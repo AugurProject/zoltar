@@ -328,7 +328,7 @@ Pool history returns:
 
 - `market`: indexed Augur pair identity and fee, when present
 - `ammPrices`: exact YES/NO reserves and complementary conditional spot prices
-- `repEthPrices`: coordinator initialization and accepted settlement observations
+- `repEthPrices`: settlements the coordinator accepted, each with its report ID and settlement time
 - `uniswapRepEthPrices`: venue-attributed REP/WETH, REP/USDC, or REP/native-ETH spot observations and raw liquidity evidence
 - `openOracleHistory`: coordinator-linked OpenOracle lifecycle evidence
 

@@ -1,8 +1,26 @@
 import type { ScannerDatabase } from '../../src/database.ts'
 import { POOL_SNAPSHOTS_BEFORE_SCHEMA_7, TABLES_REMOVED_IN_SCHEMA_7 } from '../../src/schema-removed-tables.ts'
 
-// Model the physical v6 layout: the accounting tables that migration 007 replaced.
+// Model the physical v7 layout without losing pool or price rows: the constant pool deployment columns and
+// the coordinator seed price shape that migration 008 removed.
+export const rewindStaleContractValuesToV7 = async (database: ScannerDatabase): Promise<void> => {
+	await database.sql.unsafe(`
+		ALTER TABLE public.pools ADD COLUMN collateral_repair_auction_address text DEFAULT '0x0000000000000000000000000000000000000000' NOT NULL;
+		ALTER TABLE public.pools ALTER COLUMN collateral_repair_auction_address DROP DEFAULT;
+		ALTER TABLE public.pools ADD COLUMN initial_retention_rate numeric(78,0) DEFAULT 0 NOT NULL;
+		ALTER TABLE public.pools ALTER COLUMN initial_retention_rate DROP DEFAULT;
+		ALTER TABLE public.pools ADD COLUMN initial_settlement_collateral_atto_eth numeric(78,0) DEFAULT 0 NOT NULL;
+		ALTER TABLE public.pools ALTER COLUMN initial_settlement_collateral_atto_eth DROP DEFAULT;
+		ALTER TABLE public.rep_eth_price_snapshots DROP CONSTRAINT rep_eth_price_snapshots_event_name_check;
+		ALTER TABLE public.rep_eth_price_snapshots ADD CONSTRAINT rep_eth_price_snapshots_event_name_check CHECK ((event_name = ANY (ARRAY['RepEthPriceSet'::text, 'PriceReported'::text])));
+		ALTER TABLE public.rep_eth_price_snapshots ALTER COLUMN report_id DROP NOT NULL;
+		ALTER TABLE public.rep_eth_price_snapshots ALTER COLUMN settlement_timestamp DROP NOT NULL;
+	`)
+}
+
+// Model the physical v6 layout: the accounting tables that migration 007 replaced. A v6 database also predates migration 008.
 export const rewindAccountingStorageToV6 = async (database: ScannerDatabase): Promise<void> => {
+	await rewindStaleContractValuesToV7(database)
 	await database.sql.unsafe(`
 		DROP TABLE public.pool_snapshots;
 		${POOL_SNAPSHOTS_BEFORE_SCHEMA_7}

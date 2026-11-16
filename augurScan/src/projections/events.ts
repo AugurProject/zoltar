@@ -25,13 +25,10 @@ type PoolProjection = {
 	parentAddress: string
 	universeId: string
 	questionId: string
-	collateralRepairAuctionAddress: string
 	coordinatorAddress: string
 	shareTokenAddress: string
 	securityMultiplierBps: string
 	initialPriorityFeeAttoEthPerGas: AtomicValue
-	initialRetentionRate: string
-	initialSettlementCollateralAttoEth: AtomicValue
 }
 
 // One QuestionAccountingCheckpoint: the pool's settlement collateral and share supply after an accounting change.
@@ -83,9 +80,9 @@ type RepEthPriceProjection = {
 	type: 'repEthPrice'
 	coordinatorAddress: string
 	eventName: 'PriceReported'
-	reportId?: string
+	reportId: string
 	repPerEth1e18: string
-	settlementTimestamp?: Date
+	settlementTimestamp: Date
 }
 
 type UniswapMarketProjection = {
@@ -211,13 +208,10 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				parentAddress: address(args['parent'], 'parent'),
 				universeId: integerString(args['universeId'], 'universeId'),
 				questionId: integerString(args['questionId'], 'questionId'),
-				collateralRepairAuctionAddress: '0x0000000000000000000000000000000000000000',
 				coordinatorAddress: address(args['openOraclePriceCoordinator'], 'openOraclePriceCoordinator'),
 				shareTokenAddress: address(args['shareToken'], 'shareToken'),
 				securityMultiplierBps: integerString(args['statoblastSecurityMultiplierBps'], 'statoblastSecurityMultiplierBps'),
 				initialPriorityFeeAttoEthPerGas: integerString(args['initialReportPriorityFeeAttoEthPerGas'], 'initialReportPriorityFeeAttoEthPerGas'),
-				initialRetentionRate: 0n.toString(),
-				initialSettlementCollateralAttoEth: 0n.toString(),
 			},
 		]
 	if (name === 'PairCreated' && args['token0'] !== undefined)

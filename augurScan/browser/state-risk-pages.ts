@@ -59,7 +59,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	)
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
-		metricCard('Settlement collateral', exactUnit(poolItem.settlement_collateral_atto_eth ?? poolItem.initial_settlement_collateral_atto_eth, poolCollateral.decimals, poolNativeSymbol)),
+		metricCard('Settlement collateral', poolItem.settlement_collateral_atto_eth == null ? 'No checkpoint' : exactUnit(poolItem.settlement_collateral_atto_eth, poolCollateral.decimals, poolNativeSymbol)),
 		metricCard('Share-token supply', poolItem.share_token_supply_atto_shares == null ? 'No checkpoint' : exactUnit(poolItem.share_token_supply_atto_shares, poolCollateral.decimals, 'shares')),
 		metricCard('Conditional YES', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_yes_bps, 2, '%')),
 		metricCard('Conditional NO', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_no_bps, 2, '%')),
@@ -117,15 +117,10 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 					label: `REP per ${poolNativeSymbol}`,
 					unit: `REP/${poolNativeSymbol}`,
 					decimals: Math.max(0, 36 - poolCollateral.decimals),
-					pointShape: row => (row.event_name === 'RepEthPriceSet' ? 'diamond' : 'circle'),
-					pointLabel: row => (row.event_name === 'RepEthPriceSet' ? 'Initialization seed' : 'Accepted settlement'),
 				},
 			],
-			'Coordinator price state. RepEthPriceSet records initialization and does not establish timestamp-based oracle validity; PriceReported points are accepted settlements.',
-			{
-				legendItems: [{ label: 'Initialization', className: 'initialization' }],
-				emptyMessage: 'No collateral / REP coordinator price observations match this view.',
-			},
+			'Each point is a settlement the coordinator accepted (PriceReported).',
+			{ emptyMessage: 'No collateral / REP coordinator price observations match this view.' },
 		),
 	)
 	const currentCard = element('section', 'static-card')
@@ -150,7 +145,6 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		staticAddressField('Price coordinator', poolItem.coordinator_address, poolItem.chain_id),
 		history.market === undefined || history.market === null ? staticField('Augur AMM pair', 'Unavailable') : staticAddressField('Augur AMM pair', history.market.pair_address, poolItem.chain_id),
 		staticField('Augur AMM fee', history.market === undefined || history.market === null ? '—' : percentFromBps(history.market.fee_bps)),
-		staticAddressField('Collateral repair auction', poolItem.collateral_repair_auction_address, poolItem.chain_id),
 		staticField('Security multiplier', percentFromBps(poolItem.security_multiplier_bps)),
 		staticField('Initial priority fee', exactUnit(poolItem.initial_priority_fee_atto_eth_per_gas, 9, 'nanoETH')),
 		staticField('Child pools', number(poolItem.child_count)),

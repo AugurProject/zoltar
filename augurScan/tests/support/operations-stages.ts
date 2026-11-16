@@ -283,13 +283,12 @@ export const expectQuestionHistoryCursors = async ({ database, operationsChainId
 	await database.sql`
 				INSERT INTO pools (
 					chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address,
-					universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address,
-					security_multiplier_bps, initial_priority_fee_atto_eth_per_gas,
-					initial_retention_rate, initial_settlement_collateral_atto_eth, canonical
+					universe_id, question_id, coordinator_address, share_token_address,
+					security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, canonical
 				) VALUES (
 					${operationsChainId}, ${`0x${(2).toString(16).padStart(64, '0')}`}, ${`0x${(20002).toString(16).padStart(64, '0')}`},
-					6, 2, ${sameBlockPool}, ${address.toLowerCase()}, 1, 1, ${address.toLowerCase()},
-					${oracle.toLowerCase()}, ${address.toLowerCase()}, 15000, 0, 0, 0, true
+					6, 2, ${sameBlockPool}, ${address.toLowerCase()}, 1, 1,
+					${oracle.toLowerCase()}, ${address.toLowerCase()}, 15000, 0, true
 				)
 			`
 	const firstQuestionHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1`), database.sql)

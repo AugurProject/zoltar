@@ -74,6 +74,7 @@ describe('state projections', () => {
 			}),
 		)
 		expect(deployment).toMatchObject({ type: 'pool', poolAddress: pool.toLowerCase(), questionId: '42', universeId: '0' })
+		for (const field of ['collateralRepairAuctionAddress', 'initialRetentionRate', 'initialSettlementCollateralAttoEth']) expect(deployment).not.toHaveProperty(field)
 	})
 
 	test('records universe lineage and changing theoretical supply', () => {
@@ -253,7 +254,7 @@ describe('state projections', () => {
 			repPerEth1e18: '19500000000000000000',
 		})
 		if (reported?.type !== 'repEthPrice') throw new Error('REP/ETH price projection missing')
-		expect(reported.settlementTimestamp?.toISOString()).toBe('1970-01-01T00:33:20.000Z')
+		expect(reported.settlementTimestamp.toISOString()).toBe('1970-01-01T00:33:20.000Z')
 	})
 
 	test('retains auditable Uniswap market identity and raw price evidence', () => {

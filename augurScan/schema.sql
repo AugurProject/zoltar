@@ -450,13 +450,10 @@ CREATE TABLE public.pools (
     parent_address text NOT NULL,
     universe_id numeric(78,0) NOT NULL,
     question_id numeric(78,0) NOT NULL,
-    collateral_repair_auction_address text NOT NULL,
     coordinator_address text NOT NULL,
     share_token_address text NOT NULL,
     security_multiplier_bps numeric(78,0) NOT NULL,
     initial_priority_fee_atto_eth_per_gas numeric(78,0) NOT NULL,
-    initial_retention_rate numeric(78,0) NOT NULL,
-    initial_settlement_collateral_atto_eth numeric(78,0) NOT NULL,
     canonical boolean DEFAULT true NOT NULL
 );
 
@@ -520,11 +517,11 @@ CREATE TABLE public.rep_eth_price_snapshots (
     block_number bigint NOT NULL,
     coordinator_address text NOT NULL,
     event_name text NOT NULL,
-    report_id numeric(78,0),
+    report_id numeric(78,0) NOT NULL,
     rep_per_eth_1e18 numeric(78,0) NOT NULL,
-    settlement_timestamp timestamp with time zone,
+    settlement_timestamp timestamp with time zone NOT NULL,
     canonical boolean DEFAULT true NOT NULL,
-    CONSTRAINT rep_eth_price_snapshots_event_name_check CHECK ((event_name = ANY (ARRAY['RepEthPriceSet'::text, 'PriceReported'::text]))),
+    CONSTRAINT rep_eth_price_snapshots_event_name_check CHECK ((event_name = 'PriceReported'::text)),
     CONSTRAINT rep_eth_price_snapshots_rep_per_eth_1e18_check CHECK ((rep_per_eth_1e18 >= (0)::numeric))
 );
 

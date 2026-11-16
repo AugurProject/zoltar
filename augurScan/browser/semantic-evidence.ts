@@ -40,7 +40,7 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 /** Labels and formats decoded fields; attoETH amounts are in the chain's native currency, `nativeSymbol`. */
 export const semanticFields = (data: Readonly<Record<string, unknown>>, nativeSymbol: string): ReadonlyArray<readonly [string, string]> =>
 	Object.entries(data).flatMap(([key, value]) => {
-		if (/^(current|initial)?retentionrate$/i.test(key.replaceAll('_', ''))) return [[key.toLowerCase().startsWith('initial') ? 'Initial annual open-interest fee' : 'Annual open-interest fee', annualFeeText(value)] as const]
+		if (/^(current)?retentionrate$/i.test(key.replaceAll('_', ''))) return [['Annual open-interest fee', annualFeeText(value)] as const]
 		if (key === 'outcomeBalancesAttoRep' && Array.isArray(value)) return value.map((balance, index): readonly [string, string] => [`${outcomes[index] ?? index} balance`, valueText('amountAttoRep', balance, nativeSymbol)])
 		return [[label(key), valueText(key, value, nativeSymbol, data['collateral'] === undefined ? undefined : collateralUnit(data))] as const]
 	})
