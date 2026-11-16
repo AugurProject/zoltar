@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { auctionLifecycle, reportLifecycle, reportLifecycleEventName, vaultRisk } from '../operations.ts'
+import { auctionLifecycle, reportLifecycle, reportLifecycleEventName } from '../operations.ts'
 import { ApiRequestError } from '../query-errors.ts'
 import { jsonRecord } from '../record-serialization.ts'
 
@@ -78,8 +78,6 @@ export const operationsOverviewSupplement = async (sql: SQL, chainId: number, sn
 				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS auctions,
 			(SELECT count(DISTINCT pool_address) FROM pools
 				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS pools,
-			(SELECT count(DISTINCT (pool_address, vault_address)) FROM vault_snapshots
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS vaults,
 			(SELECT count(DISTINCT pair_address) FROM amm_markets
 				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS markets,
 			(SELECT count(*) FROM chain_reorganizations WHERE chain_id = ${chainId})::integer AS reorganizations`,
@@ -215,10 +213,10 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 	})
 }
 
-export const riskCatalogData = async (sql: SQL, chainId: number, options: { poolAddress?: string | undefined; vaultAddress?: string | undefined; poolAfter?: string | undefined; vaultAfter?: string | undefined; limit?: number | undefined; snapshotBlock?: string | undefined } = {}) => {
+export const riskCatalogData = async (sql: SQL, chainId: number, options: { poolAddress?: string | undefined; poolAfter?: string | undefined; limit?: number | undefined; snapshotBlock?: string | undefined } = {}) => {
 	const queryLimit = (options.limit ?? 250) + 1
 	const snapshotBlock = options.snapshotBlock ?? '9223372036854775807'
-	const [pools, vaults, liquidations, approvalEvents, totals] = await Promise.all([
+	const [pools, takeovers, totals] = await Promise.all([
 		sql`
 			WITH identities AS (
 				SELECT DISTINCT pool_address FROM pools
@@ -239,77 +237,16 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 				AND (${options.poolAfter ?? null}::text IS NULL OR identity.pool_address > ${options.poolAfter ?? null})
 			ORDER BY identity.pool_address LIMIT ${queryLimit}
 		`,
+		// A take-over moves an unhealthy commitment to another capital position; it is the capital ledger's liquidation.
+		sql`SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
+			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
+			WHERE timeline.chain_id = ${chainId} AND timeline.canonical
+				AND timeline.semantic_event_kind = 'CommitmentTakenOver' AND timeline.block_number <= ${snapshotBlock}
+			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC, timeline.block_hash DESC LIMIT 25`,
 		sql`
-			WITH identities AS (
-				SELECT DISTINCT pool_address, vault_address FROM vault_snapshots
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
-			)
-			SELECT identity.pool_address, identity.vault_address,
-				vault.block_number::text AS block_number, vault.block_hash, vault.block_timestamp,
-				vault.read_status, vault.read_result, vault.read_failure_reason, vault.source_method, vault.observed_at,
-				vault.indexer_run_id::text AS indexer_run_id, vault.abi_source_hash,
-				vault.application_source_hash, vault.projection_source_hash,
-				pool.read_result AS pool_read_result, pool.read_status AS pool_read_status,
-				pool.block_number::text AS pool_block_number, pool.block_hash AS pool_block_hash,
-				pool.block_timestamp AS pool_block_timestamp, pool.indexer_run_id::text AS pool_indexer_run_id,
-				pool.abi_source_hash AS pool_abi_source_hash, pool.application_source_hash AS pool_application_source_hash,
-				pool.projection_source_hash AS pool_projection_source_hash
-			FROM identities identity
-			LEFT JOIN LATERAL (
-				SELECT state.* FROM entity_state_snapshots state
-				JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
-				WHERE state.chain_id = ${chainId} AND state.entity_type = 'vault'
-					AND state.entity_identity = identity.pool_address || ':' || identity.vault_address
-					AND state.canonical AND state.block_number <= ${snapshotBlock}
-				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
-			) vault ON true
-			LEFT JOIN LATERAL (
-				SELECT state.* FROM entity_state_snapshots state
-				JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
-				WHERE state.chain_id = ${chainId} AND state.entity_type = 'pool'
-					AND state.entity_identity = identity.pool_address AND state.canonical AND state.block_number <= ${snapshotBlock}
-				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
-			) pool ON true
-			WHERE (${options.poolAddress ?? null}::text IS NULL OR identity.pool_address = ${options.poolAddress ?? null})
-				AND (${options.vaultAddress ?? null}::text IS NULL OR identity.vault_address = ${options.vaultAddress ?? null})
-				AND (${options.vaultAfter ?? null}::text IS NULL OR identity.pool_address || ':' || identity.vault_address > ${options.vaultAfter ?? null})
-			ORDER BY identity.pool_address, identity.vault_address LIMIT ${queryLimit}
-		`,
-		sql`SELECT * FROM protocol_timeline_entries WHERE chain_id = ${chainId} AND canonical
-			AND semantic_event_kind = 'VaultLiquidated' AND block_number <= ${snapshotBlock}
-			ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 25`,
-		sql`
-			SELECT approval.*, COALESCE(approval.receiver_vault, installed.receiver_vault) AS receiver_vault,
-				block.timestamp AS block_timestamp
-			FROM liquidation_approval_events approval
-			JOIN blocks block ON block.chain_id = approval.chain_id AND block.hash = approval.block_hash AND block.canonical
-			LEFT JOIN LATERAL (
-				SELECT candidate.receiver_vault, candidate.event_data FROM liquidation_approval_events candidate
-				WHERE candidate.chain_id = approval.chain_id AND candidate.approval_identity = approval.approval_identity
-					AND candidate.registry_address = approval.registry_address
-					AND candidate.event_name = 'LiquidationApprovalSet' AND candidate.canonical
-					AND candidate.block_number <= ${snapshotBlock}
-				ORDER BY candidate.block_number DESC, candidate.transaction_index DESC, candidate.log_index DESC,
-					candidate.tx_hash DESC, candidate.block_hash DESC LIMIT 1
-			) installed ON true
-			WHERE approval.chain_id = ${chainId} AND approval.canonical AND approval.block_number <= ${snapshotBlock}
-				AND (${options.poolAddress ?? null}::text IS NULL OR COALESCE(approval.event_data->>'securityPool', installed.event_data->>'securityPool') = ${options.poolAddress ?? null})
-				AND (${options.vaultAddress ?? null}::text IS NULL OR COALESCE(approval.receiver_vault, installed.receiver_vault) = ${options.vaultAddress ?? null}
-					OR COALESCE(approval.event_data->>'targetVault', installed.event_data->>'targetVault') = ${options.vaultAddress ?? null})
-			ORDER BY approval.block_number DESC, approval.transaction_index DESC, approval.log_index DESC,
-				approval.tx_hash DESC, approval.block_hash DESC, approval.registry_address DESC LIMIT 100
-		`,
-		sql`
-			SELECT
-				(SELECT count(DISTINCT pool_address) FROM pools
-					WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
-						AND (${options.poolAddress ?? null}::text IS NULL OR pool_address = ${options.poolAddress ?? null}))::integer AS pool_total,
-				(SELECT count(*) FROM (
-					SELECT DISTINCT pool_address, vault_address FROM vault_snapshots
-					WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
-						AND (${options.poolAddress ?? null}::text IS NULL OR pool_address = ${options.poolAddress ?? null})
-						AND (${options.vaultAddress ?? null}::text IS NULL OR vault_address = ${options.vaultAddress ?? null})
-				) identities)::integer AS vault_total
+			SELECT count(DISTINCT pool_address)::integer AS pool_total FROM pools
+			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
+				AND (${options.poolAddress ?? null}::text IS NULL OR pool_address = ${options.poolAddress ?? null})
 		`,
 	])
 	const poolData = pools.slice(0, options.limit ?? 250).map((row: Record<string, unknown>) => {
@@ -330,75 +267,14 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 			scanner_reason: 'Question settlement is shown here. Underwriting risk belongs to the shared portfolio capital positions.',
 		}
 	})
-	const vaultData = vaults.slice(0, options.limit ?? 250).map((row: Record<string, unknown>) => {
-		const state = jsonRecord(row['read_result'])
-		const poolState = jsonRecord(row['pool_read_result'])
-		const price = jsonRecord(poolState['price'])
-		const snapshotEvidence = {
-			vaultSnapshot: { blockNumber: row['block_number'], blockHash: row['block_hash'], blockTimestamp: row['block_timestamp'] },
-			poolSnapshot: { blockNumber: row['pool_block_number'], blockHash: row['pool_block_hash'], blockTimestamp: row['pool_block_timestamp'] },
-		}
-		if (row['read_status'] !== 'success' || row['pool_read_status'] !== 'success' || row['block_hash'] !== row['pool_block_hash'])
-			return {
-				...row,
-				snapshot_evidence: snapshotEvidence,
-				protocol_state: 'unavailable',
-				scanner_severity: 'unavailable',
-				scanner_reason: row['read_failure_reason'] ?? (row['read_status'] === 'success' && row['pool_read_status'] === 'success' ? 'Vault and pool tagged reads have different evidence blocks; coherent risk state is awaiting completion' : 'Coherent tagged vault and pool reads are awaiting completion'),
-			}
-		const badDebt = BigInt(String(state['badDebtAttoEth'] ?? '0'))
-		if (badDebt > 0n)
-			return {
-				...row,
-				read_result: state,
-				price_provenance: price,
-				snapshot_evidence: snapshotEvidence,
-				protocol_state: 'bad-debt',
-				scanner_severity: 'critical',
-				scanner_reason: 'Vault has recorded bad debt',
-			}
-		if (BigInt(String(state['openInterestAttoEth'] ?? '0')) > 0n && price['protocolValid'] !== true)
-			return {
-				...row,
-				read_result: state,
-				price_provenance: price,
-				snapshot_evidence: snapshotEvidence,
-				protocol_state: 'unavailable',
-				scanner_severity: 'unavailable',
-				scanner_reason: 'Vault health is unavailable because its nonzero open interest depends on an invalid accounting price',
-			}
-		const risk = vaultRisk({
-			poolHeldBackingAttoRep: String(state['poolHeldBackingAttoRep']),
-			disputeStakedAttoRep: String(state['disputeBackingAttoRep']),
-			openInterestAttoEth: String(state['openInterestAttoEth']),
-			repPerEth1e18: String(price['repPerEth1e18'] ?? '0'),
-			securityMultiplierBps: String(state['securityMultiplierBps']),
-			badDebtAttoEth: String(state['badDebtAttoEth']),
-		})
-		return {
-			...row,
-			read_result: state,
-			snapshot_evidence: snapshotEvidence,
-			risk,
-			protocol_state: risk.protocolState,
-			scanner_severity: risk.scannerSeverity,
-			scanner_reason: risk.scannerReason,
-		}
-	})
 	const lastPool = poolData.at(-1)
-	const lastVault = vaultData.at(-1)
 	return {
 		pools: poolData,
-		vaults: vaultData,
-		recentLiquidations: liquidations,
-		approvalEvents,
+		recentTakeovers: takeovers,
 		pagination: {
 			poolTotal: Number(totals[0]?.['pool_total'] ?? 0),
 			poolHasMore: pools.length > (options.limit ?? 250),
 			poolNextCursor: pools.length > (options.limit ?? 250) && lastPool !== undefined ? String(lastPool['pool_address']) : undefined,
-			vaultTotal: Number(totals[0]?.['vault_total'] ?? 0),
-			vaultHasMore: vaults.length > (options.limit ?? 250),
-			vaultNextCursor: vaults.length > (options.limit ?? 250) && lastVault !== undefined ? `${String(lastVault['pool_address'])}:${String(lastVault['vault_address'])}` : undefined,
 		},
 	}
 }
@@ -413,6 +289,9 @@ export const forkCatalogTotal = async (sql: SQL, chainId: number, snapshotBlock:
 	return Number(rows[0]?.['total'] ?? 0)
 }
 
+// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered) or one of its
+// child universes (BranchStarted, BranchActivated). A child's start and activation belong to its parent's fork,
+// so they join only through the child's universe record and never through their own universeId.
 export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: string, cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 100, snapshotBlock = cursorBlock) =>
 	await sql`
 		WITH roots AS (
@@ -429,17 +308,16 @@ export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: st
 				(WHERE related.event_name = 'MigrationRepSplit' AND related.event_data ? 'amountAttoRep'), 0)::text AS migrated_atto_rep,
 			COALESCE(sum((related.event_data->>'amountAttoRep')::numeric) FILTER
 				(WHERE related.event_name = 'RepBurned' AND related.event_data ? 'amountAttoRep'), 0)::text AS burned_atto_rep,
-			count(*) FILTER (WHERE related.event_name IN ('SecurityPoolForkSnapshot', 'ChildPoolLinked', 'PoolHeldRepSweptToChild', 'VaultMigrationCheckpoint'))::integer AS pool_migration_events,
-			count(*) FILTER (WHERE related.event_name IN ('EscalationMigrationEntitlementInitialized', 'EscalationMigrationEntitlementMaterialized'))::integer AS obligation_events
+			count(*) FILTER (WHERE related.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'))::integer AS portfolio_fork_events
 		FROM roots root
 		LEFT JOIN fork_migration_events related ON related.chain_id = root.chain_id AND related.canonical
 			AND related.block_number <= ${snapshotBlock} AND (
-			related.universe_identity = root.universe_identity OR related.event_data->>'universeId' = root.universe_identity
-			OR EXISTS (SELECT 1 FROM pools pool WHERE pool.chain_id = root.chain_id AND pool.canonical
-				AND pool.block_number <= ${snapshotBlock}
-				AND pool.universe_id::text = root.universe_identity
-				AND (related.universe_identity = pool.pool_address OR related.event_data->>'parent' = pool.pool_address
-					OR related.event_data->>'parentPool' = pool.pool_address OR related.event_data->>'securityPool' = pool.pool_address))
+			(related.event_name NOT IN ('BranchStarted', 'BranchActivated')
+				AND (related.universe_identity = root.universe_identity OR related.event_data->>'universeId' = root.universe_identity))
+			OR (related.event_name IN ('BranchStarted', 'BranchActivated') AND EXISTS (
+				SELECT 1 FROM universe_events child WHERE child.chain_id = root.chain_id AND child.canonical
+					AND child.block_number <= ${snapshotBlock} AND child.parent_universe_id::text = root.universe_identity
+					AND child.universe_id <> child.parent_universe_id AND child.universe_id::text = related.event_data->>'universeId'))
 		)
 		WHERE (root.block_number, root.log_index, root.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
 		GROUP BY root.chain_id, root.universe_identity, root.event_name, root.event_data, root.block_number,

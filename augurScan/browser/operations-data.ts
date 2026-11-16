@@ -1,9 +1,9 @@
 import type { OperationsDetailRoute, PagedOperationsCatalogSection } from './browser-types.ts'
 import { decodeOperationsResponseValue, isJsonRecord, operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
-import { collectCanonicalPages, collectCursorCollections, collectDualCursorCollections, riskPaginationForCollectedCursors } from './canonical-pagination.ts'
+import { collectCanonicalPages, collectCursorCollections } from './canonical-pagination.ts'
 import { operationsCatalogRecordKey, operationsDetailRecordKey } from './operations-presentation.ts'
 
-export const operationsRiskHistoryKeys = ['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents', 'liquidations'] as const
+export const operationsRiskHistoryKeys = ['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents'] as const
 export const operationsHistoryOffset = (value: unknown): number | undefined => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined)
 
 export const createOperationsData = (api: (path: string) => Promise<unknown>, requiredChainId: () => string, getPageUrl: () => URL) => {
@@ -19,12 +19,11 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		return `/api/v1/state/${section}?${query.toString()}`
 	}
 
-	const operationsRiskCatalogEndpoint = (poolCursor?: string, vaultCursor?: string, limit = 100): string => {
+	const operationsRiskCatalogEndpoint = (poolCursor?: string, limit = 100): string => {
 		const query = new URLSearchParams({ chainId: requiredChainId(), limit: String(limit) })
 		const atBlock = getPageUrl().searchParams.get('atBlock')
 		if (atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
 		if (poolCursor !== undefined) query.set('poolCursor', poolCursor)
-		if (vaultCursor !== undefined) query.set('vaultCursor', vaultCursor)
 		return `/api/v1/state/risk?${query.toString()}`
 	}
 
@@ -33,14 +32,13 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		data: { ...response.data, [section]: items, _catalogPage: response.data },
 	})
 
-	const riskCatalogOperationsResponse = (response: OperationsResponse, pools: readonly JsonRecord[], vaults: readonly JsonRecord[]): OperationsResponse => ({
+	const riskCatalogOperationsResponse = (response: OperationsResponse, pools: readonly JsonRecord[]): OperationsResponse => ({
 		...response,
 		data: {
-			risk: { ...response.data, pools, vaults },
+			risk: { ...response.data, pools },
 			_riskCatalogPage: response.data,
 			totals: {
 				pools: isJsonRecord(response.data['pagination']) && typeof response.data['pagination']['poolTotal'] === 'number' ? response.data['pagination']['poolTotal'] : pools.length,
-				vaults: isJsonRecord(response.data['pagination']) && typeof response.data['pagination']['vaultTotal'] === 'number' ? response.data['pagination']['vaultTotal'] : vaults.length,
 			},
 		},
 	})
@@ -52,7 +50,6 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		pool: 'risk/pools',
 		report: 'reports',
 		trading: 'trading',
-		vault: 'risk/vaults',
 	}
 
 	const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string, limit = 100, decisionCursor?: string, decisionLimit = 100): string => {
@@ -61,7 +58,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		const resource = OPERATIONS_DETAIL_RESOURCES[route.kind]
 		const query = new URLSearchParams({ limit: String(limit) })
 		const atBlock = getPageUrl().searchParams.get('atBlock')
-		if ((route.kind === 'pool' || route.kind === 'vault') && atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
+		if (route.kind === 'pool' && atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
 		if (cursor !== undefined) query.set('cursor', cursor)
 		if (route.kind === 'report' || route.kind === 'trading') {
 			const prefix = route.kind === 'trading' ? 'activity' : 'decision'
@@ -100,13 +97,13 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		)
 	}
 
-	const loadOperationsRiskCatalog = async (poolTargetCount: number, vaultTargetCount: number): Promise<OperationsResponse> => {
+	const loadOperationsRiskCatalog = async (poolTargetCount: number): Promise<OperationsResponse> => {
 		let first: OperationsResponse | undefined
 		let last: OperationsResponse | undefined
 		let snapshotIdentity: string | undefined
-		const collected = await collectDualCursorCollections(
-			async ({ leftCursor, rightCursor, limit }) => {
-				const response = decodeOperationsResponse(await api(operationsRiskCatalogEndpoint(leftCursor, rightCursor, limit)))
+		const snapshot = await collectCanonicalPages(
+			async (cursor?: string, limit = 100) => {
+				const response = decodeOperationsResponse(await api(operationsRiskCatalogEndpoint(cursor, limit)))
 				const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
 				if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity) throw new Error('Risk catalog changed while older evidence was loading; retry from the latest available block')
 				snapshotIdentity ??= responseIdentity
@@ -114,29 +111,25 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 				last = response
 				const pagination = operationsRiskPagination(response.data['pagination'], true)
 				return {
-					left: operationsRiskRecords('pools', response.data['pools'], true),
-					right: operationsRiskRecords('vaults', response.data['vaults'], true),
-					...(pagination['poolHasMore'] === true && typeof pagination['poolNextCursor'] === 'string' ? { leftNextCursor: pagination['poolNextCursor'] } : {}),
-					...(pagination['vaultHasMore'] === true && typeof pagination['vaultNextCursor'] === 'string' ? { rightNextCursor: pagination['vaultNextCursor'] } : {}),
+					items: operationsRiskRecords(response.data['pools'], true),
+					...(pagination['poolHasMore'] === true && typeof pagination['poolNextCursor'] === 'string' ? { nextCursor: pagination['poolNextCursor'] } : {}),
 				}
 			},
 			poolTargetCount,
-			vaultTargetCount,
 			item => String(item['pool_address'] ?? ''),
-			item => `${String(item['pool_address'] ?? '')}:${String(item['vault_address'] ?? '')}`,
 		)
 		if (first === undefined || last === undefined) throw new Error('Risk catalog returned no page')
 		const pagination = isJsonRecord(last.data['pagination']) ? last.data['pagination'] : {}
+		const { poolNextCursor: _replacedCursor, ...paginationWithoutCursor } = pagination
 		return riskCatalogOperationsResponse(
 			{
 				...first,
 				data: {
 					...last.data,
-					pagination: riskPaginationForCollectedCursors(pagination, collected.leftNextCursor, collected.rightNextCursor),
+					pagination: { ...paginationWithoutCursor, poolHasMore: snapshot.nextCursor !== undefined, ...(snapshot.nextCursor === undefined ? {} : { poolNextCursor: snapshot.nextCursor }) },
 				},
 			},
-			collected.left,
-			collected.right,
+			snapshot.items,
 		)
 	}
 
@@ -234,7 +227,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 	}
 
 	const loadOperationsDetail = async (route: OperationsDetailRoute, retainedCount: number, riskHistoryThroughOffset = 0, decisionTargetCount = 0, activityTargetCount = 0): Promise<OperationsResponse> => {
-		if (route.kind === 'pool' || route.kind === 'vault') return await loadOperationsRiskDetail(route, riskHistoryThroughOffset)
+		if (route.kind === 'pool') return await loadOperationsRiskDetail(route, riskHistoryThroughOffset)
 		if (route.kind === 'report') return await loadOperationsPairedDetail(route, retainedCount, decisionTargetCount)
 		if (route.kind === 'trading') return await loadOperationsPairedDetail(route, retainedCount, activityTargetCount)
 		const pageKey = 'events'

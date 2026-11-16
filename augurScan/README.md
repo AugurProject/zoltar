@@ -4,7 +4,7 @@ augurScan is a read-only explorer for the Zoltar/Augur protocol. It indexes conf
 
 Backend capability ownership and dependency rules are documented in [`src/ARCHITECTURE.md`](src/ARCHITECTURE.md).
 
-The **Operations** area brings together the histories that operators usually need to investigate a protocol state: OpenOracle reports, escalation games, collateral repair auctions, security-pool and vault risk, Zoltar forks, Statoblast migrations, AMM trading, price provenance, semantic changes, and chain replacements. The global timeline lets you filter those records across Zoltar, Trading, Statoblast, and Open Oracle by entity, event, address, block range, text, and canonical status.
+The **Operations** area brings together the histories that operators usually need to investigate a protocol state: OpenOracle reports, escalation games, collateral repair auctions, security-pool settlement state and capital take-overs, Zoltar forks, Statoblast migrations, AMM trading, price provenance, semantic changes, and chain replacements. The global timeline lets you filter those records across Zoltar, Trading, Statoblast, and Open Oracle by entity, event, address, block range, text, and canonical status.
 
 ## Start with Docker
 
@@ -25,18 +25,18 @@ For production configuration, backups, upgrades, restore checks, integrity revie
 
 ## Explore the data
 
-The network selector in the header controls Activity, **Operations**, **System state**, **Contracts**, and **Rich list**; choose a network and select **Switch** to apply it. Its selection is stored in the `chainId` query parameter. Point-in-time pool and vault risk views also accept `atBlock` for a retained canonical block. Switching networks drops `atBlock` and the block range (`fromBlock`, `toBlock`), because block numbers belong to one chain.
+The network selector in the header controls Activity, **Operations**, **System state**, **Contracts**, and **Rich list**; choose a network and select **Switch** to apply it. Its selection is stored in the `chainId` query parameter. Point-in-time pool risk views also accept `atBlock` for a retained canonical block. Switching networks drops `atBlock` and the block range (`fromBlock`, `toBlock`), because block numbers belong to one chain.
 
 Useful Operations routes include:
 
 - `/operations/reports`, `/operations/escalations`, and `/operations/auctions` for OpenOracle and dispute resolution;
-- `/operations/risk` for tagged pool and vault observations;
+- `/operations/risk` for tagged pool observations and recent commitment take-overs;
 - `/operations/forks` for Zoltar fork and Statoblast migration evidence;
 - `/operations/trading` for AMM price, liquidity, share and ETH volume, fee history, and recent market activity;
 - `/operations/timeline` for cross-protocol semantic history;
 - `/operations/integrity` for reorgs, replay causes, migrations, indexer provenance, and canonical decode coverage by destination and selector.
 
-Detail routes are deep-linkable. Preserve `chainId` when constructing a link and preserve `atBlock` on a historical risk link. Address links stay inside augurScan; `/address?chainId=:chainId&address=:address` summarizes balances, REP tokens, pools, vaults, trading profit and loss, interactions, and recent transactions, with the external explorer as a secondary link.
+Detail routes are deep-linkable. Preserve `chainId` when constructing a link and preserve `atBlock` on a historical risk link. Address links stay inside augurScan; `/address?chainId=:chainId&address=:address` summarizes balances, REP tokens, pools, trading profit and loss, interactions, and recent transactions, with the external explorer as a secondary link.
 
 Every visible route refreshes after a committed block notification and on the status cycle. Activity preserves the reader's scroll position while new rows arrive. Paged Operations views restore the visible depth at one canonical boundary instead of mixing results from different heads.
 

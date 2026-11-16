@@ -55,7 +55,7 @@ export const reportDetailData = async (
 		FROM logs log JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
 		JOIN coordinators coordinator ON coordinator.emitter_address = log.emitter_address
 		WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.arguments->>'reportId' = ${reportId}
-			AND log.event_name IN ('PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'CoordinatorStateCheckpoint', 'ReportFundingAssigned')
+			AND log.event_name IN ('PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'ReportFundingAssigned')
 			AND (log.block_number, log.log_index, log.tx_hash) < (${decisions.block}::bigint, ${decisions.log}::integer, ${decisions.tx})
 		ORDER BY log.block_number DESC, log.log_index DESC, log.tx_hash DESC LIMIT ${decisions.limit}
 	`
@@ -86,6 +86,9 @@ export const auctionDetailData = async (sql: SQL, chainId: number, address: stri
 	return { bids, lotAttoEth: typeof lotAttoEth === 'string' && /^\d+$/.test(lotAttoEth) ? lotAttoEth : undefined, finalization: finalizations[0] }
 }
 
+// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered) or one of its
+// child universes (BranchStarted, BranchActivated). The event list shows every event naming the universe; the
+// summary counts a child's start and activation only for its parent's fork, through the child's universe record.
 export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: string; readonly chainId: number; readonly identity: string; readonly page: PageBoundary }) => {
 	const { chainId, identity, page, snapshotBlock } = query
 	const rows = await sql`
@@ -94,10 +97,10 @@ export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: 
 		WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock}
 			AND (event.universe_identity = ${identity} OR event.event_data->>'universeId' = ${identity}
 				OR event.event_data->>'childUniverseId' = ${identity}
-				OR EXISTS (SELECT 1 FROM pools pool WHERE pool.chain_id = event.chain_id AND pool.canonical AND pool.block_number <= ${snapshotBlock}
-					AND pool.universe_id::text = ${identity}
-					AND (event.universe_identity = pool.pool_address OR event.event_data->>'parent' = pool.pool_address
-						OR event.event_data->>'parentPool' = pool.pool_address OR event.event_data->>'securityPool' = pool.pool_address)))
+				OR (event.event_name IN ('BranchStarted', 'BranchActivated') AND EXISTS (
+					SELECT 1 FROM universe_events child WHERE child.chain_id = event.chain_id AND child.canonical
+						AND child.block_number <= ${snapshotBlock} AND child.parent_universe_id::text = ${identity}
+						AND child.universe_id <> child.parent_universe_id AND child.universe_id::text = event.event_data->>'universeId')))
 			AND (event.block_number, event.log_index, event.tx_hash) < (${page.block}::bigint, ${page.log}::integer, ${page.tx})
 		ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.limit}
 	`
@@ -120,16 +123,16 @@ export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: 
 				(WHERE event.event_name = 'RepBurned' AND event.event_data ? 'amountAttoRep'), 0)::text AS burned_atto_rep,
 			count(DISTINCT event.event_data->>'migrator') FILTER (WHERE event.event_data ? 'migrator')::integer AS migrator_count,
 			count(DISTINCT event.event_data->>'childUniverseId') FILTER (WHERE event.event_data ? 'childUniverseId')::integer AS child_count,
-			count(*) FILTER (WHERE event.event_name IN ('SecurityPoolForkSnapshot', 'ChildPoolLinked', 'PoolHeldRepSweptToChild', 'VaultMigrationCheckpoint'))::integer AS pool_migration_events,
-			count(*) FILTER (WHERE event.event_name = 'EscalationMigrationEntitlementInitialized')::integer AS obligations_initialized,
-			count(*) FILTER (WHERE event.event_name = 'EscalationMigrationEntitlementMaterialized')::integer AS obligations_materialized
+			count(*) FILTER (WHERE event.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'))::integer AS portfolio_fork_events,
+			count(DISTINCT event.event_data->>'owner') FILTER (WHERE event.event_name = 'BranchChosen')::integer AS branch_chooser_count
 		FROM fork_migration_events event
 		WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock} AND (
-			event.universe_identity = ${identity} OR event.event_data->>'universeId' = ${identity}
-			OR EXISTS (SELECT 1 FROM pools pool WHERE pool.chain_id = event.chain_id AND pool.canonical AND pool.block_number <= ${snapshotBlock}
-				AND pool.universe_id::text = ${identity}
-				AND (event.universe_identity = pool.pool_address OR event.event_data->>'parent' = pool.pool_address
-					OR event.event_data->>'parentPool' = pool.pool_address OR event.event_data->>'securityPool' = pool.pool_address))
+			(event.event_name NOT IN ('BranchStarted', 'BranchActivated')
+				AND (event.universe_identity = ${identity} OR event.event_data->>'universeId' = ${identity}))
+			OR (event.event_name IN ('BranchStarted', 'BranchActivated') AND EXISTS (
+				SELECT 1 FROM universe_events child WHERE child.chain_id = event.chain_id AND child.canonical
+					AND child.block_number <= ${snapshotBlock} AND child.parent_universe_id::text = ${identity}
+					AND child.universe_id <> child.parent_universe_id AND child.universe_id::text = event.event_data->>'universeId'))
 		)
 	`
 	return { rows, branches, summary: summaryRows[0] }
