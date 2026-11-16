@@ -2261,6 +2261,52 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Trigger universe fork')
 	})
 
+	test('keeps a caller-disabled Trigger universe fork reason during the parent fork response period', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 150n,
+					onTriggerZoltarFork: () => undefined,
+					reportingDetails: createReportingDetails({
+						earliestForkTime: 200n,
+						hasReachedNonDecision: true,
+					}),
+					triggerZoltarForkAvailability: {
+						disabled: true,
+						reason: 'Caller blocks the fork',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Trigger universe fork', 'Caller blocks the fork')
+	})
+
+	test('applies the parent fork response reason over a caller-enabled Trigger universe fork availability', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 150n,
+					onTriggerZoltarFork: () => undefined,
+					reportingDetails: createReportingDetails({
+						earliestForkTime: 200n,
+						hasReachedNonDecision: true,
+					}),
+					triggerZoltarForkAvailability: {
+						disabled: false,
+						reason: undefined,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Trigger universe fork', zoltarCopy.formatParentForkResponseActiveReason(formatTimestamp(200n), formatRelativeTimestamp(200n, 150n)))
+	})
+
 	test('disables preset buttons when reporting details are missing without showing the load reason inline', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
