@@ -96,7 +96,7 @@ function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): Coord
 	if (feePercentage > UINT24_MAXIMUM) throw oracleRequestFundingError('feePercentage exceeds uint24')
 	if (gasUnitsForOneDispute === 0n) throw oracleRequestFundingError('gasUnitsForOneDispute must be positive')
 	if (initialReportPriorityFeeAttoEthPerGas === 0n) throw oracleRequestFundingError('initialReportPriorityFeeAttoEthPerGas must be positive')
-	if (targetPriceErrorForDispute > OPEN_ORACLE_PERCENTAGE_PRECISION) throw oracleRequestFundingError('targetPriceErrorForDispute exceeds OpenOracle precision')
+	if (targetPriceErrorForDispute >= OPEN_ORACLE_PERCENTAGE_PRECISION) throw oracleRequestFundingError('targetPriceErrorForDispute must be below OpenOracle precision')
 	if (openOracleSecurityMultiplierBps < BPS_DENOMINATOR) throw oracleRequestFundingError('openOracleSecurityMultiplierBps must be at least 10000')
 	if (escalationHaltMultiplierBps === 0n) throw oracleRequestFundingError('escalationHaltMultiplierBps must be positive')
 	const fees = checkedAdd(protocolFee, feePercentage, 'oracle fees')
