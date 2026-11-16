@@ -22,7 +22,6 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ShareMigrationTargetsSection } from '../../universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -49,6 +48,7 @@ import {
 	getPoolMintingCapacityAttoEth,
 	hasShares,
 	MINTING_PAUSED_DURING_DISPUTE_MESSAGE,
+	parseCompleteSetAmountInput,
 } from '../lib/trading.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { formatAmountDisplay, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -443,7 +443,7 @@ export function TradingSection({
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={getModalActionAvailability(mintEnabled, mintGuardMessage ?? collateralFunding?.reason, (tryParseDecimalInput(tradingForm.completeSetAmount, collateralDecimals) ?? 0n) > 0n)}
+						availability={getModalActionAvailability(mintEnabled, mintGuardMessage ?? collateralFunding?.reason, (parseCompleteSetAmountInput(tradingForm.completeSetAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</OperationModal>
@@ -465,7 +465,7 @@ export function TradingSection({
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
-						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage, (tryParseDecimalInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
+						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage, (parseCompleteSetAmountInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</OperationModal>
