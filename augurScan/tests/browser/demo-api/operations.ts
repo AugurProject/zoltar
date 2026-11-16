@@ -1,5 +1,5 @@
 import { requiredArrayItem } from '../../../browser/api-decoding.ts'
-import { demoCapitalLedgers, demoCapitalPositions, demoLiquidations } from './capital-fixtures.ts'
+import { demoCapitalLedgers, demoCapitalPositions, demoFeeEconomics, demoLiquidations, demoQuestionFeeStreams } from './capital-fixtures.ts'
 import { demoHash } from './chain-fixtures.ts'
 import type { DemoEnvironment } from './environment.ts'
 
@@ -111,6 +111,8 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 		capitalPositions: demoCapitalPositions(asOf.blockNumber),
 		capitalPositionTotal: 3,
 		recentLiquidations: demoLiquidations(asOf.blockNumber),
+		feeEconomics: demoFeeEconomics(asOf.blockNumber),
+		questionFeeStreams: demoQuestionFeeStreams(asOf.blockNumber),
 		pagination: { poolTotal: 1, poolHasMore: false },
 	}
 	return {
@@ -121,6 +123,7 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 			escalations: allEscalations.slice(0, 250),
 			auctions: allAuctions.slice(0, 250),
 			risk,
+			feeEconomics: risk.feeEconomics,
 			prices: [{ source_event: 'PriceReported', value: '233590000000000000000', block_number: asOf.blockNumber }],
 			forks: [
 				{
