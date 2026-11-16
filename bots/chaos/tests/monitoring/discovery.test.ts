@@ -391,7 +391,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return graph.childPreparation?.shared ? address(90) : zeroAddress
 				case 'getSecurityPoolOriginId':
 					return hash(90)
-				case 'getChildPoolDependencies':
+				case 'getChildPoolCoordinator':
 					return graph.childPreparation?.ready ? address(91) : zeroAddress
 				case 'clocks':
 					return [0n, 0n, true, graph.childPreparation?.ready ?? false]

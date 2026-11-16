@@ -410,7 +410,7 @@ describe('TokenApprovalControl', () => {
 		[5n, 10n],
 		[20n, 10n],
 	]) {
-		test(`requires a zero reset for custom USDT increases with allowance ${approved}`, async () => {
+		test(`approves a custom increase over an existing allowance of ${approved} in one step`, async () => {
 			const approvals: (bigint | undefined)[] = []
 			const view = await renderIntoDocument(
 				<TokenApprovalControl
@@ -419,20 +419,23 @@ describe('TokenApprovalControl', () => {
 					allowanceLoading={false}
 					approvedAmount={approved}
 					guardMessage={undefined}
-					requiresAllowanceReset
 					onApprove={amount => approvals.push(amount)}
 					pending={false}
-					pendingLabel='Approving USDT'
+					pendingLabel='Approving USDC'
 					requiredAmount={required}
-					resetKey='usdt-reset'
-					tokenSymbol='USDT'
+					resetKey='usdc-increase'
+					tokenSymbol='USDC'
 					tokenUnits={0}
 				/>,
 			)
 			cleanupRenderedComponent = view.cleanup
 			await act(() => fireEvent.input(within(view.container).getByPlaceholderText('Blank uses required total'), { target: { value: '30' } }))
-			expectTransactionButtonDisabled(view.container, 'Approve USDT', 'Reset USDT approval first.')
-			expect(approvals).toEqual([])
+			await act(() =>
+				within(view.container)
+					.getByRole('button', { name: /Approve/ })
+					.click(),
+			)
+			expect(approvals).toEqual([30n])
 		})
 	}
 })

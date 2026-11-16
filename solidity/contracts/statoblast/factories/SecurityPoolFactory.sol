@@ -125,7 +125,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(address(parent.shareToken()) == address(shareToken), 'Child share token mismatch');
 		uint256 initialReportPriorityFeeAttoEthPerGas = parent.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
 		_reserveSecurityPool(originId, universeId);
-		OpenOraclePriceCoordinator openOraclePriceCoordinator = _prepareChildPoolDependencies(parent, universeId);
+		OpenOraclePriceCoordinator openOraclePriceCoordinator = _prepareChildPoolCoordinator(parent, universeId);
 		_configureSharedPriceFeed(openOraclePriceCoordinator, portfolio, universeId);
 		securityPool = deploySecurityPool(shareToken, parent, openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps);
 		_registerSecurityPool(originId, universeId, securityPool, hasInheritedForkOutcome, portfolio);
@@ -250,7 +250,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	/// @notice Prepare the canonical child coordinator without exposing a partial child ledger.
-	function prepareChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator) {
+	function prepareChildPoolCoordinator(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator) {
 		uint248 parentUniverseId = parent.universeId();
 		require(address(poolRegistrations[getPoolId(poolMetadata[parent].originId, parentUniverseId)].pool) == address(parent), 'Parent pool is not canonical');
 		require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
@@ -259,17 +259,17 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		address portfolio = poolMetadata[parent].portfolio;
 		require(portfolio != address(0), 'Portfolio missing');
 		require(sharedPriceFeeds[portfolio][universeId] != address(0), 'Prepare shared child price feed');
-		return _prepareChildPoolDependencies(parent, universeId);
+		return _prepareChildPoolCoordinator(parent, universeId);
 	}
 
-	function getChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator) {
+	function getChildPoolCoordinator(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator) {
 		return
 			childPoolCoordinators[
 				getPoolId(poolMetadata[parent].originId, zoltar.getChildUniverseId(parent.universeId(), outcomeIndex))
 			];
 	}
 
-	function _prepareChildPoolDependencies(ISecurityPool parent, uint248 universeId) private returns (OpenOraclePriceCoordinator coordinator) {
+	function _prepareChildPoolCoordinator(ISecurityPool parent, uint248 universeId) private returns (OpenOraclePriceCoordinator coordinator) {
 		bytes32 poolId = getPoolId(poolMetadata[parent].originId, universeId);
 		coordinator = childPoolCoordinators[poolId];
 		if (address(coordinator) != address(0)) return coordinator;

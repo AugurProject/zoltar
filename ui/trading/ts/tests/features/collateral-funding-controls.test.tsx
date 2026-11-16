@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { expectTransactionButtonDisabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { CollateralFundingControls } from '../../features/CollateralFundingControls.js'
 import type { useCollateralFunding } from '../../features/live/useCollateralFunding.js'
@@ -21,50 +20,25 @@ function fundingFor(token: Address, symbol: string, overrides: Partial<ReturnTyp
 		readError: undefined,
 		retry: () => undefined,
 		pending: false,
-		resetting: false,
 		approve: async () => undefined,
 		...overrides,
 	}
 }
 
 describe('collateral funding controls', () => {
-	// The fake backend runs on the mainnet profile, which configures a USDT address.
 	const lifecycle = installDomTestLifecycle({ beforeTest: () => void installActiveEnvironmentForTesting(createFakeBackend()), afterTest: resetActiveEnvironmentForTesting })
+	const token = getAddress('0x4000000000000000000000000000000000000000')
 
-	async function renderedButtonLabels(token: Address, symbol: string) {
-		const rendered = await renderIntoDocument(<CollateralFundingControls actionLabel='buying' funding={fundingFor(token, symbol)} required={5_000_000n} disabled={false} reason={undefined} />)
+	test('offers one approval button and no reset for a token that already has an allowance', async () => {
+		const rendered = await renderIntoDocument(<CollateralFundingControls actionLabel='buying' funding={fundingFor(token, 'USDC')} required={5_000_000n} disabled={false} reason={undefined} />)
 		lifecycle.trackRendered(rendered)
-		return Array.from(rendered.container.querySelectorAll('button')).map(button => button.textContent?.trim())
-	}
-
-	// The approval operation rejects a nonzero-to-nonzero change for this address, so the reset has to be offered for it.
-	test('offers the allowance reset for the network USDT token whatever symbol the token reports', async () => {
-		const usdt = getActiveNetworkProfile().usdtAddress
-		if (usdt === undefined) throw new Error('Expected a configured USDT address')
-		expect(await renderedButtonLabels(usdt, 'USD₮')).toContain('Reset USD₮ approval')
+		expect(Array.from(rendered.container.querySelectorAll('button')).map(button => button.textContent?.replaceAll('\u00a0', ' ').trim())).toEqual(['Approve 5 USDC'])
 	})
 
-	test.each([
-		{ resetting: true, pendingLabel: 'Resetting USD₮ approval…' },
-		{ resetting: false, pendingLabel: 'Approving USD₮…' },
-	])('shows one pending button with the shared label while resetting is $resetting', async ({ resetting, pendingLabel }) => {
-		const usdt = getActiveNetworkProfile().usdtAddress
-		if (usdt === undefined) throw new Error('Expected a configured USDT address')
-		const rendered = await renderIntoDocument(<CollateralFundingControls actionLabel='buying' funding={fundingFor(usdt, 'USD₮', { pending: true, resetting })} required={5_000_000n} disabled={false} reason={undefined} />)
+	test('shows the approval button as pending while the approval is in flight', async () => {
+		const rendered = await renderIntoDocument(<CollateralFundingControls actionLabel='buying' funding={fundingFor(token, 'USDC', { pending: true })} required={5_000_000n} disabled={false} reason={undefined} />)
 		lifecycle.trackRendered(rendered)
 		const busy = Array.from(rendered.container.querySelectorAll('button[aria-busy="true"]')).map(button => button.textContent?.trim())
-		expect(busy).toEqual([pendingLabel])
-	})
-
-	test('explains a reset that has nothing left to reset with the shared reason', async () => {
-		const usdt = getActiveNetworkProfile().usdtAddress
-		if (usdt === undefined) throw new Error('Expected a configured USDT address')
-		const rendered = await renderIntoDocument(<CollateralFundingControls actionLabel='buying' funding={fundingFor(usdt, 'USDT', { allowance: 0n })} required={5_000_000n} disabled={false} reason={undefined} />)
-		lifecycle.trackRendered(rendered)
-		expectTransactionButtonDisabled(rendered.container, 'Reset USDT approval', 'Not needed.')
-	})
-
-	test('does not offer an allowance reset for another token that reports the USDT symbol', async () => {
-		expect(await renderedButtonLabels(getAddress('0x4000000000000000000000000000000000000000'), 'USDT')).not.toContain('Reset USDT approval')
+		expect(busy).toEqual(['Approving USDC…'])
 	})
 })

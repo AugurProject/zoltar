@@ -37,26 +37,50 @@ describe('liquidator durable state', () => {
 		expect(operatorSnapshot(state, true).operatorCapable).toBe(false)
 		state.wallet = getAddress('0x0000000000000000000000000000000000000010')
 		expect(operatorSnapshot(state, true).operatorCapable).toBe(true)
-		state.pendingStagedOperations.push({
-			coordinator: getAddress('0x0000000000000000000000000000000000000020'),
-			operationId: 7n,
-			queuedBlock: 101n,
-			target: getAddress('0x0000000000000000000000000000000000000030'),
+		state.pendingTransactions.push({
+			hash: `0x${'77'.repeat(32)}`,
+			kind: 'liquidation',
+			label: 'Pending liquidation',
+			maxBlockNumber: 120n,
+			mode: 'public',
+			nonce: 7n,
+			receiptExpectation: { type: 'transaction' },
+			requiresMarketEvidence: true,
+			sender: getAddress('0x0000000000000000000000000000000000000010'),
+			serializedTransaction: '0x',
+			submissionBlock: 101n,
 		})
 		const blocked = operatorSnapshot(state, false)
 		expect(blocked.operatorCapable).toBe(false)
-		expect(blocked.pendingStagedOperations).toEqual([expect.objectContaining({ operationId: '7', queuedBlock: '101' })])
-		expect(blocked.alerts).toEqual(expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('staged operation(s) require outcome recovery') })]))
+		expect(blocked).not.toHaveProperty('pendingStagedOperations')
+		expect(blocked.alerts).toEqual(expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('transaction intent(s) require recovery') })]))
+		expect(blocked.alerts.some(alert => alert.message.includes('staged operation'))).toBe(false)
 	})
 
-	test('rejects a current state journal that omits recovery collections', async () => {
+	test('rejects a current state journal that omits pending transactions and accepts one without legacy staged operations', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-schema-'))
 		const path = join(directory, 'state.json')
 		try {
-			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingStagedOperations: [], version: 2 }), { encoding: 'utf8', mode: 0o600 })
+			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, version: 2 }), { encoding: 'utf8', mode: 0o600 })
 			await expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions')
 			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingTransactions: [], version: 2 }), { encoding: 'utf8', mode: 0o600 })
-			await expect(loadDurableState(path, 1)).rejects.toThrow('pendingStagedOperations')
+			expect((await loadDurableState(path, 1)).pendingTransactions).toEqual([])
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects a state journal that still holds legacy staged operations and ignores an empty legacy list', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-staged-'))
+		const path = join(directory, 'state.json')
+		try {
+			const legacyOperation = { coordinator: '0x0000000000000000000000000000000000000020', operationId: '7', queuedBlock: '101', target: '0x0000000000000000000000000000000000000030' }
+			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingStagedOperations: [legacyOperation], pendingTransactions: [], version: 2 }), { encoding: 'utf8', mode: 0o600 })
+			await expect(loadDurableState(path, 1)).rejects.toThrow('Liquidator state contains 1 legacy pending staged operation(s), which are no longer supported')
+			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingStagedOperations: [], pendingTransactions: [], version: 2 }), { encoding: 'utf8', mode: 0o600 })
+			const loaded = await loadDurableState(path, 1)
+			expect(loaded.pendingTransactions).toEqual([])
+			expect(Reflect.has(loaded, 'pendingStagedOperations')).toBe(false)
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -140,24 +164,6 @@ describe('liquidator durable state', () => {
 		try {
 			const { account, serializedTransaction } = await signedTransfer(`0x${'11'.repeat(32)}`)
 			const state = initialRuntimeState(false, account.address, 1)
-			state.pendingStagedOperations.push({
-				candidateOutcome: {
-					blockHash: `0x${'44'.repeat(32)}`,
-					blockNumber: 110n,
-					errorMessage: '',
-					operation: 0n,
-					operationId: 7n,
-					success: true,
-					transactionHash: `0x${'55'.repeat(32)}`,
-				},
-				coordinator: getAddress('0x0000000000000000000000000000000000000020'),
-				historicalRecoveryComplete: true,
-				operationId: 7n,
-				queuedBlock: 101n,
-				recoveryAnchorBlock: 110n,
-				recoveryAnchorHash: `0x${'66'.repeat(32)}`,
-				target: getAddress('0x0000000000000000000000000000000000000030'),
-			})
 			state.pendingTransactions.push({
 				hash: keccak256(serializedTransaction),
 				kind: 'liquidation',
@@ -181,7 +187,6 @@ describe('liquidator durable state', () => {
 			await saveDurableState(path, state)
 			const loaded = await loadDurableState(path, 1)
 			expect(loaded.pendingTransactions).toEqual(state.pendingTransactions)
-			expect(loaded.pendingStagedOperations).toEqual(state.pendingStagedOperations)
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -248,8 +253,8 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-'))
 		const path = join(directory, 'state.json')
 		try {
-			await writeFile(path, '{"version":2,"chainId":1,"activities":[],"pendingStagedOperations":[],"pendingTransactions":"invalid"}', { mode: 0o600 })
-			expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions must be an array')
+			await writeFile(path, '{"version":2,"chainId":1,"activities":[],"pendingTransactions":"invalid"}', { mode: 0o600 })
+			await expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions must be an array')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -264,7 +269,6 @@ describe('liquidator durable state', () => {
 				JSON.stringify({
 					activities: [],
 					chainId: 1,
-					pendingStagedOperations: [],
 					pendingTransactions: [
 						{
 							hash: `0x${'11'.repeat(32)}`,
@@ -283,7 +287,7 @@ describe('liquidator durable state', () => {
 				}),
 				{ mode: 0o600 },
 			)
-			expect(loadDurableState(path, 1)).rejects.toThrow('hash does not match')
+			await expect(loadDurableState(path, 1)).rejects.toThrow('hash does not match')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -303,7 +307,6 @@ describe('liquidator durable state', () => {
 				JSON.stringify({
 					activities: [],
 					chainId: 1,
-					pendingStagedOperations: [],
 					pendingTransactions: [
 						{
 							hash: keccak256(serializedTransaction),
@@ -322,7 +325,7 @@ describe('liquidator durable state', () => {
 				}),
 				{ mode: 0o600 },
 			)
-			expect(loadDurableState(path, 1)).rejects.toThrow('sender does not match')
+			await expect(loadDurableState(path, 1)).rejects.toThrow('sender does not match')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}

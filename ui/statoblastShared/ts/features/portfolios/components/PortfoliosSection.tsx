@@ -79,7 +79,6 @@ export function PortfoliosSection({ parameters, walletConnected, enabled, enviro
 							options={[
 								{ value: collateralCopy.weth, label: collateralCopy.weth, disabled },
 								{ value: collateralCopy.usdc, label: collateralCopy.usdc, disabled },
-								{ value: collateralCopy.usdt, label: collateralCopy.usdt, disabled },
 							]}
 						/>
 						<PortfolioInput label={collateralCopy.oracleStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={disabled} numeric />

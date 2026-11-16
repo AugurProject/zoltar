@@ -15,7 +15,7 @@ export function renderOverviewHealth(snapshot: Snapshot, _configuration: Configu
 		mode: snapshot.execute ? 'Live armed' : 'Dry run',
 		lastScanAt: snapshot.lastScanAt,
 		capitalAtRisk: portfolio === undefined ? 'Awaiting portfolio exposure scan' : `${formatAmount(portfolio.managedPrincipalRep, 'REP')} / ${formatAmount(portfolio.maximumTotalPrincipalRep, 'REP')} portfolios`,
-		recoveryItems: snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length,
+		recoveryItems: snapshot.pendingTransactions.length,
 		lastAction: snapshot.activities[0]?.message ?? 'No action yet',
 		paused: snapshot.paused,
 		stale,

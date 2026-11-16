@@ -47,14 +47,10 @@ async function setup(configure: (fixture: ReturnType<typeof priceFixture>) => vo
 	await waitFor(() => expect(hook.state().loading).toBe(false))
 	return { ...fixture, fork, target, actions, requests, labels, actionIds, hook }
 }
-function stablecoinCollateral(symbol: 'USDC' | 'USDT') {
-	const collateral = symbol === 'USDC' ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.usdtAddress
-	if (collateral === undefined) throw new Error(`Expected configured ${symbol} collateral`)
-	return collateral
-}
+const usdc = MAINNET_NETWORK_PROFILE.usdcAddress
 
 /** Reports in the stablecoin `collateral`, whose minimum report is 2 units, with `balance` of it in the wallet. */
-function reportInStablecoin(fixture: ReturnType<typeof priceFixture>, collateral: ReturnType<typeof stablecoinCollateral>, balance: bigint) {
+function reportInStablecoin(fixture: ReturnType<typeof priceFixture>, collateral: typeof usdc, balance: bigint) {
 	fixture.values['collateralToken'] = collateral
 	fixture.values['minimumToken1ReportAttoEth'] = 2_000_000n
 	fixture.set(collateral, 'balanceOf', balance)
@@ -217,36 +213,32 @@ test('a sponsor change during fresh price validation invalidates the reviewed ac
 	await expect(validation).rejects.toThrow('wallet environment changed')
 })
 
-for (const symbol of ['USDC', 'USDT'] as const) {
-	test(`${symbol} reports require the actual collateral balance before review`, async () => {
-		const collateral = stablecoinCollateral(symbol)
-		const state = await setup(f => {
-			reportInStablecoin(f, collateral, 1_999_999n)
-			f.setAllowances(100n * unit, 100n * unit)
-		})
-		await act(() => state.hook.state().setPrice('1'))
-		expect(state.hook.state().funding?.wrap).toBe(0n)
-		expect(state.hook.state().requestReason).toContain('Insufficient collateral')
-		await expect(state.hook.state().request()).rejects.toThrow('Insufficient collateral')
-		expect(state.requests).toHaveLength(0)
+test('USDC reports require the actual collateral balance before review', async () => {
+	const state = await setup(f => {
+		reportInStablecoin(f, usdc, 1_999_999n)
+		f.setAllowances(100n * unit, 100n * unit)
 	})
+	await act(() => state.hook.state().setPrice('1'))
+	expect(state.hook.state().funding?.wrap).toBe(0n)
+	expect(state.hook.state().requestReason).toContain('Insufficient collateral')
+	await expect(state.hook.state().request()).rejects.toThrow('Insufficient collateral')
+	expect(state.requests).toHaveLength(0)
+})
 
-	test(`${symbol} reports recheck collateral lost during transaction review`, async () => {
-		const collateral = stablecoinCollateral(symbol)
-		const state = await setup(f => {
-			reportInStablecoin(f, collateral, 2_000_000n)
-			f.setAllowances(100n * unit, 100n * unit)
-		})
-		await act(() => state.hook.state().setPrice('1'))
-		expect(state.hook.state().requestReason).toBeUndefined()
-		await act(() => state.hook.state().request())
-		const request = lastRequest(state.requests)
-		await request.validateBeforeSubmit?.()
-		state.set(collateral, 'balanceOf', 1_999_999n)
-		await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Wallet report funding is insufficient')
-		expect(state.requests).toHaveLength(1)
+test('USDC reports recheck collateral lost during transaction review', async () => {
+	const state = await setup(f => {
+		reportInStablecoin(f, usdc, 2_000_000n)
+		f.setAllowances(100n * unit, 100n * unit)
 	})
-}
+	await act(() => state.hook.state().setPrice('1'))
+	expect(state.hook.state().requestReason).toBeUndefined()
+	await act(() => state.hook.state().request())
+	const request = lastRequest(state.requests)
+	await request.validateBeforeSubmit?.()
+	state.set(usdc, 'balanceOf', 1_999_999n)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Wallet report funding is insufficient')
+	expect(state.requests).toHaveLength(1)
+})
 test("another environment never compares against the previous one's price", async () => {
 	const state = await setup(fixture => {
 		fixture.values['lastPrice'] = 900n * unit
@@ -320,27 +312,15 @@ test('with nothing to price, the report waits for a target instead of loading fo
 	expect(state.hook.state().refreshReason).toBe(priceCopy.scopes.universe.missingTarget)
 })
 
-test('a universe USDT reset uses its own transaction action instead of the branch action', async () => {
-	const collateral = stablecoinCollateral('USDT')
+test('a collateral approval over an existing allowance is one approval with the requested amount', async () => {
 	const state = await setup(f => {
-		reportInStablecoin(f, collateral, 2_000_000n)
-		f.setAllowances(1n, 100n * unit)
+		reportInStablecoin(f, usdc, 2_000_000n)
+		f.set(usdc, 'allowance', 1n)
+		f.setAllowances(1n, 0n)
 	}, capitalSnapshot())
 	await act(() => state.hook.state().setPrice('1'))
-	await act(() => state.hook.state().approve('weth', 0n))
-	expect(state.actionIds).toEqual(['resetPortfolioPriceCollateral:universe'])
-	expect(decodeFunctionData({ abi, data: lastRequest(state.requests).data }).args).toEqual([priceFeed, 0n])
-})
-test('a REP approval is never blocked by an existing USDT collateral allowance', async () => {
-	const collateral = stablecoinCollateral('USDT')
-	const state = await setup(f => {
-		reportInStablecoin(f, collateral, 2_000_000n)
-		f.set(collateral, 'allowance', 1n)
-		f.setAllowances(0n, 0n)
-	}, capitalSnapshot())
-	await act(() => state.hook.state().setPrice('1'))
-	await act(() => state.hook.state().approve('rep', 5n * unit))
-	await lastRequest(state.requests).validateBeforeSubmit?.()
 	await act(() => state.hook.state().approve('weth', 2_000_000n))
-	await expect(lastRequest(state.requests).validateBeforeSubmit?.()).rejects.toThrow('Reset USDT approval first.')
+	await lastRequest(state.requests).validateBeforeSubmit?.()
+	expect(state.actionIds).toEqual(['approvePortfolioPriceWeth:universe'])
+	expect(decodeFunctionData({ abi, data: lastRequest(state.requests).data }).args).toEqual([priceFeed, 2_000_000n])
 })

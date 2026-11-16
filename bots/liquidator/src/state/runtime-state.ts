@@ -4,7 +4,7 @@ import type { PortfolioObservation, PortfolioScope } from '#monitoring/portfolio
 import type { Address, Hex, RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 import type { CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { Activity, PendingStagedOperation, PendingTransactionIntent, PoolObservation, UniverseObservation } from './operator-state.ts'
+import type { Activity, PendingTransactionIntent, PoolObservation, UniverseObservation } from './operator-state.ts'
 
 export type RuntimeState = {
 	sponsoredReports?: SponsoredReport[] | undefined
@@ -27,7 +27,6 @@ export type RuntimeState = {
 	lastScannedTimestamp: bigint | undefined
 	paused: boolean
 	rpcEndpointHealth: readonly RpcEndpointHealth[]
-	pendingStagedOperations: PendingStagedOperation[]
 	pendingTransactions: PendingTransactionIntent[]
 	portfolios: PortfolioObservation[]
 	portfolioScopes: PortfolioScope[]
