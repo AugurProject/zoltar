@@ -47,13 +47,13 @@ test('singular transaction wording shows one linked recovery alert', async () =>
 	expect(rows[0]?.actionHref).toBe('/operations#recovery')
 })
 
-test('warning-level transaction recovery appears once beside distinct staged recovery', async () => {
+test('warning-level transaction recovery appears once beside a distinct alert', async () => {
 	const rows = await alertRows([
 		{ message: '1 transaction intent requires recovery before execution can continue', severity: 'warning' },
-		{ message: '1 staged operation requires outcome recovery before execution can continue', severity: 'warning' },
+		{ message: 'RPC connectivity is degraded', severity: 'warning' },
 	])
 	expect(rows).toHaveLength(2)
 	expect(rows[0]?.actionHref).toBe('/operations#recovery')
-	expect(rows[1]?.message).toContain('staged operation')
+	expect(rows[1]?.message).toContain('RPC connectivity')
 	expect(rows[1]?.actionHref).toBeUndefined()
 })

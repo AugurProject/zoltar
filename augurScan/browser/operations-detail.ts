@@ -1,3 +1,4 @@
+import { capitalPositionSummary, capitalSummarizedFields, capitalSummaryMetrics } from './capital-presentation.ts'
 import { poolSummaryMetrics } from './pool-metrics.ts'
 import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
 import { semanticFields } from './semantic-evidence.ts'
@@ -104,7 +105,14 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	back.href = operationsHref(catalogPath)
 	back.textContent = headerPresentation.backLabel
 	const titleIdentity = route.identity[0]
-	const title = element('h2', '', route.kind === 'report' ? `OpenOracle report ${route.identity[1]}` : `${route.kind[0]?.toUpperCase()}${route.kind.slice(1)} ${shortIdentifier(titleIdentity ?? '')}`)
+	const detailTitle = (): string => {
+		if (route.kind === 'report') return `OpenOracle report ${route.identity[1]}`
+		// A capital position is identified by ledger and owner; readers know it by its owner.
+		// Word joiners keep the shortened address on one line when a narrow heading wraps.
+		if (route.kind === 'capital') return `Capital position ${shortIdentifier(route.identity[1] ?? '').replace('…', '\u2060…\u2060')}`
+		return `${route.kind[0]?.toUpperCase()}${route.kind.slice(1)} ${shortIdentifier(titleIdentity ?? '')}`
+	}
+	const title = element('h2', '', detailTitle())
 	header.append(back, title)
 	const identity = element('details', 'operations-detail-identity')
 	identity.append(
@@ -135,6 +143,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		const state = data['read_status'] === 'success' && isPlainRecord(data['read_result']) ? data['read_result'] : {}
 		for (const [label, value] of poolSummaryMetrics(state, nativeSymbol)) summary.append(operationCard(label, value))
 	}
+	if (route.kind === 'capital' && data['read_status'] === 'success' && isPlainRecord(data['read_result'])) for (const [label, value] of capitalSummaryMetrics(data['read_result'])) summary.append(operationCard(label, value))
 
 	const panels: { tab: DetailTab; node: HTMLElement }[] = []
 	const addPanel = (tab: DetailTab, node: HTMLElement) => panels.push({ tab, node })
@@ -172,9 +181,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		)
 	}
 	if (current !== undefined) addPanel('overview', operationsPanel('Current report', [operationRow(String(lifecycle?.['state'] ?? current['event_name'] ?? 'Report'), 'Latest canonical report evidence', route.identity.join(':'), current['block_number']), rawEvidence(current)], 'Current report unavailable'))
-	if (route.kind === 'pool') {
+	if (route.kind === 'pool' || route.kind === 'capital') {
 		const riskPresentation = operationsRiskPresentation(data['protocol_state'], data['scanner_severity'])
-		const protocolStateRow = operationRow('Protocol state', riskPresentation.protocolState, route.identity.join(':'), data['block_number'])
+		const protocolStateRow = operationRow('Protocol state', riskPresentation.protocolState, route.kind === 'capital' ? route.identity[1] : route.identity.join(':'), data['block_number'])
 		protocolStateRow.classList.add('operations-risk-protocol')
 		const scannerAssessmentRow = operationRow('Scanner assessment', `${riskPresentation.scannerAssessment} · ${String(data['scanner_reason'] ?? 'Current-state evidence unavailable')}`, undefined, data['block_number'])
 		scannerAssessmentRow.classList.add('operations-risk-assessment', `operations-risk-${riskPresentation.scannerTone}`)
@@ -185,9 +194,12 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				[
 					protocolStateRow,
 					scannerAssessmentRow,
-					...semanticFields({ ...(data['read_status'] === 'success' && isPlainRecord(data['read_result']) ? data['read_result'] : {}), ...(data['read_status'] === 'success' && isPlainRecord(data['risk']) ? data['risk'] : {}) }, nativeSymbol).map(([label, value]) =>
-						operationRow(label, value, undefined, data['block_number']),
-					),
+					...semanticFields(
+						Object.fromEntries(
+							Object.entries({ ...(data['read_status'] === 'success' && isPlainRecord(data['read_result']) ? data['read_result'] : {}), ...(data['read_status'] === 'success' && isPlainRecord(data['risk']) ? data['risk'] : {}) }).filter(([key]) => route.kind !== 'capital' || !capitalSummarizedFields.has(key)),
+						),
+						nativeSymbol,
+					).map(([label, value]) => operationRow(label, value, undefined, data['block_number'])),
 					rawEvidence(data),
 				],
 				'Risk state unavailable',
@@ -268,7 +280,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			'Coordinator decisions',
 			decisionItems.map(decision => {
 				const argumentsValue = isPlainRecord(decision['arguments']) ? decision['arguments'] : {}
-				return operationRow(String(decision['event_name'] ?? 'Coordinator decision'), String(argumentsValue['reason'] ?? decision['summary'] ?? 'Linked coordinator evidence'), String(decision['emitter_address'] ?? ''), decision['block_number'])
+				// The report's escrow completes the report and records whether the feed accepted its price.
+				const completion = decision['event_name'] === 'ReportCompleted' && typeof argumentsValue['accepted'] === 'boolean' ? `Escrow settled the report; the feed ${argumentsValue['accepted'] ? 'accepted' : 'did not accept'} its price` : undefined
+				return operationRow(String(decision['event_name'] ?? 'Coordinator decision'), String(argumentsValue['reason'] ?? completion ?? decision['summary'] ?? 'Linked coordinator evidence'), String(decision['emitter_address'] ?? ''), decision['block_number'])
 			}),
 			'No coordinator decision could be linked to this report.',
 		)
@@ -422,6 +436,10 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 						undefined,
 					),
 					operationRow('Portfolio fork', `${operationCounted(forkSummary['portfolio_fork_events'], 'portfolio fork event')} · ${operationCounted(forkSummary['branch_chooser_count'], 'owner')} chose a branch`, undefined, undefined),
+					// The reporter ledger freezes once per forked universe: live game escrow migrates, finalized games keep parent REP.
+					...(Number(forkSummary['reporter_fork_frozen_count'] ?? 0) > 0
+						? [operationRow('Reporter escrow', `${exactUnit(String(forkSummary['reporter_migration_atto_rep'] ?? '0'), 18, 'REP')} live escrow migrates · ${exactUnit(String(forkSummary['reporter_protected_parent_atto_rep'] ?? '0'), 18, 'REP')} of finalized games stays with the parent`, undefined, undefined)]
+						: []),
 				],
 				'No fork summary evidence is available.',
 			),
@@ -438,6 +456,28 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No child branches match this view.',
 			),
 		)
+	if (route.kind === 'capital') {
+		const history = isPlainRecord(data['history']) ? data['history'] : {}
+		const reads = operationRecords(history['snapshots'])
+		addPanel(
+			'history',
+			operationsPanel(
+				'Tagged position history',
+				reads.map(read => {
+					const row = operationRow(
+						read['read_status'] === 'success' ? 'Position read' : 'Failed position read',
+						read['read_status'] === 'success' && isPlainRecord(read['read_result']) ? capitalPositionSummary(read['read_result']) : String(read['read_failure_reason'] ?? 'Tagged read unavailable'),
+						undefined,
+						read['block_number'],
+					)
+					row.append(rawEvidence(read))
+					return row
+				}),
+				'No tagged read of this position is retained.',
+				history['truncated'] === true ? { label: 'Latest 250 reads' } : undefined,
+			),
+		)
+	}
 	const evidencePage = detailPageRecord(data, route.kind === 'report' ? 'rounds' : 'events')
 	const evidenceItems = operationRecords(evidencePage['items'])
 	deps.setDetailState({
@@ -450,7 +490,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	})
 	const evidenceHasMore = evidencePage['hasMore'] === true && typeof evidencePage['nextCursor'] === 'string'
 	if (operationsDetailEvidencePanelVisible(route.kind, evidenceItems.length, evidenceHasMore, renderContext.focusLoadMore)) {
-		const evidencePanel = operationsPanel(route.kind === 'report' ? 'Report rounds' : 'Lifecycle timeline', detailEvidenceRowsFor(route.kind, evidenceItems), 'No canonical evidence is available.')
+		const evidenceTitles: Partial<Record<OperationsDetailRoute['kind'], string>> = { report: 'Report rounds', capital: 'Capital and liquidation events' }
+		// A take-over or cure names positions of one universe ledger; the chain does not tie it to a question pool.
+		const evidencePanel = operationsPanel(evidenceTitles[route.kind] ?? 'Lifecycle timeline', detailEvidenceRowsFor(route.kind, evidenceItems), 'No canonical evidence is available.', route.kind === 'capital' ? { label: 'Attributed to this owner and universe, not to a question pool' } : undefined)
 		if (evidenceHasMore) {
 			const loadMore = document.createElement('button')
 			loadMore.type = 'button'

@@ -40,6 +40,7 @@ export const reportDetailData = async (
 			AND event.report_id = ${reportId} AND event.canonical AND event.block_number <= ${snapshotBlock}
 		ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1
 	`
+	// The feed emits the request and its decision. The report's escrow emits the completion and names the feed that created it.
 	const coordinatorDecisions = await sql`
 		WITH coordinators AS (
 			SELECT DISTINCT request.emitter_address
@@ -53,9 +54,10 @@ export const reportDetailData = async (
 		SELECT log.block_number::text, log.block_hash, log.tx_hash, log.log_index, log.emitter_address,
 			log.event_name, log.arguments, log.summary, block.timestamp AS block_timestamp
 		FROM logs log JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
-		JOIN coordinators coordinator ON coordinator.emitter_address = log.emitter_address
+		JOIN coordinators coordinator ON (coordinator.emitter_address = log.emitter_address
+				AND log.event_name IN ('PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'ReportFundingAssigned'))
+			OR (log.event_name = 'ReportCompleted' AND lower(log.arguments->>'priceFeed') = coordinator.emitter_address)
 		WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.arguments->>'reportId' = ${reportId}
-			AND log.event_name IN ('PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'ReportFundingAssigned')
 			AND (log.block_number, log.log_index, log.tx_hash) < (${decisions.block}::bigint, ${decisions.log}::integer, ${decisions.tx})
 		ORDER BY log.block_number DESC, log.log_index DESC, log.tx_hash DESC LIMIT ${decisions.limit}
 	`
@@ -86,8 +88,8 @@ export const auctionDetailData = async (sql: SQL, chainId: number, address: stri
 	return { bids, lotAttoEth: typeof lotAttoEth === 'string' && /^\d+$/.test(lotAttoEth) ? lotAttoEth : undefined, finalization: finalizations[0] }
 }
 
-// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered) or one of its
-// child universes (BranchStarted, BranchActivated). The event list shows every event naming the universe; the
+// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered, ReporterForkFrozen,
+// and ReporterChildCreated as sourceUniverseId) or one of its child universes (BranchStarted, BranchActivated). The event list shows every event naming the universe; the
 // summary counts a child's start and activation only for its parent's fork, through the child's universe record.
 export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: string; readonly chainId: number; readonly identity: string; readonly page: PageBoundary }) => {
 	const { chainId, identity, page, snapshotBlock } = query
@@ -96,7 +98,7 @@ export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: 
 		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical
 		WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock}
 			AND (event.universe_identity = ${identity} OR event.event_data->>'universeId' = ${identity}
-				OR event.event_data->>'childUniverseId' = ${identity}
+				OR event.event_data->>'childUniverseId' = ${identity} OR event.event_data->>'sourceUniverseId' = ${identity}
 				OR (event.event_name IN ('BranchStarted', 'BranchActivated') AND EXISTS (
 					SELECT 1 FROM universe_events child WHERE child.chain_id = event.chain_id AND child.canonical
 						AND child.block_number <= ${snapshotBlock} AND child.parent_universe_id::text = ${identity}
@@ -111,7 +113,7 @@ export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: 
 			count(DISTINCT event_data->>'migrator') FILTER (WHERE event_data ? 'migrator')::integer AS migrator_count,
 			count(*) FILTER (WHERE event_name = 'MigrationRepSplit')::integer AS migration_count
 		FROM fork_migration_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
-			AND (universe_identity = ${identity} OR event_data->>'universeId' = ${identity})
+			AND (universe_identity = ${identity} OR event_data->>'universeId' = ${identity} OR event_data->>'sourceUniverseId' = ${identity})
 			AND event_data ? 'childUniverseId'
 		GROUP BY event_data->>'childUniverseId' ORDER BY event_data->>'childUniverseId'
 	`
@@ -123,12 +125,16 @@ export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: 
 				(WHERE event.event_name = 'RepBurned' AND event.event_data ? 'amountAttoRep'), 0)::text AS burned_atto_rep,
 			count(DISTINCT event.event_data->>'migrator') FILTER (WHERE event.event_data ? 'migrator')::integer AS migrator_count,
 			count(DISTINCT event.event_data->>'childUniverseId') FILTER (WHERE event.event_data ? 'childUniverseId')::integer AS child_count,
-			count(*) FILTER (WHERE event.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'))::integer AS portfolio_fork_events,
+			count(*) FILTER (WHERE event.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen', 'ReporterChildCreated'))::integer AS portfolio_fork_events,
+			count(*) FILTER (WHERE event.event_name = 'ReporterForkFrozen')::integer AS reporter_fork_frozen_count,
+			COALESCE(sum((event.event_data->>'migrationAttoRep')::numeric) FILTER (WHERE event.event_name = 'ReporterForkFrozen'), 0)::text AS reporter_migration_atto_rep,
+			COALESCE(sum((event.event_data->>'protectedParentAttoRep')::numeric) FILTER (WHERE event.event_name = 'ReporterForkFrozen'), 0)::text AS reporter_protected_parent_atto_rep,
 			count(DISTINCT event.event_data->>'owner') FILTER (WHERE event.event_name = 'BranchChosen')::integer AS branch_chooser_count
 		FROM fork_migration_events event
 		WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock} AND (
 			(event.event_name NOT IN ('BranchStarted', 'BranchActivated')
-				AND (event.universe_identity = ${identity} OR event.event_data->>'universeId' = ${identity}))
+				AND (event.universe_identity = ${identity} OR event.event_data->>'universeId' = ${identity}
+					OR event.event_data->>'sourceUniverseId' = ${identity}))
 			OR (event.event_name IN ('BranchStarted', 'BranchActivated') AND EXISTS (
 				SELECT 1 FROM universe_events child WHERE child.chain_id = event.chain_id AND child.canonical
 					AND child.block_number <= ${snapshotBlock} AND child.parent_universe_id::text = ${identity}

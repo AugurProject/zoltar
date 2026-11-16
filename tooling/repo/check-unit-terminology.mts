@@ -6,6 +6,13 @@ const sourceFiles = listRepositoryFiles({ untracked: true })
 const protectedVendorPath = 'solidity/contracts/statoblast/openOracle/OpenOracle.sol'
 const terminologyCheckPath = 'tooling/repo/check-unit-terminology.mts'
 const serializedAtomicStringAllowlist = new Set([
+	// Capital API records and fixtures serialize exact atomic integers as decimal strings.
+	'augurScan/browser/browser-types.ts',
+	'augurScan/tests/browser/demo-api/capital-fixtures.ts',
+	'augurScan/tests/integration/postgres-capital-positions.test.ts',
+	'augurScan/tests/integration/postgres-operations.test.ts',
+	'augurScan/tests/unit/capital-presentation.test.ts',
+	'augurScan/tests/unit/capital-snapshots.test.ts',
 	// Auction demand curves consume and return exact atomic integers as decimal strings.
 	'augurScan/src/operations.ts',
 	'augurScan/tests/browser/demo-api/operations-detail.ts',

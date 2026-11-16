@@ -89,9 +89,9 @@
 					<dt id="start-bond">Start bond</dt>
 					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the pool was deployed ÷ 10<sup>7</sup>. Origin-pool deployment requires it to be below the non-decision threshold; a game started with a bond at or above that threshold is clamped to one atto-REP below that threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold. A child pool continuing a forked game keeps its parent's start bond.</dd>
 					<dt id="binding-capital">Binding capital</dt>
-					<dd>The median of the three outcome balances that determines the Escalation Game's scheduled deadline.</dd>
+					<dd>The median of the three outcome balances. See <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game deadlines</a> for its role in finality.</dd>
 					<dt id="required-support">Required support</dt>
-					<dd>The REP an outcome must hold to stay in contention, called attrition cost in the contracts (<code>totalCostAttoRep</code>). It is zero for the three-day activation delay, then rises from the start bond to the non-decision threshold over 49 days. The game's deadline is the moment it passes binding capital.</dd>
+					<dd>The REP an outcome must hold to stay in contention, called attrition cost in the contracts (<code>totalCostAttoRep</code>). It is zero for the three-day activation delay, then rises from the start bond to the non-decision threshold over 49 days.</dd>
 					<dt id="non-decision-threshold">Non-decision threshold</dt>
 					<dd>The balance that two outcomes must each reach for the Escalation Game to enter non-decision: half of the universe's fork threshold, rounded up, read when the game opens and fixed for that game and any game carried from it.</dd>
 					<dt id="non-decision">Non-decision</dt>

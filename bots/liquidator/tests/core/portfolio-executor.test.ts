@@ -114,7 +114,19 @@ test('post-approval revalidation rejects deteriorated collateral, stale price ep
 	await expect(stopped.run()).rejects.toThrow('disabled')
 	expect(stopped.calls).toHaveLength(0)
 	const recovery = fixture()
-	recovery.state.pendingStagedOperations.push({ coordinator: recovery.observation.snapshot.capitalLedger, operationId: 1n, queuedBlock: 1n, target: recovery.observation.snapshot.owner })
+	recovery.state.pendingTransactions.push({
+		hash: `0x${'ab'.repeat(32)}`,
+		kind: 'deposit',
+		label: 'Pending deposit',
+		maxBlockNumber: 120n,
+		mode: 'public',
+		nonce: 1n,
+		receiptExpectation: { type: 'transaction' },
+		requiresMarketEvidence: false,
+		sender: recovery.observation.snapshot.owner,
+		serializedTransaction: '0x',
+		submissionBlock: 1n,
+	})
 	await expect(recovery.run()).rejects.toThrow('recovery')
 	expect(recovery.calls).toHaveLength(0)
 })

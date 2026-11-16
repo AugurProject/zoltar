@@ -59,7 +59,19 @@ test('earned REP counts for collection only with current independent market evid
 test('earnings collection never runs during pending recovery', async () => {
 	const f = fixture()
 	f.observation.snapshot.ownerAccount.feesAttoEth = unit
-	f.state.pendingStagedOperations.push({ coordinator: f.observation.snapshot.capitalLedger, operationId: 1n, queuedBlock: 1n, target: f.observation.snapshot.owner })
+	f.state.pendingTransactions.push({
+		hash: `0x${'ab'.repeat(32)}`,
+		kind: 'deposit',
+		label: 'Pending deposit',
+		maxBlockNumber: 120n,
+		mode: 'public',
+		nonce: 1n,
+		receiptExpectation: { type: 'transaction' },
+		requiresMarketEvidence: false,
+		sender: f.observation.snapshot.owner,
+		serializedTransaction: '0x',
+		submissionBlock: 1n,
+	})
 	await expect(f.run(true)).rejects.toThrow('Pending recovery')
 	expect(f.calls).toHaveLength(0)
 })

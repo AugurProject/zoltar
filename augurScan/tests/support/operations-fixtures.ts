@@ -98,6 +98,14 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 					readStatus: 'success',
 					readResult: { finalized: false, bidCount: '2' },
 				},
+				// The one-time read that names the owner of position 1; position 2 has not been read.
+				{
+					entityType: 'capital-position',
+					entityIdentity: `${oracle.toLowerCase()}:1`,
+					sourceMethod: 'augurscan.capital-position-state.v1',
+					readStatus: 'success',
+					readResult: { ledger: oracle.toLowerCase(), positionId: '1', owner: address.toLowerCase() },
+				},
 			],
 			lease,
 		)

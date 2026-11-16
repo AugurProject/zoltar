@@ -13,7 +13,7 @@ type RpcPool = ReturnType<typeof createRpcEndpointPool>
 /** Earned fees are collected separately, with no principal or commitment mutation. */
 export async function executePortfolioEarnings(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, target: PortfolioObservation, priceAllowed: (observation: PortfolioObservation) => Promise<boolean>, execution = { refresh: refreshPortfolioExecution, submit: submitCall }) {
 	if (!settings.portfolioPolicy.allowFundedTakeovers || !settings.runtime.execute) throw new Error('Portfolio automation is disabled')
-	if (state.pendingTransactions.length !== 0 || state.pendingStagedOperations.length !== 0) throw new Error('Pending recovery blocks portfolio earnings withdrawal')
+	if (state.pendingTransactions.length !== 0) throw new Error('Pending recovery blocks portfolio earnings withdrawal')
 	const refresh = async () => {
 		const current = await execution.refresh(wallet, settings, state.portfolioScopes, pool, target, undefined)
 		const observation = current.observation

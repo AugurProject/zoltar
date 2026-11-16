@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import { apiFailureLog } from '../api-failure-log.ts'
 import { actionCatalog, contractCatalog, contractDetail, networkCatalog } from '../repositories/catalog.ts'
 import { addressIdentity, addressInteractions, addressTransactions } from './address-history.ts'
+import { capitalCatalogResponse, capitalDetailResponse, liquidationCatalogResponse } from './capital.ts'
 import { directObservationsResponse } from './direct-observations.ts'
 import { eventEntityDetailResponse, forkDetailResponse, reportDetailResponse } from './entity-details.ts'
 import { historicalExport } from './exports.ts'
@@ -47,6 +48,8 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/state/auctions') return await domainCatalogResponse(sql, url, 'auctions')
 		if (url.pathname === '/api/v1/state/risk') return await domainCatalogResponse(sql, url, 'risk')
 		if (url.pathname === '/api/v1/state/forks') return await domainCatalogResponse(sql, url, 'forks')
+		if (url.pathname === '/api/v1/state/capital') return await capitalCatalogResponse(sql, url)
+		if (url.pathname === '/api/v1/state/liquidations') return await liquidationCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/trading') return await tradingCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/integrity') return await integrityCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/direct-observations') return await directObservationsResponse(sql, url)
@@ -55,6 +58,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname.startsWith('/api/v1/state/auctions/')) return await eventEntityDetailResponse(sql, url.pathname.slice('/api/v1/state/auctions/'.length).split('/'), url, 'auction')
 		if (url.pathname.startsWith('/api/v1/state/forks/')) return await forkDetailResponse(sql, url.pathname.slice('/api/v1/state/forks/'.length).split('/'), url)
 		if (url.pathname.startsWith('/api/v1/state/risk/')) return await riskDetailResponse(sql, url.pathname.slice('/api/v1/state/risk/'.length).split('/'), url)
+		if (url.pathname.startsWith('/api/v1/state/capital/')) return await capitalDetailResponse(sql, url.pathname.slice('/api/v1/state/capital/'.length).split('/'), url)
 		if (url.pathname.startsWith('/api/v1/state/trading/')) return await tradingDetailResponse(sql, url.pathname.slice('/api/v1/state/trading/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/state/address-portfolio') return await addressPortfolioResponse(sql, url)
 		if (url.pathname === '/api/v1/state/timeline') return await timelineCatalogResponse(sql, url)

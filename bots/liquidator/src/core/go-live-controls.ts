@@ -62,11 +62,11 @@ export function createGoLiveControls({ activePrivateKey, applySigner, locks, per
 				const active = activePrivateKey()
 				const current = settings()
 				if (candidate.privateKey?.toLowerCase() !== active?.toLowerCase()) {
-					const activeRecovery = active !== undefined && (state.pendingTransactions.length > 0 || state.pendingStagedOperations.length > 0)
+					const activeRecovery = active !== undefined && state.pendingTransactions.length > 0
 					const differentPendingSender = state.pendingTransactions.some(intent => intent.sender.toLowerCase() !== candidate.address?.toLowerCase())
 					// The persisted intents authenticate their sender on load. Only that sender can replace a stale
 					// active signer, and live execution must remain paused until the replacement is complete.
-					const restoringPendingSender = state.pendingTransactions.length > 0 && state.pendingStagedOperations.length === 0 && (!current.runtime.execute || (current.paused && state.paused)) && !differentPendingSender
+					const restoringPendingSender = state.pendingTransactions.length > 0 && (!current.runtime.execute || (current.paused && state.paused)) && !differentPendingSender
 					if ((activeRecovery && !restoringPendingSender) || differentPendingSender) throw new Error(PENDING_SIGNER_RECOVERY)
 				}
 				// Validate the configuration that would result, before reservations or durable writes.

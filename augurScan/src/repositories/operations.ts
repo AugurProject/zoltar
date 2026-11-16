@@ -136,6 +136,8 @@ export const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<
 	})
 }
 
+// A game's latest own event is its catalog state. The reporter ledger schedules finality after the game's
+// concluding event in the same transaction, so its events are the state only of a game with no event of its own.
 export const escalationCatalogData = async (sql: SQL, chainId: number, snapshotBlock: string, cursorBlock = snapshotBlock, cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 250) =>
 	await sql`
 		WITH games AS (
@@ -157,7 +159,7 @@ export const escalationCatalogData = async (sql: SQL, chainId: number, snapshotB
 		) snapshot ON true JOIN LATERAL (
 			SELECT * FROM escalation_game_events event WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address
 				AND event.canonical AND event.block_number <= ${snapshotBlock}
-			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1
+			ORDER BY (event.event_name IN ('GameRegistered', 'ReporterFinalityScheduled')), event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1
 		) latest ON true WHERE (latest.block_number, latest.log_index, latest.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
 		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
 	`
@@ -214,7 +216,7 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 export const riskCatalogData = async (sql: SQL, chainId: number, options: { poolAddress?: string | undefined; poolAfter?: string | undefined; limit?: number | undefined; snapshotBlock?: string | undefined } = {}) => {
 	const queryLimit = (options.limit ?? 250) + 1
 	const snapshotBlock = options.snapshotBlock ?? '9223372036854775807'
-	const [pools, takeovers, totals] = await Promise.all([
+	const [pools, totals] = await Promise.all([
 		sql`
 			WITH identities AS (
 				SELECT DISTINCT pool_address FROM pools
@@ -235,12 +237,6 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 				AND (${options.poolAfter ?? null}::text IS NULL OR identity.pool_address > ${options.poolAfter ?? null})
 			ORDER BY identity.pool_address LIMIT ${queryLimit}
 		`,
-		// A take-over moves an unhealthy commitment to another capital position; it is the capital ledger's liquidation.
-		sql`SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
-			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
-			WHERE timeline.chain_id = ${chainId} AND timeline.canonical
-				AND timeline.semantic_event_kind = 'CommitmentTakenOver' AND timeline.block_number <= ${snapshotBlock}
-			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC, timeline.block_hash DESC LIMIT 25`,
 		sql`
 			SELECT count(DISTINCT pool_address)::integer AS pool_total FROM pools
 			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
@@ -268,7 +264,6 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 	const lastPool = poolData.at(-1)
 	return {
 		pools: poolData,
-		recentTakeovers: takeovers,
 		pagination: {
 			poolTotal: Number(totals[0]?.['pool_total'] ?? 0),
 			poolHasMore: pools.length > (options.limit ?? 250),
@@ -287,9 +282,10 @@ export const forkCatalogTotal = async (sql: SQL, chainId: number, snapshotBlock:
 	return Number(rows[0]?.['total'] ?? 0)
 }
 
-// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered) or one of its
-// child universes (BranchStarted, BranchActivated). A child's start and activation belong to its parent's fork,
-// so they join only through the child's universe record and never through their own universeId.
+// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered, ReporterForkFrozen,
+// and ReporterChildCreated as sourceUniverseId) or one of its child universes (BranchStarted, BranchActivated).
+// A child's start and activation belong to its parent's fork, so they join only through the child's universe
+// record and never through their own universeId.
 export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: string, cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 100, snapshotBlock = cursorBlock) =>
 	await sql`
 		WITH roots AS (
@@ -306,12 +302,13 @@ export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: st
 				(WHERE related.event_name = 'MigrationRepSplit' AND related.event_data ? 'amountAttoRep'), 0)::text AS migrated_atto_rep,
 			COALESCE(sum((related.event_data->>'amountAttoRep')::numeric) FILTER
 				(WHERE related.event_name = 'RepBurned' AND related.event_data ? 'amountAttoRep'), 0)::text AS burned_atto_rep,
-			count(*) FILTER (WHERE related.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'))::integer AS portfolio_fork_events
+			count(*) FILTER (WHERE related.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen', 'ReporterChildCreated'))::integer AS portfolio_fork_events
 		FROM roots root
 		LEFT JOIN fork_migration_events related ON related.chain_id = root.chain_id AND related.canonical
 			AND related.block_number <= ${snapshotBlock} AND (
 			(related.event_name NOT IN ('BranchStarted', 'BranchActivated')
-				AND (related.universe_identity = root.universe_identity OR related.event_data->>'universeId' = root.universe_identity))
+				AND (related.universe_identity = root.universe_identity OR related.event_data->>'universeId' = root.universe_identity
+					OR related.event_data->>'sourceUniverseId' = root.universe_identity))
 			OR (related.event_name IN ('BranchStarted', 'BranchActivated') AND EXISTS (
 				SELECT 1 FROM universe_events child WHERE child.chain_id = root.chain_id AND child.canonical
 					AND child.block_number <= ${snapshotBlock} AND child.parent_universe_id::text = root.universe_identity

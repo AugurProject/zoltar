@@ -133,7 +133,7 @@ function currentConfiguration() {
 		connectivity,
 		network,
 		networkConfigured,
-		runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
+		runtime: { execute: false },
 		selectedPortfolios,
 		strategy,
 		portfolioPolicy,
@@ -191,10 +191,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 	getState: () => ({
 		operatorCapable: false,
 		activities,
-		alerts: [
-			{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' },
-			{ message: '1 staged operation requires outcome recovery before execution can continue', severity: 'error' },
-		],
+		alerts: [{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' }],
 		centralizedMarket: {
 			assetId: '0x0000000000000000000000000000000000000abc',
 			askDepthEth: '6.3',
@@ -249,17 +246,6 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 				nonce: '19',
 				requiresMarketEvidence: true,
 				submissionBlock: '8842011',
-			},
-		],
-		pendingStagedOperations: [
-			{
-				coordinator: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-				historicalRecoveryComplete: false,
-				latestRecoveryBlock: '8842011',
-				nextHistoricalBlock: '8841755',
-				operationId: '27',
-				queuedBlock: '8841500',
-				target: '0x4444444444444444444444444444444444444444',
 			},
 		],
 		portfolios: [

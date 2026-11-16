@@ -45,6 +45,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 
 	const OPERATIONS_DETAIL_RESOURCES: Record<OperationsDetailRoute['kind'], string> = {
 		auction: 'auctions',
+		capital: 'capital',
 		escalation: 'escalations',
 		fork: 'forks',
 		pool: 'risk/pools',
@@ -58,7 +59,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		const resource = OPERATIONS_DETAIL_RESOURCES[route.kind]
 		const query = new URLSearchParams({ limit: String(limit) })
 		const atBlock = getPageUrl().searchParams.get('atBlock')
-		if (route.kind === 'pool' && atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
+		if ((route.kind === 'pool' || route.kind === 'capital') && atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
 		if (cursor !== undefined) query.set('cursor', cursor)
 		if (route.kind === 'report' || route.kind === 'trading') {
 			const prefix = route.kind === 'trading' ? 'activity' : 'decision'

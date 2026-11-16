@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { conditionalYesBps } from '@zoltar/trading-shared/trading/math'
-import { arrangeMarkets, coarseDuration, marketLiquidityAttoEth, marketOddsPercent, marketYesTenths, probabilityTenths, type MarketFilter } from '../../lib/marketListing.js'
+import { arrangeMarkets, coarseDuration, marketLiquidityCollateralUnits, marketOddsPercent, marketYesTenths, probabilityTenths, type MarketFilter } from '../../lib/marketListing.js'
 import { DEFAULT_MARKET_LIST_OPTIONS, marketTicketHref, readMarketListParams, readMarketViewParam, readTicketParam, withoutRouteStateParams, writeMarketListParams, writeMarketViewParam, writeTicketParam } from '../../lib/routeState.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { marketsCopy } from '../../copy/markets.js'
@@ -46,13 +46,13 @@ describe('market odds and liquidity', () => {
 
 	test('values the reserves at the pair spot price in settlement collateral', () => {
 		// Genesis rate: 10^18 attoShares per attoETH. Balanced 1-token reserves are worth one token of collateral.
-		expect(marketLiquidityAttoEth(market({ pool: address('01') }))).toBe(10n ** 18n)
+		expect(marketLiquidityCollateralUnits(market({ pool: address('01') }))).toBe(10n ** 18n)
 		// 2·Y·N / (Y + N) with Y = 1, N = 3 tokens is 1.5 tokens.
-		expect(marketLiquidityAttoEth(market({ pool: address('01'), yesReserve: 10n ** 18n, noReserve: 3n * 10n ** 18n }))).toBe(15n * 10n ** 17n)
+		expect(marketLiquidityCollateralUnits(market({ pool: address('01'), yesReserve: 10n ** 18n, noReserve: 3n * 10n ** 18n }))).toBe(15n * 10n ** 17n)
 		// Once collateral exists, the pool's own share rate applies.
-		expect(marketLiquidityAttoEth(market({ pool: address('01'), shareTokenSupplyAttoShares: 4n * 10n ** 18n, settlementCollateralAttoEth: 2n * 10n ** 18n }))).toBe(5n * 10n ** 17n)
-		expect(marketLiquidityAttoEth(market({ pool: address('01'), yesReserve: 0n, noReserve: 0n }))).toBe(0n)
-		expect(marketLiquidityAttoEth(market({ pool: address('01'), pair: undefined }))).toBeUndefined()
+		expect(marketLiquidityCollateralUnits(market({ pool: address('01'), shareTokenSupplyAttoShares: 4n * 10n ** 18n, settlementCollateralAttoEth: 2n * 10n ** 18n }))).toBe(5n * 10n ** 17n)
+		expect(marketLiquidityCollateralUnits(market({ pool: address('01'), yesReserve: 0n, noReserve: 0n }))).toBe(0n)
+		expect(marketLiquidityCollateralUnits(market({ pool: address('01'), pair: undefined }))).toBeUndefined()
 	})
 })
 
@@ -120,6 +120,14 @@ describe('market ordering', () => {
 
 	test('liquidity sorts deepest first and leaves markets without a pair last', () => {
 		expect(pools(arrangeMarkets(loaded, { filter: 'all', query: '', sort: 'liquidity' }, NOW))).toEqual(pools([second, third, first, unpaired]))
+	})
+
+	test('liquidity compares markets in whole collateral units, not raw base units of different decimals', () => {
+		const usdc = { token: address('c6'), symbol: 'USDC', decimals: 6, native: false } as const
+		// One million USDC of depth (2·Y·N / (Y + N) pairs at a one-to-one share rate) against 0.01 ETH.
+		const deepUsdc = market({ pool: address('11'), collateral: usdc, yesReserve: 10n ** 12n, noReserve: 10n ** 12n, shareTokenSupplyAttoShares: 10n ** 12n, settlementCollateralAttoEth: 10n ** 12n })
+		const shallowEth = market({ pool: address('12'), yesReserve: 10n ** 16n, noReserve: 10n ** 16n, shareTokenSupplyAttoShares: 10n ** 16n, settlementCollateralAttoEth: 10n ** 16n })
+		expect(pools(arrangeMarkets([shallowEth, deepUsdc], { filter: 'all', query: '', sort: 'liquidity' }, NOW))).toEqual(pools([deepUsdc, shallowEth]))
 	})
 
 	test('applies the filter and search before sorting', () => {

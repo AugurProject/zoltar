@@ -3,7 +3,8 @@ import { shortIdentifier } from './identifier-format.ts'
 import type { NetworkRecord, OperationsCatalogSection, OperationsRenderContext, PagedOperationsCatalogSection } from './browser-types.ts'
 import { operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
 import { evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationReasonLabel, timelineEntityTypeLabel, timelineOccurrenceFields } from './history-evidence.ts'
-import { operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness, takeoverSummary } from './operations-presentation.ts'
+import { capitalLedgerSummary, capitalPositionListLabel, capitalPositionPath, capitalPositionSummary, liquidationSummary, liquidationTitle } from './capital-presentation.ts'
+import { operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness } from './operations-presentation.ts'
 import { exactUnit, percentFromBps, utcDateTime } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import type { createOperationsComponents } from './operations-components.ts'
@@ -60,7 +61,9 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const risk = isPlainRecord(riskValue) ? riskValue : {}
 	const riskPagination = operationsRiskPagination(risk['pagination'], riskValue !== undefined)
 	const pools = operationsRiskRecords(risk['pools'])
-	const recentTakeovers = operationRecords(risk['recentTakeovers'])
+	const capitalPositions = operationRecords(risk['capitalPositions'])
+	const capitalLedgers = operationRecords(risk['capitalLedgers'])
+	const recentLiquidations = operationRecords(risk['recentLiquidations'])
 	const freshness = element('div', 'operations-freshness')
 	freshness.append(
 		operationCard('Latest block', `#${number(typeof asOf['blockNumber'] === 'string' ? asOf['blockNumber'] : undefined)}`, shortIdentifier(String(asOf['blockHash'] ?? 'Unavailable'))),
@@ -138,7 +141,33 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		)
 	})
 	const nativeSymbol = nativeSymbolFor(requiredChainId())
-	const takeoverRows = recentTakeovers.map(item => operationRow('Commitment take-over', takeoverSummary(item['summary_data']), String(item['source_contract'] ?? ''), item['block_number']))
+	// Underwriting capital is held per owner in one ledger per portfolio universe, so its risk is listed beside the pools.
+	const capitalPositionRows = capitalPositions.map(item => {
+		const riskPresentation = operationsRiskPresentation(item['protocol_state'], item['scanner_severity'])
+		const state = isPlainRecord(item['read_result']) ? item['read_result'] : {}
+		return operationRow(
+			riskPresentation.protocolState,
+			// A warning is the scanner's own band over a protocol-healthy position, so the row says what triggered it.
+			`${riskPresentation.scannerAssessment}${item['scanner_severity'] === 'warning' ? ' · health below the scanner threshold' : ''} · ${item['read_status'] === 'success' ? capitalPositionSummary(state) : String(item['scanner_reason'] ?? 'Tagged read unavailable')}`,
+			String(item['owner_address'] ?? ''),
+			item['block_number'],
+			operationsHref(capitalPositionPath(item['ledger_address'], item['owner_address'])),
+		)
+	})
+	const capitalLedgerRows = capitalLedgers.map(item => {
+		const state = isPlainRecord(item['read_result']) ? item['read_result'] : undefined
+		return operationRow(`Universe ${shortIdentifier(String(item['universe_id'] ?? 'unread'), 9, 6)}`, state === undefined ? 'Awaiting the first tagged ledger read' : capitalLedgerSummary(state, item['owner_count']), String(item['ledger_address'] ?? ''), item['block_number'])
+	})
+	const liquidationRows = recentLiquidations.map(item => {
+		const eventData = isPlainRecord(item['event_data']) ? item['event_data'] : {}
+		// A take-over or cure opens the source owner's position. A report operation opens its sponsor's address, since a sponsor need not hold a position.
+		const sponsor = eventData['sponsor']
+		let href: string | undefined
+		if (typeof item['source_owner'] === 'string' && typeof item['ledger_address'] === 'string') href = operationsHref(capitalPositionPath(item['ledger_address'], item['source_owner']))
+		else if (item['event_name'] === 'ReportOperationAttempted' && typeof sponsor === 'string') href = operationsHref(`/address/${encodeURIComponent(sponsor.toLowerCase())}`)
+		return operationRow(liquidationTitle(item), liquidationSummary(item), String(item['tx_hash'] ?? ''), item['block_number'], href)
+	})
+	const atRiskCapitalRows = capitalPositionRows.filter((_, index) => ['critical', 'warning'].includes(String(capitalPositions[index]?.['scanner_severity'])))
 	const tradingRows = trading.map(item =>
 		operationRow(
 			String(item['question_title'] ?? 'Augur AMM market'),
@@ -227,7 +256,17 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		['reports', () => [operationsPanel('OpenOracle reports', reportRows, 'No reports match this view.')]],
 		['escalations', () => [operationsPanel('Escalation games', escalationRows, 'No escalation games match this view.')]],
 		['auctions', () => [operationsPanel('Collateral repair auctions', auctionRows, 'No auctions match this view.')]],
-		['risk', () => [riskPoolPanel, operationsPanel('Recent commitment take-overs', takeoverRows, 'No commitment take-overs match this view.', { label: 'Latest 25' })]],
+		[
+			'risk',
+			() => [
+				operationsPanel('Capital positions', capitalPositionRows, 'No capital position has been read yet.', {
+					label: capitalPositionListLabel(capitalPositions.length, Number(risk['capitalPositionTotal'] ?? capitalPositions.length)),
+				}),
+				operationsPanel('Capital ledgers', capitalLedgerRows, 'No capital ledger is indexed.'),
+				operationsPanel('Liquidation feed', liquidationRows, 'No take-over, cure or report operation matches this view.', { label: 'Latest 25 · attributed to universe and owner, not to a question pool' }),
+				riskPoolPanel,
+			],
+		],
 		['trading', () => [operationsPanel('Augur AMM markets', tradingRows, 'No Augur AMM markets match this view.')]],
 		[
 			'timeline',
@@ -303,6 +342,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), `No reports need attention among ${number(reports.length)} shown.`),
 		operationsPanel('Active escalations', activeEscalationRows, `No active escalation games among ${number(escalations.length)} shown.`),
 		operationsPanel('Active auctions', activeAuctionRows, `No active auctions among ${number(auctions.length)} shown.`),
+		operationsPanel('Capital positions at risk', atRiskCapitalRows.slice(0, 5), `No capital position at risk among ${number(capitalPositions.length)} shown.`),
 		operationsPanel('Pool risk', poolRiskRows, 'No risk snapshots are available.'),
 		operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
 		operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),
