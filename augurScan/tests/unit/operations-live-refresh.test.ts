@@ -153,6 +153,19 @@ test('raw evidence stays open on the same record when newer evidence arrives abo
 	})
 })
 
+test('AMM LP transfer and approval evidence shows the ERC-20 value argument', async () => {
+	await withOperationsPage('http://localhost/trading/0x01?chainId=1', () => {
+		const { routeView } = createRouteView()
+		const owner = `0x${'1'.repeat(40)}`
+		const spender = `0x${'2'.repeat(40)}`
+		const rows = routeView.detailEvidenceRowsFor('trading', [
+			{ event_name: 'Transfer', event_data: { from: owner, to: spender, value: '2500000000000000000' }, block_number: '100', tx_hash: `0x${'a'.repeat(64)}` },
+			{ event_name: 'Approval', event_data: { owner, spender, value: '1000000000000000000' }, block_number: '100', tx_hash: `0x${'b'.repeat(64)}` },
+		])
+		expect(rows.map(row => row.textContent)).toEqual([expect.stringContaining('2.5 LP shares'), expect.stringContaining('1 LP shares')])
+	})
+})
+
 test('the render signature ignores per-block freshness, cursors, and the detail tab but not displayed evidence', () => {
 	const inputs = { chainId: '1', url: new URL('http://localhost/pool/0x01?chainId=1'), networkName: 'Ethereum Mainnet', liveConnected: true }
 	const signature = (blockNumber: string, data: JsonRecord, overrides: Partial<typeof inputs> = {}, historical = false) => operationsRenderSignature({ chainId: '1', asOf: asOfBlock(blockNumber, historical), data }, { ...inputs, ...overrides })

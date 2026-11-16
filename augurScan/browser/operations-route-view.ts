@@ -144,8 +144,8 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			if (eventName === 'Swap')
 				summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), 18, String(analytics['baseAsset'] ?? 'shares'))} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), 18, String(analytics['quoteAsset'] ?? 'shares'))} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), 18, 'shares')} fee${isPlainRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%')} impact` : ''}`
 			else if (eventName === 'Sync') summary = `${exactUnit(String(data['yesReserve'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noReserve'] ?? '0'), 18, 'NO')} reserves`
-			else if (eventName === 'Transfer') summary = `${exactUnit(String(data['amount'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['from'] ?? ''))} → ${shortIdentifier(String(data['to'] ?? ''))}`
-			else if (eventName === 'Approval') summary = `${exactUnit(String(data['amount'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['owner'] ?? ''))} approved ${shortIdentifier(String(data['spender'] ?? ''))}`
+			else if (eventName === 'Transfer') summary = `${exactUnit(String(data['value'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['from'] ?? ''))} → ${shortIdentifier(String(data['to'] ?? ''))}`
+			else if (eventName === 'Approval') summary = `${exactUnit(String(data['value'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['owner'] ?? ''))} approved ${shortIdentifier(String(data['spender'] ?? ''))}`
 			else if (eventName.startsWith('Liquidity')) summary = `${exactUnit(String(data['yesAmount'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noAmount'] ?? '0'), 18, 'NO')} · ${exactUnit(String(data['liquidity'] ?? '0'), 18, 'LP shares')}`
 			const row = operationRow(eventName, summary, String(data['provider'] ?? data['sender'] ?? item['tx_hash'] ?? ''), item['block_number'])
 			row.append(rawEvidence(item))
