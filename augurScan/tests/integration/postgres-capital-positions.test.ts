@@ -5,6 +5,7 @@ import { capitalRiskOverview } from '../../src/api/capital.ts'
 import { storeLogProjections } from '../../src/database-projections.ts'
 import { ScannerDatabase } from '../../src/database.ts'
 import { getAddress, type Hex } from '../../src/ethereum.ts'
+import { auctionCollateral } from '../../src/repositories/auction-collateral.ts'
 import { capitalLedgerRows, capitalOwnerEventRows, capitalPositionHistoryRows, capitalPositionRows, liquidationRows } from '../../src/repositories/capital.ts'
 import { richListRows } from '../../src/repositories/portfolio.ts'
 import { initializeSchema } from '../../src/schema.ts'
@@ -194,8 +195,16 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			VALUES (${chainId}, 2, ${blockHash(2)}, ${blockHash(1_002)}, 9, ${auction}, 'BidSettled', ${JSON.stringify({ bidId: '1', bidder: lower(alice), filledLots: '0', refundAttoEth: '1500000' })}::text::jsonb, true)`
 		await snapshot('auction', auction, 2, { lotAttoEth: '1000000', collateral: auctionCollateralToken })
 		await snapshot('auction', auction, 3, null, 'failed')
+		// Another auction's newer successful read has no collateral key, so the earlier read still names its token.
+		const keylessAuction = lower(address('7'))
+		const keylessAuctionToken = { address: lower(address('6')), symbol: 'DAI', decimals: 18 }
+		await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical)
+			VALUES (${chainId}, 2, ${blockHash(2)}, ${blockHash(1_002)}, 8, ${keylessAuction}, 'BidSettled', ${JSON.stringify({ bidId: '2', bidder: lower(alice), filledLots: '0', refundAttoEth: '7' })}::text::jsonb, true)`
+		await snapshot('auction', keylessAuction, 1, { lotAttoEth: '1', collateral: keylessAuctionToken })
+		await snapshot('auction', keylessAuction, 3, { lotAttoEth: '1' })
+		expect(await auctionCollateral(connection, chainId, '3', keylessAuction)).toEqual(keylessAuctionToken)
 		const rich = await richListRows(connection, { chainId, address: lower(alice), snapshotBlock: '3', limit: 10, offset: 0, sort: 'transactions' })
-		expect(rich[0]?.['auction_claims']).toEqual([expect.objectContaining({ type: 'BidSettled', entity: auction, collateral: auctionCollateralToken })])
+		expect(rich[0]?.['auction_claims']).toEqual([expect.objectContaining({ type: 'BidSettled', entity: auction, collateral: auctionCollateralToken }), expect.objectContaining({ type: 'BidSettled', entity: keylessAuction, collateral: keylessAuctionToken })])
 		expect(rich[0]?.['capital_positions']).toEqual([
 			{
 				ledgerAddress: lower(ledger),

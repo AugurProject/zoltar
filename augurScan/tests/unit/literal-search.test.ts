@@ -25,10 +25,17 @@ function captureQueries() {
 			return query
 		},
 		get(target, property, receiver) {
+			// Like a tagged call, an unsafe query runs when awaited and is otherwise an embedded fragment.
 			if (property === 'unsafe')
-				return (_query: string, values: unknown[]) => {
-					bindings.push(values)
-					return Promise.resolve([])
+				return (_query: string, values: readonly unknown[] = []) => {
+					const query = {
+						then: (resolve: (rows: unknown[]) => void) => {
+							bindings.push([...values])
+							resolve([])
+						},
+					}
+					fragments.set(query, values)
+					return query
 				}
 			return Reflect.get(target, property, receiver)
 		},
