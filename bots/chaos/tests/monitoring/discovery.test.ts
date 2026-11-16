@@ -180,7 +180,7 @@ test('discovers and authenticates fixed-fee REP/WETH pools for every canonical u
 		anchorBlockNumber: 10n,
 		client: fake.client,
 		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
-		limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 		wallet: address(1),
 	})
 	expect(snapshot.universeUniswap?.pools[0]?.positions).toHaveLength(5)
@@ -203,7 +203,7 @@ test('discovers unpoked fees at exact ranges and gates mismatched router binding
 			anchorBlockNumber: 10n,
 			client: fake.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: factory, weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			wallet: address(1),
 		})
 		expect(snapshot.universeUniswap?.routerAuthenticated).toBe(weth === address(7))
@@ -222,7 +222,7 @@ test('discovers Sepolia pools using the network default when no factory override
 		client: fake.client,
 		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 		discoverGenesisDeployment: true,
-		limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 		wallet: address(1),
 	})
 	expect(snapshot.genesisUniswap).toMatchObject({ factory: true, pool, initialized: true, liquidity: '7' })
@@ -237,7 +237,7 @@ test('bounds concurrent per-universe Uniswap pool-state fan-out below the RPC qu
 		anchorBlockNumber: 10n,
 		client: fake.client,
 		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
-		limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 11, maxVaultsPerPool: 10 },
+		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 11, maxVaultsPerPool: 10 },
 		wallet: address(1),
 	})
 	expect(snapshot.universeUniswap?.pools).toHaveLength(11)
@@ -616,7 +616,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'initialEscalationGameDepositAttoRep':
 				case 'lastSettlementTimestamp':
 				case 'priceValidUntil':
-				case 'stagedOperationCounter':
 				case 'pendingReportId':
 				case 'getTotalPoolHeldAttoRep':
 				case 'getQuestionOutcome':
@@ -624,7 +623,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'getVaultOpenInterestAttoEth':
 				case 'vaultBadDebtAttoEth':
 				case 'backingUnitsToAttoRep':
-				case 'getActiveStagedOperationCount':
 					return 0n
 				case 'isPriceValid':
 					return true
@@ -942,7 +940,7 @@ describe('anchored ecosystem discovery', () => {
 				anchorBlockNumber: 10n,
 				client: fake.client,
 				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-				limits: { maxPools: 101, maxQuestions: 1, maxStagedOperationsPerPool: 1, maxUniverses: 100, maxVaultsPerPool: 1 },
+				limits: { maxPools: 101, maxQuestions: 1, maxUniverses: 100, maxVaultsPerPool: 1 },
 				wallet: address(1),
 			}),
 		).rejects.toThrow('maxPools × maxUniverses exceeds the 10000-item discovery safety envelope')
@@ -1017,7 +1015,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 10n,
 			client: fake.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
+			limits: { maxPools: 2, maxQuestions: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
 			wallet: address(1),
 		})
 		expect(snapshot.questions).toEqual([])
@@ -1035,7 +1033,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 10n,
 			client: fake.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
+			limits: { maxPools: 3, maxQuestions: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
 			wallet: address(1),
 		})
 		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1', '2'])
@@ -1054,7 +1052,7 @@ describe('anchored ecosystem discovery', () => {
 			shareToken: address(3_000 + index),
 			universeId: 0n,
 		}))
-		const limits = { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
+		const limits = { maxPools: 3, maxQuestions: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
 		let previousAnchor: bigint | undefined
 		for (let cycle = 0; cycle < 4; cycle += 1) {
 			const anchor = 10n + BigInt(cycle)
@@ -1197,7 +1195,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 10n,
 			client: first.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			recordTopologyCache: (value, changed) => {
 				checkpoint = value
 				initialChanged = changed
@@ -1218,7 +1216,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 11n,
 			client: next.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			recordTopologyCache: (value, changed) => {
 				nextCheckpoint = value
 				extendedChanged = changed
@@ -1249,7 +1247,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 12n,
 			client: unchanged.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			recordTopologyCache: (value, changed) => {
 				unchangedCheckpoint = value
 				unchangedChanged = changed
@@ -1271,7 +1269,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 11n,
 			client: reorged.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			recordTopologyCache: (_value, changed) => {
 				reorgChanged = changed
 			},

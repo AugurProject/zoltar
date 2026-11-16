@@ -312,7 +312,6 @@ export type DiscoveryIssue =
 	| { kind: 'registry'; collection: 'questions' | 'pools' | 'vaults'; label: string; authenticated: string; canonicalCount: string; residentLimit: string }
 	| { kind: 'universe-limit'; retained: number; limit: number }
 	| { kind: 'pool-prerequisites'; authenticated: string; canonicalCount: string }
-	| { kind: 'staged-operation-limit'; coordinator: Address; count: string; limit: number }
 	| { kind: 'share-fanout'; plannedFanout: string; limit: number }
 
 export interface EcosystemSnapshot {
@@ -447,7 +446,6 @@ export type OperationPlanDraft = Omit<OperationPlan, 'planningSeed'>
 export interface ImmutableTopologyPlanningCapacity {
 	maxPools: number
 	maxQuestions: number
-	maxStagedOperationsPerPool: number
 	maxUniverses: number
 	maxVaultsPerPool: number
 	maximumAggregateItems: number
