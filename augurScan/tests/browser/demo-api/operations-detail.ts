@@ -114,7 +114,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		}
 	}
 	if (domain === 'auctions') {
-		const bid = evidence('BidSubmitted', { bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', lots: '3', minimumAttoRepPerLot: (4n * 10n ** 18n).toString() })
+		const bid = evidence('BidSubmitted', { bidId: '1', bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', vault: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', lots: '3', minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), targetHealthBps: '12000' })
 		return {
 			chainId,
 			asOf: operations.asOf,
@@ -124,10 +124,10 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 					entity_identity: identity[0],
 					block_number: operations.asOf.blockNumber,
 					read_status: 'success',
-					source_method: 'auctionState(), computeClearing()',
-					read_result: { finalized: true, clearingTick: '14', attoEthRaised: '3000000000000000000', totalAttoRepPurchased: String(12000000000000000000n), computeClearing: { tick: '14', funded: true } },
+					source_method: 'augurscan.auction-state.v1',
+					read_result: { initialized: true, finalized: true, lotAttoEth: (10n ** 18n).toString(), targetLots: '3', bidCount: '1', clearing: { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 18n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() } },
 				},
-				finalization: evidence('AuctionFinalized', { clearingTick: '14', grossAcceptedAttoEth: String(3000000000000000000n), repSoldAttoRep: String(12000000000000000000n), funded: true }),
+				finalization: evidence('AuctionFinalized', { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 18n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() }),
 				demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
 				demandCurve: [{ minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), lots: '3', cumulativeLots: '3', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
 				events: evidencePage(bid),
@@ -137,7 +137,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 	if (domain === 'risk') {
 		const kind = parts[4]
 		const risk = operations.data.risk
-		const entity = kind === 'pools' ? risk.pools.find(item => item.pool_address.toLowerCase() === parts[6]?.toLowerCase()) : risk.vaults.find(item => item.pool_address.toLowerCase() === parts[6]?.toLowerCase() && item.vault_address.toLowerCase() === parts[7]?.toLowerCase())
+		const entity = kind === 'pools' ? risk.pools.find(item => item.pool_address.toLowerCase() === parts[6]?.toLowerCase()) : undefined
 		const offset = request.searchParams.has('cursor') ? 100 : 0
 		const historyMore = context.pageUrl.searchParams.get('riskHistoryMore') === '1'
 		const historyBlock = String(BigInt(operations.asOf.blockNumber) - BigInt(offset === 0 ? 5 : 500))
@@ -158,12 +158,10 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 			asOf: operations.asOf,
 			data: {
 				...(entity ?? {}),
-				approvalEvents: risk.approvalEvents,
 				history: {
 					stateSnapshots: [historyRecord('TaggedStateRead', 0)],
-					accountingSnapshots: [historyRecord('VaultAccountingCheckpoint', 1)],
-					lifecycleEvents: [historyRecord(offset === 0 ? 'VaultHealthChecked' : 'RepDepositedToVault', 2)],
-					liquidations: offset === 0 ? [] : [historyRecord('VaultLiquidated', 3)],
+					accountingSnapshots: [historyRecord('QuestionAccountingCheckpoint', 1)],
+					lifecycleEvents: [historyRecord(offset === 0 ? 'CompleteSetCreated' : 'EscalationGameSet', 2)],
 					limit: 100,
 					offset,
 					truncated: historyMore && offset === 0,
@@ -245,9 +243,8 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 				burned_atto_rep: '500000000000000000000',
 				migrator_count: 1,
 				child_count: 1,
-				pool_migration_events: 4,
-				obligations_initialized: 2,
-				obligations_materialized: 1,
+				portfolio_fork_events: 3,
+				branch_chooser_count: 2,
 			},
 			branches: [{ child_universe_id: '1', outcome_index: '1', migrated_atto_rep: '4500000000000000000000', migrator_count: 1, migration_count: 1 }],
 			events: evidencePage(migration),

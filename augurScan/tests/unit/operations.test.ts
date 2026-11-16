@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, fixedWindowTwap, reportLifecycle, reportRoundChanges, swapAnalytics, vaultRisk } from '../../src/operations.ts'
+import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, fixedWindowTwap, reportLifecycle, reportRoundChanges, swapAnalytics } from '../../src/operations.ts'
 
 test('derives OpenOracle boundaries with the report clock selected by flags', () => {
 	expect(
@@ -76,42 +76,10 @@ test('describes report round changes against the next older evidence row', () =>
 })
 
 test('derives auction lifecycle at exact boundaries', () => {
-	expect(auctionLifecycle({ started: true, finalized: false, startTimestamp: '10', endTimestamp: '20', indexedTimestamp: '20', bidCount: 1, settlementCount: 0 })).toBe('Awaiting finalization')
+	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '20', bidCount: 1, settlementCount: 0 })).toBe('Awaiting finalization')
+	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '19', bidCount: 0, settlementCount: 0 })).toBe('Open')
+	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '9', bidCount: 0, settlementCount: 0 })).toBe('Scheduled')
 	expect(auctionLifecycle({ started: true, finalized: true, indexedTimestamp: '20', bidCount: 2, settlementCount: 1 })).toBe('Bid settlements outstanding')
-})
-
-test('matches the Solidity vault health constraints and keeps scanner severity separate', () => {
-	const healthy = vaultRisk({
-		poolHeldBackingAttoRep: String(200),
-		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
-		repPerEth1e18: '100',
-		securityMultiplierBps: '15000',
-		badDebtAttoEth: String(0),
-	})
-	expect(healthy.protocolState).toBe('healthy')
-	expect(healthy.healthFactorBps).toBe('13333')
-	expect(healthy.scannerSeverity).toBe('healthy')
-
-	const warning = vaultRisk({
-		poolHeldBackingAttoRep: String(179),
-		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
-		repPerEth1e18: '100',
-		securityMultiplierBps: '15000',
-		badDebtAttoEth: String(0),
-	})
-	expect(warning).toMatchObject({ protocolState: 'healthy', scannerSeverity: 'warning', healthFactorBps: '11933' })
-
-	const liquidatable = vaultRisk({
-		poolHeldBackingAttoRep: String(149),
-		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
-		repPerEth1e18: '100',
-		securityMultiplierBps: '15000',
-		badDebtAttoEth: String(0),
-	})
-	expect(liquidatable).toMatchObject({ protocolState: 'liquidatable', scannerSeverity: 'critical' })
 })
 
 test('reconstructs pre-swap reserves and exact price impact from Swap evidence', () => {
@@ -149,22 +117,24 @@ test('computes fixed-window TWAP with explicit coverage', () => {
 	expect(fixedWindowTwap(observations.slice(1), '10', '30')).toMatchObject({ state: 'Partial coverage', coverageSeconds: '10' })
 })
 
-test('aggregates auction demand from the best (lowest) REP price per lot and builds exact candles', () => {
+test('orders auction demand by fill priority and builds exact candles', () => {
+	// The auction fills the lowest REP-per-lot limit first, so the curve ascends by that limit.
 	expect(
 		auctionDemandCurve(
 			[
-				{ minimumAttoRepPerLot: '2', lots: '10' },
-				{ minimumAttoRepPerLot: '1', lots: '3' },
-				{ minimumAttoRepPerLot: '2', lots: '5' },
+				{ minimumAttoRepPerLot: '200', lots: '10' },
+				{ minimumAttoRepPerLot: '100', lots: '3' },
+				{ minimumAttoRepPerLot: '200', lots: '5' },
 			],
-			'100',
+			'7',
 		),
 	).toEqual([
-		{ minimumAttoRepPerLot: '1', lots: '3', cumulativeLots: '3', amountAttoEth: String(300), cumulativeDemandAttoEth: String(300) },
-		{ minimumAttoRepPerLot: '2', lots: '15', cumulativeLots: '18', amountAttoEth: String(1500), cumulativeDemandAttoEth: String(1800) },
+		{ minimumAttoRepPerLot: '100', lots: '3', cumulativeLots: '3', amountAttoEth: '21', cumulativeDemandAttoEth: '21' },
+		{ minimumAttoRepPerLot: '200', lots: '15', cumulativeLots: '18', amountAttoEth: '105', cumulativeDemandAttoEth: '126' },
 	])
-	// Bids indexed without their AuctionStarted lot size still produce a curve, in lots.
-	expect(auctionDemandCurve([{ minimumAttoRepPerLot: '2', lots: '4' }], undefined)).toEqual([{ minimumAttoRepPerLot: '2', lots: '4', cumulativeLots: '4' }])
+	// Without an indexed AuctionStarted lot size only lot counts are known.
+	expect(auctionDemandCurve([{ minimumAttoRepPerLot: '100', lots: '3' }], undefined)).toEqual([{ minimumAttoRepPerLot: '100', lots: '3', cumulativeLots: '3' }])
+	expect(() => auctionDemandCurve([{ minimumAttoRepPerLot: 'null', lots: '3' }], '7')).toThrow('minimumAttoRepPerLot must be a non-negative integer')
 	expect(
 		candlestickBuckets(
 			[

@@ -32,7 +32,6 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 		live = false,
 		catalogTargetCount,
 		riskPoolTargetCount,
-		riskVaultTargetCount,
 		detailTargetCount,
 		decisionTargetCount,
 		activityTargetCount,
@@ -42,7 +41,6 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 		live?: boolean
 		catalogTargetCount?: number
 		riskPoolTargetCount?: number
-		riskVaultTargetCount?: number
 		detailTargetCount?: number
 		decisionTargetCount?: number
 		activityTargetCount?: number
@@ -54,7 +52,7 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 			operationsState.loadState,
 			requestedContext,
 			live,
-			catalogTargetCount !== undefined || riskPoolTargetCount !== undefined || riskVaultTargetCount !== undefined || detailTargetCount !== undefined || decisionTargetCount !== undefined || activityTargetCount !== undefined || historyTargetOffset !== undefined,
+			catalogTargetCount !== undefined || riskPoolTargetCount !== undefined || detailTargetCount !== undefined || decisionTargetCount !== undefined || activityTargetCount !== undefined || historyTargetOffset !== undefined,
 			() => routeDataContext(requiredChainId(), new URL(location.href)),
 			() => operationsState.requestVersion++,
 			async () => {
@@ -71,16 +69,14 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 					const catalogSection = detailRoute === undefined ? operationsCatalogSection() : undefined
 					const retainedCatalogCount = catalogSection !== undefined && catalogSection !== 'risk' && operationsState.catalogState?.chainId === requiredChainId() && operationsState.catalogState.section === catalogSection ? operationsState.catalogState.items.length : 0
 					const retainedRiskPoolCount = catalogSection === 'risk' && operationsState.riskCatalogState?.chainId === requiredChainId() ? operationsState.riskCatalogState.pools.length : 0
-					const retainedRiskVaultCount = catalogSection === 'risk' && operationsState.riskCatalogState?.chainId === requiredChainId() ? operationsState.riskCatalogState.vaults.length : 0
 					const retainedDetailCount = detailRoute !== undefined && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.items.length : 0
-					const retainedRiskHistoryOffset =
-						detailRoute !== undefined && (detailRoute.kind === 'pool' || detailRoute.kind === 'vault') && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.riskHistoryOffset : 0
+					const retainedRiskHistoryOffset = detailRoute?.kind === 'pool' && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.riskHistoryOffset : 0
 					const retainedDecisionCount = detailRoute?.kind === 'report' && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.decisionItems.length : 0
 					const retainedActivityCount = detailRoute?.kind === 'trading' && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.activityItems.length : 0
 					const loadResponse = async () => {
 						if (detailRoute !== undefined) return await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount, historyTargetOffset ?? retainedRiskHistoryOffset, decisionTargetCount ?? retainedDecisionCount, activityTargetCount ?? retainedActivityCount)
 						if (catalogSection === undefined) return decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
-						if (catalogSection === 'risk') return await loadOperationsRiskCatalog(riskPoolTargetCount ?? retainedRiskPoolCount, riskVaultTargetCount ?? retainedRiskVaultCount)
+						if (catalogSection === 'risk') return await loadOperationsRiskCatalog(riskPoolTargetCount ?? retainedRiskPoolCount)
 						return await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
 					}
 					const response = await loadResponse()

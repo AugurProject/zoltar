@@ -40,7 +40,7 @@ export const createSystemCatalogLoader = (deps: SystemCatalogLoaderDeps) => {
 	let pageOffset = 0
 	let catalogScope: string | undefined
 	let pageBoundaryKeys: Partial<Record<StateTab, string>> = {}
-	const catalogTypes = ['pools', 'vaults', 'questions', 'universes'] as const
+	const catalogTypes = ['pools', 'questions', 'universes'] as const
 	const pageBoundaries = (page: StateCatalog, previous: Partial<Record<StateTab, string>> = {}): Partial<Record<StateTab, string>> => {
 		const boundaries = { ...previous }
 		for (const type of catalogTypes) {
@@ -60,7 +60,6 @@ export const createSystemCatalogLoader = (deps: SystemCatalogLoaderDeps) => {
 		return {
 			...first,
 			pools: merge('pools', first.pools, second.pools),
-			vaults: merge('vaults', first.vaults, second.vaults),
 			questions: merge('questions', first.questions, second.questions),
 			universes: merge('universes', first.universes, second.universes),
 			poolStates: [...previousStates, ...(second.poolStates ?? []).filter(item => !seenStates.has(`${item.chain_id}:${item.pool_address}:${item.event_name}`))],

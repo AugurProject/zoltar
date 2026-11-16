@@ -41,13 +41,12 @@ export async function demoCatalogRoute(env: DemoEnvironment, path: string): Prom
 			catalogVersion: counters.dualCatalogShifted ? '1'.repeat(32) : demoCatalog.catalogVersion,
 			pools: allPools.slice(offset, offset + limit),
 			questions: allQuestions.slice(offset, offset + limit),
-			vaults: demoCatalog.vaults.slice(offset, offset + limit),
 			universes: demoCatalog.universes.slice(offset, offset + limit),
 			poolStates: [],
 			limit,
 			offset,
-			totals: { pools: 501, vaults: demoCatalog.vaults.length, questions: 501, universes: demoCatalog.universes.length },
-			truncated: { pools: offset + limit < 501, vaults: false, questions: offset + limit < 501, universes: false },
+			totals: { pools: 501, questions: 501, universes: demoCatalog.universes.length },
+			truncated: { pools: offset + limit < 501, questions: offset + limit < 501, universes: false },
 		}
 	}
 	if (context.pageUrl.searchParams.get('pool501') === '1' && chainId === '1') {
@@ -68,7 +67,6 @@ export async function demoCatalogRoute(env: DemoEnvironment, path: string): Prom
 			...demoCatalog,
 			catalogVersion: counters.poolLiveShifted ? '1'.repeat(32) : demoCatalog.catalogVersion,
 			pools,
-			vaults: demoCatalog.vaults.slice(offset, offset + limit),
 			questions: demoCatalog.questions.slice(offset, offset + limit),
 			universes: demoCatalog.universes.slice(offset, offset + limit),
 			poolStates: pools.map(pool => ({
@@ -81,8 +79,8 @@ export async function demoCatalogRoute(env: DemoEnvironment, path: string): Prom
 			})),
 			limit,
 			offset,
-			totals: { pools: 501, vaults: demoCatalog.vaults.length, questions: demoCatalog.questions.length, universes: demoCatalog.universes.length },
-			truncated: { pools: offset + limit < 501, vaults: false, questions: false, universes: false, poolStates: false },
+			totals: { pools: 501, questions: demoCatalog.questions.length, universes: demoCatalog.universes.length },
+			truncated: { pools: offset + limit < 501, questions: false, universes: false, poolStates: false },
 		}
 	}
 	if (catalogSize !== undefined && chainId === '1') {
@@ -105,24 +103,21 @@ export async function demoCatalogRoute(env: DemoEnvironment, path: string): Prom
 			...demoCatalog,
 			catalogVersion: counters.catalogShifted ? '1'.repeat(32) : demoCatalog.catalogVersion,
 			pools: demoCatalog.pools.slice(offset, offset + limit),
-			vaults: demoCatalog.vaults.slice(offset, offset + limit),
 			questions,
 			universes: demoCatalog.universes.slice(offset, offset + limit),
 			limit,
 			offset,
-			totals: { pools: demoCatalog.pools.length, vaults: demoCatalog.vaults.length, questions: allQuestions.length, universes: demoCatalog.universes.length },
-			truncated: { pools: false, vaults: false, questions: offset + limit < matching.length, universes: false },
+			totals: { pools: demoCatalog.pools.length, questions: allQuestions.length, universes: demoCatalog.universes.length },
+			truncated: { pools: false, questions: offset + limit < matching.length, universes: false },
 		}
 	}
 	return {
 		catalogVersion: demoCatalog.catalogVersion,
 		pools: demoCatalog.pools.filter(item => !chainId || item.chain_id === chainId),
-		vaults: demoCatalog.vaults.filter(item => !chainId || item.chain_id === chainId),
 		questions: demoCatalog.questions.filter(item => !chainId || item.chain_id === chainId),
 		universes: demoCatalog.universes.filter(item => !chainId || item.chain_id === chainId),
 		totals: {
 			pools: demoCatalog.pools.filter(item => !chainId || item.chain_id === chainId).length,
-			vaults: demoCatalog.vaults.filter(item => !chainId || item.chain_id === chainId).length,
 			questions: demoCatalog.questions.filter(item => !chainId || item.chain_id === chainId).length,
 			universes: demoCatalog.universes.filter(item => !chainId || item.chain_id === chainId).length,
 		},

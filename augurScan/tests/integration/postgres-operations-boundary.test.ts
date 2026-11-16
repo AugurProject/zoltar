@@ -115,13 +115,13 @@ postgresTest(
 						chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical
 					) VALUES
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 2, 1, ${auctionAddress}, 'AuctionStarted',
-							'{"opensAt":"1767225600","closesAt":"1767229200","lotAttoEth":"1000000000000000000","targetLots":"5","inventoryAttoRep":"100","maximumAttoRepPerLot":"20"}'::jsonb, true),
+							'{"opensAt":"1767225600","closesAt":"1767229200","lotAttoEth":"1000","targetLots":"10","inventoryAttoRep":"900","maximumAttoRepPerLot":"90"}'::jsonb, true),
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 3, 1, ${auctionAddress}, 'BidSubmitted',
-							'{"bidder":"0x1000000000000000000000000000000000000001","lots":"2","minimumAttoRepPerLot":"5"}'::jsonb, true),
+							'{"bidId":"1","bidder":"0x1000000000000000000000000000000000000001","vault":"0x1000000000000000000000000000000000000001","lots":"4","minimumAttoRepPerLot":"60","targetHealthBps":"12000"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 2, 2, ${auctionAddress}, 'BidSubmitted',
-							'{"bidder":"0x2000000000000000000000000000000000000002","lots":"3","minimumAttoRepPerLot":"4"}'::jsonb, true),
+							'{"bidId":"2","bidder":"0x2000000000000000000000000000000000000002","vault":"0x2000000000000000000000000000000000000002","lots":"3","minimumAttoRepPerLot":"30","targetHealthBps":"12000"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 3, 2, ${auctionAddress}, 'AuctionFinalized',
-							'{"winningTick":"1"}'::jsonb, true)
+							'{"attoRepPerLot":"60","filledLots":"7","raisedAttoEth":"7000","soldAttoRep":"420"}'::jsonb, true)
 				`
 			const response = await handleApi(new Request(`http://localhost/api/v1/state/risk?chainId=${historicalChainId}&atBlock=1&limit=1`), database.sql)
 			if (response === undefined) throw new Error('historical risk catalog did not return a response')
@@ -167,7 +167,18 @@ postgresTest(
 				report_data: { marker: 'historical' },
 			})
 			expect(operations.data.escalations).toEqual([expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: null, balance_read_status: null })])
-			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0 })])
+			// Block 1 is stamped 21 seconds after AuctionStarted.opensAt and well before closesAt.
+			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0, status: 'Open' })])
+			const auctionDetailResponse = await handleApi(new Request(`http://localhost/api/v1/state/auctions/${historicalChainId}/${auctionAddress}`), database.sql)
+			expect(auctionDetailResponse?.status).toBe(200)
+			const auctionDetail = (await auctionDetailResponse?.json()) as { data: { demandCurve: unknown; demandCurveTruncated: boolean; finalization: { event_data: unknown } } }
+			// The lower REP-per-lot limit fills first; each lot is AuctionStarted.lotAttoEth of collateral.
+			expect(auctionDetail.data.demandCurve).toEqual([
+				{ minimumAttoRepPerLot: '30', lots: '3', cumulativeLots: '3', amountAttoEth: '3000', cumulativeDemandAttoEth: '3000' },
+				{ minimumAttoRepPerLot: '60', lots: '4', cumulativeLots: '7', amountAttoEth: '4000', cumulativeDemandAttoEth: '7000' },
+			])
+			expect(auctionDetail.data.demandCurveTruncated).toBe(false)
+			expect(auctionDetail.data.finalization.event_data).toMatchObject({ attoRepPerLot: '60', filledLots: '7' })
 			expect(operations.data.totals).toMatchObject({ reports: 1, escalations: 1, auctions: 1, reorganizations: 1 })
 			const reportCursor = btoa(
 				JSON.stringify([historicalChainId, 'reports-catalog', 'catalog', operations.asOf.blockNumber, operations.asOf.blockHash, operations.asOf.invalidationId, operations.asOf.abiSourceHash, operations.asOf.applicationSourceHash, operations.asOf.projectionSourceHash, '1', firstTransactionHash, 0]),
@@ -175,21 +186,6 @@ postgresTest(
 			const crossScopeResponse = await handleApi(new Request(`http://localhost/api/v1/state/escalations?chainId=${historicalChainId}&cursor=${encodeURIComponent(reportCursor)}`), database.sql)
 			expect(crossScopeResponse?.status).toBe(400)
 			expect(await crossScopeResponse?.json()).toEqual({ error: 'cursor does not match the requested entity' })
-			const auctionResponse = await handleApi(new Request(`http://localhost/api/v1/state/auctions/${historicalChainId}/${auctionAddress}`), database.sql)
-			expect(auctionResponse?.status).toBe(200)
-			// Lower minimum REP per lot is the better bid, so demand accumulates from the lowest price level; each lot is 1 ETH.
-			expect(((await auctionResponse?.json()) as { data: { demandCurve: unknown } }).data.demandCurve).toEqual([
-				{ minimumAttoRepPerLot: '4', lots: '3', cumulativeLots: '3', amountAttoEth: '3000000000000000000', cumulativeDemandAttoEth: '3000000000000000000' },
-				{ minimumAttoRepPerLot: '5', lots: '2', cumulativeLots: '5', amountAttoEth: '2000000000000000000', cumulativeDemandAttoEth: '5000000000000000000' },
-			])
-			// An auction whose AuctionStarted predates retained history still answers, with its demand in lots.
-			await database.sql`DELETE FROM collateral_repair_auction_events WHERE chain_id = ${historicalChainId} AND auction_address = ${auctionAddress} AND event_name = 'AuctionStarted'`
-			const startlessResponse = await handleApi(new Request(`http://localhost/api/v1/state/auctions/${historicalChainId}/${auctionAddress}`), database.sql)
-			expect(startlessResponse?.status).toBe(200)
-			expect(((await startlessResponse?.json()) as { data: { demandCurve: unknown } }).data.demandCurve).toEqual([
-				{ minimumAttoRepPerLot: '4', lots: '3', cumulativeLots: '3' },
-				{ minimumAttoRepPerLot: '5', lots: '2', cumulativeLots: '5' },
-			])
 			await database.sql`
 					INSERT INTO chain_reorganizations
 						(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
