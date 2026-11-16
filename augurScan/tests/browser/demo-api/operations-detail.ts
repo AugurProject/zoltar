@@ -114,7 +114,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		}
 	}
 	if (domain === 'auctions') {
-		const bid = evidence('BidSubmitted', { bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', tick: '14', bidAmountAttoEth: (3n * 10n ** 18n).toString() })
+		const bid = evidence('BidSubmitted', { bidId: '1', bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', vault: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', lots: '3', minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), targetHealthBps: '12000' })
 		return {
 			chainId,
 			asOf: operations.asOf,
@@ -124,12 +124,12 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 					entity_identity: identity[0],
 					block_number: operations.asOf.blockNumber,
 					read_status: 'success',
-					source_method: 'auctionState(), computeClearing()',
-					read_result: { finalized: true, clearingTick: '14', attoEthRaised: '3000000000000000000', totalAttoRepPurchased: String(12000000000000000000n), computeClearing: { tick: '14', funded: true } },
+					source_method: 'augurscan.auction-state.v1',
+					read_result: { initialized: true, finalized: true, lotAttoEth: (10n ** 18n).toString(), targetLots: '3', bidCount: '1', clearing: { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 18n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() } },
 				},
-				finalization: evidence('AuctionFinalized', { clearingTick: '14', grossAcceptedAttoEth: String(3000000000000000000n), repSoldAttoRep: String(12000000000000000000n), funded: true }),
+				finalization: evidence('AuctionFinalized', { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 18n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() }),
 				demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
-				demandCurve: [{ tick: '14', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
+				demandCurve: [{ minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), lots: '3', cumulativeLots: '3', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
 				events: evidencePage(bid),
 			},
 		}
