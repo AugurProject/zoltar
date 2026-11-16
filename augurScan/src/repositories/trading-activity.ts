@@ -220,10 +220,10 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 				COALESCE(sum(delta) FILTER (WHERE outcome = 2), 0) AS no
 			FROM share_moves GROUP BY token, universe_id
 		), lp_moves AS (
-			SELECT event.market_address, lower(event.event_data->>'from') AS sender, lower(event.event_data->>'to') AS receiver, (event.event_data->>'amount')::numeric AS amount
+			SELECT event.market_address, lower(event.event_data->>'from') AS sender, lower(event.event_data->>'to') AS receiver, (event.event_data->>'value')::numeric AS amount
 			FROM amm_trade_events event
 			WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${asOfBlock} AND event.event_name = 'Transfer'
-				AND event.event_data ? 'from' AND event.event_data ? 'to' AND event.event_data ? 'amount'
+				AND event.event_data ? 'from' AND event.event_data ? 'to' AND event.event_data ? 'value'
 		), lp_balances AS (
 			SELECT market_address, sum(CASE WHEN receiver = ${account} THEN amount ELSE -amount END) AS balance
 			FROM lp_moves WHERE (receiver = ${account}) <> (sender = ${account}) GROUP BY market_address

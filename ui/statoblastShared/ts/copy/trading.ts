@@ -7,6 +7,9 @@ export const childNotDeployed = 'Child not deployed'
 export const clear = 'Clear'
 export const loadingForkQuestionDetails = 'Loading fork question details…'
 export const loadingForkTargetUniverses = 'Loading child universes…'
+export const loadingShareMigrationTargetPools = 'Loading child universe security pools…'
+export const missingChildPoolBlocker = 'This selection includes a child universe without a security pool. Migrate into each such child universe separately.'
+export const formatSharesAlreadyMigratedReason = (outcomeLabel: string) => `Your ${outcomeLabel} shares are already migrated into the selected child universes.`
 export const formatMalformedOutcomeLabel = (outcomeIndex: string) => `Malformed (${outcomeIndex})`
 export const selectAll = 'Select all'
 export const childTargetsLockedReason = 'Child universe targets unlock after this universe forks.'

@@ -190,3 +190,58 @@ export const demoCapitalDetail = (ledger: string, owner: string, blockNumber: st
 		},
 	}
 }
+
+/** Fee economics of the demo universe and the current fee streams of two of its questions. */
+export const demoFeeEconomics = (blockNumber: string) => [
+	{
+		ledger_address: demoCapitalLedger,
+		portfolio: demoCapitalPortfolio,
+		universe_id: '0',
+		collateral: usdc,
+		block_number: blockNumber,
+		fees: { annualFeeBps: '200', purchaseFeeBps: '30', vestingOutstandingAttoEth: usdcUnits(700n), vestingOutstandingAttoRep: '0', deferredAttoEth: '0', deferredAttoRep: '0', settlementBook: `0x${'8'.repeat(40)}`, bookId: '1', bookFeesEnabled: true },
+		accrued_atto_eth: usdcUnits(1_250n),
+		accrual_count: 41,
+		purchase_fees_atto_eth: usdcUnits(960n),
+		purchase_cash_atto_eth: usdcUnits(320_000n),
+		purchase_count: 18,
+		premium_funded_atto_eth: usdcUnits(60n),
+		earnings_funded_atto_eth: usdcUnits(900n),
+		claimed_atto_eth: usdcUnits(1_100n),
+		claimed_atto_rep: rep(12n),
+		claim_count: 7,
+		burned_atto_eth: usdcUnits(25n),
+		burned_atto_rep: '0',
+		burn_count: 2,
+	},
+]
+
+export const demoQuestionFeeStreams = (blockNumber: string) => [
+	{
+		ledger_address: demoCapitalLedger,
+		universe_id: '0',
+		collateral: usdc,
+		question_id: '42',
+		question_title: 'Will the 2030 global mean temperature anomaly exceed 1.5°C?',
+		rate_atto_eth_per_second: '203',
+		rate_atto_eth_per_year: usdcUnits(6_400n),
+		end_timestamp: '1893456000',
+		block_number: blockNumber,
+		tx_hash: `0x${'a'.repeat(64)}`,
+		log_index: 4,
+	},
+	{
+		ledger_address: demoCapitalLedger,
+		universe_id: '0',
+		collateral: usdc,
+		question_id: '44',
+		question_title: 'Will the protocol meet its launch reliability target?',
+		rate_atto_eth_per_second: '95',
+		rate_atto_eth_per_year: usdcUnits(3_000n),
+		end_timestamp: '1704067200',
+		block_number: blockNumber,
+		tx_hash: `0x${'c'.repeat(64)}`,
+		log_index: 6,
+	},
+	{ ledger_address: demoCapitalLedger, universe_id: '0', collateral: usdc, question_id: '43', question_title: null, rate_atto_eth_per_second: '0', rate_atto_eth_per_year: '0', end_timestamp: '0', block_number: blockNumber, tx_hash: `0x${'b'.repeat(64)}`, log_index: 5 },
+]

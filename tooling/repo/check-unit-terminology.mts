@@ -10,6 +10,7 @@ const serializedAtomicStringAllowlist = new Set([
 	'augurScan/browser/browser-types.ts',
 	'augurScan/tests/browser/demo-api/capital-fixtures.ts',
 	'augurScan/tests/integration/postgres-capital-positions.test.ts',
+	'augurScan/tests/integration/postgres-fee-economics.test.ts',
 	'augurScan/tests/integration/postgres-operations.test.ts',
 	'augurScan/tests/unit/capital-presentation.test.ts',
 	'augurScan/tests/unit/capital-snapshots.test.ts',

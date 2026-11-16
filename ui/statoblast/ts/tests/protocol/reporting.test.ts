@@ -92,6 +92,7 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 			if (request.functionName === 'responseRestartedUntil') return 0n
 			if (request.functionName === 'getQuestionOutcome') return 3
 			if (request.functionName === 'getForkTime') return 0n
+			if (request.functionName === 'getEarliestForkTime') return 4321n
 			if (request.functionName === 'hasReachedNonDecision') return true
 			if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 			if (request.functionName === 'getForkThresholdAttoRep') return 100n
@@ -143,6 +144,16 @@ describe('reporting protocol client', () => {
 		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
 		expect(details.responseRestartedUntil).toBe(140n)
+	})
+
+	test('loads the earliest Zoltar fork time for an active escalation game', async () => {
+		const details = await loadReportingDetails(
+			createActiveReportingClient(() => []),
+			securityPoolAddress,
+			undefined,
+		)
+		if (details.status !== 'active') throw new Error('Expected active reporting details')
+		expect(details.earliestForkTime).toBe(4321n)
 	})
 
 	test.each([zeroAddress, escalationGameAddress])('wallet reporting approves the pool before and after game startup (%s)', async gameAddress => {
@@ -343,6 +354,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 0n
+				if (request.functionName === 'getEarliestForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return true
 				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'continuationSettlementForkThresholdAttoRep') return 0n
@@ -411,6 +423,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 123n
+				if (request.functionName === 'getEarliestForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'forkData') return [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n]
 				if (request.functionName === 'ordinarySettlementInitialized') return false
@@ -478,6 +491,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 123n
+				if (request.functionName === 'getEarliestForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'continuationSettlementForkThresholdAttoRep') return 0n
@@ -532,6 +546,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 120n
+				if (request.functionName === 'getEarliestForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'continuationSettlementForkThresholdAttoRep') return 0n
