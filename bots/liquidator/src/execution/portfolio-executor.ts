@@ -64,7 +64,7 @@ export async function executePortfolioTakeover(
 ) {
 	if (state.sponsoredReports?.some(report => report.fundingKey === `${target.snapshot.capitalLedger.toLowerCase()}:${wallet.account.address.toLowerCase()}`)) throw new PortfolioOpportunityExpired('Sponsored report outcomes must be reconciled before new funding')
 	if (!settings.portfolioPolicy.allowFundedTakeovers || !settings.runtime.execute) throw new Error('Funded portfolio automation is disabled')
-	if (state.pendingTransactions.length !== 0 || state.pendingStagedOperations.length !== 0) throw new Error('Pending recovery blocks portfolio exposure changes')
+	if (state.pendingTransactions.length !== 0) throw new Error('Pending recovery blocks portfolio exposure changes')
 	const refresh = async () => {
 		const current = await execution.refresh(wallet, settings, state.portfolioScopes, pool, target, positionId)
 		const position = current.observation.positions.find(position => samePortfolioTarget(portfolioTarget(position), positionId))

@@ -13,7 +13,7 @@ type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 /** Durable, one-shot instructions use the same quorum, simulation and journal as automatic takeovers. */
 export async function executePortfolioInstruction(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, instruction: PortfolioInstruction, priceAllowed: (observation: PortfolioObservation) => Promise<boolean>) {
-	if (!settings.runtime.execute || state.pendingTransactions.length !== 0 || state.pendingStagedOperations.length !== 0) throw new Error('Pending recovery or dry-run mode blocks portfolio instructions')
+	if (!settings.runtime.execute || state.pendingTransactions.length !== 0) throw new Error('Pending recovery or dry-run mode blocks portfolio instructions')
 	const fingerprint = JSON.stringify(serializePortfolioInstructions([instruction])[0])
 	const completed = state.completedPortfolioInstructions !== undefined && Object.hasOwn(state.completedPortfolioInstructions, instruction.id) ? state.completedPortfolioInstructions[instruction.id] : undefined
 	if (completed !== undefined) {

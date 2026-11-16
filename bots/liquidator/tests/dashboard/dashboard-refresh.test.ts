@@ -48,7 +48,7 @@ type DashboardConfiguration = {
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
 	networkConfigured?: boolean
-	runtime: { execute: boolean; historicalLogRecovery: boolean; logLookbackBlocks: number }
+	runtime: { execute: boolean }
 	selectedPortfolios: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
 	portfolioPolicy: ReturnType<typeof serializePortfolioPolicy>
@@ -80,7 +80,7 @@ function configuration(approvedUniverses = ['1'], network?: DashboardConfigurati
 		desiredPools: [],
 		network: network ?? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 		networkConfigured: network !== undefined,
-		runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
+		runtime: { execute: false },
 		selectedPortfolios: [{ address: '0x1111111111111111111111111111111111111111', universeId: '0' }],
 		strategy: { ...example.strategy },
 		portfolioPolicy: serializePortfolioPolicy(parsePortfolioPolicy(undefined)),
@@ -105,7 +105,6 @@ function state(
 		marketSources?: MarketSourceRow[]
 		network?: 'mainnet' | 'sepolia'
 		paused?: boolean
-		pendingStagedOperations?: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
 		pendingTransactions?: PendingTransaction[]
 		rpcEndpointHealth?: { consecutiveFailures: number; latencyMilliseconds?: number; status: string; target: string }[]
 		universes?: DashboardUniverse[]
@@ -137,7 +136,6 @@ function state(
 		},
 		network: options.network ?? 'mainnet',
 		paused: options.paused ?? false,
-		pendingStagedOperations: options.pendingStagedOperations ?? [],
 		pendingTransactions: options.pendingTransactions ?? [],
 		rpcEndpointHealth: options.rpcEndpointHealth ?? [],
 		pools: [
@@ -1253,22 +1251,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(dialog?.hasAttribute('open')).toBe(true)
 		expect(page.window.document.getElementById('resume-preflight')?.textContent).toContain('Recovery work')
 
-		page.setSnapshot(
-			state(undefined, [{ message: '1 staged operation requires outcome recovery', severity: 'error' }], {
-				pendingStagedOperations: [
-					{
-						coordinator: '0x1111111111111111111111111111111111111111',
-						historicalRecoveryComplete: false,
-						latestRecoveryBlock: '110',
-						operationId: '7',
-						queuedBlock: '100',
-						target: '0x2222222222222222222222222222222222222222',
-					},
-				],
-			}),
-		)
+		page.setSnapshot(state(undefined, [{ message: '1 transaction intent(s) require recovery before execution can continue', severity: 'error' }], { execute: true, paused: true, pendingTransactions: [pending] }))
 		await page.refresh()
-		expect(page.window.document.getElementById('recovery-list')?.textContent).toContain('Staged operation 7')
+		expect(page.window.document.getElementById('recovery-list')?.textContent).toContain('Liquidate pool')
 		expect(page.window.document.getElementById('attention-badge')?.textContent).toContain('action')
 
 		const confirm = page.window.document.getElementById('confirm-resume')
@@ -1301,27 +1286,6 @@ describe('liquidator go-live settings', () => {
 		reserve.dispatchEvent(new page.window.Event('input', { bubbles: true }))
 		expect(strategySave.disabled).toBe(false)
 		expect(Array.from(page.window.document.querySelectorAll('.settings-badges[data-form="strategy-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Unsaved changes'])
-	})
-
-	test('strategy review shows saved runtime values for log recovery controls', async () => {
-		const saved = mainnetConfiguration()
-		saved.runtime.logLookbackBlocks = 48
-		saved.runtime.historicalLogRecovery = true
-		const page = await dashboard(saved, state())
-		const form = page.window.document.getElementById('strategy-form')
-		const lookback = page.window.document.querySelector('#strategy-form input[name="logLookbackBlocks"]')
-		const historical = page.window.document.querySelector('#strategy-form input[name="historicalLogRecovery"]')
-		if (!(form instanceof page.window.HTMLFormElement) || !(lookback instanceof page.window.HTMLInputElement) || !(historical instanceof page.window.HTMLInputElement)) throw new Error('Expected log recovery controls')
-		lookback.value = '64'
-		historical.checked = false
-		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
-		let review = page.window.document.querySelector('.operator-confirm-dialog')
-		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
-			await Bun.sleep(10)
-			review = page.window.document.querySelector('.operator-confirm-dialog')
-		}
-		expect(review?.textContent).toContain('Latest log window48 blocks→64 blocks')
-		expect(review?.textContent).toContain('Historical log recoveryEnabled→Disabled')
 	})
 
 	test('rejects an invalid liquidation limit before opening the strategy review', async () => {
@@ -1397,7 +1361,8 @@ describe('liquidator go-live settings', () => {
 			await Bun.sleep(10)
 			review = page.window.document.querySelector('.operator-confirm-dialog')
 		}
-		expect(review?.textContent).not.toContain('Historical log recovery')
+		expect(review?.textContent).not.toContain('Report')
+		expect(review?.textContent).not.toContain('Enabled')
 		await page.confirmOperatorAction()
 		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
 		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ minimumNetRewardEth: '0.123', maximumReportFundingEth: '0.05', reportOperationGasLimit: 2_000_000, reportOperationsGasLimit: 5_000_000 }) })])

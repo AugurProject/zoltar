@@ -122,6 +122,14 @@ describe('market ordering', () => {
 		expect(pools(arrangeMarkets(loaded, { filter: 'all', query: '', sort: 'liquidity' }, NOW))).toEqual(pools([second, third, first, unpaired]))
 	})
 
+	test('liquidity compares markets in whole collateral units, not raw base units of different decimals', () => {
+		const usdc = { token: address('c6'), symbol: 'USDC', decimals: 6, native: false } as const
+		// One million USDC of depth (2·Y·N / (Y + N) pairs at a one-to-one share rate) against 0.01 ETH.
+		const deepUsdc = market({ pool: address('11'), collateral: usdc, yesReserve: 10n ** 12n, noReserve: 10n ** 12n, shareTokenSupplyAttoShares: 10n ** 12n, settlementCollateralAttoEth: 10n ** 12n })
+		const shallowEth = market({ pool: address('12'), yesReserve: 10n ** 16n, noReserve: 10n ** 16n, shareTokenSupplyAttoShares: 10n ** 16n, settlementCollateralAttoEth: 10n ** 16n })
+		expect(pools(arrangeMarkets([shallowEth, deepUsdc], { filter: 'all', query: '', sort: 'liquidity' }, NOW))).toEqual(pools([deepUsdc, shallowEth]))
+	})
+
 	test('applies the filter and search before sorting', () => {
 		expect(pools(arrangeMarkets(loaded, { filter: 'open', query: '', sort: 'liquidity' }, NOW))).toEqual(pools([second, first, unpaired]))
 		expect(arrangeMarkets(loaded, { filter: 'resolved', query: '', sort: 'recent' }, NOW)).toEqual([])

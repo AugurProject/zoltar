@@ -3,6 +3,7 @@ import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/liveMarket.js'
 import { attoSharesToCollateralAttoEth } from './shareValue.js'
+import { collateralAsset } from '../protocol/collateral.js'
 
 /** Market-list chips. `all` keeps ended but unresolved markets reachable; the others narrow the downloaded markets. */
 export type MarketFilter = 'all' | 'open' | 'closing-soon' | 'resolved'
@@ -102,7 +103,10 @@ function compareLiquidity(left: LiveMarket, right: LiveMarket) {
 	const leftLiquidity = marketLiquidityAttoEth(left)
 	const rightLiquidity = marketLiquidityAttoEth(right)
 	if (leftLiquidity === undefined || rightLiquidity === undefined) return (leftLiquidity === undefined ? 1 : 0) - (rightLiquidity === undefined ? 1 : 0)
-	return compareBigint(rightLiquidity, leftLiquidity)
+	// Each amount is in its own collateral's base units, so compare whole units: scale each side by the other's decimals.
+	const leftScaled = leftLiquidity * 10n ** BigInt(collateralAsset(right).decimals)
+	const rightScaled = rightLiquidity * 10n ** BigInt(collateralAsset(left).decimals)
+	return compareBigint(rightScaled, leftScaled)
 }
 
 /**
