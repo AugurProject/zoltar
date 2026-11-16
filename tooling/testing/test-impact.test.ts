@@ -33,9 +33,10 @@ describe('test impact recommendations', () => {
 	// The timeout test spawns the runner as a subprocess, so the import graph never reaches it from the runner sources.
 	test('maps the runner and its process wrapper to the timeout and process tests', () => {
 		for (const path of ['tooling/testing/bun-test.mts', 'tooling/testing/run-bun-test-process.mts']) {
-			expect(commandsFor([path])).toEqual([INFRASTRUCTURE_COMMAND])
-			expect(INFRASTRUCTURE_COMMAND).toContain('tooling/testing/test-timeout.test.ts')
-			expect(INFRASTRUCTURE_COMMAND).toContain('tooling/testing/run-bun-test-process.test.ts')
+			const commands = commandsFor([path])
+			expect(commands).toEqual([INFRASTRUCTURE_COMMAND])
+			expect(commands[0]).toContain('tooling/testing/test-timeout.test.ts')
+			expect(commands[0]).toContain('tooling/testing/run-bun-test-process.test.ts')
 		}
 	})
 
