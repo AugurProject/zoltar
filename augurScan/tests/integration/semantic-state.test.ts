@@ -46,8 +46,15 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		] as const
 		for (const [index, [name, data, blockNumber]] of auctionEvents.entries())
 			await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical) VALUES (1, ${blockNumber}, ${hash}, ${hash}, ${index}, ${token}, ${name}, ${JSON.stringify(data)}::text::jsonb, true)`
-		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5' })])
+		// Without a sampled auction snapshot the refund carries no collateral metadata and the browser keeps raw collateral units.
+		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5', collateral: null })])
 		expect(await pendingAuctionRefunds(connection, 1, '2', owner)).toEqual([])
+		const usdc = { address: `0x${'5'.repeat(40)}`, symbol: 'USDC', decimals: 6 }
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical) VALUES (1, 'auction', ${token}, 1, ${hash}, 'success', ${JSON.stringify({ lotAttoEth: '1000000', collateral: usdc })}::text::jsonb, true)`
+		// A later failed read does not hide the immutable collateral token sampled earlier.
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical) VALUES (1, 'auction', ${token}, 1, ${hash}, 'failed', NULL, true)`
+		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5', collateral: usdc })])
+		await connection`DELETE FROM entity_state_snapshots WHERE entity_type = 'auction'`
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 1, ${hash}, ${hash}, 1, 'LocalDepositAppended', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', amountAttoRep: '200' })}::text::jsonb, true)`
 		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical) VALUES (1, 'escalation', ${token}, 1, ${hash}, 'success', ${JSON.stringify({ outcomeBalancesAttoRep: ['2', '3', '4'], finalQuestionResolution: '1' })}::text::jsonb, true)`
 		expect(await escalationCatalogData(connection, 1, '1')).toEqual([expect.objectContaining({ invalid_stake_atto_rep: '2', yes_stake_atto_rep: '3', no_stake_atto_rep: '4' })])

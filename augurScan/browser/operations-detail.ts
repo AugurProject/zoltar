@@ -1,6 +1,7 @@
 import { capitalPositionSummary, capitalSummarizedFields, capitalSummaryMetrics } from './capital-presentation.ts'
 import { poolSummaryMetrics } from './pool-metrics.ts'
 import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
+import { collateralUnit, type CollateralUnit } from '../src/collateral.ts'
 import { semanticFields } from './semantic-evidence.ts'
 import { identifierCopyButton } from './identifier-copy.ts'
 import { shortIdentifier } from './identifier-format.ts'
@@ -31,7 +32,7 @@ export interface OperationsDetailDeps {
 	readonly operationNumber: (value: unknown) => string
 	readonly operationsHistoryOffset: (value: unknown) => number | undefined
 	readonly operationsRiskHistoryKeys: readonly ['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents']
-	readonly detailEvidenceRows: (items: readonly JsonRecord[]) => HTMLElement[]
+	readonly detailEvidenceRows: (items: readonly JsonRecord[], collateral?: CollateralUnit) => HTMLElement[]
 	readonly historyBlockRangeLabel: (oldestBlock: bigint | undefined, newestBlock: bigint | undefined, emptyLabel?: string) => string
 	readonly isDemo: boolean
 	readonly pageUrl: URL
@@ -42,7 +43,7 @@ export interface OperationsDetailDeps {
 	readonly setDetailState: (state: { readonly chainId: string; readonly routeKey: string; readonly items: readonly JsonRecord[]; readonly decisionItems: readonly JsonRecord[]; readonly activityItems: readonly JsonRecord[]; readonly riskHistoryOffset: number }) => void
 	readonly requiredChainId: () => string
 	readonly operationsDetailRouteKey: (route: OperationsDetailRoute) => string
-	readonly detailEvidenceRowsFor: (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[]) => HTMLElement[]
+	readonly detailEvidenceRowsFor: (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[], collateral?: CollateralUnit) => HTMLElement[]
 	readonly loadOperations: (options?: { live?: boolean; catalogTargetCount?: number; riskPoolTargetCount?: number; detailTargetCount?: number; decisionTargetCount?: number; activityTargetCount?: number; historyTargetOffset?: number; preservedContext?: OperationsRenderContext }) => Promise<boolean>
 	readonly components: Components
 }
@@ -139,6 +140,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	})
 	if (summaryPresentation.label !== 'Evidence state' || summaryPresentation.value !== 'Event-derived') summary.append(operationCard(summaryPresentation.label, summaryPresentation.value))
 	const nativeSymbol = nativeSymbolFor(requiredChainId())
+	// Auction amounts are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
+	const auctionCollateral = route.kind === 'auction' ? collateralUnit(snapshot) : undefined
 	if (route.kind === 'pool') {
 		const state = data['read_status'] === 'success' && isPlainRecord(data['read_result']) ? data['read_result'] : {}
 		for (const [label, value] of poolSummaryMetrics(state, nativeSymbol)) summary.append(operationCard(label, value))
@@ -159,7 +162,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'Current-state snapshot',
 				[
 					operationRow('Tagged block read', String(snapshot['read_status']), String(snapshot['entity_identity'] ?? ''), snapshot['block_number']),
-					...semanticFields(isPlainRecord(snapshot['read_result']) ? Object.fromEntries(Object.entries(snapshot['read_result']).filter(([key]) => key !== 'claimEvidence')) : {}, nativeSymbol).map(([label, value]) => operationRow(label, value, undefined, undefined)),
+					...semanticFields(isPlainRecord(snapshot['read_result']) ? Object.fromEntries(Object.entries(snapshot['read_result']).filter(([key]) => key !== 'claimEvidence')) : {}, nativeSymbol, auctionCollateral).map(([label, value]) => operationRow(label, value, undefined, undefined)),
 					rawEvidence(snapshot),
 				],
 				'Snapshot unavailable',
@@ -409,7 +412,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		}
 	}
 
-	if (isPlainRecord(data['finalization'])) addPanel('evidence', operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']]), 'Not finalized'))
+	if (isPlainRecord(data['finalization'])) addPanel('evidence', operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']], auctionCollateral), 'Not finalized'))
 	if (route.kind === 'escalation') {
 		for (const key of ['deposits', 'claims']) addPanel('history', operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
 	}
@@ -417,7 +420,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	const demand = operationRecords(data['demandCurve'])
 	if (demand.length > 0) {
 		// Levels arrive in fill order: the lowest REP-per-lot minimum fills first.
-		const demandLots = (lots: unknown, amount: unknown): string => (typeof amount === 'string' ? `${operationCounted(lots, 'lot')} (${exactUnit(amount, 18, nativeSymbol)})` : operationCounted(lots, 'lot'))
+		const demandCollateral = collateralUnit(snapshot)
+		const demandLots = (lots: unknown, amount: unknown): string => (typeof amount === 'string' ? `${operationCounted(lots, 'lot')} (${exactUnit(amount, demandCollateral.decimals, demandCollateral.symbol)})` : operationCounted(lots, 'lot'))
 		const demandRows = demand.map(point => operationRow(`Minimum ${exactUnit(String(point['minimumAttoRepPerLot'] ?? '0'), 18, 'REP')} per lot`, `${demandLots(point['lots'], point['amountAttoEth'])} · cumulative ${demandLots(point['cumulativeLots'], point['cumulativeDemandAttoEth'])}`, undefined, undefined))
 		addPanel('history', operationsPanel('Demand curve data', demandRows, 'No bids match this view.'))
 	}
@@ -492,7 +496,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	if (operationsDetailEvidencePanelVisible(route.kind, evidenceItems.length, evidenceHasMore, renderContext.focusLoadMore)) {
 		const evidenceTitles: Partial<Record<OperationsDetailRoute['kind'], string>> = { report: 'Report rounds', capital: 'Capital and liquidation events' }
 		// A take-over or cure names positions of one universe ledger; the chain does not tie it to a question pool.
-		const evidencePanel = operationsPanel(evidenceTitles[route.kind] ?? 'Lifecycle timeline', detailEvidenceRowsFor(route.kind, evidenceItems), 'No canonical evidence is available.', route.kind === 'capital' ? { label: 'Attributed to this owner and universe, not to a question pool' } : undefined)
+		const evidencePanel = operationsPanel(evidenceTitles[route.kind] ?? 'Lifecycle timeline', detailEvidenceRowsFor(route.kind, evidenceItems, auctionCollateral), 'No canonical evidence is available.', route.kind === 'capital' ? { label: 'Attributed to this owner and universe, not to a question pool' } : undefined)
 		if (evidenceHasMore) {
 			const loadMore = document.createElement('button')
 			loadMore.type = 'button'

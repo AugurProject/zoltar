@@ -50,14 +50,25 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 }
 
 // BidSettled credits a bidder's refund; RefundWithdrawn pays out the bidder's whole outstanding credit.
+// Refunds are amounts of the auction's immutable collateral token, so the latest tagged auction read that sampled it names their units.
 export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>
 	await sql`
-		SELECT auction_address, sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
-		FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
-			AND event_name IN ('BidSettled', 'RefundWithdrawn') AND lower(event_data->>'bidder') = ${address}
-		GROUP BY auction_address
-		HAVING sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END) <> 0
-		ORDER BY auction_address LIMIT 251
+		SELECT refunds.auction_address, refunds.pending_atto_eth, (
+			SELECT snapshot.read_result->'collateral' FROM entity_state_snapshots snapshot
+			JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash AND block.canonical
+			WHERE snapshot.chain_id = ${chainId} AND snapshot.entity_type = 'auction' AND snapshot.entity_identity = refunds.auction_address
+				AND snapshot.canonical AND snapshot.block_number <= ${snapshotBlock} AND snapshot.read_status = 'success' AND snapshot.read_result->'collateral' IS NOT NULL
+			ORDER BY snapshot.block_number DESC, snapshot.observed_at DESC LIMIT 1
+		) AS collateral
+		FROM (
+			SELECT auction_address, sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
+			FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
+				AND event_name IN ('BidSettled', 'RefundWithdrawn') AND lower(event_data->>'bidder') = ${address}
+			GROUP BY auction_address
+			HAVING sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END) <> 0
+			ORDER BY auction_address LIMIT 251
+		) refunds
+		ORDER BY refunds.auction_address
 	`
 
 export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>

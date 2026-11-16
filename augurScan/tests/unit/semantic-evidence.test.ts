@@ -10,6 +10,21 @@ test('renders exact lifecycle amounts, counterparties and outcomes without round
 	expect(semanticFields({ outcomeBalancesAttoRep: ['1000000000000000000', '2', '3'] }, 'ETH').map(field => field[0])).toEqual(['INVALID balance', 'YES balance', 'NO balance'])
 })
 
+test('formats auction collateral amounts, including nested clearing, with the collateral token units', () => {
+	const usdc = { symbol: 'USDC', decimals: 6 }
+	const auction = { collateral: usdc, depositedAttoEth: '2500000', clearing: { raisedAttoEth: '1500000', soldAttoRep: '1000000000000000000' } }
+	expect(semanticFields(auction, 'ETH')).toEqual([
+		['Collateral', 'Symbol: USDC · Decimals: 6'],
+		['Deposited', '2.5 USDC'],
+		['Clearing', 'Raised: 1.5 USDC · Sold: 1 REP'],
+	])
+	// Auctions without sampled token metadata stay in explicit raw collateral units instead of native ETH.
+	expect(semanticFields({ lotAttoEth: '2500000', clearing: { raisedAttoEth: '7' } }, 'ETH', { symbol: 'collateral units', decimals: 0 })).toEqual([
+		['Lot', '2,500,000 collateral units'],
+		['Clearing', 'Raised: 7 collateral units'],
+	])
+})
+
 test('timeline targets link only entities that have a detail page', () => {
 	// A vault is a capital-ledger owner; it has timeline evidence but no detail page of its own.
 	expect(timelineEntityPath({ entity_type: 'vault', entity_identity: 'ledger:owner' })).toBeUndefined()

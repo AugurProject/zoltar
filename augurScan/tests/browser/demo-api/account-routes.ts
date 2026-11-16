@@ -69,7 +69,7 @@ export async function demoAddressPortfolioRoute(env: DemoEnvironment, path: stri
 				truncated: false,
 				basis: 'Canonical indexed transfers',
 			},
-			pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100000000000000001' }],
+			pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100001', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } }],
 			escalation_payouts: {
 				items: claimState === 'unavailable' ? [] : [{ game_address: demoAddress('7'), snapshot_block: operations.asOf.blockNumber, snapshot_block_hash: demoHash, position: claimPosition }],
 				unavailable_games: claimState === 'unavailable' ? '1' : '0',
