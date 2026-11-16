@@ -9,7 +9,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { portfolioAmountOrUndefined } from '../../portfolios/lib/draft.js'
+import { parseCompleteSetAmountInput } from '../lib/trading.js'
 import { loadTradingCollateral, quoteTradingCollateral } from '../../../protocol/trading.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 
@@ -44,7 +44,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 				const quoteInput = currentAmount.current
 				const collateral = await loadTradingCollateral(client, collateralPool, accountAddress, identity)
 				identity = collateral
-				const amount = portfolioAmountOrUndefined(quoteInput, collateral.decimals)
+				const amount = parseCompleteSetAmountInput(quoteInput, collateral.decimals)
 				const quote = amount !== undefined && amount > 0n ? await quoteTradingCollateral(client, collateral, amount) : undefined
 				if (active && getActiveBackend() === backend) collateralLoaded.value = { key: collateralKey, collateral, quote, quoteInput }
 			})()
@@ -91,7 +91,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	if (accountAddress === undefined) collateralReason = commonCopy.walletConnectionRequired
 	else if (selectedCollateral?.error !== undefined) collateralReason = selectedCollateral.error
 	else if (collateral === undefined) collateralReason = collateralCopy.fundingLoading
-	else if (requiredCollateral === undefined) collateralReason = (portfolioAmountOrUndefined(amountInput, collateral.decimals) ?? 0n) > 0n ? 'Updating collateral quote.' : 'Enter a positive collateral amount.'
+	else if (requiredCollateral === undefined) collateralReason = (parseCompleteSetAmountInput(amountInput, collateral.decimals) ?? 0n) > 0n ? 'Updating collateral quote.' : 'Enter a positive collateral amount.'
 	else if (collateral.balance < requiredCollateral) collateralReason = collateralCopy.formatInsufficientBalance(collateral.symbol)
 	else if (collateral.allowance < requiredCollateral) collateralReason = collateralCopy.approvalRequired
 

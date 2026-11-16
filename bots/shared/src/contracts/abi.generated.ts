@@ -610,7 +610,7 @@ export const securityPoolFactoryAbi = [
 	},
 	{
 		type: 'function',
-		name: 'getChildPoolDependencies',
+		name: 'getChildPoolCoordinator',
 		stateMutability: 'view',
 		inputs: [
 			{ name: 'parent', type: 'address', internalType: 'contract ISecurityPool' },
@@ -678,7 +678,7 @@ export const securityPoolFactoryAbi = [
 	},
 	{
 		type: 'function',
-		name: 'prepareChildPoolDependencies',
+		name: 'prepareChildPoolCoordinator',
 		stateMutability: 'nonpayable',
 		inputs: [
 			{ name: 'parent', type: 'address', internalType: 'contract ISecurityPool' },

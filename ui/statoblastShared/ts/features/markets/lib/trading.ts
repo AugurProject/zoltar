@@ -152,6 +152,11 @@ export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) 
 	return deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
 }
 
+/** The one parser for complete-set mint and redeem amounts, shared by the guards, the collateral quote and submission so they never disagree. */
+export function parseCompleteSetAmountInput(input: string, decimals: number) {
+	return tryParseDecimalInput(input, decimals)
+}
+
 export function getTradingMintGuardMessage({
 	collateral,
 	accountAddress,
@@ -199,7 +204,7 @@ export function getTradingMintGuardMessage({
 
 	const trimmedAmount = mintAmountInput.trim()
 	if (trimmedAmount === '') return tradingCopy.mintAmountRequired
-	const mintAmount = tryParseDecimalInput(trimmedAmount, collateral?.decimals ?? 18)
+	const mintAmount = parseCompleteSetAmountInput(trimmedAmount, collateral?.decimals ?? 18)
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
 	if (mintAmount <= 0n) return tradingCopy.mintAmountRequired
@@ -241,7 +246,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 
 	const trimmedAmount = redeemAmountInput.trim()
 	if (trimmedAmount === '') return tradingCopy.redeemAmountRequired
-	const redeemAmount = tryParseDecimalInput(trimmedAmount, shareDecimals)
+	const redeemAmount = parseCompleteSetAmountInput(trimmedAmount, shareDecimals)
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
 	if (redeemAmount <= 0n) return tradingCopy.redeemAmountRequired
