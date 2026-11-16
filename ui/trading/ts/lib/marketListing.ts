@@ -3,6 +3,7 @@ import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/liveMarket.js'
 import { attoSharesToCollateralAttoEth } from './shareValue.js'
+import { collateralAsset } from '../protocol/collateral.js'
 
 /** Market-list chips. `all` keeps ended but unresolved markets reachable; the others narrow the downloaded markets. */
 export type MarketFilter = 'all' | 'open' | 'closing-soon' | 'resolved'
@@ -54,9 +55,10 @@ export function marketPriceState(market: Parameters<typeof marketAcceptsNewRisk>
 
 /**
  * Settlement-collateral value of the pair's reserves at the pair's own spot price. Valuing YES at p and NO at 1 - p
- * gives 2·Y·N / (Y + N) outcome-share pairs, which convert to collateral at the pool's current share rate.
+ * gives 2·Y·N / (Y + N) outcome-share pairs, which convert to collateral at the pool's current share rate. The result is in
+ * base units of the market's own collateral, so compare markets only after accounting for each collateral's decimals.
  */
-export function marketLiquidityAttoEth(market: Pick<LiveMarket, 'loadError' | 'pair' | 'yesReserve' | 'noReserve' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
+export function marketLiquidityCollateralUnits(market: Pick<LiveMarket, 'loadError' | 'pair' | 'yesReserve' | 'noReserve' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
 	if (market.loadError !== undefined || market.pair === undefined) return undefined
 	const total = market.yesReserve + market.noReserve
 	if (total === 0n) return 0n
@@ -99,10 +101,13 @@ function compareClosingSoon(left: LiveMarket, right: LiveMarket, nowSeconds: big
 }
 
 function compareLiquidity(left: LiveMarket, right: LiveMarket) {
-	const leftLiquidity = marketLiquidityAttoEth(left)
-	const rightLiquidity = marketLiquidityAttoEth(right)
+	const leftLiquidity = marketLiquidityCollateralUnits(left)
+	const rightLiquidity = marketLiquidityCollateralUnits(right)
 	if (leftLiquidity === undefined || rightLiquidity === undefined) return (leftLiquidity === undefined ? 1 : 0) - (rightLiquidity === undefined ? 1 : 0)
-	return compareBigint(rightLiquidity, leftLiquidity)
+	// Each amount is in its own collateral's base units, so compare whole units: scale each side by the other's decimals.
+	const leftScaled = leftLiquidity * 10n ** BigInt(collateralAsset(right).decimals)
+	const rightScaled = rightLiquidity * 10n ** BigInt(collateralAsset(left).decimals)
+	return compareBigint(rightScaled, leftScaled)
 }
 
 /**

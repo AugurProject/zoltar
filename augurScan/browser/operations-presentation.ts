@@ -1,6 +1,5 @@
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import type { JsonRecord, JsonValue } from './api-validation.ts'
-import { exactUnit } from './format.ts'
 
 export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
 
@@ -25,10 +24,11 @@ export const operationsRouteFreshness = (asOf: JsonRecord, liveConnected: boolea
 	return `As of block #${operationsInteger(asOf['blockNumber'])} · ${operationsInteger(asOf['lagBlocks'])} blocks behind · ${liveConnected ? 'live updates connected' : 'live updates reconnecting'}`
 }
 
-type OperationsDetailKind = 'auction' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading'
+type OperationsDetailKind = 'auction' | 'capital' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading'
 
 const operationsDetailCatalogPaths: Readonly<Record<OperationsDetailKind, string>> = {
 	auction: '/operations/auctions',
+	capital: '/operations/risk',
 	escalation: '/operations/escalations',
 	fork: '/operations/forks',
 	pool: '/operations/risk',
@@ -56,6 +56,17 @@ const poolProtocolStateLabel = (value: JsonValue | undefined): string => {
 			return 'Fork migration'
 		case 'bad-debt':
 			return 'Bad debt'
+		// Capital position states.
+		case 'healthy':
+			return 'Healthy'
+		case 'uncommitted':
+			return 'No commitment'
+		case 'under-collateralized':
+			return 'Below liquidation price'
+		case 'takeover-preconditions-met':
+			return 'Take-over preconditions met'
+		case 'frozen':
+			return 'Frozen by fork'
 		case 'unavailable':
 			return 'Unavailable'
 		default:
@@ -75,21 +86,6 @@ export const operationsRiskPresentation = (protocolState: JsonValue | undefined,
 	...(riskAssessments[String(scannerSeverity).toLowerCase()] ?? { scannerAssessment: 'Unrecognized assessment', scannerTone: 'unavailable' }),
 })
 
-// CommitmentTakenOver carries position ids, the commitment moved and the REP award. The commitment is in the
-// ledger's collateral token, whose decimals a timeline entry does not carry, so it stays in explicit base units.
-export const takeoverSummary = (summaryData: unknown): string => {
-	const data = isPlainRecord(summaryData) ? summaryData : {}
-	const integer = (key: string): string | undefined => {
-		const value = data[key]
-		return typeof value === 'string' && /^\d+$/.test(value) ? value : undefined
-	}
-	const [sourceId, receiverId, commitment, award] = [integer('sourceId'), integer('receiverId'), integer('commitment'), integer('awardAttoRep')]
-	const parts = [sourceId === undefined || receiverId === undefined ? undefined : `Position ${sourceId} → ${receiverId}`, commitment === undefined ? undefined : `commitment ${exactUnit(commitment, 0, 'collateral units')}`, award === undefined ? undefined : `award ${exactUnit(award, 18, 'REP')}`].filter(
-		(part): part is string => part !== undefined,
-	)
-	return parts.length === 0 ? 'Take-over evidence unavailable' : parts.join(' · ')
-}
-
 const snapshotReadStatusLabel = (readStatus: unknown) => {
 	if (readStatus === 'success') return 'Current tagged read available'
 	if (readStatus === undefined || readStatus === null || readStatus === '') return 'Event-derived'
@@ -106,7 +102,7 @@ export const operationsDetailSummaryPresentation = (
 		readonly snapshotReadStatus?: JsonValue | undefined
 	},
 ): { readonly label: string; readonly value: string } => {
-	if (kind === 'pool')
+	if (kind === 'pool' || kind === 'capital')
 		return {
 			label: 'Protocol state',
 			value: operationsRiskPresentation(state.protocolState, state.scannerSeverity).protocolState,

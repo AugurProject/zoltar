@@ -6,7 +6,7 @@ import { initializeSchema } from '../../src/schema.ts'
 import type { NetworkConfig } from '../../src/types.ts'
 import { type OperationsContext, seedBulkTradingHistory, seedRiskAndPortfolioEvidence, storeOperationsEvidenceBlock } from '../support/operations-fixtures.ts'
 import { expectQuestionHistoryCursors, expectReportCatalogGenerations, expectReportDetailPagination, expectRiskAndForkCatalogs, expectTimelinePagination, expectTradingAndPortfolioPagination, expectUnicodeTradingPagination } from '../support/operations-stages.ts'
-import { address, blockHash, chainId, discoveredAddress, postgresTest, requirePostgresUrl } from '../support/postgres-fixtures.ts'
+import { address, blockHash, chainId, discoveredAddress, postgresTest, promotedAddress, requirePostgresUrl } from '../support/postgres-fixtures.ts'
 
 const uniswapOnlyMarket = getAddress('0x9999999999999999999999999999999999999999').toLowerCase()
 
@@ -112,15 +112,31 @@ const expectRecentTakeovers = async ({ database, operationsChainId, oracle }: Op
 	const overviewResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
 	if (overviewResponse === undefined) throw new Error('operations endpoint did not return a response')
 	const overview = (await overviewResponse.json()) as { data: Record<string, unknown> & { risk: Record<string, unknown>; totals: Record<string, unknown> } }
-	expect(overview.data.risk['recentTakeovers']).toEqual([
-		expect.objectContaining({
-			semantic_event_kind: 'CommitmentTakenOver',
-			entity_type: 'capital-position',
-			entity_identity: `${oracle.toLowerCase()}:1`,
-			summary_data: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: 5n.toString() },
-		}),
-	])
-	for (const removed of ['vaults', 'approvalEvents', 'recentLiquidations']) expect(overview.data.risk).not.toHaveProperty(removed)
+	// The liquidation feed names the owner that the read of position 1 supplied; position 2 has not been read.
+	const takeover = { event_name: 'CommitmentTakenOver', source_contract: oracle.toLowerCase(), event_data: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: '5' }, source_owner: address.toLowerCase(), receiver_owner: null }
+	const cure = { event_name: 'CommitmentCured', event_data: { positionId: '1', removedCommitment: '10' }, source_owner: address.toLowerCase(), receiver_owner: null }
+	expect(overview.data.risk['recentLiquidations']).toEqual([expect.objectContaining(takeover), expect.objectContaining(cure)])
+	expect(overview.data.risk).toMatchObject({ capitalPositions: [], capitalPositionTotal: 0, capitalLedgers: [] })
+	for (const removed of ['vaults', 'approvalEvents', 'recentTakeovers']) expect(overview.data.risk).not.toHaveProperty(removed)
+	const api = async (path: string) => {
+		const response = await handleApi(new Request(`http://localhost${path}`), database.sql)
+		if (response === undefined) throw new Error(`${path} did not return a response`)
+		return response
+	}
+	const liquidations = await api(`/api/v1/state/liquidations?chainId=${operationsChainId}&limit=1`)
+	expect(liquidations.status).toBe(200)
+	const firstPage = (await liquidations.json()) as { data: { items: unknown[]; hasMore: boolean; nextCursor: string } }
+	expect(firstPage.data).toMatchObject({ items: [takeover], hasMore: true })
+	const secondPage = (await (await api(`/api/v1/state/liquidations?chainId=${operationsChainId}&limit=1&cursor=${encodeURIComponent(firstPage.data.nextCursor)}`)).json()) as { data: { items: unknown[]; hasMore: boolean } }
+	expect(secondPage.data).toMatchObject({ items: [cure], hasMore: false })
+	expect(await (await api(`/api/v1/state/liquidations?chainId=${operationsChainId}&owner=${promotedAddress}`)).json()).toMatchObject({ data: { items: [] } })
+	// A cursor belongs to the filter it was issued for.
+	expect((await api(`/api/v1/state/liquidations?chainId=${operationsChainId}&owner=${address}&cursor=${encodeURIComponent(firstPage.data.nextCursor)}`)).status).toBe(400)
+	expect((await api(`/api/v1/state/liquidations?chainId=${operationsChainId}&owner=0x12`)).status).toBe(400)
+	expect(await (await api(`/api/v1/state/capital?chainId=${operationsChainId}`)).json()).toMatchObject({ data: { ledgers: [], positions: { items: [], total: 0, hasMore: false } } })
+	expect((await api(`/api/v1/state/capital?chainId=${operationsChainId}&offset=1`)).status).toBe(400)
+	expect((await api(`/api/v1/state/capital/${operationsChainId}/${oracle}/${address}`)).status).toBe(404)
+	expect((await api(`/api/v1/state/capital/${operationsChainId}/${oracle}`)).status).toBe(400)
 	expect(overview.data.totals).not.toHaveProperty('vaults')
 	expect(overview.data).not.toHaveProperty('feeEconomics')
 	const vaultRiskResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)

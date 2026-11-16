@@ -49,12 +49,13 @@ The same separation applies across the indexed domains:
 
 | Surface | Retained evidence | Current materialization |
 | --- | --- | --- |
-| OpenOracle reports | Submitted, disputed, settled, rejected, and recovery occurrences plus coordinator decisions | Latest report round and lifecycle state |
-| Escalations and auctions | Deposits, claims, bids, settlements, refunds, and lifecycle events | Current totals, outcome state, and clearing summary |
-| Statoblast risk | Question accounting checkpoints, capital-ledger commitment take-overs, and tagged pool reads | Latest pool settlement state |
+| OpenOracle reports | Submitted, disputed, settled, rejected, and recovery occurrences plus coordinator decisions and the report escrow's `ReportCompleted` | Latest report round and lifecycle state |
+| Escalations and auctions | Deposits, claims, bids, settlements, refunds, and lifecycle events, plus the reporter ledger's `GameRegistered` and `ReporterFinalityScheduled` for the game they name | Current totals, outcome state, and clearing summary |
+| Statoblast risk | Question accounting checkpoints and tagged pool reads; capital-ledger events and every retained tagged `capital-ledger` and `capital-owner` read, and the one-time `capital-position` read of each position's owner | Latest pool settlement state; each owner's latest principal, commitment and health per universe ledger; the liquidation feed of take-overs, cures and report operations |
 | Trading | Pair identity, reserve synchronization, swaps, liquidity events, and LP transfers, joined at read time with pool complete-set events and share transfers | Current market summary, ETH volume, market activity, account profit and loss, positions, and bounded analytics |
-| Zoltar forks | Universe lineage, migration, REP burn, and portfolio fork events (`ForkFrozen`, `BranchChosen`, `BranchStarted`, `BranchActivated`, `NeutralCashRecovered`) | Current branch and migration summary |
+| Zoltar forks | Universe lineage, migration, REP burn, and portfolio fork events (`ForkFrozen`, `BranchChosen`, `BranchStarted`, `BranchActivated`, `NeutralCashRecovered`, and the reporter ledger's `ReporterForkFrozen` and `ReporterChildCreated`) | Current branch and migration summary, including the reporter escrow that migrates and the REP finalized games keep in the parent |
 | Addresses and tokens | Participation occurrences plus tagged balance and metadata read outcomes | Latest successful balance and metadata values |
+| Portfolio components | Settlement-book, portfolio-services, portfolio-settlement, and reporter-ledger events, as timeline entries of the `settlement-book`, `portfolio-services`, `portfolio-settlement`, and `reporter-ledger` entities | None; these events are timeline evidence. Coverage starts at the block that registered the component, so the origin book's `BookCreated`, emitted during portfolio setup, is absent |
 
 Exact domain calculations, filters, response fields, limits, and continuation rules belong to the [API reference](API_REFERENCE.md). This page owns only the evidence model.
 

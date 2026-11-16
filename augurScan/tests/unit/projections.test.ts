@@ -348,6 +348,40 @@ describe('state projections', () => {
 		expect(projectionsFrom({ ...log('URI', { value: 'ipfs://share', id: '1' }), contractKind: 'shareToken' })).toEqual([])
 	})
 
+	test('a materialized auction bid belongs to the vault that owns the new position', () => {
+		expect(projectionsFrom(log('AuctionBidMaterialized', { bidId: '4', vault, positionId: '3', principal: '70', commitment: '10' })).at(-1)).toMatchObject({ domain: 'risk', entityType: 'vault', entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}` })
+		// The cohort is the auction adapter's aggregate position, identified by its position id.
+		expect(projectionsFrom(log('AuctionCohortInstalled', { adapter: vault, positionId: '3', lots: '1', repPerLot: '2', commitmentPerLot: '3' })).at(-1)).toMatchObject({ entityType: 'capital-position', entityIdentity: `${pool.toLowerCase()}:3` })
+	})
+
+	test('classifies the events of contracts registered through portfolio discovery', () => {
+		const emitter = pool.toLowerCase()
+		const game = vault.toLowerCase()
+		const cases = [
+			['BookCreated', { bookId: '2', sourceBookId: '1', cashAttoEth: atomic(5n), units: '5' }, 'risk', 'settlement-book', `${emitter}:2`],
+			['SettlementMinted', { bookId: '1', questionId: '42', cashAttoEth: atomic(5n), outcomeShares: '5' }, 'risk', 'settlement-book', `${emitter}:1`],
+			['SettlementRedeemed', { bookId: '1', questionId: '42', outcomeShares: '5', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
+			['FinalityScheduled', { bookId: '1', questionId: '42', finalAfter: '100' }, 'risk', 'settlement-book', `${emitter}:1`],
+			['FinalClaimsFrozen', { bookId: '1', frozenBookId: '1', portfolioTimestamp: '100', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
+			['FeeStreamReplaced', { bookId: '1', questionId: '42', rateAttoEthPerSecond: atomic(3n), end: '200' }, 'risk', 'settlement-book', `${emitter}:1`],
+			['AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '150', cashAttoEth: atomic(9n) }, 'risk', 'settlement-book', `${emitter}:1`],
+			['PremiumFunded', { universeId: '3', questionId: '42', amountAttoEth: atomic(1n), units: '1' }, 'risk', 'portfolio-services', `${emitter}:3`],
+			['PremiumRecovered', { universeId: '3', questionId: '42', recipient: vault, amountAttoEth: atomic(1n) }, 'risk', 'portfolio-services', `${emitter}:3`],
+			['UnusedServiceCashBurned', { universeId: '3', amountAttoEth: atomic(1n) }, 'risk', 'portfolio-services', `${emitter}:3`],
+			['RecoveryRepPaid', { universeId: '3', questionId: '42', recipient: vault, amountAttoRep: atomic(2n) }, 'risk', 'portfolio-settlement', `${emitter}:3`],
+			['ReporterBalanceChanged', { universeId: '3', questionId: '42', balanceAttoRep: atomic(7n) }, 'risk', 'reporter-ledger', `${emitter}:3`],
+			// The reporter ledger names the game, so both events belong to that game rather than to the ledger.
+			['GameRegistered', { universeId: '3', questionId: '42', game: vault }, 'escalation', 'escalation', game],
+			['ReporterFinalityScheduled', { game: vault, finalAfter: '100' }, 'escalation', 'escalation', game],
+			['ReporterForkFrozen', { universeId: '3', migrationAttoRep: atomic(4n), protectedParentAttoRep: atomic(1n) }, 'fork', 'portfolio-branch', `${emitter}:3`],
+			// The child's reporter escrow is created under the source universe that forked.
+			['ReporterChildCreated', { sourceUniverseId: '3', childUniverseId: '4', escrowAttoRep: atomic(4n) }, 'fork', 'portfolio-branch', `${emitter}:3`],
+			// The escrow completes a report for the feed that created it, so the entity is that feed.
+			['ReportCompleted', { reportId: '7', priceFeed: vault, accepted: true }, 'oracle', 'price-feed', game],
+		] as const
+		for (const [name, data, domain, entityType, entityIdentity] of cases) expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain, entityType, entityIdentity, semanticEventKind: name })
+	})
+
 	test('covers coordinator, escalation, risk, trading, and fork lifecycle taxonomy with stable keys', () => {
 		expect(projectionsFrom(log('PendingReportRecovered', { reportId: '1' })).at(-1)).toMatchObject({
 			type: 'domainEvent',

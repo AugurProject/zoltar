@@ -151,6 +151,20 @@ export interface RichListRecord {
 	rep_balances_truncated?: boolean
 	weth_balances_truncated?: boolean
 	pool_associations: Array<{ address: string; label: string | null; questionTitle: string | null }>
+	// The latest tagged read of each capital position the address owns, one per universe ledger.
+	capital_positions?: Array<{
+		ledgerAddress: string
+		portfolio: string | null
+		universeId: string | null
+		readStatus: string
+		principalAttoRep: string | null
+		commitmentAttoEth: string | null
+		healthFactorBps: string | null
+		unclaimedFeesAttoEth: string | null
+		unclaimedFeesAttoRep: string | null
+		collateral: { address?: string; symbol: string; decimals: number } | null
+		blockNumber: string
+	}>
 	share_positions?: JsonRecord
 	escalation_positions_truncated?: boolean
 	pending_refunds_truncated?: boolean
@@ -477,7 +491,7 @@ export type OperationsRenderContext = {
 }
 
 export type OperationsDetailRoute = {
-	readonly kind: 'auction' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading'
+	readonly kind: 'auction' | 'capital' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading'
 	readonly identity: readonly string[]
 }
 

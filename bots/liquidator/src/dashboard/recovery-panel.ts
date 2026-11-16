@@ -13,7 +13,6 @@ type RecoveryPanelContext = {
 }
 
 type PendingTransaction = Snapshot['pendingTransactions'][number]
-type PendingStagedOperation = Snapshot['pendingStagedOperations'][number]
 
 type TransactionCard = {
 	card: HTMLElement
@@ -25,8 +24,6 @@ type TransactionCard = {
 	/** A reconciliation is being confirmed or sent; the card stays locked and keeps its status across polls. */
 	busy: boolean
 }
-
-type StagedCard = { card: HTMLElement; metadata: HTMLParagraphElement; status: HTMLParagraphElement }
 
 function recoveryCard(title: string) {
 	const card = document.createElement('article')
@@ -43,18 +40,12 @@ function setText(target: HTMLElement, text: string) {
 	if (target.textContent !== text) target.textContent = text
 }
 
-function historicalRecoveryText(operation: PendingStagedOperation) {
-	if (operation.historicalRecoveryComplete) return 'historical backfill complete'
-	return operation.nextHistoricalBlock === undefined ? 'historical backfill not enabled' : `historical backfill next block ${operation.nextHistoricalBlock}`
-}
-
 /**
- * Renders pending transaction intents with their reconciliation forms and the staged operations awaiting a canonical
- * outcome. Cards are kept per intent and updated in place, so a poll never discards a typed hash or an in-flight status.
+ * Renders pending transaction intents with their reconciliation forms. Cards are kept per intent and updated in place,
+ * so a poll never discards a typed hash or an in-flight status.
  */
 export function createRecoveryPanel({ state, elements, refresh }: RecoveryPanelContext) {
 	const transactionCards = new Map<string, TransactionCard>()
-	const stagedCards = new Map<string, StagedCard>()
 	let renderedKey: string | undefined
 	let latestSnapshot: Snapshot | undefined
 
@@ -131,26 +122,11 @@ export function createRecoveryPanel({ state, elements, refresh }: RecoveryPanelC
 		entry.button.disabled = entry.busy || reconciliationLocked()
 	}
 
-	function syncStagedCard(entry: StagedCard, operation: PendingStagedOperation) {
-		setText(entry.metadata, `queued block ${operation.queuedBlock} · latest checked ${operation.latestRecoveryBlock ?? 'not yet'} · ${historicalRecoveryText(operation)} · ${operation.coordinator} → ${operation.target}`)
-		setText(entry.status, operation.candidateBlock === undefined ? 'Waiting for a canonical outcome.' : `Outcome found at block ${operation.candidateBlock}; waiting for canonical finality.`)
-	}
-
-	function createStagedCard(operation: PendingStagedOperation): StagedCard {
-		const { card, metadata } = recoveryCard(`Staged operation ${operation.operationId}`)
-		const status = document.createElement('p')
-		status.className = 'muted'
-		card.append(status)
-		return { card, metadata, status }
-	}
-
 	function renderRecovery(snapshot: Snapshot) {
 		latestSnapshot = snapshot
 		const recoveryList = elements.recoveryList
 		const transactionKeys = snapshot.pendingTransactions.map(intent => intent.hash.toLowerCase())
-		const stagedKeys = snapshot.pendingStagedOperations.map(operation => operation.operationId)
 		for (const key of transactionCards.keys()) if (!transactionKeys.includes(key)) transactionCards.delete(key)
-		for (const key of stagedCards.keys()) if (!stagedKeys.includes(key)) stagedCards.delete(key)
 		const cards: HTMLElement[] = []
 		for (const intent of snapshot.pendingTransactions) {
 			const key = intent.hash.toLowerCase()
@@ -159,14 +135,8 @@ export function createRecoveryPanel({ state, elements, refresh }: RecoveryPanelC
 			syncTransactionCard(entry, intent)
 			cards.push(entry.card)
 		}
-		for (const operation of snapshot.pendingStagedOperations) {
-			const entry = stagedCards.get(operation.operationId) ?? createStagedCard(operation)
-			stagedCards.set(operation.operationId, entry)
-			syncStagedCard(entry, operation)
-			cards.push(entry.card)
-		}
 		// The list is only rebuilt when its membership changes, so focus and typed values survive ordinary polls.
-		const key = JSON.stringify([transactionKeys, stagedKeys])
+		const key = JSON.stringify(transactionKeys)
 		if (key === renderedKey) return
 		renderedKey = key
 		if (cards.length === 0) {

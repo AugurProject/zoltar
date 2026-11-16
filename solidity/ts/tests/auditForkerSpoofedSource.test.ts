@@ -56,8 +56,8 @@ describe('audit: the forker rejects a child pool resolved through a spoofed sour
 		expect(await systemState()).toBe(0n)
 
 		const spoof = await deployContract(owner, encodeDeployData({ abi: spoofArtifact.abi, bytecode: `0x${spoofArtifact.evm.bytecode.object}`, args: [child, pool().address] }))
-		await expect(owner.writeContract({ ...forker(), functionName: 'preparePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Child pool belongs to another factory')
-		await expect(owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Child pool belongs to another factory')
+		await expect(owner.writeContract({ ...forker(), functionName: 'preparePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Child pool is not from the source factory')
+		await expect(owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Child pool is not from the source factory')
 		expect(await systemState()).toBe(0n)
 		await redeemShares(trader, pool().address)
 	})

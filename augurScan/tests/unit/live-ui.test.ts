@@ -41,7 +41,6 @@ import {
 	operationsForkChildCount,
 	operationsRiskPresentation,
 	forkParticipationUniverse,
-	takeoverSummary,
 	operationsRouteFreshness,
 } from '../../browser/operations-presentation.ts'
 import {
@@ -478,12 +477,6 @@ test('links a portfolio fork participation row to its universe fork', () => {
 	expect(forkParticipationUniverse({ universe_identity: '0xcccccccccccccccccccccccccccccccccccccccc:7', event_data: { universeId: '7', owner: '0xaa' } })).toBe('7')
 	expect(forkParticipationUniverse({ universe_identity: '7', event_data: { universeId: '7' } })).toBe('7')
 	expect(forkParticipationUniverse({ universe_identity: '0xcccccccccccccccccccccccccccccccccccccccc:7' })).toBe('0xcccccccccccccccccccccccccccccccccccccccc:7')
-})
-
-test('summarizes a commitment take-over with explicit units', () => {
-	expect(takeoverSummary({ sourceId: '7', receiverId: '12', commitment: '2000000000000000000', awardAttoRep: 300000000000000000n.toString() })).toBe('Position 7 → 12 · commitment 2,000,000,000,000,000,000 collateral units · award 0.3 REP')
-	expect(takeoverSummary({ sourceId: '7', commitment: 'bad' })).toBe('Take-over evidence unavailable')
-	expect(takeoverSummary(undefined)).toBe('Take-over evidence unavailable')
 })
 
 test('uses protocol state only for detail summaries that contain semantic protocol state', () => {

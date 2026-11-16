@@ -1,5 +1,6 @@
 import type { ContractRecord } from '../../../browser/browser-types.ts'
 import { requiredArrayItem } from '../../../browser/api-decoding.ts'
+import { demoOwnedCapitalPositions } from './capital-fixtures.ts'
 
 export const demoHash = `0x${'7e4b9ad70f2248c48217f9c9ef694017'.repeat(2)}`
 
@@ -222,6 +223,7 @@ export const createDemoChainFixtures = () => {
 				label: poolIndex === 0 ? 'Security Pool' : null,
 				questionTitle: poolIndex === 0 ? demoPoolQuestionTitle(network.id) : null,
 			})),
+			capital_positions: network.chain_id === '1' ? demoOwnedCapitalPositions(address, network.indexed_block) : [],
 		}
 	})
 

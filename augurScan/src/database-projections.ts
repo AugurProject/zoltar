@@ -35,9 +35,10 @@ const storeDomainEvent = async (transaction: SQL, chainId: number, item: StoredL
 		return
 	}
 	if (projection.domain === 'escalation') {
+		// The identity is the game: the emitter for a game's own events, the named game for reporter-ledger events.
 		await transaction`
 			INSERT INTO escalation_game_events (chain_id, block_hash, tx_hash, log_index, block_number, game_address, event_name, event_data, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, (${databaseJsonText(projection.data)}::text)::jsonb, true)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.entityIdentity}, ${projection.semanticEventKind}, (${databaseJsonText(projection.data)}::text)::jsonb, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, game_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
 		`
 		return

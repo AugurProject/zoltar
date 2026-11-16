@@ -110,7 +110,9 @@ contract SecurityPoolForkerPortfolioDelegate {
 		portfolio = ISecurityPoolPortfolioNative(authority);
 		portfolio.prepareQuestionUniverse(targetUniverse);
 		child = factory.getSecurityPool(origin, targetUniverse);
-		if (address(child) != address(0)) _requireSameFactory(child, factory);
+		// An already operational child returns before its parent is checked, so prove its factory first.
+		if (address(child) != address(0))
+			require(address(child.securityPoolFactory()) == address(factory), 'Child pool is not from the source factory');
 		if (address(child) != address(0) && child.systemState() == SystemState.Operational)
 			return (child, portfolio, address(0));
 		SecurityPoolReporterLedger reporters = SecurityPoolReporterLedger(portfolio.reporterLedger(targetUniverse));
@@ -119,24 +121,24 @@ contract SecurityPoolForkerPortfolioDelegate {
 		sourceGame = reporterState.sourceGame;
 		require(sourceGame == address(0) || sourceGame == address(source.escalationGame()), 'Use last live reporter source');
 		if (address(child) != address(0)) {
+			// A pool's parent is immutable, so this also proves `source` and its factory.
 			require(address(child.parent()) == address(source), 'Use prepared question source');
 			return (child, portfolio, sourceGame);
 		}
 		factory.preparePortfolioPriceFeed(source, targetUniverse);
 		child = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps());
-		_requireSameFactory(child, factory);
+		_requireChildProvenance(factory, source, child, targetUniverse);
 		source.authorizeChildPool(child);
 		portfolio.registerChildPool(child);
 		if (zoltar.getForkTime(targetUniverse) != 0) child.setSystemState(SystemState.PoolForked);
 	}
 
-	/// @dev The forker is every pool's privileged caller, and `source` is chosen by
-	/// the caller. A pool this forker may act on names its own immutable factory, so
-	/// requiring that factory to be the one that vouched for `source` and resolved
-	/// `child` means a genuine pool can only be reached through its genuine lineage.
-	/// A counterfeit child can claim any factory, but privileged calls on it are inert.
-	function _requireSameFactory(ISecurityPool child, ISecurityPoolFactory factory) private view {
-		require(address(child.securityPoolFactory()) == address(factory), 'Child pool belongs to another factory');
+	/// @dev `source` and everything derived from it are caller-supplied. A pool's factory is
+	/// immutable, so a child that names `factory` proves the factory, and therefore the
+	/// canonical source lookup, before this forker uses its privileges on the child.
+	function _requireChildProvenance(ISecurityPoolFactory factory, ISecurityPool source, ISecurityPool child, uint248 targetUniverse) private view {
+		require(address(child.securityPoolFactory()) == address(factory), 'Child pool is not from the source factory');
+		require(address(child.parent()) == address(source) && child.universeId() == targetUniverse && address(child.shareToken()) == address(source.shareToken()), 'Child pool does not continue the source');
 	}
 
 	function getQuestionOutcome(ISecurityPool pool) external view returns (BinaryOutcomes.BinaryOutcome) {
