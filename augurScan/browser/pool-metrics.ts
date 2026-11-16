@@ -9,7 +9,7 @@ const atomic = (value: unknown): bigint | undefined => {
 
 // Shares Statoblast's annual fee math: compound the per-second retention
 // over a 365-day year, then round the complementary fee to six decimals.
-export const annualFeeMillionths = (value: unknown): string | undefined => roundedOpenInterestFeePerYear(atomic(value), 6)?.toString()
+const annualFeeMillionths = (value: unknown): string | undefined => roundedOpenInterestFeePerYear(atomic(value), 6)?.toString()
 
 export const annualFeeText = (value: unknown): string => {
 	const fee = annualFeeMillionths(value)

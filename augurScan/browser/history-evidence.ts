@@ -80,8 +80,6 @@ export const timelineEntityTypeLabel = (value: JsonValue | undefined): string =>
 			return 'Security pool'
 		case 'vault':
 			return 'Vault'
-		case 'liquidation-approval':
-			return 'Liquidation approval'
 		case 'amm':
 			return 'AMM market'
 		case 'fork':
