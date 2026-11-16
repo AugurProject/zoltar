@@ -10,11 +10,20 @@ import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { getDefaultTradingFormState } from '../lib/marketForm.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { estimateMintCheckpoint, getDefaultShareMigrationTargetOutcomeIndexes, getSelectedOutcomeShareBalance, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
+import {
+	estimateMintCheckpoint,
+	getDefaultShareMigrationTargetOutcomeIndexes,
+	getSelectedOutcomeShareBalance,
+	getTradingMigrateSharesGuardMessage,
+	getTradingMintGuardMessage,
+	getTradingRedeemCompleteSetGuardMessage,
+	getTradingRedeemSharesGuardMessage,
+	isTradingSystemDeployed,
+	parseCompleteSetAmountInput,
+} from '../lib/trading.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../../transactionPresentations.js'
@@ -302,9 +311,8 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 		return collateral.decimals
 	}
 
-	/** Parses with the same rules as the mint and redeem guards, so every amount they accept is the amount submitted. */
 	function parseCollateralAmount(input: string) {
-		return tryParseDecimalInput(input, requireCollateralDecimals())
+		return parseCompleteSetAmountInput(input, requireCollateralDecimals())
 	}
 
 	const createCompleteSet = async () =>
