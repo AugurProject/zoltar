@@ -48,8 +48,8 @@ browserTest(
 			await waitFor(`document.querySelector('#explorer-content h3')?.textContent === 'First 250 transactions'`)
 			expect(await evaluate(`document.querySelector('#explorer-content .data-note')?.textContent`)).toContain('More indexed transactions')
 			await session.send('Page.navigate', { url: `${origin}/operations?demo=1&chainId=1` })
-			await waitFor(`document.querySelector('#operations-content')?.textContent.includes('Vault position')`)
-			expect(await evaluate(`document.querySelector('#operations-content')?.textContent.includes('health 113.5%')`)).toBe(true)
+			await waitFor(`document.querySelector('#operations-content')?.textContent.includes('Pool accounting')`)
+			expect(await evaluate(`document.querySelector('#operations-content')?.textContent.includes('Vault position')`)).toBe(false)
 			await session.send('Page.navigate', { url: `${origin}/richlist?demo=1` })
 			await waitFor(`document.querySelector('.data-table tbody tr') !== null`)
 			expect(await evaluate(`document.querySelector('.data-table tbody tr td:nth-child(2)')?.textContent`)).toBe('912.000000000000000001 REP · 0x221657…f5c9bb')
@@ -58,10 +58,10 @@ browserTest(
 			expect(await evaluate(`document.querySelector('#richlist-table').hidden === false && document.querySelector('#richlist-shell').hidden === true`)).toBe(true)
 			await evaluate(`document.querySelector('#rich-view-toggle').click()`)
 			expect(await evaluate(`location.search.includes('view=cards') && document.querySelector('#richlist-table').hidden && !document.querySelector('#richlist-shell').hidden`)).toBe(true)
-			expect(await evaluate(`document.querySelector('#richlist-rows')?.textContent`)).toContain('Underwriting commitment 85 ETH')
+			expect(await evaluate(`document.querySelector('#richlist-rows')?.textContent`)).toContain('Pool associations')
 			await evaluate(`document.querySelector('#richlist-rows .rich-address').click()`)
 			await waitFor(`document.querySelector('.address-profile-panel .rich-position') !== null`)
-			expect(await evaluate(`document.querySelector('#address-profile')?.textContent ?? document.body.textContent`)).toContain('85 ETH underwriting commitment')
+			expect(await evaluate(`document.querySelector('#address-profile')?.textContent ?? document.body.textContent`)).toContain('Security pools')
 			await session.send('Page.navigate', { url: `${origin}/question/501?demo=1&chainId=1&entity501=1` })
 			await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Question 501')`)
 			expect(await evaluate(`document.querySelector('#state-detail .state-detail-title')?.textContent`)).toBe('Question 501')
@@ -117,15 +117,6 @@ const catalogTest = (name: string, query: string, viewport: typeof desktopViewpo
 		},
 		timeout,
 	)
-
-const expectVaultAccountingUnits = async (session: DevToolsSession) => {
-	const { evaluate, waitFor } = session
-	await session.send('Page.navigate', { url: `${origin}/system?demo=1&chainId=1&tab=vaults` })
-	await waitFor(`document.querySelector('#entity-list .entity-row') !== null`)
-	await evaluate(`document.querySelector('#entity-list .entity-row').click()`)
-	await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Vault accounting history')`)
-	expect(await evaluate(`document.querySelector('#state-detail')?.textContent`)).toContain('Commitments and fees are shown in WETH; REP backing units are protocol accounting units.')
-}
 
 catalogTest('the system catalog can load and find questions beyond its initial page', 'tab=questions&entity1201=1', desktopViewport, async session => {
 	const { evaluate, waitFor } = session
@@ -209,8 +200,7 @@ catalogTest('pool lifecycle and checkpoints remain available after loading a lat
 	expect(detail).toContain('42')
 	expect(detail).not.toContain('No lifecycle event yet')
 	expect(detail).not.toContain('No checkpoint')
-	expect(detail).toContain('Collateral, commitments, and fees are shown in WETH.')
-	await expectVaultAccountingUnits(session)
+	expect(detail).toContain('Collateral is shown in WETH')
 })
 
 catalogTest(
@@ -230,8 +220,7 @@ catalogTest(
 		const detail = String(await evaluate(`document.querySelector('#state-detail')?.textContent`))
 		expect(detail).toContain('84')
 		expect(detail).not.toContain('No checkpoint')
-		expect(detail).toContain('Collateral, commitments, and fees are shown in WETH.')
-		await expectVaultAccountingUnits(session)
+		expect(detail).toContain('Collateral is shown in WETH')
 		const requestsAfterLive = Number(await evaluate(`window.__augurScanCatalogRequests`))
 		const sequenceAfterLive = Number(await evaluate(`window.__augurScanLiveSequence`))
 		expect(requestsAfterLive - requestsBeforeLive).toBeLessThanOrEqual(2 * (sequenceAfterLive - sequenceBeforeLive))

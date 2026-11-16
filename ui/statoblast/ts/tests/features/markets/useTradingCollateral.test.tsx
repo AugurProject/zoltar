@@ -162,3 +162,13 @@ test('typing keeps token identity visible and debounces quotes without reloading
 	await waitFor(() => expect(quotes()).toBe(beforeQuotes + 2))
 	expect(identityReads()).toBe(before)
 })
+
+test('quotes every amount the mint guard accepts, including a leading decimal point and digit grouping spaces', async () => {
+	const { hook } = await setup(30_000_000n, 30_000_000n)
+	await hook.setProps({ amountInput: '.5' })
+	await waitFor(() => expect(hook.state().requiredCollateral).toBe(500_000n))
+	expect(hook.state().reason).toBeUndefined()
+	await hook.setProps({ amountInput: '1 0' })
+	await waitFor(() => expect(hook.state().requiredCollateral).toBe(10_000_000n))
+	expect(hook.state().reason).toBeUndefined()
+})

@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import { operationsAsOf } from '../repositories/operations.ts'
-import { poolStateHistory, questionStateHistory, stateHistoryNetwork, universeStateHistory, vaultStateHistory } from '../repositories/state-history.ts'
+import { poolStateHistory, questionStateHistory, stateHistoryNetwork, universeStateHistory } from '../repositories/state-history.ts'
 import { ApiConflictError, ApiRequestError, integer, json, postgresBigint, routeInteger } from './shared.ts'
 import { snapshotBoundaryMatches } from './snapshot.ts'
 import { offsetCursorFor, offsetPage, rejectRawSnapshotOffset } from './trading-catalog.ts'
@@ -16,12 +16,9 @@ export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL)
 	const queryLimit = limit + 1
 	const chronological = <T>(rows: readonly T[]): T[] => rows.slice(0, limit).reverse()
 	if (chainId === undefined) return json({ error: 'Invalid state identifier' }, 400)
-	const validStateIdentity =
-		(type === 'pools' && parts.length === 3 && /^0x[0-9a-fA-F]{40}$/.test(parts[2] ?? '')) ||
-		(type === 'vaults' && parts.length === 4 && /^0x[0-9a-fA-F]{40}$/.test(parts[2] ?? '') && /^0x[0-9a-fA-F]{40}$/.test(parts[3] ?? '')) ||
-		((type === 'universes' || type === 'questions') && parts.length === 3 && /^\d+$/.test(parts[2] ?? ''))
+	const validStateIdentity = (type === 'pools' && parts.length === 3 && /^0x[0-9a-fA-F]{40}$/.test(parts[2] ?? '')) || ((type === 'universes' || type === 'questions') && parts.length === 3 && /^\d+$/.test(parts[2] ?? ''))
 	if (!validStateIdentity) {
-		if (type !== 'pools' && type !== 'vaults' && type !== 'universes' && type !== 'questions') return json({ error: 'Unknown state history type' }, 404)
+		if (type !== 'pools' && type !== 'universes' && type !== 'questions') return json({ error: 'Unknown state history type' }, 404)
 		return json({ error: 'Invalid state identifier' }, 400)
 	}
 	rejectRawSnapshotOffset(url)
@@ -83,20 +80,6 @@ export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL)
 				uniswapRepEthPrices: Math.min(uniswapRepEthPrices.length, limit),
 				openOracleHistory: Math.min(openOracleHistory.length, limit),
 			}),
-		})
-	}
-	if (type === 'vaults') {
-		const pool = parts[2]?.toLowerCase()
-		const vault = parts[3]?.toLowerCase()
-		if (parts.length !== 4 || pool === undefined || vault === undefined || !/^0x[0-9a-f]{40}$/.test(pool) || !/^0x[0-9a-f]{40}$/.test(vault)) return json({ error: 'Invalid vault identifier' }, 400)
-		const snapshots = await vaultStateHistory(sql, pool, vault, { chainId, fromBlock, toBlock, queryLimit, offset })
-		const truncated = snapshots.length > limit
-		return json({
-			snapshots: chronological(snapshots),
-			truncated,
-			limit,
-			offset,
-			coverage: coverage(truncated, { snapshots: Math.min(snapshots.length, limit) }),
 		})
 	}
 	if (type === 'universes') {

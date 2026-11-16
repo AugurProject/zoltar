@@ -1,5 +1,5 @@
 import { collateralUnit } from '../src/collateral.ts'
-import type { EntityHistory, PoolRecord, RenderEntityListOptions, SelectEntityOptions, StateCatalog, StateEntity, StateTab, QuestionRecord, UniverseRecord, VaultRecord } from './browser-types.ts'
+import type { EntityHistory, PoolRecord, RenderEntityListOptions, SelectEntityOptions, StateCatalog, StateEntity, StateTab, QuestionRecord, UniverseRecord } from './browser-types.ts'
 import type { SystemRouteState } from './system-route-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import type { RefreshGate } from './live-refresh.ts'
@@ -23,7 +23,6 @@ interface SystemRouteDeps {
 	nativeSymbol: (chainId?: string) => string
 	fetchEntityHistory: (type: StateTab, item: StateEntity, offset: number) => Promise<EntityHistory>
 	renderPoolDetail: (item: PoolRecord, requestVersion: number, canonicalGeneration: number, history?: EntityHistory) => Promise<void>
-	renderVaultDetail: (item: VaultRecord, requestVersion: number, canonicalGeneration: number, history?: EntityHistory) => Promise<void>
 	renderQuestionDetail: (item: QuestionRecord, requestVersion: number, canonicalGeneration: number, history?: EntityHistory) => Promise<void>
 	renderUniverseDetail: (item: UniverseRecord, requestVersion: number, canonicalGeneration: number, history?: EntityHistory) => Promise<void>
 	systemDetailRefreshGate: RefreshGate
@@ -36,21 +35,19 @@ interface SystemRouteDeps {
 }
 
 export const createSystemRoute = (deps: SystemRouteDeps) => {
-	const { state: systemRouteState, canonicalState, element, number, counted, fetchEntityHistory, renderPoolDetail, renderVaultDetail, renderQuestionDetail, renderUniverseDetail, systemDetailRefreshGate, liveSnapshot, setLiveRecord, applyLiveChanges, errorMessage, retryCanonicalViewOr } = deps
+	const { state: systemRouteState, canonicalState, element, number, counted, fetchEntityHistory, renderPoolDetail, renderQuestionDetail, renderUniverseDetail, systemDetailRefreshGate, liveSnapshot, setLiveRecord, applyLiveChanges, errorMessage, retryCanonicalViewOr } = deps
 	const $ = deps.lookup
 	// The rendered detail and the inputs it was built from; an unchanged live refresh keeps those nodes.
 	let renderedDetail: { readonly signature: string; readonly firstNode: Element } | undefined
 	const entityKey = (type: StateTab, item: StateEntity): string => {
 		if (type === 'pools' && 'pool_address' in item) return `${item.chain_id}:${item.pool_address}`
-		if (type === 'vaults' && 'vault_address' in item) return `${item.chain_id}:${item.pool_address}:${item.vault_address}`
 		if (type === 'questions' && 'question_id' in item) return `${item.chain_id}:${item.question_id}`
 		if ('universe_id' in item) return `${item.chain_id}:${item.universe_id}`
 		throw new Error(`State entity does not match the selected ${type} tab`)
 	}
 
 	const entityCopy = (type: StateTab, item: StateEntity): [string, string] => {
-		if (type === 'pools' && 'settlement_collateral_atto_eth' in item) return [item.question_title ?? short(item.pool_address), `${short(item.pool_address, 8, 6)} · ${counted(item.vault_count, 'vault')} · ${exactUnit(item.settlement_collateral_atto_eth, collateralUnit(item).decimals, collateralUnit(item).symbol)}`]
-		if (type === 'vaults' && 'vault_address' in item) return [short(item.vault_address, 10, 6), `${exactUnit(item.capacity_ownership_atto_rep, collateralUnit(item).decimals, collateralUnit(item).symbol)} commitment`]
+		if (type === 'pools' && 'settlement_collateral_atto_eth' in item) return [item.question_title ?? short(item.pool_address), `${short(item.pool_address, 8, 6)} · ${exactUnit(item.settlement_collateral_atto_eth, collateralUnit(item).decimals, collateralUnit(item).symbol)}`]
 		if (type === 'questions' && 'outcome_options' in item) return [item.title, `${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
 		if ('universe_id' in item && 'pool_count' in item) return [item.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(item.universe_id, 9, 6)}`, `${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`]
 		throw new Error(`State entity does not match the selected ${type} tab`)
@@ -100,7 +97,6 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 				// Re-rendering the same entity reopens its disclosures, such as exact chart data, and refocuses the control the reader was using.
 				const viewState = systemRouteState.renderedDetailKey === detailKey && !replaceWithLoading ? captureViewState(detail) : undefined
 				if (systemRouteState.activeType === 'pools' && 'settlement_collateral_atto_eth' in item) await renderPoolDetail(item, requestVersion, canonicalGeneration, loadedHistory)
-				if (systemRouteState.activeType === 'vaults' && 'vault_address' in item) await renderVaultDetail(item, requestVersion, canonicalGeneration, loadedHistory)
 				if (systemRouteState.activeType === 'questions' && 'outcome_options' in item) await renderQuestionDetail(item, requestVersion, canonicalGeneration, loadedHistory)
 				if (systemRouteState.activeType === 'universes' && 'reputation_token_address' in item) await renderUniverseDetail(item, requestVersion, canonicalGeneration, loadedHistory)
 				if (viewState !== undefined && isCurrent()) restoreViewState(detail, viewState)
@@ -163,7 +159,6 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 
 	const stateItems = (catalog: StateCatalog, type: StateTab): StateEntity[] => {
 		if (type === 'pools') return catalog.pools
-		if (type === 'vaults') return catalog.vaults
 		if (type === 'questions') return catalog.questions
 		return catalog.universes
 	}
@@ -240,7 +235,6 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		const statGroups: Array<readonly [string, keyof NonNullable<StateCatalog['totals']>, readonly StateEntity[]]> = [
 			['Pools', 'pools', systemRouteState.data.pools],
 			['Questions', 'questions', systemRouteState.data.questions],
-			['Vaults', 'vaults', systemRouteState.data.vaults],
 			['Universes', 'universes', systemRouteState.data.universes],
 		]
 		for (const [label, key, items] of statGroups) {

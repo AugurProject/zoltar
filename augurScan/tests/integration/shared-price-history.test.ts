@@ -33,15 +33,15 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				[poolB, coordinatorB],
 				[standalonePool, standaloneCoordinator],
 			]) {
-				await connection`INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, initial_retention_rate, initial_settlement_collateral_atto_eth)
-					VALUES (${chainId}, ${blockHash}, ${blockHash}, 0, 10, ${pool}, ${pool}, 0, 1, ${pool}, ${coordinator}, ${pool}, 15000, 1, 1, 0)`
+				await connection`INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas)
+					VALUES (${chainId}, ${blockHash}, ${blockHash}, 0, 10, ${pool}, ${pool}, 0, 1, ${coordinator}, ${pool}, 15000, 1)`
 			}
 			for (const [index, emitter, name, args, canonical] of [
 				[1, coordinatorA, 'SharedPriceFeedSet', { priceFeed: feed }, true],
 				[2, coordinatorB, 'SharedPriceFeedSet', { priceFeed: feed }, true],
 				[3, coordinatorA, 'SharedPriceFeedSet', { priceFeed: orphanFeed }, false],
 				[4, feed, 'PriceReported', { reportId: '1', price: '100' }, true],
-				[5, coordinatorA, 'StagedOperationQueued', { operationId: '1' }, true],
+				[5, coordinatorA, 'SecurityPoolSet', { securityPool: poolA }, true],
 				[6, standaloneCoordinator, 'PriceReported', { reportId: '2', price: '200' }, true],
 			] as const) {
 				await connection`INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
@@ -53,8 +53,8 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				[7, orphanFeed, '999', true],
 				[8, feed, '999', false],
 			] as const) {
-				await connection`INSERT INTO rep_eth_price_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, coordinator_address, event_name, report_id, rep_per_eth_1e18, canonical)
-					VALUES (${chainId}, ${blockHash}, ${blockHash}, ${index}, 10, ${source}, 'PriceReported', ${index}, ${price}, ${canonical})`
+				await connection`INSERT INTO rep_eth_price_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, coordinator_address, event_name, report_id, rep_per_eth_1e18, settlement_timestamp, canonical)
+					VALUES (${chainId}, ${blockHash}, ${blockHash}, ${index}, 10, ${source}, 'PriceReported', ${index}, ${price}, now(), ${canonical})`
 			}
 			const query = { chainId, fromBlock: '0', toBlock: '10', queryLimit: 20, offset: 0 }
 			const historyA = await poolStateHistory(connection, poolA, query)
@@ -65,8 +65,8 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				expect(history.repEthPrices[0]).toMatchObject({ coordinator_address: feed, rep_per_eth_1e18: '100' })
 				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'PriceReported')).toHaveLength(1)
 			}
-			expect(historyA.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'StagedOperationQueued')).toHaveLength(1)
-			expect(historyB.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'StagedOperationQueued')).toHaveLength(0)
+			expect(historyA.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'SecurityPoolSet')).toHaveLength(1)
+			expect(historyB.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'SecurityPoolSet')).toHaveLength(0)
 			expect(ordinary.repEthPrices).toHaveLength(1)
 			expect(ordinary.repEthPrices[0]).toMatchObject({ coordinator_address: standaloneCoordinator, rep_per_eth_1e18: '200' })
 			expect(ordinary.openOracleHistory).toHaveLength(1)

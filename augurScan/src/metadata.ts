@@ -1,4 +1,4 @@
-import type { CollateralDisplayUnit } from './collateral-metadata.ts'
+import { type CollateralDisplayUnit, usesCollateralUnits } from './collateral-metadata.ts'
 import { abiForKind, catalogAbis, wrapperAbiForInput } from './abi-catalog.ts'
 import { dependencyDiscoveryKinds, discoveries } from './contract-discovery.ts'
 import { delegationExecutionDetails } from './delegation-executions.ts'
@@ -387,17 +387,7 @@ export const decodeLogRecord = (
 	const kindEvents = kindAbi?.filter((item): item is AbiEvent => isAbiEvent(item) && toEventSelector(item) === topic) ?? []
 	const candidates = kindEvents.length > 0 ? kindEvents : (eventByTopic.get(topic) ?? [])
 	if (candidates.length === 0) return { status: 'unknown', summary: `Unknown event ${topic.slice(0, 10)}…` }
-	return decodeWithEvents(
-		candidates,
-		kind,
-		topics,
-		data,
-		labels,
-		tokenMetadata,
-		contractKinds,
-		emitterAddress,
-		/^(securityPool|sharedPool|openOraclePrice|priceCoordinator|twoWayConstantProduct)/u.test(kind ?? '') ? { ...context, collateralUnits: true, collateral: context.collateralByAddress?.get(emitterAddress?.toLowerCase() ?? '') ?? context.collateral } : context,
-	)
+	return decodeWithEvents(candidates, kind, topics, data, labels, tokenMetadata, contractKinds, emitterAddress, usesCollateralUnits(kind) ? { ...context, collateralUnits: true, collateral: context.collateralByAddress?.get(emitterAddress?.toLowerCase() ?? '') ?? context.collateral } : context)
 }
 
 export const decodeAction = (contract: ContractMetadata | undefined, input: Hex, labels: ReadonlyMap<string, string>, tokenMetadata: ReadonlyMap<string, TokenMetadata> = new Map(), contractKinds: ReadonlyMap<string, string> = new Map(), context: DecodeDisplayContext = defaultDisplayContext): DecodedRecord => {
@@ -407,7 +397,7 @@ export const decodeAction = (contract: ContractMetadata | undefined, input: Hex,
 const decodeActionRecord = (contract: ContractMetadata | undefined, input: Hex, labels: ReadonlyMap<string, string>, tokenMetadata: ReadonlyMap<string, TokenMetadata>, contractKinds: ReadonlyMap<string, string>, context: DecodeDisplayContext, depth: number): DecodedRecord => {
 	context = {
 		...context,
-		collateralUnits: /^(securityPool|sharedPool|openOraclePrice|priceCoordinator|twoWayConstantProduct)/u.test(contract?.kind ?? ''),
+		collateralUnits: usesCollateralUnits(contract?.kind),
 		collateral: context.collateralByAddress === undefined ? context.collateral : context.collateralByAddress.get(contract?.address.toLowerCase() ?? ''),
 	}
 
