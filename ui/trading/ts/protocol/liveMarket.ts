@@ -28,7 +28,6 @@ export type LiveMarket = Readonly<{
 	/** Child REP delivered alongside the question’s ETH on redemption. */
 	settlementRecoveryAttoRep?: bigint
 	valuation?: Readonly<{ timestamp: bigint; feeEndTime: bigint; projectedCollateralAttoEth: bigint; feeAccounting?: FeeAccounting }>
-	currentRetentionRate: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint
 	mintingCapacityCeilingAttoEth: bigint

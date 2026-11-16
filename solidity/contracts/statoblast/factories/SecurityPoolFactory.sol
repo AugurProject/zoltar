@@ -43,13 +43,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	mapping(ISecurityPool => SecurityPoolMetadata) private poolMetadata;
 	mapping(address => mapping(uint248 => address)) public sharedPriceFeeds;
 	mapping(address => OpenOraclePriceCoordinator) private portfolioConfigurations;
-	struct ChildPoolDependencies {
-		OpenOraclePriceCoordinator coordinator;
-		address auction;
-	}
-	mapping(bytes32 => ChildPoolDependencies) private childPoolDependencies;
+	mapping(bytes32 => OpenOraclePriceCoordinator) private childPoolCoordinators;
 
-	event DeploySecurityPool(ISecurityPool indexed securityPool, address collateralRepairAuction, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth);
+	event DeploySecurityPool(ISecurityPool indexed securityPool, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas);
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
 	event PortfolioRegistered(address indexed portfolio, uint248 indexed originUniverseId);
 
@@ -118,7 +114,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		}
 	}
 
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external returns (ISecurityPool securityPool, address collateralRepairAuction) {
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps) external returns (ISecurityPool securityPool) {
 		require(msg.sender == address(securityPoolForker), 'Only security pool forker');
 		bytes32 originId = poolMetadata[parent].originId;
 		require(address(poolRegistrations[getPoolId(originId, parent.universeId())].pool) == address(parent), 'Parent pool is not canonical');
@@ -129,13 +125,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(address(parent.shareToken()) == address(shareToken), 'Child share token mismatch');
 		uint256 initialReportPriorityFeeAttoEthPerGas = parent.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
 		_reserveSecurityPool(originId, universeId);
-		OpenOraclePriceCoordinator openOraclePriceCoordinator;
-		(openOraclePriceCoordinator, collateralRepairAuction) = _prepareChildPoolDependencies(parent, universeId);
+		OpenOraclePriceCoordinator openOraclePriceCoordinator = _prepareChildPoolDependencies(parent, universeId);
 		_configureSharedPriceFeed(openOraclePriceCoordinator, portfolio, universeId);
-		securityPool = deploySecurityPool(shareToken, parent, openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps, address(collateralRepairAuction));
+		securityPool = deploySecurityPool(shareToken, parent, openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps);
 		_registerSecurityPool(originId, universeId, securityPool, hasInheritedForkOutcome, portfolio);
-		_initializeSecurityPool(securityPool, openOraclePriceCoordinator, portfolio, currentRetentionRate, settlementCollateralAttoEth);
-		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, collateralRepairAuction, openOraclePriceCoordinator, shareToken, parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, currentRetentionRate, settlementCollateralAttoEth));
+		_initializeSecurityPool(securityPool, openOraclePriceCoordinator, portfolio);
+		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, openOraclePriceCoordinator, shareToken, parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
 	}
 
 	/// @notice Deploy in the caller's own namespace; another caller can never add a ledger to it.
@@ -172,13 +167,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		// Each origin lineage has its own share token, which is reused by all migrated children.
 		IShareToken shareToken = shareTokenFactory.deployShareToken(originId, questionId);
-		uint256 initialRetentionRate = 0;
-		securityPool = deploySecurityPool(shareToken, ISecurityPool(payable(address(0))), openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps, address(0));
+		securityPool = deploySecurityPool(shareToken, ISecurityPool(payable(address(0))), openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps);
 
 		_registerSecurityPool(originId, universeId, securityPool, false, portfolio);
-		_initializeSecurityPool(securityPool, openOraclePriceCoordinator, portfolio, initialRetentionRate, 0);
+		_initializeSecurityPool(securityPool, openOraclePriceCoordinator, portfolio);
 		shareToken.authorize(securityPool);
-		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, address(0), openOraclePriceCoordinator, shareToken, ISecurityPool(payable(address(0))), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, initialRetentionRate, 0));
+		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, openOraclePriceCoordinator, shareToken, ISecurityPool(payable(address(0))), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
 	}
 
 	function _reserveSecurityPool(bytes32 originId, uint248 universeId) private {
@@ -197,11 +191,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function _recordSecurityPoolDeployment(SecurityPoolDeployment memory deployment) private {
 		securityPoolDeployments.push(deployment);
-		emit DeploySecurityPool(deployment.securityPool, deployment.collateralRepairAuction, deployment.openOraclePriceCoordinator, deployment.shareToken, deployment.parent, deployment.universeId, deployment.questionId, deployment.statoblastSecurityMultiplierBps, deployment.initialReportPriorityFeeAttoEthPerGas, deployment.currentRetentionRate, deployment.settlementCollateralAttoEth);
+		emit DeploySecurityPool(deployment.securityPool, deployment.openOraclePriceCoordinator, deployment.shareToken, deployment.parent, deployment.universeId, deployment.questionId, deployment.statoblastSecurityMultiplierBps, deployment.initialReportPriorityFeeAttoEthPerGas);
 	}
 
-	function deploySecurityPool(IShareToken shareToken, ISecurityPool parent, OpenOraclePriceCoordinator openOraclePriceCoordinator, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, address collateralRepairAuction) private returns (ISecurityPool securityPool) {
-		securityPool = securityPoolDeployer.deploy(address(securityPoolForker), questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, collateralRepairAuction);
+	function deploySecurityPool(IShareToken shareToken, ISecurityPool parent, OpenOraclePriceCoordinator openOraclePriceCoordinator, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps) private returns (ISecurityPool securityPool) {
+		securityPool = securityPoolDeployer.deploy(address(securityPoolForker), questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps);
 
 		openOraclePriceCoordinatorFactory.configureSecurityPool(openOraclePriceCoordinator, securityPool);
 	}
@@ -255,8 +249,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		return address(_getOrCreateSharedPriceFeed(source.openOraclePriceCoordinator(), portfolio, universeId));
 	}
 
-	/// @notice Prepare canonical coordinator and auction dependencies without exposing a partial child ledger.
-	function prepareChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator, address auction) {
+	/// @notice Prepare the canonical child coordinator without exposing a partial child ledger.
+	function prepareChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator) {
 		uint248 parentUniverseId = parent.universeId();
 		require(address(poolRegistrations[getPoolId(poolMetadata[parent].originId, parentUniverseId)].pool) == address(parent), 'Parent pool is not canonical');
 		require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
@@ -268,22 +262,21 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		return _prepareChildPoolDependencies(parent, universeId);
 	}
 
-	function getChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator, address auction) {
-		ChildPoolDependencies storage dependencies = childPoolDependencies[
-			getPoolId(poolMetadata[parent].originId, zoltar.getChildUniverseId(parent.universeId(), outcomeIndex))
-		];
-		return (dependencies.coordinator, dependencies.auction);
+	function getChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator) {
+		return
+			childPoolCoordinators[
+				getPoolId(poolMetadata[parent].originId, zoltar.getChildUniverseId(parent.universeId(), outcomeIndex))
+			];
 	}
 
-	function _prepareChildPoolDependencies(ISecurityPool parent, uint248 universeId) private returns (OpenOraclePriceCoordinator coordinator, address auction) {
+	function _prepareChildPoolDependencies(ISecurityPool parent, uint248 universeId) private returns (OpenOraclePriceCoordinator coordinator) {
 		bytes32 poolId = getPoolId(poolMetadata[parent].originId, universeId);
-		ChildPoolDependencies storage dependencies = childPoolDependencies[poolId];
-		if (address(dependencies.coordinator) != address(0)) return (dependencies.coordinator, dependencies.auction);
+		coordinator = childPoolCoordinators[poolId];
+		if (address(coordinator) != address(0)) return coordinator;
 		uint256 priorityFee = parent.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
 		bytes32 salt = keccak256(abi.encode(parent, universeId, parent.questionId(), parent.statoblastSecurityMultiplierBps(), priorityFee));
 		coordinator = openOraclePriceCoordinatorFactory.deployOpenOraclePriceCoordinator(openOracle, zoltar.getRepToken(universeId), priorityFee, salt);
-		dependencies.coordinator = coordinator;
-		dependencies.auction = auction;
+		childPoolCoordinators[poolId] = coordinator;
 	}
 
 	function _getOrCreateSharedPriceFeed(OpenOraclePriceCoordinator coordinator, address portfolio, uint248 universeId) private returns (SharedPoolPriceFeed feed) {
@@ -298,9 +291,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		openOraclePriceCoordinatorFactory.configureSharedPriceFeed(coordinator, _getOrCreateSharedPriceFeed(coordinator, portfolio, universeId));
 	}
 
-	function _initializeSecurityPool(ISecurityPool securityPool, OpenOraclePriceCoordinator coordinator, address portfolio, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) private {
+	function _initializeSecurityPool(ISecurityPool securityPool, OpenOraclePriceCoordinator coordinator, address portfolio) private {
 		SharedPoolPriceFeed(payable(sharedPriceFeeds[portfolio][securityPool.universeId()])).registerCoordinator(address(coordinator));
-		securityPool.setStartingParams(currentRetentionRate, settlementCollateralAttoEth);
+		securityPool.setStartingParams();
 	}
 
 	function _getInitialEscalationDepositAttoRep(uint248 universeId) private view returns (uint256 initialDepositAttoRep) {

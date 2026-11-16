@@ -282,17 +282,15 @@ describe('useTradingOperations', () => {
 				getWalletEthBalance: mock(async () => 3n * ATTO_ETH_PER_ETH),
 				loadSecurityPoolMintCapacity: mock(async () =>
 					createMintCapacity({
-						currentRetentionRate: ATTO_ETH_PER_ETH / 2n,
+						linearFee: { rateAttoEthPerSecond: ATTO_ETH_PER_ETH, endTime: 100n },
 						currentTimestamp: 2n,
 						feeEligibleUnderwritingLimitAttoEth: 3n * ATTO_ETH_PER_ETH,
 						feeEndTimestamp: 100n,
-						feeIndexRemainder: 0n,
 						lastFeeCheckpointNativeTime: 1n,
 						mintingCapacityAttoEth: 3n * ATTO_ETH_PER_ETH,
 						settlementCollateralAttoEth: 2n * ATTO_ETH_PER_ETH,
 						shareTokenSupplyAttoShares: 2n * ATTO_ETH_PER_ETH,
 						totalUnderwritingLimitAttoEth: 3n * ATTO_ETH_PER_ETH,
-						totalFeesOwedRemainder: 0n,
 					}),
 				),
 			}),

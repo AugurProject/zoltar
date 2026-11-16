@@ -19,7 +19,7 @@ interface ISecurityPoolRepDepositContext {
 	function questionData() external view returns (address);
 	function repToken() external view returns (address);
 	function universeId() external view returns (uint248);
-	function updateRetentionRate() external;
+	function refreshPortfolioFees() external;
 	function zoltar() external view returns (address);
 }
 
@@ -66,7 +66,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		if (escalationGame.forkResumedAt() == 0) return;
 		awaitingForkContinuation = false;
 		emit AwaitingForkContinuationSet(false);
-		ISecurityPoolRepDepositContext(address(this)).updateRetentionRate();
+		ISecurityPoolRepDepositContext(address(this)).refreshPortfolioFees();
 	}
 
 	/// @notice Pool delegatecall target: burns `redeemer`'s winning shares and returns the settlement collateral owed.

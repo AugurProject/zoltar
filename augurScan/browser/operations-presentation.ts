@@ -1,5 +1,5 @@
-import { type JsonRecord, type JsonValue } from './api-validation.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
+import type { JsonRecord, JsonValue } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 
 export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
