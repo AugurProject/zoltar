@@ -121,6 +121,10 @@ describe('Statoblast: chosen underwriting and claimant recovery remain separate'
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'registerQuestion', args: [child, 1n, buyer.account.address] }))
 		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
+		const repBalance = (address: Address) => owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })
+		const initialBuyerRep = await repBalance(buyer.account.address)
+		const initialRecoveryRep = await repBalance(engine)
+		expect(initialRecoveryRep).toBe(1000n * E)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'redeemQuestion', args: [child, 1n, 20n * E, buyer.account.address] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement', args: [0n] }))
 		const firstPosition = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [first.positionId] })
@@ -129,8 +133,18 @@ describe('Statoblast: chosen underwriting and claimant recovery remain separate'
 		expect(firstPosition.releasedRep).toBe((105n * E) / 100n)
 		expect(secondPosition.commitment).toBe((899n * E) / 10n)
 		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })).toBe((909n * E) / 10n)
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [buyer.account.address] })).toBe(100n * E)
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [engine] })).toBe(900n * E)
+		// Q128 recovery indexing can leave one attoREP on a partial claim; custody retains that exact residual.
+		const partialBuyerRep = await repBalance(buyer.account.address)
+		const remainingRecoveryRep = await repBalance(engine)
+		const partialPayout = partialBuyerRep - initialBuyerRep
+		expect(partialPayout).toBeGreaterThanOrEqual(100n * E - 1n)
+		expect(partialPayout).toBeLessThanOrEqual(100n * E)
+		expect(partialPayout + remainingRecoveryRep).toBe(initialRecoveryRep)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'redeemQuestion', args: [child, 1n, 180n * E, buyer.account.address] }))
+		expect((await repBalance(buyer.account.address)) - partialBuyerRep).toBe(remainingRecoveryRep)
+		expect((await repBalance(buyer.account.address)) - initialBuyerRep).toBe(initialRecoveryRep)
+		expect(await repBalance(engine)).toBe(0n)
+		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })).toBe(0n)
 	})
 
 	test('a zero-choice branch has no capital position but preserves the full REP recovery basket', async () => {
