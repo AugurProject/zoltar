@@ -887,7 +887,7 @@ describe('chaos dashboard server', () => {
 				],
 				inventory: { eth: '1', rep: [{ allowances: { spender: privateKey }, balance: '2', symbol: 'REP', token: '0x2222222222222222222222222222222222222222' }], weth: '3' },
 				lastScannedBlock: 42n,
-				obligations: [{ blockers: [`rpc_url=${rpc}`], dueAt: '2026-08-24T01:00:00.000Z', id: 'settle', label: 'Settle report', status: 'pending' }],
+				obligations: [{ blockers: [`rpc_url=${rpc}`], expiresAt: '2026-08-24T01:00:00.000Z', id: 'settle', label: 'Settle report', status: 'pending' }],
 				pendingTransactions: [
 					{
 						data: calldata,

@@ -6,6 +6,9 @@ import { join } from 'node:path'
 import type { ChangedFileEntry } from '../repo/changed-files.mts'
 import { deduplicateTestRecommendations, getImportGraphTestRecommendations, getTestImpactRecommendations } from './test-impact.mts'
 
+const INFRASTRUCTURE_COMMAND_WITHOUT_IMPACT_TEST = 'bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/run-bun-test-process.test.ts tooling/testing/test-timeout.test.ts'
+const INFRASTRUCTURE_COMMAND = `${INFRASTRUCTURE_COMMAND_WITHOUT_IMPACT_TEST} tooling/testing/test-impact.test.ts`
+
 const commandsFor = (changedFiles: string[]) => getTestImpactRecommendations(changedFiles).map(recommendation => recommendation.command)
 
 describe('test impact recommendations', () => {
@@ -23,8 +26,17 @@ describe('test impact recommendations', () => {
 		expect(commandsFor(['tooling/contracts/prettier-solidity-batch.mjs'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/contracts/format-solidity-one-line.test.ts'])
 	})
 	test('maps test infrastructure to its focused runner tests', () => {
-		expect(commandsFor(['tooling/testing/test-timings.mts'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
-		expect(commandsFor(['bun-test-setup.ts'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
+		expect(commandsFor(['tooling/testing/test-timings.mts'])).toEqual([INFRASTRUCTURE_COMMAND])
+		expect(commandsFor(['bun-test-setup.ts'])).toEqual([INFRASTRUCTURE_COMMAND])
+	})
+
+	// The timeout test spawns the runner as a subprocess, so the import graph never reaches it from the runner sources.
+	test('maps the runner and its process wrapper to the timeout and process tests', () => {
+		for (const path of ['tooling/testing/bun-test.mts', 'tooling/testing/run-bun-test-process.mts']) {
+			expect(commandsFor([path])).toEqual([INFRASTRUCTURE_COMMAND])
+			expect(INFRASTRUCTURE_COMMAND).toContain('tooling/testing/test-timeout.test.ts')
+			expect(INFRASTRUCTURE_COMMAND).toContain('tooling/testing/run-bun-test-process.test.ts')
+		}
 	})
 
 	test('runs the changed production-build test without escalating solely because the test changed', () => {
@@ -58,9 +70,7 @@ describe('test impact recommendations', () => {
 	})
 
 	test('deduplicates recommendations shared by multiple changed files', () => {
-		expect(commandsFor(['tooling/testing/test-discovery.mts', 'tooling/testing/test-discovery.test.ts', 'tooling/testing/test-impact.mts', 'tooling/testing/test-impact.test.ts', 'tooling/testing/test-timings.mts'])).toEqual([
-			'bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
-		])
+		expect(commandsFor(['tooling/testing/test-discovery.mts', 'tooling/testing/test-discovery.test.ts', 'tooling/testing/test-impact.mts', 'tooling/testing/test-impact.test.ts', 'tooling/testing/test-timings.mts'])).toEqual([INFRASTRUCTURE_COMMAND])
 	})
 
 	test('maps CI workflow changes to workflow contract tests', () => {
@@ -95,13 +105,13 @@ describe('test impact recommendations', () => {
 				{ path: 'bun-test-setup.ts', status: 'modified' },
 				{ path: 'tooling/testing/test-impact.test.ts', status: 'deleted' },
 			]).map(recommendation => recommendation.command),
-		).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts'])
+		).toEqual([INFRASTRUCTURE_COMMAND_WITHOUT_IMPACT_TEST])
 		expect(
 			getTestImpactRecommendations([
 				{ path: 'bun-test-setup.ts', status: 'modified' },
 				{ path: 'bots/liquidator/tests/renamed-impact.test.ts', previousPath: 'tooling/testing/test-impact.test.ts', status: 'renamed' },
 			]).map(recommendation => recommendation.command),
-		).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts', 'cd bots/liquidator && bun ../../tooling/testing/bun-test.mts tests/renamed-impact.test.ts'])
+		).toEqual([INFRASTRUCTURE_COMMAND_WITHOUT_IMPACT_TEST, 'cd bots/liquidator && bun ../../tooling/testing/bun-test.mts tests/renamed-impact.test.ts'])
 	})
 
 	test('does not retain opaque specialized tiers for deleted or renamed integration tests', () => {
