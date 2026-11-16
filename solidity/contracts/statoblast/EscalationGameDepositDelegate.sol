@@ -200,10 +200,19 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
 		uint8 outcomeIndex = uint8(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		bool takesLead = _validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
+		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), amountAttoRep);
+		// Whoever led before must be able to answer a change of strict leader, whatever the curve allows.
+		BinaryOutcomes.BinaryOutcome previousLeader = _strictStakeLeader();
+		bool hadReport =
+			outcomeState[0].balanceAttoRep != 0 ||
+				outcomeState[1].balanceAttoRep != 0 ||
+				outcomeState[2].balanceAttoRep != 0;
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
+		BinaryOutcomes.BinaryOutcome nextLeader = _strictStakeLeader();
+		if (hadReport && nextLeader != BinaryOutcomes.BinaryOutcome.None && nextLeader != previousLeader)
+			responseRestartedUntil = block.timestamp + ACTIVATION_DELAY;
 		_increaseEscrowedRepForBundle(depositor, amountAttoRep);
 		vaultAccounting[depositor].unresolvedAttoRep += amountAttoRep;
 		totalLocalUnresolvedAttoRep += amountAttoRep;
@@ -237,8 +246,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			nonDecisionTimestamp = block.timestamp;
 			emit NonDecisionReached(nonDecisionTimestamp);
 		}
-		// Whoever led before must be able to answer, whatever the curve allows.
-		if (takesLead) responseRestartedUntil = block.timestamp + ACTIVATION_DELAY;
 		_accrueOrdinarySurplus(depositor, amountAttoRep);
 		_scheduleReporterFinality();
 		IEscalationGameSecurityPoolContext(IEscalationGameDepositContext(address(this)).securityPool()).refreshPortfolioFees();

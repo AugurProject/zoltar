@@ -72,6 +72,17 @@ abstract contract EscalationGameStorage {
 	// claims, including each claim's own haircut, would pay later claimants less.
 	uint256 public continuationSettlementForkThresholdAttoRep;
 
+	function _strictStakeLeader() internal view returns (BinaryOutcomes.BinaryOutcome leader) {
+		uint256 highest;
+		for (uint8 index = 0; index < 3; index++) {
+			uint256 balance = outcomeState[index].balanceAttoRep;
+			if (balance > highest) {
+				highest = balance;
+				leader = BinaryOutcomes.BinaryOutcome(index);
+			} else if (balance == highest) leader = BinaryOutcomes.BinaryOutcome.None;
+		}
+	}
+
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
 		// A provisional leader cannot close a guaranteed response period: the one
 		// an unresolved continuation starts with, or one restarted by a change of

@@ -14,7 +14,7 @@ import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js
 import type { usePortfolio } from './usePortfolio.js'
 import * as copy from '../../../copy/portfolio.js'
 import { defaultPortfolioCreationDraft, parseFixedPortfolioQuestions, parsePortfolioCreationEconomics, portfolioDeploymentReviewDescription, type CuratedAdmissionMode, type PortfolioCreationDraft } from '../lib/creation.js'
-import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission } from '../../../protocol/securityPoolPortfolioAdmission.js'
+import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission, requirePortfolioQuestionHorizon } from '../../../protocol/securityPoolPortfolioAdmission.js'
 import { buildPortfolioAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { authenticatePortfolioAuctionVault } from '../../../protocol/securityPoolPortfolioAuction.js'
 
@@ -165,7 +165,9 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		let current = true
 		registration.value = undefined
 		if (snapshot !== undefined && questionId !== undefined && admissionAllowed) {
-			void requirePortfolioQuestionAdmission(createConnectedReadClient(), snapshot.questionAdmissionPolicy, snapshot.portfolio, snapshot.originUniverseId, questionId, snapshot.blockNumber)
+			const client = createConnectedReadClient()
+			void requirePortfolioQuestionAdmission(client, snapshot.questionAdmissionPolicy, snapshot.portfolio, snapshot.originUniverseId, questionId, snapshot.blockNumber)
+				.then(async () => await requirePortfolioQuestionHorizon(client, snapshot.portfolio, questionId, { number: snapshot.blockNumber, timestamp: snapshot.timestamp }))
 				.then(() => {
 					if (current) registration.value = { key: registrationKey }
 				})
@@ -325,7 +327,9 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 					...portfolioContractRequest(parameters.accountAddress, selected.portfolio, 'addQuestion', [id]),
 					reviewDescription: `Register question 0x${id.toString(16)} in portfolio ${selected.portfolio}. Registration does not pledge additional REP.`,
 					validateBeforeSubmit: async () => {
-						await requirePortfolioQuestionAdmission(createConnectedReadClient(), selected.questionAdmissionPolicy, selected.portfolio, selected.originUniverseId, id)
+						const client = createConnectedReadClient()
+						await requirePortfolioQuestionAdmission(client, selected.questionAdmissionPolicy, selected.portfolio, selected.originUniverseId, id)
+						await requirePortfolioQuestionHorizon(client, selected.portfolio, id, await client.getBlock())
 					},
 				}
 			}),

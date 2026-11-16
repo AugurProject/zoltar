@@ -23,6 +23,34 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 
 describe('Statoblast: inherited activation delay and finality', () => {
 	const fixture = useSecurityPoolPortfolioFixture({})
+	test('activation-boundary lead flip reschedules reporter and settlement finality', async () => {
+		await fixture.prepare()
+		await fixture.mint(10n * unit)
+		const owner = fixture.owner(),
+			base = fixture.base
+		const pool = fixture.poolFor(base.questionId).securityPool
+		const p = { abi: portfolioArtifact.abi, address: fixture.portfolio }
+		const bond = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'initialEscalationGameDepositAttoRep' })
+		await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), pool)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [1, bond] }))
+		const game = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
+		const activation = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'activationTime' })
+		await base.mockWindow.setTime(activation - 1n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [2, 2n * bond] }))
+		expect((await owner.getBlock()).timestamp).toBe(activation)
+		const end = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
+		expect(end).toBe(activation + 3n * DAY)
+		const engine = await owner.readContract({ ...p, functionName: 'settlement' })
+		const book = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' })
+		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [base.genesisUniverse] })
+		const [question] = await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, base.questionId] })
+		const ledger = await owner.readContract({ ...p, functionName: 'reporterLedger', args: [base.genesisUniverse] })
+		const [reporter] = await owner.readContract({ abi: reporterArtifact.abi, address: ledger, functionName: 'question', args: [base.genesisUniverse, base.questionId] })
+		expect(reporter.finalAfter).toBe(question.finalAfter)
+		expect(await owner.readContract({ ...p, functionName: 'nativeTimeForPortfolioTime', args: [base.genesisUniverse, question.finalAfter] })).toBe(end)
+	})
+
 	const cases = [
 		{ name: 'pending activation', forkOffset: -2n * DAY, materializationOffset: undefined },
 		{ name: 'early initialization', forkOffset: -2n * DAY, materializationOffset: -3n * DAY },
