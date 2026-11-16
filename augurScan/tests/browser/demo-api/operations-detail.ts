@@ -64,7 +64,17 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		const coordinatorDecisions = request.searchParams.has('decisionCursor')
 			? { items: [{ ...coordinatorDecision, event_name: 'PendingReportRecovered' }], limit: 100, hasMore: false }
 			: {
-					items: [coordinatorDecision],
+					// The report's escrow, not the feed, emits the completion.
+					items: [
+						{
+							event_name: 'ReportCompleted',
+							summary: `ReportCompleted · reportId=${identity[1]} · priceFeed=${coordinatorDecision.emitter_address} · accepted=false`,
+							arguments: { reportId: identity[1], priceFeed: coordinatorDecision.emitter_address, accepted: false },
+							emitter_address: '0x8888888888888888888888888888888888888888',
+							block_number: operations.asOf.blockNumber,
+						},
+						coordinatorDecision,
+					],
 					limit: 100,
 					hasMore: context.pageUrl.searchParams.get('decisionMore') === '1',
 					...(context.pageUrl.searchParams.get('decisionMore') === '1' ? { nextCursor: 'demo-decision-older' } : {}),
@@ -243,8 +253,11 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 				burned_atto_rep: '500000000000000000000',
 				migrator_count: 1,
 				child_count: 1,
-				portfolio_fork_events: 3,
+				portfolio_fork_events: 5,
 				branch_chooser_count: 2,
+				reporter_fork_frozen_count: 1,
+				reporter_migration_atto_rep: '1200000000000000000000',
+				reporter_protected_parent_atto_rep: '300000000000000000000',
 			},
 			branches: [{ child_universe_id: '1', outcome_index: '1', migrated_atto_rep: '4500000000000000000000', migrator_count: 1, migration_count: 1 }],
 			events: evidencePage(migration),
