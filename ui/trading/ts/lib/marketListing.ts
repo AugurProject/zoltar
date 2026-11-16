@@ -17,6 +17,11 @@ const CLOSING_SOON_WINDOW_SECONDS = 7n * 24n * 60n * 60n
 
 type OddsInputs = Pick<LiveMarket, 'loadError' | 'pair' | 'yesReserve' | 'noReserve'>
 
+/** A YES percentage rounded half up to whole tenths of a percent, the one-decimal precision every price display uses. */
+export function probabilityTenths(yesPercent: number) {
+	return Math.round((yesPercent + Number.EPSILON * Math.abs(yesPercent)) * 10)
+}
+
 /**
  * Conditional YES probability implied by the pair reserves, in tenths of a percent rounded half up, the rounding the trade
  * estimate's probability bar applies to the same price; undefined until the pair holds liquidity.
