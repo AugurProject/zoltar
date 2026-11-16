@@ -41,10 +41,10 @@ describe('state projections', () => {
 	test('projects each question accounting checkpoint as pool state and as an accounting snapshot', () => {
 		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' }))
 		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' } })
-		const snapshot: Projection = { type: 'poolSnapshot', poolAddress: pool.toLowerCase(), reason: 2, settlementCollateralAttoEth: '100', shareTokenSupplyAttoShares: '200', lastSettlementPortfolioTime: new Date(300_000) }
+		const snapshot: Projection = { type: 'poolSnapshot', poolAddress: pool.toLowerCase(), reason: 2, settlementCollateralAttoEth: atomic(100n), shareTokenSupplyAttoShares: atomic(200n), lastSettlementPortfolioTime: new Date(300_000) }
 		expect(projections).toContainEqual(snapshot)
 		// A uint8 enum decodes to a number; a replayed JSON record may carry it as a string.
-		expect(projectionsFrom(log('QuestionAccountingCheckpoint', { reason: '2', settlementCollateralAttoEth: '100', shareTokenSupplyAttoShares: '200', lastSettlementPortfolioTime: '300' }))).toContainEqual(snapshot)
+		expect(projectionsFrom(log('QuestionAccountingCheckpoint', { reason: '2', settlementCollateralAttoEth: atomic(100n), shareTokenSupplyAttoShares: atomic(200n), lastSettlementPortfolioTime: '300' }))).toContainEqual(snapshot)
 	})
 
 	test('ignores accounting and approval events that no current contract emits', () => {

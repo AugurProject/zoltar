@@ -481,7 +481,7 @@ test('links a portfolio fork participation row to its universe fork', () => {
 })
 
 test('summarizes a commitment take-over with explicit units', () => {
-	expect(takeoverSummary({ sourceId: '7', receiverId: '12', commitment: '2000000000000000000', awardAttoRep: '300000000000000000' })).toBe('Position 7 → 12 · commitment 2,000,000,000,000,000,000 collateral units · award 0.3 REP')
+	expect(takeoverSummary({ sourceId: '7', receiverId: '12', commitment: '2000000000000000000', awardAttoRep: 300000000000000000n.toString() })).toBe('Position 7 → 12 · commitment 2,000,000,000,000,000,000 collateral units · award 0.3 REP')
 	expect(takeoverSummary({ sourceId: '7', commitment: 'bad' })).toBe('Take-over evidence unavailable')
 	expect(takeoverSummary(undefined)).toBe('Take-over evidence unavailable')
 })
