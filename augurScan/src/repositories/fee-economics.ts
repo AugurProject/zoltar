@@ -97,7 +97,7 @@ export const questionFeeStreamRows = async (sql: SQL, chainId: number, snapshotB
 		SELECT stream.*, question.title AS question_title FROM (
 			SELECT DISTINCT ON (ledger.ledger_address, entry.summary_data->>'questionId')
 				ledger.ledger_address, ledger.read_result->>'universeId' AS universe_id, ledger.read_result->'collateral' AS collateral,
-				entry.summary_data->>'questionId' AS question_id, entry.summary_data->>'rateAttoEthPerSecond' AS rate_atto_eth_per_second,
+				entry.summary_data->>'questionId' AS question_id, entry.summary_data->>'rateAttoEthPerSecond' AS rate_claim_units_per_second,
 				entry.summary_data->>'end' AS end_timestamp, entry.block_number, entry.block_hash, entry.tx_hash, entry.log_index
 			FROM ledgers ledger
 			${feeIdentity(sql, chainId, snapshotBlock)}

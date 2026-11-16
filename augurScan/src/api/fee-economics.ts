@@ -20,10 +20,10 @@ const universeFees = (row: Record<string, unknown>): Record<string, unknown> => 
 	}
 }
 
-/** A question's stream with its rate per 365-day year, the unit the portfolio's `annualFeeBps` is defined in. */
+/** Annualize internal claim-unit rates without implying a historical cash-to-unit index. */
 const questionStream = (row: Record<string, unknown>): Record<string, unknown> => {
-	const rate = unsigned(row['rate_atto_eth_per_second'])
-	return { ...row, block_number: String(row['block_number']), rate_atto_eth_per_year: rate === undefined ? undefined : (rate * SECONDS_PER_YEAR).toString() }
+	const rate = unsigned(row['rate_claim_units_per_second'])
+	return { ...row, claim_unit_scale: '1000000000', block_number: String(row['block_number']), rate_claim_units_per_year: rate === undefined ? undefined : (rate * SECONDS_PER_YEAR).toString() }
 }
 
 /** Fee economics of every universe and the 25 most recently replaced question streams, as embedded in the Operations overview and risk catalog. */
