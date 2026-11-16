@@ -167,7 +167,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		if (snapshot !== undefined && questionId !== undefined && admissionAllowed) {
 			const client = createConnectedReadClient()
 			void requirePortfolioQuestionAdmission(client, snapshot.questionAdmissionPolicy, snapshot.portfolio, snapshot.originUniverseId, questionId, snapshot.blockNumber)
-				.then(async () => await requirePortfolioQuestionHorizon(client, snapshot.portfolio, questionId, { number: snapshot.blockNumber, timestamp: snapshot.timestamp }))
+				.then(async () => await requirePortfolioQuestionHorizon(client, snapshot.portfolio, questionId, snapshot.blockNumber, snapshot.timestamp))
 				.then(() => {
 					if (current) registration.value = { key: registrationKey }
 				})
@@ -329,7 +329,9 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()
 						await requirePortfolioQuestionAdmission(client, selected.questionAdmissionPolicy, selected.portfolio, selected.originUniverseId, id)
-						await requirePortfolioQuestionHorizon(client, selected.portfolio, id, await client.getBlock())
+						// The transaction is included in a later block, at least one second after the latest one.
+						const latest = await client.getBlock()
+						await requirePortfolioQuestionHorizon(client, selected.portfolio, id, latest.number, latest.timestamp + 1n)
 					},
 				}
 			}),

@@ -38,7 +38,7 @@ test(
 					await forkSeededPortfolio(parameters, pool.portfolioAddress, pool.securityPoolAddress, BigInt(pool.questionId))
 					const forkedUniverse = await loadZoltarUniverseSummary(parameters.createReadClient(), 0n)
 					if (forkedUniverse === undefined) throw new Error('Missing forked universe')
-					const targetsBefore = await loadShareMigrationTargets(parameters.createReadClient(), pool.securityPoolAddress, forkedUniverse.childUniverses, owner)
+					const targetsBefore = await loadShareMigrationTargets(parameters.createReadClient(), redeemed, forkedUniverse.childUniverses, owner)
 					expect(targetsBefore.map(target => [target.outcomeIndex, target.canonicalPool !== undefined, target.migratedAttoShares.noAttoShares])).toEqual([
 						[0n, false, 0n],
 						[1n, true, 0n],
@@ -46,7 +46,7 @@ test(
 					])
 					await expect(migrateSharesFromUniverse(writer, pool.securityPoolAddress, 'no', [0n, 1n, 2n])).rejects.toThrow('ShareToken bulk migration requires canonical child pools')
 					await migrateSharesFromUniverse(writer, pool.securityPoolAddress, 'no', [1n], redeemed.shareBalances?.noAttoShares)
-					const targetsAfter = await loadShareMigrationTargets(parameters.createReadClient(), pool.securityPoolAddress, forkedUniverse.childUniverses, owner)
+					const targetsAfter = await loadShareMigrationTargets(parameters.createReadClient(), redeemed, forkedUniverse.childUniverses, owner)
 					expect(targetsAfter.find(target => target.outcomeIndex === 1n)?.migratedAttoShares.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
 					const remaining = await loadTradingDetails(parameters.createReadClient(), pool.securityPoolAddress, owner)
 					expect(remaining.shareBalances?.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)

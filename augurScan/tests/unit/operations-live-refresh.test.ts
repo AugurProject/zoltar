@@ -162,7 +162,8 @@ test('AMM LP transfer and approval evidence shows the ERC-20 value argument', as
 			{ event_name: 'Transfer', event_data: { from: owner, to: spender, value: '2500000000000000000' }, block_number: '100', tx_hash: `0x${'a'.repeat(64)}` },
 			{ event_name: 'Approval', event_data: { owner, spender, value: '1000000000000000000' }, block_number: '100', tx_hash: `0x${'b'.repeat(64)}` },
 		])
-		expect(rows.map(row => row.textContent)).toEqual([expect.stringContaining('2.5 LP shares'), expect.stringContaining('1 LP shares')])
+		// Anchor the whole summary so a wrong value such as 11 or 0.1 LP shares cannot satisfy the assertion.
+		expect(rows.map(row => row.textContent)).toEqual([expect.stringMatching(/^Transfer2\.5 LP shares · 0x111111…111111 → 0x222222…222222/), expect.stringMatching(/^Approval1 LP shares · 0x111111…111111 approved 0x222222…222222/)])
 	})
 })
 
