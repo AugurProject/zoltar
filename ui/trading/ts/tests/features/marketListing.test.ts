@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import { conditionalYesBps } from '@zoltar/trading-shared/trading/math'
 import { arrangeMarkets, coarseDuration, marketLiquidityAttoEth, marketOddsPercent, marketYesTenths, type MarketFilter } from '../../lib/marketListing.js'
 import { DEFAULT_MARKET_LIST_OPTIONS, marketTicketHref, readMarketListParams, readMarketViewParam, readTicketParam, withoutRouteStateParams, writeMarketListParams, writeMarketViewParam, writeTicketParam } from '../../lib/routeState.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { marketsCopy } from '../../copy/markets.js'
+import { probabilityPercent } from '../../features/live/tradeTicketModel.js'
 import { FIXTURE_DAY, FIXTURE_NOW, fixtureAddress as address, listingMarketFixture as market } from '../support/liveMarketFixture.js'
 
 const NOW = FIXTURE_NOW
@@ -24,6 +26,17 @@ describe('market odds and liquidity', () => {
 		expect(marketsCopy.formatOutcomePrice(marketsCopy.yes, thirds?.yes ?? 0)).toBe('Yes 33.3%')
 		expect(marketsCopy.formatOutcomePrice(marketsCopy.no, thirds?.no ?? 0)).toBe('No 66.7%')
 		expect(marketsCopy.formatOutcomePrice(marketsCopy.yes, 62)).toBe('Yes 62.0%')
+	})
+
+	test('rounds odds to the nearest tenth, matching the trade estimate bar for the same reserves', () => {
+		expect(marketOddsPercent(market({ pool: address('01'), yesReserve: 1n, noReserve: 2n }))).toEqual({ yes: 66.7, no: 33.3 })
+		for (let yesReserve = 1n; yesReserve <= 40n; yesReserve += 1n) {
+			for (let noReserve = 1n; noReserve <= 40n; noReserve += 1n) {
+				// The estimate bar rounds the basis-point price half up to one decimal.
+				const estimateBarTenths = Math.round(probabilityPercent(conditionalYesBps(yesReserve, noReserve)) * 10 + 1e-9)
+				expect(marketYesTenths(market({ pool: address('01'), yesReserve, noReserve }))).toBe(estimateBarTenths)
+			}
+		}
 	})
 
 	test('has no odds without a funded pair or authoritative data', () => {

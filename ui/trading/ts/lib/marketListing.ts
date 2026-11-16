@@ -17,12 +17,15 @@ const CLOSING_SOON_WINDOW_SECONDS = 7n * 24n * 60n * 60n
 
 type OddsInputs = Pick<LiveMarket, 'loadError' | 'pair' | 'yesReserve' | 'noReserve'>
 
-/** Conditional YES probability implied by the pair reserves, in tenths of a percent; undefined until the pair holds liquidity. */
+/**
+ * Conditional YES probability implied by the pair reserves, in tenths of a percent rounded half up, the rounding the trade
+ * estimate's probability bar applies to the same price; undefined until the pair holds liquidity.
+ */
 export function marketYesTenths(market: OddsInputs) {
 	if (market.loadError !== undefined || market.pair === undefined) return undefined
 	const total = market.yesReserve + market.noReserve
 	if (total === 0n) return undefined
-	return bigintToSafeNumber((market.noReserve * 1_000n) / total, 'Conditional YES tenths')
+	return bigintToSafeNumber((market.noReserve * 2_000n + total) / (2n * total), 'Conditional YES tenths')
 }
 
 /** YES / NO odds in percent to one decimal, the precision every price display uses; NO is 100 minus YES, so the two always add up to 100. */
