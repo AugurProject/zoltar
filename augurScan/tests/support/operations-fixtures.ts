@@ -39,7 +39,7 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 			{ name: 'CommitmentCured', argumentsValue: { positionId: '1', removedCommitment: '10' } },
 			{ name: 'CommitmentTakenOver', argumentsValue: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: 5n.toString() } },
 			// The decoder keeps the uint8 reason as a number.
-			{ name: 'QuestionAccountingCheckpoint', argumentsValue: { reason: 5, settlementCollateralAttoEth: '40', shareTokenSupplyAttoShares: '40', lastSettlementPortfolioTime: '1767225620' } },
+			{ name: 'QuestionAccountingCheckpoint', argumentsValue: { reason: 5, settlementCollateralAttoEth: 40n.toString(), shareTokenSupplyAttoShares: 40n.toString(), lastSettlementPortfolioTime: '1767225620' } },
 		]
 		const capitalEvents = capitalEvidence.map(({ name, argumentsValue }, index) => ({
 			...decodedLog(hash, index + 2, oracle, name, argumentsValue),

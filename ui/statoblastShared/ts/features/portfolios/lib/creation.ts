@@ -1,3 +1,4 @@
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { validatePortfolioEconomics } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { parsePortfolioAmount, portfolioAmountOrUndefined } from './draft.js'
 
@@ -72,4 +73,10 @@ export function parseFixedPortfolioQuestions(input: string) {
 		if (left > right) return 1
 		return 0
 	})
+}
+
+/** The wallet review for a portfolio deployment; the purchase fee floor and minimum commitment are in collateral units. */
+export function portfolioDeploymentReviewDescription(mode: CuratedAdmissionMode, config: ReturnType<typeof parsePortfolioCreationEconomics>, collateral: Readonly<{ decimals: number; symbol: string }>) {
+	const amount = (value: bigint) => `${formatUnits(value, collateral.decimals)} ${collateral.symbol}`
+	return `Deploy a portfolio with immutable ${mode} question admission. Fixed annual time fee ${formatUnits(config.annualFeeBps, 2)}%. Purchase fee ${formatUnits(config.purchaseFeeBps, 2)}% of required backing value, minimum ${amount(config.minimumPurchaseFeeAttoEth)}. Each purchase also prepays up to 52 days of resolution fees. The whole purchase fee goes to underwriters; price reporters and keepers pay their own costs. Winners can retire if spare backing permits; there is no minimum holding period. Minimum commitment and auction lot ${amount(config.minimumCommitmentAttoEth)}; prepaid rewards vest over ${config.rewardVestingSeconds} seconds. Each owner chooses their own health target. Register eligible questions in a separate transaction.`
 }

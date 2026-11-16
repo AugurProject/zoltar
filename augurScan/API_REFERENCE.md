@@ -177,7 +177,7 @@ Each report-detail round contains `comparison.state`, the previous round/block i
 
 ### Fork detail
 
-`data.summary` counts the events of the forked universe: `portfolio_fork_events` counts `ForkFrozen`, `BranchChosen`, `NeutralCashRecovered`, `ReporterForkFrozen`, and `ReporterChildCreated` for the universe together with `BranchStarted` and `BranchActivated` of its child universes. `reporter_fork_frozen_count` is the number of `ReporterForkFrozen` events; `reporter_migration_atto_rep` and `reporter_protected_parent_atto_rep` are that event's `migrationAttoRep` (live reporter escrow that migrates) and `protectedParentAttoRep` (REP of games finalized before the fork, which stays in the parent). `data.events` lists every event that names the universe, including `ReporterChildCreated` under both its source and its child.
+`data.summary` counts the events of the forked universe: `portfolio_fork_events` counts `ForkFrozen`, `BranchChosen`, `NeutralCashRecovered`, `ReporterForkFrozen`, and `ReporterChildCreated` for the universe together with `BranchStarted` and `BranchActivated` of its child universes. `reporter_fork_frozen_count` is the number of `ReporterForkFrozen` events; `reporter_migration_atto_rep` and `reporter_protected_parent_atto_rep` are sums across those events of `migrationAttoRep` (live reporter escrow that migrates) and `protectedParentAttoRep` (REP of games finalized before the fork, which stays in the parent). `data.events` lists every event that names the universe, including `ReporterChildCreated` under both its source and its child.
 
 ### Escalation detail
 

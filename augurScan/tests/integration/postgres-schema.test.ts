@@ -443,7 +443,7 @@ postgresTest('replaces v6 accounting storage and keeps the logs a projection reb
 		const txHash = blockHash('accounting-storage-transaction')
 		await database.sql`INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES (${migrationChainId}, 1, ${hash}, ${blockHash('accounting-storage-parent')}, now(), true)`
 		await database.sql`INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, receipt, canonical) VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', '{}'::jsonb, true)`
-		const checkpoint = JSON.stringify({ reason: 5, settlementCollateralAttoEth: '7', shareTokenSupplyAttoShares: '9', lastSettlementPortfolioTime: '100' })
+		const checkpoint = JSON.stringify({ reason: 5, settlementCollateralAttoEth: 7n.toString(), shareTokenSupplyAttoShares: 9n.toString(), lastSettlementPortfolioTime: '100' })
 		await database.sql`
 			INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
 			VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x', 'QuestionAccountingCheckpoint', (${checkpoint}::text)::jsonb, 'decoded', 'QuestionAccountingCheckpoint', true)

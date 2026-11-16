@@ -478,6 +478,14 @@ function parsePositionJournalArchive(value: unknown): PositionJournalArchive {
 	return { gasSpentByUtcDay: boundedGasSpentByUtcDay(parsedGasSpentByUtcDay), hedgedProfitBeforeGasEth, positionCount, realizedNetProfitEth }
 }
 
+/**
+ * Realized P&L of a finished position. An expired entry stays `expired-not-included` when its transaction is later found
+ * to have reverted, and its realized P&L then carries that gas, so it counts like a closed position.
+ */
+export function terminalRealizedNetProfitEth(position: Pick<PositionRecord, 'realizedNetProfitEth' | 'status'>) {
+	return position.status === 'closed' || position.status === 'expired-not-included' ? position.realizedNetProfitEth : undefined
+}
+
 function archivePosition(archive: PositionJournalArchive, position: PositionRecord): PositionJournalArchive {
 	const gasSpentByUtcDay = { ...archive.gasSpentByUtcDay }
 	for (const expenditure of position.gasExpenditures) {
@@ -486,7 +494,8 @@ function archivePosition(archive: PositionJournalArchive, position: PositionReco
 	}
 	const awaitingLifecycleEvidence = position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
 	const hedgedProfit = position.actualEntryGasCostEth === '0' || awaitingLifecycleEvidence ? 0n : signedDecimalAmountAttoEth(position.hedgedProfitBeforeGasEth)
-	const realizedProfit = position.status === 'closed' && position.realizedNetProfitEth !== undefined ? signedDecimalAmountAttoEth(position.realizedNetProfitEth) : 0n
+	const realizedNetProfitEth = terminalRealizedNetProfitEth(position)
+	const realizedProfit = realizedNetProfitEth === undefined ? 0n : signedDecimalAmountAttoEth(realizedNetProfitEth)
 	return {
 		gasSpentByUtcDay: boundedGasSpentByUtcDay(gasSpentByUtcDay),
 		hedgedProfitBeforeGasEth: formatDecimalAmount(signedDecimalAmountAttoEth(archive.hedgedProfitBeforeGasEth) + hedgedProfit),

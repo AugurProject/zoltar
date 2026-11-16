@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { defaultPortfolioCreationDraft, parseFixedPortfolioQuestions, parsePortfolioCreationEconomics } from '@zoltar/ui-statoblast-shared/features/portfolios/lib/creation.js'
+import { defaultPortfolioCreationDraft, parseFixedPortfolioQuestions, parsePortfolioCreationEconomics, portfolioDeploymentReviewDescription } from '@zoltar/ui-statoblast-shared/features/portfolios/lib/creation.js'
 test('creation configures pool fees and minimums while health remains a personal setting', () => {
 	expect(parsePortfolioCreationEconomics(defaultPortfolioCreationDraft())).toEqual({
 		annualFeeBps: 1000n,
@@ -25,4 +25,11 @@ test('six-decimal collateral parses minimums in token units and rejects excess p
 	expect(config.minimumCommitmentAttoEth).toBe(1_000_000n)
 	expect(config.minimumOutcomeRate).toBe(10n ** 16n)
 	expect(() => parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), minimumPurchaseFee: '0.0000001' }, 6)).toThrow('6 decimal places')
+})
+
+test('the deployment review states the purchase fee floor and minimum commitment in collateral units', () => {
+	const config = parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), minimumCommitment: '100', minimumPurchaseFee: '1.5' }, 6)
+	const review = portfolioDeploymentReviewDescription('open', config, { decimals: 6, symbol: 'USDC' })
+	expect(review).toContain('minimum 1.5 USDC.')
+	expect(review).toContain('Minimum commitment and auction lot 100 USDC;')
 })

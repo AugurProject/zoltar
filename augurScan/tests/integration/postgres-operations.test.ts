@@ -117,7 +117,7 @@ const expectRecentTakeovers = async ({ database, operationsChainId, oracle }: Op
 			semantic_event_kind: 'CommitmentTakenOver',
 			entity_type: 'capital-position',
 			entity_identity: `${oracle.toLowerCase()}:1`,
-			summary_data: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: '5' },
+			summary_data: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: 5n.toString() },
 		}),
 	])
 	for (const removed of ['vaults', 'approvalEvents', 'recentLiquidations']) expect(overview.data.risk).not.toHaveProperty(removed)
