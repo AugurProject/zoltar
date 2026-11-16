@@ -33,9 +33,10 @@ describe('test impact recommendations', () => {
 	// The timeout test spawns the runner as a subprocess, so the import graph never reaches it from the runner sources.
 	test('maps the runner and its process wrapper to the timeout and process tests', () => {
 		for (const path of ['tooling/testing/bun-test.mts', 'tooling/testing/run-bun-test-process.mts']) {
-			expect(commandsFor([path])).toEqual([INFRASTRUCTURE_COMMAND])
-			expect(INFRASTRUCTURE_COMMAND).toContain('tooling/testing/test-timeout.test.ts')
-			expect(INFRASTRUCTURE_COMMAND).toContain('tooling/testing/run-bun-test-process.test.ts')
+			const commands = commandsFor([path])
+			expect(commands).toEqual([INFRASTRUCTURE_COMMAND])
+			expect(commands[0]).toContain('tooling/testing/test-timeout.test.ts')
+			expect(commands[0]).toContain('tooling/testing/run-bun-test-process.test.ts')
 		}
 	})
 
@@ -82,6 +83,16 @@ describe('test impact recommendations', () => {
 	test('maps developer documentation asserted by the UI split workflow test to that test', () => {
 		expect(commandsFor(['docs/how-to/trading-set-up-development.html'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts'])
 		expect(commandsFor(['testnetwork/README.md'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts'])
+	})
+
+	test('maps documentation read or executed by tests or checks to those tests and checks', () => {
+		expect(commandsFor(['docs/reference/invariants.html'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/docs/documentation-tools-runtime.test.ts'])
+		expect(commandsFor(['docs/runtime/docsShell.ts'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/docs/docs-shell-runtime.test.ts tooling/docs/documentation-tools-runtime.test.ts tooling/docs/responsive-docs-runtime.test.ts'])
+		expect(commandsFor(['docs/documentation.html'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/docs/docs-shell-runtime.test.ts'])
+		expect(commandsFor(['augurScan/README.md'])).toEqual(['cd augurScan && bun test tests/unit/docker-packaging.test.ts'])
+		expect(commandsFor(['bots/README.md'])).toEqual(['cd bots/open-oracle-arbitrager && bun run check:docs'])
+		expect(commandsFor(['bots/open-oracle-arbitrager/MARKETS.md'])).toEqual(['cd bots/open-oracle-arbitrager && bun ../../tooling/testing/bun-test.mts tests/dashboard/dashboard-server.test.ts', 'cd bots/open-oracle-arbitrager && bun run check:docs'])
+		expect(commandsFor(['docs/assets/screenshots/fingerprints.json', 'docs/how-to/trading-deploy-contracts.html'])).toEqual([])
 	})
 
 	test('specialized external integration tiers replace ineffective raw test commands', () => {

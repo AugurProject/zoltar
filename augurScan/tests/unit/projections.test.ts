@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { abiForKind } from '../../src/abi-catalog.ts'
-import { encodeAbiParameters, encodeEventTopics, getAddress, type Hex } from '../../src/ethereum.ts'
-import { decodeLogRecord } from '../../src/metadata.ts'
+import { getAddress, type Hex } from '../../src/ethereum.ts'
 import { type Projection, projectionsFrom } from '../../src/projections.ts'
 import type { StoredLog } from '../../src/types.ts'
+import { encodedAmmPairTransfer } from '../support/amm-pair-transfer.ts'
 
 const hash = `0x${'12'.repeat(32)}` as Hex
 const pool = getAddress('0x1111111111111111111111111111111111111111')
@@ -218,11 +217,8 @@ describe('state projections', () => {
 	})
 
 	test('stores an AMM pair LP transfer under the compiled ERC-20 argument names', () => {
-		const event = abiForKind('ammPair')?.find(item => item.type === 'event' && item.name === 'Transfer')
-		if (event?.type !== 'event') throw new Error('Missing compiled AMM pair Transfer event')
-		const topics = encodeEventTopics({ abi: [event], eventName: 'Transfer', args: { from: pool, to: vault } }).flatMap(topic => (typeof topic === 'string' ? [topic] : []))
-		const data = encodeAbiParameters([{ type: 'uint256' }], [50n])
-		const transfer: StoredLog = { ...log('Transfer', {}, vault, 'ammPair'), topics, data, decoded: decodeLogRecord('ammPair', topics, data, new Map(), new Map(), vault) }
+		const { topics, data, decoded } = encodedAmmPairTransfer(pool, vault, 50n, vault)
+		const transfer: StoredLog = { ...log('Transfer', {}, vault, 'ammPair'), topics, data, decoded }
 		const projection = projectionsFrom(transfer).at(-1)
 		if (projection?.type !== 'domainEvent') throw new Error('LP transfer did not project a domain event')
 		// The trading, catalog, portfolio, and detail LP queries read these exact keys from amm_trade_events.event_data.
