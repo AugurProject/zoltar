@@ -94,6 +94,7 @@ function createTradingDetails(overrides: Partial<TradingDetails> = {}): TradingD
 	return {
 		maxRedeemableCompleteSetsAttoShares: 2n * 10n ** 18n,
 		shareBalances,
+		shareTokenAddress: zeroAddress,
 		universeId: 1n,
 		...overrides,
 	}
@@ -252,13 +253,24 @@ function TradingSectionHarness({ tradingForkUniverse }: { tradingForkUniverse: Z
 	)
 }
 
-function TradingSectionWithMutableForm({ initialTradingForm = {}, tradingForkUniverse, selectedPool = createSelectedPool({ universeHasForked: true }) }: { initialTradingForm?: Partial<TradingFormState>; tradingForkUniverse: ZoltarUniverseSummary; selectedPool?: ListedSecurityPool }) {
+function TradingSectionWithMutableForm({
+	initialTradingForm = {},
+	tradingDetails = createTradingDetails(),
+	tradingForkUniverse,
+	selectedPool = createSelectedPool({ universeHasForked: true }),
+}: {
+	initialTradingForm?: Partial<TradingFormState>
+	tradingDetails?: TradingDetails
+	tradingForkUniverse: ZoltarUniverseSummary
+	selectedPool?: ListedSecurityPool
+}) {
 	const [tradingForm, setTradingForm] = useState<TradingFormState>({ ...createTradingForm(), ...initialTradingForm })
 
 	return (
 		<TradingSection
 			{...createTradingSectionProps({
 				selectedPool,
+				tradingDetails,
 				tradingForkUniverse,
 				tradingForm,
 			})}
@@ -1277,5 +1289,29 @@ void describe('TradingSection', () => {
 			fireEvent.click(yesTarget)
 		})
 		expect(yesTarget.getAttribute('aria-pressed')).toBe('false')
+	})
+
+	void test('selects only child universes a single migration can reach when a child has no security pool', async () => {
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const tradingDetails = createTradingDetails({
+			shareMigrationTargets: [
+				{ canonicalPool: undefined, migratedAttoShares: noMigratedShares, outcomeIndex: 0n },
+				{ canonicalPool: '0x00000000000000000000000000000000000000b1', migratedAttoShares: noMigratedShares, outcomeIndex: 1n },
+			],
+		})
+		const renderedComponent = await renderIntoDocument(<TradingSectionWithMutableForm tradingDetails={tradingDetails} tradingForkUniverse={createBinaryForkUniverse()} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+		})
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		await act(() => {
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Select all' }))
+		})
+
+		expect(modalQueries.getByRole('button', { name: /^Yes/ }).getAttribute('aria-pressed')).toBe('false')
+		expect(modalQueries.getByRole('button', { name: /^No/ }).getAttribute('aria-pressed')).toBe('true')
 	})
 })
