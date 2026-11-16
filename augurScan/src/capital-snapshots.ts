@@ -1,0 +1,243 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
+import { abiForKind } from './abi-catalog.ts'
+import { readCollateralMetadata } from './collateral-metadata.ts'
+import { type AbiValue, type Address, getAddress, zeroAddress } from './ethereum.ts'
+import type { StateRead } from './snapshots.ts'
+import type { SystemContractKind } from './system-interfaces.ts'
+
+const BPS = 10_000n
+
+// viem returns a uint48 as a number and wider integers as bigint.
+const quantity = (value: unknown, name: string): bigint => {
+	if (typeof value === 'bigint' && value >= 0n) return value
+	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
+	throw new Error(`${name} returned an invalid value`)
+}
+const flag = (value: unknown, name: string): boolean => {
+	if (typeof value !== 'boolean') throw new Error(`${name} returned an invalid value`)
+	return value
+}
+const address = (value: unknown, name: string): Address => {
+	if (typeof value !== 'string') throw new Error(`${name} returned an invalid address`)
+	return getAddress(value)
+}
+const tuple = (value: unknown, length: number, name: string): readonly unknown[] => {
+	if (!Array.isArray(value) || value.length !== length) throw new Error(`${name} returned an invalid tuple`)
+	return value
+}
+const struct = (value: unknown, name: string): Readonly<Record<string, unknown>> => {
+	if (!isObjectRecord(value)) throw new Error(`${name} returned an invalid struct`)
+	return value
+}
+
+const caller =
+	(read: StateRead) =>
+	(target: Address, kind: SystemContractKind, name: string, args: readonly AbiValue[] = []) => {
+		const abi = abiForKind(kind)
+		if (abi === undefined) throw new Error(`Missing capital snapshot ABI ${kind}`)
+		return read(target, abi, name, args)
+	}
+
+// ERC20 metadata is optional. A failed read must not erase an otherwise valid capital snapshot.
+const collateralOf = async (portfolio: Address, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
+	try {
+		const token = address(await caller(read)(portfolio, 'securityPoolPortfolio', 'collateralToken'), 'collateralToken')
+		return { collateral: await readCollateralMetadata(token, read) }
+	} catch (error) {
+		return { collateralMetadataError: errorMessage(error) }
+	}
+}
+
+/**
+ * How far a position's pledged REP is above the REP its commitment requires at the ledger's liquidation
+ * price, in basis points. Below 10,000 the position is under the price at which a take-over is allowed.
+ * A position without commitment, or a ledger that never accepted a price, has no health factor.
+ */
+const capitalHealthFactorBps = (pledgedAttoRep: bigint, requiredAttoRep: bigint | undefined): string | undefined => (requiredAttoRep === undefined || requiredAttoRep === 0n ? undefined : ((pledgedAttoRep * BPS) / requiredAttoRep).toString())
+
+type LedgerState = {
+	readonly portfolio: Address
+	readonly universeId: bigint
+	readonly index: Address
+	readonly multiplier: bigint
+	readonly acceptedPrice: bigint
+	readonly conservativePrice: bigint
+	readonly liquidationPrice: bigint
+	readonly priceValidUntil: bigint
+	readonly priceValid: boolean
+	readonly frozen: boolean
+	readonly importing: boolean
+	// Zoltar forked the universe: the ledger rejects every owner operation even before its `freeze()` call.
+	readonly universeForked: boolean
+}
+
+const ledgerState = async (ledger: Address, read: StateRead): Promise<LedgerState> => {
+	const call = caller(read)
+	const kind = 'securityPoolCapitalLedger'
+	const values = await Promise.all([
+		call(ledger, kind, 'portfolio'),
+		call(ledger, kind, 'universeId'),
+		call(ledger, kind, 'commitmentIndex'),
+		call(ledger, kind, 'securityMultiplierBps'),
+		call(ledger, kind, 'acceptedPrice'),
+		call(ledger, kind, 'conservativePrice'),
+		call(ledger, kind, 'liquidationPrice'),
+		call(ledger, kind, 'priceValidUntil'),
+		call(ledger, kind, 'isPriceValid'),
+		call(ledger, kind, 'frozen'),
+		call(ledger, kind, 'importing'),
+		call(ledger, kind, 'zoltar'),
+	])
+	const index = address(values[2], 'commitmentIndex')
+	if (index === zeroAddress) throw new Error('Capital ledger has no commitment index')
+	const universeId = quantity(values[1], 'universeId')
+	const forkTime = quantity(await call(address(values[11], 'zoltar'), 'zoltar', 'getForkTime', [universeId]), 'getForkTime')
+	return {
+		portfolio: address(values[0], 'portfolio'),
+		universeId,
+		index,
+		multiplier: quantity(values[3], 'securityMultiplierBps'),
+		acceptedPrice: quantity(values[4], 'acceptedPrice'),
+		conservativePrice: quantity(values[5], 'conservativePrice'),
+		liquidationPrice: quantity(values[6], 'liquidationPrice'),
+		priceValidUntil: quantity(values[7], 'priceValidUntil'),
+		priceValid: flag(values[8], 'isPriceValid'),
+		frozen: flag(values[9], 'frozen'),
+		importing: flag(values[10], 'importing'),
+		universeForked: forkTime !== 0n,
+	}
+}
+
+const ledgerFields = (state: LedgerState): Record<string, unknown> => ({
+	portfolio: state.portfolio.toLowerCase(),
+	universeId: state.universeId.toString(),
+	securityMultiplierBps: state.multiplier.toString(),
+	acceptedPrice: state.acceptedPrice.toString(),
+	conservativePrice: state.conservativePrice.toString(),
+	liquidationPrice: state.liquidationPrice.toString(),
+	priceValidUntil: state.priceValidUntil.toString(),
+	priceValid: state.priceValid,
+	frozen: state.frozen,
+	importing: state.importing,
+	universeForked: state.universeForked,
+})
+
+/** One universe's capital ledger: the price it accepted, its aggregate principal and commitment, and the last position id it issued. */
+export const capitalLedgerSnapshot = async (ledger: Address, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
+	const call = caller(read)
+	const state = await ledgerState(ledger, read)
+	const kind = 'securityPoolCapitalLedger'
+	const [rawTotals, demand, free, retirement, frozenBacking, frozenCommitment, lastPositionId, feed] = await Promise.all([
+		call(ledger, kind, 'totals'),
+		call(ledger, kind, 'demandAttoEth'),
+		call(ledger, kind, 'totalFreeAttoRep'),
+		call(ledger, kind, 'retirementCashAttoRep'),
+		call(ledger, kind, 'frozenBackingAttoRep'),
+		call(ledger, kind, 'frozenCommitmentAttoEth'),
+		call(state.index, 'securityPoolCommitmentIndex', 'lastPositionId'),
+		call(state.portfolio, 'securityPoolPortfolio', 'priceFeed', [state.universeId]),
+	])
+	const totals = tuple(rawTotals, 3, 'totals')
+	return {
+		...ledgerFields(state),
+		commitmentIndex: state.index.toLowerCase(),
+		priceFeed: address(feed, 'priceFeed').toLowerCase(),
+		pledgedAttoRep: quantity(totals[0], 'totals.rep').toString(),
+		commitmentAttoEth: quantity(totals[1], 'totals.commitment').toString(),
+		healthyCommitmentAttoEth: quantity(totals[2], 'totals.healthy').toString(),
+		demandAttoEth: quantity(demand, 'demandAttoEth').toString(),
+		// Commitment above demand. While it covers a position's deficit, the ledger cures that position instead of allowing a take-over.
+		spareCommitmentAttoEth: (quantity(totals[1], 'totals.commitment') > quantity(demand, 'demandAttoEth') ? quantity(totals[1], 'totals.commitment') - quantity(demand, 'demandAttoEth') : 0n).toString(),
+		totalFreeAttoRep: quantity(free, 'totalFreeAttoRep').toString(),
+		retirementCashAttoRep: quantity(retirement, 'retirementCashAttoRep').toString(),
+		frozenBackingAttoRep: quantity(frozenBacking, 'frozenBackingAttoRep').toString(),
+		frozenCommitmentAttoEth: quantity(frozenCommitment, 'frozenCommitmentAttoEth').toString(),
+		lastPositionId: quantity(lastPositionId, 'lastPositionId').toString(),
+		...(await collateralOf(state.portfolio, read)),
+	}
+}
+
+/**
+ * The owner of one position id. The index never deletes a position, so its owner is a permanent fact: one
+ * successful read identifies every event that names the id, including a position a fork imported silently.
+ */
+export const capitalPositionSnapshot = async (ledger: Address, positionId: bigint, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
+	const call = caller(read)
+	const index = address(await call(ledger, 'securityPoolCapitalLedger', 'commitmentIndex'), 'commitmentIndex')
+	const owner = address(struct(await call(index, 'securityPoolCommitmentIndex', 'accountOf', [positionId]), 'accountOf')['owner'], 'accountOf.owner')
+	if (owner === zeroAddress) throw new Error('Capital position does not exist')
+	return { ledger: ledger.toLowerCase(), positionId: positionId.toString(), owner: owner.toLowerCase() }
+}
+
+/** One owner's capital in one universe's ledger: principal, commitment, health and unclaimed earnings. */
+export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
+	const call = caller(read)
+	const state = await ledgerState(ledger, read)
+	const kind = 'securityPoolCapitalLedger'
+	const [rawAccount, rawCollateral, ownerPrice, rawCohort] = await Promise.all([call(ledger, kind, 'ownerAccount', [owner]), call(ledger, kind, 'ownerCollateral', [owner]), call(ledger, kind, 'ownerConservativePrice', [owner]), call(ledger, kind, 'auctionCohort')])
+	const account = struct(rawAccount, 'ownerAccount')
+	const collateral = tuple(rawCollateral, 3, 'ownerCollateral')
+	const cohort = tuple(rawCohort, 5, 'auctionCohort')
+	// The auction adapter owns the cohort's aggregate position in the index, but the ledger keeps its id in
+	// `auctionCohort` and reports zero principal and commitment for the adapter itself.
+	const cohortId = address(cohort[0], 'auctionCohort.adapter') === owner ? quantity(cohort[1], 'auctionCohort.positionId') : 0n
+	const positionId = cohortId === 0n ? quantity(account['positionId'], 'ownerAccount.positionId') : cohortId
+	const freeAttoRep = quantity(account['freeAttoRep'], 'ownerAccount.freeAttoRep')
+	let principal = quantity(collateral[0], 'ownerCollateral.principal')
+	let commitment = quantity(collateral[1], 'ownerCollateral.commitment')
+	let pledged = principal - freeAttoRep
+	let unclaimedEth = quantity(account['feesAttoEth'], 'ownerAccount.feesAttoEth')
+	let unclaimedRep = quantity(account['feesAttoRep'], 'ownerAccount.feesAttoRep')
+	let position: Record<string, unknown> = {}
+	if (positionId !== 0n) {
+		const [rawPosition, started] = await Promise.all([call(state.index, 'securityPoolCommitmentIndex', 'accountOf', [positionId]), call(ledger, kind, 'liquidationStarted', [positionId])])
+		const indexed = struct(rawPosition, 'accountOf')
+		const maxHealthyPrice = quantity(indexed['maxHealthyPrice'], 'accountOf.maxHealthyPrice')
+		const liquidationStartedAt = quantity(started, 'liquidationStarted')
+		pledged = quantity(indexed['rep'], 'accountOf.rep')
+		if (cohortId !== 0n) {
+			// Unmaterialized winning bids: the cohort's REP and commitment are not yet split among the winning vaults.
+			principal = pledged
+			commitment = quantity(indexed['commitment'], 'accountOf.commitment')
+		}
+		// The index holds earnings the ledger has not yet moved to the owner's account.
+		unclaimedEth += quantity(indexed['ethFees'], 'accountOf.ethFees')
+		unclaimedRep += quantity(indexed['repFees'], 'accountOf.repFees')
+		const belowLiquidationPrice = commitment !== 0n && state.liquidationPrice !== 0n && maxHealthyPrice < state.liquidationPrice
+		position = {
+			maxHealthyPrice: maxHealthyPrice.toString(),
+			releasedAttoRep: quantity(indexed['releasedRep'], 'accountOf.releasedRep').toString(),
+			retirementBatch: quantity(indexed['batch'], 'accountOf.batch').toString(),
+			remainingCommitmentAttoEth: quantity(indexed['remainingCommitment'], 'accountOf.remainingCommitment').toString(),
+			liquidationStartedAt: liquidationStartedAt.toString(),
+			belowLiquidationPrice,
+			// What a take-over needs before the ledger cures: a fresh price, an open universe (`_requireOpen`) and an adverse observation.
+			// The ledger then cures the position first and still rejects the take-over when spare commitment covers the deficit; that
+			// outcome depends on the ledger's private minimum commitment and cannot be read. A cohort is taken over per bid, never as a whole.
+			takeoverPreconditionsMet: cohortId === 0n && belowLiquidationPrice && liquidationStartedAt !== 0n && state.priceValid && !state.frozen && !state.importing && !state.universeForked,
+		}
+	}
+	// The pure index formula at the protocol health floor; it rejects a zero price, so it is read only once a price exists.
+	const required = commitment === 0n || state.liquidationPrice === 0n ? undefined : quantity(await call(state.index, 'securityPoolCommitmentIndex', 'requiredRep', [commitment, state.liquidationPrice, state.multiplier, BPS]), 'requiredRep')
+	return {
+		...ledgerFields(state),
+		ledger: ledger.toLowerCase(),
+		owner: owner.toLowerCase(),
+		positionId: positionId.toString(),
+		...(cohortId === 0n ? {} : { auctionCohort: true, auctionCohortRemainingLots: quantity(cohort[2], 'auctionCohort.remainingLots').toString() }),
+		principalAttoRep: principal.toString(),
+		commitmentAttoEth: commitment.toString(),
+		withdrawableAttoRep: quantity(collateral[2], 'ownerCollateral.withdrawable').toString(),
+		freeAttoRep: freeAttoRep.toString(),
+		pledgedAttoRep: pledged.toString(),
+		targetHealthFactorBps: quantity(account['targetHealthFactorBps'], 'ownerAccount.targetHealthFactorBps').toString(),
+		unclaimedFeesAttoEth: unclaimedEth.toString(),
+		unclaimedFeesAttoRep: unclaimedRep.toString(),
+		ownerConservativePrice: quantity(ownerPrice, 'ownerConservativePrice').toString(),
+		requiredAttoRep: required?.toString(),
+		healthFactorBps: capitalHealthFactorBps(pledged, required),
+		...position,
+		...(await collateralOf(state.portfolio, read)),
+	}
+}

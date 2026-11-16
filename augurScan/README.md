@@ -4,7 +4,7 @@ augurScan is a read-only explorer for the Zoltar/Augur protocol. It indexes conf
 
 Backend capability ownership and dependency rules are documented in [`src/ARCHITECTURE.md`](src/ARCHITECTURE.md).
 
-The **Operations** area brings together the histories that operators usually need to investigate a protocol state: OpenOracle reports, escalation games, collateral repair auctions, security-pool settlement state and capital take-overs, Zoltar forks, Statoblast migrations, AMM trading, price provenance, semantic changes, and chain replacements. The global timeline lets you filter those records across Zoltar, Trading, Statoblast, and Open Oracle by entity, event, address, block range, text, and canonical status.
+The **Operations** area brings together the histories that operators usually need to investigate a protocol state: OpenOracle reports, escalation games, collateral repair auctions, security-pool settlement state, owner capital positions and their liquidation feed, Zoltar forks, Statoblast migrations, AMM trading, price provenance, semantic changes, and chain replacements. The global timeline lets you filter those records across Zoltar, Trading, Statoblast, and Open Oracle by entity, event, address, block range, text, and canonical status.
 
 ## Start with Docker
 
@@ -30,7 +30,7 @@ The network selector in the header controls Activity, **Operations**, **System s
 Useful Operations routes include:
 
 - `/operations/reports`, `/operations/escalations`, and `/operations/auctions` for OpenOracle and dispute resolution;
-- `/operations/risk` for tagged pool observations and recent commitment take-overs;
+- `/operations/risk` for capital positions ranked by risk, capital ledgers, the liquidation feed, and tagged pool observations; `/capital/:ledger/:owner` for one owner's position, read history, and liquidation history;
 - `/operations/forks` for Zoltar fork and Statoblast migration evidence;
 - `/operations/trading` for AMM price, liquidity, share and ETH volume, fee history, and recent market activity;
 - `/operations/timeline` for cross-protocol semantic history;

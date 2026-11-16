@@ -59,7 +59,9 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
 	...definitions('risk', 'pool', ['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'EthReceived'], ['securityPool']),
 	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'EarningsClaimed'], ['owner']),
-	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled', 'AuctionBidMaterialized'], ['positionId', 'sourceId']),
+	// A materialized auction bid becomes the position of the vault that won it, so the vault is the owner.
+	...definitions('risk', 'vault', ['AuctionBidMaterialized'], ['vault']),
+	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled'], ['positionId', 'sourceId']),
 	...definitions('risk', 'portfolio', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
 	...definitions('risk', 'portfolio', ['PortfolioRegistered'], ['portfolio']),
 	// The portfolio auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.

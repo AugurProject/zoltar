@@ -1,5 +1,6 @@
 import { semanticSummary } from './semantic-evidence.ts'
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
+import { capitalEventPresentation, liquidationSummary, liquidationTitle } from './capital-presentation.ts'
 import { operationsDetailRecordKey } from './operations-presentation.ts'
 import { operationRecords, type JsonRecord } from './api-validation.ts'
 import { exactUnit } from './format.ts'
@@ -86,7 +87,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		if (chainId !== '') destination.searchParams.set('chainId', chainId)
 		if (isDemo) destination.searchParams.set('demo', '1')
 		const atBlock = pageUrl().searchParams.get('atBlock')
-		if (atBlock !== null && (destination.pathname.startsWith('/operations/risk') || destination.pathname.startsWith('/pool/'))) destination.searchParams.set('atBlock', atBlock)
+		if (atBlock !== null && (destination.pathname.startsWith('/operations/risk') || destination.pathname.startsWith('/pool/') || destination.pathname.startsWith('/capital/'))) destination.searchParams.set('atBlock', atBlock)
 		return `${destination.pathname}${destination.search}`
 	}
 
@@ -178,8 +179,19 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			return row
 		})
 
+	// Take-overs, cures and report operations carry the owners the API resolved; other capital events are shown as decoded.
+	const capitalEvidenceRows = (items: readonly JsonRecord[]) =>
+		items.map(item => {
+			const owned = capitalEventPresentation(item)
+			if (owned === undefined && !['CommitmentTakenOver', 'CommitmentCured', 'ReportOperationAttempted'].includes(String(item['event_name']))) return detailEvidenceRows([item])[0] ?? operationRow('Capital event', 'Evidence unavailable', undefined, item['block_number'])
+			const row = operationRow(owned?.title ?? liquidationTitle(item), owned?.summary ?? liquidationSummary(item, { universe: false }), String(item['tx_hash'] ?? ''), item['block_number'])
+			row.append(rawEvidence(item))
+			return row
+		})
+
 	const detailEvidenceRowsFor = (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[]) => {
 		if (kind === 'trading') return tradingEvidenceRows(items)
+		if (kind === 'capital') return capitalEvidenceRows(items)
 		return kind === 'report' ? reportEvidenceRows(items) : detailEvidenceRows(items)
 	}
 

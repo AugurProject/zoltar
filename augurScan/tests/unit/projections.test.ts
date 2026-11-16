@@ -347,6 +347,12 @@ describe('state projections', () => {
 		expect(projectionsFrom({ ...log('URI', { value: 'ipfs://share', id: '1' }), contractKind: 'shareToken' })).toEqual([])
 	})
 
+	test('a materialized auction bid belongs to the vault that owns the new position', () => {
+		expect(projectionsFrom(log('AuctionBidMaterialized', { bidId: '4', vault, positionId: '3', principal: '70', commitment: '10' })).at(-1)).toMatchObject({ domain: 'risk', entityType: 'vault', entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}` })
+		// The cohort is the auction adapter's aggregate position, identified by its position id.
+		expect(projectionsFrom(log('AuctionCohortInstalled', { adapter: vault, positionId: '3', lots: '1', repPerLot: '2', commitmentPerLot: '3' })).at(-1)).toMatchObject({ entityType: 'capital-position', entityIdentity: `${pool.toLowerCase()}:3` })
+	})
+
 	test('classifies the events of contracts registered through portfolio discovery', () => {
 		const emitter = pool.toLowerCase()
 		const game = vault.toLowerCase()

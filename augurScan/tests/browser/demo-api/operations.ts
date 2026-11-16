@@ -1,4 +1,5 @@
 import { requiredArrayItem } from '../../../browser/api-decoding.ts'
+import { demoCapitalLedgers, demoCapitalPositions, demoLiquidations } from './capital-fixtures.ts'
 import { demoHash } from './chain-fixtures.ts'
 import type { DemoEnvironment } from './environment.ts'
 
@@ -106,17 +107,10 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 							},
 			},
 		],
-		recentTakeovers: [
-			{
-				semantic_event_kind: 'CommitmentTakenOver',
-				entity_type: 'capital-position',
-				entity_identity: '0x5555555555555555555555555555555555555555:7',
-				source_contract: '0x5555555555555555555555555555555555555555',
-				block_number: asOf.blockNumber,
-				log_index: 3,
-				summary_data: { sourceId: '7', receiverId: '12', commitment: (2n * 10n ** 18n).toString(), awardAttoRep: (3n * 10n ** 17n).toString() },
-			},
-		],
+		capitalLedgers: demoCapitalLedgers(asOf.blockNumber),
+		capitalPositions: demoCapitalPositions(asOf.blockNumber),
+		capitalPositionTotal: 3,
+		recentLiquidations: demoLiquidations(asOf.blockNumber),
 		pagination: { poolTotal: 1, poolHasMore: false },
 	}
 	return {

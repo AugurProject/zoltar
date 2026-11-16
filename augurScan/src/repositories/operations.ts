@@ -218,7 +218,7 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 export const riskCatalogData = async (sql: SQL, chainId: number, options: { poolAddress?: string | undefined; poolAfter?: string | undefined; limit?: number | undefined; snapshotBlock?: string | undefined } = {}) => {
 	const queryLimit = (options.limit ?? 250) + 1
 	const snapshotBlock = options.snapshotBlock ?? '9223372036854775807'
-	const [pools, takeovers, totals] = await Promise.all([
+	const [pools, totals] = await Promise.all([
 		sql`
 			WITH identities AS (
 				SELECT DISTINCT pool_address FROM pools
@@ -239,12 +239,6 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 				AND (${options.poolAfter ?? null}::text IS NULL OR identity.pool_address > ${options.poolAfter ?? null})
 			ORDER BY identity.pool_address LIMIT ${queryLimit}
 		`,
-		// A take-over moves an unhealthy commitment to another capital position; it is the capital ledger's liquidation.
-		sql`SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
-			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
-			WHERE timeline.chain_id = ${chainId} AND timeline.canonical
-				AND timeline.semantic_event_kind = 'CommitmentTakenOver' AND timeline.block_number <= ${snapshotBlock}
-			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC, timeline.block_hash DESC LIMIT 25`,
 		sql`
 			SELECT count(DISTINCT pool_address)::integer AS pool_total FROM pools
 			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
@@ -272,7 +266,6 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 	const lastPool = poolData.at(-1)
 	return {
 		pools: poolData,
-		recentTakeovers: takeovers,
 		pagination: {
 			poolTotal: Number(totals[0]?.['pool_total'] ?? 0),
 			poolHasMore: pools.length > (options.limit ?? 250),

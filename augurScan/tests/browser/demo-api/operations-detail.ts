@@ -1,4 +1,5 @@
 import { demoTradingActivity } from '../demo-fixtures.ts'
+import { demoCapitalDetail } from './capital-fixtures.ts'
 import { demoHash } from './chain-fixtures.ts'
 import type { DemoEnvironment } from './environment.ts'
 import { demoOperations } from './operations.ts'
@@ -31,6 +32,11 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 				hasMore: false,
 			}
 		return { items: [item], limit: 100, hasMore: continuationFixture, ...(continuationFixture ? { nextCursor: 'demo-detail-older' } : {}) }
+	}
+	if (domain === 'capital') {
+		const detail = demoCapitalDetail(identity[0] ?? '', identity[1] ?? '', operations.asOf.blockNumber, operations.asOf.blockHash)
+		if (detail === undefined) throw new Error('404 Capital position not found')
+		return { chainId, asOf: operations.asOf, data: detail }
 	}
 	if (domain === 'reports') {
 		const report = operations.data.reports.find(item => item.open_oracle_address.toLowerCase() === identity[0]?.toLowerCase() && item.report_id === identity[1])

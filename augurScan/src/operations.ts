@@ -347,3 +347,45 @@ export const candlestickBuckets = (observations: readonly ExactPriceObservation[
 			return { bucketStart, open: serialized(open), high: serialized(high), low: serialized(low), close: serialized(close), observations: entries.length }
 		})
 }
+
+const CAPITAL_WARNING_HEALTH_FACTOR_BPS = 12_000n
+
+type CapitalPositionRisk = {
+	readonly protocolState: 'frozen' | 'healthy' | 'takeover-preconditions-met' | 'unavailable' | 'uncommitted' | 'under-collateralized'
+	readonly scannerSeverity: 'critical' | 'healthy' | 'unavailable' | 'warning'
+	readonly scannerReason: string
+}
+
+/**
+ * Classifies one tagged `capital-owner` read. The protocol facts are the ledger's own: a position is under
+ * its liquidation price when `maxHealthyPrice < liquidationPrice`, and a take-over additionally needs a fresh
+ * price, an open universe and an adverse observation. The warning band is the scanner's, not the protocol's.
+ */
+export const capitalPositionRisk = (state: Readonly<Record<string, unknown>>): CapitalPositionRisk => {
+	const unsigned = (key: string): bigint | undefined => {
+		const value = state[key]
+		return typeof value === 'string' && /^\d+$/.test(value) ? BigInt(value) : undefined
+	}
+	const commitment = unsigned('commitmentAttoEth')
+	if (commitment === undefined) return { protocolState: 'unavailable', scannerSeverity: 'unavailable', scannerReason: 'The tagged read carries no commitment' }
+	if (state['frozen'] === true || state['universeForked'] === true || state['importing'] === true)
+		return { protocolState: 'frozen', scannerSeverity: 'unavailable', scannerReason: state['importing'] === true ? 'The ledger is importing fork choices and is not open yet' : 'The universe forked; the ledger accepts no owner operation and its positions await a branch choice' }
+	if (commitment === 0n) return { protocolState: 'uncommitted', scannerSeverity: 'healthy', scannerReason: 'No commitment is authorized, so no principal backs open interest' }
+	const stalePrice = state['priceValid'] === true ? '' : ' The accepted price has expired, so health is measured against the last accepted price.'
+	if (state['takeoverPreconditionsMet'] === true)
+		return {
+			protocolState: 'takeover-preconditions-met',
+			scannerSeverity: 'critical',
+			scannerReason: 'Pledged REP is below the requirement at the liquidation price and an adverse price observation has started the take-over clock. The ledger cures the position first and rejects the take-over while spare commitment covers the deficit',
+		}
+	// A cohort holds the unmaterialized winning bids of an auction; the ledger takes it over one materialized bid at a time.
+	if (state['belowLiquidationPrice'] === true && state['auctionCohort'] === true)
+		return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `The auction cohort's pledged REP is below the requirement at the liquidation price; it is taken over per bid, once a bid is materialized.${stalePrice}` }
+	if (state['belowLiquidationPrice'] === true) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price; a take-over additionally needs a fresh price and an adverse observation.${stalePrice}` }
+	const health = unsigned('healthFactorBps')
+	// An owner whose commitment is still an unmaterialized auction bid has no index position to compare with the liquidation price.
+	if (health !== undefined && health < 10_000n) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price.${stalePrice}` }
+	if (health === undefined) return { protocolState: 'unavailable', scannerSeverity: 'unavailable', scannerReason: 'The ledger has not accepted a price, so the commitment has no REP requirement yet' }
+	if (health < CAPITAL_WARNING_HEALTH_FACTOR_BPS) return { protocolState: 'healthy', scannerSeverity: 'warning', scannerReason: `Health factor is below the scanner warning threshold of ${CAPITAL_WARNING_HEALTH_FACTOR_BPS} bps.${stalePrice}` }
+	return { protocolState: 'healthy', scannerSeverity: 'healthy', scannerReason: `Health factor is above the scanner warning threshold.${stalePrice}` }
+}
