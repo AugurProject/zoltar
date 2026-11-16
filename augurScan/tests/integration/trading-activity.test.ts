@@ -1,10 +1,8 @@
 import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
-import { abiForKind } from '../../src/abi-catalog.ts'
 import { handleApi } from '../../src/api.ts'
-import { encodeAbiParameters, encodeEventTopics, type Hex } from '../../src/ethereum.ts'
-import { decodeLogRecord } from '../../src/metadata.ts'
 import { initializeSchema } from '../../src/schema.ts'
+import { encodedAmmPairTransfer } from '../support/amm-pair-transfer.ts'
 
 const url = process.env['POSTGRES_TEST_URL']
 const chainId = 1
@@ -21,15 +19,7 @@ const swapper = address('3')
 const settler = address('4')
 const now = 1_767_225_600
 // LP transfers are decoded through the pair ABI, so the stored payload keys follow the compiled ERC-20 event.
-const lpTransfer = (from: string, to: string, value: bigint) => {
-	const event = abiForKind('ammPair')?.find(item => item.type === 'event' && item.name === 'Transfer')
-	if (event?.type !== 'event') throw new Error('Missing compiled AMM pair Transfer event')
-	const topics = encodeEventTopics({ abi: [event], eventName: 'Transfer', args: { from, to } }).flatMap(topic => (typeof topic === 'string' ? [topic] : []))
-	const data: Hex = encodeAbiParameters([{ type: 'uint256' }], [value])
-	const decoded = decodeLogRecord('ammPair', topics, data, new Map())
-	if (decoded.arguments === undefined) throw new Error(`AMM pair Transfer did not decode: ${decoded.summary}`)
-	return decoded.arguments
-}
+const lpTransfer = (from: string, to: string, value: bigint) => encodedAmmPairTransfer(from, to, value).arguments
 const blocks = [
 	{ number: 1, hash: hash(1001), timestamp: now - 200_000 },
 	{ number: 2, hash: hash(1002), timestamp: now - 100 },
