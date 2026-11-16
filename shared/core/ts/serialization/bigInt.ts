@@ -1,11 +1,7 @@
-function compareBigIntAscending(left: bigint, right: bigint) {
-	if (left < right) return -1
-	if (left > right) return 1
-	return 0
-}
+import { compareBigint } from '../math/bigint.js'
 
 export function sortBigIntsAscending(values: bigint[]) {
-	return [...values].sort(compareBigIntAscending)
+	return [...values].sort(compareBigint)
 }
 
 /** `JSON.stringify` replacer that writes every bigint as its decimal string and leaves other values unchanged. */

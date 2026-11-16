@@ -35,6 +35,7 @@ async function requestTransportOnce<TValue>(transport: Transport, parameters: Cl
 			signal: AbortSignal.timeout(transport.requestTimeout),
 		})
 		if (!response.ok) {
+			void response.body?.cancel().catch(() => undefined)
 			throw new RpcError(`HTTP ${response.status} while calling ${parameters.method}`, {
 				code: response.status,
 				shortMessage: `HTTP ${response.status} while calling ${parameters.method}`,

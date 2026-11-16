@@ -56,7 +56,7 @@ A direct Bun process needs an external supervisor.
 
 ### Chain and RPC connectivity
 
-The dashboard's **Chain and RPC connectivity** form is the source of network and endpoint selection. It chain-checks the read, public-submission, and independent quorum RPCs before saving them. An initially unconfigured process remains paused with its dashboard available and begins scanning only after a verified selection is saved. Same-chain RPC changes apply at the next scan. A chain profile includes its signer, markets, selections, strategy, RPCs, and runtime state path. Profiles are private sibling files beside the active operator file, and a newly created profile receives a separate chain-named recovery state path. This prevents transactions, staged operations, and scan state from crossing chains. Docker and direct Bun use the same in-process switching behavior.
+The dashboard's **Chain and RPC connectivity** form is the source of network and endpoint selection. It chain-checks the read, public-submission, and independent quorum RPCs before saving them. An initially unconfigured process remains paused with its dashboard available and begins scanning only after a verified selection is saved. Same-chain RPC changes apply at the next scan. A chain profile includes its signer, markets, selections, strategy, RPCs, and runtime state path. Profiles are private sibling files beside the active operator file, and a newly created profile receives a separate chain-named recovery state path. This prevents transactions and scan state from crossing chains. Docker and direct Bun use the same in-process switching behavior.
 
 Each chain profile saves its own [RPC agreement requirement](../README.md#rpc-agreement-requirement). The default is `1`, so the primary read RPC is sufficient and independent quorum RPCs are optional. Select agreement `2` in **Chain and RPC connectivity** and configure two independent quorum RPC URLs when that chain must retain a two-reader policy. For a critical pool, price, vault, or candidate snapshot, the configured number of readers must respond and every responding reader must agree exactly before a transaction is sent.
 
@@ -169,7 +169,7 @@ The operator file is `version: 2`. A key is required unless the Default column g
 | `connectivity` | object | [shared](../README.md#connectivity) | absent until saved | absent | RPC endpoints and the agreement requirement. |
 | `approvedUniverses` | string array | decimal universe ids below 2^248 | required | `[]` | The operator's truth policy. |
 | `selectedPortfolios` | array | up to 16 address/universe pairs | `[]` | `[]` | Portfolios the bot monitors. |
-| `portfolioPolicy` | object | see [Portfolio operation](#portfolio-operation) | conservative defaults | absent | Portfolio acquisition and scanning limits. |
+| `portfolioPolicy` | object | see [Portfolio operation](#portfolio-operation) | conservative defaults | the defaults | Portfolio acquisition and scanning limits. |
 | `centralizedMarkets` | object | [shared](../README.md#centralizedmarkets-keys) | required | no sources | Root REP market policy. |
 | `childMarketConfigurations` | array | each entry uses the shared keys plus `assetAddress` and `assetChainId` | `[]` | `[]` | Child-universe REP market policies. |
 | `submission` | object | [shared](../README.md#submission) | required | public | Delivery mode and relays. |
@@ -185,8 +185,6 @@ The operator file is `version: 2`. A key is required unless the Default column g
 | `uiPort` | number | 1–65,535 | required | `4183` | Dashboard port. |
 | `pollMilliseconds` | number | 1,000–3,600,000 | required | `12000` | Main loop interval. |
 | `stateFile` | path | — | required | `.state/operator-state.json` | Durable transaction intent, outcomes, and activity journal. |
-| `logLookbackBlocks` | number | 1–256 | `256` | `256` | Latest block window that normal recovery checks, newest first. |
-| `historicalLogRecovery` | boolean | — | `false` | `false` | Enables the historical recovery backfill, which walks older required blocks newest first and saves each successful chunk. |
 
 ### `strategy`
 
@@ -215,7 +213,7 @@ The reusable Ethereum, connectivity, quorum, block synchronization, signer gate,
 
 ## Upgrading
 
-The operator file must use `version: 2`. Deployment addresses come from the selected network's manifest. Removed standalone-pool settings are ignored and disappear on the next save; configure `selectedPortfolios` and `portfolioPolicy` explicitly before enabling portfolio automation. Keep the durable state file and chain profiles so managed exposure and pending transactions remain recoverable.
+The operator file must use `version: 2`. Deployment addresses come from the selected network's manifest. Removed standalone-pool settings (`selectedPools`, `desiredPools`, `deployment`, and the former standalone-pool `strategy` keys) are ignored and disappear on the next save. Any other unknown key at the top level or in `runtime`, `strategy`, or `portfolioPolicy` is rejected at startup, so a misspelled optional key cannot silently take its default; configure `selectedPortfolios` and `portfolioPolicy` explicitly before enabling portfolio automation. Keep the durable state file and chain profiles so managed exposure and pending transactions remain recoverable.
 
 ## Explicit portfolio instructions
 

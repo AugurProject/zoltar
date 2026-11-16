@@ -1,12 +1,13 @@
 // API-reading stages of the canonical lifecycle integration test: log, reorganization, integrity, trading,
 // provenance, and export pagination over the stored chain, including stale-generation cursor rejection.
 import { expect } from 'bun:test'
-import { isLogDetailValue, isRecord } from '../../browser/api-validation.ts'
+import { isLogDetailValue } from '../../browser/api-validation.ts'
 import { handleApi } from '../../src/api.ts'
 import { decodeOpaqueCursor } from '../../src/cursor-codec.ts'
 import { CURRENT_SCHEMA_VERSION } from '../../src/schema-policy.ts'
 import type { LifecycleChain, LifecycleContext } from './canonical-lifecycle-chain.ts'
 import { address, blockHash, chainId, discoveredAddress, rediscoveredAddress, transactionHash } from './postgres-fixtures.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 // Serves canonical and orphaned logs and pins a log page to its snapshot while the indexed head advances.
 // Returns the first page's continuation so a later stage can prove a new invalidation stales it.
@@ -215,8 +216,8 @@ export const expectRunProvenancePagination = async ({ database }: LifecycleConte
 	await database.sql`DELETE FROM indexer_runs`
 	const provenanceResponse = await handleApi(new Request('http://localhost/api/v1/provenance'), database.sql)
 	const provenance = await provenanceResponse?.json()
-	if (!isRecord(provenance) || !Array.isArray(provenance['migrations'])) throw new Error('Provenance migrations are malformed')
-	expect(provenance['migrations'].some(migration => isRecord(migration) && migration['schema_version'] === CURRENT_SCHEMA_VERSION)).toBe(true)
+	if (!isPlainRecord(provenance) || !Array.isArray(provenance['migrations'])) throw new Error('Provenance migrations are malformed')
+	expect(provenance['migrations'].some(migration => isPlainRecord(migration) && migration['schema_version'] === CURRENT_SCHEMA_VERSION)).toBe(true)
 }
 
 // Exports orphaned logs, reads stable single-row export pages, and serves log detail with and without contract identity.

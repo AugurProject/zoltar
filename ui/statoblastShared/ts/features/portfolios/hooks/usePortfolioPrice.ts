@@ -1,4 +1,3 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { collateralPresentation } from '../../../protocol/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -35,7 +34,6 @@ export function accountPriceTarget(account: Pick<PortfolioAccountSnapshot, 'port
 	return { portfolio: account.portfolio, owner: account.owner, universeId: account.universeId, blockHash: account.blockHash, started: !account.importing, reportingDeadline: undefined }
 }
 const actionNames = {
-	resetCollateral: 'resetPortfolioPriceCollateral',
 	prepare: 'preparePortfolioPrice',
 	wrap: 'wrapPortfolioPrice',
 	approveWeth: 'approvePortfolioPriceWeth',
@@ -274,11 +272,9 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 					if (fresh.wrap !== funding?.wrap || latest.ethBalanceAttoEth < fresh.requiredEth) throw new Error('Wallet funding changed. Refresh before wrapping ETH.')
 				},
 			),
-		approve: (token: 'weth' | 'rep', amount: bigint) => {
-			const approvalAction = token === 'weth' ? 'approveWeth' : 'approveRep'
-			const action = amount === 0n && token === 'weth' ? 'resetCollateral' : approvalAction
-			return run(
-				portfolioPriceAction(scope, action),
+		approve: (token: 'weth' | 'rep', amount: bigint) =>
+			run(
+				portfolioPriceAction(scope, token === 'weth' ? 'approveWeth' : 'approveRep'),
 				token === 'weth' ? copy.approveWeth : copy.approveRep,
 				fundingReason,
 				selected => ({
@@ -287,11 +283,8 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 				}),
 				async latest => {
 					freshFunding(latest)
-					const reason = getTokenApprovalResetReason(latest.observation?.wethAllowanceAttoEth, amount, collateral.symbol, token === 'weth' && collateral.symbol === 'USDT')
-					if (reason !== undefined) throw new Error(reason)
 				},
-			)
-		},
+			),
 		request: () =>
 			run(
 				portfolioPriceAction(scope, 'request'),

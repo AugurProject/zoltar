@@ -33,6 +33,16 @@ function includedReceipt(transactionHash: Hash) {
 	return { blockHash: transactionHash, blockNumber: 5n, cumulativeGasUsed: 21_000n, effectiveGasPrice: 1n, from: account, gasUsed: 21_000n, logs: [], status: 'success' as const, to: account, transactionHash, transactionIndex: 0, type: 'eip1559' as const }
 }
 
+/** Stores one pending Mainnet transaction titled `title` for the connected account, then clears the in-memory list as a fresh page load would; returns its storage key. */
+function storePendingActivityForNextLoad(title: string) {
+	setTransactionActivityOwner(account)
+	const storageKey = transactionActivity.value.storageKey
+	if (storageKey === undefined) throw new Error('Expected stored activity for a connected account')
+	window.localStorage.setItem(storageKey, serializeTransactionActivity([{ chainId: 1, hash: pendingHash, scope: ['market:0x1'], status: 'pending', submittedAt: Date.now(), title }]))
+	transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+	return storageKey
+}
+
 function WatchedMenu() {
 	useTransactionActivityReceiptWatcher()
 	return <TransactionActivityMenu />
@@ -203,12 +213,8 @@ test('resumes receipt watching for a pending transaction restored after a reload
 			}),
 	}
 	installActiveEnvironmentForTesting(backend)
-	setTransactionActivityOwner(account)
-	const storageKey = transactionActivity.value.storageKey
-	if (storageKey === undefined) throw new Error('Expected stored activity for a connected account')
-	window.localStorage.setItem(storageKey, serializeTransactionActivity([{ chainId: 1, hash: pendingHash, scope: ['market:0x1'], status: 'pending', submittedAt: Date.now(), title: 'Trade · Will this resolve?' }]))
+	const storageKey = storePendingActivityForNextLoad('Trade · Will this resolve?')
 	// A fresh page load reads the stored list for the same owner.
-	transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 	setTransactionActivityOwner(account)
 	expect(transactionActivity.value.entries[0]?.status).toBe('pending')
 
@@ -246,11 +252,7 @@ test('resumes a pending receipt after returning to its network while ignoring th
 		}),
 	}
 	installActiveEnvironmentForTesting(backend)
-	setTransactionActivityOwner(account)
-	const storageKey = transactionActivity.value.storageKey
-	if (storageKey === undefined) throw new Error('Expected stored activity for a connected account')
-	window.localStorage.setItem(storageKey, serializeTransactionActivity([{ chainId: 1, hash: pendingHash, scope: ['market:0x1'], status: 'pending', submittedAt: Date.now(), title: 'Trade' }]))
-	transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+	storePendingActivityForNextLoad('Trade')
 	const rendered = await renderIntoDocument(<OwnedWatchedMenu environmentRevision={0} />)
 	try {
 		await waitFor(() => expect(waits).toHaveLength(1))

@@ -85,7 +85,6 @@ export const generatedArtifacts: readonly GeneratedArtifact[] = [
 	},
 	{ pattern: 'bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', tracked: true, regenerate: 'cd bots/open-oracle-arbitrager && bun run compile-contracts', reason: arbitragerReason, check: arbitragerCheck, linguist: 'generated' },
 	{ pattern: 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts', tracked: true, regenerate: 'cd bots/open-oracle-arbitrager && bun run compile-contracts', reason: arbitragerReason, check: arbitragerCheck, linguist: 'generated' },
-	{ pattern: 'bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts', tracked: true, regenerate: 'cd bots/open-oracle-arbitrager && bun run generate:abi', reason: arbitragerReason, check: arbitragerCheck, linguist: 'generated' },
 	{ pattern: 'bots/open-oracle-arbitrager/docs/chart-runtime.js', tracked: true, regenerate: 'cd bots/open-oracle-arbitrager && bun run build:docs', reason: 'The static operator guide loads it directly.', check: arbitragerCheck, linguist: 'generated' },
 	{
 		pattern: 'scripts/artifacts/uniswap-deployment.json',

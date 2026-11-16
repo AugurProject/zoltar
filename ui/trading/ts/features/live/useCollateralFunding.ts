@@ -3,11 +3,11 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { collateralAsset, tokenFunded } from '../../protocol/collateral.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
 import type { LiveWorkflowContext } from './liveTradingTypes.js'
 import { useTransactionSubmission } from './useTransactionSubmission.js'
+import { walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '../../copy/collateral.js'
 
 export function useCollateralFunding(market: LiveMarket, required: bigint | undefined, context: LiveWorkflowContext | undefined, enabled: boolean) {
@@ -16,7 +16,6 @@ export function useCollateralFunding(market: LiveMarket, required: bigint | unde
 	const key = `${backend.id}:${context?.configuration.chainId}:${market.pool}:${asset.token}:${context?.configuration.router}:${context?.account}:${market.valuation?.timestamp}`
 	const currentKey = useRef(key)
 	currentKey.current = key
-	const [approvalAmount, setApprovalAmount] = useState<bigint>()
 	const [version, setVersion] = useState(0)
 	const [loaded, setLoaded] = useState<{ key: string; backend: typeof backend; balance?: bigint; allowance?: bigint; error?: string }>()
 	const applicable = tokenFunded(market)
@@ -54,7 +53,7 @@ export function useCollateralFunding(market: LiveMarket, required: bigint | unde
 	else if (selected?.balance !== undefined) balanceState = 'ready'
 	let reason: string | undefined
 	if (enabled && applicable) {
-		if (context?.account === undefined) reason = copy.connect
+		if (context?.account === undefined) reason = walletConnectionRequired
 		else if (selected?.error !== undefined) reason = selected.error
 		else if (selected?.balance === undefined || selected.allowance === undefined) reason = copy.loading
 		else if (required !== undefined && required > selected.balance) reason = copy.insufficient(asset.symbol)
@@ -72,18 +71,13 @@ export function useCollateralFunding(market: LiveMarket, required: bigint | unde
 		readError: selected?.error,
 		retry: () => setVersion(value => value + 1),
 		pending: transaction.state === 'preparing' || transaction.state === 'submitting' || transaction.state === 'pending',
-		resetting: approvalAmount === 0n && (transaction.state === 'preparing' || transaction.state === 'submitting' || transaction.state === 'pending'),
 		approve: async (amount: bigint) => {
 			if (context?.account === undefined || context.walletClient === undefined || !applicable || !enabled || transaction.workflowLocked) return
-			setApprovalAmount(amount)
 			const capturedKey = key
 			const { account, walletClient, configuration } = context
 			await transaction.submit({
 				prepare: async () => {
 					if (currentKey.current !== capturedKey || getActiveBackend() !== backend) throw new Error('Collateral funding context changed. Review again.')
-					const allowance = await walletClient.readContract({ address: asset.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, configuration.router] })
-					const resetReason = getTokenApprovalResetReason(allowance, amount, asset.symbol, asset.symbol === 'USDT')
-					if (resetReason !== undefined) throw new Error(resetReason)
 					return amount
 				},
 				send: async (approved, requestSignature) =>

@@ -289,7 +289,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 			weth: zeroAddress,
 			zoltar: zeroAddress,
 		},
-		discovery: { maxPools: 1, maxQuestions: 1, maxStagedOperationsPerPool: 1, maxUniverses: 1, maxVaultsPerPool: 1 },
+		discovery: { maxPools: 1, maxQuestions: 1, maxUniverses: 1, maxVaultsPerPool: 1 },
 		network: { chainId: 1, explorerUrl: '', maximumBlockIntervalSeconds: 15, name: 'mainnet' },
 		networkConfigured: true,
 		paused: false,

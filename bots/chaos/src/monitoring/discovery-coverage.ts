@@ -19,8 +19,6 @@ function formatDiscoveryIssue(issue: DiscoveryIssue): string {
 			return `Universe discovery truncated at ${issue.retained.toString()} retained universes because the configured resident limit is ${issue.limit.toString()}`
 		case 'pool-prerequisites':
 			return `Pool discovery truncated while prerequisite question or universe topology is incomplete; authenticated ${issue.authenticated} of ${issue.canonicalCount} canonical pool entries`
-		case 'staged-operation-limit':
-			return `Staged-operation discovery truncated for ${issue.coordinator}: exact canonical total ${issue.count} exceeds the configured ${issue.limit.toString()}-entry resident limit`
 		case 'share-fanout':
 			return `Share-inventory discovery truncated because planned approval and migration fan-out is at least ${issue.plannedFanout} entries, exceeding the configured ${issue.limit.toString()}-entry aggregate limit`
 		default: {
@@ -39,8 +37,6 @@ function normalizeDiscoveryIssue(issue: DiscoveryIssue): DiscoveryIssue {
 			return { kind: issue.kind, retained: issue.retained, limit: issue.limit }
 		case 'pool-prerequisites':
 			return { kind: issue.kind, authenticated: BigInt(issue.authenticated).toString(), canonicalCount: BigInt(issue.canonicalCount).toString() }
-		case 'staged-operation-limit':
-			return { kind: issue.kind, coordinator: issue.coordinator, count: BigInt(issue.count).toString(), limit: issue.limit }
 		case 'share-fanout':
 			return { kind: issue.kind, plannedFanout: BigInt(issue.plannedFanout).toString(), limit: issue.limit }
 		default: {

@@ -1,3 +1,5 @@
+import { executorArtifact } from '#contracts/artifacts.generated'
+
 export { erc20Abi, openOracleAbi, openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 export { constantProductPairAbi } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 
@@ -54,6 +56,6 @@ export const augurMarketAbi = [
 	{ type: 'function', name: 'getNumberOfOutcomes', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
 ] as const
 
-export { openOracleArbitrageExecutorAbi } from '#contracts/executor-abi.generated'
+export const openOracleArbitrageExecutorAbi = executorArtifact.abi
 
 export const multicall3Abi = [{ type: 'function', name: 'getEthBalance', stateMutability: 'view', inputs: [{ name: 'addr', type: 'address' }], outputs: [{ name: 'balance', type: 'uint256' }] }] as const

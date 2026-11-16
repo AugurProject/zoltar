@@ -1,7 +1,5 @@
 import { useOpenOracleLiveReport } from './useOpenOracleLiveReport.js'
-import { createReportWrapShortfall, validateCreateReportApproval } from '../lib/createFunding.js'
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createReportWrapShortfall } from '../lib/createFunding.js'
 import { useSignal } from '@preact/signals'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { useEffect, useRef } from 'preact/hooks'
@@ -260,9 +258,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						requirement: token === 'token1' ? disputeSubmission.token1Approval : disputeSubmission.token2Approval,
 						tokenLabel,
 					})
-					const approvalRequirement = token === 'token1' ? disputeSubmission.token1Approval : disputeSubmission.token2Approval
-					const resetReason = getTokenApprovalResetReason(approvalRequirement.approvedAmount, approvalAmount, tokenLabel, tokenLabel === 'USDT' || (token === 'token1' ? reportDetails.token1 : reportDetails.token2).toLowerCase() === getActiveNetworkProfile().usdtAddress?.toLowerCase())
-					if (resetReason !== undefined) throw new Error(resetReason)
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), token === 'token1' ? reportDetails.token1 : reportDetails.token2, getOpenOracleAddress(), approvalAmount, action)
 				},
 				`Failed to approve ${tokenLabel}`,
@@ -275,8 +270,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		await runOracleAction(
 			token === 'token1' ? 'approveToken1' : 'approveToken2',
 			async (walletAddress, context) => {
-				const client = dependencies.createConnectedReadClient()
-				await validateCreateReportApproval(client, tokenAddress, walletAddress, amount)
 				if (parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], 'Token address') !== tokenAddress) throw new Error('Report token changed. Review again.')
 				return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), tokenAddress, getOpenOracleAddress(), amount, token === 'token1' ? 'approveToken1' : 'approveToken2')
 			},

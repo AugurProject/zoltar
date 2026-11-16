@@ -38,7 +38,6 @@ export type DeploymentSettings = {
 type DiscoverySettings = {
 	maxPools: number
 	maxQuestions: number
-	maxStagedOperationsPerPool: number
 	maxUniverses: number
 	maxVaultsPerPool: number
 }
@@ -178,18 +177,16 @@ function parseNetwork(value: unknown): OperatorSettings['network'] {
 
 function parseDiscovery(value: unknown): DiscoverySettings {
 	const discovery = requiredRecord(value, 'discovery')
-	const keys = ['maxPools', 'maxQuestions', 'maxStagedOperationsPerPool', 'maxUniverses', 'maxVaultsPerPool'] as const
+	const keys = ['maxPools', 'maxQuestions', 'maxUniverses', 'maxVaultsPerPool'] as const
 	assertExactKeys(discovery, keys, [], 'discovery')
 	const parsed = {
 		maxPools: integer(discovery['maxPools'], 'discovery.maxPools', 1, 10_000),
 		maxQuestions: integer(discovery['maxQuestions'], 'discovery.maxQuestions', 1, 10_000),
-		maxStagedOperationsPerPool: integer(discovery['maxStagedOperationsPerPool'], 'discovery.maxStagedOperationsPerPool', 1, 10_000),
 		maxUniverses: integer(discovery['maxUniverses'], 'discovery.maxUniverses', 1, 10_000),
 		maxVaultsPerPool: integer(discovery['maxVaultsPerPool'], 'discovery.maxVaultsPerPool', 1, 10_000),
 	}
 	if (parsed.maxPools * parsed.maxUniverses > MAXIMUM_DISCOVERY_AGGREGATE_ITEMS) throw new Error(`discovery.maxPools × discovery.maxUniverses must not exceed ${MAXIMUM_DISCOVERY_AGGREGATE_ITEMS.toString()} aggregate entries`)
 	if (parsed.maxPools * parsed.maxVaultsPerPool > MAXIMUM_DISCOVERY_AGGREGATE_ITEMS) throw new Error(`discovery.maxPools × discovery.maxVaultsPerPool must not exceed ${MAXIMUM_DISCOVERY_AGGREGATE_ITEMS.toString()} aggregate entries`)
-	if (parsed.maxPools * parsed.maxStagedOperationsPerPool > MAXIMUM_DISCOVERY_AGGREGATE_ITEMS) throw new Error(`discovery.maxPools × discovery.maxStagedOperationsPerPool must not exceed ${MAXIMUM_DISCOVERY_AGGREGATE_ITEMS.toString()} aggregate entries`)
 	return parsed
 }
 
@@ -273,18 +270,18 @@ function parseStrategy(value: unknown): StrategySettings {
 	}
 }
 
-function parseDeploymentPin(value: unknown, network: OperatorSettings['network']): DeploymentSettings {
-	const pin = requiredRecord(value, 'deploymentPin')
-	const addressKeys = ['multicall3', 'openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
-	assertExactKeys(pin, ['factoryId', 'profileId', ...addressKeys], [], 'deploymentPin')
-	const address = (key: (typeof addressKeys)[number]) => {
+export const DEPLOYMENT_PIN_ADDRESS_KEYS = ['multicall3', 'openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
+
+/** Reads the pinned contract addresses; the caller owns the record's key set and its derived identities. */
+export function parseDeploymentPinAddresses(pin: Record<string, unknown>) {
+	const address = (key: (typeof DEPLOYMENT_PIN_ADDRESS_KEYS)[number]) => {
 		const value = pin[key]
 		if (typeof value !== 'string') throw new Error(`deploymentPin.${key} must be an address`)
 		const parsed = getAddress(value)
 		if (parsed === zeroAddress) throw new Error(`deploymentPin.${key} must not be the zero address`)
 		return parsed
 	}
-	const deployment = {
+	return {
 		multicall3: address('multicall3'),
 		openOracle: address('openOracle'),
 		questionData: address('questionData'),
@@ -296,6 +293,12 @@ function parseDeploymentPin(value: unknown, network: OperatorSettings['network']
 		weth: address('weth'),
 		zoltar: address('zoltar'),
 	}
+}
+
+function parseDeploymentPin(value: unknown, network: OperatorSettings['network']): DeploymentSettings {
+	const pin = requiredRecord(value, 'deploymentPin')
+	assertExactKeys(pin, ['factoryId', 'profileId', ...DEPLOYMENT_PIN_ADDRESS_KEYS], [], 'deploymentPin')
+	const deployment = parseDeploymentPinAddresses(pin)
 	if (pin['profileId'] !== executionProfileId({ deployment, network })) throw new Error('deploymentPin does not match its chain and deployment addresses')
 	if (pin['factoryId'] !== deploymentFactoryId(pin['profileId'], deployment.uniswapV3Factory)) throw new Error('deploymentPin factory does not match its saved identity')
 	assertSepoliaUniswapFactory(network.chainId, deployment.uniswapV3Factory)

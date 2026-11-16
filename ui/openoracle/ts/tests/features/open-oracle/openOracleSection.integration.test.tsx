@@ -2,7 +2,6 @@ import { test_statoblast_CollateralTestToken_CollateralTestToken as collateralAr
 import { deployContract } from '../../../../../../solidity/ts/testSupport/deployContract.js'
 import { applyLibraries } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
-import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 /// <reference types="bun-types" />
 
@@ -345,13 +344,10 @@ describe.serial('OpenOracleSection integration', () => {
 		expect(reportDetails.reportTimestamp > 0n).toBe(true)
 	})
 
-	test('creates a six-decimal report through explicit reset and approval controls for a no-return token', async () => {
-		const token = await deployContract(client, encodeDeployData({ abi: collateralArtifact.abi, bytecode: applyLibraries(collateralArtifact.evm.bytecode.object), args: [6, true] }))
+	test('creates a six-decimal report by raising an existing allowance in one approval', async () => {
+		const token = await deployContract(client, encodeDeployData({ abi: collateralArtifact.abi, bytecode: applyLibraries(collateralArtifact.evm.bytecode.object), args: [6] }))
 		await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: token, abi: collateralArtifact.abi, functionName: 'mint', args: [walletAddress, 1_000_000_000n] }) })
 		await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: token, abi: collateralArtifact.abi, functionName: 'approve', args: [getOpenOracleAddress(), 1n] }) })
-		const profile = getActiveNetworkProfile()
-		resetActiveEnvironment?.()
-		resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...profile, usdtAddress: token } }))
 		const rendered = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
 		cleanupRenderedComponent = rendered.cleanup
 		await fillOpenOracleCreateForm()
@@ -359,10 +355,8 @@ describe.serial('OpenOracleSection integration', () => {
 		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Wrap ETH'))
 		await clickElement(within(document.body).getByRole('button', { name: 'Wrap ETH' }))
 		await waitForLatestAction('wrapWeth')
-		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Reset TEST approval'))
 		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report')
-		await clickElement(within(document.body).getByRole('button', { name: 'Reset TEST approval' }))
-		await waitFor(async () => expect(await uiReadClient.readContract({ address: token, abi: collateralArtifact.abi, functionName: 'allowance', args: [walletAddress, getOpenOracleAddress()] })).toBe(0n))
+		expect(within(document.body).queryByRole('button', { name: /Reset/ })).toBeNull()
 		for (const symbol of ['TEST', 'WETH']) {
 			const approval = () => Array.from(document.querySelectorAll('button')).find(button => button.textContent?.trim().startsWith('Approve ') && button.textContent.includes(symbol))
 			await waitFor(() => expect(approval()?.disabled).toBe(false))

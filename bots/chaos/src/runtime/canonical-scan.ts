@@ -60,7 +60,7 @@ export type CanonicalScanOptions = {
 	clock?: (() => number) | undefined
 }
 
-function requiredConnectivity(settings: OperatorSettings) {
+export function requiredConnectivity(settings: OperatorSettings) {
 	if (settings.connectivity === undefined) throw new Error('Canonical scanning requires configured RPC connectivity')
 	return settings.connectivity
 }

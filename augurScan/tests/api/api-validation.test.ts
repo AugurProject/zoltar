@@ -15,7 +15,6 @@ import {
 	isRichListRecordValue,
 	isUniswapPriceValue,
 	isUniverseStateEntityValue,
-	isVaultStateEntityValue,
 	operationRecords,
 	operationsCatalogRecords,
 	operationsRiskPagination,
@@ -46,12 +45,12 @@ test('fails closed on malformed Operations boundaries, pagination, and records',
 	expect(operationsCatalogRecords('integrity', [{ id: '1', reason: 'chain-reorg', causes: ['chain-reorg'], occurrence_counts: { block: '2' } }])).toHaveLength(1)
 	expect(() => operationsCatalogRecords('integrity', [{ id: '1', reason: 'chain-reorg', causes: [], occurrence_counts: { block: 2 } }])).toThrow('Operations integrity records are malformed')
 	expect(operationsCatalogRecords('reports', [{ open_oracle_address: '0x529dcaC57677451CBfe766d88CcC133D082500df', report_id: '1842' }])).toHaveLength(1)
-	expect(operationsRiskRecords('vaults', [{ pool_address: `0x${'2'.repeat(40)}`, vault_address: `0x${'3'.repeat(40)}` }])).toHaveLength(1)
-	expect(() => operationsRiskRecords('vaults', [{ pool_address: `0x${'2'.repeat(40)}` }])).toThrow('Operations risk vaults records are malformed')
-	expect(operationsRiskPagination({ poolTotal: 1, poolHasMore: true, poolNextCursor: 'pool-2', vaultTotal: 0, vaultHasMore: false }, true)).toMatchObject({
+	expect(operationsRiskRecords([{ pool_address: `0x${'2'.repeat(40)}` }])).toHaveLength(1)
+	expect(() => operationsRiskRecords([{ pool_address: 'pool' }])).toThrow('Operations risk pools records are malformed')
+	expect(operationsRiskPagination({ poolTotal: 1, poolHasMore: true, poolNextCursor: 'pool-2' }, true)).toMatchObject({
 		poolNextCursor: 'pool-2',
 	})
-	expect(() => operationsRiskPagination({ poolTotal: 1, poolHasMore: true, vaultTotal: 0, vaultHasMore: false }, true)).toThrow('Operations risk poolNextCursor is malformed')
+	expect(() => operationsRiskPagination({ poolTotal: 1, poolHasMore: true }, true)).toThrow('Operations risk poolNextCursor is malformed')
 })
 
 test('validates state-history range and completeness metadata', () => {
@@ -135,12 +134,10 @@ const richListRecord = {
 	transaction_count: '1',
 	interaction_count: '2',
 	pool_count: '0',
-	vault_count: '0',
 	rep_balances: [],
 	weth_balances: [],
 	native_balance_detail: null,
 	pool_associations: [],
-	vault_positions: [],
 }
 
 test('accepts production-shaped unknown logs, unknown calldata, partial related logs, and pending balances', () => {
@@ -217,10 +214,10 @@ test('validates nested state rows and complete specialized price records', () =>
 	const repEth = {
 		timestamp: '2026-08-19T00:00:00.000Z',
 		block_number: '12',
-		event_name: 'RepEthPriceSet',
-		report_id: null,
+		event_name: 'PriceReported',
+		report_id: '7',
 		rep_per_eth_1e18: '18000000000000000000',
-		settlement_timestamp: null,
+		settlement_timestamp: '2026-08-19T00:00:00.000Z',
 	}
 	const uniswap = {
 		timestamp: '2026-08-19T00:00:00.000Z',
@@ -265,7 +262,6 @@ test('rejects malformed nested records before rendering', () => {
 	).toBeFalse()
 	expect(isAccountTransactionValue({ ...accountTransaction, action_argument_schema: [null] })).toBeFalse()
 	expect(isRichListRecordValue({ ...richListRecord, rep_balances: [null] })).toBeFalse()
-	expect(isRichListRecordValue({ ...richListRecord, vault_positions: [null] })).toBeFalse()
 	expect(isRichListRecordValue({ ...richListRecord, pool_associations: [{ address: null }] })).toBeFalse()
 	expect(isRichListRecordValue({ ...richListRecord, native_balance_detail: { balance: '1', blockNumber: null } })).toBeFalse()
 })
@@ -279,37 +275,14 @@ test('requires complete, renderable state catalog entities', () => {
 		universe_id: '0',
 		question_id: 'question',
 		question_title: null,
-		collateral_repair_auction_address: 'auction',
 		coordinator_address: 'coordinator',
 		share_token_address: 'shares',
 		security_multiplier_bps: '15000',
 		initial_priority_fee_atto_eth_per_gas: '1',
-		initial_retention_rate: '2',
-		initial_settlement_collateral_atto_eth: '3',
 		settlement_collateral_atto_eth: null,
-		total_capacity_ownership_atto_rep: null,
-		fee_eligible_capacity_ownership_atto_rep: null,
-		total_claimable_vault_fees_atto_eth: null,
-		unallocated_accrued_fees_atto_eth: null,
-		current_retention_rate: null,
-		vault_count: '0',
+		share_token_supply_atto_shares: null,
 		child_count: '0',
 		snapshot_block: null,
-	}
-	const vault = {
-		chain_id: '1',
-		network_id: 'mainnet',
-		pool_address: 'pool',
-		vault_address: 'vault',
-		question_title: null,
-		rep_backing_units: '1',
-		capacity_ownership_atto_rep: '2',
-		claimable_fees_atto_eth: '3',
-		fee_index: '4',
-		vault_fee_remainder: '5',
-		resulting_total_rep_backing_units: '6',
-		resulting_fee_eligible_capacity_ownership_atto_rep: '7',
-		block_number: '8',
 	}
 	const question = {
 		chain_id: '1',
@@ -348,11 +321,10 @@ test('requires complete, renderable state catalog entities', () => {
 	}
 
 	expect(isPoolStateEntityValue(pool)).toBeTrue()
-	expect(isVaultStateEntityValue(vault)).toBeTrue()
 	expect(isQuestionStateEntityValue(question)).toBeTrue()
 	expect(isUniverseStateEntityValue(universe)).toBeTrue()
 	expect(isPoolStateEntityValue({ ...pool, share_token_address: null })).toBeFalse()
-	expect(isVaultStateEntityValue({ ...vault, fee_index: undefined })).toBeFalse()
+	expect(isPoolStateEntityValue({ ...pool, share_token_supply_atto_shares: undefined })).toBeFalse()
 	expect(isQuestionStateEntityValue({ ...question, outcome_options: [null] })).toBeFalse()
 	expect(isUniverseStateEntityValue({ ...universe, reputation_token_address: null })).toBeFalse()
 })

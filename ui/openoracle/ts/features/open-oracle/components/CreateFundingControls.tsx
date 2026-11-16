@@ -4,7 +4,6 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import * as oracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as copy from '../copy/funding.js'
-import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import type { useCreateFunding } from '../hooks/useCreateFunding.js'
 
@@ -29,7 +28,7 @@ export function CreateFundingControls({
 }) {
 	let wrapReason = guard
 	if (wrapReason === undefined && funding.loading) wrapReason = copy.loading
-	else if (wrapReason === undefined && funding.wrap === 0n) wrapReason = copy.notNeeded
+	else if (wrapReason === undefined && funding.wrap === 0n) wrapReason = common.notNeeded
 	const tokens = funding.tokens
 	if (tokens.length === 0) return undefined
 	return (
@@ -40,22 +39,9 @@ export function CreateFundingControls({
 			) : undefined}
 			{tokens.map((token, index) => {
 				const symbol = symbols[index] ?? copy.funding
-				const usdt = token.token?.toLowerCase() === getActiveNetworkProfile().usdtAddress?.toLowerCase()
-				let resetReason = guard ?? funding.error
-				if (resetReason === undefined && token.access === undefined) resetReason = copy.loading
-				else if (resetReason === undefined && token.access?.allowance === 0n) resetReason = copy.notNeeded
+				const approvalActionPending = activeAction === `approveToken${index + 1}`
 				return (
 					<div key={token.key}>
-						{usdt ? (
-							<TransactionActionButton
-								idleLabel={common.formatResetTokenApproval(symbol)}
-								pendingLabel={common.formatApprovingToken(symbol)}
-								pending={activeAction === `approveToken${index + 1}`}
-								availability={{ disabled: disabled || token.access === undefined || token.access.allowance === 0n || approve === undefined, reason: resetReason }}
-								onClick={() => approve?.(token.key, 0n)}
-								tone='secondary'
-							/>
-						) : undefined}
 						<TokenApprovalControl
 							actionLabel={oracleCopy.createStandaloneReport}
 							allowanceError={undefined}
@@ -63,11 +49,10 @@ export function CreateFundingControls({
 							approvedAmount={token.access?.allowance}
 							disabled={disabled || approve === undefined}
 							guardMessage={guard}
-							requiresAllowanceReset={usdt}
 							onApprove={amount => {
 								if (amount !== undefined) approve?.(token.key, amount)
 							}}
-							pending={activeAction === `approveToken${index + 1}`}
+							pending={approvalActionPending}
 							pendingLabel={common.formatApprovingToken(symbol)}
 							requiredAmount={token.required}
 							resetKey={`${token.token}:${token.required}`}

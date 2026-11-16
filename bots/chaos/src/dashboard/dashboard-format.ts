@@ -65,13 +65,6 @@ export function parsePositiveNumber(value: string | number | undefined) {
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
-export function publicCandidateCount(value: string | number | undefined) {
-	if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : undefined
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined
-	const count = BigInt(value)
-	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
-}
-
 export function formatClockDuration(totalSeconds: number) {
 	const seconds = Math.max(0, Math.floor(totalSeconds))
 	const hours = Math.floor(seconds / 3_600)
@@ -96,7 +89,7 @@ export function obligationDetail(obligation: Obligation) {
 		return `${ecosystemLabel(obligation.ecosystem)} · ${obligation.automaticRetryCount.toString()} of ${obligation.automaticRetryLimit.toString()} included attempts failed · next attempt ${formatDate(obligation.notBefore)}`
 	}
 	if (obligation.status === 'deferred') return `${ecosystemLabel(obligation.ecosystem)} · tracked, not currently actionable`
-	return `${ecosystemLabel(obligation.ecosystem)} · due ${formatDate(obligation.dueAt)}`
+	return `${ecosystemLabel(obligation.ecosystem)} · deadline ${formatDate(obligation.expiresAt)}`
 }
 
 export function recoveryItemCount(value: Snapshot) {

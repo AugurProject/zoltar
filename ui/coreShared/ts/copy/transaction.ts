@@ -52,7 +52,6 @@ export const dismiss = 'Dismiss'
 
 export const paidFrom = 'Paid from'
 export const walletRep = 'Wallet REP'
-export const vaultBackedRep = 'Pool vault REP'
 export const reportingAction = (outcome: string, amount: string) => `Report ${outcome} · ${amount}\u00a0REP`
 export const settleReportNumber = (id: string) => `Settle report #${id}`
 
@@ -67,7 +66,6 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	deposit: { title: wrapEthIntoWeth, completedTitle: ethWrapped, description: 'Convert ETH into WETH held in your wallet to fund the oracle report.' },
 	requestPrice: { title: 'Request new price', completedTitle: priceRequested, description: 'Fund and start an oracle price report using your approved REP and WETH.' },
 	approve: { title: 'Approve token spending', completedTitle: 'Token spending approved', description: 'Authorize the listed spending limit; tokens stay in your wallet.' },
-	depositToEscalationGame: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	depositRepOnOutcome: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	depositWalletRepToEscalationGame: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	withdrawFromEscalationGame: { title: settleEscalationDeposits, completedTitle: escalationDepositsSettled, description: 'Settle the selected deposits after resolution.' },

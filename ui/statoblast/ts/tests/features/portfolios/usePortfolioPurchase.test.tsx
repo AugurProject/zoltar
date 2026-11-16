@@ -107,21 +107,13 @@ test('USDC purchases parse six decimals and require a separate token approval', 
 	expect(decodeFunctionData({ abi, data: purchase.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, 2_000_000n, owner, 900_000n, 20_000n] })
 })
 
-test('USDT approvals require a separate reset even when the existing allowance covers the purchase', async () => {
-	const collateralToken = '0xdAC17F958D2ee523a2206206994597C13D831ec7' as const
-	const snapshot = capitalSnapshot({ collateralToken, collateral: { address: collateralToken, symbol: 'USDT', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 5_000_000n })
-	const { hook, source, requests } = await setup(snapshot)
-	source.setRead('allowance', 5_000_000n)
+test('raising an existing collateral allowance is one approval that needs no reset', async () => {
+	const snapshot = capitalSnapshot({ collateral: { address: token, symbol: 'USDC', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 5_000_000n })
+	const { hook, requests } = await setup(snapshot)
 	await act(() => hook.state().approve(10_000_000n))
+	expect(requests).toHaveLength(1)
 	const increase = requests[0]
 	if (increase === undefined) throw new Error('Missing approval')
-	await expect(increase.validateBeforeSubmit?.()).rejects.toThrow('Reset USDT approval first.')
-	await act(() => hook.state().approve(0n))
-	const reset = requests[1]
-	if (reset === undefined) throw new Error('Missing reset')
-	await reset.validateBeforeSubmit?.()
-	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: reset.data }).args).toEqual([snapshot.services, 0n])
-	source.setRead('allowance', 0n)
-	await increase.validateBeforeSubmit?.()
-	expect(requests).toHaveLength(2)
+	expect(increase.validateBeforeSubmit).toBeUndefined()
+	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: increase.data }).args).toEqual([snapshot.services, 10_000_000n])
 })

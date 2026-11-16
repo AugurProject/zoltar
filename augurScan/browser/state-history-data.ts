@@ -1,7 +1,8 @@
 import type { EntityHistory, StateEntity, StateTab } from './browser-types.ts'
 import { decodeEntityHistory } from './api-decoding.ts'
-import { isRecord, type EntityHistoryCoverageValue } from './api-validation.ts'
+import type { EntityHistoryCoverageValue } from './api-validation.ts'
 import { collectCursorCollections, compareCanonicalEventPosition } from './canonical-pagination.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export const entityHistoryCollectionKeys = ['snapshots', 'events', 'ammPrices', 'repEthPrices', 'uniswapRepEthPrices', 'openOracleHistory', 'pools', 'forks'] as const
 
@@ -26,7 +27,6 @@ export const createStateHistoryData = (api: (path: string) => Promise<unknown>, 
 		if (cursor !== undefined) range.set('cursor', cursor)
 		const suffix = range.size === 0 ? '' : `?${range}`
 		if (type === 'pools' && 'pool_address' in item) return decodeEntityHistory(await api(`/api/v1/state/pools/${item.chain_id}/${item.pool_address}${suffix}`))
-		if (type === 'vaults' && 'vault_address' in item) return decodeEntityHistory(await api(`/api/v1/state/vaults/${item.chain_id}/${item.pool_address}/${item.vault_address}${suffix}`))
 		if (type === 'questions' && 'question_id' in item) return decodeEntityHistory(await api(`/api/v1/state/questions/${item.chain_id}/${item.question_id}${suffix}`))
 		if ('universe_id' in item) return decodeEntityHistory(await api(`/api/v1/state/universes/${item.chain_id}/${item.universe_id}${suffix}`))
 		throw new Error(`State entity does not match the selected ${type} tab`)
@@ -57,7 +57,7 @@ export const createStateHistoryData = (api: (path: string) => Promise<unknown>, 
 		)
 		if (firstPage === undefined || anchor === undefined) throw new Error('State history returned no pages')
 		const anchoredCoverage = anchor
-		const chronological = (records: readonly unknown[]) => records.toSorted((left, right) => (isRecord(left) && isRecord(right) ? compareCanonicalEventPosition(left, right) : 0))
+		const chronological = (records: readonly unknown[]) => records.toSorted((left, right) => (isPlainRecord(left) && isPlainRecord(right) ? compareCanonicalEventPosition(left, right) : 0))
 		const collections = Object.fromEntries(entityHistoryCollectionKeys.map(key => [key, chronological(collected.collections[key] ?? [])]))
 		const series = Object.fromEntries(entityHistoryCollectionKeys.filter(key => key in anchoredCoverage.series).map(key => [key, collections[key]?.length ?? 0]))
 		const decoded = decodeEntityHistory({

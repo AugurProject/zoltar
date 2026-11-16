@@ -2,7 +2,7 @@ import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/configuration-commit.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS } from '../support/chromium.ts'
-import { connectToChromium, state, walletAddress } from '../support/dashboard-harness.ts'
+import { connectToChromium, inertDashboardControls, state, walletAddress } from '../support/dashboard-harness.ts'
 
 browserTest(
 	'permanently freezes dashboard mutations after an indeterminate configuration commit',
@@ -28,17 +28,10 @@ browserTest(
 				{ id: '12'.repeat(32), active: false, revision: 'archive-revision', profileId: 'profile:v1:old', addresses: [] },
 			],
 			getState: () => state({ signerReady: true, wallet: walletAddress }),
-			hostname: '127.0.0.1',
-			setCancellation: () => {},
-			setCandidate: () => {},
-			setObligation: () => {},
-			setPaused: () => {},
-			setReplacement: () => {},
-			setSettings: () => {},
+			...inertDashboardControls,
 			setSigner: () => {
 				throw indeterminate
 			},
-			setWorkflow: () => {},
 		})
 		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
 		try {

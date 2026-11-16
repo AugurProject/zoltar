@@ -281,10 +281,6 @@
 			"bun": "./ts/protocol/reviewedBackend.ts",
 			"default": "./js/protocol/reviewedBackend.js"
 		},
-		"./copy/priceRequest.js": {
-			"bun": "./ts/copy/priceRequest.ts",
-			"default": "./js/copy/priceRequest.js"
-		},
 		"./features/reporting/lib/escalationReminder.js": {
 			"bun": "./ts/features/reporting/lib/escalationReminder.ts",
 			"default": "./js/features/reporting/lib/escalationReminder.js"
@@ -440,6 +436,10 @@
 		"./copy/portfolio.js": {
 			"bun": "./ts/copy/portfolio.ts",
 			"default": "./js/copy/portfolio.js"
+		},
+		"./copy/collateral.js": {
+			"bun": "./ts/copy/collateral.ts",
+			"default": "./js/copy/collateral.js"
 		},
 		"./features/portfolios/components/PortfolioTakeover.js": {
 			"bun": "./ts/features/portfolios/components/PortfolioTakeover.tsx",

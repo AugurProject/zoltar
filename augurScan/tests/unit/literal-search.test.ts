@@ -4,14 +4,25 @@ import { logListRows } from '../../src/repositories/logs.ts'
 import { timelineCatalogRows } from '../../src/repositories/timeline.ts'
 import { tradingCatalogRows } from '../../src/repositories/trading-catalog.ts'
 
-// Capture only the database call boundary so the real repositories build each query.
+// Capture only the database call boundary so the real repositories build each query. A tagged call
+// is recorded when it is awaited; one embedded in another query as a fragment contributes its
+// bindings to that query instead.
 function captureQueries() {
 	const bindings: unknown[][] = []
+	const fragments = new WeakMap<object, readonly unknown[]>()
+	const expand = (values: readonly unknown[]): unknown[] => values.flatMap(value => (typeof value === 'object' && value !== null && fragments.has(value) ? expand(fragments.get(value) ?? []) : [value]))
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused')
 	const sql = new Proxy(database, {
 		apply(_target, _receiver, argumentsList) {
-			bindings.push(argumentsList.slice(1))
-			return Promise.resolve([])
+			const values = argumentsList.slice(1)
+			const query = {
+				then: (resolve: (rows: unknown[]) => void) => {
+					bindings.push(expand(values))
+					resolve([])
+				},
+			}
+			fragments.set(query, values)
+			return query
 		},
 		get(target, property, receiver) {
 			if (property === 'unsafe')

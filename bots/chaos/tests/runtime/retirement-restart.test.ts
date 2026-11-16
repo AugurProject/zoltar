@@ -1,5 +1,6 @@
 import { resetPristineStateForDeploymentProfile, retirementReplacementTargetId } from '../../src/runtime/deployment-profile.ts'
 import { afterEach, describe, expect, test } from 'bun:test'
+import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +14,7 @@ import { initialDurableState, initialRuntimeState } from '../../src/state/initia
 import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, requestRetirement, uniswapV3PositionKey } from '../../src/state/retirement.ts'
 import { createDurableWorkflow } from '../../src/runtime/workflows.ts'
 import { readV3PositionsWithQuorum, reconcileV3PositionJournal, recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
-import { address, hash, snapshotFixture } from '../operations/fixture.ts'
+import { address, drainedWalletSnapshotFixture, hash } from '../operations/fixture.ts'
 
 const directories: string[] = []
 
@@ -28,15 +29,8 @@ async function statePath() {
 }
 
 function emptySnapshot() {
-	const snapshot = snapshotFixture()
+	const snapshot = drainedWalletSnapshotFixture()
 	snapshot.wallet.ethBalanceAttoEth = '0'
-	snapshot.wallet.tokens = []
-	snapshot.wallet.shares = []
-	snapshot.wallet.lpTokens = []
-	snapshot.wallet.openOracleEthCredit = '0'
-	snapshot.portfolioCapital = []
-	for (const pair of snapshot.pairs) pair.walletLiquidity = '0'
-	snapshot.warnings = []
 	return snapshot
 }
 
@@ -109,18 +103,47 @@ describe('Drain & Retire persisted restart behavior', () => {
 		const second = serveBlock()
 		try {
 			const settings = liveSettings()
-			settings.connectivity = { publicRpcUrls: [first.url.origin], readRpcUrl: first.url.origin, quorumRpcUrls: [second.url.origin], rpcQuorum: 1 }
+			settings.connectivity = { publicRpcUrls: [first.url.origin], readRpcUrl: first.url.origin, quorumRpcUrls: [second.url.origin], rpcQuorum: 2 }
 			const pool = createChaosReadPool(settings)
 			const anchor = { blockHash: hash(101), blockNumber: 101n }
 			expect(await retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).toBeTrue()
 			canonicalHash = hash(99)
 			expect(await retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).toBeFalse()
+			second.stop(true)
+			await expect(retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).rejects.toBeInstanceOf(ConnectivityDegradedError)
 			const scan = { anchor: { ...anchor, baseFeePerGas: 1n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot }
 			updateRetirementAssessment(scan, settings, state, [], false)
 			expect(state.retirement.completionEvidence).toMatchObject({ blockHash: hash(101), blockNumber: '101' })
 		} finally {
 			first.stop(true)
 			second.stop(true)
+		}
+	})
+
+	test('checks an old completion block against a single reader when the configured quorum is one', async () => {
+		const snapshot = emptySnapshot()
+		const state = requestedState(snapshot)
+		const path = await statePath()
+		await cycle(path, state, snapshot, [], undefined, 100n)
+		let canonicalHash = hash(100)
+		const reader = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const body = await request.json()
+				const id = typeof body === 'object' && body !== null ? Reflect.get(body, 'id') : undefined
+				return Response.json({ id, jsonrpc: '2.0', result: { hash: canonicalHash, number: '0x64', timestamp: '0x1', transactions: [] } })
+			},
+		})
+		try {
+			const settings = liveSettings()
+			settings.connectivity = { publicRpcUrls: [reader.url.origin], readRpcUrl: reader.url.origin, quorumRpcUrls: [], rpcQuorum: 1 }
+			const pool = createChaosReadPool(settings)
+			const anchor = { blockHash: hash(101), blockNumber: 101n }
+			expect(await retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).toBeTrue()
+			canonicalHash = hash(99)
+			expect(await retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).toBeFalse()
+		} finally {
+			reader.stop(true)
 		}
 	})
 

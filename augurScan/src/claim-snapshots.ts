@@ -1,5 +1,6 @@
 import { allocatedWinningPayout, ordinaryWinningPayout } from './claim-payout.ts'
-import { bagCarryPeaks, compareBigintAscending, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
+import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { abiForKind } from './abi-catalog.ts'
 import { type AbiValue, type Address, type Hex, getAddress, zeroAddress } from './ethereum.ts'
@@ -90,7 +91,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			leaves.push({ ...leaf, localIndex: 0n, active: isActive, leafHash: isActive ? hashCarryLeaf(leaf, outcome) : ZERO })
 			nodeId = uint(node[0])
 		}
-		leaves.sort((a, b) => compareBigintAscending(a.index, b.index))
+		leaves.sort((a, b) => compareBigint(a.index, b.index))
 		return leaves.map((leaf, index) => ({ ...leaf, localIndex: BigInt(index) }))
 	}
 	const histories = new Map<string, Promise<{ leaves: Leaf[]; consumed: bigint[] }>>()

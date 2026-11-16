@@ -5,7 +5,7 @@ import type { QuestionSnapshot } from '../operations/types.ts'
 
 import { assertExactKeys, normalizedHash32 as hash, requiredRecord, uint256String as unsignedIntegerString } from '../state/validators.ts'
 
-export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 3
+export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 4
 export const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
 export const IMMUTABLE_TOPOLOGY_MANIFEST_BYTES = 64 * 1024
 export const IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES = 64 * 1024 * 1024
@@ -30,7 +30,6 @@ export interface CachedPoolDeployment {
 	questionId: string
 	securityPool: Address
 	shareToken: Address
-	collateralRepairAuction: Address
 	universeId: string
 }
 
@@ -181,14 +180,13 @@ function parseQuestion(value: unknown, index: number): QuestionSnapshot {
 function parsePoolDeployment(value: unknown, index: number): CachedPoolDeployment {
 	const label = `immutable topology pool deployment ${index.toString()}`
 	const deployment = requiredRecord(value, label)
-	assertExactKeys(deployment, ['coordinator', 'parent', 'questionId', 'securityPool', 'shareToken', 'collateralRepairAuction', 'universeId'], [], label)
+	assertExactKeys(deployment, ['coordinator', 'parent', 'questionId', 'securityPool', 'shareToken', 'universeId'], [], label)
 	return {
 		coordinator: address(deployment['coordinator'], `${label}.coordinator`),
 		parent: address(deployment['parent'], `${label}.parent`),
 		questionId: unsignedIntegerString(deployment['questionId'], `${label}.questionId`),
 		securityPool: address(deployment['securityPool'], `${label}.securityPool`),
 		shareToken: address(deployment['shareToken'], `${label}.shareToken`),
-		collateralRepairAuction: address(deployment['collateralRepairAuction'], `${label}.collateralRepairAuction`),
 		universeId: unsignedIntegerString(deployment['universeId'], `${label}.universeId`),
 	}
 }

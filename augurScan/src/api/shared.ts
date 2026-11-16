@@ -89,11 +89,7 @@ const isLogCursor = (parts: readonly JsonValue[]): parts is LogCursor =>
 	(parts[3] === null || (typeof parts[3] === 'string' && /^0x[0-9a-f]{40}$/.test(parts[3]))) &&
 	(parts[4] === null || parts[4] === 'true' || parts[4] === 'false') &&
 	(parts[5] === 'canonical' || parts[5] === 'orphaned' || parts[5] === 'all') &&
-	isPostgresBigint(parts[6]) &&
-	typeof parts[7] === 'string' &&
-	/^0x[0-9a-f]{64}$/.test(parts[7]) &&
-	isPostgresBigint(parts[8]) &&
-	parts.slice(9, 12).every(part => typeof part === 'string') &&
+	hasCursorSnapshot(parts, 6) &&
 	typeof parts[12] === 'string' &&
 	isExactIsoTimestamp(parts[12]) &&
 	isPostgresBigint(parts[13]) &&
@@ -130,6 +126,12 @@ export const isPostgresBigint = (value: unknown): value is string => {
 	return BigInt(value) <= POSTGRES_BIGINT_MAX
 }
 
+/** Checks the snapshot segment [snapshotBlock, snapshotHash, invalidationId, abiSourceHash, applicationSourceHash, projectionSourceHash] that pagination cursors embed at `offset`. */
+export const hasCursorSnapshot = (parts: readonly JsonValue[], offset: number): boolean => {
+	const snapshotHash = parts[offset + 1]
+	return isPostgresBigint(parts[offset]) && typeof snapshotHash === 'string' && /^0x[0-9a-f]{64}$/.test(snapshotHash) && isPostgresBigint(parts[offset + 2]) && parts.slice(offset + 3, offset + 6).every(part => typeof part === 'string')
+}
+
 export const directObservationTotal = (value: unknown): number => {
 	if (!isPostgresBigint(value) || BigInt(value) > BigInt(Number.MAX_SAFE_INTEGER)) throw new ApiRequestError('direct observation result set exceeds the safe pagination range; narrow kind, address, or canonical filters')
 	return Number(value)
@@ -153,15 +155,11 @@ export const parseAddressHistoryCursor = (value: string | null, kind: AddressHis
 				!isNonNegativeSafeInteger(parts[2]) ||
 				typeof parts[3] !== 'string' ||
 				!/^0x[0-9a-f]{40}$/.test(parts[3]) ||
-				!isPostgresBigint(parts[4]) ||
-				typeof parts[5] !== 'string' ||
-				!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
-				!isPostgresBigint(parts[6]) ||
-				!parts.slice(7, 10).every(part => typeof part === 'string') ||
+				!hasCursorSnapshot(parts, 4) ||
 				!isNonNegativeSafeInteger(parts[10]) ||
 				!isPostgresBigint(parts[11]) ||
 				!isPostgresInteger(parts[12]) ||
-				BigInt(parts[11]) > BigInt(parts[4])
+				BigInt(parts[11]) > BigInt(String(parts[4]))
 			)
 				throw new Error('shape')
 			return parts as [1, AddressHistoryKind, number, string, string, string, string, string, string, string, number, string, number]
@@ -179,11 +177,7 @@ const isActionCursor = (parts: readonly JsonValue[]): parts is ActionCursor =>
 	parts.length === 13 &&
 	parts[0] === 1 &&
 	isNonNegativeSafeInteger(parts[1]) &&
-	isPostgresBigint(parts[2]) &&
-	typeof parts[3] === 'string' &&
-	/^0x[0-9a-f]{64}$/.test(parts[3]) &&
-	isPostgresBigint(parts[4]) &&
-	parts.slice(5, 8).every(part => typeof part === 'string') &&
+	hasCursorSnapshot(parts, 2) &&
 	typeof parts[8] === 'string' &&
 	isCursorTimestamp(parts[8]) &&
 	isPostgresBigint(parts[9]) &&

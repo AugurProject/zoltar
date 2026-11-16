@@ -7,7 +7,8 @@ import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-s
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { executeForkAuctionAction, readSecurityPoolUniverseId } from './securityPoolActions.js'
-import { getCarrySnapshotRoot, buildCarryMerkleMountainRangeProof, compareBigintAscending, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
+import { getCarrySnapshotRoot, buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { claimStateChanged } from './claimActionState.js'
 import { withClaimReadContext } from './claimReadContext.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
@@ -113,7 +114,7 @@ async function loadHistoricalLocalCarryLeaves(client: Pick<ReadClient, 'readCont
 		carryLeaves.push(leaf)
 		nodeId = parentNodeId
 	}
-	return carryLeaves.sort((left, right) => compareBigintAscending(left.carryLeafIndex, right.carryLeafIndex))
+	return carryLeaves.sort((left, right) => compareBigint(left.carryLeafIndex, right.carryLeafIndex))
 }
 
 async function buildHistoricalLocalCarrySnapshotEntries(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey, localLeaves: readonly HistoricalCarryLeafViewStruct[]): Promise<HistoricalCarrySnapshotEntry[]> {
@@ -230,7 +231,7 @@ async function loadRecursiveCarrySnapshot(
 }> {
 	const [outcomeState, forkContinuation, localLeaves] = await Promise.all([readEscalationOutcomeState(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress), loadCarryLeafPage(client, escalationGameAddress, outcome)])
 	const { currentCarryRoot: carryRoot, currentLeafCount: carryLeafCount, currentNullifierRoot: nullifierRoot } = outcomeState
-	const orderedLocalLeaves = [...localLeaves].sort((left, right) => compareBigintAscending(left.sourceNodeId, right.sourceNodeId))
+	const orderedLocalLeaves = [...localLeaves].sort((left, right) => compareBigint(left.sourceNodeId, right.sourceNodeId))
 	const parentEscalationGameAddress = forkContinuation === true ? await readParentEscalationGameAddress(client, escalationGameAddress) : undefined
 	if (parentEscalationGameAddress === undefined) {
 		return {

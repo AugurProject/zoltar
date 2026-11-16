@@ -26,8 +26,8 @@ interface ICapitalLifecycleHost {
 contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	using SafeERC20Ops for IERC20;
 	address public immutable ledger;
-	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amount);
-	event EarningsClaimed(address indexed owner, uint256 attoEth, uint256 attoRep);
+	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
+	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
 	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
 	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
 	constructor(address host) {

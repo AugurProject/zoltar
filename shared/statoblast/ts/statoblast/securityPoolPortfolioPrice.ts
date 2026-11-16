@@ -1,5 +1,6 @@
-import { encodeFunctionData, getAddress, isAddress, isHex, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, isHex, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
+import { decodeAddress, decodeBool, decodeUint } from './securityPoolPortfolioDecoding.js'
 
 const abi = parseAbi([
 	'function factory() view returns (address)',
@@ -38,26 +39,13 @@ const abi = parseAbi([
 	'function deposit() payable',
 ])
 type PriceReadClient = PortfolioReadClient & { getBalance(parameters: { address: Address; blockNumber: bigint }): Promise<bigint> }
-function address(value: unknown, label: string, allowZero = false): Address {
-	if (typeof value !== 'string' || !isAddress(value) || (!allowZero && getAddress(value) === zeroAddress)) throw new Error(`${label} must be a nonzero address.`)
-	return getAddress(value)
-}
-function uint(value: unknown, label: string, bits = 256): bigint {
-	const integer = typeof value === 'number' && Number.isSafeInteger(value) ? BigInt(value) : value
-	if (typeof integer !== 'bigint' || integer < 0n || integer >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
-	return integer
-}
-function bool(value: unknown, label: string) {
-	if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean.`)
-	return value
-}
 
 /** Read one branch feed directly, without a question coordinator or history scan. */
 export async function loadPortfolioPriceSnapshot(parameters: { client: PriceReadClient; portfolio: Address; owner: Address; universeId: bigint; blockNumber?: bigint }) {
 	const { client } = parameters
-	const portfolio = address(parameters.portfolio, 'Portfolio')
-	const owner = address(parameters.owner, 'Report sponsor')
-	const universeId = uint(parameters.universeId, 'Universe', 248)
+	const portfolio = decodeAddress(parameters.portfolio, 'Portfolio')
+	const owner = decodeAddress(parameters.owner, 'Report sponsor')
+	const universeId = decodeUint(parameters.universeId, 'Universe', 248)
 	const [block, chainId] = await Promise.all([client.getBlock(parameters.blockNumber === undefined ? undefined : { blockNumber: parameters.blockNumber }), client.getChainId()])
 	if (block.number === undefined || block.hash === undefined) throw new Error('Price preparation requires a mined block.')
 	if (parameters.blockNumber !== undefined && block.number !== parameters.blockNumber) throw new Error('Price preparation returned another block.')
@@ -71,22 +59,22 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 		read(portfolio, 'isPriceReportingOpen', [universeId]),
 		client.getBalance({ address: owner, blockNumber }),
 	])
-	const factory = address(factoryValue, 'Portfolio factory')
-	const originUniverseId = uint(originUniverseValue, 'Origin universe', 248)
-	const zoltar = address(protocolValue, 'Portfolio protocol')
-	const feed = address(feedValue, 'Portfolio price feed', true)
-	const reportingOpen = bool(openValue, 'Reporting window')
+	const factory = decodeAddress(factoryValue, 'Portfolio factory')
+	const originUniverseId = decodeUint(originUniverseValue, 'Origin universe', 248)
+	const zoltar = decodeAddress(protocolValue, 'Portfolio protocol')
+	const feed = decodeAddress(feedValue, 'Portfolio price feed', true)
+	const reportingOpen = decodeBool(openValue, 'Reporting window must be a boolean.')
 	const [questionPage, factoryProtocol, registeredFeed, repValue] = await Promise.all([read(portfolio, 'getQuestions', [0n, 1n]), read(factory, 'zoltar'), read(factory, 'sharedPriceFeeds', [portfolio, universeId]), read(zoltar, 'getRepToken', [universeId])])
-	if (address(factoryProtocol, 'Factory protocol') !== zoltar || address(registeredFeed, 'Canonical price feed', true) !== feed) throw new Error('Portfolio price identities do not match.')
+	if (decodeAddress(factoryProtocol, 'Factory protocol') !== zoltar || decodeAddress(registeredFeed, 'Canonical price feed', true) !== feed) throw new Error('Portfolio price identities do not match.')
 	if (!Array.isArray(questionPage) || questionPage.length > 1) throw new Error('Invalid portfolio preparation source page.')
 	let sourcePool: Address | undefined
 	if (questionPage.length === 1) {
-		sourcePool = address(await read(portfolio, 'getPool', [uint(questionPage[0], 'Source question'), originUniverseId]), 'Preparation source')
+		sourcePool = decodeAddress(await read(portfolio, 'getPool', [decodeUint(questionPage[0], 'Source question'), originUniverseId]), 'Preparation source')
 		const [sourcePortfolio, sourceOrigin] = await Promise.all([read(factory, 'getSecurityPoolPortfolio', [sourcePool]), read(factory, 'getSecurityPoolOriginId', [sourcePool])])
 		if (typeof sourceOrigin !== 'string' || !isHex(sourceOrigin) || sourceOrigin.length !== 66) throw new Error('Invalid preparation source origin.')
-		if (address(sourcePortfolio, 'Source portfolio') !== portfolio || address(await read(factory, 'getSecurityPool', [sourceOrigin, originUniverseId]), 'Canonical source') !== sourcePool) throw new Error('Portfolio preparation source is not canonical.')
+		if (decodeAddress(sourcePortfolio, 'Source portfolio') !== portfolio || decodeAddress(await read(factory, 'getSecurityPool', [sourceOrigin, originUniverseId]), 'Canonical source') !== sourcePool) throw new Error('Portfolio preparation source is not canonical.')
 	}
-	const repToken = address(repValue, 'Branch REP', true)
+	const repToken = decodeAddress(repValue, 'Branch REP', true)
 	let observation:
 		| {
 				weth: Address
@@ -108,10 +96,10 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 		| undefined
 	if (feed !== zeroAddress) {
 		const [authority, feedFactory, feedUniverse, feedRep, wethValue, oracleValue] = await Promise.all([read(feed, 'portfolio'), read(feed, 'securityPoolFactory'), read(feed, 'universeId'), read(feed, 'reputationToken'), read(feed, 'collateralToken'), read(feed, 'openOracle')])
-		if (address(authority, 'Feed portfolio') !== portfolio || address(feedFactory, 'Feed factory') !== factory || uint(feedUniverse, 'Feed universe', 248) !== universeId || address(feedRep, 'Feed REP') !== repToken) throw new Error('Price feed belongs to another portfolio or branch.')
-		const weth = address(wethValue, 'Collateral')
-		const wrappedNative = address(await read(feed, 'weth'), 'Wrapped native token')
-		const openOracle = address(oracleValue, 'OpenOracle')
+		if (decodeAddress(authority, 'Feed portfolio') !== portfolio || decodeAddress(feedFactory, 'Feed factory') !== factory || decodeUint(feedUniverse, 'Feed universe', 248) !== universeId || decodeAddress(feedRep, 'Feed REP') !== repToken) throw new Error('Price feed belongs to another portfolio or branch.')
+		const weth = decodeAddress(wethValue, 'Collateral')
+		const wrappedNative = decodeAddress(await read(feed, 'weth'), 'Wrapped native token')
+		const openOracle = decodeAddress(oracleValue, 'OpenOracle')
 		const [minimum, minimumRep, bounty, price, settled, validity, settlement, pending, wethBalanceAttoEth, repBalanceAttoRep, wethAllowanceAttoEth, repAllowanceAttoRep] = await Promise.all([
 			reportingOpen ? read(feed, 'minimumToken1ReportAttoEth') : undefined,
 			reportingOpen ? read(feed, 'minimumToken2ReportAttoRep') : undefined,
@@ -130,23 +118,23 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 			wrappedNative,
 			weth,
 			openOracle,
-			minimumWethAttoEth: minimum === undefined ? undefined : uint(minimum, 'Minimum WETH', 128),
-			minimumRepAttoRep: minimumRep === undefined ? undefined : uint(minimumRep, 'Minimum REP', 128),
-			bounty: uint(bounty, 'Report bounty', 96),
-			lastPrice: uint(price, 'Last price'),
-			lastSettlementTimestamp: uint(settled, 'Last settlement'),
-			validitySeconds: uint(validity, 'Price validity'),
-			settlementSeconds: uint(settlement, 'Report challenge period', 48),
-			pendingReportId: uint(pending, 'Pending report'),
-			wethBalanceAttoEth: uint(wethBalanceAttoEth, 'WETH balance'),
-			repBalanceAttoRep: uint(repBalanceAttoRep, 'REP balance'),
-			wethAllowanceAttoEth: uint(wethAllowanceAttoEth, 'WETH allowance'),
-			repAllowanceAttoRep: uint(repAllowanceAttoRep, 'REP allowance'),
+			minimumWethAttoEth: minimum === undefined ? undefined : decodeUint(minimum, 'Minimum WETH', 128),
+			minimumRepAttoRep: minimumRep === undefined ? undefined : decodeUint(minimumRep, 'Minimum REP', 128),
+			bounty: decodeUint(bounty, 'Report bounty', 96),
+			lastPrice: decodeUint(price, 'Last price'),
+			lastSettlementTimestamp: decodeUint(settled, 'Last settlement'),
+			validitySeconds: decodeUint(validity, 'Price validity'),
+			settlementSeconds: decodeUint(settlement, 'Report challenge period', 48),
+			pendingReportId: decodeUint(pending, 'Pending report'),
+			wethBalanceAttoEth: decodeUint(wethBalanceAttoEth, 'WETH balance'),
+			repBalanceAttoRep: decodeUint(repBalanceAttoRep, 'REP balance'),
+			wethAllowanceAttoEth: decodeUint(wethAllowanceAttoEth, 'WETH allowance'),
+			repAllowanceAttoRep: decodeUint(repAllowanceAttoRep, 'REP allowance'),
 		}
 	}
 	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Price preparation changed. Refresh and retry.')
-	return { chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp, portfolio, owner, universeId, factory, originUniverseId, sourcePool, zoltar, feed, repToken, reportingOpen, ethBalanceAttoEth: uint(eth, 'ETH balance'), observation }
+	return { chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp, portfolio, owner, universeId, factory, originUniverseId, sourcePool, zoltar, feed, repToken, reportingOpen, ethBalanceAttoEth: decodeUint(eth, 'ETH balance'), observation }
 }
 export type PortfolioPriceSnapshot = Awaited<ReturnType<typeof loadPortfolioPriceSnapshot>>
 
@@ -154,13 +142,13 @@ export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, pro
 	const observation = snapshot.observation
 	if (observation === undefined) throw new Error('Prepare the branch price feed first.')
 	if (observation.minimumWethAttoEth === undefined || observation.minimumRepAttoRep === undefined) throw new Error('The branch price reporting window is closed.')
-	const price = uint(proposedRepPerEth, 'REP per ETH price')
+	const price = decodeUint(proposedRepPerEth, 'REP per ETH price')
 	if (price === 0n) throw new Error('Enter a positive REP per ETH price.')
-	uint(requestedWeth, 'Requested WETH', 128)
+	decodeUint(requestedWeth, 'Requested WETH', 128)
 	const inventoryWeth = (observation.minimumRepAttoRep * 10n ** 18n + price - 1n) / price
 	const minimum = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
-	const weth = uint(requestedWeth > minimum ? requestedWeth : minimum, 'Initial WETH report', 128)
-	const rep = uint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)
+	const weth = decodeUint(requestedWeth > minimum ? requestedWeth : minimum, 'Initial WETH report', 128)
+	const rep = decodeUint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)
 	const wrap = observation.weth === observation.wrappedNative && weth > observation.wethBalanceAttoEth ? weth - observation.wethBalanceAttoEth : 0n
 	return { price, weth, rep, wrap, bounty: observation.bounty, requiredEth: wrap + observation.bounty }
 }
@@ -175,10 +163,10 @@ export function buildPortfolioPriceRequest(snapshot: PortfolioPriceSnapshot, pro
 }
 export function buildPortfolioPriceApprovalRequest(snapshot: PortfolioPriceSnapshot, token: 'weth' | 'rep', amount: bigint) {
 	if (snapshot.observation === undefined) throw new Error('Prepare the branch price feed first.')
-	return { account: snapshot.owner, to: token === 'weth' ? snapshot.observation.weth : snapshot.repToken, value: 0n, data: encodeFunctionData({ abi, functionName: 'approve', args: [snapshot.feed, uint(amount, 'Approval amount')] }) }
+	return { account: snapshot.owner, to: token === 'weth' ? snapshot.observation.weth : snapshot.repToken, value: 0n, data: encodeFunctionData({ abi, functionName: 'approve', args: [snapshot.feed, decodeUint(amount, 'Approval amount')] }) }
 }
 export function buildPortfolioPriceWrapRequest(snapshot: PortfolioPriceSnapshot, amount: bigint) {
-	if (snapshot.observation === undefined || snapshot.observation.weth !== snapshot.observation.wrappedNative || uint(amount, 'ETH to wrap') === 0n) throw new Error('No WETH wrapping is required.')
+	if (snapshot.observation === undefined || snapshot.observation.weth !== snapshot.observation.wrappedNative || decodeUint(amount, 'ETH to wrap') === 0n) throw new Error('No WETH wrapping is required.')
 	return { account: snapshot.owner, to: snapshot.observation.weth, value: amount, data: encodeFunctionData({ abi, functionName: 'deposit' }) }
 }
 
@@ -190,14 +178,14 @@ export type PortfolioReportOperations = { gasLimit: bigint; minimumPrice: bigint
 export function buildPortfolioPriceOperationsRequest(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWethAttoEth: bigint, batch: PortfolioReportOperations) {
 	const request = buildPortfolioPriceRequest(snapshot, proposedRepPerEth, requestedWethAttoEth)
 	const funding = quotePortfolioPriceFunding(snapshot, proposedRepPerEth, requestedWethAttoEth)
-	uint(batch.gasLimit + 4_000_000n, 'Callback gas', 32)
-	uint(batch.minimumPrice, 'Minimum operation price')
-	uint(batch.maximumPrice, 'Maximum operation price')
-	uint(batch.deadline, 'Operations deadline', 48)
+	decodeUint(batch.gasLimit + 4_000_000n, 'Callback gas', 32)
+	decodeUint(batch.minimumPrice, 'Minimum operation price')
+	decodeUint(batch.maximumPrice, 'Maximum operation price')
+	decodeUint(batch.deadline, 'Operations deadline', 48)
 	if (batch.deadline <= snapshot.timestamp || batch.minimumPrice > batch.maximumPrice || batch.maximumPrice === 0n || batch.operations.length === 0) throw new Error('Invalid report operation batch.')
 	let requiredGas = 0n
 	for (const operation of batch.operations) {
-		if (uint(operation.gasLimit, 'Operation gas', 32) === 0n || !isHex(operation.data) || operation.data.length < 10 || operation.data.length % 2 !== 0) throw new Error('Invalid report operation.')
+		if (decodeUint(operation.gasLimit, 'Operation gas', 32) === 0n || !isHex(operation.data) || operation.data.length < 10 || operation.data.length % 2 !== 0) throw new Error('Invalid report operation.')
 		requiredGas += operation.gasLimit + 100_000n
 	}
 	if (requiredGas > batch.gasLimit) throw new Error('Operation gas budget insufficient.')

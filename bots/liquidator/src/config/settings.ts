@@ -3,6 +3,7 @@ import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolic
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { presetNetworkChainId, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -41,8 +42,6 @@ export type OperatorSettings = {
 	privateKey: Hex | undefined
 	runtime: {
 		execute: boolean
-		historicalLogRecovery: boolean
-		logLookbackBlocks: number
 		once: boolean
 		pollMilliseconds: number
 		stateFile: string
@@ -56,6 +55,57 @@ export type OperatorSettings = {
 	strategy: StrategySettings
 	submission: SubmissionSettings
 	version: typeof SETTINGS_VERSION
+}
+
+const ROOT_KEYS = ['approvedUniverses', 'centralizedMarkets', 'childMarketConfigurations', 'connectivity', 'network', 'networkConfigured', 'paused', 'portfolioInstructions', 'portfolioPolicy', 'privateKey', 'runtime', 'selectedPortfolios', 'strategy', 'submission', 'version']
+const RUNTIME_KEYS = ['execute', 'once', 'pollMilliseconds', 'stateFile', 'ui', 'uiHost', 'uiPort']
+const STRATEGY_KEYS = ['maximumGasCostEth', 'walletReserveRep']
+const PORTFOLIO_POLICY_KEYS = [
+	'allowFundedTakeovers',
+	'maximumCommitmentEth',
+	'maximumOwnFundingRep',
+	'maximumPositionsPerScan',
+	'maximumPrincipalRep',
+	'maximumReportFundingEth',
+	'maximumTotalPrincipalRep',
+	'minimumNetRewardEth',
+	'reportOperationGasLimit',
+	'reportOperationsGasLimit',
+	'stalledRetirementSeconds',
+	'targetHealthFactorBps',
+	'walletReserveEth',
+]
+
+/** Settings removed with standalone pools. An operator file may still carry them; they are ignored and dropped on the next save. */
+const REMOVED_ROOT_KEYS = ['deployment', 'desiredPools', 'selectedPools']
+const REMOVED_STRATEGY_KEYS = [
+	'allowAutomaticDeposits',
+	'allowAutomaticPoolCreation',
+	'allowAutomaticVaultMigrations',
+	'allowAutomaticWithdrawals',
+	'candidatePriority',
+	'fallbackRepPerEthPrice',
+	'maximumLiquidationDebtEth',
+	'maximumOracleRequestCostEth',
+	'maximumPerPoolRep',
+	'maximumTotalDeployedRep',
+	'minimumLiquidationDebtEth',
+	'minimumRepWithdrawalRep',
+	'minimumRewardValueEth',
+	'redeemFeesAboveEth',
+	'stagedOperationValidForSeconds',
+	'stalePriceFundingBufferBps',
+	'vaultTargetHealthBps',
+	'vaultTopUpHealthBps',
+	'vaultWithdrawHealthBps',
+]
+
+/** A misspelled optional key would otherwise silently take its default. */
+function assertKnownKeys(value: unknown, known: readonly string[], removed: readonly string[], label: string) {
+	if (!isPlainRecord(value)) return
+	const allowed = new Set([...known, ...removed])
+	const unsupported = Object.keys(value).find(key => !allowed.has(key))
+	if (unsupported !== undefined) throw new Error(`${label} contains unsupported field ${unsupported}`)
 }
 
 function uiHost(value: unknown): '0.0.0.0' | '127.0.0.1' {
@@ -79,6 +129,10 @@ export function parseStrategy(value: unknown): StrategySettings {
 export function parseSettings(value: unknown): OperatorSettings {
 	const root = record(value, 'operator settings')
 	if (root['version'] !== SETTINGS_VERSION) throw new Error('operator settings version must be 2')
+	assertKnownKeys(root, ROOT_KEYS, REMOVED_ROOT_KEYS, 'operator settings')
+	assertKnownKeys(root['runtime'], RUNTIME_KEYS, [], 'runtime')
+	assertKnownKeys(root['strategy'], STRATEGY_KEYS, REMOVED_STRATEGY_KEYS, 'strategy')
+	assertKnownKeys(root['portfolioPolicy'], PORTFOLIO_POLICY_KEYS, [], 'portfolioPolicy')
 	const networkConfigured = root['networkConfigured'] === undefined ? root['connectivity'] !== undefined : boolean(root['networkConfigured'], 'networkConfigured')
 	if (networkConfigured && (root['network'] === undefined || root['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
@@ -108,8 +162,6 @@ export function parseSettings(value: unknown): OperatorSettings {
 		privateKey,
 		runtime: {
 			execute: boolean(runtime['execute'], 'runtime.execute'),
-			historicalLogRecovery: runtime['historicalLogRecovery'] === undefined ? false : boolean(runtime['historicalLogRecovery'], 'runtime.historicalLogRecovery'),
-			logLookbackBlocks: integer(runtime['logLookbackBlocks'] ?? 256, 'runtime.logLookbackBlocks', 1, 256),
 			once: boolean(runtime['once'], 'runtime.once'),
 			pollMilliseconds: integer(runtime['pollMilliseconds'], 'runtime.pollMilliseconds', 1_000, 3_600_000),
 			stateFile: resolve(string(runtime['stateFile'], 'runtime.stateFile')),

@@ -2,6 +2,7 @@ import { restoreOperationPlanningInputs } from './manual-inputs.ts'
 import { OPEN_ORACLE_OPERATIONS } from './open-oracle/catalog.ts'
 import { STATOBLAST_OPERATIONS } from './statoblast.ts'
 import { assertWorkflowPrerequisiteLimit } from './timing.ts'
+import { serializeOperationMetadata } from './planning.ts'
 import { TRADING_OPERATIONS } from './trading/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, OperationContinuationContext, OperationDefinition, OperationPlan, PlanningOptions } from './types.ts'
 import { ZOLTAR_OPERATIONS } from './zoltar.ts'
@@ -103,7 +104,7 @@ export function canonicalLifecyclePresence(snapshot: EcosystemSnapshot, options:
 			if (!raw.has(key)) throw new Error(`Lifecycle definition ${definition.id} exposes an obstructing identity outside raw presence`)
 		}
 		for (const plan of definition.buildLifecyclePlans(snapshot, options)) {
-			const key = canonicalMetadata(plan.metadata)
+			const key = serializeOperationMetadata(plan.metadata)
 			if (!raw.has(key)) throw new Error(`Lifecycle definition ${definition.id} built an actionable plan outside raw presence`)
 			if (!obstructing.has(key)) throw new Error(`Lifecycle definition ${definition.id} built an actionable plan outside obstructing presence`)
 		}
@@ -111,14 +112,10 @@ export function canonicalLifecyclePresence(snapshot: EcosystemSnapshot, options:
 	})
 }
 
-function canonicalMetadata(metadata: OperationPlan['metadata']) {
-	return JSON.stringify(Object.fromEntries(Object.entries(metadata).sort(([left], [right]) => left.localeCompare(right))))
-}
-
 function uniqueLifecycleMetadata(definitionId: string, kind: 'obstructing' | 'raw', metadata: Array<Record<string, string | number | boolean>>) {
 	const unique = new Map<string, Record<string, string | number | boolean>>()
 	for (const instance of metadata) {
-		const key = canonicalMetadata(instance)
+		const key = serializeOperationMetadata(instance)
 		if (unique.has(key)) throw new Error(`Lifecycle definition ${definitionId} exposes duplicate ${kind} identity ${key}`)
 		unique.set(key, instance)
 	}
@@ -186,8 +183,8 @@ export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, pre
 			if (previousPlan.operationInputs !== undefined) evaluation.plan.operationInputs = { ...previousPlan.operationInputs }
 			if (previousPlan.inputSources !== undefined) evaluation.plan.inputSources = { ...previousPlan.inputSources }
 		}
-		const expected = canonicalMetadata(previousPlan.metadata)
-		const exact = evaluations.find(evaluation => evaluation.plan !== undefined && canonicalMetadata(evaluation.plan.metadata) === expected)
+		const expected = serializeOperationMetadata(previousPlan.metadata)
+		const exact = evaluations.find(evaluation => evaluation.plan !== undefined && serializeOperationMetadata(evaluation.plan.metadata) === expected)
 		return (
 			exact ?? {
 				definition: publicDefinition(definition),
@@ -207,7 +204,7 @@ export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, pre
 		if (plan !== undefined && continuationDisposition === 'cleanup-only' && plan.continuationDisposition !== 'cleanup-only') {
 			throw new Error(`Cleanup-only continuation builder ${definition.id} returned an unmarked plan`)
 		}
-		if (plan !== undefined && canonicalMetadata(plan.metadata) === canonicalMetadata(previousPlan.metadata)) {
+		if (plan !== undefined && serializeOperationMetadata(plan.metadata) === serializeOperationMetadata(previousPlan.metadata)) {
 			return evaluatedPlan(definition, { ...plan, ...(previousPlan.operationInputs === undefined ? {} : { operationInputs: previousPlan.operationInputs }), ...(previousPlan.inputSources === undefined ? {} : { inputSources: previousPlan.inputSources }) }, previousPlan.planningSeed)
 		}
 		return {
@@ -220,7 +217,7 @@ export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, pre
 		if (previousPlan.operationInputs !== undefined) evaluated.plan.operationInputs = { ...previousPlan.operationInputs }
 		if (previousPlan.inputSources !== undefined) evaluated.plan.inputSources = { ...previousPlan.inputSources }
 	}
-	if (previousPlan.steps.length <= 1 || (evaluated.plan !== undefined && canonicalMetadata(evaluated.plan.metadata) === canonicalMetadata(previousPlan.metadata))) return evaluated
+	if (previousPlan.steps.length <= 1 || (evaluated.plan !== undefined && serializeOperationMetadata(evaluated.plan.metadata) === serializeOperationMetadata(previousPlan.metadata))) return evaluated
 	return {
 		definition: publicDefinition(definition),
 		eligibility: { blockers: ['The exact selectable workflow instance is not eligible at the anchored snapshot'], eligible: false },

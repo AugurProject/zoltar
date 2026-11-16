@@ -1,9 +1,11 @@
 import { collateralUnit, type CollateralUnit } from '../src/collateral.ts'
 import { annualFeeText } from './pool-metrics.ts'
-import { isRecord } from './api-validation.ts'
 import { exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const outcomes = ['INVALID', 'YES', 'NO', 'None']
+const capitalPriceKeys: ReadonlySet<string> = new Set(['acceptedPrice', 'conservativePrice', 'liquidationPrice', 'ownerConservativePrice', 'maxHealthyPrice'])
+const MAX_UINT256 = 2n ** 256n - 1n
 const label = (key: string): string => {
 	const words = key
 		.replace(/Bps$/i, '')
@@ -17,14 +19,21 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 	if (value === undefined || value === null) return 'Unavailable'
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No'
 	if (Array.isArray(value)) return value.map(item => valueText(key, item, nativeSymbol, collateral)).join(', ')
-	if (isRecord(value))
+	if (isPlainRecord(value))
 		return semanticFields(value, nativeSymbol)
 			.map(([name, text]) => `${name}: ${text}`)
 			.join(' · ')
 	const text = String(value)
 	if (/^(outcome|questionResolution|finalQuestionResolution)$/.test(key)) return outcomes[Number(text)] ?? `Unknown outcome (${text})`
 	if (/^-?\d+$/.test(text)) {
-		if (/^(activationTime|endTimestamp|nonDecisionTimestamp)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
+		if (/^(activationTime|endTimestamp|nonDecisionTimestamp|priceValidUntil)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
+		// The ledger reports zero until an adverse price observation starts a position's take-over clock.
+		if (key === 'liquidationStartedAt') return text === '0' ? 'Not started' : utcDateTime(Number(text) * 1000)
+		// Capital-ledger prices are attoREP per whole collateral token scaled by 1e18; a position without commitment has no price limit.
+		if (capitalPriceKeys.has(key)) {
+			if (BigInt(text) === MAX_UINT256) return 'No limit'
+			return collateral === undefined ? exactNumber(text) : exactUnit(text, Math.max(0, 36 - collateral.decimals), `REP/${collateral.symbol}`)
+		}
 		const unitKey = key.replaceAll('_', '')
 		if (/attoRep/i.test(unitKey)) return exactUnit(text, 18, 'REP')
 		if (/attoEthPerGas/i.test(unitKey)) return exactUnit(text, 18, `${nativeSymbol}/gas`)
@@ -40,14 +49,14 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 /** Labels and formats decoded fields; attoETH amounts are in the chain's native currency, `nativeSymbol`. */
 export const semanticFields = (data: Readonly<Record<string, unknown>>, nativeSymbol: string): ReadonlyArray<readonly [string, string]> =>
 	Object.entries(data).flatMap(([key, value]) => {
-		if (/^(current|initial)?retentionrate$/i.test(key.replaceAll('_', ''))) return [[key.toLowerCase().startsWith('initial') ? 'Initial annual open-interest fee' : 'Annual open-interest fee', annualFeeText(value)] as const]
+		if (/^(current)?retentionrate$/i.test(key.replaceAll('_', ''))) return [['Annual open-interest fee', annualFeeText(value)] as const]
 		if (key === 'outcomeBalancesAttoRep' && Array.isArray(value)) return value.map((balance, index): readonly [string, string] => [`${outcomes[index] ?? index} balance`, valueText('amountAttoRep', balance, nativeSymbol)])
 		return [[label(key), valueText(key, value, nativeSymbol, data['collateral'] === undefined ? undefined : collateralUnit(data))] as const]
 	})
 
 export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string): string => {
 	const data = record['event_data'] ?? record['summary_data'] ?? record['arguments'] ?? record['read_result']
-	return isRecord(data)
+	return isPlainRecord(data)
 		? semanticFields(data, nativeSymbol)
 				.map(([name, value]) => `${name}: ${value}`)
 				.join(' · ') || 'No payload fields'
@@ -59,8 +68,6 @@ export const timelineEntityPath = (record: Readonly<Record<string, unknown>>): s
 	if (identity === '') return undefined
 	const segment = encodeURIComponent(identity)
 	switch (record['entity_type']) {
-		case 'vault':
-			return `/operations/risk/vault/${identity.split(':').map(encodeURIComponent).join('/')}`
 		case 'pool':
 			return `/operations/risk/pool/${segment}`
 		case 'auction':

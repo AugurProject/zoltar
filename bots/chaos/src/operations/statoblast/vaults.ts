@@ -49,9 +49,9 @@ export const deployPool: OperationDefinition = {
 	},
 }
 
-export function checkpointDefinition(kind: 'collateral' | 'retention'): OperationDefinition {
+export function checkpointDefinition(kind: 'collateral' | 'fees'): OperationDefinition {
 	const id = `statoblast.pool.checkpoint-${kind}`
-	const method = kind === 'collateral' ? 'updateSettlementCollateral' : 'updateRetentionRate'
+	const method = kind === 'collateral' ? 'updateSettlementCollateral' : 'refreshPortfolioFees'
 	return {
 		buildPlan(snapshot, options) {
 			const pool = choose(

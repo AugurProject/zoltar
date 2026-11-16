@@ -2,7 +2,7 @@ import { integer } from '../infrastructure/json-validation.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { historyUnavailableError } from '../monitoring/block-sync.ts'
 import { permanentHistoricalLogError } from '../monitoring/log-availability.ts'
-import { custom, http, requestTransport, RpcError } from './rpc-transport.ts'
+import { custom, http, isRateLimitError, requestTransport, RpcError } from './rpc-transport.ts'
 
 export type RpcEndpointStatus = 'degraded' | 'healthy' | 'offline' | 'unknown'
 
@@ -81,7 +81,8 @@ function endpointRequestFailure(error: unknown, endpoint: Pick<MutableEndpointHe
 }
 
 function retryableRpcFailure(error: unknown) {
-	if (error instanceof RpcEndpointPoolFailure) return true
+	// A rate limit (HTTP 429 or JSON-RPC -32005) is temporary for this endpoint, so another endpoint may serve the request.
+	if (error instanceof RpcEndpointPoolFailure || isRateLimitError(error)) return true
 	if (error instanceof RpcError) {
 		if (typeof error.code === 'number') return error.code === 408 || error.code === 425 || error.code === 429 || error.code >= 500
 		if (error.code !== undefined) return false

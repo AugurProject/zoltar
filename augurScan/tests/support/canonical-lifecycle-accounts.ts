@@ -1,12 +1,13 @@
 // Account-level stages of the canonical lifecycle integration test: address interactions, actions,
 // address transaction snapshots, and rich-list rankings over the stored chain.
 import { expect } from 'bun:test'
-import { isAccountTransactionValue, isRecord } from '../../browser/api-validation.ts'
+import { isAccountTransactionValue } from '../../browser/api-validation.ts'
 import { handleApi } from '../../src/api.ts'
 import { decodeOpaqueCursor } from '../../src/cursor-codec.ts'
 import { type Address, getAddress } from '../../src/ethereum.ts'
 import type { LifecycleChain, LifecycleContext } from './canonical-lifecycle-chain.ts'
 import { address, blockHash, chainId, discoveredAddress, orphanOnlyAddress, referencedOnlyAddress, rediscoveredAddress, secondWethAddress, transactionHash, wethAddress } from './postgres-fixtures.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const referencedOnlyTransactionHash = blockHash('calldata-only-address-reference')
 
@@ -71,7 +72,7 @@ export const expectAddressInteractionsAndActions = async ({ database }: Lifecycl
 		total: 2,
 		limit: 1,
 	})
-	if (!isRecord(interactionsPayload) || !Array.isArray(interactionsPayload['items'])) throw new Error('address interactions API returned malformed items')
+	if (!isPlainRecord(interactionsPayload) || !Array.isArray(interactionsPayload['items'])) throw new Error('address interactions API returned malformed items')
 	expect(interactionsPayload['items'].every(isAccountTransactionValue)).toBeTrue()
 	const interactionCursor = interactionsPayload['nextCursor']
 	if (typeof interactionCursor !== 'string') throw new Error('address interactions API omitted its continuation')
@@ -161,7 +162,6 @@ export const expectRichListProfiles = async ({ database }: LifecycleContext): Pr
 			Record<string, unknown> & {
 				rep_balances: Array<Record<string, unknown>>
 				pool_associations: Array<Record<string, unknown>>
-				vault_positions: Array<Record<string, unknown>>
 				weth_balances: Array<Record<string, unknown>>
 				native_balance_detail: Record<string, unknown>
 			}
@@ -188,7 +188,7 @@ export const expectRichListProfiles = async ({ database }: LifecycleContext): Pr
 	if (addressProfileResponse === undefined) throw new Error('address profile query did not return a response')
 	expect(await addressProfileResponse.json()).toMatchObject({
 		total: 1,
-		items: [expect.objectContaining({ address: address.toLowerCase(), pool_count: '1', vault_count: '1' })],
+		items: [expect.objectContaining({ address: address.toLowerCase(), pool_count: '1' })],
 	})
 	const addressIdentityResponse = await handleApi(new Request(`http://localhost/api/v1/address-identity?chainId=${chainId}&address=${discoveredAddress}`), database.sql)
 	if (addressIdentityResponse === undefined) throw new Error('address identity query did not return a response')
@@ -208,15 +208,6 @@ export const expectRichListProfiles = async ({ database }: LifecycleContext): Pr
 	expect(addressRichList?.weth_balances).toEqual([expect.objectContaining({ address: wethAddress.toLowerCase(), balance: '1234567890123456789', symbol: 'WETH' }), expect.objectContaining({ address: secondWethAddress.toLowerCase(), balance: '222222222222222222', symbol: 'WETH2' })])
 	expect(addressRichList?.native_balance_detail).toEqual({ balance: '2000000000456789123', blockNumber: '2' })
 	expect(addressRichList?.pool_associations).toEqual([expect.objectContaining({ address: discoveredAddress.toLowerCase() })])
-	expect(addressRichList?.vault_positions).toEqual([
-		expect.objectContaining({
-			poolAddress: discoveredAddress.toLowerCase(),
-			repBackingUnits: '120000000000000000000',
-			underwritingLimitAttoEth: 85_000_000_000_000_000_000n.toString(),
-			claimableFeesAttoEth: 30_000_000_000_000_000n.toString(),
-			blockNumber: '2',
-		}),
-	])
 	const beyondEndResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&offset=2`), database.sql)
 	if (beyondEndResponse === undefined) throw new Error('offset rich-list API did not return a response')
 	const beyondEnd = (await beyondEndResponse.json()) as { items: unknown[]; total: number }

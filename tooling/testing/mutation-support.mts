@@ -80,11 +80,11 @@ export function getMutationJunitTestNames(junitXml: string) {
 
 export const MUTATION_SMOKE_CASES: readonly SourceMutation[] = [
 	{
-		name: 'bigint ascending comparator direction',
-		filePath: 'shared/core/ts/serialization/bigInt.ts',
+		name: 'bigint three-way comparator direction',
+		filePath: 'shared/core/ts/math/bigint.ts',
 		from: 'if (left < right) return -1',
 		to: 'if (left > right) return -1',
-		testCommand: ['bun', 'test', 'shared/core/ts/serialization/bigInt.test.ts'],
+		testCommand: ['bun', 'test', 'shared/core/ts/math/bigint.test.ts'],
 	},
 	{
 		name: 'unsigned bigint ceiling division',

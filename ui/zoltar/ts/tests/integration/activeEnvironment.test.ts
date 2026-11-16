@@ -39,6 +39,19 @@ async function selectsSimulationBackend(location: Parameters<typeof initializeAc
 }
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 
+async function expectSavedStateFallsBackToBaseline(simState: string) {
+	const backend = await initializeActiveEnvironment({
+		hash: `#/zoltar?simulate=1&simState=${simState}`,
+		hostname: 'localhost',
+		search: '',
+	})
+	if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
+	const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
+	expect(simulationBackend.currentScenario).toBe('baseline')
+	expect(simulationBackend.bootstrapError).toBeUndefined()
+	expect(simulationBackend.bootstrapWarning).toContain('could not be loaded')
+}
+
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
 })
@@ -443,16 +456,7 @@ void describe('active environment', () => {
 		const domEnvironment = installDomEnvironment()
 
 		try {
-			const backend = await initializeActiveEnvironment({
-				hash: '#/zoltar?simulate=1&simState=missing-state',
-				hostname: 'localhost',
-				search: '',
-			})
-			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
-			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
-			expect(simulationBackend.currentScenario).toBe('baseline')
-			expect(simulationBackend.bootstrapError).toBeUndefined()
-			expect(simulationBackend.bootstrapWarning).toContain('could not be loaded')
+			await expectSavedStateFallsBackToBaseline('missing-state')
 		} finally {
 			domEnvironment.cleanup()
 		}
@@ -474,16 +478,7 @@ void describe('active environment', () => {
 		)
 
 		try {
-			const backend = await initializeActiveEnvironment({
-				hash: '#/zoltar?simulate=1&simState=broken-state',
-				hostname: 'localhost',
-				search: '',
-			})
-			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
-			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
-			expect(simulationBackend.currentScenario).toBe('baseline')
-			expect(simulationBackend.bootstrapError).toBeUndefined()
-			expect(simulationBackend.bootstrapWarning).toContain('could not be loaded')
+			await expectSavedStateFallsBackToBaseline('broken-state')
 		} finally {
 			domEnvironment.cleanup()
 		}

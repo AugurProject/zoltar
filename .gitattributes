@@ -23,7 +23,6 @@
 /bots/shared/src/contracts/abi.generated.ts linguist-generated=true
 /bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts linguist-generated=true
 /bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts linguist-generated=true
-/bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts linguist-generated=true
 /bots/open-oracle-arbitrager/docs/chart-runtime.js linguist-generated=true
 /augurScan/config/dependency-abis.json linguist-vendored=true
 

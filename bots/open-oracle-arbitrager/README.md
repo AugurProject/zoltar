@@ -160,6 +160,6 @@ Its own `package.json`, TypeScript configuration, test configuration, and genera
 | `bun run typecheck`, `bun run lint`, `bun run test`, `bun run format:check` | The individual steps. |
 | `bun run check:docs` | Validates the operator guide, these reference documents, and the pinned market fixture. |
 | `bun run build:docs` | Rebuilds the tracked `docs/chart-runtime.js` that the operator guide loads. |
-| `bun run compile-contracts`, `bun run generate:abi`, `bun run check:generated` | Regenerate and verify the [executor artifacts](./EXECUTION.md#executor-abi-source). |
+| `bun run compile-contracts`, `bun run check:generated` | Regenerate and verify the [executor artifacts](./EXECUTION.md#executor-abi-source). |
 
 `scripts/capture-docs-screenshots.mts` recaptures the operator-guide screenshots. It reads `CHROMIUM_PATH` (default `/usr/bin/chromium`) and `OPEN_ORACLE_SCREENSHOT_OUTPUT_DIR` (default `docs/assets`); each `OPEN_ORACLE_CAPTURE_<GROUP>=1` variable adds a group of QA states. `check:docs` replays the pinned market fixture against an archive node only when `OPEN_ORACLE_ARCHIVE_RPC_URL` is set.

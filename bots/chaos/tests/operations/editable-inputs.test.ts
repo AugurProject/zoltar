@@ -26,7 +26,7 @@ const options = {
 	maxRepSpendAttoRep: 1000000000000000n.toString(),
 	minimumEthReserveAttoEth: 10000000000000000n.toString(),
 	minimumRepReserveAttoRep: 1000000000000000000n.toString(),
-	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxStagedOperationsPerPool: 100, maxUniverses: 100, maxVaultsPerPool: 100, maximumAggregateItems: 10000 },
+	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxUniverses: 100, maxVaultsPerPool: 100, maximumAggregateItems: 10000 },
 }
 
 function editableSnapshot() {

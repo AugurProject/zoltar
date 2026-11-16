@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs'
 import * as process from 'node:process'
 import { getCommittedChangedPaths } from '../repo/changed-files.mts'
 import { runGit } from '../repo/git.mts'
-import { affectedProjects, ciScopes as registeredCiScopes, componentProjects, projectForPath, projects, taskInputMatches } from '../repo/projects.ts'
+import { affectedProjects, ciScopes as registeredCiScopes, componentProjects, type Project, projectForPath, projects, taskInputMatches, topologicallySortedProjects } from '../repo/projects.ts'
 
 export const ciScopes = registeredCiScopes()
 export type CiScope = (typeof ciScopes)[number]
@@ -32,12 +32,42 @@ const instructionFiles = new Set(['LICENSE', '.vscode/settings.json', '.vscode/t
 const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.ts', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
 const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(scope => scopes.has(scope))
 
+// Canonical deployment addresses are imported by bots, augurScan builds and UI packaging.
+const isDeploymentAddressData = (filePath: string) => /^docs\/[a-z-]+-deployment-addresses\.json$/.test(filePath)
+// Documentation that code or tests execute or read. Changes run these consumers alongside the documentation checks.
+const documentationConsumers: readonly { readonly projectId: string; readonly matches: (filePath: string) => boolean }[] = [
+	// Root tooling tests and typechecking execute the documentation runtime, its compiled bundles and docs data, and read the setup READMEs.
+	{ projectId: 'repository', matches: filePath => filePath.startsWith('docs/runtime/') || filePath.startsWith('docs/assets/js/') || (filePath.startsWith('docs/') && filePath.endsWith('.json')) || filePath === 'README.md' || filePath === 'testnetwork/README.md' },
+	// augurScan packaging tests assert its README.
+	{ projectId: 'augur-scan', matches: filePath => filePath === 'augurScan/README.md' },
+	// The arbitrager dashboard serves its reference documents and its check validates them.
+	{ projectId: 'arbitrager', matches: filePath => /^bots\/open-oracle-arbitrager\/[^/]+\.md$/.test(filePath) },
+]
+for (const consumer of documentationConsumers) if (!projects.some(project => project.id === consumer.projectId)) throw new Error(`Documentation consumer ${consumer.projectId} is not a registered project`)
+
 export function isDocumentationChange(filePath: string) {
+	if (isDeploymentAddressData(filePath)) return false
 	return /^\.(?:agents|claude)\/skills\/[a-z0-9-]+$/.test(filePath) || filePath.endsWith('.md') || instructionFiles.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')
+}
+
+/** Projects, with their dependents, whose code or tests execute or read the changed documentation paths. */
+export function documentationConsumerProjects(filePaths: readonly string[]): Project[] {
+	const ids = new Set(filePaths.flatMap(filePath => (isDocumentationChange(filePath) ? documentationConsumers.filter(consumer => consumer.matches(filePath)).map(consumer => consumer.projectId) : [])))
+	let changed = true
+	while (changed) {
+		changed = false
+		for (const project of projects)
+			if (!ids.has(project.id) && project.dependencies.some(dependency => ids.has(dependency))) {
+				ids.add(project.id)
+				changed = true
+			}
+	}
+	return topologicallySortedProjects(projects).filter(project => ids.has(project.id))
 }
 
 function directScopeForPath(filePath: string): CiScope | 'full' {
 	if (isDocumentationChange(filePath)) return 'docs'
+	if (isDeploymentAddressData(filePath)) return 'full'
 	if (filePath.startsWith('.github/') || filePath.startsWith('scripts/') || filePath.startsWith('tooling/') || rootGlobalFiles.has(filePath)) return 'full'
 	return projectForPath(filePath)?.ci?.scope ?? 'full'
 }
@@ -64,8 +94,13 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 		if (scope === 'full') forcedFull = true
 		else direct.add(scope)
 	}
-	// Prose inside a project must not select that project's runtime consumers.
+	// Prose inside a project must not select that project's runtime consumers; documentation consumers are selected above.
 	const runtimeFiles = changedFiles.filter(filePath => !isDocumentationChange(filePath))
+	for (const project of documentationConsumerProjects(changedFiles)) {
+		const scope = project.ci?.scope
+		if (scope === undefined || !ciScopes.includes(scope)) forcedFull = true
+		else direct.add(scope)
+	}
 	const expanded = expandScopes(direct, runtimeFiles, forcedFull)
 	const directScopes = ordered(direct)
 	const expandedScopes = ordered(expanded)

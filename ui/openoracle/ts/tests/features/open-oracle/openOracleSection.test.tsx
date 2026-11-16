@@ -25,6 +25,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { createAccountState as createEmptyAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 type VNodeLike = {
 	props: Record<string, unknown>
@@ -33,10 +34,6 @@ type VNodeLike = {
 
 const REPORTER = getAddress('0x3000000000000000000000000000000000000000')
 const TOKEN_UNITS = 10n ** 18n
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
 
 function isVNodeLike(value: unknown): value is VNodeLike {
 	return isObjectRecord(value) && 'type' in value && 'props' in value && isObjectRecord(value['props'])
@@ -362,13 +359,14 @@ function createOpenOracleDisputeSubmission({
 type ReportActionSectionOptions = {
 	accountState?: AccountState
 	isOnActiveAppChain?: boolean
+	openOracleActiveAction?: OpenOracleSectionProps['openOracleActiveAction']
 	openOracleForm?: OpenOracleFormState
 	openOracleReportDetails?: OpenOracleReportDetails
 }
 
 function renderReportActionSection(
 	actionMode: 'dispute' | 'settle',
-	{ accountState = createAccountState(), isOnActiveAppChain = true, openOracleForm = createOpenOracleForm(), openOracleReportDetails }: Required<Pick<ReportActionSectionOptions, 'openOracleReportDetails'>> & ReportActionSectionOptions,
+	{ accountState = createAccountState(), isOnActiveAppChain = true, openOracleActiveAction, openOracleForm = createOpenOracleForm(), openOracleReportDetails }: Required<Pick<ReportActionSectionOptions, 'openOracleReportDetails'>> & ReportActionSectionOptions,
 	openOracleTokenAccessState: OpenOracleSectionProps['openOracleTokenAccessState'],
 	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined,
 ) {
@@ -383,7 +381,7 @@ function renderReportActionSection(
 		onOpenOracleFormChange: () => undefined,
 		onSettleReport: () => undefined,
 		onWrapDisputeWeth: () => undefined,
-		openOracleActiveAction: undefined,
+		openOracleActiveAction,
 		openOracleForm,
 		openOracleTokenAccessState,
 		openOracleReportDetails,
@@ -562,7 +560,7 @@ void describe('OpenOracleSection', () => {
 			const documentQueries = within(document.body)
 			const searchInput = documentQueries.getByLabelText('Search reports')
 			if (!(searchInput instanceof window.HTMLInputElement)) throw new Error('Expected report search input')
-			expect(searchInput.placeholder).toBe('Report ID, token symbol, or token address')
+			expect(searchInput.placeholder).toBe('Report ID, token, or address')
 			expect(documentQueries.getByText('Report block')).not.toBeNull()
 			expect(documentQueries.getByText('Settlement block')).not.toBeNull()
 			expect(documentQueries.getByText('123 blocks')).not.toBeNull()

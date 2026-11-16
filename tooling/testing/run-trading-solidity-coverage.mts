@@ -1,6 +1,7 @@
 import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const coverageDirectory = path.join(repositoryRoot, 'coverage', 'trading-contracts')
 const summaryPath = path.join(coverageDirectory, 'coverage-summary.json')
@@ -15,13 +16,11 @@ type CoverageSummary = {
 	readonly files: Readonly<Record<string, CoverageFile>>
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
-
 const parseSummary = (value: unknown): CoverageSummary => {
-	if (!isRecord(value) || !isRecord(value['files'])) throw new Error('Invalid trading Solidity coverage summary')
+	if (!isPlainRecord(value) || !isPlainRecord(value['files'])) throw new Error('Invalid trading Solidity coverage summary')
 	const files: Record<string, CoverageFile> = {}
 	for (const [absolutePath, rawFile] of Object.entries(value['files'])) {
-		if (!isRecord(rawFile) || typeof rawFile['file'] !== 'string' || !isRecord(rawFile['lineHits'])) throw new Error(`Invalid coverage entry for ${absolutePath}`)
+		if (!isPlainRecord(rawFile) || typeof rawFile['file'] !== 'string' || !isPlainRecord(rawFile['lineHits'])) throw new Error(`Invalid coverage entry for ${absolutePath}`)
 		const lineHits: Record<string, number> = {}
 		for (const [line, hits] of Object.entries(rawFile['lineHits'])) {
 			if (typeof hits !== 'number') throw new Error(`Invalid hit count for ${absolutePath}:${line}`)

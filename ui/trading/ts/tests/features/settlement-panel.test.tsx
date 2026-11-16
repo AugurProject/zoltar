@@ -9,6 +9,7 @@ import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { passthroughWorkflowPanelProps } from '../support/liveWorkflowPanelProps.js'
 import { formatDecimalPrecisionError } from '@zoltar/ui-core-shared/copy/common.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
@@ -40,24 +41,16 @@ const walletClient = createWalletClient({
 function renderPanel(market: LiveMarket, holdings: Readonly<{ invalid: bigint; yes: bigint; no: bigint }>, nowSeconds = 100n, settings = DEFAULT_TRADE_SETTINGS, options: Readonly<{ services?: LiveSettlementServices; refresh?(options?: Readonly<{ background?: boolean }>): Promise<void> }> = {}) {
 	return renderIntoDocument(
 		<LiveSettlementControls
+			{...passthroughWorkflowPanelProps}
 			configuration={configuration}
 			market={market}
 			balances={{ scope: shareBalanceScope(market), ...holdings, lp: 0n }}
 			balanceState='ready'
-			balanceError={undefined}
 			account={account}
 			walletClient={walletClient}
-			networkMismatchReason={undefined}
-			wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
 			settings={settings}
 			nowSeconds={nowSeconds}
-			externallyLocked={false}
 			refresh={options.refresh ?? (async () => undefined)}
-			onKnownReceipt={() => undefined}
-			executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
-			createGuardedWalletWrite={() => async write => await write()}
-			retryBalances={async () => undefined}
-			onWorkflowLockChange={() => undefined}
 			services={options.services ?? services}
 		/>,
 	)
@@ -87,8 +80,8 @@ describe('settlement panel', () => {
 
 	test('projects redemption holding fees from current chain time without a quote read', async () => {
 		const collateral = 10n * 10n ** 18n
-		const feeAccounting = { settlementCollateralAttoEth: collateral, totalUnderwritingLimitAttoEth: collateral, feeEligibleUnderwritingLimitAttoEth: collateral, currentRetentionRate: 999_990_000_000_000_000n, lastFeeCheckpointNativeTime: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n }
-		const market = { ...closedMarket, currentRetentionRate: feeAccounting.currentRetentionRate, valuation: { timestamp: 100n, feeEndTime: 10000n, projectedCollateralAttoEth: collateral, feeAccounting } }
+		const feeAccounting = { settlementCollateralAttoEth: collateral, totalUnderwritingLimitAttoEth: collateral, feeEligibleUnderwritingLimitAttoEth: collateral, lastFeeCheckpointNativeTime: 100n, linearFee: { rateAttoEthPerSecond: collateral / 100_000n, endTime: 10000n } }
+		const market = { ...closedMarket, valuation: { timestamp: 100n, feeEndTime: 10000n, projectedCollateralAttoEth: collateral, feeAccounting } }
 		const rendered = await renderPanel(market, { invalid: 2n * 10n ** 18n, yes: 2n * 10n ** 18n, no: 2n * 10n ** 18n }, 2000n, { ...DEFAULT_TRADE_SETTINGS, validityMinutes: 1n })
 		try {
 			await act(() => buttonByLabel('Max').click())

@@ -6,6 +6,7 @@ import { parseOperatorSettings, type PersistedOperatorSettings } from '#config/s
 import { checkIndependentRpcChains, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
 import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { deploymentUpdateMustWait, requireSafeDeploymentTransition } from '../../src/runtime/deployment-transition.ts'
+import { serveSepoliaChainIdRpc } from '../support/sepolia-rpc.ts'
 
 async function exampleSettings() {
 	const settings = parseOperatorSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
@@ -140,14 +141,7 @@ describe('operator connectivity updates', () => {
 	})
 
 	test('records wrong-chain RPC failures without discarding private relay health', async () => {
-		const rpc = Bun.serve({
-			async fetch(request) {
-				const body = (await request.json()) as { id: unknown }
-				return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
-			},
-			hostname: '127.0.0.1',
-			port: 0,
-		})
+		const rpc = serveSepoliaChainIdRpc()
 		try {
 			if (rpc.port === undefined) throw new Error('Test RPC did not expose a port')
 			const settings = await exampleSettings()

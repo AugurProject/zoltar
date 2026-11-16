@@ -3,7 +3,7 @@ import { bagCarryPeaks, buildCarryPeakHeights, hashCarryLeaf as hashLeaf, type C
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 
-export { buildCarryMerkleMountainRangeProof, compareBigintAscending, createSparseNullifier } from '@zoltar/core-shared/evm/carryProof'
+export { buildCarryMerkleMountainRangeProof, createSparseNullifier } from '@zoltar/core-shared/evm/carryProof'
 
 export const hashCarryLeaf = (leaf: CarryLeaf, outcome: ReportingOutcomeKey) => hashLeaf(leaf, getReportingOutcomeValue(outcome))
 

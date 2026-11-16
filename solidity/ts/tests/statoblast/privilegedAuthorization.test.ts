@@ -135,7 +135,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	test('factory initialization and portfolio custody binding reject attackers without changing capital', async () => {
 		await portfolio.prepare()
 		const attacker = portfolio.other()
-		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setStartingParams', args: [1n, 0n] }), /Only factory/)
+		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setStartingParams' }), /Only factory/)
 		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setPortfolioCustody', args: [attacker.account.address] }), /Only portfolio/)
 	})
 

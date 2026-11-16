@@ -1,14 +1,11 @@
-import { ceilDiv, compareBigint } from '@zoltar/core-shared/math/bigint'
-import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { plainRecord } from './record-serialization.ts'
 
 type ReportClock = 'block' | 'timestamp'
 
 export const ETH_QUOTE_DECIMALS = 18
 export const USDC_QUOTE_DECIMALS = 6
-const VAULT_WARNING_HEALTH_FACTOR_BPS = 12_000n
 const BPS_DENOMINATOR = 10_000n
-const PRICE_PRECISION = 10n ** 18n
 
 export type ReportLifecycleInput = {
 	readonly eventName: 'ReportSubmitted' | 'ReportDisputed' | 'ReportSettled'
@@ -146,19 +143,26 @@ export const reportLifecycle = (input: ReportLifecycleInput): LifecycleState => 
 export type AuctionLifecycleInput = {
 	readonly started: boolean
 	readonly finalized: boolean
-	readonly startTimestamp?: string | undefined
-	readonly endTimestamp?: string | undefined
+	/** `AuctionStarted.opensAt` and `closesAt`, in Unix seconds. */
+	readonly opensAt?: string | undefined
+	readonly closesAt?: string | undefined
 	readonly indexedTimestamp: string
 	readonly bidCount: number
 	readonly settlementCount: number
 }
 
+/** The bidding window from a stored `AuctionStarted(opensAt, closesAt, …)` event, in the field names auctionLifecycle reads. */
+export const auctionStartedWindow = (eventData: Readonly<Record<string, unknown>>) => ({
+	opensAt: typeof eventData['opensAt'] === 'string' ? eventData['opensAt'] : undefined,
+	closesAt: typeof eventData['closesAt'] === 'string' ? eventData['closesAt'] : undefined,
+})
+
 export const auctionLifecycle = (input: AuctionLifecycleInput): string => {
 	if (!input.started) return 'Scheduled'
 	if (input.finalized) return input.settlementCount < input.bidCount ? 'Bid settlements outstanding' : 'Fully settled'
 	const current = nonNegative(input.indexedTimestamp)
-	const start = nonNegative(input.startTimestamp)
-	const end = nonNegative(input.endTimestamp)
+	const start = nonNegative(input.opensAt)
+	const end = nonNegative(input.closesAt)
 	if (current === undefined || start === undefined || end === undefined) return 'Awaiting indexed evidence'
 	if (current < start) return 'Scheduled'
 	if (current < end) return 'Open'
@@ -169,67 +173,6 @@ const positiveInteger = (value: unknown, name: string): bigint => {
 	if (typeof value !== 'string') throw new Error(`${name} must be a non-negative decimal integer`)
 	if (!/^\d+$/.test(value)) throw new Error(`${name} must be a non-negative integer`)
 	return BigInt(value)
-}
-
-export type VaultRiskInput = {
-	readonly poolHeldBackingAttoRep: unknown
-	/** Collateral-eligible escrow, excluding surplus already credited to the pool. */
-	readonly disputeStakedAttoRep: unknown
-	readonly openInterestAttoEth: unknown
-	readonly repPerEth1e18: string
-	readonly securityMultiplierBps: string
-	readonly badDebtAttoEth: unknown
-}
-
-const vaultHealthAssessment = (badDebt: bigint, healthFactor: bigint) => {
-	if (badDebt > 0n) return { protocolState: 'bad-debt' as const, scannerSeverity: 'critical' as const, scannerReason: 'Vault has recorded bad debt' }
-	if (healthFactor < BPS_DENOMINATOR) return { protocolState: 'liquidatable' as const, scannerSeverity: 'critical' as const, scannerReason: 'Exact contract health constraints fail at the liquidation boundary' }
-	if (healthFactor < VAULT_WARNING_HEALTH_FACTOR_BPS) return { protocolState: 'healthy' as const, scannerSeverity: 'warning' as const, scannerReason: `Health factor is below the scanner warning threshold of ${VAULT_WARNING_HEALTH_FACTOR_BPS} bps` }
-	return { protocolState: 'healthy' as const, scannerSeverity: 'healthy' as const, scannerReason: 'Health factor is above the scanner warning threshold' }
-}
-
-export const vaultRisk = (input: VaultRiskInput) => {
-	const backing = positiveInteger(input.poolHeldBackingAttoRep, 'poolHeldBackingAttoRep')
-	const dispute = positiveInteger(input.disputeStakedAttoRep, 'disputeStakedAttoRep')
-	const openInterest = positiveInteger(input.openInterestAttoEth, 'openInterestAttoEth')
-	const price = positiveInteger(input.repPerEth1e18, 'repPerEth1e18')
-	const securityMultiplier = positiveInteger(input.securityMultiplierBps, 'securityMultiplierBps')
-	const badDebt = positiveInteger(input.badDebtAttoEth, 'badDebtAttoEth')
-	if (openInterest === 0n)
-		return {
-			protocolState: badDebt > 0n ? ('bad-debt' as const) : ('healthy' as const),
-			scannerSeverity: badDebt > 0n ? ('critical' as const) : ('healthy' as const),
-			scannerReason: badDebt > 0n ? 'Vault has recorded bad debt' : 'Vault has no open-interest obligation',
-			healthFactorBps: undefined,
-			liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
-		}
-	if (price === 0n)
-		return {
-			protocolState: 'unavailable' as const,
-			scannerSeverity: 'unavailable' as const,
-			scannerReason: 'The accounting REP/ETH price is zero or unavailable',
-			healthFactorBps: undefined,
-			liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
-		}
-	const baseRequired = ceilDiv(openInterest * price, PRICE_PRECISION)
-	const associatedBeforeFactor = ceilDiv(baseRequired * securityMultiplier, BPS_DENOMINATOR)
-	const migrationMultiplier = getLiquidationMigrationSecurityMultiplierBps(securityMultiplier)
-	const freeBeforeFactor = ceilDiv(baseRequired * migrationMultiplier, BPS_DENOMINATOR)
-	const associatedFactor = associatedBeforeFactor === 0n ? 0n : ((backing + dispute) * BPS_DENOMINATOR) / associatedBeforeFactor
-	const freeFactor = freeBeforeFactor === 0n ? 0n : (backing * BPS_DENOMINATOR) / freeBeforeFactor
-	const healthFactor = associatedFactor < freeFactor ? associatedFactor : freeFactor
-	const assessment = vaultHealthAssessment(badDebt, healthFactor)
-	return {
-		...assessment,
-		healthFactorBps: healthFactor.toString(),
-		liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
-		calculation: {
-			baseRequiredRepAttoRep: baseRequired.toString(),
-			associatedRequiredBeforeHealthFactorAttoRep: associatedBeforeFactor.toString(),
-			freeRequiredBeforeHealthFactorAttoRep: freeBeforeFactor.toString(),
-			migrationSecurityMultiplierBps: migrationMultiplier.toString(),
-		},
-	}
 }
 
 export type SwapAnalyticsInput = {
@@ -349,18 +292,30 @@ export const fixedWindowTwap = (observations: readonly ExactPriceObservation[], 
 	}
 }
 
-export const auctionDemandCurve = (bids: readonly { readonly tick: string; readonly amountAttoEth: unknown }[]) => {
+export type AuctionBidLevel = { readonly minimumAttoRepPerLot: unknown; readonly lots: unknown }
+
+// The uniform-price auction fills bids in ascending minimumAttoRepPerLot order: a
+// lower REP-per-lot limit accepts less collateral per lot and is therefore the
+// better bid. Demand accumulates in that fill order. A lot is `lotAttoEth` of
+// collateral, known only once AuctionStarted is indexed.
+export const auctionDemandCurve = (bids: readonly AuctionBidLevel[], lotAttoEth: string | undefined) => {
+	const lotSize = lotAttoEth === undefined ? undefined : positiveInteger(lotAttoEth, 'lotAttoEth')
 	const totals = new Map<bigint, bigint>()
 	for (const bid of bids) {
-		const tick = BigInt(bid.tick)
-		totals.set(tick, (totals.get(tick) ?? 0n) + positiveInteger(bid.amountAttoEth, 'bid amount'))
+		const level = positiveInteger(bid.minimumAttoRepPerLot, 'minimumAttoRepPerLot')
+		totals.set(level, (totals.get(level) ?? 0n) + positiveInteger(bid.lots, 'lots'))
 	}
-	let cumulative = 0n
+	let cumulativeLots = 0n
 	return [...totals]
-		.sort(([left], [right]) => compareBigint(right, left))
-		.map(([tick, amountAttoEth]) => {
-			cumulative += amountAttoEth
-			return { tick: tick.toString(), amountAttoEth: amountAttoEth.toString(), cumulativeDemandAttoEth: cumulative.toString() }
+		.sort(([left], [right]) => compareBigint(left, right))
+		.map(([level, lots]) => {
+			cumulativeLots += lots
+			return {
+				minimumAttoRepPerLot: level.toString(),
+				lots: lots.toString(),
+				cumulativeLots: cumulativeLots.toString(),
+				...(lotSize === undefined ? {} : { amountAttoEth: (lots * lotSize).toString(), cumulativeDemandAttoEth: (cumulativeLots * lotSize).toString() }),
+			}
 		})
 }
 
@@ -397,4 +352,46 @@ export const candlestickBuckets = (observations: readonly ExactPriceObservation[
 			const high = entries.reduce((current, candidate) => (compare(candidate, current) > 0 ? candidate : current), open)
 			return { bucketStart, open: serialized(open), high: serialized(high), low: serialized(low), close: serialized(close), observations: entries.length }
 		})
+}
+
+const CAPITAL_WARNING_HEALTH_FACTOR_BPS = 12_000n
+
+type CapitalPositionRisk = {
+	readonly protocolState: 'frozen' | 'healthy' | 'takeover-preconditions-met' | 'unavailable' | 'uncommitted' | 'under-collateralized'
+	readonly scannerSeverity: 'critical' | 'healthy' | 'unavailable' | 'warning'
+	readonly scannerReason: string
+}
+
+/**
+ * Classifies one tagged `capital-owner` read. The protocol facts are the ledger's own: a position is under
+ * its liquidation price when `maxHealthyPrice < liquidationPrice`, and a take-over additionally needs a fresh
+ * price, an open universe and an adverse observation. The warning band is the scanner's, not the protocol's.
+ */
+export const capitalPositionRisk = (state: Readonly<Record<string, unknown>>): CapitalPositionRisk => {
+	const unsigned = (key: string): bigint | undefined => {
+		const value = state[key]
+		return typeof value === 'string' && /^\d+$/.test(value) ? BigInt(value) : undefined
+	}
+	const commitment = unsigned('commitmentAttoEth')
+	if (commitment === undefined) return { protocolState: 'unavailable', scannerSeverity: 'unavailable', scannerReason: 'The tagged read carries no commitment' }
+	if (state['frozen'] === true || state['universeForked'] === true || state['importing'] === true)
+		return { protocolState: 'frozen', scannerSeverity: 'unavailable', scannerReason: state['importing'] === true ? 'The ledger is importing fork choices and is not open yet' : 'The universe forked; the ledger accepts no owner operation and its positions await a branch choice' }
+	if (commitment === 0n) return { protocolState: 'uncommitted', scannerSeverity: 'healthy', scannerReason: 'No commitment is authorized, so no principal backs open interest' }
+	const stalePrice = state['priceValid'] === true ? '' : ' The accepted price has expired, so health is measured against the last accepted price.'
+	if (state['takeoverPreconditionsMet'] === true)
+		return {
+			protocolState: 'takeover-preconditions-met',
+			scannerSeverity: 'critical',
+			scannerReason: 'Pledged REP is below the requirement at the liquidation price and an adverse price observation has started the take-over clock. The ledger cures the position first and rejects the take-over while spare commitment covers the deficit',
+		}
+	// A cohort holds the unmaterialized winning bids of an auction; the ledger takes it over one materialized bid at a time.
+	if (state['belowLiquidationPrice'] === true && state['auctionCohort'] === true)
+		return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `The auction cohort's pledged REP is below the requirement at the liquidation price; it is taken over per bid, once a bid is materialized.${stalePrice}` }
+	if (state['belowLiquidationPrice'] === true) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price; a take-over additionally needs a fresh price and an adverse observation.${stalePrice}` }
+	const health = unsigned('healthFactorBps')
+	// An owner whose commitment is still an unmaterialized auction bid has no index position to compare with the liquidation price.
+	if (health !== undefined && health < 10_000n) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price.${stalePrice}` }
+	if (health === undefined) return { protocolState: 'unavailable', scannerSeverity: 'unavailable', scannerReason: 'The ledger has not accepted a price, so the commitment has no REP requirement yet' }
+	if (health < CAPITAL_WARNING_HEALTH_FACTOR_BPS) return { protocolState: 'healthy', scannerSeverity: 'warning', scannerReason: `Health factor is below the scanner warning threshold of ${CAPITAL_WARNING_HEALTH_FACTOR_BPS} bps.${stalePrice}` }
+	return { protocolState: 'healthy', scannerSeverity: 'healthy', scannerReason: `Health factor is above the scanner warning threshold.${stalePrice}` }
 }

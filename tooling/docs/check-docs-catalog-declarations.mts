@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { Window } from 'happy-dom'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export function assertInvariantCatalogLifecycleBoundaries(invariantsHtml: string): void {
 	for (const id of ['capital-health', 'capital-exit', 'share-settlement', 'escalation', 'forks', 'auctions', 'auction-refunds', 'oracle', 'lifecycle']) {
@@ -34,28 +35,28 @@ export function assertInvariantIndexMatchesEntries(invariantsHtml: string): void
 /** The coordinator data file repeats event declarations and enum values; keep them identical to the compiled ABI and the Solidity source. */
 export function assertCoordinatorDataEventAndEnumDeclarations(coordinatorData: string, compiledContractArtifacts: unknown, priceCoordinatorTypes: string): void {
 	const coordinatorIndex: unknown = JSON.parse(coordinatorData)
-	assert.ok(isRecord(coordinatorIndex))
-	assert.ok(isRecord(compiledContractArtifacts))
+	assert.ok(isPlainRecord(coordinatorIndex))
+	assert.ok(isPlainRecord(compiledContractArtifacts))
 	const compiledContracts = compiledContractArtifacts['contracts']
-	assert.ok(isRecord(compiledContracts))
+	assert.ok(isPlainRecord(compiledContracts))
 	const coordinatorSourceArtifact = compiledContracts['contracts/statoblast/OpenOraclePriceCoordinator.sol']
-	assert.ok(isRecord(coordinatorSourceArtifact))
+	assert.ok(isPlainRecord(coordinatorSourceArtifact))
 	const coordinatorArtifact = coordinatorSourceArtifact['OpenOraclePriceCoordinator']
-	assert.ok(isRecord(coordinatorArtifact))
+	assert.ok(isPlainRecord(coordinatorArtifact))
 	const coordinatorAbi = coordinatorArtifact['abi']
 	assert.ok(Array.isArray(coordinatorAbi))
 	const compiledEventDeclarations: Record<string, string> = {}
 	const compiledEventParameterNames: Record<string, string[]> = {}
 	const compiledIndexedEventParameterNames: Record<string, string[]> = {}
 	for (const entry of coordinatorAbi) {
-		if (!isRecord(entry) || entry['type'] !== 'event') continue
+		if (!isPlainRecord(entry) || entry['type'] !== 'event') continue
 		const eventName = entry['name']
 		const inputs = entry['inputs']
 		assert.ok(typeof eventName === 'string' && Array.isArray(inputs))
 		const parameterNames: string[] = []
 		const indexedParameterNames: string[] = []
 		const parameters = inputs.map((input: unknown) => {
-			assert.ok(isRecord(input))
+			assert.ok(isPlainRecord(input))
 			const parameterType = input['type']
 			const parameterName = input['name']
 			assert.ok(typeof parameterType === 'string' && typeof parameterName === 'string')
@@ -84,10 +85,6 @@ export function assertCoordinatorDataEventAndEnumDeclarations(coordinatorData: s
 		sourceEnumValues[enumName] = Object.fromEntries(members.map((member, index) => [String(index), member]))
 	}
 	assert.deepEqual(coordinatorIndex['enumValues'], sourceEnumValues, 'Coordinator data enum values must exactly match OpenOraclePriceCoordinatorTypes.sol')
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** The coordinator parameter table and the worked request cost state literal values; keep them equal to the deployment configuration and source constants. */

@@ -1,22 +1,17 @@
 import { expect, spyOn, test } from 'bun:test'
-import { ScannerDatabase } from '../../src/database.ts'
 import { decodeFunctionResult, encodeAbiParameters, getAddress, toHex, keccak256, stringToHex, type Log } from '../../src/ethereum.ts'
-import { createNetworkIndexer } from '../../src/indexer/network-state.ts'
 import { indexBlock } from '../../src/indexer/ingestion-operations.ts'
 import { projectionsFrom } from '../../src/projections.ts'
+import { discoveredReceiptReplay } from '../support/replay-receipt-block.ts'
 
 const portfolio = getAddress('0x1111111111111111111111111111111111111111')
 const capital = getAddress('0x2222222222222222222222222222222222222222')
 const owner = getAddress('0x3333333333333333333333333333333333333333')
+const index = getAddress('0x4444444444444444444444444444444444444444')
+const streams = getAddress('0x5555555555555555555555555555555555555555')
 
 test('universe preparation discovers capital and indexes deposits from the same receipt', async () => {
-	const database = new ScannerDatabase('postgres://unused')
-	const indexer = createNetworkIndexer({ id: 'sepolia', name: 'Sepolia', chainId: 11_155_111, rpcUrls: ['http://unused.invalid'], startBlock: 10n, confirmationDepth: 12n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, new AbortController().signal, { traceSelectedTransactions: false })
-	indexer.stateBoundary.discovered = true
-	const hash = toHex(10n, { size: 32 })
-	const tx = toHex(20n, { size: 32 })
-	const header = { hash, parentHash: toHex(9n, { size: 32 }), timestamp: 1_700_000_000n }
-	const position = { blockNumber: 10n, blockHash: hash, transactionHash: tx, transactionIndex: 0n }
+	const { database, indexer, hash, tx, header, position } = discoveredReceiptReplay()
 	const logs: Log[] = [
 		{ ...position, address: portfolio, logIndex: 0n, topics: [keccak256(stringToHex('UniversePrepared(uint248,address)')), toHex(2n, { size: 32 })], data: encodeAbiParameters([{ type: 'address' }], [capital]) },
 		{ ...position, address: capital, logIndex: 1n, topics: [keccak256(stringToHex('PrincipalDeposited(address,address,uint256)')), toHex(BigInt(owner), { size: 32 }), toHex(BigInt(owner), { size: 32 })], data: encodeAbiParameters([{ type: 'uint256' }], [100n]) },
@@ -26,7 +21,8 @@ test('universe preparation discovers capital and indexes deposits from the same 
 		spyOn(indexer.providers.client, 'getTransactionReceipt').mockResolvedValue({ transactionHash: tx, blockHash: hash, blockNumber: 10n, transactionIndex: 0n, from: owner, to: portfolio, gasUsed: 1_000_000n, cumulativeGasUsed: 1_000_000n, status: 'success', logs }),
 		spyOn(indexer.providers.client, 'readContract').mockImplementation(async request => {
 			expect(request.blockNumber).toBe(10n)
-			const address = request.functionName === 'capitalLedger' ? capital : portfolio
+			const addresses: Readonly<Record<string, string>> = { capitalLedger: capital, commitmentIndex: index, feeStreams: streams, portfolio }
+			const address = addresses[request.functionName] ?? portfolio
 			return decodeFunctionResult({ abi: request.abi, functionName: request.functionName, data: request.functionName === 'universeId' ? encodeAbiParameters([{ type: 'uint248' }], [2n]) : encodeAbiParameters([{ type: 'address' }], [address]) })
 		}),
 	]
@@ -46,6 +42,9 @@ test('universe preparation discovers capital and indexes deposits from the same 
 			async () => header,
 		)
 		expect(result.contracts.get(capital.toLowerCase())?.kind).toBe('securityPoolCapitalLedger')
+		// The ledger's accounting components are registered with it, from reads tagged with the same block.
+		expect(result.contracts.get(index.toLowerCase())).toMatchObject({ kind: 'securityPoolCommitmentIndex', discoveryBlock: 10n })
+		expect(result.contracts.get(streams.toLowerCase())).toMatchObject({ kind: 'securityPoolCapitalFeeStreams', discoveryBlock: 10n })
 		const deposit = result.block.logs.find(log => log.address === capital)
 		if (deposit === undefined) throw new Error('Capital event was not indexed')
 		expect(projectionsFrom(deposit)).toContainEqual(expect.objectContaining({ domain: 'risk', semanticEventKind: 'PrincipalDeposited', entityIdentity: `${capital.toLowerCase()}:${owner.toLowerCase()}` }))

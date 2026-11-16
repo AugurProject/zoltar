@@ -10,7 +10,7 @@ import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { reconcileTransaction } from '../../src/runtime/transaction-reconciliation-handler.ts'
 import { initialRuntimeState, loadDurableState } from '#state/operator-state'
 import { portfolioReceiptIntent } from './portfolio-receipt-fixture.ts'
-import { portfolioSettings } from '../support/portfolio-observation.ts'
+import { serveScriptedRpc } from '../support/scripted-rpc.ts'
 
 test('manual fee replacement registers the created report atomically with removing the original intent', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'sponsored-replacement-'))
@@ -23,43 +23,29 @@ test('manual fee replacement registers the created report atomically with removi
 	const replacementHash = `0x${'33'.repeat(32)}` as const
 	const blockHash = `0x${'11'.repeat(32)}` as const
 	const topics = encodeEventTopics({ abi: sharedPoolPriceFeedAbi, eventName: 'ReportFundingAssigned', args: { reportId: 7n, sponsor: intent.sender, coordinator: feed } })
-	const server = Bun.serve({
-		hostname: '127.0.0.1',
-		port: 0,
-		async fetch(request) {
-			const payload: unknown = await request.json()
-			if (typeof payload !== 'object' || payload === null) throw new Error('Invalid RPC request')
-			const method = Reflect.get(payload, 'method')
-			const params = Reflect.get(payload, 'params')
-			let result: unknown
-			if (method === 'eth_blockNumber') result = '0x70'
-			else if (method === 'eth_getBlockByNumber') {
-				const number = Array.isArray(params) && params[0] !== 'latest' ? params[0] : '0x70'
-				result = { number, hash: number === '0x64' ? blockHash : `0x${'22'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-			} else if (method === 'eth_getTransactionByHash') result = { blockHash, blockNumber: '0x64', hash: replacementHash, from: intent.sender, to: feed, input: original.data, nonce: '0x0', gas: '0x100000', value: '0x0', transactionIndex: '0x0', type: '0x2' }
-			else if (method === 'eth_getTransactionReceipt')
-				result = {
-					blockHash,
-					blockNumber: '0x64',
-					transactionHash: replacementHash,
-					from: intent.sender,
-					to: feed,
-					status: '0x1',
-					cumulativeGasUsed: '0x1',
-					gasUsed: '0x1',
-					transactionIndex: '0x0',
-					logs: [{ address: feed, topics, data: '0x', blockHash, blockNumber: '0x64', transactionHash: replacementHash, transactionIndex: '0x0', logIndex: '0x0', removed: false }],
-				}
-			else throw new Error(`Unexpected RPC method ${String(method)}`)
-			return Response.json({ jsonrpc: '2.0', id: Reflect.get(payload, 'id'), result })
-		},
+	const { endpoint, server, settings } = serveScriptedRpc((method, params) => {
+		if (method === 'eth_blockNumber') return '0x70'
+		if (method === 'eth_getBlockByNumber') {
+			const number = Array.isArray(params) && params[0] !== 'latest' ? params[0] : '0x70'
+			return { number, hash: number === '0x64' ? blockHash : `0x${'22'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+		}
+		if (method === 'eth_getTransactionByHash') return { blockHash, blockNumber: '0x64', hash: replacementHash, from: intent.sender, to: feed, input: original.data, nonce: '0x0', gas: '0x100000', value: '0x0', transactionIndex: '0x0', type: '0x2' }
+		if (method === 'eth_getTransactionReceipt')
+			return {
+				blockHash,
+				blockNumber: '0x64',
+				transactionHash: replacementHash,
+				from: intent.sender,
+				to: feed,
+				status: '0x1',
+				cumulativeGasUsed: '0x1',
+				gasUsed: '0x1',
+				transactionIndex: '0x0',
+				logs: [{ address: feed, topics, data: '0x', blockHash, blockNumber: '0x64', transactionHash: replacementHash, transactionIndex: '0x0', logIndex: '0x0', removed: false }],
+			}
+		throw new Error(`Unexpected RPC method ${String(method)}`)
 	})
 	try {
-		const settings = portfolioSettings()
-		const endpoint = `http://127.0.0.1:${server.port}`
-		settings.connectivity.readRpcUrl = endpoint
-		settings.connectivity.quorumRpcUrls = []
-		settings.connectivity.rpcQuorum = 1
 		const state = initialRuntimeState(true, intent.sender, 1)
 		state.pendingTransactions = [intent]
 		state.portfolioFunding = { [fundingKey]: { amount: 100n, target: 1n } }

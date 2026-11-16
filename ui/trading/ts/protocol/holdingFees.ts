@@ -14,10 +14,7 @@ export type FeeAccounting = Readonly<{
 	settlementCollateralAttoEth: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint
-	currentRetentionRate: bigint
 	lastFeeCheckpointNativeTime: bigint
-	feeIndexRemainder: bigint
-	totalFeesOwedRemainder: bigint
 }>
 
 /** Pin the checkpoint and share supply to the simulation block, including after the user's other transactions. */
@@ -35,7 +32,6 @@ export async function loadTransactionFeeMarket(client: WalletClient, market: Liv
 		shareTokenSupplyAttoShares: central.shareTokenSupplyAttoShares,
 		settlementRecoveryAttoRep: recovery,
 		settlementCollateralAttoEth: checkpoint.settlementCollateralAfterFeesAttoEth,
-		currentRetentionRate: feeAccounting.currentRetentionRate,
 		feeEligibleUnderwritingLimitAttoEth: feeAccounting.feeEligibleUnderwritingLimitAttoEth,
 		totalUnderwritingLimitAttoEth: feeAccounting.totalUnderwritingLimitAttoEth,
 		valuation: { timestamp, feeEndTime, projectedCollateralAttoEth: checkpoint.settlementCollateralAfterFeesAttoEth, feeAccounting },
@@ -45,8 +41,8 @@ export async function loadTransactionFeeMarket(client: WalletClient, market: Liv
 function projectedCollateral(market: LiveMarket, deadline: bigint) {
 	const valuation = market.valuation
 	if (valuation?.feeAccounting !== undefined) return estimateMintCheckpoint({ ...valuation.feeAccounting, currentTimestamp: deadline, feeEndTimestamp: valuation.feeEndTime })?.settlementCollateralAfterFeesAttoEth
-	if (market.currentRetentionRate === 10n ** 18n || market.feeEligibleUnderwritingLimitAttoEth === 0n) return market.settlementCollateralAttoEth
-	return undefined
+	// A market loaded without fee accounting has no fee stream to project.
+	return market.settlementCollateralAttoEth
 }
 
 /** A minimum approved today must remain payable through the signed transaction's validity, without other state changes. */

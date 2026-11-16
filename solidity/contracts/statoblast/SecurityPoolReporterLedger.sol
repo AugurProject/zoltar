@@ -203,7 +203,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	/// @notice Charge admission only to the actual triggering question, then freeze the aggregate.
 	function triggerFork(uint248 universeId, uint256 questionId) external onlyPortfolio {
 		Book storage book = _book(universeId);
-		require(!book.isSealed && zoltar.getForkTime(universeId) == 0, 'Reporter universe already forked');
+		require(!book.isSealed && zoltar.getForkTime(universeId) == 0, 'Reporter universe is forked');
 		_freezeMatured(universeId, book, _portfolioTime(universeId));
 		(Question memory state, bool finalClaim) = _question(universeId, questionId);
 		uint256 threshold = zoltar.getForkThresholdAttoRep(universeId);

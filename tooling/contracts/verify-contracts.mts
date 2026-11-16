@@ -19,6 +19,7 @@ import {
 	type VerificationOutcome,
 	type VerificationPlan,
 } from './contract-verification.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const CONTRACT_ARTIFACT_PATH = path.join(repositoryRoot, 'solidity', 'artifacts', 'Contracts.json')
 const NETWORK_IDS_BY_CHAIN_ID: Readonly<Record<number, 'mainnet' | 'sepolia'>> = {
@@ -36,18 +37,14 @@ export function parseRequestedChainIds(argv: readonly string[]): number[] {
 	})
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
 export function createArtifactLookup(rawArtifact: unknown): ArtifactLookup {
-	if (!isRecord(rawArtifact) || !isRecord(rawArtifact['contracts'])) throw new Error('Contract artifact must contain a contracts object')
+	if (!isPlainRecord(rawArtifact) || !isPlainRecord(rawArtifact['contracts'])) throw new Error('Contract artifact must contain a contracts object')
 	const contracts = rawArtifact['contracts']
 	return (sourcePath, contractName) => {
 		const contractFile = contracts[sourcePath]
-		if (!isRecord(contractFile) || !isRecord(contractFile[contractName])) throw new Error(`Contract artifact is missing ${sourcePath}:${contractName}`)
+		if (!isPlainRecord(contractFile) || !isPlainRecord(contractFile[contractName])) throw new Error(`Contract artifact is missing ${sourcePath}:${contractName}`)
 		const evm = contractFile[contractName]['evm']
-		if (!isRecord(evm) || !isRecord(evm['bytecode']) || typeof evm['bytecode']['object'] !== 'string') throw new Error(`Contract artifact ${sourcePath}:${contractName} has no creation bytecode`)
+		if (!isPlainRecord(evm) || !isPlainRecord(evm['bytecode']) || typeof evm['bytecode']['object'] !== 'string') throw new Error(`Contract artifact ${sourcePath}:${contractName} has no creation bytecode`)
 		return { creationBytecode: evm['bytecode']['object'] }
 	}
 }

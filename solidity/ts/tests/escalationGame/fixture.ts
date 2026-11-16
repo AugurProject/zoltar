@@ -8,7 +8,7 @@ import { TEST_ADDRESSES, MAX_UINT256 } from '../../testSupport/simulator/utils/c
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { getEscrowedRepByVault, getTotalEscrowedRep, readTimeSinceStartFromAttritionCost, readCarryTotal, readCarryLeafPage } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getEscalationGameOutcomeState, getEscrowedRepByVault, getTotalEscrowedRep, readTimeSinceStartFromAttritionCost, readCarryTotal, readCarryLeafPage } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import {
@@ -168,6 +168,17 @@ export function useEscalationGameFixture() {
 					args: [],
 				}),
 		)
+	}
+
+	const deployForkContinuationEscalationGame = async () => {
+		const deployment = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(deployment.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		return deployment
+	}
+
+	const readOutcomeCarrySnapshot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => {
+		const state = await getEscalationGameOutcomeState(client, escalationGameAddress, outcome)
+		return { peaks: state.currentPeaks, leafCount: state.currentLeafCount, carryTotal: state.currentCarryTotalAttoRep, nullifierRoot: state.currentNullifierRoot }
 	}
 
 	const fundEscalationGame = async (escalationGameAddress: Address, amountAttoRep: bigint) =>
@@ -441,6 +452,8 @@ export function useEscalationGameFixture() {
 		startEscalation,
 		startEscalationFromFork,
 		resumeEscalationFromFork,
+		deployForkContinuationEscalationGame,
+		readOutcomeCarrySnapshot,
 		fundEscalationGame,
 		advanceForkContinuationPastStart,
 		depositOnOutcomeViaProofTestSecurityPool,

@@ -1,4 +1,4 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { encodeFunctionData, formatUnits, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -63,13 +63,13 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 		else if (amount > quote.availableCommitmentAttoEth) reason = 'Insufficient available backing after queued retirement.'
 		else if (fee === undefined || fee < quote.purchaseFeeAttoEth) reason = 'Set a maximum fee that covers the quote.'
 		else if (minimum > quote.shares) reason = 'Minimum shares exceed the current quote.'
-		else if (amount + fee > snapshot.walletCollateral) reason = 'Insufficient collateral balance.'
-		else if (snapshot.collateralAllowance < amount + fee) reason = 'Collateral approval required.'
+		else if (amount + fee > snapshot.walletCollateral) reason = collateralCopy.formatInsufficientBalance(snapshot.collateral.symbol)
+		else if (snapshot.collateralAllowance < amount + fee) reason = collateralCopy.approvalRequired
 	}
 	return {
 		requiredCollateral: amount === undefined || fee === undefined ? undefined : amount + fee,
 		approve: (approvalAmount: bigint) =>
-			actions.runPortfolioAction(approvalAmount === 0n ? 'resetPurchaseCollateral' : 'approvePurchaseCollateral', 'Approve purchase collateral', () => {
+			actions.runPortfolioAction('approvePurchaseCollateral', 'Approve purchase collateral', () => {
 				if (snapshot === undefined) throw new Error('Portfolio unavailable.')
 				const account = snapshot.auctionVault?.bidder ?? snapshot.owner
 				return {
@@ -77,12 +77,6 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 					to: snapshot.collateralToken,
 					value: 0n,
 					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [snapshot.services, approvalAmount] }),
-					validateBeforeSubmit: async () => {
-						const allowance = await createConnectedReadClient().readContract({ address: snapshot.collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, snapshot.services] })
-						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')
-						const reason = getTokenApprovalResetReason(allowance, approvalAmount, snapshot.collateral.symbol, snapshot.collateral.symbol === 'USDT')
-						if (reason !== undefined) throw new Error(reason)
-					},
 				}
 			}),
 		questionInput: questionInput.value,

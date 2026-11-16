@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 import { IWeth9 } from '../interfaces/IWeth9.sol';
-import { ShareToken } from '../tokens/ShareToken.sol';
 import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
-import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';

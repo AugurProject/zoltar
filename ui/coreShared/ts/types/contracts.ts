@@ -31,7 +31,7 @@ export type MarketType = 'binary' | 'categorical' | 'scalar'
 
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type ForkOutcomeKey = ReportingOutcomeKey | 'none'
-export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkCollateralRepairAuction'
+export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration'
 
 export type QuestionData = {
 	title: string
@@ -61,6 +61,8 @@ export type ZoltarUniverseSummary = {
 	relatedUniversesLoaded?: boolean
 	childUniverses: ZoltarChildUniverseSummary[]
 	forkBurnDivisor?: bigint
+	/** When Zoltar first accepts a fork of this universe: its parent's fork response period end, or 0 for genesis. */
+	earliestForkTime?: bigint
 	forkThresholdAttoRep: bigint
 	forkQuestionDetails: MarketDetails | undefined
 	forkTime: bigint

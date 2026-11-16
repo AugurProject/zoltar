@@ -13,29 +13,20 @@ export async function storeEntityStateSnapshots(this: ScannerDatabase, chainId: 
 			`
 		if (canonicalRows.length !== 1) throw new DatabaseConsistencyError('Cannot store entity snapshots for a noncanonical block')
 		for (const snapshot of snapshots) {
+			// A fresh fragment per statement, so the two inserts never share one Query object.
+			const snapshotRow = () => transaction`(
+					chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
+					source_method, read_status, read_result, read_failure_reason, canonical, observed_at,
+					indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
+				) VALUES (
+					${chainId}, ${snapshot.entityType}, ${snapshot.entityIdentity}, ${blockNumber.toString()}, ${blockHash}, ${blockTimestamp},
+					${snapshot.sourceMethod}, ${snapshot.readStatus}, (${snapshot.readResult === undefined ? null : databaseJsonText(snapshot.readResult)}::text)::jsonb,
+					${snapshot.readFailureReason ?? null}, true, now(), ${provenance?.indexerRunId ?? null}, ${provenance?.abiSourceHash ?? null},
+					${provenance?.applicationSourceHash ?? null}, ${provenance?.projectionSourceHash ?? null}
+				)`
+			await transaction`INSERT INTO entity_state_observations ${snapshotRow()}`
 			await transaction`
-					INSERT INTO entity_state_observations (
-						chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
-						source_method, read_status, read_result, read_failure_reason, canonical, observed_at,
-						indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
-					) VALUES (
-						${chainId}, ${snapshot.entityType}, ${snapshot.entityIdentity}, ${blockNumber.toString()}, ${blockHash}, ${blockTimestamp},
-						${snapshot.sourceMethod}, ${snapshot.readStatus}, (${snapshot.readResult === undefined ? null : databaseJsonText(snapshot.readResult)}::text)::jsonb,
-						${snapshot.readFailureReason ?? null}, true, now(), ${provenance?.indexerRunId ?? null}, ${provenance?.abiSourceHash ?? null},
-						${provenance?.applicationSourceHash ?? null}, ${provenance?.projectionSourceHash ?? null}
-					)
-				`
-			await transaction`
-					INSERT INTO entity_state_snapshots (
-						chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
-						source_method, read_status, read_result, read_failure_reason, canonical, observed_at,
-						indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
-					) VALUES (
-						${chainId}, ${snapshot.entityType}, ${snapshot.entityIdentity}, ${blockNumber.toString()}, ${blockHash}, ${blockTimestamp},
-						${snapshot.sourceMethod}, ${snapshot.readStatus}, (${snapshot.readResult === undefined ? null : databaseJsonText(snapshot.readResult)}::text)::jsonb,
-						${snapshot.readFailureReason ?? null}, true, now(), ${provenance?.indexerRunId ?? null}, ${provenance?.abiSourceHash ?? null},
-						${provenance?.applicationSourceHash ?? null}, ${provenance?.projectionSourceHash ?? null}
-					)
+					INSERT INTO entity_state_snapshots ${snapshotRow()}
 					ON CONFLICT (chain_id, entity_type, entity_identity, block_hash, source_method) DO UPDATE SET
 						read_status = EXCLUDED.read_status, read_result = EXCLUDED.read_result,
 						read_failure_reason = EXCLUDED.read_failure_reason, canonical = true, observed_at = now(),

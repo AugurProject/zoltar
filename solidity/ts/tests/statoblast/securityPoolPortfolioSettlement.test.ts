@@ -34,7 +34,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await setupTestAccounts(ethereum)
 		await ethereum.advanceTime(1_000_000n)
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		const deployedToken = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: collateralArtifact.abi, bytecode: `0x${collateralArtifact.evm.bytecode.object}`, args: [18, false] }) }) })
+		const deployedToken = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: collateralArtifact.abi, bytecode: `0x${collateralArtifact.evm.bytecode.object}`, args: [18] }) }) })
 		if (deployedToken.contractAddress === undefined) throw new Error('Collateral token deployment missing')
 		collateral = deployedToken.contractAddress
 		for (const recipient of [client.account.address, addressString(TEST_ADDRESSES[1])]) await writeContractAndWait(client, () => client.writeContract({ abi: collateralArtifact.abi, address: collateral, functionName: 'mint', args: [recipient, 10n ** 24n] }))

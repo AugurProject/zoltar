@@ -153,6 +153,39 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 	})
 
+	for (const withData of [false, true]) {
+		const emptyBatch = (from: Address, to: Address) => encodeFunctionData({ abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'safeBatchTransferFrom', args: withData ? [from, to, [], [], '0x1234'] : [from, to, [], []] })
+
+		test(`empty batch transfers reject zero recipients (withData=${withData})`, async () => {
+			const token = await deployShareToken()
+			await assert.rejects(transactWithShareToken(token, emptyBatch(client.account.address, zeroAddress)), /ERC1155: batch transfer target address must be non-zero/)
+		})
+
+		test(`empty batch transfers enforce operator approval (withData=${withData})`, async () => {
+			const token = await deployShareToken()
+			await assert.rejects(
+				writeContractAndWait(operatorClient, () => operatorClient.sendTransaction({ to: token, data: emptyBatch(client.account.address, operatorClient.account.address) })),
+				/ERC1155: caller needs operator approval for third-party batch transfers/,
+			)
+		})
+
+		test(`empty batch transfers invoke receiver acceptance and preserve payloads (withData=${withData})`, async () => {
+			const token = await deployShareToken()
+			const receiver = await deployReceiver()
+			const receipt = await client.getTransactionReceipt({ hash: await transactWithShareToken(token, emptyBatch(client.account.address, receiver)) })
+			const events = receipt.logs.filter(log => log.address === token).map(log => decodeEventLog({ abi: statoblast_tokens_ShareToken_ShareToken.abi, data: log.data, topics: log.topics }))
+			assert.strictEqual(events.length, 1)
+			assert.strictEqual(events[0]?.eventName, 'TransferBatch')
+			const receiverAbi = test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi
+			assert.strictEqual(await client.readContract({ abi: receiverAbi, address: receiver, functionName: 'batchReceiveCount' }), 1n)
+			assert.strictEqual(await client.readContract({ abi: receiverAbi, address: receiver, functionName: 'lastData' }), withData ? '0x1234' : '0x')
+			assert.strictEqual(await client.readContract({ abi: receiverAbi, address: receiver, functionName: 'lastFrom' }), client.account.address)
+			await writeContractAndWait(client, () => client.writeContract({ abi: receiverAbi, address: receiver, functionName: 'setBehavior', args: [true, false, false] }))
+			await assert.rejects(transactWithShareToken(token, emptyBatch(client.account.address, receiver)), /ERC1155: receiver rejected tokens by returning an unexpected batch-transfer selector/)
+			assert.strictEqual(await client.readContract({ abi: receiverAbi, address: receiver, functionName: 'batchReceiveCount' }), 1n)
+		})
+	}
+
 	test('single and batch transfers expose target, authorization, and array-shape guard reasons', async () => {
 		const shareTokenAddress = await deployShareToken()
 		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi

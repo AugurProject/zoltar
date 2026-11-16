@@ -2,6 +2,16 @@ import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import type { ReadinessAction } from '@zoltar/ui-zoltar-shared/features/types.js'
 
+function settleReportAction(blocker: string | undefined): ReadinessAction {
+	return {
+		actionLabel: openOracleCopy.settleReport,
+		key: 'settle-report',
+		readiness: blocker === undefined ? 'ready' : 'blocked',
+		title: openOracleCopy.settleReport,
+		...(blocker === undefined ? {} : { blocker }),
+	}
+}
+
 export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, settleMessage }: { actionMode: OpenOracleSelectedReportActionMode; disputeMessage: string | undefined; hasReport: boolean; settleMessage: string | undefined }): ReadinessAction[] {
 	const baseBlocker = !hasReport ? openOracleCopy.reportLoadRequired : undefined
 	const actions: ReadinessAction[] = []
@@ -16,24 +26,10 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 			title: openOracleCopy.disputeAndSwap,
 			...(disputeBlocker === undefined ? {} : { blocker: disputeBlocker }),
 		})
-		const settleBlocker = baseBlocker ?? settleMessage
-		actions.push({
-			actionLabel: openOracleCopy.settleReport,
-			key: 'settle-report',
-			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
-			title: openOracleCopy.settleReport,
-			...(settleBlocker === undefined ? {} : { blocker: settleBlocker }),
-		})
+		actions.push(settleReportAction(baseBlocker ?? settleMessage))
 	}
 	if (actionMode === 'settle') {
-		const settleBlocker = baseBlocker ?? settleMessage
-		actions.push({
-			actionLabel: openOracleCopy.settleReport,
-			key: 'settle-report',
-			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
-			title: openOracleCopy.settleReport,
-			...(settleBlocker === undefined ? {} : { blocker: settleBlocker }),
-		})
+		actions.push(settleReportAction(baseBlocker ?? settleMessage))
 	}
 	return actions
 }

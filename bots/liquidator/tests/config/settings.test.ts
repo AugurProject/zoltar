@@ -50,8 +50,6 @@ const settings = {
 	privateKey: null,
 	runtime: {
 		execute: false,
-		historicalLogRecovery: false,
-		logLookbackBlocks: 256,
 		once: false,
 		pollMilliseconds: 12000,
 		stateFile: '.state/operator-state.json',
@@ -80,6 +78,33 @@ describe('liquidator settings', () => {
 			expect(Object.values(parsed.deployment)).not.toContain('0x0000000000000000000000000000000000000000')
 			expect(serializedSettings(parsed)).not.toHaveProperty('deployment')
 		}
+	})
+
+	test('rejects unknown and misspelled keys instead of silently applying their defaults', () => {
+		expect(() => parseSettings({ ...settings, selectedPortfolio: [] })).toThrow('operator settings contains unsupported field selectedPortfolio')
+		expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlock: 64 } })).toThrow('runtime contains unsupported field logLookbackBlock')
+		expect(() => parseSettings({ ...settings, strategy: { ...settings.strategy, walletReserveEth: '1' } })).toThrow('strategy contains unsupported field walletReserveEth')
+		expect(() => parseSettings({ ...settings, portfolioPolicy: { allowFundedTakeover: true } })).toThrow('portfolioPolicy contains unsupported field allowFundedTakeover')
+	})
+
+	test('ignores removed standalone-pool settings and drops them on the next save', () => {
+		const parsed = parseSettings({
+			...settings,
+			desiredPools: [],
+			selectedPools: [],
+			strategy: { ...settings.strategy, allowAutomaticDeposits: true, candidatePriority: 'largest-bonus', vaultTargetHealthBps: 12500 },
+		})
+		const saved = serializedSettings(parsed)
+		expect(saved).not.toHaveProperty('desiredPools')
+		expect(saved).not.toHaveProperty('selectedPools')
+		expect(Object.keys(saved.strategy).sort()).toEqual(['maximumGasCostEth', 'walletReserveRep'])
+		expect(parseSettings(JSON.parse(JSON.stringify(saved))).strategy).toEqual(parsed.strategy)
+	})
+
+	test('loads the shipped example configuration', () => {
+		const parsed = parseSettings(example)
+		expect(parsed.networkConfigured).toBe(false)
+		expect(parsed.portfolioPolicy.maximumPositionsPerScan).toBe(example.portfolioPolicy.maximumPositionsPerScan)
 	})
 
 	test('keeps settings and durable recovery state isolated while switching chain profiles', async () => {
@@ -174,13 +199,14 @@ describe('liquidator settings', () => {
 			rpcQuorum: 1,
 		})
 		expect(serialized.runtime.stateFile).toBe(resolve(settings.runtime.stateFile))
-		expect(serialized.runtime).toMatchObject({ historicalLogRecovery: false, logLookbackBlocks: 256 })
+		expect(serialized.runtime).not.toHaveProperty('logLookbackBlocks')
+		expect(serialized.runtime).not.toHaveProperty('historicalLogRecovery')
 		expect(serialized.approvedUniverses).toEqual(['0'])
 	})
 
-	test('bounds the normal log window to the latest 1 through 256 blocks', () => {
-		for (const logLookbackBlocks of [1, 256]) expect(parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks } }).runtime.logLookbackBlocks).toBe(logLookbackBlocks)
-		for (const logLookbackBlocks of [0, 257]) expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks } })).toThrow('runtime.logLookbackBlocks must be an integer from 1 through 256')
+	test('rejects the removed staged-recovery log settings as unsupported runtime fields', () => {
+		expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks: 256 } })).toThrow('runtime contains unsupported field logLookbackBlocks')
+		expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, historicalLogRecovery: false } })).toThrow('runtime contains unsupported field historicalLogRecovery')
 	})
 
 	test('rejects invalid execution amounts', () => {

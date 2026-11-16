@@ -1,4 +1,5 @@
 import { requiredArrayItem } from '../../../browser/api-decoding.ts'
+import { demoCapitalLedgers, demoCapitalPositions, demoFeeEconomics, demoLiquidations, demoQuestionFeeStreams } from './capital-fixtures.ts'
 import { demoHash } from './chain-fixtures.ts'
 import type { DemoEnvironment } from './environment.ts'
 
@@ -106,57 +107,13 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 							},
 			},
 		],
-		vaults: [
-			{
-				pool_address: '0x9999999999999999999999999999999999999999',
-				vault_address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
-				block_number: asOf.blockNumber,
-				read_status: 'success',
-				source_method: 'vaultAccountingState()',
-				protocol_state: 'healthy',
-				scanner_severity: 'warning',
-				scanner_reason: 'Health factor is below the scanner warning threshold',
-				risk: { healthFactorBps: '11350', liquidationBoundaryBps: '10000' },
-			},
-		],
-		recentLiquidations: [],
-		approvalEvents: [
-			{
-				event_name: 'LiquidationApprovalConsumed',
-				approval_identity: `0x${'a'.repeat(64)}`,
-				receiver_vault: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
-				block_number: asOf.blockNumber,
-				transaction_index: 8,
-				log_index: 3,
-				event_data: {
-					operationId: '42',
-					consumedDebtAttoEth: (2n * 10n ** 18n).toString(),
-					releasedDebtAttoEth: (3n * 10n ** 17n).toString(),
-					resultingAvailableDebtAttoEth: (8n * 10n ** 18n).toString(),
-					resultingReservedDebtAttoEth: 0n.toString(),
-					resultingConsumedDebtAttoEth: (2n * 10n ** 18n).toString(),
-				},
-			},
-			{
-				event_name: 'LiquidationApprovalReserved',
-				approval_identity: `0x${'a'.repeat(64)}`,
-				receiver_vault: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
-				block_number: asOf.blockNumber,
-				transaction_index: 2,
-				log_index: 1,
-				event_data: { operationId: '42', reservedDebtAttoEth: (2n * 10n ** 18n).toString() },
-			},
-			{
-				event_name: 'LiquidationApprovalNonceInvalidated',
-				approval_identity: 'nonce:0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
-				receiver_vault: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
-				block_number: asOf.blockNumber,
-				transaction_index: 9,
-				log_index: 1,
-				event_data: { previousNonce: '41', newNonce: '42' },
-			},
-		],
-		pagination: { poolTotal: 1, poolHasMore: false, vaultTotal: 1, vaultHasMore: false },
+		capitalLedgers: demoCapitalLedgers(asOf.blockNumber),
+		capitalPositions: demoCapitalPositions(asOf.blockNumber),
+		capitalPositionTotal: 3,
+		recentLiquidations: demoLiquidations(asOf.blockNumber),
+		feeEconomics: demoFeeEconomics(asOf.blockNumber),
+		questionFeeStreams: demoQuestionFeeStreams(asOf.blockNumber),
+		pagination: { poolTotal: 1, poolHasMore: false },
 	}
 	return {
 		chainId,
@@ -166,6 +123,7 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 			escalations: allEscalations.slice(0, 250),
 			auctions: allAuctions.slice(0, 250),
 			risk,
+			feeEconomics: risk.feeEconomics,
 			prices: [{ source_event: 'PriceReported', value: '233590000000000000000', block_number: asOf.blockNumber }],
 			forks: [
 				{
@@ -175,10 +133,10 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 					child_count: 2,
 					migrator_count: 14,
 					migrated_atto_rep: '4500000000000000000000',
-					obligation_events: 3,
+					portfolio_fork_events: 3,
 				},
 			],
-			totals: { reports: allReports.length, escalations: allEscalations.length, auctions: allAuctions.length, pools: risk.pools.length, vaults: risk.vaults.length },
+			totals: { reports: allReports.length, escalations: allEscalations.length, auctions: allAuctions.length, pools: risk.pools.length },
 			recentChanges: [
 				{ semantic_event_kind: 'ReportDisputed', entity_type: 'report', entity_identity: '0x529dca…:1842', block_number: asOf.blockNumber, block_timestamp: new Date(Date.now() - 3_600_000).toISOString() },
 				{ semantic_event_kind: 'DepositOnOutcome', entity_type: 'escalation', entity_identity: '0x777777…', block_number: asOf.blockNumber, block_timestamp: new Date().toISOString() },

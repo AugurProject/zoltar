@@ -18,8 +18,8 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
 		['docs/charts/chartRuntime.ts', 875],
-		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
-		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
+		['solidity/ts/testSupport/coverage/traceToSource.ts', 964],
+		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 607],
 	]),
 ])
 
@@ -36,17 +36,16 @@ export const testSourceLineLimit = 1500
 export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Split by behavior area into sibling test files that share a fixture module.', [
 		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3443],
-		['augurScan/tests/unit/live-ui.test.ts', 1534],
-		['bots/chaos/tests/execution/transaction-executor.test.ts', 1848],
-		['bots/chaos/tests/monitoring/discovery.test.ts', 1704],
+		['bots/chaos/tests/execution/transaction-executor.test.ts', 1847],
+		['bots/chaos/tests/monitoring/discovery.test.ts', 1697],
 		['bots/chaos/tests/runtime/dashboard-controller.test.ts', 1666],
-		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2072],
+		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2057],
 		['bots/open-oracle-arbitrager/tests/dashboard/dashboard-refresh.test.ts', 1576],
 		['shared/core/ts/evm/ethereum.test.ts', 3826],
-		['solidity/ts/tests/coverageHelpers.test.ts', 1766],
+		['solidity/ts/tests/coverageHelpers.test.ts', 1765],
 		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
 		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1859],
-		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2302],
+		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2339],
 		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 2948],
 	]),
 ])

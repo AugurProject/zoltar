@@ -29,7 +29,7 @@ export function registerPauseControls({ state, elements, controls, refresh }: Pa
 	}
 
 	function openResumeConfirmation(snapshot: Snapshot) {
-		const recoveryWork = snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length
+		const recoveryWork = snapshot.pendingTransactions.length
 		openResumePreflight([
 			['Mode', 'Live execution'],
 			['Recovery work', recoveryWork === 0 ? 'Clear' : `${recoveryWork.toString()} unresolved`],

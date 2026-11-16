@@ -2,6 +2,7 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readdir, readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { repositoryRoot } from './root.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const requiredModel = 'gpt-6-astra'
 const requiredModelReasoningEffort = 'low'
@@ -31,14 +32,10 @@ type AgentValidation = {
 	name: string | undefined
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function parseToml(filePath: string, source: string, errors: string[]) {
 	try {
 		const value: unknown = Bun.TOML.parse(source)
-		if (!isRecord(value)) {
+		if (!isPlainRecord(value)) {
 			errors.push(`${filePath}: TOML root must be a table`)
 			return undefined
 		}
@@ -128,7 +125,7 @@ function validateProjectAgentSources(agentSources: ReadonlyArray<{ filePath: str
 	const projectConfig = parseToml('.codex/config.toml', projectConfigSource, configErrors)
 	errors.push(...configErrors)
 	const agentsConfig = projectConfig?.['agents']
-	if (!isRecord(agentsConfig)) errors.push('.codex/config.toml: [agents] table is required')
+	if (!isPlainRecord(agentsConfig)) errors.push('.codex/config.toml: [agents] table is required')
 	else {
 		const maxThreads = agentsConfig['max_threads']
 		if (typeof maxThreads !== 'number' || !Number.isInteger(maxThreads) || maxThreads < 1) errors.push('.codex/config.toml: agents.max_threads must be a positive integer')

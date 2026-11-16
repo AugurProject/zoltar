@@ -21,8 +21,6 @@ interface IEscalationGameEvents {
 	event NonDecisionReached(uint256 nonDecisionTimestamp);
 	/// @notice A continuation inherited two or more threshold-full outcomes without fabricating a local timestamp.
 	event InheritedThresholdTie(address indexed sourceGame);
-	/// @notice An auction reduced an unfixed inherited tie below non-decision, reopening ordinary reporting.
-	event InheritedThresholdTieReopened();
 	/// @notice Accepted REP and resulting escrow totals, all in attoREP. `depositIndex` is the local
 	/// per-outcome array index; `LocalDepositAppended.parentDepositIndex` is the stable continuation identity.
 	/// `cumulativeRepAmountAttoRep` is the resulting outcome total.
@@ -34,7 +32,7 @@ interface IEscalationGameEvents {
 	event ForkCarryCheckpoint(address indexed sourceGame, bytes32 indexed snapshotId, bytes32[3] carryRoots, bytes32[3] nullifierRoots, uint256[3] leafCounts, uint256[3] unresolvedTotalsAttoRep, uint256[3] resolutionBalancesAttoRep);
 	/// @notice Resulting commitment state after one local or inherited deposit is consumed. `parentDepositIndex`
 	/// and `sourceNodeId` are stable source identities; REP values use attoREP. The reason distinguishes
-	/// claims, losing settlement, export, and direct parent claim.
+	/// winning claims, losing settlement, and export.
 	event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, CarryConsumptionReason reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot);
 }
 

@@ -21,7 +21,6 @@ import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { CarriedDepositProof } from './EscalationGameTypes.sol';
 import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
-import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
@@ -30,7 +29,6 @@ import { SecurityPoolOperationsDelegate } from './SecurityPoolOperationsDelegate
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 import { DelegateCallForwarder } from './DelegateCallForwarder.sol';
 import { ISecurityPoolDeploymentWorkerConfiguration } from './interfaces/ISecurityPoolDeploymentWorkerConfiguration.sol';
-import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolLinearFees } from './SecurityPoolLinearFees.sol';
 import { SecurityPoolPortfolioAccountingDelegate } from './SecurityPoolPortfolioAccountingDelegate.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
@@ -53,7 +51,6 @@ contract SecurityPool is SecurityPoolStorage {
 	EscalationGameFactory public immutable escalationGameFactory;
 	ZoltarQuestionData public immutable questionData;
 	address public immutable securityPoolForker;
-	address public immutable collateralRepairAuction;
 	ISecurityPoolFactory public immutable securityPoolFactory;
 	bool private immutable hasInheritedForkOutcome;
 	SecurityPoolEventEmitter public immutable eventEmitter;
@@ -70,8 +67,8 @@ contract SecurityPool is SecurityPoolStorage {
 
 	modifier isOperational() {
 		// Once a universe forks, the parent pool freezes operational flows permanently.
-		// Outcome child pools can re-enter `SystemState.Operational` after migration and
-		// collateral-repair-auction processing complete. Finalized claim paths keep their own state
+		// Outcome child pools can re-enter `SystemState.Operational` after migration
+		// completes. Finalized claim paths keep their own state
 		// and finality guards so late unrelated forks do not block share or REP redemption.
 		_requireUnforkedOperational(zoltar.getForkTime(universeId));
 		_;
@@ -82,7 +79,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOraclePriceCoordinator _openOraclePriceCoordinator, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps, address _collateralRepairAuction) {
+	constructor(address _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOraclePriceCoordinator _openOraclePriceCoordinator, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps) {
 		universeId = _universeId;
 		ISecurityPoolDeploymentWorkerConfiguration worker = ISecurityPoolDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
@@ -99,10 +96,8 @@ contract SecurityPool is SecurityPoolStorage {
 		escalationGameFactory = _escalationGameFactory;
 		openOraclePriceCoordinator = _openOraclePriceCoordinator;
 		securityPoolForker = _securityPoolForker;
-		collateralRepairAuction = _collateralRepairAuction;
 		questionData = _questionData;
 		if (address(parent) == address(0x0)) {
-			// origin universe never does collateralRepairAuction
 			systemState = SystemState.Operational;
 		} else {
 			systemState = SystemState.ForkMigration;
@@ -143,9 +138,9 @@ contract SecurityPool is SecurityPoolStorage {
 		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), callData);
 	}
 
-	/// @notice Factory-only: initializes the question fee clock and settlement collateral.
-	function setStartingParams(uint256 currentRetentionRate, uint256 initialCollateral) external {
-		_delegateAccounting(abi.encodeCall(SecurityPoolEventEmitter.setStartingParams, (currentRetentionRate, initialCollateral)));
+	/// @notice Factory-only: initializes the question fee clock.
+	function setStartingParams() external {
+		_delegateAccounting(abi.encodeCall(SecurityPoolEventEmitter.setStartingParams, ()));
 	}
 
 	/// @notice Checkpoints the portfolio settlement book; callable by anyone.
@@ -163,10 +158,6 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	/// @notice Refreshes the portfolio's linear fee stream.
-	function updateRetentionRate() public {
-		_delegateAccounting(abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.updateRetentionRate, ()));
-	}
-
 	function refreshPortfolioFees() public {
 		_delegateAccounting(abi.encodeCall(SecurityPoolLinearFees.refreshLinearFeeStream, ()));
 	}
@@ -184,7 +175,7 @@ contract SecurityPool is SecurityPoolStorage {
 		return 0;
 	}
 
-	/// @notice Returns zero once a game exists; otherwise the standalone underwriting limit or question cash plus available shared capacity.
+	/// @notice Returns zero once a game exists; otherwise question cash plus available shared portfolio capacity.
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
 		if (address(escalationGame) != address(0)) return 0;
 		if (portfolioCustody != address(0)) {
@@ -221,7 +212,7 @@ contract SecurityPool is SecurityPoolStorage {
 		uint256 completeSetsToMintAttoShares = abi.decode(result, (uint256));
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMintAttoShares);
-		updateRetentionRate();
+		refreshPortfolioFees();
 	}
 
 	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in the configured token.
@@ -231,7 +222,7 @@ contract SecurityPool is SecurityPoolStorage {
 		updateSettlementCollateral();
 		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
 		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
-		updateRetentionRate();
+		refreshPortfolioFees();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 	}
@@ -355,7 +346,7 @@ contract SecurityPool is SecurityPoolStorage {
 
 	/// @notice Accepts native ETH without creating a settlement-collateral claim.
 	receive() external payable {
-		require(portfolioCustody != address(0) || msg.sender == securityPoolForker || msg.sender == collateralRepairAuction || msg.sender == address(parent), 'Bad ETH sender');
+		require(portfolioCustody != address(0) || msg.sender == securityPoolForker || msg.sender == address(parent), 'Bad ETH sender');
 		emit EthReceived(msg.sender, msg.value);
 	}
 }

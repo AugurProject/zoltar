@@ -31,7 +31,7 @@ import { createQuestion, getAnswerOptionName, makeQuestion } from '../testSuppor
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { ReputationToken_ReputationToken, test_RepV2GenesisMock_RepV2GenesisMock, test_statoblast_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
-import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
+import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { PERMIT_TYPES, signTypedDataV4, tokenDomain } from '../testSupport/simulator/utils/typedDataSignatures'
 
 // Forker deposit fraction: the deposit is 5% of total supply (1/20).

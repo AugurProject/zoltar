@@ -116,7 +116,6 @@ export type DurableObligation = {
 	blockers: string[]
 	completedAt?: string | undefined
 	createdAt: string
-	dueAt?: string | undefined
 	ecosystem: ChaosEcosystem
 	expiresAt?: string | undefined
 	id: string
@@ -215,6 +214,19 @@ const stateFilesystem: StateFilesystem = {
 	readdir,
 	rename,
 	rm,
+}
+
+/** Copies the topology deeply enough that callers can mutate each discovered entry without touching the source state. */
+export function cloneRuntimeTopology(topology: RuntimeState['topology']): RuntimeState['topology'] {
+	if (topology === undefined) return undefined
+	return {
+		...topology,
+		auctions: topology.auctions.map(auction => ({ ...auction })),
+		pairs: topology.pairs.map(pair => ({ ...pair })),
+		pools: topology.pools.map(pool => ({ ...pool })),
+		reports: topology.reports.map(report => ({ ...report })),
+		universes: topology.universes.map(universe => ({ ...universe })),
+	}
 }
 
 export function setRuntimeExecutionAddress(state: RuntimeState, address: Address | undefined) {

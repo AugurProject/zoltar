@@ -2,7 +2,7 @@ import { appendFileDurably, durableFilesystem, readFileIfPresent, type DurableAp
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { attemptHasFinality } from '#execution/execution-orchestration'
-import { decimalSignedEth, decimalWeth, parseDecimalWeth } from '#state/operator-state'
+import { chainScopedJournalRecord, decimalSignedEth, decimalWeth, parseDecimalWeth } from '#state/operator-state'
 import type { DurableTransactionIntent } from '#state/position-store'
 
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
@@ -299,15 +299,7 @@ export async function loadSettlementJournal(path: string, expectedChainId: numbe
 	const unique = new Map<string, SettlementRecord>()
 	for (const [index, line] of contents.split('\n').entries()) {
 		if (line.trim() === '') continue
-		let parsed: unknown
-		try {
-			parsed = JSON.parse(line)
-		} catch (error) {
-			if (error instanceof SyntaxError) throw new Error(`Invalid settlement journal line ${(index + 1).toString()}: ${error.message}`)
-			throw error
-		}
-		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed) || Reflect.get(parsed, 'chainId') !== expectedChainId) throw new Error(`Settlement journal record at line ${(index + 1).toString()} belongs to another chain`)
-		const record = parseSettlementRecord(Reflect.get(parsed, 'record'))
+		const record = parseSettlementRecord(chainScopedJournalRecord(line, index, expectedChainId, 'settlement journal'))
 		if (record === undefined) throw new Error(`Invalid settlement journal record at line ${(index + 1).toString()}`)
 		unique.delete(record.transactionHash.toLowerCase())
 		unique.set(record.transactionHash.toLowerCase(), record)

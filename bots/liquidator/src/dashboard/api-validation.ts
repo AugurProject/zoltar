@@ -86,7 +86,6 @@ export type Snapshot = {
 	network?: 'mainnet' | 'sepolia'
 	paused: boolean
 	rpcEndpointHealth?: { consecutiveFailures: number; error?: string; latencyMilliseconds?: number; nextRetryAt?: string; status: string; target: string }[]
-	pendingStagedOperations: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
 	pendingTransactions: { hash: string; label: string; mode: 'private' | 'public'; nonce: string; submissionBlock: string }[]
 	operatorCapable: boolean
 	portfolios?: PortfolioView[]
@@ -105,7 +104,7 @@ export type Configuration = {
 	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 	networkConfigured?: boolean | undefined
-	runtime: { execute: boolean; historicalLogRecovery: boolean; logLookbackBlocks: number }
+	runtime: { execute: boolean }
 	selectedPortfolios: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
 	portfolioPolicy: Record<string, string | number | boolean>
@@ -166,9 +165,6 @@ const snapshot = object<Snapshot>({
 	network: optional(network),
 	paused: booleanValue,
 	rpcEndpointHealth: optional(array(object<NonNullable<Snapshot['rpcEndpointHealth']>[number]>({ consecutiveFailures: numberValue, error: optionalString, latencyMilliseconds: optional(numberValue), nextRetryAt: optionalString, status: stringValue, target: stringValue }))),
-	pendingStagedOperations: array(
-		object<Snapshot['pendingStagedOperations'][number]>({ candidateBlock: optionalString, coordinator: stringValue, historicalRecoveryComplete: booleanValue, latestRecoveryBlock: optionalString, nextHistoricalBlock: optionalString, operationId: stringValue, queuedBlock: stringValue, target: stringValue }),
-	),
 	pendingTransactions: array(object<Snapshot['pendingTransactions'][number]>({ hash: stringValue, label: stringValue, mode: oneOf('private', 'public'), nonce: stringValue, submissionBlock: stringValue })),
 	operatorCapable: booleanValue,
 	portfolios: optional(array(portfolioView)),
@@ -188,7 +184,7 @@ const configuration = object<Configuration>({
 	connectivity: optional(object<NonNullable<Configuration['connectivity']>>({ publicRpcUrls: strings, quorumRpcUrls: strings, readRpcUrl: stringValue, rpcQuorum: oneOf(1, 2) })),
 	network: optional(object<NonNullable<Configuration['network']>>({ chainId: numberValue, explorerUrl: stringValue, name: network })),
 	networkConfigured: optional(booleanValue),
-	runtime: object<Configuration['runtime']>({ execute: booleanValue, historicalLogRecovery: booleanValue, logLookbackBlocks: numberValue }),
+	runtime: object<Configuration['runtime']>({ execute: booleanValue }),
 	selectedPortfolios: array(object<{ address: string; universeId: string }>({ address: stringValue, universeId: stringValue })),
 	portfolioPolicy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	strategy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),

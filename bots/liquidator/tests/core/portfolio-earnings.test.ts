@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { executePortfolioEarnings } from '../../src/execution/portfolio-earnings.ts'
 import type { refreshPortfolioExecution } from '../../src/execution/portfolio-executor.ts'
-import type { submitCall } from '../../src/execution/submit-call.ts'
+import { recordingSubmit } from '../support/portfolio-execution.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { portfolioObservation, portfolioSettings, unit } from '../support/portfolio-observation.ts'
 import { createWalletClient, createRpcEndpointPool, decodeFunctionData, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
@@ -28,12 +28,7 @@ function fixture() {
 	const state = initialRuntimeState(false, account.address, 1)
 	state.portfolioScopes = [observation.nextScope]
 	const refresh: typeof refreshPortfolioExecution = async () => ({ observation, totalPrincipal: 0n, allowance: 0n })
-	const calls: Parameters<typeof submitCall>[4][] = []
-	const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
-		await call.preSubmit?.()
-		calls.push(call)
-		return `0x${'1'.repeat(64)}`
-	}
+	const { calls, submit } = recordingSubmit()
 	const run = (priceAllowed: boolean) => executePortfolioEarnings(wallet, settings, state, pool, observation, async () => priceAllowed, { refresh, submit })
 	return { observation, settings, state, calls, run }
 }
@@ -64,7 +59,19 @@ test('earned REP counts for collection only with current independent market evid
 test('earnings collection never runs during pending recovery', async () => {
 	const f = fixture()
 	f.observation.snapshot.ownerAccount.feesAttoEth = unit
-	f.state.pendingStagedOperations.push({ coordinator: f.observation.snapshot.capitalLedger, operationId: 1n, queuedBlock: 1n, target: f.observation.snapshot.owner })
+	f.state.pendingTransactions.push({
+		hash: `0x${'ab'.repeat(32)}`,
+		kind: 'deposit',
+		label: 'Pending deposit',
+		maxBlockNumber: 120n,
+		mode: 'public',
+		nonce: 1n,
+		receiptExpectation: { type: 'transaction' },
+		requiresMarketEvidence: false,
+		sender: f.observation.snapshot.owner,
+		serializedTransaction: '0x',
+		submissionBlock: 1n,
+	})
 	await expect(f.run(true)).rejects.toThrow('Pending recovery')
 	expect(f.calls).toHaveLength(0)
 })

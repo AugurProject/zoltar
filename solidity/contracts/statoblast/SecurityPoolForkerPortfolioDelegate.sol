@@ -8,7 +8,6 @@ import { ISecurityPoolPortfolioNative } from './interfaces/ISecurityPoolPortfoli
 import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 
@@ -101,15 +100,24 @@ contract SecurityPoolForkerPortfolioDelegate {
 		sourceGame = reporterState.sourceGame;
 		require(sourceGame == address(0) || sourceGame == address(source.escalationGame()), 'Use last live reporter source');
 		if (address(child) != address(0)) {
+			// A pool's parent is immutable, so this also proves `source` and its factory.
 			require(address(child.parent()) == address(source), 'Use prepared question source');
 			return (child, portfolio, sourceGame);
 		}
 		factory.preparePortfolioPriceFeed(source, targetUniverse);
-		(child, ) = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps(), 0, 0);
-		require(child.collateralRepairAuction() == address(0), 'Portfolio question cannot have a collateral repair auction');
+		child = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps());
+		_requireChildProvenance(factory, source, child, targetUniverse);
 		source.authorizeChildPool(child);
 		portfolio.registerChildPool(child);
 		if (zoltar.getForkTime(targetUniverse) != 0) child.setSystemState(SystemState.PoolForked);
+	}
+
+	/// @dev `source` and everything derived from it are caller-supplied. A pool's factory is
+	/// immutable, so a child that names `factory` proves the factory, and therefore the
+	/// canonical source lookup, before this forker uses its privileges on the child.
+	function _requireChildProvenance(ISecurityPoolFactory factory, ISecurityPool source, ISecurityPool child, uint248 targetUniverse) private view {
+		require(address(child.securityPoolFactory()) == address(factory), 'Child pool is not from the source factory');
+		require(address(child.parent()) == address(source) && child.universeId() == targetUniverse && address(child.shareToken()) == address(source.shareToken()), 'Child pool does not continue the source');
 	}
 
 	function getQuestionOutcome(ISecurityPool pool) external view returns (BinaryOutcomes.BinaryOutcome) {

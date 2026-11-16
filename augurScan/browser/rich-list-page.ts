@@ -1,6 +1,8 @@
 import type { ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
+import { capitalPositionCard, capitalPositionPath } from './capital-presentation.ts'
 import { exactUnit } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
+import { canonicalOperationsPath } from './routes.ts'
 import { retainedPaginationAvailable } from './refresh-presentation.ts'
 import { renderRichListTable } from './rich-list-table.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
@@ -24,6 +26,9 @@ export interface RichListPageDeps {
 }
 
 const richBalance = (value: string | number | undefined, symbol: string) => exactUnit(value ?? '0', 18, symbol)
+
+// The canonical detail path on the card's chain; the demo flag is kept so the link survives a reload.
+const capitalPositionHref = (ledger: string, owner: string, chainId: string, demo: boolean): string => `${canonicalOperationsPath(capitalPositionPath(ledger, owner))}?chainId=${encodeURIComponent(chainId)}${demo ? '&demo=1' : ''}`
 
 /** The ranking the URL asks for; a URL without a known `sort` means the default ranking, the first option. */
 export const richListSort = (pageUrl: URL, sortOptions: readonly string[]): string => {
@@ -79,7 +84,8 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		transactions.append(richFieldLabel('Transactions'), element('strong', '', number(item.transaction_count)))
 		transactions.addEventListener('click', () => openAccountTransactions(item))
 		const positions = element('div', 'rich-count')
-		positions.append(richFieldLabel('Protocol involvement'), element('strong', '', counted(item.pool_count, 'pool')), element('span', '', `${counted(item.active_vault_count, 'active vault')} / ${counted(item.vault_count, 'known vault')}`))
+		const capitalPositions = Array.isArray(item.capital_positions) ? item.capital_positions : []
+		positions.append(richFieldLabel('Protocol involvement'), element('strong', '', counted(item.pool_count, 'pool')), element('span', '', counted(capitalPositions.length, 'capital position')))
 		const rep = element('div', 'rich-rep')
 		rep.append(richFieldLabel('REP tokens'))
 		if (repTokens.length === 0) rep.append(element('strong', '', 'REP pending'))
@@ -102,11 +108,10 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		main.append(identity, rep, wallet, transactions, positions)
 		article.append(main)
 		const poolAssociations = Array.isArray(item.pool_associations) ? item.pool_associations : []
-		const vaultPositions = Array.isArray(item.vault_positions) ? item.vault_positions : []
 		const involvement = element('details', 'rich-assets rich-involvement')
 		involvement.dataset['detailKey'] = `${itemKey}:involvement`
 		involvement.open = openDetailKeys.has(involvement.dataset['detailKey']) || (isInitialRender && isDemo && pageUrl.searchParams.get('expandRich') === '1' && item === richListItems[0])
-		involvement.append(element('summary', '', `${counted(item.pool_count, 'pool association')} · ${counted(item.vault_count, 'vault position')}`))
+		involvement.append(element('summary', '', capitalPositions.length === 0 ? 'Pool associations' : 'Pool associations and capital positions'))
 		const involvementGrid = element('div', 'rich-position-grid')
 		for (const pool of poolAssociations) {
 			const card = element('div', 'rich-position')
@@ -115,25 +120,20 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 				chainId: item.chain_id,
 				className: 'rich-token-address address-link',
 			})
-			card.append(element('span', 'rich-position-kind', 'Pool association'), element('strong', '', pool.questionTitle ?? pool.label ?? 'Associated security pool'), element('span', '', pool.label ?? 'Observed in the same protocol transaction'), link)
+			card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Associated security pool'), element('span', '', pool.label ?? 'Observed in the same protocol transaction'), link)
 			involvementGrid.append(card)
 		}
-		for (const position of vaultPositions) {
+		for (const position of capitalPositions) {
 			const card = element('div', 'rich-position')
-			const link = protocolAddressLink(position.poolAddress, { chainId: item.chain_id, className: 'rich-token-address address-link' })
-			card.append(
-				element('span', 'rich-position-kind', 'Vault position'),
-				element('strong', '', position.questionTitle ?? 'Vault position'),
-				element('span', '', `REP backing units ${exactUnit(position.repBackingUnits, 18, '')}`),
-				element('span', '', `Underwriting commitment ${exactUnit(position.underwritingLimitAttoEth, 18, itemNativeSymbol)}`),
-				element('span', '', `Claimable fees ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} · block #${number(position.blockNumber)}`),
-				link,
-			)
+			const link = element('a', 'rich-token-address address-link', 'Position detail')
+			link.href = capitalPositionHref(position.ledgerAddress, item.address, item.chain_id, isDemo)
+			const presentation = capitalPositionCard(position)
+			card.append(element('strong', '', presentation.title), element('span', '', presentation.summary), link)
 			involvementGrid.append(card)
 		}
-		if (poolAssociations.length < Number(item.pool_count) || vaultPositions.length < Number(item.vault_count)) involvementGrid.append(element('span', 'data-note', 'Showing the first 100 associations or positions.'))
+		if (poolAssociations.length < Number(item.pool_count)) involvementGrid.append(element('span', 'data-note', 'Showing the first 100 associations.'))
 		involvement.append(involvementGrid)
-		if (Number(item.pool_count) > 0 || Number(item.vault_count) > 0) article.append(involvement)
+		if (Number(item.pool_count) > 0 || capitalPositions.length > 0) article.append(involvement)
 		rows.append(article)
 	}
 	restoreViewState($('#richlist-table'), { focus: tableState.focus, openDetails: new Set() })

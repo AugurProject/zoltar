@@ -1,3 +1,4 @@
+import { hasCode } from '@zoltar/core-shared/evm/code'
 import { concatHex, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { RpcStateRetryWait } from '../../ui/coreShared/ts/lib/rpcStateRetries.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
@@ -18,10 +19,6 @@ export type PublishedContract = {
 }
 
 export type DevelopmentNodeRpc = (method: string, params: readonly unknown[]) => Promise<unknown>
-
-function hasCode(code: Hex | undefined): code is Hex {
-	return code !== undefined && code !== '0x'
-}
 
 export function createDevelopmentNodeRpc(rpcUrl: string): DevelopmentNodeRpc {
 	return async (method, params) => {

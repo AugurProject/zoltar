@@ -11,7 +11,6 @@ import { ReputationToken } from '../ReputationToken.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SharedPoolPriceFeed } from './SharedPoolPriceFeed.sol';
-import './OpenOraclePriceCoordinatorTypes.sol';
 
 interface IOracleReportConfig {
 	function sharedPriceFeed() external view returns (SharedPoolPriceFeed);
@@ -41,7 +40,6 @@ interface IOracleReportConfig {
 /// the calling coordinator. The delegate never accesses coordinator storage slots directly.
 contract OpenOracleReportDelegate {
 	using SafeERC20Ops for IERC20;
-	uint256 private constant OPEN_INTEREST_DIVIDER = 100;
 
 	/// @dev Delegate-called funding adapter preserves sponsor approvals to the question coordinator.
 	function createSharedReport(address sponsor, uint256 bountyAttoEth, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) external payable {
@@ -54,7 +52,6 @@ contract OpenOracleReportDelegate {
 		ReputationToken reputationToken = config.reputationToken();
 		Collateral.pull(weth, sponsor, address(this), wethAmount);
 		require(reputationToken.transferFrom(sponsor, address(this), repAmount), 'REP transfer for initial report failed');
-		weth.safeApprove(address(feed), 0);
 		weth.safeApprove(address(feed), wethAmount);
 		require(reputationToken.approve(address(feed), repAmount), 'REP approval for shared report failed');
 		feed.requestPrice{value: bountyAttoEth}(sponsor, proposedRepPerEthPrice, wethAmount, bountyAttoEth);

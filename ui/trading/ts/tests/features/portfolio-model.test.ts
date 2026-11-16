@@ -239,18 +239,18 @@ test('portfolio records REP-only redemption without inventing an ETH value', () 
 	expect(overview.recoveryRepCount).toBe(1)
 })
 
-test('keeps ETH, USDC and USDT portfolio totals separate', () => {
+test('keeps ETH, USDC and other token portfolio totals separate', () => {
 	const usdc = { token: '0x0000000000000000000000000000000000000001' as const, symbol: 'USDC', decimals: 6, native: false }
-	const usdt = { token: '0x0000000000000000000000000000000000000002' as const, symbol: 'USDT', decimals: 6, native: false }
+	const other = { token: '0x0000000000000000000000000000000000000002' as const, symbol: 'TKN', decimals: 6, native: false }
 	const amounts = { invalid: 1_000_000n, yes: 1_000_000n, no: 1_000_000n }
 	const overview = portfolioOverview(
-		[entry({}, { invalid: SET, yes: SET, no: SET }), entry({ collateral: usdc, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }, amounts), entry({ collateral: usdt, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }, amounts)],
+		[entry({}, { invalid: SET, yes: SET, no: SET }), entry({ collateral: usdc, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }, amounts), entry({ collateral: other, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }, amounts)],
 		NOW,
 	)
 	expect(overview.totalValueAttoEth).toBe(SET)
 	expect(overview.totalsByAsset?.map(total => [total.asset.symbol, total.value])).toEqual([
 		['ETH', SET],
 		['USDC', 1_000_000n],
-		['USDT', 1_000_000n],
+		['TKN', 1_000_000n],
 	])
 })

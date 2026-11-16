@@ -2,18 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { assertBotDockerPackaging, batchCommands } from '../../../tooling/testing/packaging-parsers.ts'
+import { expectSignerLockVolumeCreatedBeforeCompose } from '../../shared/tests/support/docker-packaging.ts'
 
 const botDirectory = join(import.meta.dir, '..')
 const windowsLauncher = join(botDirectory, 'start.bat')
 
 describe('Docker packaging', () => {
 	test('creates the shared external signer-lock volume before Compose runs', async () => {
-		for (const launcher of ['start.bat']) {
-			const commands = batchCommands(await readFile(join(botDirectory, launcher), 'utf8'))
-			const create = 'docker volume create zoltar-bot-signer-locks >nul || goto finish'
-			expect(commands).toContain(create)
-			expect(commands.indexOf(create)).toBeLessThan(commands.findIndex(command => command.startsWith('docker compose ')))
-		}
+		await expectSignerLockVolumeCreatedBeforeCompose(windowsLauncher)
 	})
 
 	test('provides a location-independent Windows launcher', async () => {

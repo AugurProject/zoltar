@@ -8,32 +8,14 @@ import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWi
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
-import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { loadForkMigrationContext } from '../../protocol/forks.js'
 import { createTradingWalletClient, discoverLiveUniverseMarketPage, loadLiveBalances } from '../../protocol/live.js'
 import { FORKED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario } from '../../simulation/index.js'
 import { buttonByLabel } from '../support/dom.js'
-
-function forkedScenarioConfiguration(backend: SimulationBackend) {
-	const addresses = getInfraContractAddresses(backend.profile)
-	const plan = getTradingDeploymentPlan(
-		{
-			genesisOutcome: 'yes',
-			chainId: backend.profile.chain.id,
-			chainName: backend.profile.displayName,
-			defaultRpcUrl: 'http://127.0.0.1/',
-			id: 'simulation',
-			proxyDeployer: PROXY_DEPLOYER_ADDRESS,
-			securityPoolFactory: addresses.securityPoolFactory,
-			zoltar: addresses.zoltar,
-		},
-		30,
-	)
-	return deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
-}
+import { passthroughWorkflowPanelProps } from '../support/liveWorkflowPanelProps.js'
+import { simulationDeploymentConfiguration } from '../support/simulationDeploymentConfiguration.js'
 
 function operationButton(label: string) {
 	const match = Array.from(document.querySelectorAll('[aria-label="Settlement operation"] button')).find(button => button.textContent?.trim() === label)
@@ -64,7 +46,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 	test('forks the funded market universe while the wallet keeps its parent-universe shares and a branch has a child pool', async () => {
 		activateSimulationBackendProfile(backend)
 		const client = backend.createReadClient()
-		const { markets } = await discoverLiveUniverseMarketPage(client, forkedScenarioConfiguration(backend), 0n)
+		const { markets } = await discoverLiveUniverseMarketPage(client, simulationDeploymentConfiguration(backend), 0n)
 		const market = markets[0]
 		if (market === undefined || market.loadError !== undefined) throw new Error('Forked scenario market is missing')
 		expect(market.universeForkTime).toBeGreaterThan(0n)
@@ -89,7 +71,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 			activateSimulationBackendProfile(backend)
 			const dom = installDomEnvironment('http://localhost/#/market?simulate=1&simScenario=trading-forked')
 			const restore = installActiveEnvironmentForTesting(backend, backend)
-			const configuration = forkedScenarioConfiguration(backend)
+			const configuration = simulationDeploymentConfiguration(backend)
 			const client = backend.createReadClient()
 			const { markets } = await discoverLiveUniverseMarketPage(client, configuration, 0n)
 			const market = markets[0]
@@ -99,26 +81,18 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 			let refreshes = 0
 			const rendered = await renderIntoDocument(
 				<LiveSettlementControls
+					{...passthroughWorkflowPanelProps}
 					nowSeconds={100n}
 					configuration={configuration}
 					market={market}
 					balances={balances}
 					balanceState='ready'
-					balanceError={undefined}
 					account={account}
 					walletClient={createTradingWalletClient(backend.getProvider(), account)}
-					networkMismatchReason={undefined}
-					wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
 					settings={DEFAULT_TRADE_SETTINGS}
-					externallyLocked={false}
 					refresh={async () => {
 						refreshes += 1
 					}}
-					onKnownReceipt={() => undefined}
-					executeWithCurrentWalletContext={async (_account, _networkFailure, _accountFailure, action) => await action()}
-					createGuardedWalletWrite={() => async write => await write()}
-					retryBalances={async () => undefined}
-					onWorkflowLockChange={() => undefined}
 				/>,
 			)
 			try {

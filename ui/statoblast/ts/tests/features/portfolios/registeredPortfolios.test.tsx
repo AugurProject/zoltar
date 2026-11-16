@@ -25,6 +25,18 @@ function registerPortfolio(source: ReturnType<typeof capitalClient>, { ledger = 
 	source.setRead('capitalLedger', ledger)
 	source.setRead('questionCount', questionCount)
 }
+/** A first visit: nothing remembered and no portfolio in the URL. */
+function startFirstVisit() {
+	window.localStorage.clear()
+	window.history.replaceState(undefined, '', '/#/portfolios')
+}
+function installRegisteredPortfolio() {
+	const source = capitalClient()
+	registerPortfolio(source)
+	source.install()
+	return source
+}
+const ownerField = (container: Element) => [...container.querySelectorAll('.field')].find(field => field.querySelector('label')?.textContent === copy.owner)
 const list = (container: Element) => [...container.querySelectorAll('details')].find(details => details.querySelector('summary')?.textContent === copy.portfoliosInUniverse)
 const addressField = (container: Element) => [...container.querySelectorAll('input')].find(input => input.closest('.field')?.querySelector('label')?.textContent === copy.manager)
 const renderSection = async () => {
@@ -35,11 +47,8 @@ const renderSection = async () => {
 
 test("a first visit lists the universe's portfolios and opens one without typing its address", async () => {
 	// Live networks have no owner discovery, so the tab used to start with an empty address and nothing to choose.
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
-	const source = capitalClient()
-	registerPortfolio(source)
-	source.install()
+	startFirstVisit()
+	installRegisteredPortfolio()
 	const view = await renderSection()
 	// Open from the start, so its loading state is visible and the arriving rows cause no jump.
 	expect(list(view.container)?.open).toBe(true)
@@ -63,9 +72,7 @@ test("a first visit lists the universe's portfolios and opens one without typing
 })
 
 test('a linked or remembered portfolio keeps the list folded', async () => {
-	const source = capitalClient()
-	registerPortfolio(source)
-	source.install()
+	const source = installRegisteredPortfolio()
 	const linked = await renderSection()
 	await waitFor(() => expect(linked.container.textContent).toContain(capitalCopy.prepareProgress(4)))
 	expect(list(linked.container)?.open).toBe(false)
@@ -87,8 +94,7 @@ test('a linked or remembered portfolio keeps the list folded', async () => {
 })
 
 test('a failed portfolio read shows the error with a retry', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
+	startFirstVisit()
 	const source = capitalClient()
 	registerPortfolio(source)
 	source.setRead('portfoliosRange', 'not a portfolio list')
@@ -104,8 +110,7 @@ test('a failed portfolio read shows the error with a retry', async () => {
 })
 
 test('the list shows it is loading while the page waits to read the chain', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
+	startFirstVisit()
 	capitalClient().install()
 	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled={false} environmentKey={0} activeUniverseId={0n} />)
 	lifecycle.trackRendered(view)
@@ -114,11 +119,8 @@ test('the list shows it is loading while the page waits to read the chain', asyn
 })
 
 test('a failed reload keeps the rows already shown next to the error', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
-	const source = capitalClient()
-	registerPortfolio(source)
-	source.install()
+	startFirstVisit()
+	const source = installRegisteredPortfolio()
 	const view = await renderSection()
 	await waitFor(() => expect(list(view.container)?.querySelector('li button')).toBeTruthy())
 	source.setRead('portfoliosRange', 'not a portfolio list')
@@ -141,8 +143,7 @@ test('a failed reload keeps the rows already shown next to the error', async () 
 })
 
 test('an empty registry says so and lists nothing', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
+	startFirstVisit()
 	capitalClient().install()
 	const view = await renderSection()
 	await waitFor(() => expect(list(view.container)?.textContent).toContain(copy.noPortfoliosInUniverse))
@@ -151,24 +152,20 @@ test('an empty registry says so and lists nothing', async () => {
 })
 
 test('opening a portfolio with no wallet or owner says so under the owner field', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
-	const source = capitalClient()
-	registerPortfolio(source)
-	source.install()
+	startFirstVisit()
+	installRegisteredPortfolio()
 	const visitor = { ...parameters, accountAddress: undefined }
 	const view = await renderIntoDocument(<PortfoliosSection parameters={visitor} walletConnected={false} enabled environmentKey={0} activeUniverseId={0n} />)
 	lifecycle.trackRendered(view)
-	const ownerField = () => [...view.container.querySelectorAll('.field')].find(field => field.querySelector('label')?.textContent === copy.owner)
 	await waitFor(() => expect(list(view.container)?.querySelector('li button')).toBeTruthy())
-	expect(ownerField()?.textContent).toContain(copy.ownerHint)
+	expect(ownerField(view.container)?.textContent).toContain(copy.ownerHint)
 	const open = list(view.container)?.querySelector('li button')
 	if (!(open instanceof HTMLButtonElement)) throw new Error('Missing open button')
 	await act(() => open.click())
 	// The message replaces the owner hint rather than adding a line above the list.
-	await waitFor(() => expect(ownerField()?.textContent).toContain(copy.ownerNeeded))
-	expect(ownerField()?.textContent).not.toContain(copy.ownerHint)
-	expect(ownerField()?.querySelector('[aria-live="polite"]')?.textContent).toContain(copy.ownerNeeded)
+	await waitFor(() => expect(ownerField(view.container)?.textContent).toContain(copy.ownerNeeded))
+	expect(ownerField(view.container)?.textContent).not.toContain(copy.ownerHint)
+	expect(ownerField(view.container)?.querySelector('[aria-live="polite"]')?.textContent).toContain(copy.ownerNeeded)
 	// The setup stage is unknown without an owner, so it is not shown as zero.
 	expect(view.container.textContent).toContain(capitalCopy.prepareProgressUnknown)
 	expect(view.container.textContent).not.toContain(capitalCopy.prepareProgress(0))
@@ -178,8 +175,7 @@ test('opening a portfolio with no wallet or owner says so under the owner field'
 })
 
 test('a portfolio with no capital ledger in this universe is not listed here', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
+	startFirstVisit()
 	const source = capitalClient()
 	registerPortfolio(source, { ledger: zeroAddress })
 	source.install()
@@ -189,11 +185,8 @@ test('a portfolio with no capital ledger in this universe is not listed here', a
 })
 
 test('opening a listed portfolio opens it in the universe the list is for', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
-	const source = capitalClient()
-	registerPortfolio(source)
-	source.install()
+	startFirstVisit()
+	installRegisteredPortfolio()
 	const view = await renderSection()
 	await waitFor(() => expect(list(view.container)?.querySelector('li button')).toBeTruthy())
 	const universeField = () => [...view.container.querySelectorAll('input')].find(input => input.closest('.field')?.querySelector('label')?.textContent === copy.universe)
@@ -231,46 +224,38 @@ test('opening a listed portfolio opens it in the universe the list is for', asyn
 })
 
 test('a connected wallet with an emptied owner field is asked only for an owner address', async () => {
-	const source = capitalClient()
-	registerPortfolio(source)
-	source.install()
+	installRegisteredPortfolio()
 	const view = await renderSection()
-	const ownerField = () => [...view.container.querySelectorAll('.field')].find(field => field.querySelector('label')?.textContent === copy.owner)
 	await waitFor(() => expect(view.container.textContent).toContain(capitalCopy.prepareProgress(4)))
 	await act(() => {
-		const input = ownerField()?.querySelector('input')
+		const input = ownerField(view.container)?.querySelector('input')
 		if (input === undefined || input === null) throw new Error('Missing owner field')
 		input.value = ''
 		input.dispatchEvent(new Event('input', { bubbles: true }))
 	})
-	await waitFor(() => expect(ownerField()?.textContent).toContain(copy.ownerAddressNeeded))
-	expect(ownerField()?.textContent).not.toContain(copy.ownerNeeded)
+	await waitFor(() => expect(ownerField(view.container)?.textContent).toContain(copy.ownerAddressNeeded))
+	expect(ownerField(view.container)?.textContent).not.toContain(copy.ownerNeeded)
 })
 
 test('a wallet on another network is asked only for an owner address', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
-	const source = capitalClient()
-	registerPortfolio(source)
-	source.install()
+	startFirstVisit()
+	installRegisteredPortfolio()
 	// Off the app's network the scoped account is unset, though a wallet is connected.
 	const view = await renderIntoDocument(<PortfoliosSection parameters={{ ...parameters, accountAddress: undefined }} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
 	lifecycle.trackRendered(view)
-	const ownerField = () => [...view.container.querySelectorAll('.field')].find(field => field.querySelector('label')?.textContent === copy.owner)
 	await waitFor(() => expect(list(view.container)?.querySelector('li button')).toBeTruthy())
 	await act(() => {
 		const open = list(view.container)?.querySelector('li button')
 		if (!(open instanceof HTMLButtonElement)) throw new Error('Missing open button')
 		open.click()
 	})
-	await waitFor(() => expect(ownerField()?.textContent).toContain(copy.ownerAddressNeeded))
-	expect(ownerField()?.textContent).not.toContain(copy.ownerNeeded)
+	await waitFor(() => expect(ownerField(view.container)?.textContent).toContain(copy.ownerAddressNeeded))
+	expect(ownerField(view.container)?.textContent).not.toContain(copy.ownerNeeded)
 })
 
 test('a registered address that does not answer as a portfolio is skipped', async () => {
 	// Any caller can register its own address with the factory, so one stranger must not fail the list.
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/portfolios')
+	startFirstVisit()
 	const stranger = getAddress('0x00000000000000000000000000000000000000c3')
 	const source = capitalClient()
 	registerPortfolio(source, { registry: [portfolio, stranger] })
