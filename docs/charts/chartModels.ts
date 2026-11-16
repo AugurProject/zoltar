@@ -1,4 +1,4 @@
-import { computeEscalationBindingCapitalAttoRep, computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/statoblast/ts/escalationGame/escalationMath'
+import { computeEscalationBindingCapitalAttoRep, computeEscalationCurveAttoRep, computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/statoblast/ts/escalationGame/escalationMath'
 
 export const quantitativeChartIds = ['fig-statoblast-escalation-cost-curve', 'fig-zoltar-fork-threshold-decay'] as const
 
@@ -56,14 +56,20 @@ export function computeCanonicalEscalationDeadlineDays(startBondRep: number, non
 	return ESCALATION_ACTIVATION_DELAY_DAYS + Number.parseInt(elapsedSeconds.toString(), 10) / 86_400
 }
 
-export function projectDocumentationEscalationDeposit(input: { amountRep: number; balances: EscalationBalanceTuple; nonDecisionThresholdRep: number; outcome: EscalationOutcomeKey; startBondRep: number }) {
-	return projectEscalationDeposit({
-		amountAttoRep: toAttoRep(input.amountRep),
-		balancesAttoRep: input.balances,
-		nonDecisionThresholdAttoRep: toAttoRep(input.nonDecisionThresholdRep),
-		outcome: input.outcome,
-		startBondAttoRep: toAttoRep(input.startBondRep),
-	})
+/** A deposit that takes the lead restarts the three-day response period from the day it is made. */
+export function computeCanonicalEscalationDeadlineAfterDepositDays(input: { bindingCapitalRep: number; depositDay: number; nonDecisionThresholdRep: number; startBondRep: number; takesLead: boolean }) {
+	const curveDeadlineDays = computeCanonicalEscalationDeadlineDays(input.startBondRep, input.nonDecisionThresholdRep, input.bindingCapitalRep)
+	return input.takesLead ? Math.max(curveDeadlineDays, input.depositDay + ESCALATION_ACTIVATION_DELAY_DAYS) : curveDeadlineDays
+}
+
+/** Projects a deposit made `elapsedDays` after the game opened; `belowRequiredSupport` marks a rejection by the curve alone. */
+export function projectDocumentationEscalationDeposit(input: { amountRep: number; balances: EscalationBalanceTuple; elapsedDays: number; nonDecisionThresholdRep: number; outcome: EscalationOutcomeKey; startBondRep: number }) {
+	const startBondAttoRep = toAttoRep(input.startBondRep)
+	const nonDecisionThresholdAttoRep = toAttoRep(input.nonDecisionThresholdRep)
+	const deposit = { amountAttoRep: toAttoRep(input.amountRep), balancesAttoRep: input.balances, nonDecisionThresholdAttoRep, outcome: input.outcome, startBondAttoRep }
+	const curveAttoRep = computeEscalationCurveAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, BigInt(Math.round((input.elapsedDays - ESCALATION_ACTIVATION_DELAY_DAYS) * 86_400)))
+	const projection = projectEscalationDeposit({ ...deposit, curveAttoRep })
+	return { belowRequiredSupport: projection === undefined && projectEscalationDeposit(deposit) !== undefined, projection }
 }
 
 export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; repeatDeposit: boolean; startBond: number; yesBalance: number }) {

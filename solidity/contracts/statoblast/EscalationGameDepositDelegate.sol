@@ -22,7 +22,6 @@ import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import { IERC20PermitAuthorization, IERC3009Authorization } from '../vendor/authorization/IERC20Authorization.sol';
 import {
 	Deposit,
-	ForkedEscrowState,
 	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
 	Node,
 	NonDecisionState,
@@ -31,10 +30,8 @@ import {
 
 contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGameEvents {
 	using SafeERC20Ops for IERC20;
-	event VaultEscrowUpdated(address indexed vault, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep);
 
 	event ForkContinuationResumed(uint256 resumedAt);
-	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
 	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 
 	/// @dev Reachable through the game's internal delegate dispatch, not its public fallback.
@@ -203,7 +200,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
 		uint8 outcomeIndex = uint8(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
+		bool takesLead = _validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), amountAttoRep);
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
@@ -240,6 +237,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			nonDecisionTimestamp = block.timestamp;
 			emit NonDecisionReached(nonDecisionTimestamp);
 		}
+		// Whoever led before must be able to answer, whatever the curve allows.
+		if (takesLead) responseRestartedUntil = block.timestamp + ACTIVATION_DELAY;
 		_accrueOrdinarySurplus(depositor, amountAttoRep);
 		_scheduleReporterFinality();
 		IEscalationGameSecurityPoolContext(IEscalationGameDepositContext(address(this)).securityPool()).refreshPortfolioFees();
@@ -260,27 +259,14 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit EscalationSurplusAccrued(amount, minimumBalance);
 	}
 
-	/// @notice Game delegatecall target: records fork-carried escrow for `depositor` on `outcome`, preserving reporter principal.
-	function recordForkedEscrowForOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 sourcePrincipalAttoRep, uint256 childRepAmountAttoRep) external {
-		require(!forkContinuation || forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(depositor != address(0x0), 'Depositor is zero');
-		if (sourcePrincipalAttoRep == 0 && childRepAmountAttoRep == 0) return;
-		ForkedEscrowState storage state = vaultAccounting[depositor].forkedEscrowByOutcome[uint8(outcome)];
-		state.sourcePrincipalAttoRep += sourcePrincipalAttoRep;
-		uint256 effectiveChildAttoRep = (childRepAmountAttoRep);
-		state.childAttoRep += childRepAmountAttoRep;
-		// The carry commitment owns inherited payout identity. This record tracks
-		// only child-local escrow attributed to the immutable depositor.
-		_increaseEscrowedRepForBundle(depositor, effectiveChildAttoRep);
-		emit ForkedEscrowRecorded(depositor, outcome, state.sourcePrincipalAttoRep, state.childAttoRep, _claimEscrowedRepByVault(depositor), totalDisputeStakedAttoRep, outcomeState[uint8(outcome)].balanceAttoRep);
-	}
-
-	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private view {
+	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private view returns (bool takesLead) {
 		require(!forkContinuation || forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(_isDepositResolutionOpen(IEscalationGameDepositContext(address(this)).getQuestionResolution()), 'Question resolved');
+		BinaryOutcomes.BinaryOutcome provisional = IEscalationGameDepositContext(address(this)).getQuestionResolution();
+		require(_isDepositResolutionOpen(provisional), 'Question resolved');
+		// Past the median, only support that meets the rising curve can reopen the result.
+		require(provisional == BinaryOutcomes.BinaryOutcome.None || expectedCumulativeRepAmountAttoRep >= IEscalationGameDepositContext(address(this)).totalCostAttoRep(), 'Response below curve');
 		require(currentBalanceAttoRep < nonDecisionThresholdAttoRep, 'Outcome full');
 		require(amountAttoRep > 0, 'Deposit zero');
 		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + amountAttoRep, 'Preview mismatch');
@@ -290,7 +276,9 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 maxBalance = outcomeState[0].balanceAttoRep;
 		if (outcomeState[1].balanceAttoRep > maxBalance) maxBalance = outcomeState[1].balanceAttoRep;
 		if (outcomeState[2].balanceAttoRep > maxBalance) maxBalance = outcomeState[2].balanceAttoRep;
-		if (expectedCumulativeRepAmountAttoRep != maxBalance || maxBalance >= nonDecisionThresholdAttoRep) return;
+		takesLead = currentBalanceAttoRep < maxBalance && expectedCumulativeRepAmountAttoRep > maxBalance;
+		if (expectedCumulativeRepAmountAttoRep != maxBalance || maxBalance >= nonDecisionThresholdAttoRep)
+			return takesLead;
 		for (uint8 otherOutcomeIndex = 0; otherOutcomeIndex < 3; otherOutcomeIndex++) {
 			if (otherOutcomeIndex != outcomeIndex && outcomeState[otherOutcomeIndex].balanceAttoRep == maxBalance) {
 				revert('Preview mismatch');
@@ -351,16 +339,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (game.getEscalationGameEndDate() >= block.timestamp) _scheduleReporterFinality();
 		IEscalationGameSecurityPoolContext(game.securityPool()).refreshPortfolioFees();
 		emit ForkContinuationResumed(forkResumedAt);
-	}
-
-	/// @notice Game delegatecall target: reduces `ownerAddress`'s escrowed REP claim and the total dispute stake by `amountAttoRep`.
-	function consumeEscrowedRepForOwner(address ownerAddress, uint256 amountAttoRep) external {
-		if (amountAttoRep == 0) return;
-		uint256 claimUnits = amountAttoRep;
-		require(vaultAccounting[ownerAddress].claimBundle.disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
-		vaultAccounting[ownerAddress].claimBundle.disputeStakedRepClaimUnits -= claimUnits;
-		totalDisputeStakedAttoRep -= amountAttoRep;
-		emit VaultEscrowUpdated(ownerAddress, _claimEscrowedRepByVault(ownerAddress), totalDisputeStakedAttoRep);
 	}
 
 	/// @notice Game delegatecall target: marks an inherited parent deposit consumed and records its retained principal.

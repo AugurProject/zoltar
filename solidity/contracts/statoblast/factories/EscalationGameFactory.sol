@@ -42,7 +42,10 @@ contract EscalationGameFactory {
 		assembly {
 			mcopy(add(part, 0x20), add(add(completeCode, 0x20), offset), length)
 		}
-		bytes memory deployCode = abi.encodePacked(hex'61', bytes2(uint16(length)), hex'600e60003961', bytes2(uint16(length)), hex'6000f3', part);
+		// The carrier starts with STOP: it can never execute, and a chunk that happens
+		// to begin with 0xEF cannot make its deployment fail under EIP-3541.
+		uint16 carrierLength = uint16(length + 1);
+		bytes memory deployCode = abi.encodePacked(hex'61', bytes2(carrierLength), hex'600e60003961', bytes2(carrierLength), hex'6000f3', hex'00', part);
 		assembly {
 			codePart := create(0, add(deployCode, 0x20), mload(deployCode))
 		}
@@ -79,13 +82,13 @@ contract EscalationGameFactory {
 		uint256 partOneLength;
 		uint256 partTwoLength;
 		assembly {
-			partOneLength := extcodesize(partOne)
-			partTwoLength := extcodesize(partTwo)
+			partOneLength := sub(extcodesize(partOne), 1)
+			partTwoLength := sub(extcodesize(partTwo), 1)
 		}
 		bytes memory creationCode = new bytes(partOneLength + partTwoLength);
 		assembly {
-			extcodecopy(partOne, add(creationCode, 0x20), 0, partOneLength)
-			extcodecopy(partTwo, add(add(creationCode, 0x20), partOneLength), 0, partTwoLength)
+			extcodecopy(partOne, add(creationCode, 0x20), 1, partOneLength)
+			extcodecopy(partTwo, add(add(creationCode, 0x20), partOneLength), 1, partTwoLength)
 		}
 		// Code storage is cheaper to deploy and read than one storage slot per 32-byte
 		// word, while two fixed parts keep each carrier below EIP-170.

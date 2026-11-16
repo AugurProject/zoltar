@@ -78,6 +78,7 @@ type StatoblastInfrastructureArtifacts = {
 	priceCoordinatorDeploymentWorker: BytecodeArtifact
 	sharedPoolPriceFeedDeploymentWorker: BytecodeArtifact
 	securityPoolFactory: ContractArtifact
+	securityPoolPortfolio: BytecodeArtifact
 	securityPoolForker: ContractArtifact
 	securityPoolForkerPortfolioDelegate: ContractArtifact
 	securityPoolOperationsDelegate: BytecodeArtifact
@@ -102,6 +103,15 @@ type SecurityPoolFactoryInputs = {
 	securityPoolForker: Address
 	securityPoolOperationsDelegate: Address
 	securityPoolEventEmitter: Address
+	securityPoolCapitalLedgerDeployer: Address
+	securityPoolCommitmentIndexDeployer: Address
+	securityPoolCapitalFeeStreamsDeployer: Address
+	securityPoolSettlementBookDeployer: Address
+	securityPoolPortfolioSettlementDeployer: Address
+	securityPoolReporterLedgerDeployer: Address
+	securityPoolPortfolioForkCoordinatorDeployer: Address
+	securityPoolPortfolioServicesDeployer: Address
+	securityPoolPortfolioAuctionDeployer: Address
 	shareTokenFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
@@ -139,11 +149,36 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const getSecurityPoolReporterLedgerDeployerByteCode = () => applyLibraries(artifacts.securityPoolReporterLedgerDeployer.evm.bytecode.object)
 	const getSecurityPoolPortfolioForkCoordinatorDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object)
 	const getSecurityPoolPortfolioAuctionDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioAuctionDeployer.evm.bytecode.object)
+	/** The only portfolio creation code the factory deploys; its hash is a factory constructor argument. */
+	const getSecurityPoolPortfolioCreationCode = () => applyLibraries(artifacts.securityPoolPortfolio.evm.bytecode.object)
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
 		encodeDeployData({
 			abi: artifacts.securityPoolFactory.abi,
 			bytecode: applyLibraries(artifacts.securityPoolFactory.evm.bytecode.object),
-			args: [inputs.securityPoolForker, inputs.zoltarQuestionData, inputs.escalationGameFactory, inputs.openOracle, inputs.zoltar, inputs.shareTokenFactory, inputs.openOraclePriceCoordinatorFactory, inputs.securityPoolOperationsDelegate, inputs.securityPoolEventEmitter],
+			args: [
+				inputs.securityPoolForker,
+				inputs.zoltarQuestionData,
+				inputs.escalationGameFactory,
+				inputs.openOracle,
+				inputs.zoltar,
+				inputs.shareTokenFactory,
+				inputs.openOraclePriceCoordinatorFactory,
+				inputs.securityPoolOperationsDelegate,
+				inputs.securityPoolEventEmitter,
+				keccak256(getSecurityPoolPortfolioCreationCode()),
+				// The order is the portfolio constructor's module deployer order.
+				[
+					inputs.securityPoolCapitalLedgerDeployer,
+					inputs.securityPoolCommitmentIndexDeployer,
+					inputs.securityPoolCapitalFeeStreamsDeployer,
+					inputs.securityPoolSettlementBookDeployer,
+					inputs.securityPoolPortfolioSettlementDeployer,
+					inputs.securityPoolReporterLedgerDeployer,
+					inputs.securityPoolPortfolioForkCoordinatorDeployer,
+					inputs.securityPoolPortfolioServicesDeployer,
+					inputs.securityPoolPortfolioAuctionDeployer,
+				],
+			],
 		})
 
 	/** CREATE2 addresses of every infrastructure contract for one WETH deployment and Zoltar core. */
@@ -187,6 +222,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getPriceCoordinatorDeploymentWorkerByteCode,
 		getSharedPoolPriceFeedDeploymentWorkerByteCode,
 		getSecurityPoolFactoryByteCode,
+		getSecurityPoolPortfolioCreationCode,
 		getSecurityPoolForkerByteCode,
 		getSecurityPoolForkerPortfolioDelegateByteCode,
 		getSecurityPoolOperationsDelegateByteCode,

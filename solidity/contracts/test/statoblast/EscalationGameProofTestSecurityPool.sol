@@ -136,36 +136,11 @@ contract EscalationGameProofTestSecurityPool {
 		return escalationGame.withdrawDeposit(proof, outcome);
 	}
 
-	function recordForkedEscrowForOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 sourcePrincipalAttoRep, uint256 childRepAmountAttoRep) external {
-		escalationGame.recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep);
-	}
-
-	function exportVaultUnresolvedDeposits(address vault) external returns (uint256 principalToTransferAttoRep) {
-		uint256[3] memory principalByOutcomeAttoRep = escalationGame.exportVaultUnresolvedTotalsWithoutTransfer(vault);
-		return principalByOutcomeAttoRep[0] + principalByOutcomeAttoRep[1] + principalByOutcomeAttoRep[2];
-	}
-
-	function exportForkedEscrowByOutcome(address vault, address repReceiver) external returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory childRepByOutcomeAttoRep) {
-		return escalationGame.exportForkedEscrowByOutcome(vault, repReceiver);
-	}
-
-	function exportForkedEscrowByOutcomeWithoutTransfer(address vault) external returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory childRepByOutcomeAttoRep) {
-		return escalationGame.exportForkedEscrowByOutcomeWithoutTransfer(vault);
-	}
-
-	function exportLocalUnresolvedDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) external returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
-		return escalationGame.exportUnresolvedDeposit(depositIndex, outcome);
-	}
-
 	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) external returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
 		return escalationGame.claimDepositForWinning(depositIndex, outcome);
 	}
 
 	function sweepResidualRepToSecurityPool() external {
 		escalationGame.sweepResidualRepToSecurityPool();
-	}
-
-	function drainAllRep(address receiver) external returns (uint256 amount) {
-		return escalationGame.drainAllRep(receiver);
 	}
 }

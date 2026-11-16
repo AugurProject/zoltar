@@ -9,7 +9,7 @@ import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
-import { isUniverseForked, loadPortfolioSetup, portfolioPreparationRequest, portfolioContractRequest, portfolioCreationRequest, sendPortfolioTransaction, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
+import { isUniverseForked, loadPortfolioSetup, portfolioPreparationRequest, portfolioAddressFromCreationReceipt, portfolioContractRequest, portfolioCreationRequest, sendPortfolioTransaction, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import type { usePortfolio } from './usePortfolio.js'
 import * as copy from '../../../copy/portfolio.js'
@@ -286,8 +286,8 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 				},
 				requireUnforkedOrigin,
 				async result => {
-					const portfolio = result.receipt.contractAddress
-					if (portfolio === null || portfolio === undefined || parameters.accountAddress === undefined) throw new Error('Portfolio deployment address unavailable.')
+					if (parameters.accountAddress === undefined) throw new Error('Portfolio deployment address unavailable.')
+					const portfolio = portfolioAddressFromCreationReceipt(result.receipt)
 					await model.load(portfolio, parameters.accountAddress, admission?.universeId.toString())
 				},
 			),

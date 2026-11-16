@@ -85,6 +85,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				capitalLedger: capital,
 				zoltar: infrastructure?.zoltar,
 				factory: infrastructure?.securityPoolFactory,
+				isPortfolio: true,
 				settlement: modules.engine,
 				commitmentIndex: index,
 				repToken: token,

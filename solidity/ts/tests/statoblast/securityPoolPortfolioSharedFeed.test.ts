@@ -366,7 +366,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await fixture.owner().readContract({ abi: feedArtifact.abi, address: secondFeed, functionName: 'lastPrice' })).toBe(0n)
 		await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'registerCoordinator', args: [fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator] })).rejects.toThrow('Only security pool factory')
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
-		await expect(fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] })).rejects.toThrow()
+		await expect(fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] })).rejects.toThrow('Portfolio is not canonical')
 		const ownNamespace = await fixture.other().readContract({ ...factory, functionName: 'sharedPriceFeeds', args: [fixture.other().account.address, fixture.base.genesisUniverse] })
 		expect(ownNamespace).toBe(zeroAddress)
 		expect(await fixture.owner().readContract({ ...factory, functionName: 'sharedPriceFeeds', args: [fixture.portfolio, fixture.base.genesisUniverse] })).toBe(await feed())

@@ -16,7 +16,6 @@ import {
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	ReputationToken_ReputationToken,
 	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
-	test_statoblast_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
 	test_statoblast_FalseReturningERC20_FalseReturningERC20,
 	test_statoblast_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
 } from '../../types/contractArtifact'
@@ -83,17 +82,6 @@ export function useEscalationGameFixture() {
 				}),
 		)
 		return { escalationGameAddress, testSecurityPoolAddress, proofVerifierAddress }
-	}
-
-	async function deployEscalationGameForkerHarness() {
-		const deploymentHash = await client.sendTransaction({
-			data: encodeDeployData({
-				abi: escalationGameForkerHarnessArtifact.abi,
-				bytecode: `0x${escalationGameForkerHarnessArtifact.evm.bytecode.object}`,
-			}),
-		})
-		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
-		return requireContractAddress(deploymentReceipt.contractAddress, 'escalation game forker harness deployment address')
 	}
 
 	async function deployProofTestSecurityPool(forkerAddress: Address = addressString(0n)) {
@@ -226,16 +214,6 @@ export function useEscalationGameFixture() {
 				args: [outcome, startIndex, numberOfEntries],
 			}),
 		)
-	const traceForkedEscrowByVaultAndOutcome = async (escalationGameAddress: Address, vault: Address, outcome: QuestionOutcome) =>
-		await transactWithEscalationGame(
-			escalationGameAddress,
-			encodeFunctionData({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				functionName: 'getForkedEscrowByVaultAndOutcome',
-				args: [vault, outcome],
-			}),
-		)
-
 	const assertEscrowAccounting = async (escalationGameAddress: Address, expectedTotalEscrowedAttoRep: bigint) => {
 		assert.strictEqual(await getTotalEscrowedRep(client, escalationGameAddress), expectedTotalEscrowedAttoRep, 'total escrowed REP should match scenario accounting')
 	}
@@ -272,18 +250,6 @@ export function useEscalationGameFixture() {
 			'carry leaf page should expose exactly the active local deposits newest first',
 		)
 	}
-
-	const recordForkedEscrowForOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, sourcePrincipalAttoRep: bigint, childRepAmountAttoRep: bigint) =>
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: escalationGameProofTestPoolArtifact.abi,
-					address: testSecurityPoolAddress,
-					functionName: 'recordForkedEscrowForOutcome',
-					args: [depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep],
-				}),
-		)
 
 	const withdrawDepositViaProofTestSecurityPool = async (
 		testSecurityPoolAddress: Address,
@@ -434,7 +400,6 @@ export function useEscalationGameFixture() {
 		recursiveResolutionTargetCost,
 		deployEscalationGameTestSecurityPool,
 		deployEscalationGameWithProofPool,
-		deployEscalationGameForkerHarness,
 		deployProofTestSecurityPool,
 		deployIncompatibleProofVerifier,
 		deployFalseReturningToken,
@@ -446,10 +411,8 @@ export function useEscalationGameFixture() {
 		depositOnOutcomeViaProofTestSecurityPool,
 		traceCarryLeafPage,
 		traceProofConsumedCarriedDepositIndexes,
-		traceForkedEscrowByVaultAndOutcome,
 		assertEscrowAccounting,
 		assertLocalYesAccountingModel,
-		recordForkedEscrowForOutcomeViaTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPoolWithGas,
 		claimDepositForWinningViaTestSecurityPool,

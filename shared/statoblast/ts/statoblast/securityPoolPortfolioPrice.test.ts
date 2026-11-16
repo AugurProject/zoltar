@@ -74,13 +74,15 @@ const load = (client: Parameters<typeof loadPortfolioPriceSnapshot>[0]['client']
 describe('portfolio branch price SDK', () => {
 	test('operation batches are bounded by gas and preserve caller order without a count cap', async () => {
 		const snapshot = await load(fixture().client)
-		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 100_000n, data: '0x12345678' as const }))
-		const batch = { gasLimit: 6_400_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations }
+		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 80_000n, data: '0x12345678' as const }))
+		const batch = { gasLimit: 5_760_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations }
 		const request = buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, batch)
 		const operationAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
 		expect(decodeFunctionData({ abi: operationAbi, data: request.data })).toEqual({ functionName: 'requestPortfolioPriceWithOperations', args: [unit, 2n * unit, 101n, batch] })
 		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: batch.gasLimit - 1n })).toThrow('gas budget')
-		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: 2n ** 32n })).toThrow('Callback gas')
+		// The feed adds 4,000,000 settlement gas and rejects a callback above 10,000,000.
+		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: 6_000_000n })).not.toThrow()
+		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: 6_000_001n })).toThrow('Callback gas exceeds limit')
 	})
 
 	test('a confirmed execution quote requires the requested block for every funding read', async () => {
@@ -143,9 +145,17 @@ describe('portfolio branch price SDK', () => {
 	})
 	test('quotes upward REP rounding and exact wrap and bounty requirements', async () => {
 		const snapshot = await load(fixture({ minimumToken1ReportAttoEth: 3n, balanceOf: 1n }).client)
-		expect(quotePortfolioPriceFunding(snapshot, unit + 1n)).toEqual({ price: unit + 1n, weth: 3n, rep: 4n, wrap: 2n, bounty: 101n, requiredEth: 103n })
+		expect(quotePortfolioPriceFunding(snapshot, unit + 1n)).toEqual({ price: unit + 1n, weth: 3n, minimumWeth: 3n, rep: 4n, wrap: 2n, bounty: 101n, requiredEth: 103n })
 		expect(quotePortfolioPriceFunding(snapshot, unit, 7n)).toMatchObject({ weth: 7n, rep: 7n, wrap: 6n })
 		expect(() => quotePortfolioPriceFunding(snapshot, 0n)).toThrow('positive')
+	})
+	test('funds a default report above the current minimum so exposure growth before settlement cannot void it', async () => {
+		const snapshot = await load(fixture({ minimumToken1ReportAttoEth: 101n * unit, minimumToken2ReportAttoRep: 1n }).client)
+		expect(quotePortfolioPriceFunding(snapshot, unit).weth).toBe(101n * unit + (101n * unit) / 20n)
+		expect(quotePortfolioPriceFunding(snapshot, unit, 200n * unit).weth).toBe(200n * unit)
+	})
+	test('rejects prices and amounts outside the feed range', async () => {
+		const snapshot = await load(fixture().client)
 		expect(() => quotePortfolioPriceFunding(snapshot, 1n << 255n)).toThrow('uint128')
 		expect(() => quotePortfolioPriceFunding(snapshot, unit, 1n << 128n)).toThrow('uint128')
 	})
@@ -153,7 +163,7 @@ describe('portfolio branch price SDK', () => {
 		const snapshot = await load(fixture().client)
 		const request = buildPortfolioPriceRequest(snapshot, 3n * unit)
 		expect(request).toMatchObject({ account: owner, to: feed, value: 101n })
-		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestPortfolioPrice', args: [3n * unit, 2n * unit, 101n] })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestPortfolioPrice', args: [3n * unit, (21n * unit) / 10n, 101n] })
 		for (const token of ['weth', 'rep'] as const) {
 			const approval = buildPortfolioPriceApprovalRequest(snapshot, token, 99n * unit)
 			expect(approval.to).toBe(token === 'weth' ? weth : rep)

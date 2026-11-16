@@ -66,7 +66,7 @@ const pathSpecificForbidden = new Map<string, RegExp>([
 	['docs/explanation/escalation-game.html', /\b(?:currentCarryTotal|effectiveInheritedUnresolvedTotal|localUnresolvedTotal)\b/],
 	['docs/explanation/liquidations.html', /\bbonusRepQuote\b/],
 	['docs/explanation/collateral-repair-auctions.html', /\b(?:postAuctionEffectiveOutcomeBalance|preAuctionOutcomeBalance)\b/],
-	['solidity/contracts/statoblast/EscalationGameCarry.sol', /\b(?:forkCarryInitialBacking|forkCarryBackingExportedBeforeResume|minimumBacking|sourceRetainedAmount|inheritedUnresolvedTotal|directlyClaimedPrincipal|_getEffectiveInheritedUnresolvedTotal)\b/],
+	['solidity/contracts/statoblast/EscalationGameCarry.sol', /\b(?:forkCarryInitialBacking|minimumBacking|sourceRetainedAmount|inheritedUnresolvedTotal|directlyClaimedPrincipal|_getEffectiveInheritedUnresolvedTotal)\b/],
 	['bots/shared/src/monitoring/constant-product-markets.ts', /\bethReceived\b/],
 	['ui/zoltarShared/ts/features/types.ts', /\bonRepRedeemedFromVault\b/],
 	['ui/statoblastShared/ts/copy/forkAuction.ts', /\bexport const collateral\b/],

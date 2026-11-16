@@ -114,7 +114,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		const secondFork = (await getUniverseData(owner, child)).forkTime
 		if ((materializationOffset ?? 0n) > 0n) {
 			expect(secondFork).toBeGreaterThan(gameEnd)
-			await expect(trader.simulateContract({ ...shares, functionName: 'migrate', args: [child * 256n + 1n, [1n]] })).rejects.toThrow('Question finalized before fork')
+			await expect(trader.simulateContract({ ...shares, functionName: 'migrate', args: [child * 256n + 1n, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')
 			const cashBefore = await collateralBalance(owner, fixture.portfolio, engine)
 			await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemShares' }))
 			expect(await collateralBalance(owner, fixture.portfolio, engine)).toBeLessThan(cashBefore)

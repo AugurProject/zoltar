@@ -9,6 +9,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
+import { drainEscalationGameRepForTest } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
@@ -115,7 +116,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			for (let outcome = 0; outcome < 3; outcome++) {
 				await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: securityPool, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, [1n, 1n, 1n], balances, balances, [zeroHash, zeroHash, zeroHash]] }))
 			}
-			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'drainAllRep', args: [client.account.address] }))
+			await drainEscalationGameRepForTest(mockWindow, repTokenAddress, escalationGame, client.account.address)
 			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, childBacking] }))
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'isForkCarryFundingComplete' }), true, 'mutually exclusive reporter claims must use the actual remaining escrow, not sum of all original principal')
 			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'resumeEscalationGameFromFork' }))
@@ -176,7 +177,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		}
 
 		const { escalationGame: underfundedGame, securityPool: underfundedPool } = await deployContinuation(exactMinimumBacking)
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: underfundedPool, functionName: 'drainAllRep', args: [client.account.address] }))
+		await drainEscalationGameRepForTest(mockWindow, repTokenAddress, underfundedGame, client.account.address)
 		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [underfundedGame, exactMinimumBacking - 1n] }))
 		assert.strictEqual(
 			await client.readContract({
@@ -362,14 +363,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		// Snapshot initialization transfers the full parent REP principal. Replacing it
 		// with one attoREP less than the exact post-fork backing tests both the view gate and
 		// the state-changing resume guard at the solvency boundary.
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: proofTestPoolArtifact.abi,
-				address: securityPool,
-				functionName: 'drainAllRep',
-				args: [client.account.address],
-			}),
-		)
+		await drainEscalationGameRepForTest(mockWindow, repTokenAddress, escalationGame, client.account.address)
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi: ReputationToken_ReputationToken.abi,

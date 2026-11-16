@@ -19,17 +19,6 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		_creditClaimOwners(depositor, amountToWithdrawAttoRep);
 	}
 
-	function exportUnresolvedDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amountAttoRep, uint256 parentDepositIndex) {
-		require(!ordinarySettlementInitialized, 'Final claims not exportable');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		uint8 outcomeIndex = uint8(outcome);
-		Deposit memory deposit = _consumeLocalDeposit(outcomeIndex, depositIndex, CarryConsumptionReason.Export);
-		depositor = deposit.depositor;
-		amountAttoRep = deposit.amountAttoRep;
-		_consumeEscrowedRepForBundle(depositor, amountAttoRep);
-		parentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
-	}
-
 	function withdrawDeposit(CarriedDepositProof calldata proof, BinaryOutcomes.BinaryOutcome outcome)
 		public
 		onlySecurityPoolOrForker
@@ -45,6 +34,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
 		_emitCarryDepositConsumed(outcomeIndex, proof.depositor, proof.amountAttoRep, proof.parentDepositIndex, proof.sourceNodeId, CarryConsumptionReason.WinningClaim);
 		uint256 burnAmountAttoRep;
+		_freezeContinuationForkThreshold();
 		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeCarriedWinningWithdrawal(outcomeIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep, proof.leafIndex);
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditExternalClaimOwners, (forkCarrySourceGame, depositor, proof.parentDepositIndex, amountToWithdrawAttoRep, burnAmountAttoRep)));
 		_burnWinningHaircut(burnAmountAttoRep, winnerHaircutPaidByFork);
@@ -104,15 +94,6 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			abi.decode(_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.settleOrdinaryGame, (proofVerifier, releaseSurplus))), (uint256));
 	}
 
-	function drainAllRep(address receiver) external returns (uint256 amountAttoRep) {
-		require(msg.sender == address(securityPool), 'Only pool');
-		require(!_usesCentralReporterCustody(), 'Reporter escrow migrates through portfolio');
-		require(receiver != address(0x0), 'Recipient is zero');
-		amountAttoRep = _reporterRepBalance();
-		if (amountAttoRep == 0) return 0;
-		_safeTransferRep(receiver, amountAttoRep);
-	}
-
 	function getDepositsByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new Deposit[](0);
 		uint8 outcomeIndex = uint8(outcome);
@@ -135,6 +116,11 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		return outcomeState[uint8(outcome)].localNodeIds.length;
 	}
 
+	function _freezeContinuationForkThreshold() private {
+		if (continuationSettlementForkThresholdAttoRep == 0)
+			continuationSettlementForkThresholdAttoRep = _liveSettlementForkThresholdAttoRep();
+	}
+
 	function _getPayoutQuestionResolution() private view returns (BinaryOutcomes.BinaryOutcome questionResolution) {
 		questionResolution = getFinalQuestionResolution();
 		require(questionResolution == ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool), 'Pool/game outcome mismatch');
@@ -149,6 +135,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		depositor = deposit.depositor;
 		originalDepositAmountAttoRep = deposit.amountAttoRep;
 		uint256 burnAmountAttoRep;
+		if (!ordinarySettlementInitialized) _freezeContinuationForkThreshold();
 		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeWinningWithdrawal(uint8(outcome), deposit.amountAttoRep, deposit.cumulativeAmountAttoRep);
 		if (ordinarySettlementInitialized) ordinaryWinningReserveAttoRep -= amountToWithdrawAttoRep + burnAmountAttoRep;
 		_consumeEscrowedRepForBundle(depositor, originalDepositAmountAttoRep);

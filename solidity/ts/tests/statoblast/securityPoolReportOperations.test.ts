@@ -87,8 +87,9 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const context = await prepare(2)
 		const third = createWriteClient(fixture.base.mockWindow, TEST_ADDRESSES[2])
 		const targets = await Promise.all([fixture.owner(), third].map(client => client.readContract({ ...capital(), functionName: 'ownerAccount', args: [client.account.address] })))
+		// Two calls with their per-call overhead fill the feed's operation allowance exactly: 2 x (2,900,000 + 100,000) = 6,000,000.
 		const operations = targets.map((account, index) => ({
-			gasLimit: 3_000_000n,
+			gasLimit: 2_900_000n,
 			data: encodeFunctionData({
 				abi: capitalArtifact.abi,
 				functionName: 'takeOverWithBounds',
@@ -119,13 +120,19 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		expect((await context.sponsor.readContract({ ...capital(), functionName: 'ownerAccount', args: [context.sponsor.account.address] })).freeAttoRep).toBe(2999n * unit)
 	})
 
-	test('operation count has no fixed cap: thirty-two calls fit their declared gas budget', async () => {
+	test('operation count has no fixed cap: twenty calls fill the feed operation gas allowance', async () => {
 		const context = await prepare()
-		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 200_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) }))
+		// Only gas bounds the count: 20 x (200,000 + 100,000) is the whole 6,000,000 the feed allows a batch.
+		const operations = Array.from({ length: 20 }, () => ({ gasLimit: 200_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) }))
 		const attempts = await run(context, operations)
-		expect(attempts).toHaveLength(32)
+		expect(attempts).toHaveLength(20)
 		expect(attempts.every(event => event.success)).toBe(true)
-		expect(attempts.map(event => event.operationIndex)).toEqual(Array.from({ length: 32 }, (_, index) => BigInt(index)))
+		expect(attempts.map(event => event.operationIndex)).toEqual(Array.from({ length: 20 }, (_, index) => BigInt(index)))
+		// One more call does not fit, whatever its own limit.
+		const bounty = await context.sponsor.readContract({ ...context.feed, functionName: 'getRequestPriceCostAttoEth' })
+		const timestamp = (await context.sponsor.getBlock()).timestamp
+		const oversized = { gasLimit: 6_100_001n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [...operations, { gasLimit: 1n, data: operations[0]?.data ?? '0x' }] }
+		await expect(context.sponsor.writeContract({ abi: batchAbi, address: context.feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, oversized], value: bounty })).rejects.toThrow('Callback gas exceeds limit')
 	})
 
 	test.each(['withdraw', 'price'] as const)('collateral earnings do not invoke a native %s reentry hook and later operations still execute', async mode => {
@@ -166,7 +173,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'setReceiveReentry', args: [fixture.capitalLedger, withdraw(unit, receiver).data] }))
 		const operations = [
-			{ gasLimit: 5_000_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) },
+			{ gasLimit: 3_500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) },
 			{ ...withdraw(unit, receiver), gasLimit: 2_000_000n },
 		]
 		expect((await run({ sponsor: owner, feed }, operations, unit, (data, value) => execute(feed.address, data, value), beforeSettlement)).map(event => event.success)).toEqual([true, true])

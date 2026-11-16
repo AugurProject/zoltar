@@ -74,6 +74,22 @@ describe('trusted coordinator game policy', () => {
 		expect(gamePolicyMismatch({ ...report, game: { ...report.game, multiplier: 141n } }, [policy], openOracle)).toBe('Multiplier differs from the approved coordinator template')
 	})
 
+	test('a shared-feed escrow report may add sponsor operation gas to the template, up to the feed callback cap', () => {
+		const sharedPolicy = { ...policy, reportEscrows: { '7': other } }
+		const escrowReport = (callbackGasLimit: bigint) => ({ ...report, helper: { ...report.helper, creator: other }, game: { ...report.game, callbackContract: other, callbackGasLimit } })
+		const outside = 'Callback gas limit is outside the approved shared-feed range'
+		expect(gamePolicyMismatch(escrowReport(policy.callbackGasLimit), [sharedPolicy], openOracle)).toBeUndefined()
+		expect(gamePolicyMismatch(escrowReport(policy.callbackGasLimit + 3_100_000n), [sharedPolicy], openOracle)).toBeUndefined()
+		expect(gamePolicyMismatch(escrowReport(10_000_000n), [sharedPolicy], openOracle)).toBeUndefined()
+		expect(gamePolicyMismatch(escrowReport(policy.callbackGasLimit - 1n), [sharedPolicy], openOracle)).toBe(outside)
+		expect(gamePolicyMismatch(escrowReport(10_000_001n), [sharedPolicy], openOracle)).toBe(outside)
+	})
+	test('a coordinator that is not a shared feed still needs the exact template callback gas', () => {
+		expect(gamePolicyMismatch({ ...report, game: { ...report.game, callbackGasLimit: policy.callbackGasLimit + 3_100_000n } }, [policy], openOracle)).toBe('Callback gas limit differs from the approved coordinator template')
+		expect(gamePolicyMismatch({ ...report, game: { ...report.game, callbackGasLimit: policy.callbackGasLimit - 1n } }, [policy], openOracle)).toBe('Callback gas limit differs from the approved coordinator template')
+		expect(gamePolicyMismatch(report, [policy], openOracle)).toBeUndefined()
+	})
+
 	test('accepts coordinator flag templates 6 and 7 while rejecting every unexpected optional bit', () => {
 		const blockPolicy = {
 			...policy,

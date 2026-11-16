@@ -397,12 +397,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '20d673f95a053965341d4e689a0fbc1d7340e48d506c9fc5945be195fcb118d5',
+		compiledAbiFingerprint: '3440fa0f84cf4d306e9c8062c66038be78229fcb9f619d9c75e4a8b0e091c58c',
 		name: 'SecurityPoolFactory',
-		purpose: 'Deploys and registers portfolio question ledgers and their shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: '255c67a61707b7f415a1dbdf310ff101ceb7fbef13eae561aa4d588521a146d1',
+		purpose: 'Deploys every portfolio from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
+		readAbiFingerprint: '4b091e610315d0d0c77a0e74711a0f8a368416f7e1525b415223fd5864c0eb3b',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `portfolioCount` and strict `portfoliosRange` enumerate every caller that configured a portfolio namespace, in registration order; a listed address is not authenticated as a portfolio. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` authenticates its portfolio; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolDependencies` returns a prepared coordinator and a zero per-question auction address. Branch collateral repair auctions are created by the shared fork coordinator. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `isPortfolio` is true only for a portfolio this factory deployed, and `portfolioCreationCodeHash` is the hash of the only creation code it deploys. `portfolioCount` and strict `portfoliosRange` enumerate, in registration order, the factory-deployed portfolios that have configured their namespace; a deployed portfolio is listed when its final setup step calls `initializePortfolioPriceFeed`. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` returns the factory-deployed portfolio a ledger belongs to; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolDependencies` returns a prepared coordinator and a zero per-question auction address. Branch collateral repair auctions are created by the shared fork coordinator. `zoltar` identifies the protocol root.',
 		readDeclarations: [
 			{
 				name: 'securityPoolDeploymentCount',
@@ -440,6 +440,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 		readStorageDeclarations: [
 			{
+				name: 'isPortfolio',
+			},
+			{
+				name: 'portfolioCreationCodeHash',
+			},
+			{
 				name: 'sharedPriceFeeds',
 			},
 			{
@@ -449,8 +455,22 @@ export const coreContractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 		interactions: [
 			{
+				call: '`deployPortfolio(creationCode, configuration)`',
+				caller: 'Anyone',
+				effect:
+					'Deploys a `SecurityPoolPortfolio` whose leading constructor arguments are this factory and its nine pinned module deployers, records it in `isPortfolio`, and returns its address. The deployment uses CREATE2 with a salt derived from the caller and the number of portfolios that caller has deployed, so the address depends on its creator and no other deployment can occupy it. `configuration` is the ABI encoding of the origin configuration, question horizon, admission policy and economics, in that order: the only values the creator chooses.',
+				declarations: [
+					{
+						name: 'deployPortfolio',
+					},
+				],
+				preconditions:
+					'`keccak256(creationCode)` equals `portfolioCreationCodeHash` (`Portfolio creation code is not canonical`); `configuration` is exactly 13 words (`Portfolio configuration length invalid`). The portfolio constructor\u2019s own checks apply and revert the deployment, including that every pinned module deployer holds code.',
+				signals: '`PortfolioDeployed` with the portfolio and the caller. Setup continues through the portfolio\u2019s `prepareNext`.',
+			},
+			{
 				call: '`initializePortfolioPriceFeed(universeId, priorityFee)`',
-				caller: 'Anyone, within their own caller-address namespace',
+				caller: 'A portfolio this factory deployed, within its own caller-address namespace',
 				effect:
 					'The first call creates the caller namespace\u2019s oracle configuration from the universe\u2019s REP token and the priority fee, and appends the caller to the portfolio registry. Each call creates the namespace\u2019s feed for that universe or returns the existing one. Portfolio setup calls this in its last stage, before any question is admitted.',
 				declarations: [
@@ -458,7 +478,8 @@ export const coreContractReferences: ContractReference[] = [
 						name: 'initializePortfolioPriceFeed',
 					},
 				],
-				preconditions: 'The universe has a REP token and has not forked. A repeated call must match the first call\u2019s REP token and priority fee. The feed starts without an accepted price. This call neither registers a question nor allocates REP, and registration does not authenticate the caller as a portfolio.',
+				preconditions:
+					'The universe has a REP token and has not forked. A repeated call must match the first call\u2019s REP token and priority fee. The feed starts without an accepted price. The caller satisfies `isPortfolio` (`Portfolio is not canonical`), so no other contract can open a namespace. This call neither registers a question nor allocates REP.',
 				signals: '`PortfolioRegistered` on the first call from a namespace; returns the canonical feed address. No question-deployment event.',
 			},
 			{
@@ -487,7 +508,7 @@ export const coreContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`deployPortfolioSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
-				caller: 'Anyone, within their own caller-address namespace',
+				caller: 'A portfolio with a configured namespace, within its own caller-address namespace',
 				effect:
 					'Creates a separate origin ledger and share token in the caller namespace, attaching its coordinator to the namespace/universe shared REP/ETH feed. Portfolio admission calls this from the portfolio contract, after its immutable admission policy allows the question; it then enforces the question horizon, with failure reverting deployment.',
 				declarations: [
@@ -495,7 +516,8 @@ export const coreContractReferences: ContractReference[] = [
 						name: 'deployPortfolioSecurityPool',
 					},
 				],
-				preconditions: 'The ordinary origin deployment checks apply; no lineage for this question/configuration has been claimed in the caller namespace. The namespace is derived from msg.sender and cannot be supplied on behalf of another pool.',
+				preconditions:
+					'The caller has configured its namespace (`Portfolio configuration missing`), which only a factory-deployed portfolio can do. The ordinary origin deployment checks apply; no lineage for this question/configuration has been claimed in the caller namespace. The namespace is derived from msg.sender and cannot be supplied on behalf of another pool.',
 				signals: '`SharedPriceFeedSet`, feed `CoordinatorRegistered`, `SecurityPoolRegistered`, and `DeploySecurityPool`',
 			},
 			{

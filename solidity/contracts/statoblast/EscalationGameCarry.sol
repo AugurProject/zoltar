@@ -102,10 +102,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			// The canonical factory binds this inventory to the parent's actual
 			// escrow after irrevocable source surplus and any native fork burn.
 			// Outcome principals are mutually exclusive, so their sum is not the
-			// funding requirement. Direct exports and auction sales spend only this
-			// authenticated bucket; neither can recreate discharged surplus.
-			if (forkCarryBackingExportedBeforeResumeAttoRep > forkCarryInitialBackingAttoRep) return false;
-			requiredAttoRep = (forkCarryInitialBackingAttoRep - forkCarryBackingExportedBeforeResumeAttoRep);
+			// funding requirement.
+			requiredAttoRep = forkCarryInitialBackingAttoRep;
 		}
 		return _reporterRepBalance() >= requiredAttoRep;
 	}

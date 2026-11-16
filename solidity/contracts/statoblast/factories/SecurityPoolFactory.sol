@@ -49,12 +49,43 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		address auction;
 	}
 	mapping(bytes32 => ChildPoolDependencies) private childPoolDependencies;
+	/// @notice Hash of the only portfolio creation code this factory deploys.
+	bytes32 public immutable portfolioCreationCodeHash;
+	// Module deployers every portfolio uses for its origin and for each fork child.
+	address private immutable capitalLedgerDeployer;
+	address private immutable commitmentIndexDeployer;
+	address private immutable capitalFeeStreamsDeployer;
+	address private immutable settlementBookDeployer;
+	address private immutable portfolioSettlementDeployer;
+	address private immutable reporterLedgerDeployer;
+	address private immutable forkCoordinatorDeployer;
+	address private immutable portfolioServicesDeployer;
+	address private immutable portfolioAuctionDeployer;
+	uint256 private constant PORTFOLIO_CONFIGURATION_BYTES = 13 * 32;
+	/// @notice Portfolios this factory deployed from the canonical creation code.
+	/// Only they can open a pool namespace, so every registered pool belongs to one.
+	mapping(address => bool) public isPortfolio;
+	mapping(address => uint256) private portfolioCreationCount;
 
 	event DeploySecurityPool(ISecurityPool indexed securityPool, address collateralRepairAuction, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth);
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
 	event PortfolioRegistered(address indexed portfolio, uint248 indexed originUniverseId);
+	event PortfolioDeployed(address indexed portfolio, address indexed creator);
 
-	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, address operationsDelegate, SecurityPoolEventEmitter eventEmitter) {
+	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, address operationsDelegate, SecurityPoolEventEmitter eventEmitter, bytes32 _portfolioCreationCodeHash, address[9] memory portfolioModuleDeployers) {
+		require(_portfolioCreationCodeHash != bytes32(0), 'Portfolio creation code hash missing');
+		// The deployers are deterministic addresses that may be deployed after this
+		// factory. Every portfolio constructor requires each of them to hold code.
+		portfolioCreationCodeHash = _portfolioCreationCodeHash;
+		capitalLedgerDeployer = portfolioModuleDeployers[0];
+		commitmentIndexDeployer = portfolioModuleDeployers[1];
+		capitalFeeStreamsDeployer = portfolioModuleDeployers[2];
+		settlementBookDeployer = portfolioModuleDeployers[3];
+		portfolioSettlementDeployer = portfolioModuleDeployers[4];
+		reporterLedgerDeployer = portfolioModuleDeployers[5];
+		forkCoordinatorDeployer = portfolioModuleDeployers[6];
+		portfolioServicesDeployer = portfolioModuleDeployers[7];
+		portfolioAuctionDeployer = portfolioModuleDeployers[8];
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		openOraclePriceCoordinatorFactory = _openOraclePriceCoordinatorFactory;
@@ -139,6 +170,31 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, collateralRepairAuction, openOraclePriceCoordinator, shareToken, parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, currentRetentionRate, settlementCollateralAttoEth));
 	}
 
+	/// @notice Deploys a portfolio from the canonical creation code with this factory and
+	/// its pinned module deployers. `configuration` is the ABI encoding of the origin
+	/// configuration, question horizon, admission policy and economics, in that order.
+	/// @dev A portfolio's modules hold provider REP and trader collateral, and each fork
+	/// child gets fresh ones from the same deployers. Fixing the code and the deployers
+	/// here is what lets pools, the forker and exchanges trust a registered portfolio.
+	function deployPortfolio(bytes calldata creationCode, bytes calldata configuration) external returns (address portfolio) {
+		require(keccak256(creationCode) == portfolioCreationCodeHash, 'Portfolio creation code is not canonical');
+		require(configuration.length == PORTFOLIO_CONFIGURATION_BYTES, 'Portfolio configuration length invalid');
+		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(address(this), capitalLedgerDeployer, commitmentIndexDeployer, capitalFeeStreamsDeployer, settlementBookDeployer, portfolioSettlementDeployer, reporterLedgerDeployer, forkCoordinatorDeployer, portfolioServicesDeployer, portfolioAuctionDeployer), configuration);
+		// The address depends on the creator, so no other deployment can take it.
+		bytes32 salt = keccak256(abi.encode(msg.sender, portfolioCreationCount[msg.sender]++));
+		assembly ('memory-safe') {
+			portfolio := create2(0, add(initCode, 0x20), mload(initCode), salt)
+			if iszero(portfolio) {
+				let size := returndatasize()
+				let data := mload(0x40)
+				returndatacopy(data, 0, size)
+				revert(data, size)
+			}
+		}
+		isPortfolio[portfolio] = true;
+		emit PortfolioDeployed(portfolio, msg.sender);
+	}
+
 	/// @notice Deploy in the caller's own namespace; another caller can never add a ledger to it.
 	function deployPortfolioSecurityPool(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (ISecurityPool securityPool) {
 		return
@@ -208,8 +264,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	/// @notice Initialize a portfolio's oracle configuration without a standalone question pool.
-	/// @dev The first call registers the caller for enumeration; registration does not authenticate the portfolio.
+	/// @dev Only a portfolio this factory deployed can open a namespace. The first call registers it for enumeration.
 	function initializePortfolioPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address) {
+		require(isPortfolio[msg.sender], 'Portfolio is not canonical');
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Universe REP token missing');
 		require(zoltar.getForkTime(universeId) == 0, 'Origin universe forked');
 		OpenOraclePriceCoordinator coordinator = portfolioConfigurations[msg.sender];

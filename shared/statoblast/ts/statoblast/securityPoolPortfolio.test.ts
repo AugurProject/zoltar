@@ -1,12 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, encodeAbiParameters, parseAbi, parseAbiParameters, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, exportPortfolioTransaction, validatePortfolioEconomics, type PortfolioEconomicsConfig, type PortfolioOriginConfig } from './securityPoolPortfolio.js'
+import { decodeFunctionData, encodeAbiParameters, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, exportPortfolioTransaction, portfolioAddressFromDeploymentLogs, validatePortfolioEconomics, type PortfolioEconomicsConfig, type PortfolioOriginConfig } from './securityPoolPortfolio.js'
 
 const owner: Address = '0x0000000000000000000000000000000000000001'
 const factory: Address = '0x0000000000000000000000000000000000000002'
 const origin: PortfolioOriginConfig = { collateralToken: '0x0000000000000000000000000000000000000001', minimumReportCollateral: 10n ** 16n, universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }
 const questionAdmissionPolicy: Address = '0x0000000000000000000000000000000000000004'
-const deployers = { capital: factory, commitments: factory, fees: factory, books: factory, settlement: factory, reporters: factory, forks: factory, services: factory, auctions: factory }
 const economics: PortfolioEconomicsConfig = {
 	purchaseFeeBps: 100n,
 	annualFeeBps: 1_000n,
@@ -15,31 +14,46 @@ const economics: PortfolioEconomicsConfig = {
 	minimumOutcomeRate: 10n ** 9n,
 	rewardVestingSeconds: 86_400n,
 }
-const inputs = parseAbiParameters(
-	'address factory,(address collateralToken,uint256 minimumReportCollateral,uint248 universeId,uint256 securityMultiplierBps,uint256 reportPriorityFeeAttoEthPerGas) origin,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds) config',
+// The portfolio constructor's creator-chosen arguments, after the factory and deployer arguments the factory prepends.
+const configurationInputs = parseAbiParameters(
+	'(address collateralToken,uint256 minimumReportCollateral,uint248 universeId,uint256 securityMultiplierBps,uint256 reportPriorityFeeAttoEthPerGas) origin,uint256 horizon,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds) economics',
 )
-const abi = [{ type: 'constructor', stateMutability: 'nonpayable', inputs }] as const
-const base = { owner, factory, origin, questionAdmissionPolicy, maximumQuestionHorizonSeconds: 31_536_000n, deployers, economics, artifact: { abi, bytecode: '0x1234' as const } }
+const factoryAbi = parseAbi(['function deployPortfolio(bytes creationCode, bytes configuration) returns (address portfolio)'])
+const creationCode = '0x1234' as const
+const topic = (value: Address) => encodeAbiParameters(parseAbiParameters('address'), [value])
+const base = { owner, factory, origin, questionAdmissionPolicy, maximumQuestionHorizonSeconds: 31_536_000n, economics, creationCode }
 
 describe('shared capital portfolio deployment', () => {
-	test('encodes module deployment addresses and pool economics without a shared owner health target', () => {
+	test('asks the canonical factory to deploy the pinned creation code with only the creator configuration', () => {
 		const request = buildPortfolioDeploymentRequest(base)
-		const constructor = abi.find(entry => entry.type === 'constructor')
-		if (constructor === undefined || constructor.type !== 'constructor') throw new Error('Missing test constructor')
-		const encoded = encodeAbiParameters(constructor.inputs, [factory, origin, base.maximumQuestionHorizonSeconds, deployers, questionAdmissionPolicy, economics])
-		expect(request).toEqual({ account: owner, data: `0x1234${encoded.slice(2)}` })
+		expect(request).toMatchObject({ account: owner, to: factory, value: 0n })
+		const configuration = encodeAbiParameters(configurationInputs, [origin, base.maximumQuestionHorizonSeconds, questionAdmissionPolicy, economics])
+		// The factory accepts exactly thirteen words: no deployer or factory address is the creator's to choose.
+		expect(configuration.length).toBe(2 + 13 * 64)
+		expect(decodeFunctionData({ abi: factoryAbi, data: request.data })).toEqual({ functionName: 'deployPortfolio', args: [creationCode, configuration] })
 	})
 
-	test('validates configurable fees, economic position minimums, vesting horizon and module addresses', () => {
+	test('rejects creation code that is not whole hexadecimal bytes', () => {
+		for (const invalid of ['0x', '0x123', '0xzz'] as const) expect(() => buildPortfolioDeploymentRequest({ ...base, creationCode: invalid })).toThrow('creation code')
+	})
+
+	test('reads the deployed portfolio only from the canonical factory deployment event', () => {
+		const portfolio: Address = '0x00000000000000000000000000000000000000AA'
+		const topics = [toEventSelector(parseAbiItem('event PortfolioDeployed(address indexed portfolio, address indexed creator)')), topic(portfolio), topic(owner)]
+		const log = { address: factory, data: '0x' as const, topics }
+		expect(portfolioAddressFromDeploymentLogs([{ address: owner, data: '0x', topics }, log], factory)).toBe(portfolio)
+		expect(() => portfolioAddressFromDeploymentLogs([{ address: owner, data: '0x', topics }], factory)).toThrow('deployment event is missing')
+		expect(() => portfolioAddressFromDeploymentLogs([{ ...log, topics: [topic(factory), topic(portfolio), topic(owner)] }], factory)).toThrow('deployment event is missing')
+	})
+
+	test('validates configurable fees, economic position minimums and vesting horizon', () => {
 		expect(() => validatePortfolioEconomics({ ...economics, purchaseFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })).not.toThrow()
 		for (const key of ['minimumCommitmentAttoEth', 'rewardVestingSeconds']) expect(() => validatePortfolioEconomics({ ...economics, [key]: 0n })).toThrow('must be positive')
 		expect(() => validatePortfolioEconomics({ ...economics, purchaseFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validatePortfolioEconomics({ ...economics, annualFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validatePortfolioEconomics({ ...economics, annualFeeBps: 0n })).not.toThrow()
-		expect(() => buildPortfolioDeploymentRequest({ ...base, deployers: { ...deployers, auctions: zeroAddress } })).toThrow('auctions deployer')
 		expect(() => validatePortfolioEconomics({ ...economics, minimumOutcomeRate: 10n ** 18n + 1n })).toThrow('exchange rate')
 		expect(() => validatePortfolioEconomics({ ...economics, rewardVestingSeconds: 2n ** 48n })).toThrow('uint48')
-		expect(() => buildPortfolioDeploymentRequest({ ...base, deployers: { ...deployers, commitments: zeroAddress } })).toThrow('commitments deployer')
 		expect(() => buildPortfolioDeploymentRequest({ ...base, maximumQuestionHorizonSeconds: 0n })).toThrow('positive')
 	})
 

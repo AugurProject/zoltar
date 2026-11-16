@@ -21,7 +21,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['tooling/contracts/deploy-testnet.mts', 636],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
-		['docs/charts/chartRuntime.ts', 875],
+		['docs/charts/chartRuntime.ts', 874],
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
 	]),

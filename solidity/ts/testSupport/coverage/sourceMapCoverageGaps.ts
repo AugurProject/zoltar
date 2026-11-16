@@ -27,7 +27,7 @@ export const knownSourceMapCoverageGaps = [
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol',
 		lineRules: [
 			{
-				currentSourceMatches: 3,
+				currentSourceMatches: 2,
 				linePattern: /^require\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*!=\s*BinaryOutcomes\.BinaryOutcome\.None,\s*'No outcome'\s*\);$/,
 				precededBy: {
 					maxPreviousLines: 8,

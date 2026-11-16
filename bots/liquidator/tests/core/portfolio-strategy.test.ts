@@ -118,6 +118,65 @@ test('a cure that restores health is screened out of takeovers', () => {
 	expect(evaluate(observation).reason).toBe('Cure restores target health without a takeover')
 })
 
+function deadlocked() {
+	// Two targets each short of backing; the spare covers either deficit but not both.
+	const observation = portfolioObservation()
+	const position = observation.positions[0]
+	if (position === undefined) throw new Error('Fixture position missing')
+	position.rep = 100n * unit
+	observation.positions.push({ ...position, id: 2n })
+	observation.snapshot.totalCommitmentAttoEth = 200n * unit
+	observation.snapshot.demandAttoEth = 195n * unit
+	return observation
+}
+
+test('a healing cure is submitted without an award only when it opens another position to a profitable takeover', () => {
+	const observation = deadlocked()
+	const result = evaluate(observation)
+	expect(result.reason).toBe('Unpaid cure ready; it opens another position to takeover')
+	// Zero consent: the call can cure and nothing else.
+	expect(result.plan).toMatchObject({ positionId: 1n, unpaidCure: true, minimumAward: 0n, ownFunding: 0n, maximumOwnRep: 0n, maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, commitment: 100n * unit })
+	expect(result.plan?.netRewardAttoEth).toBeGreaterThan(0n)
+	// Once the cure has spent the spare, the other position is a paid takeover.
+	const second = observation.positions[1]
+	if (second === undefined) throw new Error('Fixture position missing')
+	const cured = portfolioCureOutcome(observation, observation.positions[0] ?? second)
+	observation.snapshot.totalCommitmentAttoEth -= cured.removed
+	const paid = portfolioTakeoverPlan(observation, second, portfolioSettings(), observation.snapshot.ownerPrincipalAttoRep, true)
+	expect(paid.plan).toMatchObject({ positionId: 2n, unpaidCure: false })
+	expect(paid.plan?.minimumAward).toBeGreaterThan(0n)
+})
+
+test('no cure is submitted when it opens nothing, when the opened takeover is unprofitable, or without gas for both', () => {
+	const alone = deadlocked()
+	alone.positions.pop()
+	expect(evaluate(alone)).toEqual({ reason: 'Cure restores target health without a takeover' })
+	const settings = portfolioSettings()
+	settings.portfolioPolicy.minimumNetRewardAttoEth = 1_000n * unit
+	expect(evaluate(deadlocked(), settings).plan).toBeUndefined()
+	const funded = portfolioSettings()
+	funded.portfolioPolicy.maximumOwnFundingAttoRep = 0n
+	expect(evaluate(deadlocked(), funded).plan).toBeUndefined()
+	const poor = deadlocked()
+	poor.walletAttoEth = portfolioSettings().strategy.maximumGasCostAttoEth * 3n + portfolioSettings().portfolioPolicy.walletReserveAttoEth
+	expect(evaluate(poor).plan).toBeUndefined()
+	// A position that is already a paid takeover needs no cure elsewhere first.
+	const open = deadlocked()
+	const second = open.positions[1]
+	if (second === undefined) throw new Error('Fixture position missing')
+	second.rep = 10n * unit
+	second.commitment = 100n * unit
+	expect(evaluate(open).plan).toBeUndefined()
+})
+
+test('a plan cannot turn from a cure into a takeover, or back, between quote and signature', () => {
+	const cure = evaluate(deadlocked()).plan
+	if (cure === undefined) throw new Error('Fixture cure missing')
+	expect(() => assertPortfolioPlanStillAllowed(cure, cure, 'takeover')).not.toThrow()
+	expect(() => assertPortfolioPlanStillAllowed(cure, { ...cure, unpaidCure: false }, 'takeover')).toThrow('terms changed')
+	expect(() => assertPortfolioPlanStillAllowed({ ...cure, unpaidCure: false }, cure, 'takeover')).toThrow('terms changed')
+})
+
 test('the preliminary cure is unpaid and removes exactly the rounded-up deficit, floored and capped like the index', () => {
 	const observation = portfolioObservation()
 	const position = observation.positions[0]
@@ -129,6 +188,26 @@ test('the preliminary cure is unpaid and removes exactly the rounded-up deficit,
 	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 10n * unit, commitment: 90n * unit, rep: position.rep, healthy: true })
 	observation.snapshot.demandAttoEth = 95n * unit
 	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 100n * unit, rep: position.rep, healthy: false })
+})
+
+test('the preliminary cure never leaves a commitment below the minimum', () => {
+	const observation = portfolioObservation()
+	const position = observation.positions[0]
+	if (position === undefined) throw new Error('Fixture position missing')
+	// A 60 ETH minimum: the cut rounds up to 60 and would leave 40.
+	observation.snapshot.economics.minimumCommitmentAttoEth = 60n * unit
+	// Spare covers the whole commitment, so all of it is removed and the principal is freed.
+	observation.snapshot.demandAttoEth = 0n
+	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 100n * unit, commitment: 0n, healthy: true })
+	// Spare of 70 cannot finish the commitment and no smaller cut leaves a whole minimum: nothing is removed.
+	observation.snapshot.demandAttoEth = 30n * unit
+	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 100n * unit, healthy: false })
+	// A deep deficit (10.5 REP back 10 ETH) with a 30 ETH minimum and spare of 95: the uncovered 90 would
+	// leave 10, so the cut shrinks to 70 and exactly the minimum remains, still open to a takeover.
+	Object.assign(position, { rep: (105n * unit) / 10n })
+	observation.snapshot.economics.minimumCommitmentAttoEth = 30n * unit
+	observation.snapshot.demandAttoEth = 5n * unit
+	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 70n * unit, commitment: 30n * unit, healthy: false })
 })
 
 test('takeover prerequisites reject demand or total-capacity changes even below the cure floor', () => {

@@ -206,6 +206,9 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
 	const ordinarySettlementInitialized = !forkContinuationSnapshot && (await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementInitialized' }))
 	const frozenOrdinaryForkThreshold = ordinarySettlementInitialized ? await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementForkThresholdAttoRep' }) : undefined
+	// A game without ordinary settlement freezes its threshold at the first winning claim; zero means no claim yet.
+	const continuationForkThreshold = ordinarySettlementInitialized ? 0n : await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'continuationSettlementForkThresholdAttoRep' })
+	const frozenContinuationForkThreshold = continuationForkThreshold === 0n ? undefined : continuationForkThreshold
 	const continuationTiming = forkContinuationSnapshot
 		? await Promise.all([
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt', args: [] }),
@@ -213,7 +216,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			])
 		: undefined
 	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
-	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
+	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, responseRestartedUntil, _questionOutcome, universeForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
 		client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'startBondAttoRep',
@@ -250,6 +253,12 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'getEscalationGameEndDate',
+			address: escalationGameAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: statoblast_EscalationGame_EscalationGame.abi,
+			functionName: 'responseRestartedUntil',
 			address: escalationGameAddress,
 			args: [],
 		}),
@@ -323,7 +332,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		currentTime: block.timestamp,
 		escalationEndTime,
 		escalationGameAddress,
-		forkThresholdAttoRep: frozenOrdinaryForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),
+		forkThresholdAttoRep: frozenOrdinaryForkThreshold ?? frozenContinuationForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThresholdAttoRep,
@@ -340,6 +349,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		forkContinuation: forkContinuationSnapshot,
 		forkResumedAt: continuationTiming?.[0],
 		forkElapsedAtStart: continuationTiming?.[1],
+		responseRestartedUntil,
 		universeId,
 		parentWithdrawalEnabled: settlementState === 'resolved',
 		...walletReportingState,

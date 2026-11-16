@@ -36,6 +36,7 @@ export function storageFixture() {
 	let badEconomics = false
 	let claimReady = true
 	let checkpointApplying = false
+	let frozenForkThreshold = 0n
 	let badCheckpointCommitment = false
 	let principalAttoRep = 10n
 	let atomicFailure: Error | undefined
@@ -143,6 +144,8 @@ export function storageFixture() {
 			case 'nonDecisionThresholdAttoRep':
 			case 'getForkThresholdAttoRep':
 				return [10n]
+			case 'continuationSettlementForkThresholdAttoRep':
+				return [frozenForkThreshold]
 			case 'getEscalationGameEndDate':
 				return [100n]
 			case 'getForkTime':
@@ -214,6 +217,9 @@ export function storageFixture() {
 		},
 		setAtomicResponse: (response: Hex) => {
 			atomicResponse = response
+		},
+		setFrozenForkThreshold: (threshold: bigint) => {
+			frozenForkThreshold = threshold
 		},
 		setCheckpointApplying: () => {
 			claimReady = false

@@ -32,10 +32,8 @@ contract SecurityPoolForkerPortfolioDelegate {
 		address sourceGame;
 		(child, portfolio, sourceGame) = _preparePortfolioQuestion(source, targetUniverse);
 		if (child.systemState() == SystemState.Operational) return child;
-		if (zoltar.getForkTime(targetUniverse) != 0) {
-			(SecurityPoolReporterLedger.Question memory state, bool finalClaim) = SecurityPoolReporterLedger(portfolio.reporterLedger(targetUniverse)).question(targetUniverse, source.questionId());
-			require((finalClaim && state.balanceAttoRep != 0) || _hasProtectedQuestionCash(portfolio, targetUniverse, source.questionId()), 'Only finalized questions can activate in a forked universe');
-		}
+		if (zoltar.getForkTime(targetUniverse) != 0)
+			require(_canActivateInForkedUniverse(portfolio, targetUniverse, source.questionId()), 'Only finalized questions can activate in a forked universe');
 		if (sourceGame != address(0) && !_continueReporterGame(portfolio, source, child, EscalationGame(sourceGame)))
 			return child;
 		child.setSystemState(SystemState.Operational);
@@ -76,11 +74,31 @@ contract SecurityPoolForkerPortfolioDelegate {
 	/// @dev The source share namespace may be a prepared pool without its own game.
 	function materializeImmediatePortfolioChild(ISecurityPool source, uint256 outcomeIndex) external returns (ISecurityPool) {
 		uint248 targetUniverse = zoltar.getChildUniverseId(source.universeId(), outcomeIndex);
+		// Share migration must not depend on someone else having deployed the branch.
+		if (address(zoltar.getRepToken(targetUniverse)) == address(0))
+			zoltar.deployChild(source.universeId(), outcomeIndex);
 		ISecurityPoolPortfolioNative portfolio = ISecurityPoolPortfolioNative(source.securityPoolFactory().getSecurityPoolPortfolio(source));
 		portfolio.prepareQuestionUniverse(targetUniverse);
 		address game = portfolio.sourceGame(targetUniverse, source.questionId());
 		if (game != address(0)) source = EscalationGame(game).securityPool();
+		// A target that forked before this question was materialized there cannot
+		// activate a live question. Its prepared, forked ledger is all that shares
+		// need in order to migrate on through that universe.
+		if (zoltar.getForkTime(targetUniverse) != 0) {
+			(ISecurityPool child, ISecurityPoolPortfolioNative authority, ) = _preparePortfolioQuestion(source, targetUniverse);
+			if (
+				child.systemState() == SystemState.Operational ||
+				!_canActivateInForkedUniverse(authority, targetUniverse, source.questionId())
+			) return child;
+		}
 		return materializePortfolioQuestion(source, targetUniverse);
+	}
+
+	function _canActivateInForkedUniverse(ISecurityPoolPortfolioNative portfolio, uint248 targetUniverse, uint256 questionId) private view returns (bool) {
+		(SecurityPoolReporterLedger.Question memory state, bool finalClaim) = SecurityPoolReporterLedger(portfolio.reporterLedger(targetUniverse)).question(targetUniverse, questionId);
+		return
+			(finalClaim && state.balanceAttoRep != 0) ||
+			_hasProtectedQuestionCash(portfolio, targetUniverse, questionId);
 	}
 
 	function _preparePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) private returns (ISecurityPool child, ISecurityPoolPortfolioNative portfolio, address sourceGame) {
@@ -93,6 +111,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 		portfolio = ISecurityPoolPortfolioNative(authority);
 		portfolio.prepareQuestionUniverse(targetUniverse);
 		child = factory.getSecurityPool(origin, targetUniverse);
+		if (address(child) != address(0)) _requireSameFactory(child, factory);
 		if (address(child) != address(0) && child.systemState() == SystemState.Operational)
 			return (child, portfolio, address(0));
 		SecurityPoolReporterLedger reporters = SecurityPoolReporterLedger(portfolio.reporterLedger(targetUniverse));
@@ -106,10 +125,20 @@ contract SecurityPoolForkerPortfolioDelegate {
 		}
 		factory.preparePortfolioPriceFeed(source, targetUniverse);
 		(child, ) = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps(), 0, 0);
+		_requireSameFactory(child, factory);
 		require(child.collateralRepairAuction() == address(0), 'Portfolio question cannot have a collateral repair auction');
 		source.authorizeChildPool(child);
 		portfolio.registerChildPool(child);
 		if (zoltar.getForkTime(targetUniverse) != 0) child.setSystemState(SystemState.PoolForked);
+	}
+
+	/// @dev The forker is every pool's privileged caller, and `source` is chosen by
+	/// the caller. A pool this forker may act on names its own immutable factory, so
+	/// requiring that factory to be the one that vouched for `source` and resolved
+	/// `child` means a genuine pool can only be reached through its genuine lineage.
+	/// A counterfeit child can claim any factory, but privileged calls on it are inert.
+	function _requireSameFactory(ISecurityPool child, ISecurityPoolFactory factory) private view {
+		require(address(child.securityPoolFactory()) == address(factory), 'Child pool belongs to another factory');
 	}
 
 	function getQuestionOutcome(ISecurityPool pool) external view returns (BinaryOutcomes.BinaryOutcome) {

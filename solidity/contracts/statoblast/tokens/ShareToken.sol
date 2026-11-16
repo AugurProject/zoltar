@@ -204,8 +204,14 @@ contract ShareToken is ERC1155, IShareToken {
 
 		ISecurityPool sourcePool = canonicalPoolByUniverse[universeId];
 		require(address(sourcePool) != address(0x0), 'ShareToken source universe is missing a canonical pool');
+		// A question whose claims became final before the fork settles in this
+		// universe. A ledger that was never activated there reports no outcome, so
+		// finality is read from the settlement schedule, as for recovery rights.
+		require(sourcePool.portfolioCustody() == address(0) || isPortfolioRecoveryEligible(universeId), 'ShareToken question finalized before fork');
 		ISecurityPoolForker forker = ISecurityPoolForker(sourcePool.securityPoolForker());
-		if (sourcePool.systemState() == SystemState.Operational) {
+		// A source ledger that was prepared but never activated before its universe
+		// forked enters fork mode the same way an operational one does.
+		if (sourcePool.systemState() != SystemState.PoolForked) {
 			forker.initiateSecurityPoolFork(sourcePool);
 		}
 		require(sourcePool.systemState() == SystemState.PoolForked, 'ShareToken source pool cannot migrate');

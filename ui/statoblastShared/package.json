@@ -285,6 +285,10 @@
 			"bun": "./ts/features/reporting/lib/escalationReminder.ts",
 			"default": "./js/features/reporting/lib/escalationReminder.js"
 		},
+		"./features/reporting/lib/reportingMaxContribution.js": {
+			"bun": "./ts/features/reporting/lib/reportingMaxContribution.ts",
+			"default": "./js/features/reporting/lib/reportingMaxContribution.js"
+		},
 		"./features/reporting/lib/reportingViewerStatus.js": {
 			"bun": "./ts/features/reporting/lib/reportingViewerStatus.ts",
 			"default": "./js/features/reporting/lib/reportingViewerStatus.js"

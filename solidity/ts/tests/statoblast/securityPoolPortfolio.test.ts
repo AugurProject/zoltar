@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, parseAbiParameters, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
@@ -18,6 +18,11 @@ import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/sta
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { maximumQuestionHorizonSeconds, portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+
+// The creator-chosen tail of the portfolio constructor, which the factory appends to its own leading arguments.
+const portfolioConfigurationInputs = parseAbiParameters(
+	'(address collateralToken,uint256 minimumReportCollateral,uint248 universeId,uint256 securityMultiplierBps,uint256 reportPriorityFeeAttoEthPerGas) origin,uint256 horizon,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds) economics',
+)
 
 describe('Statoblast: central portfolio and native question integration', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -39,26 +44,29 @@ describe('Statoblast: central portfolio and native question integration', () => 
 			auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
 			services: infrastructure.securityPoolPortfolioServicesDeployer,
 		}
-		const deploy = (configuration = portfolioEconomics, modules = deployers, reportPriorityFeeAttoEthPerGas = 10_000_000_000n) =>
-			deployContract(
-				fixture.owner(),
-				encodeDeployData({
-					abi: portfolioArtifact.abi,
-					bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object),
-					args: [
-						infrastructure.securityPoolFactory,
-						{ collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', minimumReportCollateral: 10n ** 16n, universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas },
-						maximumQuestionHorizonSeconds,
-						modules,
-						fixture.questionAdmissionPolicy,
-						configuration,
-					],
+		const origin = (reportPriorityFeeAttoEthPerGas: bigint) => ({ collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const, minimumReportCollateral: 10n ** 16n, universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas })
+		const factory = { abi: factoryArtifact.abi, address: infrastructure.securityPoolFactory }
+		const creationCode = applyLibraries(portfolioArtifact.evm.bytecode.object)
+		// The factory call is encoded here, without the SDK's validation, so the constructor's own checks are the ones exercised.
+		const deploy = (configuration = portfolioEconomics, reportPriorityFeeAttoEthPerGas = 10_000_000_000n) =>
+			writeContractAndWait(fixture.owner(), () =>
+				fixture.owner().writeContract({
+					...factory,
+					functionName: 'deployPortfolio',
+					args: [creationCode, encodeAbiParameters(portfolioConfigurationInputs, [origin(reportPriorityFeeAttoEthPerGas), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, configuration])],
+					gas: 16_777_216n,
 				}),
 			)
-		await expect(deploy(portfolioEconomics, deployers, 0n)).rejects.toThrow('Initial priority fee zero')
+		const portfolioCount = () => fixture.owner().readContract({ ...factory, functionName: 'portfolioCount' })
+		const before = await portfolioCount()
+		await expect(deploy(portfolioEconomics, 0n)).rejects.toThrow('Initial priority fee zero')
 		for (const minimumOutcomeRate of [0n, unit + 1n]) await expect(deploy({ ...portfolioEconomics, minimumOutcomeRate })).rejects.toThrow('Invalid minimum exchange rate')
 		await expect(deploy({ ...portfolioEconomics, annualFeeBps: 10_001n })).rejects.toThrow('Invalid portfolio economics')
-		for (const key of Object.keys(deployers)) await expect(deploy(portfolioEconomics, { ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow(key === 'auctions' ? 'Auction deployer has no code' : 'Portfolio deployer has no code')
+		expect(await portfolioCount()).toBe(before)
+		// A creator can no longer choose module deployers. The constructor still rejects a deployer without code,
+		// which is what stops a factory whose pinned deployers are not all deployed yet from creating a portfolio.
+		const construct = (modules: typeof deployers) => deployContract(fixture.owner(), encodeDeployData({ abi: portfolioArtifact.abi, bytecode: creationCode, args: [infrastructure.securityPoolFactory, modules, origin(10_000_000_000n), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, portfolioEconomics] }))
+		for (const key of Object.keys(deployers)) await expect(construct({ ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow(key === 'auctions' ? 'Auction deployer has no code' : 'Portfolio deployer has no code')
 	})
 
 	test('portfolio setup creates its shared capital and oracle without any seed question ledger', async () => {
@@ -84,7 +92,11 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'questionCount' })).toBe(0n)
 		const registrationLogs = await fixture.owner().getLogs({ address: factory.address, fromBlock: beforeBlock + 1n, toBlock: await fixture.owner().getBlockNumber() })
 		const registrations = registrationLogs.map(log => decodeEventLog({ abi: factoryArtifact.abi, data: log.data, topics: log.topics }))
-		expect(registrations).toEqual([{ eventName: 'PortfolioRegistered', args: { portfolio: getAddress(created), originUniverseId: fixture.base.genesisUniverse } }])
+		expect(registrations).toEqual([
+			{ eventName: 'PortfolioDeployed', args: { portfolio: getAddress(created), creator: getAddress(fixture.owner().account.address) } },
+			{ eventName: 'PortfolioRegistered', args: { portfolio: getAddress(created), originUniverseId: fixture.base.genesisUniverse } },
+		])
+		expect(await fixture.owner().readContract({ ...factory, functionName: 'isPortfolio', args: [created] })).toBe(true)
 		// Reconfigure a real namespace: the feed reads its immutable collateral configuration.
 		await fixture.base.mockWindow.impersonateAccount(created)
 		await fixture.base.mockWindow.setBalance(created, unit)
@@ -95,8 +107,8 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await configure()
 		expect(await count()).toBe(before + 1n)
 		expect(await range(before - 1n, 2n)).toEqual([getAddress(fixture.portfolio), getAddress(created)])
-		// An account without collateral configuration cannot leave a partial registry entry.
-		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))).rejects.toThrow('Shared price feed deployment failed')
+		// An account the factory did not deploy cannot open a namespace or leave a registry entry.
+		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))).rejects.toThrow('Portfolio is not canonical')
 		expect(await count()).toBe(before + 1n)
 		await expect(range(before + 1n, 1n)).rejects.toThrow('Portfolio range count too large')
 	})

@@ -2,6 +2,7 @@ import { coreContractReferences } from './core-contract-references.mts'
 import { forkEscalationContractReferences } from './fork-escalation-contract-references.mts'
 import { oracleMarketContractReferences } from './oracle-market-contract-references.mts'
 import { securityPoolContractReference } from './security-pool-contract-reference.mts'
+import { securityPoolForkerContractReference } from './security-pool-forker-contract-reference.mts'
 
 type Interaction = {
 	call: string
@@ -41,6 +42,6 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '89fbc2bd00e881a54331df8855659925baa557fe39f2614dbeb720b0d221bef8'
+export const expectedProductionSoliditySourceFingerprint = '796338ed2f38ecff3ecd9952b5e9e132479869b16766e41fce7ff035924dab5b'
 
-export const contractReferences: ContractReference[] = [...coreContractReferences, securityPoolContractReference, ...forkEscalationContractReferences, ...oracleMarketContractReferences]
+export const contractReferences: ContractReference[] = [...coreContractReferences, securityPoolContractReference, securityPoolForkerContractReference, ...forkEscalationContractReferences, ...oracleMarketContractReferences]

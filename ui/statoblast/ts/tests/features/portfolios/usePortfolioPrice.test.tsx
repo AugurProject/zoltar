@@ -74,9 +74,9 @@ test('wrapping and editable approvals remain independent from requesting a funde
 	expect(state.hook.state().requestReason).toContain('Insufficient collateral')
 	await act(() => state.hook.state().wrap())
 	expect(state.requests).toHaveLength(1)
-	expect(lastRequest(state.requests)).toMatchObject({ to: priceWeth, value: 2n * unit })
+	expect(lastRequest(state.requests)).toMatchObject({ to: priceWeth, value: (21n * unit) / 10n })
 	await lastRequest(state.requests).validateBeforeSubmit?.()
-	state.setWeth(2n * unit)
+	state.setWeth((21n * unit) / 10n)
 	await act(() => state.hook.state().refresh())
 	await waitFor(() => expect(state.hook.state().funding?.wrap).toBe(0n))
 	expect(state.hook.state().requestReason).toContain('Approve both')
@@ -93,7 +93,7 @@ test('wrapping and editable approvals remain independent from requesting a funde
 	const request = lastRequest(state.requests)
 	expect(request.reviewDescription).toContain('Disputes may change')
 	expect(request.value).toBe(101n)
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestPortfolioPrice', args: [2n * unit, 2n * unit, 101n] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestPortfolioPrice', args: [2n * unit, (21n * unit) / 10n, 101n] })
 	await request.validateBeforeSubmit?.()
 	state.setAllowances(0n, 0n)
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Approve both')
@@ -227,7 +227,7 @@ for (const symbol of ['USDC', 'USDT'] as const) {
 		const state = await setup(f => {
 			f.values['collateralToken'] = collateral
 			f.values['minimumToken1ReportAttoEth'] = 2_000_000n
-			f.set(collateral, 'balanceOf', 2_000_000n)
+			f.set(collateral, 'balanceOf', 2_100_000n)
 			f.setAllowances(100n * unit, 100n * unit)
 		})
 		await act(() => state.hook.state().setPrice('1'))
@@ -235,7 +235,7 @@ for (const symbol of ['USDC', 'USDT'] as const) {
 		await act(() => state.hook.state().request())
 		const request = lastRequest(state.requests)
 		await request.validateBeforeSubmit?.()
-		state.set(collateral, 'balanceOf', 1_999_999n)
+		state.set(collateral, 'balanceOf', 2_099_999n)
 		await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Wallet report funding is insufficient')
 		expect(state.requests).toHaveLength(1)
 	})
@@ -258,7 +258,7 @@ test('an open account funds its own universe price with no preparation step or b
 	expect(state.hook.state().snapshot?.universeId).toBe(0n)
 	expect(state.hook.state().reportingDeadline).toBeUndefined()
 	await act(() => state.hook.state().setPrice('2'))
-	state.setWeth(2n * unit)
+	state.setWeth((21n * unit) / 10n)
 	state.setAllowances(9n * unit, 8n * unit)
 	// A branch would refuse this late report; the account's universe has no activation cutoff.
 	state.source.setSnapshot(capitalSnapshot({ timestamp: 2_700n }))
@@ -271,7 +271,7 @@ test('an open account funds its own universe price with no preparation step or b
 	expect(request.account).toBe(owner)
 	expect(request.reviewDescription).toContain('renews the shared price for this universe')
 	expect(request.reviewDescription).not.toContain('branch')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestPortfolioPrice', args: [2n * unit, 2n * unit, 101n] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestPortfolioPrice', args: [2n * unit, (21n * unit) / 10n, 101n] })
 	await request.validateBeforeSubmit?.()
 	await act(() => state.hook.state().approve('rep', 4n * unit))
 	expect(lastRequest(state.requests).reviewDescription).toContain('4 REP')
@@ -319,7 +319,7 @@ test('a universe USDT reset uses its own transaction action instead of the branc
 	const state = await setup(f => {
 		f.values['collateralToken'] = collateral
 		f.values['minimumToken1ReportAttoEth'] = 2_000_000n
-		f.set(collateral, 'balanceOf', 2_000_000n)
+		f.set(collateral, 'balanceOf', 2_100_000n)
 		f.setAllowances(1n, 100n * unit)
 	}, capitalSnapshot())
 	await act(() => state.hook.state().setPrice('1'))

@@ -141,7 +141,7 @@ describe('Statoblast: owner health policy', () => {
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price((E * 11n) / 10n)
-		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [id, 100n * E, 1n, 0n] }))).rejects.toThrow('Position does not need takeover')
+		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [id, 100n * E, 1n, 0n] }))).rejects.toThrow('Adverse observation missing')
 		expect((await position(id)).commitment).toBe(100n * E)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 		expect((await account(keeper)).feesAttoEth).toBe(0n)

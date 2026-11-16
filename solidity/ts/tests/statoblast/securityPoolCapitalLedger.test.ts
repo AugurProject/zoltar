@@ -100,7 +100,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(keeper)).feesAttoRep).toBe(0n)
 		expect(await alice.readContract({ abi: indexArtifact.abi, address: index, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 		await deposit(keeper, 1_000n * E)
-		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [id, 100n * E, 1n, 1_000n * E] }))).rejects.toThrow('Position does not need takeover')
+		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [id, 100n * E, 1n, 1_000n * E] }))).rejects.toThrow('Adverse observation missing')
 	})
 
 	test('one healthy commitment cannot collect the fees of a hundred unhealthy commitments', async () => {

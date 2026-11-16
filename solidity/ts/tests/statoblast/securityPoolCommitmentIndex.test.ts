@@ -774,7 +774,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await observe(unit)
 		await observe(2n * unit)
 		const started = await liquidationStarted(id)
-		const cure = (demand: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cure', args: [id, 2n * unit, 10_500n, 10n * unit, demand, 0n] }))
+		const cure = (demand: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cure', args: [id, 2n * unit, 10_500n, 10n * unit, demand, 0n, false] }))
 		await cure(75n * unit)
 		expect((await account(id)).commitment).toBe(75n * unit)
 		expect(await liquidationStarted(id)).toBe(started)
@@ -788,7 +788,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 
 	test('a cure never cuts below its target and finishes, or else lifts to the minimum, a sub-minimum partial rest', async () => {
 		const unit = 10n ** 18n
-		const cure = (id: bigint, target: bigint, demand = 0n) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cure', args: [id, 2n * unit, 10_500n, 10n * unit, demand, target] }))
+		const cure = (id: bigint, target: bigint, demand = 0n) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cure', args: [id, 2n * unit, 10_500n, 10n * unit, demand, target, false] }))
 		// At this price 105 REP backs 50 ETH, a 50 ETH deficit.
 		const bounded = await create(105n * unit, 100n * unit, unit)
 		await cure(bounded, 70n * unit)

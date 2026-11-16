@@ -112,6 +112,7 @@ export async function executePortfolioTakeover(
 					})
 				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.commitment, plan.minimumAward, plan.maximumOwnRep, bounds] }) }
 		label = typeof positionId === 'bigint' ? `Take over portfolio position ${positionId}` : `Take over auction bid ${positionId.bidId} vault ${positionId.vault}`
+		if (plan.unpaidCure) label = typeof positionId === 'bigint' ? `Cure portfolio position ${positionId} without an award` : `Cure auction bid ${positionId.bidId} vault ${positionId.vault} without an award`
 	}
 	const preSubmit = async () => {
 		const latest = await refresh()
@@ -127,7 +128,8 @@ export async function executePortfolioTakeover(
 		pool,
 		{
 			...request,
-			portfolioFunding: action === 'approval' ? undefined : { key: `${base.capitalLedger.toLowerCase()}:${base.owner.toLowerCase()}`, operation: action === 'principal' ? 'fund' : 'consume', target: positionId, amount: action === 'principal' ? plan.ownFunding : 0n },
+			// A cure spends none of the owner's principal, so funding recorded for a takeover stays recorded.
+			portfolioFunding: action === 'approval' || plan.unpaidCure ? undefined : { key: `${base.capitalLedger.toLowerCase()}:${base.owner.toLowerCase()}`, operation: action === 'principal' ? 'fund' : 'consume', target: positionId, amount: action === 'principal' ? plan.ownFunding : 0n },
 			gas: 'estimate',
 			gasBudgetExceeded: () => {
 				throw new PortfolioOpportunityExpired('Estimated portfolio gas exceeds strategy.maximumGasCostEth')
@@ -145,6 +147,7 @@ export function assertPortfolioPlanStillAllowed(original: PortfolioTakeover, cur
 	if (original.expectedTotalCommitment !== current.expectedTotalCommitment || original.expectedDemand !== current.expectedDemand) throw new PortfolioOpportunityExpired('Portfolio cure capacity changed before submission')
 	if (original.commitment !== current.commitment || original.expectedSourceBatch !== current.expectedSourceBatch || original.maximumOwnerPrincipal > current.maximumOwnerPrincipal || original.maximumOwnerCommitment > current.maximumOwnerCommitment)
 		throw new PortfolioOpportunityExpired('Portfolio exposure or cohort changed before submission')
+	if (original.unpaidCure !== current.unpaidCure) throw new PortfolioOpportunityExpired('Portfolio takeover terms changed before submission')
 	if ((action === 'approval' || action === 'principal') && original.ownFunding !== current.ownFunding) throw new PortfolioOpportunityExpired('Portfolio funding requirement changed before submission')
 	if (action === 'takeover' && (current.ownFunding !== 0n || current.minimumAward < original.minimumAward || current.maximumOwnRep > original.maximumOwnRep)) throw new PortfolioOpportunityExpired('Portfolio takeover terms changed before submission')
 }

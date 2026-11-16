@@ -102,7 +102,8 @@
 								<td>Outcome evidence and escalation funding — A04, A10</td>
 								<td>
 									<ul>
-										<li><a href="../reference/glossary.html#escalation-game">Escalation Game</a> deadline: <code>getEscalationGameEndDate()</code></li>
+										<li><a href="../reference/glossary.html#escalation-game">Escalation Game</a> deadline: <code>getEscalationGameEndDate()</code>; a change of leader moves it to at least three days after that deposit</li>
+										<li>Balance a correcting outcome must reach once <a href="../reference/glossary.html#required-support">required support</a> exceeds <a href="../reference/glossary.html#binding-capital">binding capital</a>: <code>totalCostAttoRep()</code></li>
 										<li>Outcome funding: <code>getOutcomeBalancesAttoRep()</code> and <code>getBindingCapitalAttoRep()</code>, or augurScan <code>/operations/escalations</code></li>
 										<li>REP available to fund a correction: wallet REP <code>balanceOf</code> (wallet deposits, except in a game carried across a fork) and vault REP <code>backingUnitsToAttoRep(securityVaults(vault).repBackingUnits)</code> of each ready account</li>
 										<li>Outcome evidence: where each source publishes (off-chain)</li>
@@ -115,7 +116,7 @@
 								<td>Collateral Repair Auction demand — A12</td>
 								<td>
 									<ul>
-										<li><a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a> bids: auction <code>engine()</code>, then engine <code>bidCount()</code>, <code>bids(index)</code>, and <code>previewFinalization(maximumFilledLots)</code>, or augurScan <code>/operations/auctions</code></li>
+										<li><a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a> bids: auction <code>engine()</code>, then engine <code>bidCount()</code>, <code>bids(index)</code>, and <code>previewFinalization(maximumFilledLots, floorAttoRepPerLot)</code>, or augurScan <code>/operations/auctions</code></li>
 										<li>REP/ETH depth and expected discount: arbitrager Uniswap venue quotes</li>
 										<li>Bidder gas cost: RPC <code>eth_feeHistory</code></li>
 									</ul>

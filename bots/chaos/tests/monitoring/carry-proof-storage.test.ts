@@ -376,3 +376,13 @@ test('without Multicall a 24-step target finishes its one-step parent before pre
 	expect(result.checkpoints[0]?.finalWithdrawal).toBeUndefined()
 	expect(fixture.calls.some(call => call.functionName === 'aggregate3')).toBeFalse()
 })
+
+test('derives the payout from the threshold frozen at the first winning claim', async () => {
+	const fixture = storageFixture()
+	// Frozen at the live value, the derived payout still equals the simulated one.
+	fixture.setFrozenForkThreshold(10n)
+	expect((await scan(fixture)).withdrawals).toHaveLength((await scan(storageFixture())).withdrawals.length)
+	// A frozen threshold below the non-decision threshold scales the derived payout, which the unscaled simulation no longer matches.
+	fixture.setFrozenForkThreshold(5n)
+	await expect(scan(fixture)).rejects.toThrow('economics')
+})
