@@ -117,6 +117,33 @@ describe('Drain & Retire persisted restart behavior', () => {
 		}
 	})
 
+	test('checks an old completion block against a single reader when the configured quorum is one', async () => {
+		const snapshot = emptySnapshot()
+		const state = requestedState(snapshot)
+		const path = await statePath()
+		await cycle(path, state, snapshot, [], undefined, 100n)
+		let canonicalHash = hash(100)
+		const reader = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const body = await request.json()
+				const id = typeof body === 'object' && body !== null ? Reflect.get(body, 'id') : undefined
+				return Response.json({ id, jsonrpc: '2.0', result: { hash: canonicalHash, number: '0x64', timestamp: '0x1', transactions: [] } })
+			},
+		})
+		try {
+			const settings = liveSettings()
+			settings.connectivity = { publicRpcUrls: [reader.url.origin], readRpcUrl: reader.url.origin, quorumRpcUrls: [], rpcQuorum: 1 }
+			const pool = createChaosReadPool(settings)
+			const anchor = { blockHash: hash(101), blockNumber: 101n }
+			expect(await retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).toBeTrue()
+			canonicalHash = hash(99)
+			expect(await retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).toBeFalse()
+		} finally {
+			reader.stop(true)
+		}
+	})
+
 	test('a residual override for changed core contracts cannot authorize another target factory', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
