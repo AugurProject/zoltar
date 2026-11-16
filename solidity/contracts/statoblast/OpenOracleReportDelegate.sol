@@ -52,7 +52,6 @@ contract OpenOracleReportDelegate {
 		ReputationToken reputationToken = config.reputationToken();
 		Collateral.pull(weth, sponsor, address(this), wethAmount);
 		require(reputationToken.transferFrom(sponsor, address(this), repAmount), 'REP transfer for initial report failed');
-		weth.safeApprove(address(feed), 0);
 		weth.safeApprove(address(feed), wethAmount);
 		require(reputationToken.approve(address(feed), repAmount), 'REP approval for shared report failed');
 		feed.requestPrice{value: bountyAttoEth}(sponsor, proposedRepPerEthPrice, wethAmount, bountyAttoEth);

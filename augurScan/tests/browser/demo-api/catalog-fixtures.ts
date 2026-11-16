@@ -4,7 +4,7 @@ import { demoAddress } from './chain-fixtures.ts'
 
 export const createDemoCatalogFixtures = (context: DemoContext) => {
 	const requestedCollateral = context.pageUrl.searchParams.get('collateral')
-	const symbol = requestedCollateral === 'USDC' || requestedCollateral === 'USDT' ? requestedCollateral : 'WETH'
+	const symbol = requestedCollateral === 'USDC' ? requestedCollateral : 'WETH'
 	const decimals = symbol === 'WETH' ? 18 : 6
 	const collateral = { symbol, decimals }
 	const collateralAmount = (value: string) => (BigInt(value) / 10n ** BigInt(18 - decimals)).toString()

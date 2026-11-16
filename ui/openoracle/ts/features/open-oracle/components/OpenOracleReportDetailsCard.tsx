@@ -62,7 +62,6 @@ type OpenOracleReportDetailsCardProps = {
 	onWrapDisputeWeth: () => void
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
 	openOracleActiveWithdrawalBalance: OpenOracleSectionProps['openOracleActiveWithdrawalBalance']
-	openOracleApprovalResetting: OpenOracleSectionProps['openOracleApprovalResetting']
 	openOracleDisputeSubmission: OpenOracleSectionProps['openOracleDisputeSubmission']
 	openOracleForm: OpenOracleFormState
 	openOracleReportDetails: OpenOracleReportDetails | undefined
@@ -91,7 +90,6 @@ export function OpenOracleReportDetailsCard({
 	onWrapDisputeWeth,
 	openOracleActiveAction,
 	openOracleActiveWithdrawalBalance,
-	openOracleApprovalResetting,
 	openOracleDisputeSubmission,
 	openOracleForm,
 	openOracleReportDetails,
@@ -242,7 +240,6 @@ export function OpenOracleReportDetailsCard({
 		onSettleReport,
 		onWrapDisputeWeth,
 		openOracleActiveAction,
-		openOracleApprovalResetting,
 		openOracleForm,
 		openOracleTokenAccessState,
 		openOracleReportDetails: liveReportDetails,

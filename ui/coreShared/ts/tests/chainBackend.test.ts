@@ -578,12 +578,12 @@ for (const operation of guardedWriteOperationCases.filter(operation => operation
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
 			if (method === 'eth_accounts') return [zeroAddress]
 			if (method === 'eth_chainId') return '0xaa36a7'
-			if (method === 'eth_call') throw new Error('execution reverted: approval must first be reset')
+			if (method === 'eth_call') throw new Error('execution reverted: transfer amount exceeds balance')
 			if (method === 'eth_sendTransaction') return sends()
 			return '0x'
 		})
 		const backend = createInjectedBackend()
-		await expect(operation.execute(backend.createWriteClient(zeroAddress))).rejects.toThrow('approval must first be reset')
+		await expect(operation.execute(backend.createWriteClient(zeroAddress))).rejects.toThrow('transfer amount exceeds balance')
 		expect(sends).not.toHaveBeenCalled()
 	})
 }

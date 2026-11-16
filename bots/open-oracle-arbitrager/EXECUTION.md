@@ -167,7 +167,7 @@ cast send 0xOpenOracle "approveInternal(address,address,uint256)" 0xExecutor 0xW
 cast send 0xOpenOracle "approveInternal(address,address,uint256)" 0xExecutor 0xReportToken 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
 ```
 
-Maximum allowances avoid missing an opportunity after a finite allowance is consumed. A finite ERC-20 allowance is also supported when it covers the dashboard's displayed requirement, but it must be refreshed before the next larger entry. Review each allowlisted token's approval semantics: tokens that require resetting a nonzero allowance to zero first need two separate setup transactions, and tokens with nonstandard, rebasing, or fee-on-transfer behavior must not be enabled merely because `approve` succeeds.
+Maximum allowances avoid missing an opportunity after a finite allowance is consumed. A finite ERC-20 allowance is also supported when it covers the dashboard's displayed requirement, but it must be refreshed before the next larger entry. Allowlist only standard ERC-20 tokens: a token that rejects changing a nonzero allowance to another nonzero value, omits return values, rebases, or charges a transfer fee is unsupported and must not be enabled merely because `approve` succeeds.
 
 OpenOracle rejects changing one nonzero internal allowance directly to another nonzero value. Set it to zero first when rotating or reducing an existing allowance. The bot checks both ERC-20 and both internal allowances through its configured read quorum before signing an entry, and checks the internal allowances again before lifecycle submission.
 

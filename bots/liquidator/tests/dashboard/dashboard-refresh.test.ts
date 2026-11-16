@@ -1107,7 +1107,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('keeps unchanged market-source rows mounted across polls and updates changed evidence', async () => {
-		const source: MarketSourceRow = { assetId: '0x1111111111111111111111111111111111111111', id: 'kraken', kind: 'cex', market: 'REP/USDT', status: 'admitted' }
+		const source: MarketSourceRow = { assetId: '0x1111111111111111111111111111111111111111', id: 'kraken', kind: 'cex', market: 'REP/USDC', status: 'admitted' }
 		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { marketSources: [source] }))
 		const rows = page.window.document.getElementById('market-source-rows')
 		const first = rows?.querySelector('tr')

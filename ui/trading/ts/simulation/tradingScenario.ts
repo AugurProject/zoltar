@@ -12,16 +12,14 @@ import { portfolioReadClient, sendPortfolioTransaction } from '@zoltar/ui-statob
 import { loadBudgetMint } from '../protocol/minting.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../protocol/deployment.js'
-import { USDC_TRADING_SIMULATION_SCENARIO, USDT_TRADING_SIMULATION_SCENARIO, DEPLOYED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from './index.js'
+import { USDC_TRADING_SIMULATION_SCENARIO, DEPLOYED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from './index.js'
 
-const TRADING_SIMULATION_SCENARIOS: readonly string[] = [USDC_TRADING_SIMULATION_SCENARIO, USDT_TRADING_SIMULATION_SCENARIO, DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO]
+const TRADING_SIMULATION_SCENARIOS: readonly string[] = [USDC_TRADING_SIMULATION_SCENARIO, DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO]
 
 export async function applyTradingScenario(parameters: BootstrapScenarioApplyParameters): Promise<boolean> {
 	if (!TRADING_SIMULATION_SCENARIOS.includes(parameters.scenario)) return false
-	let collateralSymbol: 'WETH' | 'USDC' | 'USDT' = 'WETH'
-	if (parameters.scenario === USDC_TRADING_SIMULATION_SCENARIO) collateralSymbol = 'USDC'
-	else if (parameters.scenario === USDT_TRADING_SIMULATION_SCENARIO) collateralSymbol = 'USDT'
-	const seeded = await applyStatoblastScenario({ ...parameters, scenario: parameters.scenario === USDC_TRADING_SIMULATION_SCENARIO || parameters.scenario === USDT_TRADING_SIMULATION_SCENARIO ? 'securitypoolx2' : 'security-pool' }, collateralSymbol)
+	const usdcFunded = parameters.scenario === USDC_TRADING_SIMULATION_SCENARIO
+	const seeded = await applyStatoblastScenario({ ...parameters, scenario: usdcFunded ? 'securitypoolx2' : 'security-pool' }, usdcFunded ? 'USDC' : 'WETH')
 	if (!seeded) throw new Error('Trading simulation could not seed its Statoblast security pool')
 
 	const account = requireQaAccount(parameters.accounts[0], 'Expected a Trading simulation QA account')
