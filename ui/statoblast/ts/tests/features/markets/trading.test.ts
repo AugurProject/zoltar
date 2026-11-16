@@ -700,6 +700,42 @@ void describe('trading helpers', () => {
 		}
 	})
 
+	void test('explains an empty default migration selection instead of asking for a target', () => {
+		const pool = '0x00000000000000000000000000000000000000b1'
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const migratedYes = { ...noMigratedShares, yesAttoShares: shareBalances.yesAttoShares }
+		const guardInput = {
+			accountAddress: '0x1234567890123456789012345678901234567890',
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			loadingTradingForkUniverse: false,
+			loadingTradingDetails: false,
+			selectedShareOutcome: 'yes',
+			shareBalances,
+			targetOutcomeIndexesInput: '',
+			tradingForkUniverse: binaryForkUniverse,
+		} as const
+		const everyChildMigrated = [
+			{ outcomeIndex: 0n, canonicalPool: pool, migratedAttoShares: migratedYes },
+			{ outcomeIndex: 1n, canonicalPool: pool, migratedAttoShares: migratedYes },
+			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: migratedYes },
+		]
+		const noChildPools = [
+			{ outcomeIndex: 0n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+			{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+		]
+
+		for (const shareMigrationTargets of [everyChildMigrated, noChildPools]) expect(getDefaultShareMigrationTargetOutcomeIndexes({ ...guardInput, shareMigrationTargets })).toBe('')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: everyChildMigrated })).toBe('Your Yes shares are already migrated into every child universe.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: noChildPools })).toBe('No child universe has a security pool yet. Select one child universe; migrating into it creates its pool.')
+		// The default for another outcome, or a cleared selection with reachable pooled children, still asks for a target.
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, selectedShareOutcome: 'no', shareMigrationTargets: everyChildMigrated })).toBe('Select at least one target child universe.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: withCanonicalPools(binaryForkUniverse) })).toBe('Select at least one target child universe.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, loadingTradingDetails: true, shareMigrationTargets: everyChildMigrated })).toBe('Select at least one target child universe.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe security pools unavailable.' } })).toBe('Select at least one target child universe.')
+	})
+
 	void test('checks local and network prerequisites before resolved-share redemption', () => {
 		expect(
 			getTradingRedeemSharesGuardMessage({

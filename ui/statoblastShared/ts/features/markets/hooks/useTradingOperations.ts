@@ -79,7 +79,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	const tradingActiveAction = useSignal<TradingActionResult['action'] | undefined>(undefined)
 	const tradingFeedback = useSignal<ActionFeedback<TradingActionResult['action']> | undefined>(undefined)
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
-	const targetOutcomeDefaultsKey = useRef<string | undefined>(undefined)
+	const targetOutcomeDefaults = useRef<{ fromLoadedTargets: boolean; inputs: string; scope: string; value: string } | undefined>(undefined)
 	const tradingSystemDeployed = isTradingSystemDeployed(deploymentStatuses)
 	const effectiveTradingPoolAddressInput = selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? tradingForm.value.securityPoolAddress : selectedSecurityPoolAddress
 	const currentTradingSelectionKey = normalizeAddress(effectiveTradingPoolAddressInput) ?? ''
@@ -403,7 +403,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			tradingError.value = undefined
 			return
 		}
-		targetOutcomeDefaultsKey.current = undefined
+		targetOutcomeDefaults.current = undefined
 		if (tradingForm.value.targetOutcomeIndexes !== '')
 			tradingForm.value = {
 				...tradingForm.value,
@@ -431,28 +431,42 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 		void refreshTradingDetails(effectiveSecurityPoolAddressInput, accountAddress, isCurrent)
 	}, [accountAddress, enabled, selectedSecurityPoolAddress, tradingForm.value.securityPoolAddress, tradingSystemDeployed])
 
+	const targetOutcomeDefaultsScope = (() => {
+		const securityPoolAddress = resolveTradingPoolAddressInput(resolveEffectiveTradingPoolAddressInput())
+		if (!enabled || securityPoolAddress === undefined || tradingForkUniverse.value === undefined) return undefined
+		return `${securityPoolAddress.toLowerCase()}:${tradingForkUniverse.value.universeId.toString()}:${tradingForkUniverse.value.forkTime.toString()}`
+	})()
 	const shareMigrationTargets = tradingDetails.value?.shareMigrationTargets
 	const shareMigrationTargetsLoaded = shareMigrationTargets !== undefined && !('unavailableReason' in shareMigrationTargets)
+	const selectedShareOutcome = tradingForm.value.selectedShareOutcome
+	// Everything the default depends on within one scope: the selected outcome, the wallet's balance of it, and what each child already holds.
+	const targetOutcomeDefaultsInputs = (() => {
+		const selectedBalance = getSelectedOutcomeShareBalance(tradingDetails.value?.shareBalances, selectedShareOutcome)
+		const targets =
+			shareMigrationTargets === undefined || 'unavailableReason' in shareMigrationTargets
+				? 'no-targets'
+				: shareMigrationTargets.map(target => `${target.outcomeIndex.toString()}:${target.canonicalPool ?? 'no-pool'}:${getSelectedOutcomeShareBalance(target.migratedAttoShares, selectedShareOutcome)?.toString() ?? ''}`).join(',')
+		return `${selectedShareOutcome}:${selectedBalance?.toString() ?? 'no-balance'}:${targets}`
+	})()
+	// A new scope always takes its default. Within a scope the default follows its inputs only while the selection is still the
+	// last default (the user has not edited it), and a selection computed from loaded targets survives a later failed read.
 	useEffect(() => {
-		if (!enabled) return
-		const securityPoolAddress = resolveTradingPoolAddressInput(resolveEffectiveTradingPoolAddressInput())
-		if (securityPoolAddress === undefined || tradingForkUniverse.value === undefined) return
-
-		// The defaults are recomputed once the share token's view of the children arrives, including after a failed read recovers.
-		const defaultsKey = `${securityPoolAddress.toLowerCase()}:${tradingForkUniverse.value.universeId.toString()}:${tradingForkUniverse.value.forkTime.toString()}:${shareMigrationTargetsLoaded ? 'targets' : 'no-targets'}`
-		if (targetOutcomeDefaultsKey.current === defaultsKey) return
-
-		tradingForm.value = {
-			...tradingForm.value,
-			targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes({
-				selectedShareOutcome: tradingForm.value.selectedShareOutcome,
-				shareBalances: tradingDetails.value?.shareBalances,
-				shareMigrationTargets: tradingDetails.value?.shareMigrationTargets,
-				tradingForkUniverse: tradingForkUniverse.value,
-			}),
+		if (targetOutcomeDefaultsScope === undefined) return
+		const previous = targetOutcomeDefaults.current
+		if (previous !== undefined && previous.scope === targetOutcomeDefaultsScope) {
+			if (previous.inputs === targetOutcomeDefaultsInputs) return
+			if (!shareMigrationTargetsLoaded && previous.fromLoadedTargets) return
+			if (tradingForm.value.targetOutcomeIndexes !== previous.value) return
 		}
-		targetOutcomeDefaultsKey.current = defaultsKey
-	}, [enabled, selectedSecurityPoolAddress, shareMigrationTargetsLoaded, tradingForm.value.securityPoolAddress, tradingForkUniverse.value?.forkTime, tradingForkUniverse.value?.universeId])
+		const value = getDefaultShareMigrationTargetOutcomeIndexes({
+			selectedShareOutcome: tradingForm.value.selectedShareOutcome,
+			shareBalances: tradingDetails.value?.shareBalances,
+			shareMigrationTargets: tradingDetails.value?.shareMigrationTargets,
+			tradingForkUniverse: tradingForkUniverse.value,
+		})
+		if (tradingForm.value.targetOutcomeIndexes !== value) tradingForm.value = { ...tradingForm.value, targetOutcomeIndexes: value }
+		targetOutcomeDefaults.current = { fromLoadedTargets: shareMigrationTargetsLoaded, inputs: targetOutcomeDefaultsInputs, scope: targetOutcomeDefaultsScope, value }
+	}, [enabled, selectedSecurityPoolAddress, targetOutcomeDefaultsInputs, targetOutcomeDefaultsScope, tradingForm.value.securityPoolAddress])
 
 	return {
 		collateralFunding,

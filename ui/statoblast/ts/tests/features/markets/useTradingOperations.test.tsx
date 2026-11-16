@@ -23,7 +23,8 @@ import { act } from 'preact/test-utils'
 
 type UseTradingOperationsParameters = Parameters<typeof useTradingOperations>[0]
 type MintCapacity = Awaited<ReturnType<UseTradingOperationsDependencies['loadSecurityPoolMintCapacity']>>
-type HarnessProps = { enabled?: boolean; selectedSecurityPoolAddress?: Address }
+// An explicit `accountAddress: undefined` renders without a connected wallet.
+type HarnessProps = { accountAddress?: Address | undefined; enabled?: boolean; selectedSecurityPoolAddress?: Address }
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
@@ -146,10 +147,11 @@ describe('useTradingOperations', () => {
 		}
 		const onTransactionFailed = mock((_message: string, _details?: unknown) => undefined)
 		let hookState: ReturnType<typeof useTradingOperations> | undefined
-		function TradingOperationsHarness({ enabled = true, selectedSecurityPoolAddress = SECURITY_POOL_ADDRESS }: HarnessProps) {
+		function TradingOperationsHarness(props: HarnessProps) {
+			const { enabled = true, selectedSecurityPoolAddress = SECURITY_POOL_ADDRESS } = props
 			hookState = useTradingOperations(
 				{
-					accountAddress: WALLET_ADDRESS,
+					accountAddress: 'accountAddress' in props ? props.accountAddress : WALLET_ADDRESS,
 					deploymentStatuses: [PROXY_DEPLOYER_STEP],
 					enabled,
 					onTransactionCanceled: () => undefined,
@@ -546,6 +548,93 @@ describe('useTradingOperations', () => {
 		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toHaveLength(2))
 		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('0, 1')
 		expect(getMigrateGuardMessage(hook.state())).toBeUndefined()
+	})
+
+	test('recomputes the default migration targets when a wallet connects after the fork details load', async () => {
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const yesShares = { ...noMigratedShares, yesAttoShares: ATTO_ETH_PER_ETH }
+		const childUniverses = [createChildUniverse(1n, 0n, 'Invalid', 2n), createChildUniverse(1n, 1n, 'Yes', 3n)]
+		const hook = await renderTradingHook(
+			createTradingOperationsDependencies({
+				// The wallet's Yes balance is already migrated into the pooled child 0; child 1 has no pool yet.
+				loadShareMigrationTargets: mock(async (_source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, _children: ZoltarUniverseSummary['childUniverses'], walletAddress: Address | undefined) => [
+					{ outcomeIndex: 0n, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: walletAddress === undefined ? noMigratedShares : yesShares },
+					{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+				]),
+				loadTradingDetails: mock(async (_securityPoolAddress: Address, walletAddress: Address | undefined) => createTradingDetails({ shareBalances: walletAddress === undefined ? undefined : yesShares })),
+				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
+			}),
+			{},
+			{ accountAddress: undefined },
+			false,
+		)
+
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toHaveLength(2))
+		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('0')
+
+		await hook.rerender({ accountAddress: WALLET_ADDRESS })
+		await waitFor(() => expect(hook.state().tradingDetails?.shareBalances).toEqual(yesShares))
+		await waitFor(() => expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('1'))
+		expect(getMigrateGuardMessage(hook.state())).toBeUndefined()
+	})
+
+	test('keeps a manual migration target selection through a failed and recovered child universe read', async () => {
+		const childUniverses = [createChildUniverse(1n, 0n, 'Invalid', 2n), createChildUniverse(1n, 1n, 'Yes', 3n)]
+		const shareBalances = { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH }
+		let failTargetsRead = false
+		const hook = await renderTradingHook(
+			createTradingOperationsDependencies({
+				loadShareMigrationTargets: mock(async (_source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, children: ZoltarUniverseSummary['childUniverses']) => {
+					if (failTargetsRead) throw new Error('multicall failed')
+					return children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } }))
+				}),
+				loadTradingDetails: mock(async () => createTradingDetails({ shareBalances })),
+				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
+			}),
+			{},
+			{},
+			false,
+		)
+
+		await waitFor(() => expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('0, 1'))
+		await hook.setForm({ targetOutcomeIndexes: '1' })
+
+		// A wallet switch reloads the details, and this time the child universe read fails.
+		failTargetsRead = true
+		await hook.rerender({ accountAddress: NEXT_WALLET_ADDRESS })
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'Child universe security pools unavailable. Refresh pool to retry. Reason: multicall failed.' }))
+		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('1')
+
+		failTargetsRead = false
+		await act(() => invalidateAppData())
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toHaveLength(2))
+		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('1')
+	})
+
+	test('recomputes the default migration targets for a newly selected share outcome until the user edits them', async () => {
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const childUniverses = [createChildUniverse(1n, 0n, 'Invalid', 2n), createChildUniverse(1n, 1n, 'Yes', 3n), createChildUniverse(1n, 2n, 'No', 4n)]
+		const hook = await renderTradingHook(
+			createTradingOperationsDependencies({
+				// Only the Yes balance is already migrated, and only into child 0.
+				loadShareMigrationTargets: mock(async (_source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, children: ZoltarUniverseSummary['childUniverses']) =>
+					children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: child.outcomeIndex === 0n ? { ...noMigratedShares, yesAttoShares: ATTO_ETH_PER_ETH } : noMigratedShares })),
+				),
+				loadTradingDetails: mock(async () => createTradingDetails({ shareBalances: { invalidAttoShares: 0n, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
+				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
+			}),
+			{},
+			{},
+			false,
+		)
+
+		await waitFor(() => expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('1, 2'))
+		await hook.setForm({ selectedShareOutcome: 'no' })
+		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('0, 1, 2')
+
+		await hook.setForm({ targetOutcomeIndexes: '2' })
+		await hook.setForm({ selectedShareOutcome: 'yes' })
+		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('2')
 	})
 
 	test('createCompleteSet ignores a stale post-success refresh after the selected pool changes', async () => {
