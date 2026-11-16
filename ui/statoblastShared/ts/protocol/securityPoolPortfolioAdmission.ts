@@ -3,7 +3,7 @@ import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openArtifact, statoblast_SecurityPoolFixedAdmissionPolicy_SecurityPoolFixedAdmissionPolicy as fixedArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../contractArtifact.js'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { verifyRuntimeCode, type PortfolioTransaction } from './securityPoolPortfolio.js'
-import { getInfraContractAddresses } from './deploymentHelpers.js'
+import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { requireBigintValue } from './decoders.js'
 
 const admissionAbi = parseAbi(['function universeId() view returns (uint248)', 'function isQuestionAllowed(address portfolio,uint248 universeId,uint256 questionId) view returns (bool)', 'function questionCount() view returns (uint256)', 'function getQuestions(uint256 start,uint256 count) view returns (uint256[])'])
@@ -46,18 +46,20 @@ export function portfolioAdmissionCreationRequest(owner: Address, mode: 'open' |
 	}
 }
 
-/** Mirrors the portfolio's registration window: the question must still be open and end within the portfolio horizon at `block` time. */
-export async function requirePortfolioQuestionHorizon(client: Pick<ReadClient, 'readContract'>, portfolio: Address, questionId: bigint, block: { number?: bigint | undefined; timestamp: bigint }) {
-	const blockNumber = block.number
+/**
+ * Mirrors the portfolio's registration window: the question must still be open and end within the portfolio horizon at `inclusionTimestamp`, reading state at `blockNumber`.
+ * The contract reads end dates from the factory's immutable ZoltarQuestionData, which is the deterministic Zoltar deployment's.
+ */
+export async function requirePortfolioQuestionHorizon(client: Pick<ReadClient, 'readContract'>, portfolio: Address, questionId: bigint, blockNumber: bigint | undefined, inclusionTimestamp: bigint) {
 	const [horizonValue, endValue] = await Promise.all([
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'maximumQuestionHorizonSeconds', blockNumber }),
-		client.readContract({ address: getInfraContractAddresses().zoltarQuestionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'getQuestionEndDate', args: [questionId], blockNumber }),
+		client.readContract({ address: getZoltarContractAddresses().zoltarQuestionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'getQuestionEndDate', args: [questionId], blockNumber }),
 	])
 	const horizon = requireBigintValue(horizonValue, 'portfolio question horizon')
 	const end = requireBigintValue(endValue, 'question end time')
 	if (end === 0n) throw new Error('This question does not exist.')
-	if (end <= block.timestamp) throw new Error('This question has ended and can no longer be registered.')
-	if (end - block.timestamp > horizon) throw new Error(`This question ends after the portfolio's ${horizon % 86_400n === 0n ? `${horizon / 86_400n}-day` : `${horizon}-second`} question horizon.`)
+	if (end <= inclusionTimestamp) throw new Error('This question has ended and can no longer be registered.')
+	if (end - inclusionTimestamp > horizon) throw new Error(`This question ends after the portfolio's ${horizon % 86_400n === 0n ? `${horizon / 86_400n}-day` : `${horizon}-second`} question horizon.`)
 }
 
 export async function requirePortfolioQuestionAdmission(client: Pick<ReadClient, 'readContract'>, policy: Address, portfolio: Address, universeId: bigint, questionId: bigint, blockNumber?: bigint) {

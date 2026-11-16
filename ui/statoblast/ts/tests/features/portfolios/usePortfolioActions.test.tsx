@@ -13,6 +13,7 @@ import { decodeFunctionData, encodeFunctionData, parseAbi, type Hex } from '@zol
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { auctionCapitalSnapshot, capitalSnapshot, owner, portfolio, token, capital } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
+import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { auctionFixture } from './auctionFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
@@ -327,13 +328,16 @@ test('changing collateral requires deliberate token-denominated economic amounts
 
 test('question registration is blocked outside the portfolio horizon by chain time', async () => {
 	const day = 86_400n
-	const now = capitalSnapshot().timestamp
+	const { timestamp: now, blockNumber } = capitalSnapshot()
+	const { zoltarQuestionData } = getZoltarContractAddresses()
 	const source = capitalClient()
 	source.setRead('isQuestionAllowed', true)
 	source.setRead('maximumQuestionHorizonSeconds', 30n * day)
 	const { hook, requests } = await renderWithDeploymentWallet(source)
+	const horizonReads = () => source.reads.filter(read => read.name === 'maximumQuestionHorizonSeconds' || read.name === 'getQuestionEndDate')
 	const expectReason = async (questionId: string, endTime: bigint, reason: string | undefined) => {
-		source.setRead('getQuestionEndDate', endTime)
+		// Scoped to the question data contract, so an end-date read anywhere else fails as an unexpected read.
+		source.setRead('getQuestionEndDate', endTime, zoltarQuestionData)
 		await act(() => hook.state().setQuestionInput(questionId))
 		if (reason === undefined) await waitFor(() => expect(hook.state().registerReason).toBeUndefined())
 		else await waitFor(() => expect(hook.state().registerReason).toContain(reason))
@@ -342,10 +346,17 @@ test('question registration is blocked outside the portfolio horizon by chain ti
 	await expectReason('8', now, 'has ended')
 	await expectReason('9', 0n, 'does not exist')
 	await expectReason('10', now + 30n * day + 1n, '30-day question horizon')
-	await expectReason('11', now + 30n * day, undefined)
-	// Chain time can pass the end between the displayed check and submission.
-	source.setSnapshot(capitalSnapshot({ timestamp: now + 31n * day }))
+	const end = now + 30n * day
+	await expectReason('11', end, undefined)
+	const displayedReads = horizonReads()
+	expect(displayedReads.filter(read => read.name === 'getQuestionEndDate').map(read => read.address)).toEqual(Array.from({ length: 5 }, () => zoltarQuestionData))
+	expect(displayedReads.filter(read => read.name === 'maximumQuestionHorizonSeconds').map(read => read.address)).toEqual(Array.from({ length: 5 }, () => portfolio))
+	expect(new Set(displayedReads.map(read => read.blockNumber))).toEqual(new Set([blockNumber]))
+	// Chain time can reach the end between the displayed check and submission; the transaction lands at least one second after the latest block.
+	source.setSnapshot(capitalSnapshot({ timestamp: end - 1n, blockNumber: blockNumber + 1n }))
 	await act(() => hook.state().register())
 	expect(requests).toHaveLength(0)
 	expect(hook.state().error).toContain('has ended')
+	const submitReads = horizonReads().slice(displayedReads.length)
+	expect(new Set(submitReads.map(read => read.blockNumber))).toEqual(new Set([blockNumber + 1n]))
 })
