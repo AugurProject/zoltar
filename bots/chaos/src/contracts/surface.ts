@@ -51,7 +51,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('ReputationToken', 'initialize', 'role-restricted', undefined, 'Only Zoltar initializes child REP identity and theoretical supply.'),
 
 	entry('SecurityPoolFactory', 'preparePortfolioChildPriceFeed', 'excluded-dangerous', undefined, 'Shared branch and question preparation perform authenticated feed creation; direct randomized preparation is unnecessary.'),
-	entry('SecurityPoolFactory', 'prepareChildPoolDependencies', 'excluded-dangerous', undefined, 'The bounded native question preparation operation installs these dependencies in canonical order.'),
+	entry('SecurityPoolFactory', 'prepareChildPoolCoordinator', 'excluded-dangerous', undefined, 'The bounded native question preparation operation installs this coordinator in canonical order.'),
 	entry('SecurityPoolFactory', 'deployChildSecurityPool', 'role-restricted', undefined, 'Only SecurityPoolForker deploys canonical children.'),
 	entry('SecurityPoolDeployer', 'deploy', 'role-restricted', undefined, 'Only the canonical SecurityPoolFactory may use its constructor-deployed pool deployer.'),
 	entry('SecurityPoolDeploymentWorker', 'deploy', 'role-restricted', undefined, 'Only the canonical SecurityPoolDeployer may use its creation-code worker.'),

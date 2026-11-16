@@ -397,12 +397,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '67c067dcdbe7499b150837a7d8defd50d3691f6cf513a39359563f8e77dc2e7a',
+		compiledAbiFingerprint: 'ac36f71ef4f84e40075203d61e8a5bb8abf77dce41f9f22fdfc56dcf63830b68',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys and registers portfolio question ledgers and their shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: '6538db54460de6d40b68f4c9e4d1527579252b4748e0cff603f7ca62505de02f',
+		readAbiFingerprint: '1b76901047075bb8e65c9b61b3f74232b249a65b8d41a183b918f94cbfe61cfe',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `portfolioCount` and strict `portfoliosRange` enumerate every caller that configured a portfolio namespace, in registration order; a listed address is not authenticated as a portfolio. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` authenticates its portfolio; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolDependencies` returns the prepared child coordinator, or zero before preparation. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `portfolioCount` and strict `portfoliosRange` enumerate every caller that configured a portfolio namespace, in registration order; a listed address is not authenticated as a portfolio. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` authenticates its portfolio; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolCoordinator` returns the prepared child coordinator, or zero before preparation. `zoltar` identifies the protocol root.',
 		readDeclarations: [
 			{
 				name: 'securityPoolDeploymentCount',
@@ -435,7 +435,7 @@ export const coreContractReferences: ContractReference[] = [
 				name: 'getSecurityPoolPortfolio',
 			},
 			{
-				name: 'getChildPoolDependencies',
+				name: 'getChildPoolCoordinator',
 			},
 		],
 		readStorageDeclarations: [
@@ -511,12 +511,12 @@ export const coreContractReferences: ContractReference[] = [
 				signals: 'Returns the canonical child feed address; child REP deployment may emit Zoltar events.',
 			},
 			{
-				call: '`prepareChildPoolDependencies(parent, outcomeIndex)`',
+				call: '`prepareChildPoolCoordinator(parent, outcomeIndex)`',
 				caller: 'Anyone',
 				effect: 'Predeploys the canonical child coordinator separately from the question ledger. Repeated calls return the same coordinator.',
 				declarations: [
 					{
-						name: 'prepareChildPoolDependencies',
+						name: 'prepareChildPoolCoordinator',
 					},
 				],
 				preconditions: 'The parent is a canonical ledger in PoolForked state. A portfolio must first prepare its child feed. Missing child REP is deployed through Zoltar. The authenticated factory chain exclusively controls subsequent coordinator binding.',
