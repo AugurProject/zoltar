@@ -47,7 +47,19 @@ test('uses the repository composite check for lint without duplicating the full 
 	expect(commands.filter(command => command === 'bun run check:complete')).toHaveLength(1)
 })
 
-for (const path of ['docs/how-to/trading-deploy-contracts.html', 'shared/core/README.md', 'bots/liquidator/README.md', 'augurScan/src/ARCHITECTURE.md', 'ui/AGENTS.md', '.codex/agents/reviewer.toml', '.vscode/settings.json', '.claude/skills/babysit']) {
+for (const path of [
+	'docs/how-to/trading-deploy-contracts.html',
+	'docs/manifest.json',
+	'docs/assets/screenshots/fingerprints.json',
+	'docs/data/open-oracle-coordinator.json',
+	'shared/core/README.md',
+	'bots/liquidator/README.md',
+	'augurScan/src/ARCHITECTURE.md',
+	'ui/AGENTS.md',
+	'.codex/agents/reviewer.toml',
+	'.vscode/settings.json',
+	'.claude/skills/babysit',
+]) {
 	test(`documentation-only ${path} selects documentation checks`, () => {
 		expect(affectedCheckSelection([path]).map(project => project.id)).toEqual(['docs'])
 		expect(affectedCheckPlan([path]).map(entry => entry.command.join(' '))).toEqual(['bun run docs:check'])
@@ -57,11 +69,13 @@ for (const path of ['docs/how-to/trading-deploy-contracts.html', 'shared/core/RE
 test.each([
 	['docs/runtime/interactiveTools.ts', ['repository', 'docs']],
 	['docs/assets/js/interactiveTools.js', ['repository', 'docs']],
-	['docs/manifest.json', ['repository', 'docs']],
+	['docs/charts/diagramControl.ts', ['repository', 'docs']],
+	['docs/reference/invariants.html', ['repository', 'docs']],
 	['README.md', ['repository', 'docs']],
 	['testnetwork/README.md', ['repository', 'docs']],
 	['augurScan/README.md', ['augur-scan', 'docs']],
 	['bots/open-oracle-arbitrager/MARKETS.md', ['arbitrager', 'docs']],
+	['bots/README.md', ['arbitrager', 'docs']],
 ] as const)('documentation consumed by code (%s) selects its consumer and documentation checks', (path, expected) => {
 	expect(affectedCheckSelection([path]).map(project => project.id)).toEqual([...expected])
 	expect(new Set(affectedCheckPlan([path]).map(entry => entry.projectId))).toEqual(new Set(expected))

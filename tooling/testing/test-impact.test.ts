@@ -84,6 +84,14 @@ describe('test impact recommendations', () => {
 		expect(commandsFor(['testnetwork/README.md'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts'])
 	})
 
+	test('maps documentation read or executed by tests to those tests', () => {
+		expect(commandsFor(['docs/reference/invariants.html'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/docs/documentation-tools-runtime.test.ts'])
+		expect(commandsFor(['docs/runtime/docsShell.ts'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/docs/documentation-tools-runtime.test.ts tooling/docs/responsive-docs-runtime.test.ts'])
+		expect(commandsFor(['augurScan/README.md'])).toEqual(['cd augurScan && bun test tests/unit/docker-packaging.test.ts'])
+		expect(commandsFor(['bots/README.md'])).toEqual(['cd bots/open-oracle-arbitrager && bun ../../tooling/testing/bun-test.mts tests/dashboard/dashboard-server.test.ts'])
+		expect(commandsFor(['docs/assets/screenshots/fingerprints.json', 'docs/how-to/trading-deploy-contracts.html'])).toEqual([])
+	})
+
 	test('specialized external integration tiers replace ineffective raw test commands', () => {
 		expect(commandsFor(['ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'])).toEqual(['bun run test:integration:mainnet'])
 		expect(commandsFor(['ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'])).toEqual(['bun run test:integration:mainnet-fork'])
