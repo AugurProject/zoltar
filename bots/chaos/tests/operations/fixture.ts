@@ -82,7 +82,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				lastOracleSettlementTimestamp: '1999999900',
 				oraclePriceValidUntilTimestamp: '2000000200',
 				lastSettlementPortfolioTime: '1999999999',
-				minimumToken1ReportAttoEth: 10_000_000_000_000_002n.toString(),
+				minimumToken1ReportAttoEth: 10_000_000_000_000_003n.toString(),
 				oraclePriceValid: true,
 				oracleRequestFunding: {
 					escalationHaltMultiplierBps: '10000',
@@ -93,7 +93,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 					openOracleSecurityMultiplierBps: '10000',
 					protocolFee: '0',
 					settlementCallbackGasLimit: '2',
-					targetPriceErrorForDispute: '10000000',
+					targetPriceErrorForDispute: '5000000',
 				},
 				oracleSettlementTime: '900',
 				pendingReportId: '0',

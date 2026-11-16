@@ -58,7 +58,6 @@ const protocolTokenUnit: Readonly<Record<string, { readonly decimals: number; re
 	shareToken: { decimals: 0, symbol: 'share units' },
 	weth: { decimals: 18, symbol: 'WETH' },
 	usdc: { decimals: 6, symbol: 'USDC' },
-	usdt: { decimals: 6, symbol: 'USDT' },
 }
 
 type TokenAmountRule = { readonly tokenPath: string; readonly amountPaths: readonly string[] }

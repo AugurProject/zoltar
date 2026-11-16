@@ -29,7 +29,7 @@ export async function discoverChildPoolPreparations(client: ChaosReadClient, fac
 			outcomes.map(async outcome => {
 				const childUniverseId = await client.readContract({ abi: zoltarAbi, address: zoltar, blockNumber, functionName: 'getChildUniverseId', args: [parentUniverseId, BigInt(outcome)] })
 				const [coordinator, childPool, feed] = await Promise.all([
-					client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'getChildPoolDependencies', args: [parent, BigInt(outcome)] }),
+					client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'getChildPoolCoordinator', args: [parent, BigInt(outcome)] }),
 					client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'getSecurityPool', args: [originId, childUniverseId] }),
 					portfolio === zeroAddress ? Promise.resolve(undefined) : client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'sharedPriceFeeds', args: [portfolio, childUniverseId] }),
 				])

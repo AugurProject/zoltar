@@ -28,7 +28,7 @@ const demoSeries = (base: string, count = 12, variation = 0.32) =>
 export const demoHistory = (env: DemoEnvironment, path: string) => {
 	const { context } = env
 	const requestedCollateral = context.pageUrl.searchParams.get('collateral')
-	const decimals = requestedCollateral === 'USDC' || requestedCollateral === 'USDT' ? 6 : 18
+	const decimals = requestedCollateral === 'USDC' ? 6 : 18
 	const collateralScale = 10n ** BigInt(18 - decimals)
 	const { priceDemo } = env.settings
 	const { mainnetDemoQuestion, demoPools, demoUniverses } = env.fixtures

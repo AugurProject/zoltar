@@ -358,7 +358,9 @@ async function readPriceHistoryTail(path: string, maximumBytes: number) {
 	const handle = await open(path, 'r')
 	try {
 		const file = await handle.stat()
-		const start = Math.max(0, file.size - maximumBytes)
+		// A tail that starts mid-file also reads the byte before it: when that byte ends a line, the first record in the
+		// bound is complete and only that newline is discarded.
+		const start = Math.max(0, file.size - maximumBytes - 1)
 		const buffer = Buffer.alloc(file.size - start)
 		let offset = 0
 		while (offset < buffer.length) {

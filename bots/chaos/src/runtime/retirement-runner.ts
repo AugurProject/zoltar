@@ -6,7 +6,7 @@ import type { OperationPlan } from '../operations/types.ts'
 import { evaluateOperationCatalog } from '../operations/catalog.ts'
 import { recordCanonicalRecoveredBalances } from '../state/retirement.ts'
 import type { DurableWorkflow, RuntimeState } from '../state/operator-state.ts'
-import { chaosReadClients, planningOptions, type CanonicalAnchor, type CanonicalScanResult } from './canonical-scan.ts'
+import { chaosReadClients, planningOptions, requiredConnectivity, type CanonicalAnchor, type CanonicalScanResult } from './canonical-scan.ts'
 import { applyRetirementAssessment, assessRetirement } from './retirement-assessment.ts'
 import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal, recordV3ScanFailure, recordV3ScanSuccess } from './retirement-v3-positions.ts'
 import type { V3PositionObservation } from './retirement-types.ts'
@@ -27,7 +27,7 @@ export async function retirementCompletionEvidenceCanonical(settings: OperatorSe
 			if (block.hash == null || block.number !== completionBlock) throw new Error(`RPC ${observation.endpoint} returned an invalid retirement completion block identity`)
 			return { endpoint: observation.endpoint, value: block.hash.toLowerCase() }
 		}),
-		2,
+		requiredConnectivity(settings).rpcQuorum,
 	)
 	return canonicalHash === evidence.blockHash.toLowerCase()
 }

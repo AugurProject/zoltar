@@ -4,6 +4,9 @@ import { indexBlock } from '../../src/indexer/ingestion-operations.ts'
 import { projectionsFrom } from '../../src/projections.ts'
 import { discoveredReceiptReplay } from '../support/replay-receipt-block.ts'
 import { sampleEntityStateWithRead } from '../../src/snapshots.ts'
+import { auctionLifecycle, auctionStartedWindow } from '../../src/operations.ts'
+import { jsonRecord } from '../../src/record-serialization.ts'
+import { databaseJsonText } from '../../src/database-json.ts'
 
 const controller = getAddress('0x1111111111111111111111111111111111111111')
 const auction = getAddress('0x2222222222222222222222222222222222222222')
@@ -62,7 +65,12 @@ test('branch events discover the uniform engine, index its auction event and sam
 		expect(reads).toEqual(['auctions', 'forkAuthority', 'engine', 'controller', 'portfolio', 'collateralToken'])
 		const indexed = result.block.logs.find(log => log.address === engine)
 		if (indexed === undefined) throw new Error('Engine event was not indexed')
-		expect(projectionsFrom(indexed)).toContainEqual(expect.objectContaining({ domain: 'auction', semanticEventKind: 'AuctionStarted' }))
+		const started = projectionsFrom(indexed).flatMap(projection => (projection.type === 'domainEvent' && projection.domain === 'auction' && projection.semanticEventKind === 'AuctionStarted' ? [projection] : []))[0]
+		if (started === undefined) throw new Error('AuctionStarted was not projected')
+		// The stored event data drives the operations catalog status: open from opensAt (100) until closesAt (200).
+		const stored = jsonRecord(JSON.parse(databaseJsonText(started.data)))
+		expect(auctionLifecycle({ started: true, finalized: false, ...auctionStartedWindow(stored), indexedTimestamp: '150', bidCount: 0, settlementCount: 0 })).toBe('Open')
+		expect(auctionLifecycle({ started: true, finalized: false, ...auctionStartedWindow(stored), indexedTimestamp: '200', bidCount: 0, settlementCount: 0 })).toBe('Awaiting finalization')
 		const snapshot = await sampleEntityStateWithRead({ entityType: 'auction', entityIdentity: indexed.address.toLowerCase(), address: indexed.address }, async (address, abi, name) => {
 			expect(address).toBe(engine)
 			expect(abi.some(item => item.type === 'function' && item.name === name && toFunctionSelector(item).length === 10)).toBe(true)

@@ -8,6 +8,7 @@ export const forkQuestionRequiredReason = 'Select a valid fork question to conti
 export const forkQuestionTimeLoadingReason = 'Loading chain time…'
 export const questionNotEndedForkReason = 'Only an ended question can fork a universe.'
 export const formatForkQuestionActiveReason = (endTime: CopyTemplateValue, relativeEndTime: CopyTemplateValue) => `The selected question must end before the universe can fork. It ends ${endTime} (${relativeEndTime}).`
+export const formatParentForkResponseActiveReason = (earliestForkTime: CopyTemplateValue, relativeEarliestForkTime: CopyTemplateValue) => `This universe can fork once its parent fork response period ends at ${earliestForkTime} (${relativeEarliestForkTime}).`
 export const forkEconomicsUnavailableReason = 'Fork burn terms could not be loaded.'
 export const forkRepInsufficientReason = 'Insufficient REP to meet the fork threshold.'
 export const forkRepApprovalRequiredReason = 'Approve enough REP to continue.'
