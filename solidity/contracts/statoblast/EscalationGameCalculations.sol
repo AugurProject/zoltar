@@ -38,9 +38,11 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 					? forkResumedAt
 					: forkResumedAt + uint256(requiredElapsed - forkElapsedAtStart);
 			uint256 minimumResponseEnd = forkResumedAt + ACTIVATION_DELAY;
+			if (leadResponseEnd > minimumResponseEnd) minimumResponseEnd = leadResponseEnd;
 			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
-		return activationTime + _finalityElapsed();
+		uint256 ordinaryCurveEnd = activationTime + _finalityElapsed();
+		return ordinaryCurveEnd > leadResponseEnd ? ordinaryCurveEnd : leadResponseEnd;
 	}
 
 	/// @dev Finality is strictly after this last second at or below binding capital.
