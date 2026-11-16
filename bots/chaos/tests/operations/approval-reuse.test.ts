@@ -37,7 +37,7 @@ function fixture(definitionId: string) {
 			openOracleSecurityMultiplierBps: '10000',
 			protocolFee: '0',
 			settlementCallbackGasLimit: '2',
-			targetPriceErrorForDispute: '10000000',
+			targetPriceErrorForDispute: '5000000',
 		}
 		pool.minimumToken1ReportAttoEth = '4'
 		pool.requestPriceCostAttoEth = '121'

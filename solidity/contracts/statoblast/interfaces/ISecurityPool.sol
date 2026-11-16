@@ -109,8 +109,8 @@ interface ISecurityPoolFactory {
 	function deployPortfolioSecurityPool(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (ISecurityPool securityPool);
 	function getPortfolioOriginId(address portfolio, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
 	function getSecurityPoolPortfolio(ISecurityPool securityPool) external view returns (address portfolio);
-	function prepareChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator);
-	function getChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator);
+	function prepareChildPoolCoordinator(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator);
+	function getChildPoolCoordinator(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator);
 	function preparePortfolioChildPriceFeed(ISecurityPool parent, uint256 outcomeIndex) external returns (address);
 	function initializePortfolioPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address);
 	function initializePortfolioPriceFeedForUniverse(uint248 universeId) external returns (address);

@@ -92,7 +92,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 					openOracleSecurityMultiplierBps: '10000',
 					protocolFee: '0',
 					settlementCallbackGasLimit: '2',
-					targetPriceErrorForDispute: '10000000',
+					targetPriceErrorForDispute: '5000000',
 				},
 				oracleSettlementTime: '900',
 				pendingReportId: '0',
