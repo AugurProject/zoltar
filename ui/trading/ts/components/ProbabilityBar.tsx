@@ -27,7 +27,7 @@ export function ProbabilityBar({ yesPercent, beforePercent, last = false, varian
 			</div>
 			<div className='probability__track'>
 				<div className='probability__yes' style={{ width: `${yesPercent}%` }} />
-				{moved && beforePercent !== undefined ? <span className='probability__marker' style={{ left: `${beforePercent}%` }} title={probabilityCopy.beforePriceLabel(before.yes)} /> : null}
+				{moved && beforePercent !== undefined ? <span className='probability__marker' style={{ left: `${beforePercent}%` }} title={probabilityCopy.beforePriceLabel(before.yes)} /> : undefined}
 			</div>
 		</figure>
 	)

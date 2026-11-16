@@ -5,7 +5,7 @@ import { expect } from 'bun:test'
 import { handleApi } from '../../src/api.ts'
 import type { ScannerDatabase } from '../../src/database.ts'
 import type { NetworkConfig } from '../../src/types.ts'
-import { address, type BlockHash, blockHash, decodedLog, discoveredAddress, promotedAddress, transaction, transactionHash } from './postgres-fixtures.ts'
+import { address, type BlockHash, blockHash, decodedLog, type discoveredAddress, promotedAddress, transaction, transactionHash } from './postgres-fixtures.ts'
 
 export type OperationsContext = {
 	readonly database: ScannerDatabase

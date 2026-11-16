@@ -44,9 +44,9 @@ function parseArchives(value: unknown): Archive[] {
 	})
 }
 
-function element<T extends HTMLElement>(id: string, constructor: { new (): T }) {
+function element<T extends HTMLElement>(id: string, elementConstructor: { new (): T }) {
 	const value = document.getElementById(id)
-	if (!(value instanceof constructor)) throw new Error(`Missing deployment archive control ${id}`)
+	if (!(value instanceof elementConstructor)) throw new Error(`Missing deployment archive control ${id}`)
 	return value
 }
 

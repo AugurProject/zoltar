@@ -1,4 +1,4 @@
-import { Document, Element, Window } from 'happy-dom'
+import { type Document, type Element, Window } from 'happy-dom'
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'

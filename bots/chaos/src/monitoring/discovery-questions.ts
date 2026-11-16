@@ -3,7 +3,7 @@ import type { DiscoveryRun } from './discovery-context.ts'
 import { registryDiscoveryIssue } from './discovery-coverage.ts'
 
 import * as abis from '@zoltar/bot-shared/contracts/abi'
-import { type Address } from '@zoltar/bot-shared/ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 
 import type { QuestionSnapshot } from '../operations/types.ts'
 import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency, type ChaosReadClient } from './discovery-client.ts'

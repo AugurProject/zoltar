@@ -6,7 +6,7 @@ import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilie
 import type { OperatorSettings } from '../config/settings.ts'
 import { erc1155Abi, erc20Abi, openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
-import { type CanonicalExecutionAnchor, type ExecutionEnvironment, type CanonicalCallAnchor, type ExactRpcTransaction } from './execution-context.ts'
+import type { CanonicalExecutionAnchor, ExecutionEnvironment, CanonicalCallAnchor, ExactRpcTransaction } from './execution-context.ts'
 
 function sameCanonicalAttesters(left: ReadonlySet<string>, right: ReadonlySet<string>) {
 	return left.size === right.size && [...left].every(rpcUrl => right.has(rpcUrl))

@@ -1,10 +1,10 @@
 /** DOM lookups shared by the bot dashboards; none of them read module state. */
 
 export function element(id: string): HTMLElement
-export function element<T extends HTMLElement>(id: string, constructor: { new (): T }): T
-export function element(id: string, constructor: { new (): HTMLElement } = HTMLElement) {
+export function element<T extends HTMLElement>(id: string, elementConstructor: { new (): T }): T
+export function element(id: string, elementConstructor: { new (): HTMLElement } = HTMLElement) {
 	const found = document.getElementById(id)
-	if (!(found instanceof constructor)) throw new Error(`Missing dashboard element: ${id}`)
+	if (!(found instanceof elementConstructor)) throw new Error(`Missing dashboard element: ${id}`)
 	return found
 }
 

@@ -131,7 +131,7 @@ export function LiveLiquidityControls({
 	const probabilityError = probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined
 	return (
 		<div className='liquidity-controls'>
-			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={appCopy.formatWalletBalancesUnavailable(balanceError ?? workflowCopy.balanceRefreshFailed)} retry={retryBalances} disabled={workflowLocked} /> : null}
+			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={appCopy.formatWalletBalancesUnavailable(balanceError ?? workflowCopy.balanceRefreshFailed)} retry={retryBalances} disabled={workflowLocked} /> : undefined}
 			<OperationSwitcher ariaLabel={liquidityCopy.operationLabel} value={operation} onChange={selectOperation} options={operationOptions} />
 			<FormField id={amountId} label={liquidityCopy.amount}>
 				<FormInput
@@ -159,11 +159,11 @@ export function LiveLiquidityControls({
 				<FormField id={probabilityId} label={liquidityCopy.conditionalYesPrice}>
 					<FormInput id={probabilityId} name='probability' value={probability} disabled={inputsDisabled} inputMode='decimal' adornment={liquidityCopy.percent} error={probabilityError} onInput={event => updateProbability(event.currentTarget.value)} />
 				</FormField>
-			) : null}
+			) : undefined}
 			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.formatRemovalGuidance(newRiskBlocker === undefined ? undefined : marketSettlementPath(market)) : liquidityCopy.additionGuidance} />
 			{operation !== 'remove' ? (
 				<CollateralFundingControls actionLabel={actionLabel} funding={funding} required={parsed} disabled={workflowLocked || funding.pending || gasReason !== undefined || !walletConnected || networkMismatchReason !== undefined} reason={networkMismatchReason ?? (!walletConnected ? wallet.actionLabel : gasReason)} />
-			) : null}
+			) : undefined}
 			<QuotedTransactionPanel
 				phase={state}
 				actionLabel={actionLabel}
@@ -174,7 +174,7 @@ export function LiveLiquidityControls({
 				walletStep={walletStep}
 				onSubmit={() => void submit()}
 			>
-				{estimate === undefined || bounds === undefined ? null : (
+				{estimate === undefined || bounds === undefined ? undefined : (
 					<LiquidityPreviewSection preview={estimate} bounds={bounds} market={market} connected={walletConnected} protection={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')} />
 				)}
 			</QuotedTransactionPanel>
@@ -228,7 +228,7 @@ function LiquidityPreviewSection({ preview, bounds, market, connected, protectio
 					)}
 				</div>
 			</div>
-			{removalValue === undefined ? null : <p className='detail'>{liquidityCopy.approximateRemovalValue(formatCollateralAmount(removalValue, market), false)}</p>}
+			{removalValue === undefined ? undefined : <p className='detail'>{liquidityCopy.approximateRemovalValue(formatCollateralAmount(removalValue, market), false)}</p>}
 			<DataGrid dense>
 				<MetricField label={liquidityCopy.minimumReceived}>
 					{preview.operation === 'remove' ? (
@@ -240,7 +240,7 @@ function LiquidityPreviewSection({ preview, bounds, market, connected, protectio
 					)}
 				</MetricField>
 			</DataGrid>
-			{preview.operation === 'remove' ? null : (
+			{preview.operation === 'remove' ? undefined : (
 				<ReadOnlyDetailAccordion title={liquidityCopy.previewDetails}>
 					<DataGrid dense>
 						<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetWithValue(preview.completeSets, market)}</MetricField>

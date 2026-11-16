@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import type { ConnectivitySettings } from '@zoltar/bot-shared/monitoring/connectivity'
-import { type MutableStrategy } from '#state/operator-state'
+import type { MutableStrategy } from '#state/operator-state'
 import type { MutableSettlement } from '#state/settlement-store'
 import { networkConfiguration, type NetworkConfiguration } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'

@@ -258,7 +258,6 @@ function parseSavedStateStorageRecords(serialized: string | null): SavedSimulati
 		} catch (error) {
 			if (!(error instanceof SavedSimulationStateError)) throw error
 			droppedRecordCount += 1
-			continue
 		}
 	}
 	return {

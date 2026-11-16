@@ -13,7 +13,7 @@ import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../t
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { ReputationToken_ReputationToken, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
 import { computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
-import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 
 const initializeForkCarrySnapshotTestPoolAbi: Abi = [
 	{

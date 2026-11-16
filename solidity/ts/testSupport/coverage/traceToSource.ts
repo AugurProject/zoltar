@@ -436,7 +436,7 @@ const isSolidityDeclarationOrSignatureLine = (line: string): boolean =>
 	/^(public|external|internal|private|view|pure|payable|virtual|override|returns)\b/.test(line) ||
 	/^returns\b/.test(line) ||
 	/^(mapping|bytes\d*|u?int\d*|address|bool|string)\b.*\b(private|public|internal|external|constant|immutable)\b/.test(line) ||
-	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*[,)]?$/.test(line)
+	/^([A-Za-z_][A-Za-z0-9_<>[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*[,)]?$/.test(line)
 
 const solidityTypeLikeCallTargets = new Set(['address', 'bool', 'bytes', 'int', 'mapping', 'string', 'uint'])
 

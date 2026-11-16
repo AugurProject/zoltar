@@ -1,17 +1,17 @@
 import { collectionDigest, manifestWithDigest, sha256 } from './content-digest.ts'
 import { parseJsonDocument } from '@zoltar/bot-shared/config/durable-file'
 
-import { type Hex } from '@zoltar/bot-shared/ethereum'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 
 import type { ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
 
 import { assertExactKeys, normalizedHash32 as hash, requiredRecord, unsignedIntegerString } from './validators.ts'
 import {
-	ProtocolIndexIdentity,
+	type ProtocolIndexIdentity,
 	MAXIMUM_PROTOCOL_INDEX_RECORDS,
 	parseIdentity,
-	AuctionBidRecord,
-	AuctionRefundRecord,
+	type AuctionBidRecord,
+	type AuctionRefundRecord,
 	parseOracleGame,
 	parseAuctionBidRecord,
 	parseAuctionRefundRecord,
@@ -26,7 +26,7 @@ import {
 	compareMigrationRoutes,
 	compareChildRoutes,
 } from './protocol-index-schema.ts'
-import { PreparedProtocolIndexChunk } from './protocol-index-store.ts'
+import type { PreparedProtocolIndexChunk } from './protocol-index-store.ts'
 
 export const PROTOCOL_INDEX_REFERENCE_VERSION = 1
 const PROTOCOL_INDEX_MANIFEST_VERSION = 1

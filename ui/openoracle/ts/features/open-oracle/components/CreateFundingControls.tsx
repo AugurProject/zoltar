@@ -31,13 +31,13 @@ export function CreateFundingControls({
 	if (wrapReason === undefined && funding.loading) wrapReason = copy.loading
 	else if (wrapReason === undefined && funding.wrap === 0n) wrapReason = copy.notNeeded
 	const tokens = funding.tokens
-	if (tokens.length === 0) return null
+	if (tokens.length === 0) return undefined
 	return (
 		<div className='workflow-stack'>
-			{funding.error === undefined ? null : <RetryableNotice message={funding.error} retryLabel={common.retry} onRetry={funding.retry} disabled={disabled} />}
+			{funding.error === undefined ? undefined : <RetryableNotice message={funding.error} retryLabel={common.retry} onRetry={funding.retry} disabled={disabled} />}
 			{funding.tokens.some(token => token.token === getWethAddress()) ? (
 				<TransactionActionButton idleLabel={oracleCopy.wrapEth} pendingLabel={oracleCopy.wrappingEth} availability={{ disabled: disabled || funding.loading || funding.wrap === 0n || wrap === undefined, reason: wrapReason }} pending={activeAction === 'wrapWeth'} onClick={() => wrap?.()} tone='secondary' />
-			) : null}
+			) : undefined}
 			{tokens.map((token, index) => {
 				const symbol = symbols[index] ?? copy.funding
 				const usdt = token.token?.toLowerCase() === getActiveNetworkProfile().usdtAddress?.toLowerCase()
@@ -55,7 +55,7 @@ export function CreateFundingControls({
 								onClick={() => approve?.(token.key, 0n)}
 								tone='secondary'
 							/>
-						) : null}
+						) : undefined}
 						<TokenApprovalControl
 							actionLabel={oracleCopy.createStandaloneReport}
 							allowanceError={undefined}

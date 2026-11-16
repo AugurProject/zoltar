@@ -212,7 +212,9 @@ test('disables both ordinary outcome controls while the chosen deployment initia
 	expect(pendingChoice.querySelector('.migration-outcome-label')?.textContent).toBe('Opening No universe')
 	expect(pendingChoice.querySelector('.migration-outcome-metrics')).toBeNull()
 	expect(within(document.body).getByRole('button', { name: 'Open Yes universe' }).textContent).not.toContain('Opening')
-	await act(() => buttons.forEach(button => button.click()))
+	await act(() => {
+		for (const button of buttons) button.click()
+	})
 	expect(initialize).toHaveBeenCalledTimes(1)
 	expect(root).not.toHaveBeenCalled()
 	await act(async () => {

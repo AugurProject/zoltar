@@ -1,7 +1,7 @@
 import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
-import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import assert from '../testSupport/simulator/utils/assert'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'

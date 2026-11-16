@@ -4,7 +4,7 @@ import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { observeReceiptWithQuorum } from '@zoltar/bot-shared/execution/receipt-quorum'
 import type { OperatorSettings } from '#config/settings'
 import { PRIVATE_INTENT_FINALITY_BLOCKS } from '#core/cycle-control'
-import { initialRuntimeState, assertIntentSender, saveDurableState } from '#state/operator-state'
+import { type initialRuntimeState, assertIntentSender, saveDurableState } from '#state/operator-state'
 import { resolveFinalizedReceipt } from '#execution/receipt-transition'
 
 function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, pool: ReturnType<typeof createRpcEndpointPool>) {

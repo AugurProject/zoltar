@@ -2,7 +2,7 @@ import { statoblast_SecurityPoolForker_SecurityPoolForker } from '../../../../ty
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { contractExists, requireBigInt } from '../utilities'
-import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
+import { type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 
 function requireQuestionOutcome(value: unknown, context: string): QuestionOutcome {

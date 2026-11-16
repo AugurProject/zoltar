@@ -18,7 +18,7 @@ export interface RepEthPriceHistoryRecord {
 	rep_per_eth_1e18: string
 }
 
-import { type EntityHistoryCoverageValue, type JsonRecord, type JsonValue } from './api-validation.ts'
+import type { EntityHistoryCoverageValue, JsonRecord, JsonValue } from './api-validation.ts'
 
 import type { ActivityDetailFocusSnapshot } from './activity-detail-dom.ts'
 import type { HistoryInvalidationReason } from './history-evidence.ts'

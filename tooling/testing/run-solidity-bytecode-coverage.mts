@@ -170,7 +170,7 @@ if (import.meta.main) {
 		selectedShards = [selectedShard]
 	}
 
-	let mergedSummary: SolidityCoverageSummary | undefined = undefined
+	let mergedSummary: SolidityCoverageSummary | undefined
 
 	for (const testShard of selectedShards) {
 		const shardIndex = testShards.indexOf(testShard) + 1

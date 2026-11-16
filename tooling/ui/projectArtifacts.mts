@@ -1,7 +1,7 @@
-import { promises as fs } from 'fs'
+import { promises as fs } from 'node:fs'
 import * as process from 'node:process'
 import * as url from 'node:url'
-import * as path from 'path'
+import * as path from 'node:path'
 import { contractProjectOwner, isContractProjectSource, type ContractProject } from '../../solidity/ts/contractProjects.ts'
 import { repositoryRoot as REPOSITORY_ROOT_PATH } from '../repo/root.mts'
 

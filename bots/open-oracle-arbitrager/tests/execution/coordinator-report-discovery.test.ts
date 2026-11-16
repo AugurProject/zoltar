@@ -6,7 +6,7 @@ import { openOracleAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum, replacementDisputeAmountsWithQuorum } from '#execution/recovery-support'
 import { applyCoordinatorReports, type ActiveReport } from '#monitoring/oracle-log-state'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import { type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import type { OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { multicallProvider } from '../helpers/multicall-provider.ts'
 
 const activeCoordinator = getAddress('0x0000000000000000000000000000000000000001')

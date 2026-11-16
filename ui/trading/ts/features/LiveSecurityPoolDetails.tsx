@@ -90,7 +90,7 @@ export function LiveSecurityPoolDetails({
 			<ErrorNotice message={connectionMessage} />
 			<SectionBlock title={liveCopy.securityPoolFacts}>
 				<div className='security-pool-details' aria-busy={refreshing}>
-					{refreshMessage === undefined ? null : <UserMessage className='detail' announcement='polite' detail={refreshMessage} />}
+					{refreshMessage === undefined ? undefined : <UserMessage className='detail' announcement='polite' detail={refreshMessage} />}
 					<RetryableNotice disabled={workflowLocked} message={errorMessage} onRetry={refreshing ? undefined : retry} retryLabel={hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool} />
 
 					{market.loadError !== undefined ? (

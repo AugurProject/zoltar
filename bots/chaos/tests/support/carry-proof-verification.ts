@@ -1,5 +1,5 @@
 import { concatHex, keccak256, zeroHash, type Hash } from '@zoltar/bot-shared/ethereum'
-import { computeNullifierRootFromProof, createMerkleMountainRangeProof, nullifierPath, sparseNullifierRoot } from '../../src/monitoring/carry-proof-index.ts'
+import { computeNullifierRootFromProof, type createMerkleMountainRangeProof, nullifierPath, sparseNullifierRoot } from '../../src/monitoring/carry-proof-index.ts'
 
 // Reference verifiers mirroring the Solidity fork-carry proof checks. The bot only
 // creates proofs, so the tests keep an independent verifier as their oracle.

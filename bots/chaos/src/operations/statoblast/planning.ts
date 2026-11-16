@@ -1,6 +1,6 @@
 import { ONE_TOKEN, allowance, amount, encodeStep, erc20AllowanceEvidence, eventTopic, optionAmount, planBase, tokenInventory } from '../planning.ts'
 
-import { EcosystemSnapshot, OperationContinuationContext, OperationEvidence, OperationPlan, PlanningOptions, PoolSnapshot } from '../types.ts'
+import type { EcosystemSnapshot, OperationContinuationContext, OperationEvidence, OperationPlan, PlanningOptions, PoolSnapshot } from '../types.ts'
 
 import { topologyMutationCapacityBlocker } from '../topology-capacity.ts'
 

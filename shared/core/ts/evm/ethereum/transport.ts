@@ -1,5 +1,5 @@
 import { errorChain } from '../../errors/errorChain.js'
-import { type ClientRequestParameters, type DeadlineRunner, type EIP1193Provider, type HttpTransportOptions, type JsonValue, type Transport, type TransportRetryOptions } from './types.js'
+import type { ClientRequestParameters, DeadlineRunner, EIP1193Provider, HttpTransportOptions, JsonValue, Transport, TransportRetryOptions } from './types.js'
 
 import { RpcError } from './errors.js'
 
@@ -44,8 +44,8 @@ async function requestTransportOnce<TValue>(transport: Transport, parameters: Cl
 		const payload: JsonValue = transport.responseParser === undefined ? ((await response.json()) as JsonValue) : await transport.responseParser(response, parameters.method)
 		if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
 		const envelope = payload as Record<string, JsonValue>
-		const hasResult = Object.prototype.hasOwnProperty.call(envelope, 'result')
-		const hasError = Object.prototype.hasOwnProperty.call(envelope, 'error')
+		const hasResult = Object.hasOwn(envelope, 'result')
+		const hasError = Object.hasOwn(envelope, 'error')
 		if (envelope['jsonrpc'] !== '2.0' || envelope['id'] !== 1 || hasResult === hasError) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
 		if (hasError) {
 			const error = envelope['error']

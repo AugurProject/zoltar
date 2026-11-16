@@ -8,6 +8,7 @@ import { installStatoblastScenarioProtocolForTesting } from '@zoltar/ui-statobla
 import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
 import type { DeploymentStep } from '@zoltar/ui-core-shared/types/contracts.js'
 import { type Address, getAddress, getCreateAddress, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 await moduleMocks.mockModule('@zoltar/ui-core-shared/simulation/clock.js', () => ({
@@ -399,12 +400,12 @@ describe('simulation bootstrap', () => {
 				writeContract: async () => '0x01',
 			}) as never
 
-		globalThis.setTimeout = ((handler: TimerHandler) => {
+		globalThis.setTimeout = testDouble<typeof globalThis.setTimeout>((handler: TimerHandler) => {
 			if (typeof handler === 'function') {
 				handler()
 			}
-			return 1 as unknown as ReturnType<typeof setTimeout>
-		}) as unknown as typeof globalThis.setTimeout
+			return 1
+		})
 
 		try {
 			await expect(

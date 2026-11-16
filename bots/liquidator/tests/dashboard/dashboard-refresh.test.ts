@@ -1772,9 +1772,9 @@ describe('liquidator dashboard operator safeguards', () => {
 		submissionBlock: '100',
 	}
 
-	function control<T>(page: Awaited<ReturnType<typeof dashboard>>, selector: string, constructor: new (...parameters: never[]) => T) {
+	function control<T>(page: Awaited<ReturnType<typeof dashboard>>, selector: string, elementConstructor: new (...parameters: never[]) => T) {
 		const found = page.window.document.querySelector(selector)
-		if (!(found instanceof constructor)) throw new Error(`Expected dashboard control ${selector}`)
+		if (!(found instanceof elementConstructor)) throw new Error(`Expected dashboard control ${selector}`)
 		return found
 	}
 

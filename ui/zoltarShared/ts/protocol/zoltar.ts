@@ -278,7 +278,7 @@ export async function loadZoltarUniverseSummary(
 	if (!includeRelatedUniverses && universeId !== 0n) outcomeLabel = await loadUniverseOutcomeName(client, zoltarAddress, parentUniverseId, forkingOutcomeIndex)
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
-	let forkQuestionDetails: MarketDetails | undefined = undefined
+	let forkQuestionDetails: MarketDetails | undefined
 	if (includeRelatedUniverses && hasForked && forkQuestionId > 0n) {
 		const marketDetails = await loadMarketDetails(client, forkQuestionId)
 		forkQuestionDetails = marketDetails

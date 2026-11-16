@@ -47,7 +47,7 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 			<SectionBlock className='deployment-setup' title={deploymentCopy.tradingContracts}>
 				<ErrorNotice message={network.error} />
 				<ErrorNotice message={network.configurationError} />
-				{network.core === undefined ? null : (
+				{network.core === undefined ? undefined : (
 					<DataGrid dense>
 						<MetricField label={deploymentCopy.deployingTo}>{network.core.chainName}</MetricField>
 						<MetricField label={deploymentCopy.securityPoolFactory}>
@@ -55,9 +55,9 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 						</MetricField>
 					</DataGrid>
 				)}
-				{network.fallbackNotice === undefined ? null : <UserMessage className='detail' tone='warning' detail={network.fallbackNotice} />}
-				{inspection.plan === undefined || inspection.complete ? null : <UserMessage className='detail' detail={deploymentCopy.deploymentSequence(inspection.plan.factory.label, inspection.plan.router.label)} />}
-				{inspection.plan === undefined ? null : (
+				{network.fallbackNotice === undefined ? undefined : <UserMessage className='detail' tone='warning' detail={network.fallbackNotice} />}
+				{inspection.plan === undefined || inspection.complete ? undefined : <UserMessage className='detail' detail={deploymentCopy.deploymentSequence(inspection.plan.factory.label, inspection.plan.router.label)} />}
+				{inspection.plan === undefined ? undefined : (
 					<DeploymentStepList
 						steps={inspection.steps.map(({ step, presentation }) => {
 							const { availability, externalReasonId } = actions.availabilityFor(step)
@@ -87,7 +87,7 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 					<DataGrid dense>
 						<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(inspection.status)}</MetricField>
 					</DataGrid>
-					{inspection.badge === undefined ? null : (
+					{inspection.badge === undefined ? undefined : (
 						<Badge id={inspection.badgeId} tone={inspection.badge.tone}>
 							{inspection.badge.label}
 						</Badge>
@@ -105,9 +105,9 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 							</a>
 						}
 					/>
-				) : null}
+				) : undefined}
 				<ErrorNotice id={wallet.networkNoticeId} message={wallet.networkNotice} />
-				{wallet.networkNotice === undefined || network.core === undefined ? null : (
+				{wallet.networkNotice === undefined || network.core === undefined ? undefined : (
 					<div className='actions'>
 						<button type='button' className='secondary' disabled={actions.busy || wallet.connecting} aria-busy={wallet.connecting} onClick={() => void actions.connectWallet()}>
 							{wallet.connecting ? deploymentCopy.switchingToNetwork(network.core.chainName) : coreAppCopy.formatSwitchToNetwork(network.core.chainName)}
@@ -116,15 +116,15 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 				)}
 				<ErrorNotice message={wallet.connectionMessage} />
 				<ErrorNotice message={inspection.message} />
-				{actions.feedback === undefined || actions.feedback.failed ? null : <UserMessage className='detail' announcement='polite' detail={actions.feedback.message} />}
+				{actions.feedback === undefined || actions.feedback.failed ? undefined : <UserMessage className='detail' announcement='polite' detail={actions.feedback.message} />}
 				<ErrorNotice message={actions.feedback?.failed ? actions.feedback.message : undefined} />
 				{inspection.plan === undefined || retryAction !== undefined ? (
 					<div className='actions'>
 						{/* Until the network is known there are no contract rows; one disabled action keeps the place and explains what is missing. */}
-						{inspection.plan === undefined ? <PlaceholderDeployAction {...actions.availabilityFor(undefined)} /> : null}
+						{inspection.plan === undefined ? <PlaceholderDeployAction {...actions.availabilityFor(undefined)} /> : undefined}
 						{retryAction}
 					</div>
-				) : null}
+				) : undefined}
 			</SectionBlock>
 		</div>
 	)

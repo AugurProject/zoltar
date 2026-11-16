@@ -362,9 +362,9 @@ function stubIntervals(window: BrowserWindow) {
 	}
 }
 
-function element<T extends Element>(window: BrowserWindow, id: string, constructor: { new (): T }): T {
+function element<T extends Element>(window: BrowserWindow, id: string, elementConstructor: { new (): T }): T {
 	const found = window.document.getElementById(id)
-	if (!(found instanceof constructor)) throw new Error(`Missing dashboard element ${id}`)
+	if (!(found instanceof elementConstructor)) throw new Error(`Missing dashboard element ${id}`)
 	return found
 }
 

@@ -13,7 +13,7 @@ import {
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { deployContract } from '../testSupport/deployContract'
 import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
-import { type AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { type WriteClient, createWriteClient } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'

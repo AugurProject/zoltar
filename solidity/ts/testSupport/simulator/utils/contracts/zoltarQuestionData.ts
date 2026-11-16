@@ -1,6 +1,6 @@
 import type { ZoltarQuestionData } from '@zoltar/zoltar-shared/questions/questionId'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
-import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
+import { type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { CONTRACT_PAGE_SIZE } from './pagination'
 

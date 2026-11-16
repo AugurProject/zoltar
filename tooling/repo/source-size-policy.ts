@@ -16,13 +16,37 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [['bots/chaos/src/monitoring/protocol-index.ts', 635]]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
-	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
-		['tooling/docs/check-docs-examples.mts', 657],
-		['tooling/contracts/deploy-testnet.mts', 636],
-	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
 		['docs/charts/chartRuntime.ts', 875],
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
+	]),
+])
+
+/**
+ * Test files and their helpers get a wider ceiling than production modules: a scenario suite legitimately carries
+ * more setup than the code it exercises, but a file past this size is several suites sharing one fixture block.
+ */
+export const testSourceLineLimit = 1500
+
+/**
+ * Temporary debt register for test sources, with the same rules as the production register above:
+ * ceilings match current line counts, ratchet down after every shrink, and disappear at 1500 lines or less.
+ */
+export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
+	...allowances('Split by behavior area into sibling test files that share a fixture module.', [
+		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3443],
+		['augurScan/tests/unit/live-ui.test.ts', 1534],
+		['bots/chaos/tests/execution/transaction-executor.test.ts', 1848],
+		['bots/chaos/tests/monitoring/discovery.test.ts', 1704],
+		['bots/chaos/tests/runtime/dashboard-controller.test.ts', 1666],
+		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2072],
+		['bots/open-oracle-arbitrager/tests/dashboard/dashboard-refresh.test.ts', 1576],
+		['shared/core/ts/evm/ethereum.test.ts', 3826],
+		['solidity/ts/tests/coverageHelpers.test.ts', 1766],
+		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
+		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1859],
+		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2302],
+		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 2948],
 	]),
 ])

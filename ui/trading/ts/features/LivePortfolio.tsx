@@ -147,9 +147,9 @@ export function LivePortfolio({
 						walletAction === undefined ? undefined : <ActionLauncherButton idleLabel={walletAction.label} pendingLabel={walletAction.label} availability={{ disabled: walletAction.disabled, reason: walletAction.disabled ? availabilityCopy.transactionInProgressReason : undefined }} onClick={walletAction.onClick} />
 					}
 				/>
-			) : null}
-			{balanceState === 'loading' ? <EmptyState live title={appCopy.loadingBalances} /> : null}
-			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
+			) : undefined}
+			{balanceState === 'loading' ? <EmptyState live title={appCopy.loadingBalances} /> : undefined}
+			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : undefined}
 			{balanceState === 'ready' && visibleEntries.length === 0 ? (
 				<EmptyState
 					title={universeId === undefined ? portfolioCopy.noPositions : portfolioCopy.noPositionsInUniverse(universeId === 0n ? formatRootUniverseName() : formatUniverseDisplayLabel(universeId))}
@@ -167,10 +167,10 @@ export function LivePortfolio({
 						</>
 					}
 				/>
-			) : null}
-			{showSummary ? <PortfolioSummary overview={overview} /> : null}
-			{showSummary ? <PortfolioActionItems groups={overview.actionGroups} nowSeconds={nowSeconds} /> : null}
-			{visibleEntries.length === 0 ? null : (
+			) : undefined}
+			{showSummary ? <PortfolioSummary overview={overview} /> : undefined}
+			{showSummary ? <PortfolioActionItems groups={overview.actionGroups} nowSeconds={nowSeconds} /> : undefined}
+			{visibleEntries.length === 0 ? undefined : (
 				<ul className='portfolio-position-list' aria-label={portfolioCopy.positions}>
 					{overview.rows.map(row => {
 						const { market, balances, error } = row.entry
@@ -188,17 +188,17 @@ export function LivePortfolio({
 									) : undefined}
 									{balances === undefined ? <TradingSecurityPoolLink value={market.pool} /> : undefined}
 								</div>
-								{balances === undefined ? null : <PortfolioHoldings market={market} balances={balances} />}
-								{balances === undefined ? null : <PortfolioValues market={market} balances={balances} valuation={row.valuation} />}
+								{balances === undefined ? undefined : <PortfolioHoldings market={market} balances={balances} />}
+								{balances === undefined ? undefined : <PortfolioValues market={market} balances={balances} valuation={row.valuation} />}
 								{row.canSell || row.canRedeem ? (
 									<div className='portfolio-position-actions'>
 										<PortfolioRowActions row={row} />
 									</div>
-								) : null}
-								{error === undefined && balances === undefined ? null : (
+								) : undefined}
+								{error === undefined && balances === undefined ? undefined : (
 									<div className='portfolio-position-extra'>
-										{error === undefined ? null : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(error)} retry={retryBalances} />}
-										{balances === undefined ? null : <PortfolioPositionDetails market={market} balances={balances} />}
+										{error === undefined ? undefined : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(error)} retry={retryBalances} />}
+										{balances === undefined ? undefined : <PortfolioPositionDetails market={market} balances={balances} />}
 									</div>
 								)}
 							</li>
@@ -215,7 +215,7 @@ export function LivePortfolio({
 						</>
 					}
 				/>
-			) : null}
+			) : undefined}
 		</div>
 	)
 }

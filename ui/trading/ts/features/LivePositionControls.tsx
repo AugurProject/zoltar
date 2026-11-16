@@ -80,7 +80,7 @@ function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO'
 }
 
 function InvalidCoverageExplanation({ model, side, disabled, onUseSellable, market }: { market: LiveMarket; model: TradeTicketModel; side: 'YES' | 'NO'; disabled: boolean; onUseSellable(value: string): void }) {
-	if (model.shortfall === undefined) return null
+	if (model.shortfall === undefined) return undefined
 	const sellable = model.sellable ?? 0n
 	return (
 		<WarningSurface role='status' surface='flat' variant='compact' className='trade-invalid-coverage'>
@@ -89,7 +89,7 @@ function InvalidCoverageExplanation({ model, side, disabled, onUseSellable, mark
 				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(roundDownShortcut(sellable, collateralAsset(market).decimals), collateralAsset(market).decimals))}>
 					{ticketCopy.sellInsteadAction(formatOutcomeQuantity(sellable, side, 4, 'down', market))}
 				</button>
-			) : null}
+			) : undefined}
 		</WarningSurface>
 	)
 }
@@ -205,7 +205,7 @@ export function LivePositionControls({
 						)
 					}
 				/>
-			) : null}
+			) : undefined}
 			<div className='trade-ticket-switchers'>
 				<ViewTabs
 					ariaLabel={ticketCopy.tradeDirection}
@@ -233,7 +233,7 @@ export function LivePositionControls({
 					]}
 				/>
 				{/* The percentages on the outcome buttons are conditional on a valid resolution, and say so in view. */}
-				{odds === undefined ? null : <span className='trade-ticket-odds-caption'>{marketsCopy.conditionalPrice}</span>}
+				{odds === undefined ? undefined : <span className='trade-ticket-odds-caption'>{marketsCopy.conditionalPrice}</span>}
 			</div>
 			<FormField id={amountId} label={mode === 'entry' ? ticketCopy.youPay : ticketCopy.sharesToSell}>
 				<FormInput
@@ -253,7 +253,7 @@ export function LivePositionControls({
 					}}
 				/>
 			</FormField>
-			{model.shortcuts.length === 0 ? null : (
+			{model.shortcuts.length === 0 ? undefined : (
 				<div className='trade-amount-shortcuts' role='group' aria-label={mode === 'entry' ? ticketCopy.buyShortcutsLabel : ticketCopy.sellShortcutsLabel}>
 					{model.shortcuts.map(shortcut => (
 						<button key={shortcut.label} type='button' className='secondary' disabled={controlsDisabled} onClick={() => ticket.setAmount(formatCurrencyInputBalance(shortcut.value, asset.decimals))}>
@@ -263,7 +263,7 @@ export function LivePositionControls({
 				</div>
 			)}
 			<InvalidCoverageExplanation market={market} model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
-			{requoted ? <UserMessage placement='page' tone='warning' announcement='polite' className='trade-requote-notice' detail={ticket.requoteNotice} /> : null}
+			{requoted ? <UserMessage placement='page' tone='warning' announcement='polite' className='trade-requote-notice' detail={ticket.requoteNotice} /> : undefined}
 			<p className='visually-hidden trade-quote-announcement' role='status'>
 				{announcement}
 			</p>
@@ -275,7 +275,7 @@ export function LivePositionControls({
 					disabled={controlsDisabled || funding.pending || gasReason !== undefined || !wallet.connected || wallet.networkMismatchReason !== undefined}
 					reason={wallet.networkMismatchReason ?? (!wallet.connected ? wallet.actionLabel : gasReason)}
 				/>
-			) : null}
+			) : undefined}
 			<QuotedTransactionPanel
 				phase={state}
 				actionLabel={model.actionLabel}
@@ -289,7 +289,7 @@ export function LivePositionControls({
 				announceMessage={model.availability.reason !== ticketCopy.updatingEstimate}
 				onSubmit={() => void ticket.submit(estimate)}
 			>
-				{estimate === undefined || model.impactTier === undefined ? null : (
+				{estimate === undefined || model.impactTier === undefined ? undefined : (
 					<TradeEstimatePanel
 						estimate={estimate}
 						market={market}

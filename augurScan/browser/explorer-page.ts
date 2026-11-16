@@ -112,7 +112,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 		const section = node('section', 'static-card')
 		let sectionTitle = 'Transactions'
 		if (kind === 'tx') sectionTitle = 'Decoded logs'
-		else if (result['hasMore'] === true) sectionTitle = `First ${exactNumber(rows instanceof Array ? rows.length : 0)} transactions`
+		else if (result['hasMore'] === true) sectionTitle = `First ${exactNumber(Array.isArray(rows) ? rows.length : 0)} transactions`
 		section.append(node('h3', '', sectionTitle))
 		if (kind === 'block' && result['hasMore'] === true) section.append(node('p', 'data-note', 'More indexed transactions exist in this block.'))
 		if (!Array.isArray(rows) || rows.length === 0) section.append(node('p', 'data-note', kind === 'tx' ? 'No indexed logs for this transaction.' : 'No indexed evidence in this block.'))

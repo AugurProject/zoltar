@@ -1,7 +1,7 @@
 import { concatHex, encodeAbiParameters, getAddress, keccak256, toHex, zeroHash, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 
-import { type CanonicalUintString } from '../core/units.ts'
+import type { CanonicalUintString } from '../core/units.ts'
 
 const CARRY_MMR_MAXIMUM_PEAKS = 64
 

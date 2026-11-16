@@ -28,5 +28,5 @@ export function useOpenOracleSettlementTime(report: OpenOracleReportDetails | un
 		const interval = setInterval(tick, 250)
 		return () => clearInterval(interval)
 	}, [reportKey, report?.timeType, report?.coordinatorPriceValidUntilTimestamp, visible])
-	return report !== undefined && report.timeType ? report.currentTime + (clock.key === reportKey ? clock.elapsedSeconds : 0n) : report?.currentTime
+	return report?.timeType ? report.currentTime + (clock.key === reportKey ? clock.elapsedSeconds : 0n) : report?.currentTime
 }

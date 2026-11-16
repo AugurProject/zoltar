@@ -220,7 +220,7 @@ export function renderSelectedReportActionSection({
 								onClick={() => (isToken1 ? onApproveToken1 : onApproveToken2)(0n)}
 								tone='secondary'
 							/>
-						) : null}
+						) : undefined}
 						<TokenApprovalControl
 							requiresAllowanceReset={tokenSymbol === 'USDT'}
 							actionLabel={openOracleCopy.disputingTheReport}

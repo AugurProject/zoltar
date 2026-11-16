@@ -6,14 +6,14 @@ import * as copy from '../copy/collateral.js'
 import type { useCollateralFunding } from './live/useCollateralFunding.js'
 
 export function CollateralFundingControls({ funding, required, disabled, reason, actionLabel }: { actionLabel: string; funding: ReturnType<typeof useCollateralFunding>; required: bigint | undefined; disabled: boolean; reason: string | undefined }) {
-	if (!funding.applicable) return null
+	if (!funding.applicable) return undefined
 	const { asset } = funding
 	let resetReason = reason
 	if (resetReason === undefined && funding.allowance === undefined) resetReason = copy.loading
 	else if (resetReason === undefined && funding.allowance === 0n) resetReason = copy.notNeeded
 	return (
 		<div className='collateral-funding'>
-			{funding.readError === undefined ? null : <RetryableNotice message={funding.readError} retryLabel={retry} onRetry={funding.retry} disabled={disabled} />}
+			{funding.readError === undefined ? undefined : <RetryableNotice message={funding.readError} retryLabel={retry} onRetry={funding.retry} disabled={disabled} />}
 			{asset.symbol === 'USDT' ? (
 				<TransactionActionButton
 					idleLabel={copy.reset(asset.symbol)}
@@ -23,7 +23,7 @@ export function CollateralFundingControls({ funding, required, disabled, reason,
 					onClick={() => void funding.approve(0n)}
 					tone='secondary'
 				/>
-			) : null}
+			) : undefined}
 			<TokenApprovalControl
 				actionLabel={actionLabel}
 				allowanceError={funding.readError === undefined ? funding.error : undefined}

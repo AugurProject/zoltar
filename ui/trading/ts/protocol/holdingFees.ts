@@ -1,7 +1,7 @@
 import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
 import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
-import { type WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import type { WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import type { LiveMarket } from './liveMarket.js'

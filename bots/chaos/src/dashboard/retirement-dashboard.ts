@@ -115,9 +115,9 @@ type RetirementDashboardOptions = {
 	refresh: () => Promise<unknown>
 }
 
-function retirementElement<T extends Element>(id: string, constructor: { new (): T }) {
+function retirementElement<T extends Element>(id: string, elementConstructor: { new (): T }) {
 	const value = document.getElementById(id)
-	if (!(value instanceof constructor)) throw new Error(`Missing dashboard element #${id}`)
+	if (!(value instanceof elementConstructor)) throw new Error(`Missing dashboard element #${id}`)
 	return value
 }
 

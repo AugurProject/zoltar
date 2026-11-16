@@ -1,10 +1,10 @@
 import type { DiscoveryIssue } from '../operations/types.ts'
 import type { ImmutableTopologyData } from './topology-schema.ts'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
-import { type AuctionBidSnapshot, type AuctionRefundSnapshot, type ChildRepSplitProgressSnapshot, type EcosystemDeployments, type EscalationDepositSnapshot, type MigrationRepSplitProgressSnapshot, type OracleGameSnapshot } from '../operations/types.ts'
-import { type ChaosReadClient } from './discovery-client.ts'
+import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EcosystemDeployments, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
+import type { ChaosReadClient } from './discovery-client.ts'
 import { type CanonicalImmutableTopologyCache, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES } from './topology-schema.ts'
-import { type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import type { Address, Hash } from '@zoltar/bot-shared/ethereum'
 
 export const DISCOVERY_AGGREGATE_ITEM_LIMIT = MAXIMUM_DISCOVERY_AGGREGATE_ITEMS
 

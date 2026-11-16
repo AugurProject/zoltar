@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadMarketDetails, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 
 const QUESTION_TUPLE_BINARY = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 100n, '']
 const QUESTION_TUPLE_SCALAR = ['Scalar question', 'desc', 1n, 2n, 100n, -10n, 10n, 'units']
@@ -31,7 +32,7 @@ type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
 function createReadClient({ multicallResponses, readContractHandlers }: { multicallResponses: unknown[]; readContractHandlers: Record<string, (request: MockReadContractRequest) => Promise<unknown>> }): MockReadClient {
 	let callIndex = 0
 
-	return {
+	return testDouble<MockReadClient>({
 		multicall: async () => {
 			const response = multicallResponses[callIndex]
 			if (response === undefined) throw new Error('No queued multicall response')
@@ -44,7 +45,7 @@ function createReadClient({ multicallResponses, readContractHandlers }: { multic
 			if (handler === undefined) throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			return await handler(request)
 		},
-	} as unknown as MockReadClient
+	})
 }
 
 describe('zoltar contract helpers', () => {

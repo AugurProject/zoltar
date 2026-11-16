@@ -108,7 +108,7 @@ async function fixture(mode: Mode) {
 		signedGas: () => signedGas,
 		run: () => executePortfolioTakeover(wallet, settings, state, createRpcEndpointPool(endpoints), observation, 1n, async () => true, { refresh, submit }),
 		close: async () => {
-			servers.forEach(server => server.stop(true))
+			for (const server of servers) server.stop(true)
 			await rm(directory, { recursive: true, force: true })
 		},
 	}

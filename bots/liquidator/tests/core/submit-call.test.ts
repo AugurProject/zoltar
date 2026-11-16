@@ -78,7 +78,7 @@ test('submission uses a common block when honest RPC endpoints differ by one hea
 		expect(simulations).toEqual(['0x64', '0x64'])
 		expect(f.state.pendingTransactions).toHaveLength(0)
 	} finally {
-		servers.forEach(server => server.stop(true))
+		for (const server of servers) server.stop(true)
 		await rm(directory, { recursive: true, force: true })
 	}
 })

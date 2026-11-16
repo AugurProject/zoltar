@@ -77,7 +77,7 @@ export function TradingWalletControls({
 	const showsConnectAction = liveWalletVisible && !showsSwitchNetworkAction && account === undefined
 	// The simulation harness owns the simulated wallet, so its popover offers no wallet change.
 	const showsChangeWalletAction = liveWalletVisible && account !== undefined && !simulation
-	if (!hasTradingWalletControls({ deploymentSetupActive, liveDeploymentStatus, routeOwnsLiveWallet })) return null
+	if (!hasTradingWalletControls({ deploymentSetupActive, liveDeploymentStatus, routeOwnsLiveWallet })) return undefined
 	return (
 		<div className='trading-wallet-actions'>
 			{deploymentSetupActive && deploymentWalletState.account !== undefined ? <AddressValue address={deploymentWalletState.account} abbreviated /> : undefined}
@@ -92,12 +92,12 @@ export function TradingWalletControls({
 					title={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWallet}
 					onClick={onDeploymentWalletRequest}
 				/>
-			) : null}
+			) : undefined}
 			{reservesSlot ? (
 				<WalletChipPlaceholder>
 					<LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
 				</WalletChipPlaceholder>
-			) : null}
+			) : undefined}
 			{liveWalletVisible && account !== undefined ? (
 				<AccountMenu
 					address={account}
@@ -105,9 +105,9 @@ export function TradingWalletControls({
 					network={networkName === undefined ? undefined : <AccountMenuNetworkFact label={coreAppCopy.network}>{networkName}</AccountMenuNetworkFact>}
 					actions={showsChangeWalletAction ? <WalletConnectionControl className='secondary wallet-button' disabled={workflowLocked} onClick={onWalletConnectRequest} label={appCopy.changeWallet} /> : undefined}
 				/>
-			) : null}
-			{showsSwitchNetworkAction ? <WalletNetworkControl badge={coreAppCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(walletChainId?.toString()) ?? coreAppCopy.unknownNetwork)} label={coreAppCopy.formatSwitchToNetwork(requiredNetworkName)} disabled={workflowLocked} onClick={onSwitchNetwork} /> : null}
-			{showsConnectAction ? <WalletConnectionControl className='secondary wallet-button' disabled={workflowLocked} onClick={onWalletConnectRequest} label={appCopy.connectWallet} /> : null}
+			) : undefined}
+			{showsSwitchNetworkAction ? <WalletNetworkControl badge={coreAppCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(walletChainId?.toString()) ?? coreAppCopy.unknownNetwork)} label={coreAppCopy.formatSwitchToNetwork(requiredNetworkName)} disabled={workflowLocked} onClick={onSwitchNetwork} /> : undefined}
+			{showsConnectAction ? <WalletConnectionControl className='secondary wallet-button' disabled={workflowLocked} onClick={onWalletConnectRequest} label={appCopy.connectWallet} /> : undefined}
 		</div>
 	)
 }

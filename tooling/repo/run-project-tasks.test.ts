@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { createProjectTaskPlan } from './run-project-tasks.mts'
-import { type Project } from './projects.ts'
+import type { Project } from './projects.ts'
 
 test('project task CLI rejects selections that would silently run no checks', async () => {
 	for (const args of [

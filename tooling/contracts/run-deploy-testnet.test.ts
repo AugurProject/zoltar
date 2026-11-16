@@ -32,6 +32,15 @@ async function withTestRoot(prefix: string, run: (testRoot: string) => Promise<v
 
 const spawnDeploymentWrapper = (wrapperSource: string) => Bun.spawn([process.execPath, '-e', wrapperSource], { stderr: 'pipe' })
 
+// The child may already have exited; any other signalling failure is a real cleanup problem.
+function killIfRunning(pid: number) {
+	try {
+		process.kill(pid, 'SIGKILL')
+	} catch (error) {
+		if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) throw error
+	}
+}
+
 async function expectNoTemporaryBundle(testRoot: string) {
 	expect((await readdir(testRoot)).filter(entry => entry.startsWith('zoltar-testnet-deployment-'))).toEqual([])
 }
@@ -152,13 +161,7 @@ test('headless deployment forwards termination and removes its temporary bundle'
 			expect(await readdir(testRoot)).toEqual(['child-pid'])
 			expect(() => process.kill(parsedDeploymentChildPid, 0)).toThrow()
 		} finally {
-			if (deploymentChildPid !== undefined) {
-				try {
-					process.kill(deploymentChildPid, 'SIGKILL')
-				} catch (error) {
-					if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) throw error
-				}
-			}
+			if (deploymentChildPid !== undefined) killIfRunning(deploymentChildPid)
 		}
 	})
 })

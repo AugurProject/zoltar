@@ -1,4 +1,4 @@
-import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'

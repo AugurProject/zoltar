@@ -1,5 +1,5 @@
 import { CANONICAL_TRADING_FEE_BPS, tradingDeploymentData } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../../solidity/ts/types/contractArtifact.ts'
 import { CANONICAL_PROXY_DEPLOYER } from '../../core/genesis-uniswap.ts'
 import { eligible, planBase } from '../planning.ts'

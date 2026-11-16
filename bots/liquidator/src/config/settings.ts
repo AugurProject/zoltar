@@ -1,7 +1,7 @@
 import { parsePortfolioInstructions, serializePortfolioInstructions, type PortfolioInstruction } from './portfolio-instructions.ts'
 import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolicy, type PortfolioPolicy, type PortfolioSelection } from './portfolio-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'

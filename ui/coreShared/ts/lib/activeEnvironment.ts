@@ -18,8 +18,8 @@ type LocationLike = {
 
 const defaultInjectedBackend = createInjectedBackend()
 
-let activeBackend: ChainBackend | undefined = undefined
-let activeSimulationController: SimulationController | undefined = undefined
+let activeBackend: ChainBackend | undefined
+let activeSimulationController: SimulationController | undefined
 let initializeActiveEnvironmentGeneration = 0
 let activeEnvironmentGeneration = 0
 
@@ -121,8 +121,8 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	}
 
 	const savedStateId = getSimulationStateId(location)
-	let initialBootstrapWarning: string | undefined = undefined
-	let savedState = undefined
+	let initialBootstrapWarning: string | undefined
+	let savedState
 	if (savedStateId !== undefined) {
 		try {
 			savedState = getSavedSimulationStateEnvelope(savedStateId)

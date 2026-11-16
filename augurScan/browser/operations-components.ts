@@ -103,8 +103,8 @@ const bindFilterForm = (form: HTMLFormElement, actionPath: string, blockFields: 
 		event.preventDefault()
 		const byName = new Map(inputs().map(input => [input.name, input]))
 		for (const input of byName.values()) input.setCustomValidity('')
-		const valueOf = (name: string) => byName.get(name)?.value ?? ''
-		const failure = blockFields.length === 2 ? blockRangeError(valueOf(blockFields[0] ?? ''), valueOf(blockFields[1] ?? '')) : blockRangeError(valueOf(blockFields[0] ?? ''), '')
+		const fieldValue = (name: string) => byName.get(name)?.value ?? ''
+		const failure = blockFields.length === 2 ? blockRangeError(fieldValue(blockFields[0] ?? ''), fieldValue(blockFields[1] ?? '')) : blockRangeError(fieldValue(blockFields[0] ?? ''), '')
 		if (failure !== undefined) {
 			const invalid = byName.get(failure.field === 'fromBlock' ? (blockFields[0] ?? '') : (blockFields[1] ?? ''))
 			invalid?.setCustomValidity(failure.message)

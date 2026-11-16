@@ -359,8 +359,8 @@ describe('contract operation classification', () => {
 	test('tracks the claim checkpoint selector exposed through the escalation-game fallback', () => {
 		const contracts = loadArtifactContracts()
 		const gameAbi = contractAbi(contracts, 'contracts/statoblast/EscalationGame.sol', 'EscalationGame')
-		const constructor = gameAbi.find(item => typeof item === 'object' && item !== null && 'type' in item && item.type === 'constructor')
-		expect(constructor).toMatchObject({ inputs: expect.arrayContaining([{ internalType: 'contract EscalationGameClaimDelegate', name: '_claimDelegate', type: 'address' }]) })
+		const constructorAbi = gameAbi.find(item => typeof item === 'object' && item !== null && 'type' in item && item.type === 'constructor')
+		expect(constructorAbi).toMatchObject({ inputs: expect.arrayContaining([{ internalType: 'contract EscalationGameClaimDelegate', name: '_claimDelegate', type: 'address' }]) })
 		expect(gameAbi).toContainEqual(expect.objectContaining({ stateMutability: 'nonpayable', type: 'fallback' }))
 		const delegateMutations = mutatingFunctions(contractAbi(contracts, 'contracts/statoblast/EscalationGameClaimDelegate.sol', 'EscalationGameClaimDelegate'))
 		expect(delegateMutations.map((item, index) => artifactFunctionSignature(item, `EscalationGameClaimDelegate[${index.toString()}]`))).toEqual(['initializeForkClaimCheckpoint(address)', 'processClaimCheckpoint(uint8,uint256,uint256,uint256,uint256,bytes32,(uint256)[])'])
