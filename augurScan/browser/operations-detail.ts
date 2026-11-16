@@ -423,10 +423,17 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	if (route.kind === 'escalation') {
 		for (const key of ['deposits', 'claims']) addPanel('history', operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
 	}
-	if (data['demandCurveTruncated'] === true) addPanel('history', operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the highest 1,000 ticks are shown. Cumulative demand covers these ticks only.')], ''))
+	if (data['demandCurveTruncated'] === true) addPanel('history', operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the 1,000 best price levels are shown. Cumulative demand covers these levels only.')], ''))
 	const demand = operationRecords(data['demandCurve'])
 	if (demand.length > 0) {
-		const demandRows = demand.map(point => operationRow(`Tick ${String(point['tick'])}`, `${exactUnit(String(point['amountAttoEth'] ?? '0'), 18, nativeSymbol)} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, nativeSymbol)}`, String(point['tick']), undefined))
+		const demandRows = demand.map(point =>
+			operationRow(
+				`At least ${exactUnit(String(point['minimumAttoRepPerLot'] ?? '0'), 18, 'REP')} per lot`,
+				`${exactUnit(String(point['amountAttoEth'] ?? '0'), 18, nativeSymbol)} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, nativeSymbol)}`,
+				String(point['minimumAttoRepPerLot']),
+				undefined,
+			),
+		)
 		addPanel('history', operationsPanel('Demand curve data', demandRows, 'No bids match this view.'))
 	}
 	const branches = operationRecords(data['branches'])

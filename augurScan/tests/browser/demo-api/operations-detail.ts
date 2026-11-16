@@ -114,7 +114,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		}
 	}
 	if (domain === 'auctions') {
-		const bid = evidence('BidSubmitted', { bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', tick: '14', bidAmountAttoEth: (3n * 10n ** 18n).toString() })
+		const bid = evidence('BidSubmitted', { bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', lots: '3', minimumAttoRepPerLot: (4n * 10n ** 18n).toString() })
 		return {
 			chainId,
 			asOf: operations.asOf,
@@ -129,7 +129,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 				},
 				finalization: evidence('AuctionFinalized', { clearingTick: '14', grossAcceptedAttoEth: String(3000000000000000000n), repSoldAttoRep: String(12000000000000000000n), funded: true }),
 				demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
-				demandCurve: [{ tick: '14', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
+				demandCurve: [{ minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), lots: '3', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
 				events: evidencePage(bid),
 			},
 		}

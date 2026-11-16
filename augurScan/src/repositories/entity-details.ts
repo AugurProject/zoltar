@@ -70,15 +70,19 @@ export const eventEntityRows = async (sql: SQL, query: { readonly snapshotBlock:
 }
 
 export const auctionDetailData = async (sql: SQL, chainId: number, address: string, snapshotBlock: string) => {
-	const [bids, finalizations] = await Promise.all([
-		sql`SELECT event_data->>'tick' AS tick, sum((event_data->>'bidAmountAttoEth')::numeric)::text AS amount_atto_eth
+	// BidSubmitted(bidId, bidder, vault, lots, minimumAttoRepPerLot, targetHealthBps): a lower minimum is the better bid.
+	const [bids, starts, finalizations] = await Promise.all([
+		sql`SELECT event_data->>'minimumAttoRepPerLot' AS minimum_atto_rep_per_lot, sum((event_data->>'lots')::numeric)::text AS lots
 			FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
 				AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'BidSubmitted'
-			GROUP BY event_data->>'tick' ORDER BY (event_data->>'tick')::numeric DESC LIMIT 1001`,
+				AND event_data->>'minimumAttoRepPerLot' ~ '^[0-9]+$' AND event_data->>'lots' ~ '^[0-9]+$'
+			GROUP BY event_data->>'minimumAttoRepPerLot' ORDER BY (event_data->>'minimumAttoRepPerLot')::numeric ASC LIMIT 1001`,
+		sql`SELECT event_data->>'lotAttoEth' AS lot_atto_eth FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
+			AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'AuctionStarted' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
 		sql`SELECT * FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
 			AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'AuctionFinalized' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
 	])
-	return { bids, finalization: finalizations[0] }
+	return { bids, lotAttoEth: starts[0]?.['lot_atto_eth'], finalization: finalizations[0] }
 }
 
 export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: string; readonly chainId: number; readonly identity: string; readonly page: PageBoundary }) => {

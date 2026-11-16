@@ -115,11 +115,11 @@ postgresTest(
 						chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical
 					) VALUES
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 2, 1, ${auctionAddress}, 'AuctionStarted',
-							'{"startTimestamp":"1767225600","endTimestamp":"1767229200"}'::jsonb, true),
+							'{"opensAt":"1767225600","closesAt":"1767229200","lotAttoEth":"1000000000000000000","targetLots":"5","inventoryAttoRep":"100","maximumAttoRepPerLot":"20"}'::jsonb, true),
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 3, 1, ${auctionAddress}, 'BidSubmitted',
-							'{"bidder":"0x1000000000000000000000000000000000000001"}'::jsonb, true),
+							'{"bidder":"0x1000000000000000000000000000000000000001","lots":"2","minimumAttoRepPerLot":"5"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 2, 2, ${auctionAddress}, 'BidSubmitted',
-							'{"bidder":"0x2000000000000000000000000000000000000002"}'::jsonb, true),
+							'{"bidder":"0x2000000000000000000000000000000000000002","lots":"3","minimumAttoRepPerLot":"4"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 3, 2, ${auctionAddress}, 'AuctionFinalized',
 							'{"winningTick":"1"}'::jsonb, true)
 				`
@@ -175,6 +175,13 @@ postgresTest(
 			const crossScopeResponse = await handleApi(new Request(`http://localhost/api/v1/state/escalations?chainId=${historicalChainId}&cursor=${encodeURIComponent(reportCursor)}`), database.sql)
 			expect(crossScopeResponse?.status).toBe(400)
 			expect(await crossScopeResponse?.json()).toEqual({ error: 'cursor does not match the requested entity' })
+			const auctionResponse = await handleApi(new Request(`http://localhost/api/v1/state/auctions/${historicalChainId}/${auctionAddress}`), database.sql)
+			expect(auctionResponse?.status).toBe(200)
+			// Lower minimum REP per lot is the better bid, so demand accumulates from the lowest price level; each lot is 1 ETH.
+			expect(((await auctionResponse?.json()) as { data: { demandCurve: unknown } }).data.demandCurve).toEqual([
+				{ minimumAttoRepPerLot: '4', lots: '3', amountAttoEth: '3000000000000000000', cumulativeDemandAttoEth: '3000000000000000000' },
+				{ minimumAttoRepPerLot: '5', lots: '2', amountAttoEth: '2000000000000000000', cumulativeDemandAttoEth: '5000000000000000000' },
+			])
 			await database.sql`
 					INSERT INTO chain_reorganizations
 						(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)

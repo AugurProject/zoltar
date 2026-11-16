@@ -149,17 +149,21 @@ test('computes fixed-window TWAP with explicit coverage', () => {
 	expect(fixedWindowTwap(observations.slice(1), '10', '30')).toMatchObject({ state: 'Partial coverage', coverageSeconds: '10' })
 })
 
-test('aggregates auction demand descending by tick and builds exact candles', () => {
+test('aggregates auction demand from the best (lowest) REP price per lot and builds exact candles', () => {
 	expect(
-		auctionDemandCurve([
-			{ tick: '2', amountAttoEth: String(10) },
-			{ tick: '1', amountAttoEth: String(3) },
-			{ tick: '2', amountAttoEth: String(5) },
-		]),
+		auctionDemandCurve(
+			[
+				{ minimumAttoRepPerLot: '2', lots: '10' },
+				{ minimumAttoRepPerLot: '1', lots: '3' },
+				{ minimumAttoRepPerLot: '2', lots: '5' },
+			],
+			'100',
+		),
 	).toEqual([
-		{ tick: '2', amountAttoEth: String(15), cumulativeDemandAttoEth: String(15) },
-		{ tick: '1', amountAttoEth: String(3), cumulativeDemandAttoEth: String(18) },
+		{ minimumAttoRepPerLot: '1', lots: '3', amountAttoEth: String(300), cumulativeDemandAttoEth: String(300) },
+		{ minimumAttoRepPerLot: '2', lots: '15', amountAttoEth: String(1500), cumulativeDemandAttoEth: String(1800) },
 	])
+	expect(auctionDemandCurve([], undefined)).toEqual([])
 	expect(
 		candlestickBuckets(
 			[
