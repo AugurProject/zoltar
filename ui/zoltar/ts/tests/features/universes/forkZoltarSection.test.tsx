@@ -313,6 +313,26 @@ describe('ForkZoltarSection', () => {
 		expect(onForkZoltar).not.toHaveBeenCalled()
 	})
 
+	test('blocks forking a child universe until its parent fork response period ends', async () => {
+		const onForkZoltar = mock(() => undefined)
+		const onApproveZoltarForkRep = mock(() => undefined)
+		const zoltarUniverse = createUniverse({ earliestForkTime: 5n, forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * ATTO_REP, universeId: 7n, zoltarAddress: ZOLTAR_ADDRESS })
+		const blocked = await renderSection(createProps({ currentTimestamp: 4n, onApproveZoltarForkRep, onForkZoltar, zoltarForkApproval: { error: undefined, loading: false, value: 0n }, zoltarUniverse }))
+
+		const expectedReason = `This universe can fork once its parent fork response period ends at ${formatTimestamp(5n)} (${formatRelativeTimestamp(5n, 4n)}).`
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe(expectedReason)
+		const forkButton = within(document.body).getByRole('button', { name: 'Fork universe' })
+		expect(forkButton.hasAttribute('disabled')).toBe(true)
+		fireEvent.click(forkButton)
+		fireEvent.click(findApproveButton(document.body))
+		expect(onForkZoltar).not.toHaveBeenCalled()
+		expect(onApproveZoltarForkRep).not.toHaveBeenCalled()
+		await blocked.cleanup()
+
+		await renderSection(createProps({ currentTimestamp: 5n, onForkZoltar, zoltarUniverse }))
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).not.toBe(expectedReason)
+	})
+
 	test('uses live chain-time updates through the exact fork-question end boundary', async () => {
 		const onForkZoltar = mock(() => undefined)
 		const props = createProps({ currentTimestamp: undefined, onForkZoltar })

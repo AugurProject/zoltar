@@ -166,7 +166,7 @@ describe('zoltar contract helpers', () => {
 	test('loadZoltarUniverseSummary returns a non-forked universe summary for an active universe', async () => {
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n],
+				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n, 4321n],
 				['Augur Reputation 5', 'REP5', 5n],
 				[QUESTION_TUPLE_BINARY, 0n],
 			],
@@ -185,6 +185,7 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.childUniverses).toEqual([])
 		expect(summary?.totalTheoreticalSupplyAttoRep).toBe(111n)
 		expect(summary?.forkBurnDivisor).toBe(5n)
+		expect(summary?.earliestForkTime).toBe(4321n)
 		expect(summary?.zoltarAddress).toBeDefined()
 		// Each generation is named by its outcome of the parent's fork question: 123 is outcome 2 of genesis question 41, 5 is outcome 0 of question 42.
 		expect(summary?.lineage).toEqual([
