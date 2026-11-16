@@ -52,7 +52,7 @@ describe('zoltar contract helpers', () => {
 		const reads: string[] = []
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [1n, 42n, 2n, REP_TOKEN, 123n], 1n, 100n, 10n],
+				[REP_TOKEN, [1n, 42n, 2n, REP_TOKEN, 123n], 1n, 100n, 10n, 0n],
 				['REP', 'REP', 8n],
 				[[1n, 41n, 0n, REP_TOKEN, 77n], REP_TOKEN],
 			],
@@ -198,7 +198,7 @@ describe('zoltar contract helpers', () => {
 	test('loadZoltarUniverseSummary loads scalar fork metadata without enumerating deployed children', async () => {
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n],
+				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n, 0n],
 				['Augur Reputation 8', 'REP8', 8n],
 				[QUESTION_TUPLE_SCALAR, 1n],
 			],
@@ -230,7 +230,7 @@ describe('zoltar contract helpers', () => {
 		const lastIndex = getScalarOutcomeIndex({ numTicks }, numTicks)
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 55n, 2n, REP_TOKEN, 77n], 15n, 5n, 5n],
+				[REP_TOKEN, [0n, 55n, 2n, REP_TOKEN, 77n], 15n, 5n, 5n, 0n],
 				['Augur Reputation 8', 'REP8', 8n],
 				[['Scalar question', '', 0n, 1n, numTicks, 0n, 100n, 'units'], 1n],
 				[99n, 100n],
@@ -261,7 +261,7 @@ describe('zoltar contract helpers', () => {
 		const childUniverseIds = [10n, 20n, 30n]
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n],
+				[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n, 0n],
 				['Augur Reputation 8', 'REP8', 8n],
 				[QUESTION_TUPLE_BINARY, 1n],
 				childUniverseIds,
