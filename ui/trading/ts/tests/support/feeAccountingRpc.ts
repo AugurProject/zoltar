@@ -46,6 +46,7 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 		['purchaseFeeBps()', market.mintFees?.purchaseFeeBps ?? 0n],
 		['annualFeeBps()', market.mintFees?.annualFeeBps ?? 0n],
 		['minimumPurchaseFeeAttoEth()', market.mintFees?.minimumPurchaseFeeAttoEth ?? 0n],
+		['quoteMintRecoveryRep(uint248,uint256,uint256)', 0n],
 	]
 	for (const [name, value] of integers) if (signature === selector(name)) return encodeAbiParameters([uint256], [value])
 	if (signature === selector('isCashFunded(uint64)')) return encodeAbiParameters([boolean], [true])
@@ -53,7 +54,8 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 	if (signature === selector('totals()')) return encodeAbiParameters([uint256, uint256, uint256], [100n, market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth])
 	if (signature === selector('snapshotQuestion(address)')) return encodeAbiParameters([{ type: 'tuple', components: Array.from({ length: 6 }, () => uint256) }], [[supply, cash, market.settlementRecoveryAttoRep ?? 0n, cash, 0n, timestamp]])
 	if (signature === selector('question(uint64,uint256)')) return encodeAbiParameters([{ type: 'tuple', components: Array.from({ length: 7 }, () => uint256) }, uint256], [[cash, supply, 0n, rate, timestamp, end, market.mintFees?.feePrincipalAttoEth ?? cash], 0n])
-	if (signature === selector('books(uint64)')) return encodeAbiParameters([uint256, uint256, uint256, uint256, uint256, uint256, uint256, boolean, uint256, uint256, uint256, boolean, uint256, uint256, uint256, uint256], [cash, cash * 1_000_000_000n, 0n, 0n, 0n, 0n, timestamp, false, 0n, 0n, 0n, true, 0n, 0n, 0n, market.settlementRecoveryAttoRep ?? 0n])
+	if (signature === selector('books(uint64)'))
+		return encodeAbiParameters([uint256, uint256, uint256, uint256, uint256, uint256, uint256, boolean, uint256, uint256, uint256, boolean, uint256, uint256, uint256, uint256], [cash, cash * 1_000_000_000n, 0n, 0n, 0n, 0n, timestamp, false, 0n, 0n, 0n, true, 0n, 0n, 0n, market.settlementRecoveryAttoRep ?? 0n])
 	if (signature === selector('attoSharesToAttoRep(uint256)')) {
 		const shares = BigInt(`0x${data.slice(10)}`)
 		return encodeAbiParameters([uint256], [supply === 0n ? 0n : (shares * (market.settlementRecoveryAttoRep ?? 0n)) / supply])

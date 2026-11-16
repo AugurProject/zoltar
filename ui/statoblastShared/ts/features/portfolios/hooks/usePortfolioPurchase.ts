@@ -19,6 +19,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 	const maximumFee = useSignal('')
 	const maximumRecoveryRep = useSignal('')
 	const minimumShares = useSignal('0')
+	const recoveryKnowledge = useSignal<{ selection: string; applicable: boolean }>()
 	const loaded = useSignal<{ key: string; quote?: PortfolioMintQuote; recovery?: Awaited<ReturnType<typeof loadRecoveryMintFunding>>; question?: Awaited<ReturnType<typeof loadPortfolioMintQuestion>>; error?: string } | undefined>(undefined)
 	const snapshot = model.snapshot
 	const questionId = portfolioUnsignedId(questionInput.value)
@@ -27,6 +28,10 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 	const fee = portfolioAmountOrUndefined(maximumFee.value, decimals)
 	const parsedRecoveryBudget = maximumRecoveryRep.value.trim() === '' ? 0n : portfolioAmountOrUndefined(maximumRecoveryRep.value, 18)
 	const minimum = portfolioAmountOrUndefined(minimumShares.value, decimals)
+	const selection = `${snapshot?.portfolio}:${snapshot?.universeId}:${snapshot?.owner}:${questionId}:${amount}`
+	useEffect(() => {
+		recoveryKnowledge.value = undefined
+	}, [selection])
 	const key = `${snapshot?.portfolio}:${snapshot?.universeId}:${snapshot?.owner}:${snapshot?.blockHash}:${questionId}:${amount}`
 	useEffect(() => {
 		let current = true
@@ -37,9 +42,12 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 				const question = await loadPortfolioMintQuestion(client, snapshot, questionId)
 				if (question === undefined) throw new Error('Register this question before purchasing.')
 				const quote = await loadPortfolioMintQuote({ client: portfolioReadClient(client), portfolio: snapshot.portfolio, universeId: snapshot.universeId, questionId, mintAttoEth: amount, blockNumber: snapshot.blockNumber })
+				if (current) {
+					recoveryKnowledge.value = { selection, applicable: quote.recoveryAttoRep > 0n }
+					if (maximumRecoveryRep.value.trim() === '' && quote.maximumRecoveryAttoRep > 0n) maximumRecoveryRep.value = formatUnits(quote.maximumRecoveryAttoRep, 18)
+				}
 				const recovery = await loadRecoveryMintFunding(client, snapshot.portfolio, snapshot.universeId, snapshot.auctionVault?.bidder ?? snapshot.owner, quote.recoveryAttoRep, snapshot.blockNumber)
 				if (current) {
-					if (maximumRecoveryRep.value.trim() === '' && quote.maximumRecoveryAttoRep > 0n) maximumRecoveryRep.value = formatUnits(quote.maximumRecoveryAttoRep, 18)
 					loaded.value = { key, quote, question, recovery }
 				}
 			})().catch(failure => {
@@ -92,6 +100,8 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [snapshot.services, approvalAmount] }),
 				}
 			}),
+		recoveryApplicable: recoveryKnowledge.value?.selection === selection && recoveryKnowledge.value.applicable,
+		recoveryError: current?.error,
 		recovery: current?.recovery,
 		requiredRecoveryRep: recoveryBudget,
 		maximumRecoveryRep: quote?.recoveryAttoRep === 0n ? '0' : maximumRecoveryRep.value,

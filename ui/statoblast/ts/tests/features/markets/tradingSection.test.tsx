@@ -134,6 +134,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 			pending: false,
 			pendingRecovery: false,
 			approvalActive: false,
+			recoveryApplicable: false,
 			recovery: { required: 0n, maximum: 0n, balance: 0n, allowance: 0n, token: undefined, spender: undefined },
 			approveRecovery: async () => undefined,
 			approve: async () => undefined,
@@ -303,6 +304,7 @@ void describe('TradingSection', () => {
 				tradingForm={createTradingForm({ completeSetAmount: '1' })}
 				collateralFunding={{
 					...funding,
+					recoveryApplicable: true,
 					recovery: { required: 2n * 10n ** 18n, maximum: (2n * 10n ** 18n * 101n) / 100n + 1n, balance: 0n, allowance: 0n, token: zeroAddress, spender: zeroAddress },
 					pendingRecovery: pending,
 					approvalActive: pending,
@@ -334,6 +336,8 @@ void describe('TradingSection', () => {
 		if (!(input instanceof HTMLInputElement)) throw new Error('Missing collateral input')
 		expect(input.value).toBe('1.234567')
 		expect(dialog.textContent).toContain('USDC')
+		expect(dialog.textContent).not.toContain('Recovery REP contribution')
+		expect(dialog.textContent).not.toContain('REP approval amount')
 		expect(dialog.textContent).not.toContain('ETH to mint with')
 	})
 

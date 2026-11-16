@@ -43,7 +43,10 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		return SettlementMath.requiredCash(book.units, target.numerator, target.denominator, 0);
 	}
 	function _childTarget(uint64 bookId, Book storage book) internal view returns (FundingTarget memory) {
-		return book.units != 0 && isCashFunded(bookId) ? FundingTarget(book.cashAttoEth * UNIT_SCALE, book.units) : fundingTargets[bookId];
+		return
+			book.units != 0 && isCashFunded(bookId)
+				? FundingTarget(book.cashAttoEth * UNIT_SCALE, book.units)
+				: fundingTargets[bookId];
 	}
 	function quoteMint(uint64 bookId, uint256 questionId, uint256 cashAttoEth) public view returns (uint256 outcomeShares) {
 		Book storage book = _activeBook(bookId);
@@ -65,7 +68,10 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		(Question memory state, ) = scaledQuestion(bookId, questionId);
 		uint256 principal = SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, _mintUnits(bookId, book, cashAttoEth));
 		require(state.feePrincipalAttoEth + principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
-		return book.units == 0 ? cashAttoEth : SettlementMath.rawValue(principal, _netCash(bookId, book), book.units, Math.Rounding.Ceil);
+		return
+			book.units == 0
+				? cashAttoEth
+				: SettlementMath.rawValue(principal, _netCash(bookId, book), book.units, Math.Rounding.Ceil);
 	}
 	function validateMintFeePrecision(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 annualBps) external view {
 		if (annualBps == 0 || cashAttoEth == 0) return;
@@ -73,7 +79,9 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		Book storage book = _book(bookId);
 		(Question memory state, ) = scaledQuestion(bookId, questionId);
 		uint256 addedUnits = _mintUnits(bookId, book, cashAttoEth);
-		uint256 principal = state.feePrincipalAttoEth + SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, addedUnits);
+		uint256 principal =
+			state.feePrincipalAttoEth +
+				SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, addedUnits);
 		require(principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
 		SettlementMath.validateFeePrecision(principal, _netCash(bookId, book) + cashAttoEth * UNIT_SCALE, book.units + addedUnits, annualBps);
 	}
@@ -88,7 +96,10 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		return Math.ceilDiv(scaled, RECOVERY_SCALE);
 	}
 	function _mintEntitlement(uint64 bookId, Book storage book, uint256 questionId, Question memory state) internal view returns (uint256) {
-		return state.units == book.units ? book.recoveryAttoRep * RECOVERY_SCALE : _scaledRecovery(bookId, book, questionId, state);
+		return
+			state.units == book.units
+				? book.recoveryAttoRep * RECOVERY_SCALE
+				: _scaledRecovery(bookId, book, questionId, state);
 	}
 	function _mintUnits(uint64 bookId, Book storage book, uint256 cash) internal view returns (uint256 added) {
 		require(cash < RECOVERY_SCALE - book.cashAttoEth, 'Settlement cash exceeds precision bound');
@@ -99,7 +110,8 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		return SettlementMath.netCash(book.cashAttoEth, feeRemainders[bookId]);
 	}
 	function _feeBudget(uint64 bookId, Book storage book, Question memory state) internal view returns (uint256) {
-		return SettlementMath.feeBudget(state.units, state.outcomeSupplyAttoShares, minimumOutcomeExchangeRate, _netCash(bookId, book), book.units);
+		return
+			SettlementMath.feeBudget(state.units, state.outcomeSupplyAttoShares, minimumOutcomeExchangeRate, _netCash(bookId, book), book.units);
 	}
 	function _missingCash(uint64 bookId, Book storage book) internal view returns (uint256) {
 		uint256 required = requiredCash(bookId);

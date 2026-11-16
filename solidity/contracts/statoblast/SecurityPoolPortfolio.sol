@@ -334,7 +334,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	/// @notice Buy into inherited recovery claims with an explicit REP spending limit.
 	function createCompleteSetWithRecoveryRep(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) external nonReentrant returns (uint256) {
-		return _purchase(universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, maximumRecoveryAttoRep);
+		return
+			_purchase(universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, maximumRecoveryAttoRep);
 	}
 	function _purchase(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) private returns (uint256 minted) {
 		uint256 fee;

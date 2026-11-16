@@ -16,6 +16,7 @@ import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatCeilingAmou
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
+	amountPrecision?: 'exact' | 'rounded'
 	approvalPurpose?: string | undefined
 	/** Keeps a finished approval in place, disabled, labelled with its result instead of removing the control. */
 	completedLabel?: string | undefined
@@ -80,7 +81,8 @@ function resolveApprovalButtonLabel({
 	)
 }
 /** Shows the requirement with the button's upward rounding, so `Required` never reads below the amount the button approves. */
-function RequiredApprovalAmount({ requiredAmount, tokenSymbol, tokenUnits }: { requiredAmount: bigint | undefined; tokenSymbol: string; tokenUnits: number }) {
+function RequiredApprovalAmount({ requiredAmount, tokenSymbol, tokenUnits, precision }: { requiredAmount: bigint | undefined; tokenSymbol: string; tokenUnits: number; precision: 'exact' | 'rounded' }) {
+	if (precision === 'exact') return <CurrencyValue precision='exact' value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />
 	if (requiredAmount === undefined || requiredAmount < 0n) return <CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />
 	const unitSuffix = formatUnitSuffix(tokenSymbol)
 	return (
@@ -96,6 +98,7 @@ function RequiredApprovalAmount({ requiredAmount, tokenSymbol, tokenUnits }: { r
 }
 export function TokenApprovalControl({
 	compact = false,
+	amountPrecision = 'rounded',
 	approvalPurpose,
 	completedLabel,
 	customAmountDisclosureLabel,
@@ -237,10 +240,10 @@ export function TokenApprovalControl({
 		<div className='form-grid'>
 			<MetricGrid>
 				<MetricField label={commonCopy.formatRequiredValue(tokenSymbol)}>
-					<RequiredApprovalAmount requiredAmount={requiredAmount} tokenSymbol={tokenSymbol} tokenUnits={tokenUnits} />
+					<RequiredApprovalAmount precision={amountPrecision} requiredAmount={requiredAmount} tokenSymbol={tokenSymbol} tokenUnits={tokenUnits} />
 				</MetricField>
 				<MetricField label={commonCopy.formatApprovedValue(tokenSymbol)}>
-					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />
+					<ApprovedAmountValue precision={amountPrecision} loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />
 				</MetricField>
 			</MetricGrid>
 

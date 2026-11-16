@@ -17,11 +17,16 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	const { accountAddress, enabled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState } = parameters
 	const tradingError = useSignal<string | undefined>(undefined)
 	const collateralLoaded = useSignal<{ key: string; collateral?: Awaited<ReturnType<typeof loadTradingCollateral>>; quoteInput?: string; quote?: Awaited<ReturnType<typeof quoteTradingCollateral>> | undefined; error?: string }>()
+	const recoveryKnowledge = useSignal<{ key: string; applicable: boolean }>()
 	const approvalPending = useSignal<'collateral' | 'recovery' | undefined>(undefined)
 	const collateralVersion = useSignal(0)
 	const backend = getActiveBackend()
 	const collateralPool = pool !== undefined && isAddress(pool) ? getAddress(pool) : undefined
 	const collateralKey = `${backend.id}:${collateralPool}:${accountAddress}`
+	const recoverySelection = `${collateralKey}:${amountInput}`
+	useEffect(() => {
+		recoveryKnowledge.value = undefined
+	}, [recoverySelection])
 	const currentAmount = useRef(amountInput)
 	currentAmount.current = amountInput
 	const refreshCollateral = useRef<(() => void) | undefined>(undefined)
@@ -45,7 +50,12 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 				const collateral = await loadTradingCollateral(client, collateralPool, accountAddress, identity)
 				identity = collateral
 				const amount = parseCompleteSetAmountInput(quoteInput, collateral.decimals)
-				const quote = amount !== undefined && amount > 0n ? await quoteTradingCollateral(client, collateral, amount) : undefined
+				const quote =
+					amount !== undefined && amount > 0n
+						? await quoteTradingCollateral(client, collateral, amount, required => {
+								if (active && getActiveBackend() === backend && currentAmount.current === quoteInput) recoveryKnowledge.value = { key: `${collateralKey}:${quoteInput}`, applicable: required > 0n }
+							})
+						: undefined
 				if (active && getActiveBackend() === backend) collateralLoaded.value = { key: collateralKey, collateral, quote, quoteInput }
 			})()
 				.catch(error => {
@@ -125,6 +135,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	}
 	if (approvalPending.value !== undefined) collateralReason = collateralCopy.approvalPending
 	return {
+		recoveryApplicable: recoveryKnowledge.value?.key === recoverySelection && recoveryKnowledge.value.applicable,
 		recovery: collateralQuote?.recovery,
 		approve: (amount: bigint) => approve(amount, false),
 		approveRecovery: (amount: bigint) => approve(amount, true),

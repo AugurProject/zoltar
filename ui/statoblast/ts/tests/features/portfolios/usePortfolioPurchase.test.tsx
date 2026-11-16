@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { usePortfolioPurchase } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioPurchase.js'
 import type { PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
@@ -12,7 +13,7 @@ import { modules, capitalClient } from './capitalClient.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee) returns(uint256)'])
-async function setup(snapshot = capitalSnapshot(), recoveryAttoRep = 0n) {
+async function setup(snapshot = capitalSnapshot(), recoveryAttoRep = 0n, recoveryToken = token) {
 	const source = capitalClient(snapshot)
 	const values = {
 		questionOriginIds: `0x${'11'.repeat(32)}`,
@@ -23,7 +24,7 @@ async function setup(snapshot = capitalSnapshot(), recoveryAttoRep = 0n) {
 		escalationGame: zeroAddress,
 		systemState: 0n,
 		quoteMintRecoveryRep: recoveryAttoRep,
-		recoveryTokens: token,
+		recoveryTokens: recoveryToken,
 		purchaseQuote: [unit / 100n, unit / 200n],
 		quoteQuestionMint: unit,
 		availableMintCapacity: 10n * unit,
@@ -45,7 +46,7 @@ async function setup(snapshot = capitalSnapshot(), recoveryAttoRep = 0n) {
 		hook.state().setMaximumFee('0.02')
 		hook.state().setMinimumShares('0.9')
 	})
-	await waitFor(() => expect(hook.state().quote).toBeDefined())
+	await waitFor(() => (recoveryToken === zeroAddress ? expect(hook.state().reason).toContain('Recovery REP funding is unavailable.') : expect(hook.state().quote).toBeDefined()))
 	return { hook, source, requests }
 }
 test('purchases made while managing an auction vault receive shares in the controlling wallet', async () => {
@@ -155,4 +156,37 @@ test('a buyer without enough recovery REP sees the contribution and cannot submi
 	expect(hook.state().quote?.recoveryAttoRep).toBe(2n * unit)
 	await expect(hook.state().buy()).rejects.toThrow('Insufficient REP')
 	expect(requests).toHaveLength(0)
+})
+
+test('known recovery controls remain applicable through a block refresh and quote error without allowing a stale purchase', async () => {
+	const snapshot = capitalSnapshot()
+	const { hook, source, requests } = await setup(snapshot, 2n * unit)
+	expect(hook.state().recoveryApplicable).toBe(true)
+	const pending = createDeferred<bigint>()
+	source.setRead('quoteMintRecoveryRep', pending.promise)
+	const next = { ...snapshot, blockNumber: 11n, blockHash: `0x${'01'.repeat(32)}` as const }
+	source.setSnapshot(next)
+	await hook.setProps({ snapshot: next })
+	await waitFor(() => expect(hook.state().quoteLoading).toBe(true))
+	expect(hook.state().recoveryApplicable).toBe(true)
+	expect(hook.state().quote).toBeUndefined()
+	await act(() => pending.reject(new Error('Recovery quote temporarily unavailable.')))
+	await waitFor(() => expect(hook.state().recoveryError).toContain('Recovery quote temporarily unavailable.'))
+	expect(hook.state().recoveryApplicable).toBe(true)
+	await expect(hook.state().buy()).rejects.toThrow('Recovery quote temporarily unavailable.')
+	expect(requests).toHaveLength(0)
+	source.setRead('quoteMintRecoveryRep', 0n)
+	source.setRead('questionId', 2n)
+	await act(() => hook.state().setQuestionInput('2'))
+	expect(hook.state().recoveryApplicable).toBe(false)
+	await waitFor(() => expect(hook.state().quote?.recoveryAttoRep).toBe(0n))
+	expect(hook.state().recoveryApplicable).toBe(false)
+})
+
+test('a positive quote makes recovery controls applicable even when its first funding read fails', async () => {
+	const { hook } = await setup(capitalSnapshot(), 2n * unit, zeroAddress)
+	expect(hook.state().recoveryApplicable).toBe(true)
+	expect(hook.state().quote).toBeUndefined()
+	expect(hook.state().recovery).toBeUndefined()
+	expect(hook.state().recoveryError).toContain('Recovery REP funding is unavailable.')
 })

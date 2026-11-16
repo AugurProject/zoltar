@@ -19,10 +19,6 @@ import { Constants } from '../Constants.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
-interface ICapitalSettlementRepairRoot {
-	function settlement() external view returns (address);
-}
-
 /// @notice Exact REP custody and individually authorized underwriting.
 /// @dev One live position contains all an owner's deposited principal and
 /// commitment. Retirement never leaves a sibling position with stale health.
@@ -212,17 +208,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireOpen();
 		require(targetHealthFactorBps >= BPS, 'Health below protocol floor');
 		_checkpoint();
-		_settleOwner(_capitalOwner());
-		Owner storage owner = owners[_capitalOwner()].account;
-		if (owner.positionId != 0 && targetHealthFactorBps > _target(owner)) {
-			_requireFresh();
-			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
-			_requireTarget(position.rep, position.commitment, targetHealthFactorBps);
-		}
-		owner.targetHealthFactorBps = targetHealthFactorBps;
-	}
-	function _requireTarget(uint256 rep, uint256 commitment, uint256 health) private view {
-		require(rep >= _requiredRep(commitment, health, ownerConservativePrice(_capitalOwner())), 'Chosen health target unmet');
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.setHealthTarget, (targetHealthFactorBps)));
 	}
 
 	/// @notice Set the owner's single commitment, which all deposited principal backs.
@@ -302,10 +288,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// The canonical settlement checkpoints old fees before receiving cash,
 	/// then supplies its actual active cash balance. No new shares are minted.
 	function recordSettlementRepair(uint256 demand) external {
-		require(msg.sender == ICapitalSettlementRepairRoot(portfolio).settlement(), 'Only canonical settlement');
-		_requireOpen();
-		require(demand >= demandAttoEth, 'Repair cannot remove demand');
-		demandAttoEth = demand;
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.recordSettlementRepair, (demand)));
 	}
 
 	/// @dev The callback checkpoints the ledger's cached old price before reading

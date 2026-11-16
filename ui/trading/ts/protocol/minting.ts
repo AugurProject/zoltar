@@ -41,5 +41,7 @@ export async function loadBudgetMint(client: PublicClient, market: LiveMarket, b
 	const fees = await loadMintFees(client, central, blockNumber)
 	const cash = mintWithMargin(budget, { ...fees, cashAttoEth: central.settlementCollateralAttoEth, outcomeSupplyAttoShares: central.shareTokenSupplyAttoShares })
 	if (cash === 0n) throw new Error('ETH budget is too small to cover the portfolio purchase fee')
+	const recovery = await client.readContract({ abi: portfolioArtifact.abi, address: central.portfolioAddress, functionName: 'quoteMintRecoveryRep', args: [market.universeId, market.questionId, cash], blockNumber })
+	if (recovery > 0n) throw new Error(recoveryRepPurchase)
 	return cash
 }

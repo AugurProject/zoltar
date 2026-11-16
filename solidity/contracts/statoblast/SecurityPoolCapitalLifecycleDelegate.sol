@@ -9,6 +9,10 @@ import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 
+interface ICapitalSettlementRepairRoot {
+	function settlement() external view returns (address);
+}
+
 interface ICapitalLifecycleHost {
 	function portfolio() external view returns (address);
 	function universeId() external view returns (uint248);
@@ -36,6 +40,28 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	modifier onlyLedger() {
 		require(address(this) == ledger, 'Only capital ledger context');
 		_;
+	}
+
+	/// @dev The ledger validates the floor and checkpoints old-price income first.
+	function setHealthTarget(uint256 targetHealthFactorBps) external onlyLedger {
+		_settleOwner(_capitalOwner());
+		Owner storage owner = owners[_capitalOwner()].account;
+		if (owner.positionId != 0 && targetHealthFactorBps > _target(owner)) {
+			ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
+			require(host.isPriceValid(), 'Capital price stale');
+			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
+			require(position.rep >= _requiredRep(host, position.commitment, targetHealthFactorBps), 'Chosen health target unmet');
+		}
+		owner.targetHealthFactorBps = targetHealthFactorBps;
+	}
+
+	/// @notice Record a canonical settlement's donation without changing index weights.
+	function recordSettlementRepair(uint256 demand) external onlyLedger {
+		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
+		require(msg.sender == ICapitalSettlementRepairRoot(host.portfolio()).settlement(), 'Only canonical settlement');
+		_requireOpen(host);
+		require(demand >= demandAttoEth, 'Repair cannot remove demand');
+		demandAttoEth = demand;
 	}
 
 	/// @dev The ledger authenticates the portfolio, validates the input, and
@@ -76,7 +102,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			owners[_capitalOwner()].fundingPrice = FundingPrice(Math.max(host.ownerConservativePrice(_capitalOwner()), reportPrice), epoch);
 		}
 		uint256 rep = owner.freeAttoRep + old.rep;
-		require(rep >= commitmentIndex.requiredRep(commitment, host.ownerConservativePrice(_capitalOwner()), host.securityMultiplierBps(), health), 'Chosen health target unmet');
+		require(rep >= _requiredRep(host, commitment, health), 'Chosen health target unmet');
 		// Owners cannot bypass a closed retirement cohort with direct reductions.
 		require(commitment >= old.commitment, 'Retire before reducing');
 		totalFreeAttoRep -= owner.freeAttoRep;
@@ -106,10 +132,10 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		if (pledged != 0) {
 			require(owner.positionId != 0 && _capitalOwner() != forkAuthority, 'Insufficient owner principal');
-			require(!importing && host.zoltar().getForkTime(host.universeId()) == 0 && !frozen, 'Capital universe inactive');
+			_requireOpen(host);
 			require(host.isPriceValid(), 'Capital price stale');
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
-			require(pledged <= position.rep && position.rep - pledged >= commitmentIndex.requiredRep(position.commitment, host.ownerConservativePrice(_capitalOwner()), host.securityMultiplierBps(), _target(owner)), 'Owner collateral too low');
+			require(pledged <= position.rep && position.rep - pledged >= _requiredRep(host, position.commitment, _target(owner)), 'Owner collateral too low');
 			uint256 maxPrice = host.maximumHealthyPrice(position.rep - pledged, position.commitment);
 			commitmentIndex.replace(owner.positionId, position.rep - pledged, position.commitment, maxPrice);
 			if (position.commitment == 0 || maxPrice >= liquidationPrice)
@@ -173,5 +199,12 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		migrationPrepared = true;
 		if (frozenBackingAttoRep != 0)
 			ICapitalLifecycleHost(address(this)).repToken().safeTransfer(_capitalOwner(), frozenBackingAttoRep);
+	}
+	function _requireOpen(ICapitalLifecycleHost host) private view {
+		require(!importing && host.zoltar().getForkTime(host.universeId()) == 0 && !frozen, 'Capital universe inactive');
+	}
+	function _requiredRep(ICapitalLifecycleHost host, uint256 commitment, uint256 health) private view returns (uint256) {
+		return
+			commitmentIndex.requiredRep(commitment, host.ownerConservativePrice(_capitalOwner()), host.securityMultiplierBps(), health);
 	}
 }

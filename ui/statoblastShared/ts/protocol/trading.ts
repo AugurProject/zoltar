@@ -120,13 +120,16 @@ export async function loadTradingCollateral(client: ReadClient, pool: Address, o
 	const [balance, allowance] = await Promise.all([client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] }), client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, services] })])
 	return { ...identity, balance, allowance, owner }
 }
-export async function quoteTradingCollateral(client: ReadClient, collateral: Awaited<ReturnType<typeof loadTradingCollateral>>, amount: bigint) {
+export async function quoteTradingCollateral(client: ReadClient, collateral: Awaited<ReturnType<typeof loadTradingCollateral>>, amount: bigint, onRecoveryRequirement?: (required: bigint) => void) {
 	const { universeId, questionId } = collateral
 	const [result, recoveryValue] = await Promise.all([
 		client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
 		client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
 	])
-	const recovery = await loadRecoveryMintFunding(client, collateral.portfolio, universeId, collateral.owner, requireBigintValue(recoveryValue, 'Recovery REP contribution'))
+	const required = requireBigintValue(recoveryValue, 'Recovery REP contribution')
+	portfolioRecoveryMintBudget(required)
+	onRecoveryRequirement?.(required)
+	const recovery = await loadRecoveryMintFunding(client, collateral.portfolio, universeId, collateral.owner, required)
 	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error('Invalid collateral fee quote.')
 	return { amount, maximumFee: (result[0] * 10_100n + 9_999n) / 10_000n, recovery }
 }

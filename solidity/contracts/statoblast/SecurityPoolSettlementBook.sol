@@ -319,10 +319,16 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 				? state.units
 				: Math.mulDiv(state.units, outcomeShares, state.outcomeSupplyAttoShares);
 		if (frozenBookId == 0)
-			return (SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned), Math.ceilDiv(unitsBurned, UNIT_SCALE));
+			return (
+				SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned),
+				Math.ceilDiv(unitsBurned, UNIT_SCALE)
+			);
 		FrozenBook storage frozen = frozenBooks[frozenBookId];
 		if (frozen.sourceBookId != bookId) return (0, 0);
-		return (SettlementMath.cashForUnits(frozen.cashAttoEth, frozen.units, 0, unitsBurned), Math.ceilDiv(unitsBurned, UNIT_SCALE));
+		return (
+			SettlementMath.cashForUnits(frozen.cashAttoEth, frozen.units, 0, unitsBurned),
+			Math.ceilDiv(unitsBurned, UNIT_SCALE)
+		);
 	}
 
 	/// @notice Quote REP directly from outcome-share ownership, before rounding ETH units.
@@ -518,5 +524,4 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		}
 		recovery.finalityRoot = tree.setModular(recovery.finalityRoot, finalAfter, next, next);
 	}
-
 }

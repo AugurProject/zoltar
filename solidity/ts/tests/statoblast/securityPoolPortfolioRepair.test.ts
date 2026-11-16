@@ -23,11 +23,6 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 import { collateralBalance } from './burnEvidence'
 
 const repairAbi = parseAbi(['function topUp(uint248 universeId,uint256 cashAttoEth)'])
-const purchaseAbi = parseAbi([
- 'function quoteMintRecoveryRep(uint248 universeId,uint256 questionId,uint256 cash) view returns(uint256)',
- 'function createCompleteSetWithRecoveryRep(uint248 universeId,uint256 questionId,uint256 cash,address recipient,uint256 minimumShares,uint256 maximumFee,uint256 maximumRecoveryAttoRep) returns(uint256)',
-])
-
 describe('Statoblast: permissionless settlement repair', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 
@@ -91,7 +86,7 @@ describe('Statoblast: permissionless settlement repair', () => {
 		await openOracleSettle(owner, reportId)
 		const services = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
 		await approveToken(owner, collateral, services)
-		const requiredRep = await owner.readContract({ abi: purchaseAbi, address: fixture.portfolio, functionName: 'quoteMintRecoveryRep', args: [child, fixture.secondQuestionId, unit] })
+		const requiredRep = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'quoteMintRecoveryRep', args: [child, fixture.secondQuestionId, unit] })
 		expect(requiredRep).toBeGreaterThan(0n)
 		const oldClaim = await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.secondQuestionId, 10n * unit] })
 		const ownerRep = () => owner.readContract({ ...rep, functionName: 'balanceOf', args: [owner.account.address] })
@@ -102,7 +97,7 @@ describe('Statoblast: permissionless settlement repair', () => {
 		const buy = async (questionId: bigint, maximumRep?: bigint) => {
 			const [fee] = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'purchaseQuote', args: [child, questionId, unit] })
 			if (maximumRep === undefined) return writeContractAndWait(owner, () => owner.writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [child, questionId, unit, owner.account.address, unit, fee] }))
-			return writeContractAndWait(owner, () => owner.writeContract({ abi: purchaseAbi, address: fixture.portfolio, functionName: 'createCompleteSetWithRecoveryRep', args: [child, questionId, unit, owner.account.address, unit, fee, maximumRep] }))
+			return writeContractAndWait(owner, () => owner.writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSetWithRecoveryRep', args: [child, questionId, unit, owner.account.address, unit, fee, maximumRep] }))
 		}
 		for (const [index, attempt] of [() => buy(fixture.secondQuestionId), () => buy(fixture.secondQuestionId, requiredRep - 1n), () => buy(fixture.secondQuestionId, requiredRep)].entries()) {
 			if (index < 2) await expect(attempt()).rejects.toThrow('Recovery REP exceeds budget')
@@ -116,11 +111,10 @@ describe('Statoblast: permissionless settlement repair', () => {
 		expect(await ownerRep()).toBe(beforeRep - requiredRep)
 		expect(await owner.readContract({ ...book, functionName: 'recoveryRep', args: [bookId] })).toBe(recovery + requiredRep)
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.secondQuestionId, 10n * unit] })).toBe(oldClaim)
-		expect(await owner.readContract({ abi: purchaseAbi, address: fixture.portfolio, functionName: 'quoteMintRecoveryRep', args: [child, freshQuestionId, unit] })).toBe(0n)
+		expect(await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'quoteMintRecoveryRep', args: [child, freshQuestionId, unit] })).toBe(0n)
 		await buy(freshQuestionId)
 		expect(await ownerRep()).toBe(beforeRep - requiredRep)
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, freshQuestionId, unit] })).toBe(0n)
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.secondQuestionId, 10n * unit] })).toBe(oldClaim)
-
 	})
 })

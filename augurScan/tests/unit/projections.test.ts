@@ -381,6 +381,18 @@ describe('state projections', () => {
 		for (const [name, data, domain, entityType, entityIdentity] of cases) expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain, entityType, entityIdentity, semanticEventKind: name })
 	})
 
+	test('repair and recovery funding evidence keeps custody universes separate from settlement book IDs', () => {
+		const emitter = pool.toLowerCase()
+		const cashAttoEth = atomic(5n)
+		const amountAttoRep = atomic(2n)
+		const bookRepair = { ...log('SettlementRepaired', { bookId: '7', cashAttoEth }), contractKind: 'securityPoolSettlementBook' as const }
+		const custodyRepair = { ...log('SettlementRepaired', { universeId: '3', sponsor: vault, cashAttoEth }), contractKind: 'securityPoolPortfolioSettlement' as const }
+		const funded = { ...log('RecoveryRepFunded', { universeId: '3', questionId: '42', payer: vault, amountAttoRep }), contractKind: 'securityPoolPortfolioSettlement' as const }
+		expect(projectionsFrom(bookRepair).at(-1)).toMatchObject({ domain: 'risk', entityType: 'settlement-book', entityIdentity: `${emitter}:7`, data: { bookId: '7', cashAttoEth } })
+		expect(projectionsFrom(custodyRepair).at(-1)).toMatchObject({ domain: 'risk', entityType: 'portfolio-settlement', entityIdentity: `${emitter}:3`, data: { universeId: '3', sponsor: vault, cashAttoEth } })
+		expect(projectionsFrom(funded).at(-1)).toMatchObject({ domain: 'risk', entityType: 'portfolio-settlement', entityIdentity: `${emitter}:3`, data: { questionId: '42', payer: vault, amountAttoRep } })
+	})
+
 	test('covers coordinator, escalation, risk, trading, and fork lifecycle taxonomy with stable keys', () => {
 		expect(projectionsFrom(log('PendingReportRecovered', { reportId: '1' })).at(-1)).toMatchObject({
 			type: 'domainEvent',

@@ -20,6 +20,34 @@ describe('TokenApprovalControl', () => {
 		},
 	})
 
+	test('shows exact required and approved recovery budgets without rounding ambiguity', async () => {
+		const amount = 2_020_000_000_000_000_001n
+		const rendered = await renderIntoDocument(
+			<TokenApprovalControl
+				amountPrecision='exact'
+				actionLabel='minting complete sets'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={amount}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={amount}
+				resetKey='recovery-exact'
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(rendered.container)
+		for (const label of ['Required REP', 'Approved REP']) {
+			const value = queries.getByText(label).parentElement?.querySelector('.currency-value')
+			expect(value?.textContent).toBe('2.020000000000000001 REP')
+		}
+		expect(queries.getByRole('button').hasAttribute('disabled')).toBe(true)
+	})
+
 	for (const purpose of ['Vault deposit', 'Oracle report']) {
 		for (const completed of [false, true]) {
 			test(`keeps ${purpose} identifiable after approval: ${completed}`, async () => {

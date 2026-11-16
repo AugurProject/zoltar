@@ -6,6 +6,7 @@ type ApprovedAmountValueProps = {
 	className?: string
 	decimals?: number
 	loading?: boolean
+	precision?: 'exact' | 'rounded'
 	requiredAmount?: bigint | undefined
 	suffix?: string
 	units?: number
@@ -17,7 +18,7 @@ function getApprovedAmountTone(value: bigint | undefined, requiredAmount: bigint
 	return value >= requiredAmount ? 'sufficient' : 'insufficient'
 }
 
-export function ApprovedAmountValue({ className = '', decimals = 2, loading = false, requiredAmount, suffix = '', units = 18, value }: ApprovedAmountValueProps) {
+export function ApprovedAmountValue({ className = '', decimals = 2, loading = false, precision = 'rounded', requiredAmount, suffix = '', units = 18, value }: ApprovedAmountValueProps) {
 	const toneClassName = getApprovedAmountTone(value, requiredAmount)
 
 	if (shouldDisplayMaxTokenApprovalAmount(value))
@@ -27,5 +28,5 @@ export function ApprovedAmountValue({ className = '', decimals = 2, loading = fa
 			</span>
 		)
 
-	return <CurrencyValue className={[toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} decimals={decimals} loading={loading} suffix={suffix} units={units} value={value} />
+	return <CurrencyValue className={[toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} decimals={decimals} precision={precision} loading={loading} suffix={suffix} units={units} value={value} />
 }

@@ -104,23 +104,26 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 					tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}
 					tokenUnits={snapshot?.collateral.decimals ?? 18}
 				/>
-				{(purchase.quote?.recoveryAttoRep ?? 0n) > 0n && (
+				{purchase.recoveryApplicable && (
 					<>
 						<UserMessage detail={collateralCopy.recoveryContributionHint} />
-						<MetricField label={collateralCopy.recoveryContribution} loading={purchase.quoteLoading}>
-							<CurrencyValue value={purchase.quote?.recoveryAttoRep} suffix={common.rep} />
-						</MetricField>
-						<PortfolioInput label={collateralCopy.maximumRecoveryContribution} hint={collateralCopy.recoveryBudgetHint} value={purchase.maximumRecoveryRep} onChange={purchase.setMaximumRecoveryRep} disabled={actions.busy !== undefined || (purchase.quote?.recoveryAttoRep ?? 0n) === 0n} numeric />
+						<MetricGrid>
+							<MetricField label={collateralCopy.recoveryContribution} loading={purchase.quoteLoading}>
+								<CurrencyValue exactWhenRoundedToZero value={purchase.quote?.recoveryAttoRep} suffix={common.rep} />
+							</MetricField>
+						</MetricGrid>
+						<PortfolioInput label={collateralCopy.maximumRecoveryContribution} hint={collateralCopy.recoveryBudgetHint} value={purchase.maximumRecoveryRep} onChange={purchase.setMaximumRecoveryRep} disabled={actions.busy !== undefined || purchase.quote === undefined || purchase.recovery === undefined} numeric />
 						<TokenApprovalControl
+							amountPrecision='exact'
 							actionLabel={copy.mint}
 							tokenSymbol={common.rep}
 							tokenUnits={18}
 							approvedAmount={purchase.recovery?.allowance}
 							requiredAmount={purchase.requiredRecoveryRep}
 							allowanceLoading={purchase.quoteLoading}
-							allowanceError={model.error}
+							allowanceError={purchase.recoveryError ?? model.error}
 							guardMessage={actions.ownerReason}
-							disabled={actions.busy !== undefined}
+							disabled={actions.busy !== undefined || purchase.quote === undefined || purchase.recovery === undefined}
 							pending={actions.busy === 'approvePurchaseRecoveryRep'}
 							pendingLabel={common.formatApprovingToken(common.rep)}
 							resetKey={`${snapshot?.portfolio}:${snapshot?.owner}:${purchase.requiredRecoveryRep}`}

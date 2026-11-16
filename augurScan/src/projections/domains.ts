@@ -72,7 +72,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	// One settlement book contract serves a portfolio; each universe owns one numbered book in it.
 	...definitions('risk', 'settlement-book', ['BookCreated', 'SettlementMinted', 'SettlementRedeemed', 'FinalityScheduled', 'FinalClaimsFrozen', 'FeeStreamReplaced', 'AggregateFeesAccrued'], ['bookId']),
 	...definitions('risk', 'portfolio-services', ['PremiumFunded', 'PremiumRecovered', 'UnusedServiceCashBurned'], ['universeId']),
-	...definitions('risk', 'portfolio-settlement', ['RecoveryRepPaid'], ['universeId']),
+	...definitions('risk', 'portfolio-settlement', ['RecoveryRepPaid', 'RecoveryRepFunded', 'SettlementRepaired'], ['universeId']),
 	// A report escrow completes one funded report for the shared feed that created it, so the event joins that feed's history.
 	...definitions('oracle', 'price-feed', ['ReportCompleted'], ['priceFeed']),
 	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
@@ -143,7 +143,8 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	const eventName = log.decoded.name
 	const data = log.decoded.arguments
 	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
-	const definition = eventDomains[eventName]
+	// The custody contract identifies repairs by universe; its book identifies them by book ID.
+	const definition = eventName === 'SettlementRepaired' && log.contractKind === 'securityPoolSettlementBook' ? ({ domain: 'risk', entityType: 'settlement-book', identityFields: ['bookId'] } as const) : eventDomains[eventName]
 	if (definition === undefined) return undefined
 	if (eventName === 'ApprovalForAll' && log.contractKind !== 'shareToken') return undefined
 	if ((eventName === 'Deposit' || eventName === 'Withdrawal') && log.contractKind !== 'weth') return undefined
