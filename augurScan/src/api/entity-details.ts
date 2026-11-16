@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportLifecycleEventName, reportRoundChanges } from '../operations.ts'
+import { auctionCollateral } from '../repositories/auction-collateral.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
 import { ApiConflictError, ApiRequestError, hasCursorSnapshot, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
@@ -219,13 +220,15 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 		events: paged(rows, page.limit, row => protocolCursorFor(chainId, domain, address, asOf, row)),
 	}
 	if (domain === 'auction') {
-		const { bids, lotAttoEth, finalization } = await auctionDetailData(sql, chainId, address, snapshotBlock)
+		// The latest snapshot can be a failed read; the immutable collateral token comes from the latest successful one.
+		const [{ bids, lotAttoEth, finalization }, collateral] = await Promise.all([auctionDetailData(sql, chainId, address, snapshotBlock), auctionCollateral(sql, chainId, snapshotBlock, address)])
 		result['demandCurve'] = auctionDemandCurve(
 			bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ minimumAttoRepPerLot: row['minimum_atto_rep_per_lot'], lots: row['lots'] })),
 			lotAttoEth,
 		)
 		result['demandCurveTruncated'] = bids.length > 1000
 		result['finalization'] = finalization
+		result['collateral'] = collateral ?? null
 	} else {
 		result['deposits'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'DepositOnOutcome' || row['event_name'] === 'LocalDepositAppended')
 		result['claims'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => String(row['event_name']).includes('Claim'))

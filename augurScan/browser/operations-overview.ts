@@ -1,3 +1,4 @@
+import { collateralUnit } from '../src/collateral.ts'
 import { semanticSummary, timelineEntityPath } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { NetworkRecord, OperationsCatalogSection, OperationsRenderContext, PagedOperationsCatalogSection } from './browser-types.ts'
@@ -184,7 +185,8 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			...timelineOccurrenceFields(item),
 			['Evidence status code', rawEvidenceStatus],
 			['Invalidation reason code', item['invalidation_reason']],
-			['Transition', semanticSummary(item, nativeSymbol)],
+			// Auction amounts are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
+			['Transition', semanticSummary(item, nativeSymbol, item['entity_type'] === 'auction' ? collateralUnit(item) : undefined)],
 			['Related entities', Array.isArray(item['related_entities']) ? item['related_entities'].join(' · ') : undefined],
 		])
 		const path = timelineEntityPath(item)

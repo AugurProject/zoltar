@@ -174,7 +174,14 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 			), '[]'::jsonb) AS escalation_claims,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
 					'type', event.event_name, 'entity', event.auction_address, 'data', event.event_data,
-					'blockNumber', event.block_number::text, 'provenance', 'historical interaction'
+					'blockNumber', event.block_number::text, 'provenance', 'historical interaction',
+					-- Auction amounts are in the auction's immutable collateral token, from its latest successful tagged read.
+					'collateral', (SELECT auction_snapshot.read_result->'collateral' FROM entity_state_snapshots auction_snapshot
+						JOIN blocks auction_block ON auction_block.chain_id = auction_snapshot.chain_id AND auction_block.hash = auction_snapshot.block_hash AND auction_block.canonical
+						WHERE auction_snapshot.chain_id = page.chain_id AND auction_snapshot.entity_type = 'auction' AND auction_snapshot.entity_identity = event.auction_address
+							AND auction_snapshot.canonical ${throughSnapshot('auction_snapshot.block_number')} AND auction_snapshot.read_status = 'success'
+							AND auction_snapshot.read_result->'collateral' IS NOT NULL
+						ORDER BY auction_snapshot.block_number DESC, auction_snapshot.observed_at DESC LIMIT 1)
 				) ORDER BY event.block_number DESC, event.log_index DESC)
 				FROM (SELECT * FROM collateral_repair_auction_events evidence WHERE evidence.chain_id = page.chain_id
 					AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'bidder') = page.address
