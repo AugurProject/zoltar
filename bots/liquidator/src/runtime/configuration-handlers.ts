@@ -123,11 +123,7 @@ export function setStrategy(runtime: LiquidatorRuntime, deps: LiquidatorDeps, va
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Strategy settings must be an object')
 		if (Reflect.get(value, 'portfolioPolicy') === undefined) throw new Error('Portfolio policy is required')
 		const portfolioPolicy = parsePortfolioPolicy(Reflect.get(value, 'portfolioPolicy'))
-		const logLookbackBlocks = Number(Reflect.get(value, 'logLookbackBlocks'))
-		const historicalLogRecovery = Reflect.get(value, 'historicalLogRecovery')
-		if (!Number.isSafeInteger(logLookbackBlocks) || logLookbackBlocks < 1 || logLookbackBlocks > 256) throw new Error('Latest log blocks must be an integer from 1 through 256')
-		if (typeof historicalLogRecovery !== 'boolean') throw new Error('Historical log recovery must be enabled or disabled explicitly')
-		await persistSettings(runtime, deps, current => ({ ...current, runtime: { ...current.runtime, historicalLogRecovery, logLookbackBlocks }, strategy, portfolioPolicy }))
+		await persistSettings(runtime, deps, current => ({ ...current, strategy, portfolioPolicy }))
 		recordActivity(deps.state, {
 			kind: 'configuration',
 			message: 'Portfolio policy saved',

@@ -1,5 +1,5 @@
 import type { SponsoredReport } from './sponsored-reports.ts'
-import type { Activity, PendingStagedOperation, PendingTransactionIntent } from './operator-state.ts'
+import type { Activity, PendingTransactionIntent } from './operator-state.ts'
 import type { PortfolioFunding } from './portfolio-instructions.ts'
 import type { PortfolioScope } from '#monitoring/portfolio-monitor'
 import type { RuntimeState } from './runtime-state.ts'
@@ -12,7 +12,6 @@ export type DurableState = {
 	activities: Activity[]
 	chainId: number
 	lastScannedBlock: string | undefined
-	pendingStagedOperations: PendingStagedOperation[]
 	pendingTransactions: PendingTransactionIntent[]
 	version: 2
 }
@@ -24,7 +23,6 @@ export function durableStateDocument(state: RuntimeState) {
 		activities: state.activities,
 		chainId: state.chainId,
 		lastScannedBlock: state.lastScannedBlock,
-		pendingStagedOperations: state.pendingStagedOperations,
 		pendingTransactions: state.pendingTransactions,
 		portfolioFunding: state.portfolioFunding ?? {},
 		completedPortfolioInstructions: state.completedPortfolioInstructions ?? {},

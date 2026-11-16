@@ -50,8 +50,6 @@ const settings = {
 	privateKey: null,
 	runtime: {
 		execute: false,
-		historicalLogRecovery: false,
-		logLookbackBlocks: 256,
 		once: false,
 		pollMilliseconds: 12000,
 		stateFile: '.state/operator-state.json',
@@ -201,13 +199,14 @@ describe('liquidator settings', () => {
 			rpcQuorum: 1,
 		})
 		expect(serialized.runtime.stateFile).toBe(resolve(settings.runtime.stateFile))
-		expect(serialized.runtime).toMatchObject({ historicalLogRecovery: false, logLookbackBlocks: 256 })
+		expect(serialized.runtime).not.toHaveProperty('logLookbackBlocks')
+		expect(serialized.runtime).not.toHaveProperty('historicalLogRecovery')
 		expect(serialized.approvedUniverses).toEqual(['0'])
 	})
 
-	test('bounds the normal log window to the latest 1 through 256 blocks', () => {
-		for (const logLookbackBlocks of [1, 256]) expect(parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks } }).runtime.logLookbackBlocks).toBe(logLookbackBlocks)
-		for (const logLookbackBlocks of [0, 257]) expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks } })).toThrow('runtime.logLookbackBlocks must be an integer from 1 through 256')
+	test('rejects the removed staged-recovery log settings as unsupported runtime fields', () => {
+		expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks: 256 } })).toThrow('runtime contains unsupported field logLookbackBlocks')
+		expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, historicalLogRecovery: false } })).toThrow('runtime contains unsupported field historicalLogRecovery')
 	})
 
 	test('rejects invalid execution amounts', () => {
