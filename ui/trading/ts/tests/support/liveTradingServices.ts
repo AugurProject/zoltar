@@ -33,6 +33,18 @@ export function connectedWalletServices(account: Address, chainId: number) {
 	}
 }
 
+/** Offline services for a page where `market` answers every discovery read and `account` is connected on `chainId`. */
+export function connectedMarketServices(market: LiveMarket, account: Address, chainId: number) {
+	return {
+		...offlineControllerServices,
+		discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
+		discoverTradingMarketPage: async () => discoveryPage([{ ...market }]),
+		discoverSavedMarkets: async () => discoveryPage([{ ...market }]),
+		...connectedWalletServices(account, chainId),
+		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
+	}
+}
+
 /** An injected provider that accepts listeners and answers nothing, so the live controller can subscribe to wallet events. */
 export function installSilentInjectedWallet() {
 	Reflect.set(window, 'ethereum', { request: async () => undefined, on: () => undefined, removeListener: () => undefined })

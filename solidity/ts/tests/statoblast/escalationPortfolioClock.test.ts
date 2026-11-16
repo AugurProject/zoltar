@@ -18,20 +18,26 @@ import {
 	test_statoblast_EscalationClaimCheckpointHarness_EscalationClaimCheckpointHarness as checkpointArtifact,
 } from '../../types/contractArtifact'
 
+/** Deploys Zoltar and a portfolio clock harness anchored at `wallAnchor` with a 1_000 second response period, wired to a fresh escalation game. */
+async function deployClockHarness(ethereum: Parameters<typeof setupTestAccounts>[0], owner: ReturnType<typeof createWriteClient>, wallAnchor: bigint) {
+	await setupTestAccounts(ethereum)
+	await ensureZoltarDeployed(owner)
+	const pool = await deployContract(owner, encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), wallAnchor, 1_000n] }))
+	const verifier = await deployContract(owner, encodeDeployData({ abi: verifierArtifact.abi, bytecode: `0x${verifierArtifact.evm.bytecode.object}` }))
+	const deposits = await deployContract(owner, encodeDeployData({ abi: depositArtifact.abi, bytecode: `0x${depositArtifact.evm.bytecode.object}` }))
+	const claims = await deployContract(owner, encodeDeployData({ abi: claimArtifact.abi, bytecode: `0x${claimArtifact.evm.bytecode.object}` }))
+	const game = await deployContract(owner, encodeDeployData({ abi: gameArtifact.abi, bytecode: `0x${gameArtifact.evm.bytecode.object}`, args: [pool, getRepTokenAddress(0n), verifier, claims, deposits] }))
+	await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'setEscalationGame', args: [game] }))
+	return { game, pool }
+}
+
 describe('Statoblast: fixed portfolio reporter clock', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	test('late materialization and inherited attrition balances cannot extend the fixed native response cutoff', async () => {
 		const ethereum = getAnvilWindowEthereum()
 		const owner = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		await setupTestAccounts(ethereum)
-		await ensureZoltarDeployed(owner)
 		const wallAnchor = 1_000_000n
-		const pool = await deployContract(owner, encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), wallAnchor, 1_000n] }))
-		const verifier = await deployContract(owner, encodeDeployData({ abi: verifierArtifact.abi, bytecode: `0x${verifierArtifact.evm.bytecode.object}` }))
-		const deposits = await deployContract(owner, encodeDeployData({ abi: depositArtifact.abi, bytecode: `0x${depositArtifact.evm.bytecode.object}` }))
-		const claims = await deployContract(owner, encodeDeployData({ abi: claimArtifact.abi, bytecode: `0x${claimArtifact.evm.bytecode.object}` }))
-		const game = await deployContract(owner, encodeDeployData({ abi: gameArtifact.abi, bytecode: `0x${gameArtifact.evm.bytecode.object}`, args: [pool, getRepTokenAddress(0n), verifier, claims, deposits] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'setEscalationGame', args: [game] }))
+		const { game, pool } = await deployClockHarness(ethereum, owner, wallAnchor)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: gameArtifact.abi, address: game, functionName: 'startFromFork', args: [1n, 1_000n, 0n, 1, false, 0n] }))
 		await approveToken(owner, getRepTokenAddress(0n), pool)
 		for (let outcome = 0; outcome < 3; outcome++) {
@@ -78,15 +84,8 @@ describe('Statoblast: fixed portfolio reporter clock', () => {
 	test('a wallet can report on an unrelated resumed central continuation', async () => {
 		const ethereum = getAnvilWindowEthereum()
 		const owner = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		await setupTestAccounts(ethereum)
-		await ensureZoltarDeployed(owner)
 		const wallAnchor = 1_000_000n
-		const pool = await deployContract(owner, encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), wallAnchor, 1_000n] }))
-		const verifier = await deployContract(owner, encodeDeployData({ abi: verifierArtifact.abi, bytecode: `0x${verifierArtifact.evm.bytecode.object}` }))
-		const deposits = await deployContract(owner, encodeDeployData({ abi: depositArtifact.abi, bytecode: `0x${depositArtifact.evm.bytecode.object}` }))
-		const claims = await deployContract(owner, encodeDeployData({ abi: claimArtifact.abi, bytecode: `0x${claimArtifact.evm.bytecode.object}` }))
-		const game = await deployContract(owner, encodeDeployData({ abi: gameArtifact.abi, bytecode: `0x${gameArtifact.evm.bytecode.object}`, args: [pool, getRepTokenAddress(0n), verifier, claims, deposits] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'setEscalationGame', args: [game] }))
+		const { game, pool } = await deployClockHarness(ethereum, owner, wallAnchor)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: gameArtifact.abi, address: game, functionName: 'startFromFork', args: [1n, 1_000n, 0n, 3, false, 0n] }))
 		for (let outcome = 0; outcome < 3; outcome++) {
 			await writeContractAndWait(owner, () =>

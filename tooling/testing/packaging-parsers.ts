@@ -31,14 +31,19 @@ const normalizedLines = (source: string): string[] => {
 	return logicalLines
 }
 
-export function dockerGlobalArguments(source: string): readonly string[] {
-	const arguments_: string[] = []
+function* dockerInstructionLines(source: string): Generator<DockerInstruction & { readonly line: string }> {
 	for (const line of normalizedLines(source)) {
 		const instructionMatch = /^(\S+)\s+(.+)$/u.exec(line)
 		if (instructionMatch === null) continue
 		const [, rawKeyword, value] = instructionMatch
 		if (rawKeyword === undefined || value === undefined) continue
-		const keyword = rawKeyword.toUpperCase()
+		yield { keyword: rawKeyword.toUpperCase(), line, value }
+	}
+}
+
+export function dockerGlobalArguments(source: string): readonly string[] {
+	const arguments_: string[] = []
+	for (const { keyword, value } of dockerInstructionLines(source)) {
 		if (keyword === 'FROM') break
 		if (keyword === 'ARG') arguments_.push(value)
 	}
@@ -47,12 +52,7 @@ export function dockerGlobalArguments(source: string): readonly string[] {
 
 export function parseDockerfile(source: string): readonly DockerStage[] {
 	const stages: { base: string; instructions: DockerInstruction[]; name?: string }[] = []
-	for (const line of normalizedLines(source)) {
-		const instructionMatch = /^(\S+)\s+(.+)$/u.exec(line)
-		if (instructionMatch === null) continue
-		const [, rawKeyword, value] = instructionMatch
-		if (rawKeyword === undefined || value === undefined) continue
-		const keyword = rawKeyword.toUpperCase()
+	for (const { keyword, line, value } of dockerInstructionLines(source)) {
 		if (keyword === 'FROM') {
 			const fromMatch = /^(\S+)(?:\s+AS\s+(\S+))?$/iu.exec(value)
 			if (fromMatch?.[1] === undefined) throw new Error(`Invalid Docker FROM instruction: ${line}`)

@@ -1,57 +1,53 @@
-import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions } from '../types.ts'
+import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions, PoolSnapshot } from '../types.ts'
 import { choose, eligible, encodeStep, eventEvidence, mixSeed, planBase } from '../planning.ts'
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { securityPoolAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { BINARY_OUTCOME_NONE, childRouteTopologyCapacityBlocker } from './planning.ts'
 
+/** A forked pool whose child escalation game is initialized but not yet resumed, funded or not. */
+function isAwaitingEscalationResume(pool: PoolSnapshot) {
+	return pool.awaitingForkContinuation && pool.systemState === 0 && pool.escalationGame !== zeroAddress && pool.escalationForkResumedAt === '0'
+}
+
+function isResumableEscalation(pool: PoolSnapshot) {
+	return isAwaitingEscalationResume(pool) && pool.escalationForkCarryFundingComplete
+}
+
+function resumeEscalationPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
+	return planBase({
+		definitionId: resumeEscalation.id,
+		ecosystem: 'statoblast',
+		label: resumeEscalation.label,
+		metadata: { pool: pool.address },
+		postconditions: ['Forked escalation game records its resumption time'],
+		priority: 'urgent',
+		risk: 'low',
+		snapshot,
+		steps: [encodeStep({ abi: securityPoolAbi, evidence: [eventEvidence(pool.escalationGame, 'ForkContinuationResumed(uint256)')], functionName: 'resumeForkedEscalationGame', id: 'resume-escalation', label: 'Resume forked escalation game', to: pool.address })],
+	})
+}
+
 export const resumeEscalation: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const pool = choose(
-			snapshot.pools.filter(candidate => candidate.awaitingForkContinuation && candidate.systemState === 0 && candidate.escalationGame !== zeroAddress && candidate.escalationForkCarryFundingComplete && candidate.escalationForkResumedAt === '0'),
-			mixSeed(options.seed, resumeEscalation.id),
-		)
+		const pool = choose(snapshot.pools.filter(isResumableEscalation), mixSeed(options.seed, resumeEscalation.id))
 		if (pool === undefined) return undefined
-		return planBase({
-			definitionId: resumeEscalation.id,
-			ecosystem: 'statoblast',
-			label: resumeEscalation.label,
-			metadata: { pool: pool.address },
-			postconditions: ['Forked escalation game records its resumption time'],
-			priority: 'urgent',
-			risk: 'low',
-			snapshot,
-			steps: [encodeStep({ abi: securityPoolAbi, evidence: [eventEvidence(pool.escalationGame, 'ForkContinuationResumed(uint256)')], functionName: 'resumeForkedEscalationGame', id: 'resume-escalation', label: 'Resume forked escalation game', to: pool.address })],
-		})
+		return resumeEscalationPlan(snapshot, pool)
 	},
 	buildLifecyclePlans(snapshot) {
-		return snapshot.pools
-			.filter(pool => pool.awaitingForkContinuation && pool.systemState === 0 && pool.escalationGame !== zeroAddress && pool.escalationForkCarryFundingComplete && pool.escalationForkResumedAt === '0')
-			.map(pool =>
-				planBase({
-					definitionId: resumeEscalation.id,
-					ecosystem: 'statoblast',
-					label: resumeEscalation.label,
-					metadata: { pool: pool.address },
-					postconditions: ['Forked escalation game records its resumption time'],
-					priority: 'urgent',
-					risk: 'low',
-					snapshot,
-					steps: [encodeStep({ abi: securityPoolAbi, evidence: [eventEvidence(pool.escalationGame, 'ForkContinuationResumed(uint256)')], functionName: 'resumeForkedEscalationGame', id: 'resume-escalation', label: 'Resume forked escalation game', to: pool.address })],
-				}),
-			)
+		return snapshot.pools.filter(isResumableEscalation).map(pool => resumeEscalationPlan(snapshot, pool))
 	},
 	enumerateLifecycleObstructingPresence(snapshot) {
-		return snapshot.pools.filter(pool => pool.awaitingForkContinuation && pool.systemState === 0 && pool.escalationGame !== zeroAddress && pool.escalationForkCarryFundingComplete && pool.escalationForkResumedAt === '0').map(pool => ({ pool: pool.address }))
+		return snapshot.pools.filter(isResumableEscalation).map(pool => ({ pool: pool.address }))
 	},
 	enumerateLifecyclePresence(snapshot) {
-		return snapshot.pools.filter(pool => pool.awaitingForkContinuation && pool.systemState === 0 && pool.escalationGame !== zeroAddress && pool.escalationForkResumedAt === '0').map(pool => ({ pool: pool.address }))
+		return snapshot.pools.filter(isAwaitingEscalationResume).map(pool => ({ pool: pool.address }))
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'SecurityPool',
 	description: 'Permissionlessly resumes a child escalation game after its fork continuation is initialized.',
 	discoveryInputs: ['pool fork continuation flag/state', 'child escalation game'],
 	ecosystem: 'statoblast',
-	evaluate: snapshot => eligible(snapshot.pools.some(pool => pool.awaitingForkContinuation && pool.systemState === 0 && pool.escalationGame !== zeroAddress && pool.escalationForkCarryFundingComplete && pool.escalationForkResumedAt === '0') ? undefined : 'No fully funded child escalation game is waiting to resume'),
+	evaluate: snapshot => eligible(snapshot.pools.some(isResumableEscalation) ? undefined : 'No fully funded child escalation game is waiting to resume'),
 	id: 'statoblast.escalation.resume',
 	label: 'Resume forked escalation game',
 	method: 'resumeForkedEscalationGame',

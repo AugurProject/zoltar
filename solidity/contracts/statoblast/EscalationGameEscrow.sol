@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameCarry } from './EscalationGameCarry.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
-import { ForkedEscrowState, OutcomeState } from './EscalationGameTypes.sol';
+import { ForkedEscrowState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameEscrow is EscalationGameCarry {
 	/// @notice Actual game inventory, distinct from mutually exclusive nominal reporter principal.

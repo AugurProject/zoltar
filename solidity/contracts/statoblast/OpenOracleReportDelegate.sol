@@ -11,7 +11,6 @@ import { ReputationToken } from '../ReputationToken.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SharedPoolPriceFeed } from './SharedPoolPriceFeed.sol';
-import './OpenOraclePriceCoordinatorTypes.sol';
 
 interface IOracleReportConfig {
 	function sharedPriceFeed() external view returns (SharedPoolPriceFeed);

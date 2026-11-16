@@ -1,12 +1,12 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { UniverseIdentity } from '@zoltar/ui-core-shared/components/UniverseIdentity.js'
 import { act } from 'preact/test-utils'
 import { useZoltarUrlState } from '../../app/hooks/useZoltarUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { renderUniverseBackdrop } from '@zoltar/ui-core-shared/tests/testUtils/universeBackdropHarness.js'
 
 type ZoltarUrlState = ReturnType<typeof useZoltarUrlState>
 
@@ -37,21 +37,13 @@ describe('useZoltarUrlState', () => {
 		const overflow = 1n << 248n
 		const maximum = overflow - 1n
 		window.history.replaceState({}, '', `/#/zoltar?universe=0x${overflow.toString(16)}`)
-		let hookState: ZoltarUrlState | undefined
-		function Harness() {
-			hookState = useZoltarUrlState()
-			return <UniverseIdentity universeId={hookState.activeUniverseId} variant='backdrop' />
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = rendered.cleanup
-		expect(requireState(hookState).activeUniverseId).toBe(0n)
-		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('0')
-		await act(() => {
-			window.history.replaceState({}, '', `/#/zoltar?universe=${maximum}`)
-			window.dispatchEvent(new Event('popstate'))
-		})
-		expect(requireState(hookState).activeUniverseId).toBe(maximum)
-		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe(maximum.toString())
+		const backdrop = await renderUniverseBackdrop(useZoltarUrlState)
+		cleanupRenderedComponent = backdrop.cleanup
+		expect(backdrop.activeUniverseId()).toBe(0n)
+		expect(backdrop.backdropUniverseId()).toBe('0')
+		await backdrop.navigate(`/#/zoltar?universe=${maximum}`)
+		expect(backdrop.activeUniverseId()).toBe(maximum)
+		expect(backdrop.backdropUniverseId()).toBe(maximum.toString())
 	})
 
 	test('reads and writes only Zoltar-owned URL state', async () => {

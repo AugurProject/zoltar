@@ -7,7 +7,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { EscalationGameSettlement } from './EscalationGameSettlement.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
-import { ESCALATION_TIME_LENGTH, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
+import { ESCALATION_TIME_LENGTH, NonDecisionState } from './EscalationGameTypes.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 

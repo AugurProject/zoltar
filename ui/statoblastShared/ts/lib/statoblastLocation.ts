@@ -101,7 +101,7 @@ export function readPoolBrowseState(search: string): PoolBrowseState {
 	return {
 		searchText: params.get('poolSearch') ?? '',
 		sortKey: resolveEnumValue<PoolSortKey>(params.get('poolSort') ?? '', 'recent', ['recent', 'remainingCapacity', 'endTime', 'state']),
-		stateFilter: resolveEnumValue<PoolStateFilter>(params.get('poolFilter') ?? '', 'all', ['all', 'operational', 'ended', 'forkMigration', 'forkCollateralRepairAuction']),
+		stateFilter: resolveEnumValue<PoolStateFilter>(params.get('poolFilter') ?? '', 'all', ['all', 'operational', 'ended', 'forkMigration']),
 	}
 }
 

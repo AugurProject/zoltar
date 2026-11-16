@@ -1,7 +1,7 @@
 import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS } from '../support/chromium.ts'
-import { connectToChromium, state } from '../support/dashboard-harness.ts'
+import { connectToChromium, inertDashboardControls, state } from '../support/dashboard-harness.ts'
 
 browserTest(
 	'schedule shortcut and catalog selection save through the dashboard',
@@ -17,7 +17,7 @@ browserTest(
 		let scans = 0
 		const mutations: unknown[] = []
 		const dashboard = startDashboardServer(0, {
-			hostname: '127.0.0.1',
+			...inertDashboardControls,
 			getConfiguration: () => ({ revision, settings: { paused, runtime: { execute: false }, scheduler: { minimumDelaySeconds: 60, maximumDelaySeconds: 3600 }, strategy: { selectableOperationAllowlist: selection } } }),
 			getState: () =>
 				state({
@@ -41,14 +41,6 @@ browserTest(
 				selection = [...selection, String(Reflect.get(Object(value), 'operationId'))]
 				revision = 'controls-2'
 			},
-			setCancellation: () => {},
-			setCandidate: () => {},
-			setObligation: () => {},
-			setPaused: () => {},
-			setReplacement: () => {},
-			setSettings: () => {},
-			setSigner: () => {},
-			setWorkflow: () => {},
 		})
 		const port = dashboard.port
 		if (port === undefined) throw new Error('Dashboard port is unavailable')

@@ -6,6 +6,7 @@ import { h } from 'preact'
 import { RouteSubNavigation } from '../../app/components/RouteSubNavigation.js'
 import { fireEvent, within } from '../testUtils/queries'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { stubElementWidths } from '../testUtils/elementWidths.js'
 
 describe('RouteSubNavigation', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -66,10 +67,7 @@ describe('RouteSubNavigation', () => {
 	})
 
 	test('presents section views as a segmented control without sideways scroll controls', async () => {
-		const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-		const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
-		Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 100 })
-		Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => 400 })
+		const restoreElementWidths = stubElementWidths(() => 100, 400)
 
 		try {
 			const renderedComponent = await renderIntoDocument(
@@ -94,10 +92,7 @@ describe('RouteSubNavigation', () => {
 			expect(documentQueries.queryByRole('button', { name: 'Show later Overflow views' })).toBeNull()
 			expect(documentQueries.getByRole('button', { name: 'First' }).getAttribute('aria-current')).toBe('page')
 		} finally {
-			if (clientWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth')
-			else Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor)
-			if (scrollWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth')
-			else Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor)
+			restoreElementWidths()
 		}
 	})
 })

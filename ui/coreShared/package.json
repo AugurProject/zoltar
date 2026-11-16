@@ -74,6 +74,10 @@
 			"bun": "./ts/tests/testUtils/transactionActionButton.ts",
 			"default": "./js/tests/testUtils/transactionActionButton.js"
 		},
+		"./tests/testUtils/universeBackdropHarness.js": {
+			"bun": "./ts/tests/testUtils/universeBackdropHarness.tsx",
+			"default": "./js/tests/testUtils/universeBackdropHarness.js"
+		},
 		"./app/components/AccountMenu.js": {
 			"bun": "./ts/app/components/AccountMenu.tsx",
 			"default": "./js/app/components/AccountMenu.js"

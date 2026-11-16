@@ -33,6 +33,16 @@ describe('Statoblast: central reporter custody', () => {
 		return game
 	}
 	const deposit = async (game: Address, amount: bigint) => await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: game, functionName: 'deposit', args: [amount] }))
+	/** Funds a source game with 10 REP scheduled to finalize at 1_001, then forks universe 0 on the question at time 1_000. */
+	const forkWithScheduledSource = async () => {
+		const source = await createGame(questionId)
+		await deposit(source, 10n * unit)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: source, functionName: 'schedule', args: [1_001] }))
+		await approveToken(owner, getRepTokenAddress(0n), getZoltarAddress())
+		await ethereum.setTime(1_000n)
+		await forkUniverse(owner, 0n, questionId)
+		return source
+	}
 	const withdraw = async (game: Address, amount: bigint) => await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: game, functionName: 'withdraw', args: [owner.account.address, amount] }))
 	const balance = async (game: Address) => await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'balanceOfGame', args: [game] })
 	const book = async (universe = 0n) => await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'books', args: [universe] })
@@ -140,12 +150,7 @@ describe('Statoblast: central reporter custody', () => {
 	})
 
 	test('finalizes an untouched inherited deadline after the response floor and permits later direct claims', async () => {
-		const source = await createGame(questionId)
-		await deposit(source, 10n * unit)
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: source, functionName: 'schedule', args: [1_001] }))
-		await approveToken(owner, getRepTokenAddress(0n), getZoltarAddress())
-		await ethereum.setTime(1_000n)
-		await forkUniverse(owner, 0n, questionId)
+		const source = await forkWithScheduledSource()
 		await rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'freezeFork', args: [0n] }))
 		const child = await createChild(1n)
 		const unrelated = await createGame(questionId + 2n, child)
@@ -190,12 +195,7 @@ describe('Statoblast: central reporter custody', () => {
 	})
 
 	test('binds a protected untouched claim after its finalizing universe has itself forked', async () => {
-		const source = await createGame(questionId)
-		await deposit(source, 10n * unit)
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: source, functionName: 'schedule', args: [1_001] }))
-		await approveToken(owner, getRepTokenAddress(0n), getZoltarAddress())
-		await ethereum.setTime(1_000n)
-		await forkUniverse(owner, 0n, questionId)
+		await forkWithScheduledSource()
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'freezeFork', args: [0n] }))
 		const child = await createChild(1n)
 		const admission = await getZoltarForkThreshold(owner, child)

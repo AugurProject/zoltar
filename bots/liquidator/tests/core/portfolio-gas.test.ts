@@ -1,43 +1,18 @@
 import { PORTFOLIO_CHECKPOINT_GAS_RESERVE } from '../../src/execution/gas-estimate.ts'
 import { expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { createRpcEndpointPool, createWalletClient, parseTransaction, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { rm } from 'node:fs/promises'
+import { createRpcEndpointPool, parseTransaction } from '@zoltar/bot-shared/ethereum'
 import { paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { executePortfolioTakeover, PortfolioOpportunityExpired, type refreshPortfolioExecution } from '../../src/execution/portfolio-executor.ts'
 import { submitCall } from '../../src/execution/submit-call.ts'
 import { settleInterruptedCycle } from '../../src/runtime/scan-cycle.ts'
-import { initialRuntimeState } from '../../src/state/operator-state.ts'
-import { portfolioObservation, portfolioSettings, unit } from '../support/portfolio-observation.ts'
+import { unit } from '../support/portfolio-observation.ts'
+import { portfolioTakeoverFixture } from '../support/portfolio-execution.ts'
 
 type Mode = 'success' | 'budget' | 'malformed' | 'zero' | 'revert' | 'reorg' | 'transport'
 async function fixture(mode: Mode) {
-	const directory = await mkdtemp(join(tmpdir(), 'portfolio-estimate-'))
-	const settings = portfolioSettings()
-	settings.runtime.execute = true
-	settings.runtime.once = false
-	settings.runtime.stateFile = join(directory, 'state.json')
+	const { directory, observation, settings, state, wallet } = await portfolioTakeoverFixture('portfolio-estimate-')
 	settings.strategy.maximumGasCostAttoEth = mode === 'budget' ? unit / 1000n : unit / 10n
-	settings.paused = false
-	const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
-	const observation = portfolioObservation()
-	observation.snapshot.owner = account.address
-	observation.snapshot.ownerPrincipalAttoRep = 100n * unit
-	observation.snapshot.ownerAccount.freeAttoRep = 100n * unit
-	const state = initialRuntimeState(false, account.address, 1)
-	state.portfolioScopes = [observation.nextScope]
-	const wallet = createWalletClient({
-		chain: mainnet,
-		account,
-		transport: custom({
-			request: async () => {
-				throw new Error('Unexpected signer RPC')
-			},
-		}),
-	})
 	const estimates: { block: unknown; transaction: unknown }[] = []
 	const simulatedGas: bigint[] = []
 	const unexpected: string[] = []

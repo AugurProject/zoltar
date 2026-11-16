@@ -113,6 +113,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionTestPr
 		onWrapDisputeWeth: () => undefined,
 		openOracleActiveAction: undefined,
 		openOracleActiveWithdrawalBalance: undefined,
+		openOracleApprovalResetting: false,
 		openOracleCreateForm,
 		openOracleError: undefined,
 		openOracleForm,

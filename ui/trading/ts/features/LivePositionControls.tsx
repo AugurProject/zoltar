@@ -1,5 +1,6 @@
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import * as collateralCopy from '../copy/collateral.js'
+import { walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
 import { collateralAsset, tokenFunded } from '../protocol/collateral.js'
 import { useCollateralFunding } from './live/useCollateralFunding.js'
 import { CollateralFundingControls } from './CollateralFundingControls.js'
@@ -273,7 +274,7 @@ export function LivePositionControls({
 					funding={funding}
 					required={required}
 					disabled={controlsDisabled || funding.pending || gasReason !== undefined || !wallet.connected || wallet.networkMismatchReason !== undefined}
-					reason={wallet.networkMismatchReason ?? (!wallet.connected ? wallet.actionLabel : gasReason)}
+					reason={wallet.networkMismatchReason ?? (!wallet.connected ? walletConnectionRequired : gasReason)}
 				/>
 			) : null}
 			<QuotedTransactionPanel

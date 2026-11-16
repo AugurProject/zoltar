@@ -132,7 +132,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		if (originUniverse === undefined) throw new Error(copy.enterOrigin)
 		const securityMultiplierBps = parseUnits(multiplierInput.value, 2)
 		const reportPriorityFeeAttoEthPerGas = parseUnits(priorityFeeInput.value, 9)
-		if (securityMultiplierBps <= 10_001n) throw new Error('Security multiplier must exceed 100.01%.')
+		if (securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 105%.')
 		if (reportPriorityFeeAttoEthPerGas <= 0n) throw new Error('Oracle priority fee must be positive.')
 		if (reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Oracle priority fee exceeds the report funding limit.')
 		if (collateral.address === undefined) throw new Error('This collateral token is unavailable on the selected network.')

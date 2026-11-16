@@ -70,6 +70,8 @@ type OpenOracleRouteContentProps = {
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined
+	/** Whether the active token approval action is an allowance reset to zero. */
+	openOracleApprovalResetting: boolean
 	openOracleError: string | undefined
 	openOracleTokenAccessState: {
 		token1Approval: TokenApprovalState

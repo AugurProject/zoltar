@@ -38,6 +38,22 @@ async function setup(snapshot = capitalSnapshot()) {
 	lifecycle.trackRendered(hook)
 	return { hook, requests, transport }
 }
+
+/** Lets the debounced report authorization quote settle. */
+async function waitForReportQuote() {
+	await act(async () => {
+		await new Promise(resolve => setTimeout(resolve, 20))
+	})
+}
+
+/** Enters a commitment and report price together, then waits for the report authorization quote. */
+async function enterReportCommitment(hook: Awaited<ReturnType<typeof setup>>['hook'], commitmentAmount: string, reportPrice: string) {
+	await act(async () => {
+		hook.state().setCommitmentAmount(commitmentAmount)
+		hook.state().setReportInput(reportPrice)
+	})
+	await waitForReportQuote()
+}
 test('approval and deposit remain separate transactions with exact capital-ledger custody', async () => {
 	const { hook, requests } = await setup()
 	await act(() => hook.state().setDepositAmount('5'))
@@ -340,13 +356,7 @@ test('a selected funded report quotes collateral, authorizes explicitly, and is 
 	const snapshot = capitalSnapshot({ oracleExposureLimitAttoEth: 1n, ownerPrincipalAttoRep: 40n * unit })
 	const { hook, requests, transport } = await setup(snapshot)
 	transport.setRead('reportAuthorization', [3n * unit, 2n])
-	await act(async () => {
-		hook.state().setCommitmentAmount('10')
-		hook.state().setReportInput('7')
-	})
-	await act(async () => {
-		await new Promise(resolve => setTimeout(resolve, 20))
-	})
+	await enterReportCommitment(hook, '10', '7')
 	expect(hook.state().authorizeReason).toBeUndefined()
 	expect(hook.state().requiredCollateral).toBe(37_800_000_000_000_000_000n)
 	await act(() => hook.state().authorize())
@@ -365,12 +375,8 @@ test('a higher funded report price resizes target capacity and settles after rec
 	await act(async () => {
 		hook.state().setReportInput('7')
 	})
-	await act(async () => {
-		await new Promise(resolve => setTimeout(resolve, 20))
-	})
-	await act(async () => {
-		await new Promise(resolve => setTimeout(resolve, 20))
-	})
+	await waitForReportQuote()
+	await waitForReportQuote()
 	expect(hook.state().commitmentAmount).toBe('10.58201058201058201')
 	expect(hook.state().authorizeReason).toBeUndefined()
 	expect(transport.reads.filter(read => read.name === 'reportAuthorization')).toHaveLength(2)
@@ -379,13 +385,7 @@ test('funded authorization proofs cover existing demand when it exceeds proposed
 	const snapshot = capitalSnapshot({ demandAttoEth: 100n * unit })
 	const { hook, transport } = await setup(snapshot)
 	transport.setRead('reportAuthorization', [2n * unit, 2n])
-	await act(async () => {
-		hook.state().setCommitmentAmount('10')
-		hook.state().setReportInput('7')
-	})
-	await act(async () => {
-		await new Promise(resolve => setTimeout(resolve, 20))
-	})
+	await enterReportCommitment(hook, '10', '7')
 	expect(transport.reads.filter(read => read.name === 'reportAuthorization').at(-1)?.args).toEqual([7n, 100n * unit])
 })
 

@@ -26,20 +26,8 @@ export const selectSystemRouteEntity = (context: ScannerContext, views: ScannerV
 
 const explorerPage = (context: ScannerContext) => renderExplorerPage(location.pathname, context.requiredChainId(), path => context.queryCache.get(path))
 
-/** Reloads the visible route after the network status changed the selected chain. */
-export const loadRouteAfterNetworkChange = async (context: ScannerContext, views: ScannerViews): Promise<void> => {
-	const { route } = context.state
-	if (route === 'activity') await views.detail.activity.loadLogs()
-	else if (route === 'system') await views.entity.systemCatalog.loadSystemState()
-	else if (route === 'operations') await views.operations.loadOperations()
-	else if (route === 'contracts') await views.entity.contracts.loadContracts()
-	else if (route === 'richlist') await views.entity.richList.loadRichList()
-	else if (route === 'address') await views.entity.addressProfile.loadAddressProfile()
-	else if (route === 'explorer') await explorerPage(context)
-}
-
-/** Reloads the visible route after the user picked another network; unknown routes fall back to the activity feed. */
-export const loadRouteAfterNetworkSelection = async (context: ScannerContext, views: ScannerViews): Promise<void> => {
+/** Reloads a chain-scoped route other than the activity feed; returns false when the route has no such loader. */
+const loadChainScopedRoute = async (context: ScannerContext, views: ScannerViews): Promise<boolean> => {
 	const { route } = context.state
 	if (route === 'system') await views.entity.systemCatalog.loadSystemState()
 	else if (route === 'operations') await views.operations.loadOperations()
@@ -47,7 +35,19 @@ export const loadRouteAfterNetworkSelection = async (context: ScannerContext, vi
 	else if (route === 'richlist') await views.entity.richList.loadRichList()
 	else if (route === 'address') await views.entity.addressProfile.loadAddressProfile()
 	else if (route === 'explorer') await explorerPage(context)
-	else await views.detail.activity.loadLogs()
+	else return false
+	return true
+}
+
+/** Reloads the visible route after the network status changed the selected chain. */
+export const loadRouteAfterNetworkChange = async (context: ScannerContext, views: ScannerViews): Promise<void> => {
+	if (context.state.route === 'activity') await views.detail.activity.loadLogs()
+	else await loadChainScopedRoute(context, views)
+}
+
+/** Reloads the visible route after the user picked another network; unknown routes fall back to the activity feed. */
+export const loadRouteAfterNetworkSelection = async (context: ScannerContext, views: ScannerViews): Promise<void> => {
+	if (!(await loadChainScopedRoute(context, views))) await views.detail.activity.loadLogs()
 }
 
 const skipTargets: Record<ScannerRoute, string> = {

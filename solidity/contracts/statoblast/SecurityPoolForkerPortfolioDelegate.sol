@@ -8,7 +8,6 @@ import { ISecurityPoolPortfolioNative } from './interfaces/ISecurityPoolPortfoli
 import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 
@@ -106,9 +105,8 @@ contract SecurityPoolForkerPortfolioDelegate {
 			return (child, portfolio, sourceGame);
 		}
 		factory.preparePortfolioPriceFeed(source, targetUniverse);
-		(child, ) = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps(), 0, 0);
+		child = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps());
 		_requireChildProvenance(factory, source, child, targetUniverse);
-		require(child.collateralRepairAuction() == address(0), 'Portfolio question cannot have a collateral repair auction');
 		source.authorizeChildPool(child);
 		portfolio.registerChildPool(child);
 		if (zoltar.getForkTime(targetUniverse) != 0) child.setSystemState(SystemState.PoolForked);

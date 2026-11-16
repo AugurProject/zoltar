@@ -43,6 +43,16 @@ async function clickConnectWallet(container: HTMLElement) {
 	})
 }
 
+/** Clicks Retry in the connection-error notice and lets the retry start. */
+async function clickConnectionRetry(container: HTMLElement) {
+	const retryButton = Array.from(container.querySelectorAll<HTMLButtonElement>('.trading-connection-error button')).find(button => button.textContent === 'Retry')
+	if (retryButton === undefined) throw new Error('The retry action is missing')
+	await act(async () => {
+		retryButton.click()
+		await Bun.sleep(0)
+	})
+}
+
 describe('trading header', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
 
@@ -230,7 +240,7 @@ describe('trading header', () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
-		expect(rendered.container.querySelector('h1.visually-hidden')?.textContent).toBe('Not found')
+		expect(rendered.container.querySelector('h1.visually-hidden')?.textContent).toBe('Page not found')
 		const skipButton = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === 'Skip to main content')
 		if (skipButton === undefined) throw new Error('Shared application skip control is unavailable')
 		await act(() => skipButton.click())
@@ -238,8 +248,8 @@ describe('trading header', () => {
 		// The shared frame focuses the route content only, so skipping lands past the header and tab navigation.
 		expect(document.activeElement?.querySelector('.tab-nav')).toBeNull()
 		expect(document.activeElement?.textContent).toContain('Page not found')
-		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
-		expect(document.title).toBe('Not found · Statoblast Trading')
+		expect(document.title).toBe(appCopy.documentTitle(appCopy.pageNotFoundTitle))
+		expect(document.title).toBe('Page not found | Statoblast Trading')
 	})
 
 	test('accepts only addressed security-pool routes', () => {
@@ -603,12 +613,7 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('.trading-connection-error')?.textContent).toContain('Trading RPC chain verification timed out')
 		expect(rendered.container.querySelector('.header-toolbar .badge')?.textContent).toBe('Deployment unverified')
 		expect(Array.from(rendered.container.querySelectorAll('.tab-nav .view-tabs a')).map(anchor => anchor.textContent)).toEqual(['Markets', 'Portfolio', 'Create'])
-		const retryButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.trading-connection-error button')).find(button => button.textContent === 'Retry')
-		if (retryButton === undefined) throw new Error('The retry action is missing')
-		await act(async () => {
-			retryButton.click()
-			await Bun.sleep(0)
-		})
+		await clickConnectionRetry(rendered.container)
 		await waitFor(() => expect(attempts).toBe(2))
 		// An RPC failure points to the RPC setting.
 		expect(rendered.container.querySelector('.trading-connection-error')?.textContent).toContain(appCopy.tradingContractsUnreachableHint)
@@ -656,12 +661,7 @@ describe('trading header', () => {
 		await waitFor(() => expect(rendered.container.querySelector('.trading-connection-error')?.textContent).toContain('Sepolia RPC did not respond'))
 		expect(initializations).toBe(1)
 		const loadsBeforeRetry = deploymentLoads
-		const retryButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.trading-connection-error button')).find(button => button.textContent === 'Retry')
-		if (retryButton === undefined) throw new Error('The retry action is missing')
-		await act(async () => {
-			retryButton.click()
-			await Bun.sleep(0)
-		})
+		await clickConnectionRetry(rendered.container)
 		await waitFor(() => expect(initializations).toBe(2))
 		await waitFor(() => expect(deploymentLoads).toBeGreaterThan(loadsBeforeRetry))
 		expect(rendered.container.querySelector('.trading-connection-error')).toBeNull()

@@ -1,4 +1,5 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { encodeFunctionData, formatUnits, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -63,8 +64,8 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 		else if (amount > quote.availableCommitmentAttoEth) reason = 'Insufficient available backing after queued retirement.'
 		else if (fee === undefined || fee < quote.purchaseFeeAttoEth) reason = 'Set a maximum fee that covers the quote.'
 		else if (minimum > quote.shares) reason = 'Minimum shares exceed the current quote.'
-		else if (amount + fee > snapshot.walletCollateral) reason = 'Insufficient collateral balance.'
-		else if (snapshot.collateralAllowance < amount + fee) reason = 'Collateral approval required.'
+		else if (amount + fee > snapshot.walletCollateral) reason = collateralCopy.formatInsufficientBalance(snapshot.collateral.symbol)
+		else if (snapshot.collateralAllowance < amount + fee) reason = collateralCopy.approvalRequired
 	}
 	return {
 		requiredCollateral: amount === undefined || fee === undefined ? undefined : amount + fee,
@@ -80,7 +81,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 					validateBeforeSubmit: async () => {
 						const allowance = await createConnectedReadClient().readContract({ address: snapshot.collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, snapshot.services] })
 						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')
-						const reason = getTokenApprovalResetReason(allowance, approvalAmount, snapshot.collateral.symbol, snapshot.collateral.symbol === 'USDT')
+						const reason = getTokenApprovalResetReason(allowance, approvalAmount, snapshot.collateral.symbol, tokenRequiresAllowanceReset(snapshot.collateralToken))
 						if (reason !== undefined) throw new Error(reason)
 					},
 				}

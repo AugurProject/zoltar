@@ -96,6 +96,32 @@ async function recoveryContext(primaryPort: number, secondaryPort: number) {
 	}
 }
 
+/** Serves `receipt` from two recovery RPC servers and runs `scenario` with chain 1 state that tracks `intent` in a temporary state file. */
+async function withPortfolioRecovery(
+	directoryPrefix: string,
+	intent: Awaited<ReturnType<typeof portfolioReceiptIntent>>['intent'],
+	receipt: TransactionReceipt,
+	pendingNonce: number | undefined,
+	scenario: (context: Awaited<ReturnType<typeof recoveryContext>> & { state: ReturnType<typeof initialRuntimeState> }) => Promise<void>,
+) {
+	const primary = rpcServer(true, blockHash, receipt, pendingNonce)
+	const secondary = rpcServer(false, blockHash, receipt, pendingNonce)
+	const directory = await mkdtemp(join(tmpdir(), directoryPrefix))
+	try {
+		if (primary.port === undefined || secondary.port === undefined) throw new Error('RPC ports unavailable')
+		const context = await recoveryContext(primary.port, secondary.port)
+		context.settings.network.chainId = 1
+		context.settings.runtime.stateFile = join(directory, 'state.json')
+		const state = initialRuntimeState(false, intent.sender, 1)
+		state.pendingTransactions.push(intent)
+		await scenario({ ...context, state })
+	} finally {
+		primary.stop(true)
+		secondary.stop(true)
+		await rm(directory, { recursive: true, force: true })
+	}
+}
+
 test('accepts matching finalized receipt evidence when providers omit optional receipt metadata', async () => {
 	const primary = rpcServer(true)
 	const secondary = rpcServer(false)
@@ -131,16 +157,7 @@ for (const status of ['success', 'reverted'] as const) {
 	test(`restart recovery handles a finalized portfolio ${status}`, async () => {
 		const { intent, receipt } = await portfolioReceiptIntent()
 		receipt.status = status
-		const primary = rpcServer(true, blockHash, receipt)
-		const secondary = rpcServer(false, blockHash, receipt)
-		const directory = await mkdtemp(join(tmpdir(), 'receipt-recovery-'))
-		try {
-			if (primary.port === undefined || secondary.port === undefined) throw new Error('RPC ports unavailable')
-			const { settings, wallet } = await recoveryContext(primary.port, secondary.port)
-			settings.network.chainId = 1
-			settings.runtime.stateFile = join(directory, 'state.json')
-			const state = initialRuntimeState(false, intent.sender, 1)
-			state.pendingTransactions.push(intent)
+		await withPortfolioRecovery('receipt-recovery-', intent, receipt, undefined, async ({ settings, state, wallet }) => {
 			await saveDurableState(settings.runtime.stateFile, state)
 			state.pendingTransactions = (await loadDurableState(settings.runtime.stateFile, 1)).pendingTransactions
 			const recovery = recoverPendingTransactions(settings, wallet, state)
@@ -149,36 +166,19 @@ for (const status of ['success', 'reverted'] as const) {
 			const loaded = await loadDurableState(settings.runtime.stateFile, 1)
 			expect(loaded.pendingTransactions).toHaveLength(0)
 			expect(loaded.activities[0]?.status).toBe(status === 'success' ? 'confirmed' : 'failed')
-		} finally {
-			primary.stop(true)
-			secondary.stop(true)
-			await rm(directory, { recursive: true, force: true })
-		}
+		})
 	})
 }
 
 for (const nonce of [0, 1]) {
 	test(`retains ambiguous portfolio intent with signer nonce ${nonce} instead of replaying stale decisions`, async () => {
 		const { intent, receipt } = await portfolioReceiptIntent()
-		const primary = rpcServer(true, blockHash, receipt, nonce)
-		const secondary = rpcServer(false, blockHash, receipt, nonce)
-		const directory = await mkdtemp(join(tmpdir(), 'portfolio-ambiguous-'))
-		try {
-			if (primary.port === undefined || secondary.port === undefined) throw new Error('RPC ports unavailable')
-			const { settings, wallet } = await recoveryContext(primary.port, secondary.port)
-			settings.network.chainId = 1
-			settings.runtime.stateFile = join(directory, 'state.json')
-			const state = initialRuntimeState(false, intent.sender, 1)
-			state.pendingTransactions.push(intent)
+		await withPortfolioRecovery('portfolio-ambiguous-', intent, receipt, nonce, async ({ settings, state, wallet }) => {
 			await expect(recoverPendingTransactions(settings, wallet, state)).rejects.toThrow(nonce === 0 ? 'automatic replay is disabled' : 'nonce was consumed')
 			expect(state.pendingTransactions).toHaveLength(1)
 			const loaded = await loadDurableState(settings.runtime.stateFile, 1)
 			expect(loaded.pendingTransactions[0]?.hash).toBe(intent.hash)
 			expect(loaded.pendingTransactions[0]?.reconciliationReason).toContain('reconcile its receipt or replace signer nonce')
-		} finally {
-			primary.stop(true)
-			secondary.stop(true)
-			await rm(directory, { recursive: true, force: true })
-		}
+		})
 	})
 }
