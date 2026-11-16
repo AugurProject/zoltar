@@ -206,7 +206,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), amountAttoRep);
+		BinaryOutcomes.BinaryOutcome previousLeader = _strictStakeLeader();
+		bool hadReport =
+			outcomeState[0].balanceAttoRep != 0 ||
+				outcomeState[1].balanceAttoRep != 0 ||
+				outcomeState[2].balanceAttoRep != 0;
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
+		BinaryOutcomes.BinaryOutcome nextLeader = _strictStakeLeader();
+		if (hadReport && nextLeader != BinaryOutcomes.BinaryOutcome.None && nextLeader != previousLeader)
+			leadResponseEnd = block.timestamp + ACTIVATION_DELAY;
 		_increaseEscrowedRepForBundle(depositor, amountAttoRep);
 		vaultAccounting[depositor].unresolvedAttoRep += amountAttoRep;
 		totalLocalUnresolvedAttoRep += amountAttoRep;
