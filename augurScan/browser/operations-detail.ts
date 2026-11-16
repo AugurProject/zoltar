@@ -268,7 +268,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			'Coordinator decisions',
 			decisionItems.map(decision => {
 				const argumentsValue = isPlainRecord(decision['arguments']) ? decision['arguments'] : {}
-				return operationRow(String(decision['event_name'] ?? 'Coordinator decision'), String(argumentsValue['reason'] ?? decision['summary'] ?? 'Linked coordinator evidence'), String(decision['emitter_address'] ?? ''), decision['block_number'])
+				// The report's escrow completes the report and records whether the feed accepted its price.
+				const completion = decision['event_name'] === 'ReportCompleted' && typeof argumentsValue['accepted'] === 'boolean' ? `Escrow settled the report; the feed ${argumentsValue['accepted'] ? 'accepted' : 'did not accept'} its price` : undefined
+				return operationRow(String(decision['event_name'] ?? 'Coordinator decision'), String(argumentsValue['reason'] ?? completion ?? decision['summary'] ?? 'Linked coordinator evidence'), String(decision['emitter_address'] ?? ''), decision['block_number'])
 			}),
 			'No coordinator decision could be linked to this report.',
 		)
@@ -422,6 +424,10 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 						undefined,
 					),
 					operationRow('Portfolio fork', `${operationCounted(forkSummary['portfolio_fork_events'], 'portfolio fork event')} · ${operationCounted(forkSummary['branch_chooser_count'], 'owner')} chose a branch`, undefined, undefined),
+					// The reporter ledger freezes once per forked universe: live game escrow migrates, finalized games keep parent REP.
+					...(Number(forkSummary['reporter_fork_frozen_count'] ?? 0) > 0
+						? [operationRow('Reporter escrow', `${exactUnit(String(forkSummary['reporter_migration_atto_rep'] ?? '0'), 18, 'REP')} live escrow migrates · ${exactUnit(String(forkSummary['reporter_protected_parent_atto_rep'] ?? '0'), 18, 'REP')} of finalized games stays with the parent`, undefined, undefined)]
+						: []),
 				],
 				'No fork summary evidence is available.',
 			),

@@ -173,7 +173,15 @@ Risk endpoints return block-tagged snapshot evidence with availability, protocol
 
 ### Report detail
 
-Each report-detail round contains `comparison.state`, the previous round/block identity when available, and a sorted `changes` array. Every change identifies its dotted field path, `added|changed|removed` kind, and the available `before`/`after` values. The comparison baseline is the next older canonical evidence row, including across a page boundary. `data.coordinatorDecisions` is a separate page: follow its `nextCursor` as `decisionCursor` without advancing the report-round cursor.
+Each report-detail round contains `comparison.state`, the previous round/block identity when available, and a sorted `changes` array. Every change identifies its dotted field path, `added|changed|removed` kind, and the available `before`/`after` values. The comparison baseline is the next older canonical evidence row, including across a page boundary. `data.coordinatorDecisions` is a separate page: follow its `nextCursor` as `decisionCursor` without advancing the report-round cursor. It lists the shared price feed's `PriceRequested`, `ReportFundingAssigned`, `PriceReported`, `PriceReportRejected`, and `PendingReportRecovered` for the report, and the `ReportCompleted` its report escrow emits for that feed.
+
+### Fork detail
+
+`data.summary` counts the events of the forked universe: `portfolio_fork_events` counts `ForkFrozen`, `BranchChosen`, `NeutralCashRecovered`, `ReporterForkFrozen`, and `ReporterChildCreated` for the universe together with `BranchStarted` and `BranchActivated` of its child universes. `reporter_fork_frozen_count` is the number of `ReporterForkFrozen` events; `reporter_migration_atto_rep` and `reporter_protected_parent_atto_rep` are sums across those events of `migrationAttoRep` (live reporter escrow that migrates) and `protectedParentAttoRep` (REP of games finalized before the fork, which stays in the parent). `data.events` lists every event that names the universe, including `ReporterChildCreated` under both its source and its child.
+
+### Escalation detail
+
+`data.events` lists the game's own events and the reporter ledger's `GameRegistered` and `ReporterFinalityScheduled` for that game. The escalation catalog's `event_name` is the game's latest own event; a reporter-ledger event is reported only for a game that has none. The ledger's `ReporterBalanceChanged` names a universe and a question but no game, so it is a timeline entry of the `reporter-ledger` entity instead.
 
 ### Direct read observations
 
