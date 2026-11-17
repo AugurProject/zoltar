@@ -507,7 +507,7 @@ export function ReportingSection({
 										<>
 											{reportingCopy.currentEscalationDisputeStakeLead}
 											<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
-											{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
+											{reportingCopy.formatAcceptedAmountTail(selectedAmount - actualReportDepositAmount === 1n, usesWalletFunding)}
 										</>
 									}
 								/>

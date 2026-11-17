@@ -38,8 +38,13 @@ export const poolHeldVaultRepBackingEmpty = 'No pool-held vault REP backing is a
 export const walletRepBalanceEmpty = 'No wallet REP is available for reporting.'
 export const reportOnSelectedSide = 'Report on selected side'
 export const currentEscalationDisputeStakeLead = 'Based on the current escalation state, this action would move '
-export const acceptedAmountTail = ' from pool-held backing into dispute-staked REP instead of the full entered amount.'
-export const acceptedWalletAmountTail = ' from wallet REP into dispute-staked REP instead of the full entered amount.'
+const acceptedAmountTail = ' from pool-held backing into dispute-staked REP instead of the full entered amount.'
+const acceptedWalletAmountTail = ' from wallet REP into dispute-staked REP instead of the full entered amount.'
+const acceptedTieAmountTail = ', 1 attoREP less than entered, because a report cannot tie the leading outcome.'
+export function formatAcceptedAmountTail(trimmedByTie: boolean, usesWalletFunding: boolean) {
+	if (trimmedByTie) return acceptedTieAmountTail
+	return usesWalletFunding ? acceptedWalletAmountTail : acceptedAmountTail
+}
 export const openForkAndMigration = 'Open fork & migration'
 export const managePoolPrice = 'Manage pool price'
 export const currentOraclePriceRequired = 'A current pool oracle price is required before reporting.'
