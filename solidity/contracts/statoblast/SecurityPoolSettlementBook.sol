@@ -18,7 +18,14 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
 	uint48 public constant MINIMUM_FORK_RESPONSE = 3 days;
+	/// @notice Exclusive bound of every fee-stream end (about year 2242). Streams stop charging after it.
+	uint48 public constant FEE_END_LIMIT = uint48(1) << 33;
 	address public immutable portfolio;
+	/// @notice Fee-stream ends are rounded down to a multiple of this power of two.
+	/// @dev The fee aggregate maps are keyed by end. Keys below 2^33 that share their low
+	/// log2(granularity) bits differ in at most 33 - log2(granularity) bits, so every key path has
+	/// at most that many branch nodes whatever ends other streams choose.
+	uint48 public immutable feeEndGranularity;
 
 	event SettlementRepaired(uint64 indexed bookId, uint256 cashAttoEth);
 	event BookCreated(uint64 indexed bookId, uint64 indexed sourceBookId, uint256 cashAttoEth, uint256 units);
@@ -29,9 +36,11 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	event FeeStreamReplaced(uint64 indexed bookId, uint256 indexed questionId, uint96 rateAttoEthPerSecond, uint48 end);
 	event AggregateFeesAccrued(uint64 indexed bookId, uint48 portfolioTimestamp, uint256 cashAttoEth);
 
-	constructor(address authority, uint256 minimumExchangeRate) SecurityPoolSettlementPricing(minimumExchangeRate) {
+	constructor(address authority, uint256 minimumExchangeRate, uint48 endGranularity) SecurityPoolSettlementPricing(minimumExchangeRate) {
 		require(authority != address(0), 'Invalid settlement authority');
+		require(endGranularity != 0 && endGranularity <= FEE_END_LIMIT >> 1 && endGranularity & (endGranularity - 1) == 0, 'Invalid fee end granularity');
 		portfolio = authority;
+		feeEndGranularity = endGranularity;
 	}
 
 	modifier onlyPortfolio() {
@@ -227,9 +236,10 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		state.units -= unitsBurned;
 		state.feePrincipalAttoEth = Math.mulDiv(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
 		if (state.feeRateAttoEthPerSecond != 0) {
-			_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, DECREASE_BALANCE);
-			state.feeRateAttoEthPerSecond = Math.mulDiv(state.feeRateAttoEthPerSecond, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
-			_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, INCREASE_BALANCE);
+			uint256 remainingRate = Math.mulDiv(state.feeRateAttoEthPerSecond, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
+			// One net write: the stream keeps its end, so its key is changed once instead of removed and re-added.
+			_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond - remainingRate, DECREASE_BALANCE);
+			state.feeRateAttoEthPerSecond = remainingRate;
 		}
 		state.outcomeSupplyAttoShares -= outcomeShares;
 		uint256 correction;
@@ -248,8 +258,9 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	/// @notice Replace one prospective collateral fee stream after checkpointing every old stream.
-	/// @dev Clamp the end to the fee budget above the backing floor. Runoff pauses accrual globally;
-	/// pausing never extends the absolute end, so skipped intervals cannot be charged after recap.
+	/// @dev Clamp the end to the fee budget above the backing floor and FEE_END_LIMIT, then round it
+	/// down to feeEndGranularity. Runoff pauses accrual globally; pausing never extends the absolute
+	/// end, so skipped intervals cannot be charged after recap.
 	function replaceFeeStream(uint64 bookId, uint256 questionId, uint96 rateAttoEthPerSecond, uint48 end, uint48 portfolioTimestamp) external onlyPortfolio {
 		Book storage book = _activeBook(bookId);
 		_freezeMatured(bookId, book, portfolioTimestamp);
@@ -258,15 +269,23 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		uint48 feeClockTimestamp = _feeTimestamp(book);
 		require(rateAttoEthPerSecond == 0 || (state.finalAfter == 0 && end > feeClockTimestamp), 'Invalid question fee interval');
 		if (rateAttoEthPerSecond != 0) {
-			uint256 duration = Math.min(end - feeClockTimestamp, _feeBudget(bookId, book, state) / rateAttoEthPerSecond);
-			if (duration == 0) rateAttoEthPerSecond = 0;
-			else end = feeClockTimestamp + uint48(duration);
+			uint256 last = Math.min(Math.min(end, FEE_END_LIMIT - 1), feeClockTimestamp + _feeBudget(bookId, book, state) / rateAttoEthPerSecond);
+			last -= last % feeEndGranularity;
+			if (last <= feeClockTimestamp) rateAttoEthPerSecond = 0;
+			else end = uint48(last);
 		}
-		_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, DECREASE_BALANCE);
+		uint48 nextEnd = rateAttoEthPerSecond == 0 ? 0 : end;
+		uint256 previousRate = state.feeRateAttoEthPerSecond;
+		// An unchanged end receives one net write; only a moved stream is removed and re-added.
+		if (state.feeEnd == nextEnd)
+			_changeFeeRate(book, nextEnd, rateAttoEthPerSecond > previousRate ? rateAttoEthPerSecond - previousRate : previousRate - rateAttoEthPerSecond, rateAttoEthPerSecond > previousRate);
+		else {
+			_changeFeeRate(book, state.feeEnd, previousRate, DECREASE_BALANCE);
+			_changeFeeRate(book, nextEnd, rateAttoEthPerSecond, INCREASE_BALANCE);
+		}
 		state.feeRateAttoEthPerSecond = rateAttoEthPerSecond;
 		state.feeStart = feeClockTimestamp;
-		state.feeEnd = rateAttoEthPerSecond == 0 ? 0 : end;
-		_changeFeeRate(book, state.feeEnd, rateAttoEthPerSecond, INCREASE_BALANCE);
+		state.feeEnd = nextEnd;
 		_writeQuestion(bookId, book, questionId, state);
 		emit FeeStreamReplaced(bookId, questionId, rateAttoEthPerSecond, state.feeEnd);
 	}

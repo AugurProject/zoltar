@@ -28,7 +28,7 @@ export async function deployPortfolioForkHarness(owner: WriteClient) {
 	const root = await deploy('fork harness root', encodeDeployData({ abi: rootArtifact.abi, bytecode: `0x${rootArtifact.evm.bytecode.object}`, args: [zoltar, capitals, indices, streams, auctions] }))
 	const collateral = await owner.readContract({ abi: rootArtifact.abi, address: root, functionName: 'collateralToken' })
 	const engine = await deploy('portfolio settlement', encodeDeployData({ abi: settlementArtifact.abi, bytecode: `0x${settlementArtifact.evm.bytecode.object}`, args: [root, collateral] }))
-	const book = await deploy('settlement book', encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [engine, 10n ** 12n] }))
+	const book = await deploy('settlement book', encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [engine, 10n ** 12n, 1n] }))
 	const reporter = await deploy('reporter ledger', encodeDeployData({ abi: reporterArtifact.abi, bytecode: `0x${reporterArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
 	const forks = await deploy('fork coordinator', encodeDeployData({ abi: forkArtifact.abi, bytecode: `0x${forkArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
 	await writeContractAndWait(owner, () => owner.writeContract({ abi: rootArtifact.abi, address: root, functionName: 'initialize', args: [engine, book, reporter, forks] }))

@@ -85,7 +85,9 @@ type ModelBook = {
 	recPaid: bigint
 }
 type ModelFrozen = { cash: bigint; units: bigint; source: number; rec: bigint }
-type Model = { books: Map<number, ModelBook>; frozen: Map<number, ModelFrozen>; minimum: bigint }
+// granularity mirrors the book's feeEndGranularity: stream ends round down to a multiple of it.
+type Model = { books: Map<number, ModelBook>; frozen: Map<number, ModelFrozen>; minimum: bigint; granularity: bigint }
+const FEE_END_LIMIT = 1n << 33n
 
 const emptyQuestion = (): ModelQuestion => ({ units: 0n, supply: 0n, finalAfter: 0, rate: 0n, feeEnd: 0, frozen: 0 })
 const questionOf = (book: ModelBook, id: number) => {
@@ -122,6 +124,7 @@ const clearEmpty = (book: ModelBook) => {
 }
 const cloneModel = (model: Model): Model => ({
 	minimum: model.minimum,
+	granularity: model.granularity,
 	frozen: new Map([...model.frozen].map(([id, value]) => [id, { ...value }])),
 	books: new Map([...model.books].map(([id, value]) => [id, { ...value, questions: new Map([...value.questions].map(([questionId, state]) => [questionId, { ...state }])) }])),
 })
@@ -248,12 +251,12 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			let end = op.end
 			if (rate !== 0n) {
 				if (state.finalAfter !== 0 || end <= clock) return reject('invalid interval')
-				const budget = feeBudget(model, book, state)
-				const affordable = budget / rate
-				const requested = BigInt(end - clock)
-				const duration = requested < affordable ? requested : affordable
-				if (duration === 0n) rate = 0n
-				else end = clock + Number(duration)
+				const affordable = BigInt(clock) + feeBudget(model, book, state) / rate
+				const requested = BigInt(end) < FEE_END_LIMIT ? BigInt(end) : FEE_END_LIMIT - 1n
+				let last = requested < affordable ? requested : affordable
+				last -= last % model.granularity
+				if (last <= BigInt(clock)) rate = 0n
+				else end = Number(last)
 			}
 			state.rate = rate
 			state.feeEnd = rate === 0n ? 0 : end
@@ -462,11 +465,11 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 	})
 
 	// Runs one lifecycle. `source` yields the next operations given the model; returns the failure text or undefined.
-	const run = async (minimum: bigint, source: (model: Model, index: number) => Op[] | undefined, record: Op[] | undefined): Promise<string | undefined> => {
+	const run = async (minimum: bigint, granularity: bigint, source: (model: Model, index: number) => Op[] | undefined, record: Op[] | undefined): Promise<string | undefined> => {
 		// Anvil slows down as blocks accumulate, so every lifecycle starts from the same snapshot.
 		await ethereum.anvilRevert(baseline)
 		baseline = await ethereum.anvilSnapshot()
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, minimum] }) }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, minimum, granularity] }) }) })
 		if (receipt.contractAddress === undefined) throw new Error('deployment address missing')
 		const address: Address = receipt.contractAddress
 		const target = { abi: artifact.abi, address }
@@ -491,6 +494,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		await transact(encodeFunctionData({ abi: artifact.abi, functionName: 'createBook', args: [START] }))
 		let model: Model = {
 			minimum,
+			granularity,
 			frozen: new Map(),
 			books: new Map([
 				[1, { cash: 0n, units: 0n, remainder: 0n, targetNumerator: 1n, targetDenominator: 1n, feeCash: 0n, ts: START, offset: 0, isSealed: false, enabled: true, minimumFinalAfter: 0, rec: 0n, depth: 0, children: 0, questions: new Map(), cashIn: 0n, cashPaid: 0n, feesAccrued: 0n, recIn: 0n, recPaid: 0n }],
@@ -696,10 +700,13 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 	const runSeed = async (seed: number): Promise<string | undefined> => {
 		const random = makeRandom(seed)
 		const minimum = random.pick([1n, 1n, 1n, SCALE / 2n, SCALE / 2n, (SCALE * 9n) / 10n, 333_333_333_333_333_333n, 333_333_333_333_333_333n, seed % 9 === 0 ? SCALE : SCALE - 1n])
+		// Derived from the seed so the random stream, and every existing seed's operations, stay unchanged.
+		const granularity = [1n, 16n, 4_096n][seed % 3] ?? 1n
 		const recorded: Op[] = []
 		let drained = false
 		const failure = await run(
 			minimum,
+			granularity,
 			(model, index) => {
 				if (index < STEPS) return generate(model, random, blockStart, index)
 				if (drained) {
@@ -722,7 +729,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		).catch(error => String(error instanceof Error ? error.message : error))
 		if (failure === undefined) return undefined
 		// Shrink: drop operations while the lifecycle still fails (any failure).
-		const replay = (ops: Op[]) => run(minimum, (_model, index) => (index < ops.length ? ops.slice(index, index + 1) : undefined), undefined).catch(error => String(error instanceof Error ? error.message : error))
+		const replay = (ops: Op[]) => run(minimum, granularity, (_model, index) => (index < ops.length ? ops.slice(index, index + 1) : undefined), undefined).catch(error => String(error instanceof Error ? error.message : error))
 		let best = recorded
 		let bestFailure = failure
 		const deadline = Date.now() + SHRINK_MS
@@ -737,7 +744,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 			}
 			if (chunk === 1) break
 		}
-		return `seed ${seed} (minimum rate ${minimum}): ${failure}\n--- shrunk to ${best.length} operations ---\n${best.map(show).join('\n')}\n--- shrunk failure ---\n${bestFailure}`
+		return `seed ${seed} (minimum rate ${minimum}, fee end granularity ${granularity}): ${failure}\n--- shrunk to ${best.length} operations ---\n${best.map(show).join('\n')}\n--- shrunk failure ---\n${bestFailure}`
 	}
 
 	test('random lifecycles match the reference model exactly', async () => {

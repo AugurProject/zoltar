@@ -90,7 +90,7 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 		const collateral = await deployToken()
 		const custody = await transact(undefined, encodeDeployData({ abi: custodyArtifact.abi, bytecode: `0x${custodyArtifact.evm.bytecode.object}`, args: [owner, collateral] }))
 		if (custody === undefined) throw new Error('custody deployment failed')
-		const ledger = await transact(undefined, encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [custody, minimum] }))
+		const ledger = await transact(undefined, encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [custody, minimum, 1n] }))
 		if (ledger === undefined) throw new Error('ledger deployment failed')
 		const custodyTarget = { abi: custodyArtifact.abi, address: custody }
 		const ledgerTarget = { abi: bookArtifact.abi, address: ledger }

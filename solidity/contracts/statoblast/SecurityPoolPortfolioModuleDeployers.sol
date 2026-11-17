@@ -33,8 +33,11 @@ contract SecurityPoolCapitalFeeStreamsDeployer {
 	}
 }
 contract SecurityPoolSettlementBookDeployer {
+	/// @dev 2^17 seconds (about 36.4 hours): fee-end keys differ only in bits 17..32, so each key path
+	/// in the fee aggregate maps has at most 16 branch nodes.
+	uint48 public constant FEE_END_GRANULARITY = uint48(1) << 17;
 	function create(address authority, uint256 minimumOutcomeRate) external returns (SecurityPoolSettlementBook) {
-		return new SecurityPoolSettlementBook(authority, minimumOutcomeRate);
+		return new SecurityPoolSettlementBook(authority, minimumOutcomeRate, FEE_END_GRANULARITY);
 	}
 }
 contract SecurityPoolPortfolioSettlementDeployer {
