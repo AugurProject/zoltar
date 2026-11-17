@@ -74,8 +74,8 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 					items: [
 						{
 							event_name: 'ReportCompleted',
-							summary: `ReportCompleted · reportId=${identity[1]} · priceFeed=${coordinatorDecision.emitter_address} · accepted=false`,
-							arguments: { reportId: identity[1], priceFeed: coordinatorDecision.emitter_address, accepted: false },
+							summary: `ReportCompleted · reportId=${identity[1]} · priceFeed=${coordinatorDecision.emitter_address} · outcome=2`,
+							arguments: { reportId: identity[1], priceFeed: coordinatorDecision.emitter_address, outcome: 2 },
 							emitter_address: '0x8888888888888888888888888888888888888888',
 							block_number: operations.asOf.blockNumber,
 						},

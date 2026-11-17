@@ -38,7 +38,7 @@ const reportEscrowAbi = [
 		inputs: [
 			{ name: 'reportId', type: 'uint256', indexed: true },
 			{ name: 'priceFeed', type: 'address', indexed: true },
-			{ name: 'accepted', type: 'bool', indexed: false },
+			{ name: 'outcome', type: 'uint8', indexed: false },
 		],
 	},
 ] as const

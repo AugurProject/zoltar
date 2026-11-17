@@ -417,8 +417,8 @@ describe('openOracle protocol client', () => {
 			const preimage = createOpenOraclePreimage(7n)
 			preimage.game.callbackContract = vaultAddress
 			const feedAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
-			const escrowAbi = parseAbi(['event ReportCompleted(uint256 indexed reportId,address indexed priceFeed,bool accepted)'])
-			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('bool'), [accepted]), topics: encodeEventTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateSecurityPoolAddress } }) }
+			const escrowAbi = parseAbi(['event ReportCompleted(uint256 indexed reportId,address indexed priceFeed,uint8 outcome)'])
+			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('uint8'), [accepted ? 1 : 2]), topics: encodeEventTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateSecurityPoolAddress } }) }
 			const eventName = accepted ? ('PriceReported' as const) : ('PriceReportRejected' as const)
 			const result = {
 				address: alternateSecurityPoolAddress,

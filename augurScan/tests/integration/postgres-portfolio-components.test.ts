@@ -60,9 +60,9 @@ test.skipIf(url === undefined)('events of portfolio components reach the escalat
 			projected(0, openOracle, 'ReportSubmitted', report),
 			projected(1, feed, 'PriceRequested', { reportId: '7', pendingReportMaxSettlementBaseFeeAttoEthPerGas: 1n.toString() }),
 			projected(2, feed, 'ReportFundingAssigned', { reportId: '7', coordinator, sponsor: coordinator }),
-			projected(3, escrow, 'ReportCompleted', { reportId: '7', priceFeed: feed, accepted: true }),
+			projected(3, escrow, 'ReportCompleted', { reportId: '7', priceFeed: feed, outcome: 1 }),
 			// Another feed's escrow completes its own report 7; it must not join this report's decisions.
-			projected(4, escrow, 'ReportCompleted', { reportId: '7', priceFeed: otherFeed, accepted: false }),
+			projected(4, escrow, 'ReportCompleted', { reportId: '7', priceFeed: otherFeed, outcome: 2 }),
 			projected(5, game, 'GameStarted', { activationTime: '1' }),
 			projected(6, reporters, 'GameRegistered', { universeId: '1', questionId: '42', game }),
 			projected(7, reporters, 'ReporterFinalityScheduled', { game, finalAfter: '500' }),

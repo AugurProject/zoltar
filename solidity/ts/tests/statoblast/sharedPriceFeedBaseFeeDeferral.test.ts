@@ -5,6 +5,7 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact,
+	statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
@@ -30,6 +31,18 @@ const feedEvents = (logs: readonly Log[], address: string) =>
 			if (event.eventName === 'PriceReportRejected') return `PriceReportRejected(${event.args.reason})`
 			if (event.eventName === 'ReportOperationAttempted') return `ReportOperationAttempted(success=${event.args.success})`
 			return event.eventName
+		})
+
+// The escrow emits ReportCompleted on every settlement callback, carrying the feed's reportOutcome.
+const reportCompletedOutcomes = (logs: readonly Log[], escrow: string) =>
+	logs
+		.filter(log => log.address.toLowerCase() === escrow.toLowerCase() && log.topics[0] === keccak256('ReportCompleted(uint256,address,uint8)'))
+		.map(log => {
+			const [signature, ...rest] = log.topics
+			if (signature === undefined) throw new Error('Escrow log has no signature topic')
+			const event = decodeEventLog({ abi: escrowArtifact.abi, topics: [signature, ...rest], data: log.data })
+			if (event.eventName !== 'ReportCompleted') throw new Error(`Unexpected escrow event ${event.eventName}`)
+			return { reportId: event.args.reportId, priceFeed: event.args.priceFeed, outcome: BigInt(event.args.outcome) }
 		})
 
 // Every report records maxSettlementBaseFee = 3 x (request base fee + priority fee), but anyone
@@ -84,6 +97,8 @@ describe('Statoblast: shared price feed defers settlements above the report base
 		const { sponsor, feed, weth, escrow, report, receipt, spike, lastSettlementBefore } = await settleAboveCeiling()
 
 		expect(feedEvents(receipt.logs, feed.address)).toEqual(['PriceReportDeferred'])
+		// The escrow still names the feed but reports the deferral as pending, not as a final rejection.
+		expect(reportCompletedOutcomes(receipt.logs, escrow)).toEqual([{ reportId: report, priceFeed: feed.address, outcome: REPORT_PENDING }])
 		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(REPORT_PENDING)
 		expect(await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })).toBe(report)
 		expect(await sponsor.readContract({ ...feed, functionName: 'lastSettlementTimestamp' })).toBe(lastSettlementBefore)
@@ -97,6 +112,31 @@ describe('Statoblast: shared price feed defers settlements above the report base
 		await setNextBlockBaseFee(spike)
 		await expect(sponsor.writeContract({ ...feed, functionName: 'recoverReport', args: [report], gasPrice: spike, gas: 5_000_000n })).rejects.toThrow('Base fee too high')
 		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(REPORT_PENDING)
+	})
+
+	test('a settlement at the ceiling is accepted and its escrow reports the accepted outcome', async () => {
+		const { sponsor, settler, feed, escrow, report, ceiling } = await sponsorReportWithWithdrawal()
+		await fixture.base.mockWindow.advanceTime(481n)
+		await setNextBlockBaseFee(ceiling)
+		const receipt = await settler.waitForTransactionReceipt({ hash: await openOracleSettleWithGasPrice(settler, report, ceiling) })
+
+		expect(feedEvents(receipt.logs, feed.address)).toEqual(['PriceReported', 'ReportOperationAttempted(success=true)'])
+		expect(reportCompletedOutcomes(receipt.logs, escrow)).toEqual([{ reportId: report, priceFeed: feed.address, outcome: REPORT_ACCEPTED }])
+		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(REPORT_ACCEPTED)
+	})
+
+	test('a settlement after the validity window is rejected and its escrow reports the rejected outcome', async () => {
+		const { sponsor, settler, feed, escrow, report, ceiling } = await sponsorReportWithWithdrawal()
+		const oracle = await sponsor.readContract({ ...feed, functionName: 'openOracle' })
+		const [, , , reportedAt, , , , settlementTime] = await sponsor.readContract({ abi: oracleArtifact.abi, address: oracle, functionName: 'storedGame', args: [report] })
+		const validity = await sponsor.readContract({ ...feed, functionName: 'priceValidityWindowSeconds' })
+		await fixture.base.mockWindow.setTime(BigInt(reportedAt) + BigInt(settlementTime) + validity)
+		await setNextBlockBaseFee(ceiling)
+		const receipt = await settler.waitForTransactionReceipt({ hash: await openOracleSettleWithGasPrice(settler, report, ceiling) })
+
+		expect(feedEvents(receipt.logs, feed.address)).toEqual(['PriceReportRejected(Report stale)'])
+		expect(reportCompletedOutcomes(receipt.logs, escrow)).toEqual([{ reportId: report, priceFeed: feed.address, outcome: REPORT_REJECTED }])
+		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(REPORT_REJECTED)
 	})
 
 	test('recovery at the ceiling accepts the settled price at its original timestamp and runs the sponsor operations', async () => {

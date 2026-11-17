@@ -50,6 +50,20 @@ export interface OperationsDetailDeps {
 
 const detailPageRecord = (data: JsonRecord, key: string): JsonRecord => (isPlainRecord(data[key]) ? data[key] : {})
 
+// ReportCompleted carries the feed's reportOutcome: 0 = deferred and still recoverable, 1 = accepted, 2 = rejected.
+const reportCompletionSummary = (outcome: unknown): string | undefined => {
+	switch (String(outcome)) {
+		case '0':
+			return 'Escrow settled the report; the feed deferred its price until a recovery at or below the base-fee ceiling'
+		case '1':
+			return 'Escrow settled the report; the feed accepted its price'
+		case '2':
+			return 'Escrow settled the report; the feed rejected its price'
+		default:
+			return undefined
+	}
+}
+
 // Overview holds current state, History keeps timelines with their pagers, and Evidence holds canonical records and proofs.
 type DetailTab = 'overview' | 'history' | 'evidence'
 
@@ -285,8 +299,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			'Coordinator decisions',
 			decisionItems.map(decision => {
 				const argumentsValue = isPlainRecord(decision['arguments']) ? decision['arguments'] : {}
-				// The report's escrow completes the report and records whether the feed accepted its price.
-				const completion = decision['event_name'] === 'ReportCompleted' && typeof argumentsValue['accepted'] === 'boolean' ? `Escrow settled the report; the feed ${argumentsValue['accepted'] ? 'accepted' : 'did not accept'} its price` : undefined
+				// The report's escrow runs every settlement callback and records the feed's outcome afterwards.
+				const completion = decision['event_name'] === 'ReportCompleted' ? reportCompletionSummary(argumentsValue['outcome']) : undefined
 				return operationRow(String(decision['event_name'] ?? 'Coordinator decision'), String(argumentsValue['reason'] ?? completion ?? decision['summary'] ?? 'Linked coordinator evidence'), String(decision['emitter_address'] ?? ''), decision['block_number'])
 			}),
 			'No coordinator decision could be linked to this report.',
