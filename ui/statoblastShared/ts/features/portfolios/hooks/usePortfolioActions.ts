@@ -9,12 +9,12 @@ import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
-import { isUniverseForked, loadPortfolioSetup, portfolioPreparationRequest, portfolioContractRequest, portfolioCreationRequest, sendPortfolioTransaction, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
+import { isUniverseForked, loadPortfolioSetup, portfolioPreparationRequest, portfolioAddressFromCreationReceipt, portfolioContractRequest, portfolioCreationRequest, sendPortfolioTransaction, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import type { usePortfolio } from './usePortfolio.js'
 import * as copy from '../../../copy/portfolio.js'
 import { defaultPortfolioCreationDraft, parseFixedPortfolioQuestions, parsePortfolioCreationEconomics, portfolioDeploymentReviewDescription, type CuratedAdmissionMode, type PortfolioCreationDraft } from '../lib/creation.js'
-import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission } from '../../../protocol/securityPoolPortfolioAdmission.js'
+import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission, requirePortfolioQuestionHorizon } from '../../../protocol/securityPoolPortfolioAdmission.js'
 import { buildPortfolioAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { authenticatePortfolioAuctionVault } from '../../../protocol/securityPoolPortfolioAuction.js'
 
@@ -165,7 +165,9 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		let current = true
 		registration.value = undefined
 		if (snapshot !== undefined && questionId !== undefined && admissionAllowed) {
-			void requirePortfolioQuestionAdmission(createConnectedReadClient(), snapshot.questionAdmissionPolicy, snapshot.portfolio, snapshot.originUniverseId, questionId, snapshot.blockNumber)
+			const client = createConnectedReadClient()
+			void requirePortfolioQuestionAdmission(client, snapshot.questionAdmissionPolicy, snapshot.portfolio, snapshot.originUniverseId, questionId, snapshot.blockNumber)
+				.then(async () => await requirePortfolioQuestionHorizon(client, snapshot.portfolio, questionId, snapshot.blockNumber, snapshot.timestamp))
 				.then(() => {
 					if (current) registration.value = { key: registrationKey }
 				})
@@ -286,8 +288,8 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 				},
 				requireUnforkedOrigin,
 				async result => {
-					const portfolio = result.receipt.contractAddress
-					if (portfolio === null || portfolio === undefined || parameters.accountAddress === undefined) throw new Error('Portfolio deployment address unavailable.')
+					if (parameters.accountAddress === undefined) throw new Error('Portfolio deployment address unavailable.')
+					const portfolio = portfolioAddressFromCreationReceipt(result.receipt)
 					await model.load(portfolio, parameters.accountAddress, admission?.universeId.toString())
 				},
 			),
@@ -325,7 +327,11 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 					...portfolioContractRequest(parameters.accountAddress, selected.portfolio, 'addQuestion', [id]),
 					reviewDescription: `Register question 0x${id.toString(16)} in portfolio ${selected.portfolio}. Registration does not pledge additional REP.`,
 					validateBeforeSubmit: async () => {
-						await requirePortfolioQuestionAdmission(createConnectedReadClient(), selected.questionAdmissionPolicy, selected.portfolio, selected.originUniverseId, id)
+						const client = createConnectedReadClient()
+						await requirePortfolioQuestionAdmission(client, selected.questionAdmissionPolicy, selected.portfolio, selected.originUniverseId, id)
+						// The transaction is included in a later block, at least one second after the latest one.
+						const latest = await client.getBlock()
+						await requirePortfolioQuestionHorizon(client, selected.portfolio, id, latest.number, latest.timestamp + 1n)
 					},
 				}
 			}),

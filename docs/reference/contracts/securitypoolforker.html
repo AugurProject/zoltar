@@ -65,8 +65,8 @@
 						<tr>
 							<td><code>createChildUniverse(securityPool, outcomeIndex)</code><wbr /></td>
 							<td>Anyone</td>
-							<td>Canonical source and prepared shared branch; target universe and question identity must match.</td>
-							<td>Materializes the immediate portfolio child question using the shared branch and lazy carry installation.</td>
+							<td>Canonical source in a forked universe; target universe and question identity must match; the portfolio’s shared branch for the target universe is ready (<code>Child settlement not ready</code>).</td>
+							<td>Deploys the native child universe when it does not exist yet, then materializes the immediate portfolio child question using the shared branch and lazy carry installation. When the target universe has itself already forked and the question cannot activate there, the call stops after preparing the child ledger in fork mode, which is all that share migration through that universe needs.</td>
 							<td>Shared fork, question deployment and reporting continuation events as applicable.</td>
 						</tr>
 					</tbody>

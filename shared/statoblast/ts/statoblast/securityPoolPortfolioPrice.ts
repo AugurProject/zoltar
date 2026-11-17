@@ -138,6 +138,8 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 }
 export type PortfolioPriceSnapshot = Awaited<ReturnType<typeof loadPortfolioPriceSnapshot>>
 
+/** Reports without a requested size carry 5% more than the current minimum so exposure growth during the challenge period cannot void them. */
+const PORTFOLIO_REPORT_FUNDING_HEADROOM_DIVISOR = 20n
 export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWeth = 0n) {
 	const observation = snapshot.observation
 	if (observation === undefined) throw new Error('Prepare the branch price feed first.')
@@ -146,11 +148,13 @@ export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, pro
 	if (price === 0n) throw new Error('Enter a positive REP per ETH price.')
 	decodeUint(requestedWeth, 'Requested WETH', 128)
 	const inventoryWeth = (observation.minimumRepAttoRep * 10n ** 18n + price - 1n) / price
-	const minimum = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
-	const weth = decodeUint(requestedWeth > minimum ? requestedWeth : minimum, 'Initial WETH report', 128)
+	const required = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
+	// The feed judges the report against exposure at settlement, so an exact-minimum report is void once exposure grows by one attoETH.
+	const suggested = requestedWeth === 0n ? required + required / PORTFOLIO_REPORT_FUNDING_HEADROOM_DIVISOR : requestedWeth
+	const weth = decodeUint(suggested > required ? suggested : required, 'Initial WETH report', 128)
 	const rep = decodeUint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)
 	const wrap = observation.weth === observation.wrappedNative && weth > observation.wethBalanceAttoEth ? weth - observation.wethBalanceAttoEth : 0n
-	return { price, weth, rep, wrap, bounty: observation.bounty, requiredEth: wrap + observation.bounty }
+	return { price, weth, minimumWeth: required, rep, wrap, bounty: observation.bounty, requiredEth: wrap + observation.bounty }
 }
 export function buildPortfolioPricePreparationRequest(snapshot: PortfolioPriceSnapshot) {
 	if (snapshot.sourcePool === undefined) throw new Error('No registered origin question is available to prepare this feed.')
@@ -170,6 +174,11 @@ export function buildPortfolioPriceWrapRequest(snapshot: PortfolioPriceSnapshot,
 	return { account: snapshot.owner, to: snapshot.observation.weth, value: amount, data: encodeFunctionData({ abi, functionName: 'deposit' }) }
 }
 
+/** Gas the feed's own settlement callback needs; the sponsor's operation gas is added to it. */
+export const PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS = 4_000_000n
+/** The feed caps a report's whole callback gas so every report settles in one transaction. */
+export const MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS = 10_000_000n
+
 /** @public Calldata and gas allowance for an external sponsor operation. */
 export type PortfolioReportOperation = { gasLimit: bigint; data: Hex }
 export type PortfolioReportOperations = { gasLimit: bigint; minimumPrice: bigint; maximumPrice: bigint; deadline: bigint; operations: readonly PortfolioReportOperation[] }
@@ -178,7 +187,7 @@ export type PortfolioReportOperations = { gasLimit: bigint; minimumPrice: bigint
 export function buildPortfolioPriceOperationsRequest(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWethAttoEth: bigint, batch: PortfolioReportOperations) {
 	const request = buildPortfolioPriceRequest(snapshot, proposedRepPerEth, requestedWethAttoEth)
 	const funding = quotePortfolioPriceFunding(snapshot, proposedRepPerEth, requestedWethAttoEth)
-	decodeUint(batch.gasLimit + 4_000_000n, 'Callback gas', 32)
+	if (decodeUint(batch.gasLimit, 'Operations gas') + PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS > MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS) throw new Error('Callback gas exceeds limit.')
 	decodeUint(batch.minimumPrice, 'Minimum operation price')
 	decodeUint(batch.maximumPrice, 'Maximum operation price')
 	decodeUint(batch.deadline, 'Operations deadline', 48)

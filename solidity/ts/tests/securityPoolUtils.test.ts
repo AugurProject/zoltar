@@ -3,7 +3,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
+import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { statoblast_SecurityPoolUtils_SecurityPoolUtils } from '../types/contractArtifact'
 

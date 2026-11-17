@@ -1,5 +1,5 @@
-import * as path from 'path'
-import { promises as fs } from 'fs'
+import * as path from 'node:path'
+import { promises as fs } from 'node:fs'
 import { getUiAppContractProject, getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 type FileType = 'file' | 'directory'

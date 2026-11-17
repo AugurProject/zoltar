@@ -29,6 +29,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		cancelAuthorization: ['external(address,bytes32,uint8,bytes32,bytes32)'],
 	},
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': {
+		deployPortfolio: ['external(bytes,bytes)'],
 		initializePortfolioPriceFeed: ['external(uint248,uint256)'],
 		initializePortfolioPriceFeedForUniverse: ['external(uint248)'],
 		preparePortfolioPriceFeed: ['external(ISecurityPool,uint248)'],
@@ -75,10 +76,8 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		recordDepositFromSecurityPool: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
 	},
 	'solidity/contracts/statoblast/EscalationGameSettlement.sol': {
-		drainAllRep: ['external(address)'],
 		withdrawDeposit: ['public(CarriedDepositProof,BinaryOutcomes.BinaryOutcome)', 'public(uint256,BinaryOutcomes.BinaryOutcome)'],
 		claimDepositForWinning: ['public(uint256,BinaryOutcomes.BinaryOutcome)'],
-		exportUnresolvedDeposit: ['public(uint256,BinaryOutcomes.BinaryOutcome)'],
 		settleOrdinaryGame: ['external()'],
 		sweepResidualRepToSecurityPool: ['external()'],
 	},
@@ -88,12 +87,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': {
 		processClaimCheckpoint: ['external(uint8,uint256,uint256,uint256,uint256,bytes32,EscalationClaimTransform[])'],
 		initializeForkClaimCheckpoint: ['external(address)'],
-	},
-	'solidity/contracts/statoblast/EscalationGameEscrow.sol': {
-		exportVaultUnresolvedTotalsWithoutTransfer: ['external(address)'],
-		recordForkedEscrowForOutcome: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
-		exportForkedEscrowByOutcome: ['external(address,address)'],
-		exportForkedEscrowByOutcomeWithoutTransfer: ['external(address)'],
 	},
 	'solidity/contracts/statoblast/OpenOraclePriceSource.sol': {
 		requestPrice: ['public(uint256,uint256,uint256)'],
@@ -137,14 +130,13 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': '7a09d1ce16324a2165c74fa4548c45410fd1177fb66929adee8732a572a90301',
 	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': '995cac2d2b605782625d4d84126569bb3a13c6f37b17a91c9d2c3badba80df38',
-	'solidity/contracts/statoblast/EscalationGameEscrow.sol': 'd825a73d0f32f5ca16230d07c57a5165624c2a8e38d43a1032ff369929197546',
-	'solidity/contracts/statoblast/EscalationGameSettlement.sol': 'f4bd05d85d0e68c8bd99e87cfe388bc4f0d05723e6ed9df892ed594f53051769',
+	'solidity/contracts/statoblast/EscalationGameSettlement.sol': 'c0e413e31690d76b60a8ddc3bfe7481ffbddd79cb3c7ff4e7939f338a9d46feb',
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPool.sol': '829869a2d6d5143d6d375b80af14695aae01cc420dd0264b3b0c0a4660c4f66a',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
-	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': 'a048dcb1dd7247c59fd0b33785200c9bda31dd56d69f20b36d31802aebd98e19',
+	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '132aa4383180f1ea2384614440c4247328f2256ee16d95ecb0fe0be02f3a05bf',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': '68c370c22a6da29cf139846ea2fdf86f9922027ee6d46e2618de0dcdb7bc5e5f',
 	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',

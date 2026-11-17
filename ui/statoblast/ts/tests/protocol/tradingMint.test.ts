@@ -1,8 +1,8 @@
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { createBlockWithTimestamp, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { createCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createBlockWithTimestamp, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createCompleteSetInSecurityPool, redeemSharesInSecurityPool, requireCanonicalPoolPortfolio } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
@@ -20,6 +20,7 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 				if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
+				if (request.functionName === 'isPortfolio') return true
 				if (request.functionName === 'getPool') return pool
 				if (request.functionName === 'purchaseQuote') return [0n, 0n]
 				if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
@@ -73,6 +74,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 				if (request.functionName === 'universeId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
+				if (request.functionName === 'isPortfolio') return true
 				if (request.functionName === 'shareToken' || request.functionName === 'securityPoolForker') return portfolio
 				pinned.push(request.blockNumber)
 				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
@@ -113,6 +115,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 		let walletBalance = 1_000n
 		let timestamp = 1n
 		let game = zeroAddress
+		let canonicalPortfolio = true
 		let plans: readonly TransactionPlanStep[] = []
 		const send = mock((request: { to?: unknown; data?: `0x${string}`; value?: bigint }) => {
 			expect(request.to).toBe(portfolio)
@@ -138,6 +141,8 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return pool
 						case 'getSecurityPoolPortfolio':
 							return portfolio
+						case 'isPortfolio':
+							return canonicalPortfolio
 						case 'questionId':
 							return 7n
 						case 'universeId':
@@ -184,6 +189,11 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			timestamp = 1n
 			game = pool
 			await expect(validate()).rejects.toThrow('escalation starts')
+			// A portfolio the factory did not deploy is rejected before its collateral token or spender is read.
+			game = zeroAddress
+			canonicalPortfolio = false
+			await expect(validate()).rejects.toThrow('not deployed by the canonical factory')
+			await expect(createCompleteSetInSecurityPool(client, pool, 100n)).rejects.toThrow('not deployed by the canonical factory')
 			expect(send).toHaveBeenCalledTimes(1)
 		} else {
 			await expect(createCompleteSetInSecurityPool(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
@@ -191,3 +201,24 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 		}
 	})
 }
+
+test('a pool portfolio is trusted only when the factory that registered the pool deployed it, at the requested block', async () => {
+	for (const scenario of [
+		{ recorded: portfolio, deployed: true, failure: undefined },
+		{ recorded: portfolio, deployed: false, failure: 'not deployed by the canonical factory' },
+		{ recorded: zeroAddress, deployed: true, failure: 'Question has no portfolio' },
+	]) {
+		const reads: unknown[] = []
+		const client = createMockReadClient(async request => {
+			reads.push([request.address, request.functionName, request.args, request.blockNumber])
+			if (request.functionName === 'getSecurityPoolPortfolio') return scenario.recorded
+			if (request.functionName === 'isPortfolio') return scenario.deployed
+			throw new Error(`Unexpected read ${request.functionName}`)
+		})
+		const result = requireCanonicalPoolPortfolio(client, pool, pool, 7n)
+		if (scenario.failure === undefined) expect(await result).toBe(portfolio)
+		else await expect(result).rejects.toThrow(scenario.failure)
+		// Only the factory is consulted; nothing is read from the portfolio itself.
+		expect(reads).toEqual([[pool, 'getSecurityPoolPortfolio', [pool], 7n], ...(scenario.recorded === zeroAddress ? [] : [[pool, 'isPortfolio', [portfolio], 7n]])])
+	}
+})

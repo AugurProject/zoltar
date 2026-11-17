@@ -1,4 +1,4 @@
-import { type Abi, type AbiParameter, type AbiValue, type ContractFunctionResult, type DecodedFunctionData, type Hex } from '../types.js'
+import type { Abi, AbiParameter, AbiValue, ContractFunctionResult, DecodedFunctionData, Hex } from '../types.js'
 
 import { bytesToHex, ensure0x, getAddress, isAddress, isHex, keccak256, normalizeRpcHex, stripHexPrefix } from '../encoding.js'
 

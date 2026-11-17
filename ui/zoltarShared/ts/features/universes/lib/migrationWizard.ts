@@ -81,7 +81,7 @@ function getAlreadyMigratedAttoRep(child: ZoltarChildUniverseSummary, childMigra
 /** The largest amount every selected outcome can still receive from the existing migration balance. */
 function getReusableMigrationBalance(outcomes: readonly Pick<MigrationWizardOutcome, 'alreadyMigratedAttoRep'>[], migrationBalanceAttoRep: bigint | undefined) {
 	if (migrationBalanceAttoRep === undefined) return undefined
-	let reusable: bigint | undefined = undefined
+	let reusable: bigint | undefined
 	for (const outcome of outcomes) {
 		if (outcome.alreadyMigratedAttoRep === undefined) return undefined
 		const remaining = migrationBalanceAttoRep > outcome.alreadyMigratedAttoRep ? migrationBalanceAttoRep - outcome.alreadyMigratedAttoRep : 0n

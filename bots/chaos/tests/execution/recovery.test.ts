@@ -9,7 +9,7 @@ import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
 import { assertRecoverySubmissionMode, pendingIntentRecoveryAction, transactionIsStrictNonceCancellation } from '../../src/execution/recovery-policy.ts'
 import { TransactionAwaitingRecovery } from '../../src/execution/transaction-executor.ts'
-import { type ExecutionEnvironment } from '../../src/execution/execution-context.ts'
+import type { ExecutionEnvironment } from '../../src/execution/execution-context.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 import { createDurableWorkflow, markWorkflowStepSigned, markWorkflowStepSubmitted } from '../../src/runtime/workflows.ts'
 import { loadDurableState, loadRuntimeState, saveDurableState, type PendingTransactionIntent } from '../../src/state/operator-state.ts'
@@ -289,7 +289,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 			weth: zeroAddress,
 			zoltar: zeroAddress,
 		},
-		discovery: { maxPools: 1, maxQuestions: 1, maxStagedOperationsPerPool: 1, maxUniverses: 1, maxVaultsPerPool: 1 },
+		discovery: { maxPools: 1, maxQuestions: 1, maxUniverses: 1, maxVaultsPerPool: 1 },
 		network: { chainId: 1, explorerUrl: '', maximumBlockIntervalSeconds: 15, name: 'mainnet' },
 		networkConfigured: true,
 		paused: false,

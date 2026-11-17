@@ -1,4 +1,4 @@
-import { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationPlan, PlanningOptions, PoolSnapshot } from '../types.ts'
+import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationPlan, PlanningOptions, PoolSnapshot } from '../types.ts'
 
 import { approveCoordinatorToken, exactTokenTransferToCoordinatorEvidence, operationalPools, oracleRequestInventoryIsFunded, oracleRequestPreparation, type PreparedOracleRequest } from './planning.ts'
 

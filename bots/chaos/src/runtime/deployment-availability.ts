@@ -4,7 +4,7 @@ import type { ChaosReadClient } from '../monitoring/discovery-client.ts'
 import type { EcosystemSnapshot } from '../operations/types.ts'
 import type { RuntimeState } from '../state/operator-state.ts'
 import { requiredConnectivity } from '../execution/execution-quorum.ts'
-import { canonicalAnchor, chaosReadClients, createChaosReadPool, unavailableOperationCatalog } from './canonical-scan.ts'
+import { canonicalAnchor, chaosReadClients, type createChaosReadPool, unavailableOperationCatalog } from './canonical-scan.ts'
 
 async function missingDeploymentRoots(client: Pick<ChaosReadClient, 'getCode'>, deployment: DeploymentSettings, blockNumber: bigint) {
 	const roots = [

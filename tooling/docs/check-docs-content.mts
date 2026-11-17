@@ -141,7 +141,9 @@ const duplicateParagraphBodies = async (path: string, text: string) => {
 	return []
 }
 
-const recordDuplicateParagraphs = async (blocks: DuplicateBlockMap, path: string, text: string) => (await duplicateParagraphBodies(path, text)).forEach((paragraph, index) => recordDuplicateCandidate(blocks, path, `paragraph ${index + 1}`, paragraph, 18))
+const recordDuplicateParagraphs = async (blocks: DuplicateBlockMap, path: string, text: string) => {
+	for (const [index, paragraph] of (await duplicateParagraphBodies(path, text)).entries()) recordDuplicateCandidate(blocks, path, `paragraph ${index + 1}`, paragraph, 18)
+}
 
 const duplicateDetectorFixtureBlocks: DuplicateBlockMap = new Map()
 const duplicateDetectorFixture = 'Canonical duplication fixtures preserve meaningful operators while ignoring ordinary sentence punctuation across the rendered documentation sources reviewed by this content check.'
@@ -185,7 +187,7 @@ for (const path of paths.sort()) {
 	const text = await Bun.file(path).text()
 	await recordDuplicateParagraphs(duplicateBlocks, path, text)
 	if (path.endsWith('.html')) {
-		;(await parsedHtmlFormulaSources(text)).forEach((formula, index) => recordDuplicateCandidate(duplicateBlocks, path, `formula ${index + 1}`, formula, 6, normalizeDuplicateFormula))
+		for (const [index, formula] of (await parsedHtmlFormulaSources(text)).entries()) recordDuplicateCandidate(duplicateBlocks, path, `formula ${index + 1}`, formula, 6, normalizeDuplicateFormula)
 	}
 }
 const duplicateViolations = Array.from(duplicateBlocks.values())

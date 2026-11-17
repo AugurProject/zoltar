@@ -30,7 +30,7 @@ The network selector in the header controls Activity, **Operations**, **System s
 Useful Operations routes include:
 
 - `/operations/reports`, `/operations/escalations`, and `/operations/auctions` for OpenOracle and dispute resolution;
-- `/operations/risk` for capital positions ranked by risk, capital ledgers, the liquidation feed, and tagged pool observations; `/capital/:ledger/:owner` for one owner's position, read history, and liquidation history;
+- `/operations/risk` for capital positions ranked by risk, capital ledgers, the liquidation feed, fee economics per universe, question fee streams, and tagged pool observations; `/capital/:ledger/:owner` for one owner's position, read history, and liquidation history;
 - `/operations/forks` for Zoltar fork and Statoblast migration evidence;
 - `/operations/trading` for AMM price, liquidity, share and ETH volume, fee history, and recent market activity;
 - `/operations/timeline` for cross-protocol semantic history;

@@ -5,7 +5,7 @@ import { expect } from 'bun:test'
 import { handleApi } from '../../src/api.ts'
 import type { ScannerDatabase } from '../../src/database.ts'
 import type { NetworkConfig } from '../../src/types.ts'
-import { address, type BlockHash, blockHash, decodedLog, discoveredAddress, promotedAddress, transaction, transactionHash } from './postgres-fixtures.ts'
+import { address, type BlockHash, blockHash, decodedLog, type discoveredAddress, promotedAddress, transaction, transactionHash } from './postgres-fixtures.ts'
 
 export type OperationsContext = {
 	readonly database: ScannerDatabase
@@ -236,7 +236,7 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 					item, 0, evidence.log_index, ${oracle.toLowerCase()}, '[]'::jsonb, '0x', evidence.event_name,
 					CASE evidence.log_index
 						WHEN 1 THEN jsonb_build_object('pair', '0x' || lpad(to_hex(item + 1000000), 40, '0'))
-						WHEN 2 THEN jsonb_build_object('from', '0x0000000000000000000000000000000000000000', 'to', ${address.toLowerCase()}::text, 'amount', item::text)
+						WHEN 2 THEN jsonb_build_object('from', '0x0000000000000000000000000000000000000000', 'to', ${address.toLowerCase()}::text, 'value', item::text)
 						WHEN 4 THEN jsonb_build_object('universeId', item::text, 'migrator', ${address.toLowerCase()}::text)
 						WHEN 5 THEN jsonb_build_object('reportId', item::text, 'currentReporter', ${address.toLowerCase()}::text)
 						ELSE jsonb_build_object('universeId', (item + 1000)::text)
@@ -271,7 +271,7 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 				)
 				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
 					2, item, '0x' || lpad(to_hex(item + 1000000), 40, '0'), 'Transfer',
-					jsonb_build_object('from', '0x0000000000000000000000000000000000000000', 'to', ${address.toLowerCase()}::text, 'amount', item::text), true
+					jsonb_build_object('from', '0x0000000000000000000000000000000000000000', 'to', ${address.toLowerCase()}::text, 'value', item::text), true
 				FROM generate_series(2, 103) item
 			`
 	await database.sql`
@@ -281,7 +281,7 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 				) VALUES (
 					${operationsChainId}, ${`0x${(20002).toString(16).padStart(64, '0')}`}, ${`0x${(2).toString(16).padStart(64, '0')}`},
 					2, 0, 3, ${`0x${(1000002).toString(16).padStart(40, '0')}`}, '[]'::jsonb, '0x', 'Transfer',
-					jsonb_build_object('from', ${address.toLowerCase()}::text, 'to', ${address.toLowerCase()}::text, 'amount', '999'),
+					jsonb_build_object('from', ${address.toLowerCase()}::text, 'to', ${address.toLowerCase()}::text, 'value', '999'),
 					'[]'::jsonb, 'decoded', 'Transfer', true, true
 				)
 			`
@@ -291,7 +291,7 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 				) VALUES (
 					${operationsChainId}, ${`0x${(2).toString(16).padStart(64, '0')}`}, ${`0x${(20002).toString(16).padStart(64, '0')}`},
 					3, 2, ${`0x${(1000002).toString(16).padStart(40, '0')}`}, 'Transfer',
-					jsonb_build_object('from', ${address.toLowerCase()}::text, 'to', ${address.toLowerCase()}::text, 'amount', '999'), true
+					jsonb_build_object('from', ${address.toLowerCase()}::text, 'to', ${address.toLowerCase()}::text, 'value', '999'), true
 				)
 			`
 	await database.sql`

@@ -14,6 +14,7 @@ interface IEscalationGameDepositContext {
 	function repToken() external view returns (address);
 	function securityPool() external view returns (address);
 	function getBindingCapitalAttoRep() external view returns (uint256);
+	function totalCostAttoRep() external view returns (uint256);
 	function computeTimeSinceStartFromAttritionCostAttoRep(uint256 amountAttoRep) external view returns (uint256);
 	function isForkCarryFundingComplete() external view returns (bool);
 }

@@ -42,6 +42,17 @@ test('setup and account authentication reject an unrecognized future auction dep
 	await expect(loadPortfolioSetup(fixture.client, portfolio, owner)).rejects.toThrow('unrecognized auction deployer')
 	await expect(loadPortfolioAccount(fixture.client, portfolio, owner, 0n)).rejects.toThrow('unrecognized auction deployer')
 })
+test('genuine runtime code the canonical factory did not deploy fails setup and account authentication', async () => {
+	// Runtime code and getters match a real portfolio; only the factory record separates it from one built with other module deployers.
+	const fixture = capitalClient()
+	fixture.setRead('isPortfolio', false)
+	await expect(loadPortfolioSetup(fixture.client, portfolio, owner)).rejects.toThrow('not deployed by the canonical factory')
+	await expect(loadPortfolioAccount(fixture.client, portfolio, owner, 0n)).rejects.toThrow('not deployed by the canonical factory')
+	expect(fixture.reads.filter(read => read.name === 'isPortfolio').map(read => [read.args, read.blockNumber])).toEqual([
+		[[portfolio], 10n],
+		[[portfolio], 10n],
+	])
+})
 test('a genuine capital ledger cannot nominate an unrelated fork authority', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('forkAuthority', modules.engine)

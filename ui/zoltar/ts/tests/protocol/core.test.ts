@@ -8,6 +8,7 @@ import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, wri
 import { buildIntent, createPreparedWalletPresentation } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 
 type MulticallRequest = Parameters<ReadClient['multicall']>[0]
 type WriteContractClient = Pick<WriteClient, 'sendTransaction' | 'waitForTransactionReceipt'> &
@@ -16,7 +17,7 @@ type WriteContractClient = Pick<WriteClient, 'sendTransaction' | 'waitForTransac
 	}
 
 function hashReceipt(status: TransactionReceipt['status']): TransactionReceipt {
-	return {
+	return testDouble<TransactionReceipt>({
 		blockHash: '0x0',
 		blockNumber: 0n,
 		contractAddress: null,
@@ -30,18 +31,18 @@ function hashReceipt(status: TransactionReceipt['status']): TransactionReceipt {
 		transactionHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
 		transactionIndex: 0n,
 		type: 'eip1559',
-	} as unknown as TransactionReceipt
+	})
 }
 
 describe('contract core helpers', () => {
 	test('readRequiredMulticall forwards allowFailure false to the multicall address', async () => {
 		let capturedRequest: MulticallRequest | undefined
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			multicall: async (request: MulticallRequest) => {
 				capturedRequest = request
 				return [{ result: 1n, status: 'success' } as never]
 			},
-		} as unknown as ReadClient
+		})
 
 		const values = await readRequiredMulticall(readClient, [{ abi: [], address: getAddress('0x1111111111111111111111111111111111111111'), functionName: 'foo' } as const])
 		const request = capturedRequest
@@ -53,12 +54,12 @@ describe('contract core helpers', () => {
 
 	test('readOptionalMulticall forwards allowFailure true to the multicall address', async () => {
 		let capturedRequest: MulticallRequest | undefined
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			multicall: async (request: MulticallRequest) => {
 				capturedRequest = request
 				return [{ result: 1n, status: 'success' } as never]
 			},
-		} as unknown as ReadClient
+		})
 
 		const values = await readOptionalMulticall(readClient, [{ abi: [], address: getAddress('0x1111111111111111111111111111111111111111'), functionName: 'foo' } as const])
 		const request = capturedRequest

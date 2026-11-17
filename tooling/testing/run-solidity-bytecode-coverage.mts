@@ -135,7 +135,7 @@ const bytecodeCoverageWeights = new Map<string, number>([
 	['solidity/ts/tests/escalationGame/continuationTies.test.ts', 2],
 	['solidity/ts/tests/escalationGame/entryPointGuards.test.ts', 2],
 	['solidity/ts/tests/escalationGame/forkCarryProofs.test.ts', 2],
-	['solidity/ts/tests/escalationGame/forkedEscrow.test.ts', 3],
+	['solidity/ts/tests/escalationGame/carriedProofPayouts.test.ts', 3],
 	['solidity/ts/tests/escalationGame/lifecycleGuards.test.ts', 2],
 	['solidity/ts/tests/escalationGame/localAccounting.test.ts', 2],
 	['solidity/ts/tests/escalationGame/recursiveCarry.test.ts', 3],
@@ -169,7 +169,7 @@ if (import.meta.main) {
 		selectedShards = [selectedShard]
 	}
 
-	let mergedSummary: SolidityCoverageSummary | undefined = undefined
+	let mergedSummary: SolidityCoverageSummary | undefined
 
 	for (const testShard of selectedShards) {
 		const shardIndex = testShards.indexOf(testShard) + 1

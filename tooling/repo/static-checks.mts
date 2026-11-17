@@ -4,6 +4,8 @@ const customChecks = [
 	'tooling/repo/lint-no-bare-catch.mts',
 	'tooling/repo/lint-no-signal-wrapper-comparisons.mts',
 	'tooling/repo/lint-no-restricted-import-types.mts',
+	'tooling/repo/lint-no-rendered-null.mts',
+	'tooling/repo/lint-no-double-casts.mts',
 	'tooling/contracts/lint-no-nested-solidity-ternaries.mts',
 	'tooling/ui/lint-ui-layer-boundaries.mts',
 	'tooling/repo/check-shared-boundaries.mts',

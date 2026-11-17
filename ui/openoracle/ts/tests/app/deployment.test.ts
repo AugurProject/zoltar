@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import type { Address, Hex } from '@zoltar/core-shared/evm/ethereum'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'

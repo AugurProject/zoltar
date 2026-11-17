@@ -112,10 +112,12 @@ function buildDirectShareLiquidityPlan(
 	if (!poolLifecycleOpen(snapshot, pool, options, steps.length)) return undefined
 	const expected = expectedDirectLiquidity(pair, kind, shareAmount)
 	if (expected?.expectedLiquidity === undefined || expected.expectedLiquidity < minimumLiquidity) return undefined
+	const deadline = protocolQuestionDeadline(snapshot, pool)
+	if (deadline === undefined) return undefined
 	steps.push(
 		encodeStep({
 			abi: twoWayConstantProductPairAbi,
-			args: [shareAmount, shareAmount, minimumLiquidity, snapshot.wallet.address],
+			args: [shareAmount, shareAmount, minimumLiquidity, snapshot.wallet.address, BigInt(deadline)],
 			evidence: [eventEvidence(pair.address, expected.signature)],
 			functionName: method,
 			id: method,
@@ -125,7 +127,7 @@ function buildDirectShareLiquidityPlan(
 		}),
 	)
 	return planBase({
-		deadlineTimestamp: protocolQuestionDeadline(snapshot, pool),
+		deadlineTimestamp: deadline,
 		definitionId: id,
 		ecosystem: 'trading',
 		label: `${kind} share liquidity`,

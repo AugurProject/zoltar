@@ -7,7 +7,7 @@ import type { PortfolioReportTakeover } from '#core/portfolio-report-strategy'
 import type { PortfolioTakeover } from '#core/portfolio-strategy'
 import { sharedPoolPriceFeedAbi, openOracleAbi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { buildPortfolioPriceOperationsRequest, buildPortfolioPriceApprovalRequest, buildPortfolioPriceWrapRequest, quotePortfolioPriceFunding, type PortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS, PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS, buildPortfolioPriceOperationsRequest, buildPortfolioPriceApprovalRequest, buildPortfolioPriceWrapRequest, quotePortfolioPriceFunding, type PortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { PortfolioOpportunityExpired, assertPortfolioPlanStillAllowed } from './portfolio-executor.ts'
 import { readPortfolioExecutionSnapshot } from './portfolio-execution-snapshot.ts'
 import { submitCall } from './submit-call.ts'
@@ -22,7 +22,9 @@ export function assertPortfolioReportFunding(current: ReportContext, settings: O
 	const reportRisk = funding.weth + (funding.rep * 10n ** 18n + funding.price - 1n) / funding.price
 	if (reportRisk > settings.portfolioPolicy.maximumReportFundingAttoEth) throw new PortfolioOpportunityExpired('Report funding exceeds configured loss budget')
 	if (current.baseFeePerGas === undefined || current.reportPlans === undefined) throw new PortfolioOpportunityExpired('Missing report settlement gas quote')
-	const callbackGas = 4_000_000n + BigInt(current.reportPlans.length * (settings.portfolioPolicy.reportOperationGasLimit + 100_000))
+	const callbackGas = PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS + BigInt(current.reportPlans.length * (settings.portfolioPolicy.reportOperationGasLimit + 100_000))
+	// The feed rejects a larger callback. The strategy sizes batches under this cap; one that still exceeds it is never funded.
+	if (callbackGas > MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS) throw new PortfolioOpportunityExpired('Report operations exceed the feed callback gas limit')
 	const settlementGas = callbackGas + callbackGas / 63n + 350_000n
 	if (maximumFeePerGas(current.baseFeePerGas) * paddedTransactionGas(settlementGas) > settings.strategy.maximumGasCostAttoEth) throw new PortfolioOpportunityExpired('Report settlement exceeds transaction gas budget')
 
@@ -65,10 +67,12 @@ export async function executePortfolioReportRequest(wallet: Wallet, settings: Op
 		const plans = current.reportPlans
 		if (plans === undefined || plans.length === 0) throw new PortfolioOpportunityExpired('Missing report batch plan')
 		const operations = plans.map(item => {
-			const bounds = { maximumOwnerPrincipal: plan.maximumOwnerPrincipal, maximumOwnerCommitment: plan.maximumOwnerCommitment, expectedTargetHealthFactorBps: settings.portfolioPolicy.targetHealthFactorBps, expectedAcceptedPriceEpoch: 0n, expectedSourceBatch: item.plan.expectedSourceBatch }
+			// An unpaid cure carries its own zero consent: it asks for no award and can acquire nothing.
+			const consent = item.plan.unpaidCure ? item.plan : plan
+			const bounds = { maximumOwnerPrincipal: consent.maximumOwnerPrincipal, maximumOwnerCommitment: consent.maximumOwnerCommitment, expectedTargetHealthFactorBps: settings.portfolioPolicy.targetHealthFactorBps, expectedAcceptedPriceEpoch: 0n, expectedSourceBatch: item.plan.expectedSourceBatch }
 			// Every attempt may consume the remaining prefunded balance. A failed
 			// predecessor leaves that balance available; no call adds new funding.
-			const ownRep = plan.maximumOwnRep
+			const ownRep = consent.maximumOwnRep
 			const data =
 				typeof item.target === 'bigint'
 					? encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverWithBounds', args: [item.target, item.plan.commitment, item.plan.minimumAward, ownRep, bounds] })

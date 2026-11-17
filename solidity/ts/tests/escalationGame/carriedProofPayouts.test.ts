@@ -6,19 +6,14 @@ import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { getEscrowedRepByVault, readEscalationGameEndDate, readCarryPeaks, readCarryRoot, readCarryLeafCount, readCarryTotal, readNullifierRoot, readForkedEscrowByVaultAndOutcome } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getEscrowedRepByVault, readEscalationGameEndDate, readCarryPeaks, readCarryRoot, readCarryLeafCount, readCarryTotal, readNullifierRoot, drainEscalationGameRepForTest } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import {
-	statoblast_EscalationGame_EscalationGame,
-	ReputationToken_ReputationToken,
-	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
-	test_statoblast_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
-} from '../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame } from '../../types/contractArtifact'
 import { SparseNullifierTree } from '../carryProofHelpers'
 import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, zeroHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
-describe('Escalation Game: carried proofs and forked escrow', () => {
+describe('Escalation Game: carried proof payouts', () => {
 	const fixture = useEscalationGameFixture()
 	const {
 		reportBond,
@@ -26,14 +21,11 @@ describe('Escalation Game: carried proofs and forked escrow', () => {
 		recursiveResolutionTargetCost,
 		deployEscalationGameTestSecurityPool,
 		deployEscalationGameWithProofPool,
-		deployEscalationGameForkerHarness,
 		startEscalationFromFork,
 		resumeEscalationFromFork,
 		fundEscalationGame,
 		advanceForkContinuationPastStart,
 		depositOnOutcomeViaProofTestSecurityPool,
-		traceForkedEscrowByVaultAndOutcome,
-		recordForkedEscrowForOutcomeViaTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPool,
 		readCarryLeafHash,
 		createCarryProof,
@@ -148,7 +140,7 @@ describe('Escalation Game: carried proofs and forked escrow', () => {
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 300n * reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 300n * reportBond)
 		await mockWindow.setTime((await readEscalationGameEndDate(client, child.escalationGameAddress)) + DAY)
-		await writeContractAndWait(client, () => client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: child.testSecurityPoolAddress, functionName: 'drainAllRep', args: [client.account.address] }))
+		await drainEscalationGameRepForTest(mockWindow, getRepTokenAddress(0n), child.escalationGameAddress, client.account.address)
 		await fundEscalationGame(child.escalationGameAddress, 148n * reportBond)
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
 		const rootBefore = await readNullifierRoot(client, child.escalationGameAddress, QuestionOutcome.Yes)
@@ -180,7 +172,7 @@ describe('Escalation Game: carried proofs and forked escrow', () => {
 		assert.strictEqual(await readCarryTotal(client, child.escalationGameAddress, QuestionOutcome.Yes), 0n, 'the losing inherited outcome should already be terminal')
 	})
 
-	test('forked-escrow winner payout applies the inherited reward schedule in child REP', async () => {
+	test('carried winner payout applies the inherited reward schedule in child REP', async () => {
 		const parent = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, addressString(TEST_ADDRESSES[1]), QuestionOutcome.Yes, reportBond)
@@ -193,37 +185,10 @@ describe('Escalation Game: carried proofs and forked escrow', () => {
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [await readCarryLeafHash(parent.escalationGameAddress, 2n)], new SparseNullifierTree().getProof(0n))
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'recordForkedEscrowForOutcome',
-				args: [client.account.address, QuestionOutcome.Yes, proof.amountAttoRep, proof.amountAttoRep],
-			}),
-		)
-
 		const walletBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
 		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
 		const walletBalanceAfter = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
-		assert.ok(walletBalanceAfter - walletBalanceBefore > proof.amountAttoRep, 'forked winning proof should receive reward upside, not only escrow principal')
-	})
-
-	test('recordForkedEscrowForOutcome preserves child REP backing when an owner source-principal share rounds to zero', async () => {
-		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await fundEscalationGame(child.escalationGameAddress, 1n)
-		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 0n, 1n)
-		assert.strictEqual(await getEscrowedRepByVault(client, child.escalationGameAddress, client.account.address), 1n)
-		const balanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'exportForkedEscrowByOutcome',
-				args: [client.account.address, client.account.address],
-			}),
-		)
-		assert.strictEqual((await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)) - balanceBefore, 1n)
+		assert.ok(walletBalanceAfter - walletBalanceBefore > proof.amountAttoRep, 'a carried winning proof should receive reward upside, not only its principal')
 	})
 
 	test('fork continuation inherits claim commitments without copying payout bundles', async () => {
@@ -280,132 +245,5 @@ describe('Escalation Game: carried proofs and forked escrow', () => {
 
 		assert.strictEqual(await readCarryLeafCount(client, child.escalationGameAddress, QuestionOutcome.No), 1n)
 		assert.strictEqual(await getEscrowedRepByVault(client, child.escalationGameAddress, client.account.address), 66n * reportBond)
-	})
-
-	test('residual sweep rejects while forked escrow remains unsettled', async () => {
-		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [0n, reportBond, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'recordForkedEscrowForOutcome',
-				args: [client.account.address, QuestionOutcome.Yes, reportBond, reportBond],
-			}),
-		)
-		await assert.rejects(
-			writeContractAndWait(client, async () =>
-				client.writeContract({
-					abi: statoblast_EscalationGame_EscalationGame.abi,
-					address: child.escalationGameAddress,
-					functionName: 'sweepResidualRepToSecurityPool',
-					args: [],
-				}),
-			),
-			/Escrowed REP remains/,
-		)
-	})
-
-	test('forked escrow export preserves original outcome buckets and cannot export twice', async () => {
-		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		const receiver = addressString(TEST_ADDRESSES[1])
-		const repToken = getRepTokenAddress(0n)
-		const yesSourcePrincipal = 10n * reportBond
-		const yesChildRep = 4n * reportBond
-		const noSourcePrincipal = 20n * reportBond
-		const noChildRep = 6n * reportBond
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: ReputationToken_ReputationToken.abi,
-				address: repToken,
-				functionName: 'transfer',
-				args: [child.escalationGameAddress, yesChildRep + noChildRep],
-			}),
-		)
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'recordForkedEscrowForOutcome',
-				args: [client.account.address, QuestionOutcome.Yes, yesSourcePrincipal, yesChildRep],
-			}),
-		)
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'recordForkedEscrowForOutcome',
-				args: [client.account.address, QuestionOutcome.No, noSourcePrincipal, noChildRep],
-			}),
-		)
-
-		const receiverBalanceBefore = await getERC20Balance(client, repToken, receiver)
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'exportForkedEscrowByOutcome',
-				args: [client.account.address, receiver],
-			}),
-		)
-		const receiverBalanceAfter = await getERC20Balance(client, repToken, receiver)
-		const yesEscrow = await readForkedEscrowByVaultAndOutcome(client, child.escalationGameAddress, client.account.address, QuestionOutcome.Yes)
-		const noEscrow = await readForkedEscrowByVaultAndOutcome(client, child.escalationGameAddress, client.account.address, QuestionOutcome.No)
-		await traceForkedEscrowByVaultAndOutcome(child.escalationGameAddress, client.account.address, QuestionOutcome.Yes)
-		assert.strictEqual(receiverBalanceAfter - receiverBalanceBefore, yesChildRep + noChildRep, 'export should transfer only child REP backing')
-		assert.deepStrictEqual(yesEscrow, [yesSourcePrincipal, yesSourcePrincipal, yesChildRep, yesChildRep], 'yes forked escrow should be marked fully exported without affecting no')
-		assert.deepStrictEqual(noEscrow, [noSourcePrincipal, noSourcePrincipal, noChildRep, noChildRep], 'no forked escrow should be marked fully exported without affecting yes')
-		assert.strictEqual(await getEscrowedRepByVault(client, child.escalationGameAddress, client.account.address), 0n, 'export should clear the vault escrow lock')
-
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'exportForkedEscrowByOutcome',
-				args: [client.account.address, receiver],
-			}),
-		)
-		const receiverBalanceAfterSecondExport = await getERC20Balance(client, repToken, receiver)
-		assert.strictEqual(receiverBalanceAfterSecondExport, receiverBalanceAfter, 'already-exported forked escrow should not transfer twice')
-	})
-
-	test('source-only forked escrow can migrate into the next continuation without child REP backing', async () => {
-		const forkerHarnessAddress = await deployEscalationGameForkerHarness()
-		const parent = await deployEscalationGameWithProofPool(getRepTokenAddress(0n), forkerHarnessAddress)
-		const child = await deployEscalationGameWithProofPool(getRepTokenAddress(0n), forkerHarnessAddress)
-		await startEscalationFromFork(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
-		await initializeSnapshotViaTestSecurityPool(parent.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: parent.testSecurityPoolAddress,
-				functionName: 'recordForkedEscrowForOutcome',
-				args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n],
-			}),
-		)
-
-		const exportResult = await client.simulateContract({
-			abi: escalationGameForkerHarnessArtifact.abi,
-			address: forkerHarnessAddress,
-			functionName: 'migrateForkedEscrowWithoutTransferForTest',
-			args: [parent.escalationGameAddress, child.escalationGameAddress, client.account.address],
-		})
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameForkerHarnessArtifact.abi,
-				address: forkerHarnessAddress,
-				functionName: 'migrateForkedEscrowWithoutTransferForTest',
-				args: [parent.escalationGameAddress, child.escalationGameAddress, client.account.address],
-			}),
-		)
-
-		assert.deepStrictEqual(exportResult.result[0], [0n, reportBond, 0n], 'source-only forked escrow should still export its original principal bucket')
-		assert.deepStrictEqual(exportResult.result[1], [0n, 0n, 0n], 'source-only forked escrow should not fabricate child REP backing during export')
-		assert.deepStrictEqual(await readForkedEscrowByVaultAndOutcome(client, child.escalationGameAddress, client.account.address, QuestionOutcome.Yes), [reportBond, 0n, 0n, 0n], 'the next continuation should retain the migrated source-only escrow instead of dropping it')
-		assert.strictEqual(await getEscrowedRepByVault(client, child.escalationGameAddress, client.account.address), 0n, 'source-only migration should not create a new child REP escrow lock')
 	})
 })

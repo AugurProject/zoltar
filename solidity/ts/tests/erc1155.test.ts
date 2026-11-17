@@ -1,7 +1,7 @@
 import { type Address, decodeEventLog, encodeDeployData, encodeFunctionData, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
-import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
@@ -588,7 +588,8 @@ describe('ERC1155 Compliance Test Suite', () => {
 					args: [sourceTokenId, [1n]],
 				}),
 			),
-			/ShareToken source pool cannot migrate/,
+			// The pool is in fork migration and has no forker, so entering fork mode on its behalf fails.
+			/execution reverted/,
 		)
 		assert.strictEqual(
 			await client.readContract({

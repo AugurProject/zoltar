@@ -148,10 +148,10 @@ contract SecurityPoolUniformPriceAuction {
 
 	/// @notice Zero capacity cancels safely. Otherwise the winning prefix must
 	/// fit the inventory at every winner's minimum collateral amount per lot.
-	function finalize(uint256 maximumFilledLots) external onlyController returns (Clearing memory result) {
+	function finalize(uint256 maximumFilledLots, uint256 floorAttoRepPerLot) external onlyController returns (Clearing memory result) {
 		require(initialized && !finalized, 'Auction cannot be finalized');
 		require(block.timestamp >= closesAt, 'Auction bidding window has not closed');
-		result = previewFinalization(maximumFilledLots);
+		result = previewFinalization(maximumFilledLots, floorAttoRepPerLot);
 		clearing = result;
 		remainingFeeLots = result.filledLots;
 		if (result.roundingAttoRep != 0) nodes[root].pendingAttoRep = _amount128(result.roundingAttoRep);
@@ -159,12 +159,16 @@ contract SecurityPoolUniformPriceAuction {
 		emit AuctionFinalized(result.attoRepPerLot, result.filledLots, result.raisedAttoEth, result.soldAttoRep);
 	}
 
-	function previewFinalization(uint256 maximumFilledLots) public view returns (Clearing memory result) {
+	/// @notice `floorAttoRepPerLot` is the least REP every winning lot must receive,
+	/// whatever its bid accepted. It lowers the lots the inventory can fund and
+	/// raises the clearing REP per lot, and never changes which bids rank first.
+	function previewFinalization(uint256 maximumFilledLots, uint256 floorAttoRepPerLot) public view returns (Clearing memory result) {
 		require(initialized, 'Auction has not started');
 		if (finalized) return clearing;
 		require(maximumFilledLots <= targetLots, 'Auction raise limit exceeds its target');
+		require(floorAttoRepPerLot % repGrid == 0, 'Auction floor must use the REP price grid');
 		if (maximumFilledLots == 0) return result;
-		result.filledLots = _fundedLots(maximumFilledLots);
+		result.filledLots = _fundedLots(maximumFilledLots, floorAttoRepPerLot);
 		if (result.filledLots == 0) return result;
 		uint256 marginal = bids[_lotAt(result.filledLots)].minimumAttoRepPerLot;
 		result.marginalMinimumAttoRepPerLot = marginal;
@@ -172,7 +176,8 @@ contract SecurityPoolUniformPriceAuction {
 		result.marginalDemandLots = _pricePrefix(marginal, PriceBoundary.Inclusive) - result.fullBeforeLots;
 		result.marginalFillLots = result.filledLots - result.fullBeforeLots;
 		result.raiseLimitReached = result.filledLots == maximumFilledLots;
-		result.attoRepPerLot = result.raiseLimitReached ? marginal : inventoryAttoRep / result.filledLots;
+		result.attoRepPerLot =
+			result.raiseLimitReached ? Math.max(marginal, floorAttoRepPerLot) : inventoryAttoRep / result.filledLots;
 		result.attoRepPerLot -= result.attoRepPerLot % repGrid;
 		result.raisedAttoEth = result.filledLots * lotAttoEth;
 		uint256 principal = result.filledLots * result.attoRepPerLot;
@@ -425,12 +430,12 @@ contract SecurityPoolUniformPriceAuction {
 
 	/// @dev A later bid has a weakly larger minimum and can only lower affordable
 	/// capacity. Subtree lot sums locate the largest feasible prefix in one path.
-	function _fundedLots(uint256 maximumFilledLots) private view returns (uint256 lots) {
+	function _fundedLots(uint256 maximumFilledLots, uint256 floorAttoRepPerLot) private view returns (uint256 lots) {
 		uint256 id = root;
 		while (id != 0) {
 			Node storage node = nodes[id];
 			uint256 before = lots + nodes[node.left].subtreeLots;
-			uint256 capacity = Math.min(maximumFilledLots, inventoryAttoRep / bids[id].minimumAttoRepPerLot);
+			uint256 capacity = Math.min(maximumFilledLots, inventoryAttoRep / Math.max(bids[id].minimumAttoRepPerLot, floorAttoRepPerLot));
 			if (capacity < before) id = node.left;
 			else if (capacity <= before + bids[id].lots) return capacity;
 			else {

@@ -1,4 +1,4 @@
-import { type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import type { Chain, PublicClient, Transport } from '@zoltar/bot-shared/ethereum'
 
 export function requirePositiveLimit(value: unknown, label: string) {
 	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive safe integer`)

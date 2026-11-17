@@ -1,6 +1,6 @@
 import { createDecodeError, getAbiSignature, isIntegerAbiType, isStaticBytesAbiType, normalizeAbi, normalizeCodecValue, normalizeDecodedTuple } from './codec.js'
 
-import { type Abi, type AbiParameter, type AbiValue, type DecodedEventArguments, type DecodedEventLog, type EncodedEventTopic, type Hex } from '../types.js'
+import type { Abi, AbiParameter, AbiValue, DecodedEventArguments, DecodedEventLog, EncodedEventTopic, Hex } from '../types.js'
 
 import { ensure0x, hexToBytes, isHex, keccak256, stripHexPrefix } from '../encoding.js'
 

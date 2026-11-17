@@ -36,7 +36,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 	let setupStage = 4n
 	const overrides: Record<string, unknown> = {}
 	const scopedOverrides = new Map<string, unknown>()
-	const reads: { name: string; args: readonly unknown[] | undefined; blockNumber: bigint | undefined }[] = []
+	const reads: { address: Address; name: string; args: readonly unknown[] | undefined; blockNumber: bigint | undefined }[] = []
 	const multicallBlocks: (bigint | undefined)[] = []
 	// Calls to these addresses fail in a multicall that allows failures, as calls to a non-portfolio would.
 	const failingMulticallAddresses = new Set<Address>()
@@ -72,7 +72,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 		getBalance: async () => snapshot.walletAttoEth,
 		getBlock: async () => ({ ...createBlockWithTimestamp(snapshot.timestamp), number: snapshot.blockNumber, hash: snapshot.blockHash }),
 		...createMockReadClient(async request => {
-			reads.push({ name: request.functionName, args: request.args, blockNumber: request.blockNumber })
+			reads.push({ address: request.address, name: request.functionName, args: request.args, blockNumber: request.blockNumber })
 			const scopedKey = `${request.address}:${request.functionName}`
 			if (scopedOverrides.has(scopedKey)) return scopedOverrides.get(scopedKey)
 			// Deriving deployment addresses hashes large init codes; unrelated reads need no derivation.
@@ -85,6 +85,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				capitalLedger: capital,
 				zoltar: infrastructure?.zoltar,
 				factory: infrastructure?.securityPoolFactory,
+				isPortfolio: true,
 				settlement: modules.engine,
 				commitmentIndex: index,
 				repToken: token,

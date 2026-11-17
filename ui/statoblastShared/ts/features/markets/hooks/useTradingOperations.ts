@@ -3,7 +3,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { createCompleteSetInSecurityPool, loadSecurityPoolMintCapacity, loadTradingDetails as loadTradingDetailsForPool, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../../../protocol/trading.js'
+import { createCompleteSetInSecurityPool, loadSecurityPoolMintCapacity, loadShareMigrationTargets, loadTradingDetails as loadTradingDetailsForPool, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../../../protocol/trading.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -31,8 +31,10 @@ import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from 
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TradingFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { TradingActionResult, TradingDetails } from '../../../types/contracts.js'
+import type { ShareMigrationTargetsState, TradingActionResult, TradingDetails } from '../../../types/contracts.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as tradingCopy from '../../../copy/trading.js'
 
 type UseTradingOperationsParameters = WriteOperationsParameters & {
 	deploymentStatuses: DeploymentStatus[]
@@ -44,6 +46,7 @@ export type UseTradingOperationsDependencies = {
 	createCompleteSetInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, amount: bigint) => ReturnType<typeof createCompleteSetInSecurityPool>
 	getWalletEthBalance: (walletAddress: Address) => Promise<bigint>
 	loadSecurityPoolMintCapacity: (securityPoolAddress: Address) => ReturnType<typeof loadSecurityPoolMintCapacity>
+	loadShareMigrationTargets: (source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, childUniverses: ZoltarUniverseSummary['childUniverses'], accountAddress: Address | undefined) => ReturnType<typeof loadShareMigrationTargets>
 	loadTradingDetails: (securityPoolAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadTradingDetailsForPool>
 	loadZoltarUniverseSummary: (universeId: bigint) => ReturnType<typeof loadZoltarUniverseSummary>
 	migrateSharesFromUniverse: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof migrateSharesFromUniverse>[2], targetOutcomeIndexes: bigint[], migratedAttoShares?: bigint) => ReturnType<typeof migrateSharesFromUniverse>
@@ -55,6 +58,7 @@ const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies 
 	createCompleteSetInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, amount) => await createCompleteSetInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, amount),
 	getWalletEthBalance: async walletAddress => await createConnectedReadClient().getBalance({ address: walletAddress }),
 	loadSecurityPoolMintCapacity: async securityPoolAddress => await loadSecurityPoolMintCapacity(createConnectedReadClient(), securityPoolAddress),
+	loadShareMigrationTargets: async (source, childUniverses, accountAddress) => await loadShareMigrationTargets(createConnectedReadClient(), source, childUniverses, accountAddress),
 	loadTradingDetails: async (securityPoolAddress, accountAddress) => await loadTradingDetailsForPool(createConnectedReadClient(), securityPoolAddress, accountAddress),
 	loadZoltarUniverseSummary: async universeId => await loadZoltarUniverseSummary(createConnectedReadClient(), universeId),
 	migrateSharesFromUniverse: async (accountAddress, callbacks, securityPoolAddress, outcome, targetOutcomeIndexes, migratedAttoShares) => await migrateSharesFromUniverse(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, targetOutcomeIndexes, migratedAttoShares),
@@ -75,7 +79,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	const tradingActiveAction = useSignal<TradingActionResult['action'] | undefined>(undefined)
 	const tradingFeedback = useSignal<ActionFeedback<TradingActionResult['action']> | undefined>(undefined)
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
-	const targetOutcomeDefaultsKey = useRef<string | undefined>(undefined)
+	const targetOutcomeDefaults = useRef<{ fromLoadedTargets: boolean; inputs: string; scope: string; value: string } | undefined>(undefined)
 	const tradingSystemDeployed = isTradingSystemDeployed(deploymentStatuses)
 	const effectiveTradingPoolAddressInput = selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? tradingForm.value.securityPoolAddress : selectedSecurityPoolAddress
 	const currentTradingSelectionKey = normalizeAddress(effectiveTradingPoolAddressInput) ?? ''
@@ -131,6 +135,37 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	}
 	const resolveEffectiveTradingPoolAddressInput = () => effectiveTradingPoolAddressInput
 	const isTradingSelectionCurrent = (selectionKey: string) => currentTradingSelectionKeyRef.current === selectionKey
+	// A failed read only blocks migration; balances and redeem capacity stay usable.
+	const loadShareMigrationTargetsState = async (details: TradingDetails, forkUniverse: ZoltarUniverseSummary, walletAddress: Address | undefined): Promise<ShareMigrationTargetsState> => {
+		try {
+			return await dependencies.loadShareMigrationTargets(details, forkUniverse.childUniverses, walletAddress)
+		} catch (error) {
+			return { unavailableReason: getErrorMessage(error, tradingCopy.shareMigrationTargetPoolsUnavailable) }
+		}
+	}
+	// A forked universe's details carry its child universes' share-token state, which decides whether a migration would revert.
+	const loadTradingState = async (securityPoolAddress: Address, walletAddress: Address | undefined) => {
+		const details = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
+		const forkUniverse = await dependencies.loadZoltarUniverseSummary(details.universeId)
+		if (forkUniverse?.hasForked !== true) return { details, forkUniverse }
+		const shareMigrationTargets = await loadShareMigrationTargetsState(details, forkUniverse, walletAddress)
+		return { details: { ...details, shareMigrationTargets }, forkUniverse }
+	}
+	// Retries an unavailable read on the next block or explicit refresh, without reloading the rest of the details.
+	const shareMigrationTargetsRetryPending = useRef(false)
+	useBlockRefresh(() => {
+		const details = tradingDetails.value
+		const forkUniverse = tradingForkUniverse.value
+		if (details?.shareMigrationTargets === undefined || !('unavailableReason' in details.shareMigrationTargets) || forkUniverse?.hasForked !== true || shareMigrationTargetsRetryPending.current || tradingDetailsLoad.isLoading.value) return
+		shareMigrationTargetsRetryPending.current = true
+		void loadShareMigrationTargetsState(details, forkUniverse, accountAddress)
+			.then(shareMigrationTargets => {
+				if (tradingDetails.value === details) tradingDetails.value = { ...details, shareMigrationTargets }
+			})
+			.finally(() => {
+				shareMigrationTargetsRetryPending.current = false
+			})
+	}, enabled)
 
 	const refreshTradingDetails = async (securityPoolAddressInput: string, walletAddress: Address | undefined, isCurrent?: () => boolean) => {
 		if (!tradingSystemDeployed) {
@@ -151,11 +186,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			onStart: () => {
 				tradingError.value = undefined
 			},
-			load: async () => {
-				const details = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
-				const forkUniverse = await dependencies.loadZoltarUniverseSummary(details.universeId)
-				return { details, forkUniverse }
-			},
+			load: async () => await loadTradingState(securityPoolAddress, walletAddress),
 			onSuccess: ({ details, forkUniverse }: { details: TradingDetails; forkUniverse: ZoltarUniverseSummary | undefined }) => {
 				tradingDetails.value = details
 				tradingForkUniverse.value = forkUniverse
@@ -215,8 +246,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 				async (walletAddress, activeWallet) => {
 					const securityPoolAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), 'Security pool address')
 					const isOnActiveAppChain = isActiveAppChain(activeWallet.chainId)
-					const latestTradingDetails = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
-					const latestForkUniverse = await dependencies.loadZoltarUniverseSummary(latestTradingDetails.universeId)
+					const { details: latestTradingDetails, forkUniverse: latestForkUniverse } = await loadTradingState(securityPoolAddress, walletAddress)
 					if (isActionSelectionCurrent()) {
 						tradingDetails.value = latestTradingDetails
 						tradingForkUniverse.value = latestForkUniverse
@@ -275,6 +305,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 							loadingTradingForkUniverse: false,
 							selectedShareOutcome: currentForm.selectedShareOutcome,
 							shareBalances: latestTradingDetails.shareBalances,
+							shareMigrationTargets: latestTradingDetails.shareMigrationTargets,
 							targetOutcomeIndexesInput: currentForm.targetOutcomeIndexes,
 							tradingForkUniverse: latestForkUniverse,
 						})
@@ -372,7 +403,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			tradingError.value = undefined
 			return
 		}
-		targetOutcomeDefaultsKey.current = undefined
+		targetOutcomeDefaults.current = undefined
 		if (tradingForm.value.targetOutcomeIndexes !== '')
 			tradingForm.value = {
 				...tradingForm.value,
@@ -400,20 +431,42 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 		void refreshTradingDetails(effectiveSecurityPoolAddressInput, accountAddress, isCurrent)
 	}, [accountAddress, enabled, selectedSecurityPoolAddress, tradingForm.value.securityPoolAddress, tradingSystemDeployed])
 
-	useEffect(() => {
-		if (!enabled) return
+	const targetOutcomeDefaultsScope = (() => {
 		const securityPoolAddress = resolveTradingPoolAddressInput(resolveEffectiveTradingPoolAddressInput())
-		if (securityPoolAddress === undefined || tradingForkUniverse.value === undefined) return
-
-		const defaultsKey = `${securityPoolAddress.toLowerCase()}:${tradingForkUniverse.value.universeId.toString()}:${tradingForkUniverse.value.forkTime.toString()}`
-		if (targetOutcomeDefaultsKey.current === defaultsKey) return
-
-		tradingForm.value = {
-			...tradingForm.value,
-			targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse.value),
+		if (!enabled || securityPoolAddress === undefined || tradingForkUniverse.value === undefined) return undefined
+		return `${securityPoolAddress.toLowerCase()}:${tradingForkUniverse.value.universeId.toString()}:${tradingForkUniverse.value.forkTime.toString()}`
+	})()
+	const shareMigrationTargets = tradingDetails.value?.shareMigrationTargets
+	const shareMigrationTargetsLoaded = shareMigrationTargets !== undefined && !('unavailableReason' in shareMigrationTargets)
+	const selectedShareOutcome = tradingForm.value.selectedShareOutcome
+	// Everything the default depends on within one scope: the selected outcome, the wallet's balance of it, and what each child already holds.
+	const targetOutcomeDefaultsInputs = (() => {
+		const selectedBalance = getSelectedOutcomeShareBalance(tradingDetails.value?.shareBalances, selectedShareOutcome)
+		const targets =
+			shareMigrationTargets === undefined || 'unavailableReason' in shareMigrationTargets
+				? 'no-targets'
+				: shareMigrationTargets.map(target => `${target.outcomeIndex.toString()}:${target.canonicalPool ?? 'no-pool'}:${getSelectedOutcomeShareBalance(target.migratedAttoShares, selectedShareOutcome)?.toString() ?? ''}`).join(',')
+		return `${selectedShareOutcome}:${selectedBalance?.toString() ?? 'no-balance'}:${targets}`
+	})()
+	// A new scope always takes its default. Within a scope the default follows its inputs only while the selection is still the
+	// last default (the user has not edited it), and a selection computed from loaded targets survives a later failed read.
+	useEffect(() => {
+		if (targetOutcomeDefaultsScope === undefined) return
+		const previous = targetOutcomeDefaults.current
+		if (previous !== undefined && previous.scope === targetOutcomeDefaultsScope) {
+			if (previous.inputs === targetOutcomeDefaultsInputs) return
+			if (!shareMigrationTargetsLoaded && previous.fromLoadedTargets) return
+			if (tradingForm.value.targetOutcomeIndexes !== previous.value) return
 		}
-		targetOutcomeDefaultsKey.current = defaultsKey
-	}, [enabled, selectedSecurityPoolAddress, tradingForm.value.securityPoolAddress, tradingForkUniverse.value?.forkTime, tradingForkUniverse.value?.universeId])
+		const value = getDefaultShareMigrationTargetOutcomeIndexes({
+			selectedShareOutcome: tradingForm.value.selectedShareOutcome,
+			shareBalances: tradingDetails.value?.shareBalances,
+			shareMigrationTargets: tradingDetails.value?.shareMigrationTargets,
+			tradingForkUniverse: tradingForkUniverse.value,
+		})
+		if (tradingForm.value.targetOutcomeIndexes !== value) tradingForm.value = { ...tradingForm.value, targetOutcomeIndexes: value }
+		targetOutcomeDefaults.current = { fromLoadedTargets: shareMigrationTargetsLoaded, inputs: targetOutcomeDefaultsInputs, scope: targetOutcomeDefaultsScope, value }
+	}, [enabled, selectedSecurityPoolAddress, targetOutcomeDefaultsInputs, targetOutcomeDefaultsScope, tradingForm.value.securityPoolAddress])
 
 	return {
 		collateralFunding,

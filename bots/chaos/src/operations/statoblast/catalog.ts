@@ -1,6 +1,6 @@
 import { capitalAction, capitalPolicy, depositCapital } from './capital.ts'
 import { initializeChildHistory } from './child-preparation.ts'
-import { OperationDefinition } from '../types.ts'
+import type { OperationDefinition } from '../types.ts'
 
 import { checkpointDefinition, deployPool } from './vaults.ts'
 

@@ -2,7 +2,7 @@ import { executorArtifact } from '#contracts/artifacts.generated'
 import { concatHex, getCreate2Address } from '@zoltar/bot-shared/ethereum'
 import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 
-import { type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import type { ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
 import { type Address, type Hash, type Hex, keccak256, parseTransaction, recoverTransactionAddress } from '@zoltar/bot-shared/ethereum'
 

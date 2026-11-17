@@ -18,7 +18,17 @@
 		"enabled": true,
 		"rules": {
 			"recommended": false,
+			"complexity": {
+				"noUselessCatch": "error",
+				"noUselessContinue": "error",
+				"noUselessEmptyExport": "error",
+				"noUselessEscapeInRegex": "error",
+				"noUselessTernary": "error",
+				"noUselessUndefinedInitialization": "error",
+				"useOptionalChain": "error"
+			},
 			"correctness": {
+				"noUnsafeFinally": "error",
 				"noUnusedFunctionParameters": "error",
 				"noUnusedImports": "error",
 				"noUnusedVariables": "error"
@@ -29,7 +39,11 @@
 			},
 			"suspicious": {
 				"noDoubleEquals": "error",
-				"noExplicitAny": "error"
+				"noExplicitAny": "error",
+				"noPrototypeBuiltins": "error",
+				"noShadowRestrictedNames": "error",
+				"useIsArray": "error",
+				"useIterableCallbackReturn": "error"
 			},
 			"style": {
 				"useConst": "error",
@@ -38,6 +52,9 @@
 				"noNonNullAssertion": "error",
 				"useDefaultSwitchClause": "error",
 				"useNodeAssertStrict": "error",
+				"useExportType": "error",
+				"useImportType": "error",
+				"useNodejsImportProtocol": "error",
 				"noRestrictedImports": {
 					"level": "error",
 					"options": {

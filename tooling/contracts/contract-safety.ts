@@ -111,10 +111,10 @@ function minimumTupleEncodingSize(parameters: readonly AbiParameter[]): number {
 }
 
 function minimumConstructorArgumentsBytes(contract: ArtifactContract, label: string): number {
-	const constructor = contract.abi?.find(entry => isPlainRecord(entry) && entry['type'] === 'constructor')
-	if (constructor === undefined) return 0
-	if (!isPlainRecord(constructor) || !Array.isArray(constructor['inputs'])) throw new Error(`${label} constructor ABI is missing inputs`)
-	return minimumTupleEncodingSize(constructor['inputs'].map((input, index) => getAbiParameter(input, `${label} constructor input ${index}`)))
+	const constructorAbi = contract.abi?.find(entry => isPlainRecord(entry) && entry['type'] === 'constructor')
+	if (constructorAbi === undefined) return 0
+	if (!isPlainRecord(constructorAbi) || !Array.isArray(constructorAbi['inputs'])) throw new Error(`${label} constructor ABI is missing inputs`)
+	return minimumTupleEncodingSize(constructorAbi['inputs'].map((input, index) => getAbiParameter(input, `${label} constructor input ${index}`)))
 }
 
 function getContract(artifact: ContractArtifact, reference: ContractReference): ArtifactContract {

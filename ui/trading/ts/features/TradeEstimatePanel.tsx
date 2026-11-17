@@ -29,7 +29,7 @@ function formatImpactPercent(impactBps: bigint) {
 
 function ImpactNotice({ tier, impactBps, acknowledged, disabled, onAcknowledge }: { tier: PriceImpactTier; impactBps: bigint; acknowledged: boolean; disabled: boolean; onAcknowledge(value: boolean): void }) {
 	const percent = formatImpactPercent(impactBps)
-	if (tier === 'low') return null
+	if (tier === 'low') return undefined
 	// The percentage follows every debounced estimate, so these stay quiet; the panel's tier announcement speaks for them.
 	if (tier === 'caution') return <UserMessage tone='warning' className='trade-impact-notice trade-impact-notice--caution' detail={ticketCopy.priceImpactCaution(percent)} />
 	return (
@@ -40,7 +40,7 @@ function ImpactNotice({ tier, impactBps, acknowledged, disabled, onAcknowledge }
 					<input type='checkbox' checked={acknowledged} disabled={disabled} onChange={event => onAcknowledge(event.currentTarget.checked)} />
 					<span>{ticketCopy.acknowledgeImpact(percent)}</span>
 				</label>
-			) : null}
+			) : undefined}
 		</WarningSurface>
 	)
 }
@@ -180,7 +180,7 @@ export function TradeEstimatePanel({
 				</DataGrid>
 				<div className='trade-estimate-notes'>
 					<UserMessage className='detail trade-estimate-note' detail={estimate.kind === 'entry' ? ticketCopy.invalidInsuranceNote : ticketCopy.invalidUsedNote} />
-					{estimate.kind === 'entry' ? <UserMessage className='detail trade-estimate-note' detail={payoutCopy.holdingFeeNote} /> : null}
+					{estimate.kind === 'entry' ? <UserMessage className='detail trade-estimate-note' detail={payoutCopy.holdingFeeNote} /> : undefined}
 					<UserMessage
 						className='detail trade-estimate-note'
 						detail={
@@ -195,7 +195,7 @@ export function TradeEstimatePanel({
 					/>
 				</div>
 			</ReadOnlyDetailAccordion>
-			{onSettingsChange === undefined ? null : (
+			{onSettingsChange === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={protection}>
 					<TradeSettingsPanel embedded settings={settings} onChange={onSettingsChange} />
 					<div className='trade-estimate-notes'>

@@ -230,11 +230,11 @@ export const addressPortfolioRows = async (
 		sql`
 			WITH transfers AS (
 				SELECT event.market_address, lower(event.event_data->>'from') AS from_address,
-					lower(event.event_data->>'to') AS to_address, (event.event_data->>'amount')::numeric AS amount
+					lower(event.event_data->>'to') AS to_address, (event.event_data->>'value')::numeric AS amount
 				FROM amm_trade_events event
 				WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock}
 					AND event.event_name = 'Transfer' AND event.event_data ? 'from'
-					AND event.event_data ? 'to' AND event.event_data ? 'amount'
+					AND event.event_data ? 'to' AND event.event_data ? 'value'
 			), deltas AS (
 				SELECT transfer.market_address, transfer.amount AS balance_delta FROM transfers transfer WHERE transfer.to_address = ${address}
 				UNION ALL SELECT transfer.market_address, -transfer.amount FROM transfers transfer WHERE transfer.from_address = ${address}

@@ -1,8 +1,8 @@
-import { type Account, type Address, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import type { Account, Address, Chain, Hex, Transport, WalletClient } from '@zoltar/bot-shared/ethereum'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
 import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
-import { type RuntimeState } from '../state/operator-state.ts'
+import type { RuntimeState } from '../state/operator-state.ts'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
 

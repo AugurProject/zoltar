@@ -88,15 +88,16 @@ export async function scanCarryStorage(context: {
 	const selected = candidates.filter(candidate => candidate.proof !== undefined)
 	const economicsByGame = new Map<string, ReturnType<typeof readEconomics>>()
 	async function readEconomics(candidate: (typeof candidates)[number]) {
-		const [bindingCapital, nonDecisionThreshold, gameEnd, universeId, zoltar] = await drainConcurrent([
+		const [bindingCapital, nonDecisionThreshold, gameEnd, universeId, zoltar, frozenForkThreshold] = await drainConcurrent([
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'getBindingCapitalAttoRep' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'getEscalationGameEndDate' }),
 			client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber, functionName: 'universeId' }),
 			client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber, functionName: 'zoltar' }),
+			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'continuationSettlementForkThresholdAttoRep' }),
 		])
 		const [forkThreshold, forkTime] = await drainConcurrent([client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }), client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber, functionName: 'getForkTime' })])
-		return { bindingCapital, nonDecisionThreshold, gameEnd, forkThreshold, forkTime }
+		return { bindingCapital, nonDecisionThreshold, gameEnd, forkThreshold, forkTime, frozenForkThreshold }
 	}
 	const verified = await mapWithConcurrency(selected, Math.min(2, DISCOVERY_RPC_CONCURRENCY), async (candidate): Promise<ForkedCarryWithdrawalSnapshot | undefined> => {
 		if (!(await reader.finalReady(candidate)) || !(await reader.progress(candidate.game, reader.identity(candidate))).ready) return undefined
@@ -119,14 +120,16 @@ export async function scanCarryStorage(context: {
 			gameEconomics = readEconomics(candidate)
 			economicsByGame.set(key, gameEconomics)
 		}
-		const [allocation, { bindingCapital, nonDecisionThreshold, gameEnd, forkThreshold, forkTime }, gameWithdrawal, simulation] = await drainConcurrent([
+		const [allocation, { bindingCapital, nonDecisionThreshold, gameEnd, forkThreshold, forkTime, frozenForkThreshold }, gameWithdrawal, simulation] = await drainConcurrent([
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [candidate.outcome, argument.amountAttoRep, argument.cumulativeAmountAttoRep, argument.leafIndex], blockNumber, functionName: 'getInheritedClaimAllocation' }),
 			gameEconomics,
 			client.simulateContract({ abi: escalationGameAbi, address: candidate.game, account: candidate.pool, args: [argument, candidate.outcome], blockNumber, functionName: 'withdrawDeposit' }),
 			client.simulateContract({ abi: securityPoolAbi, address: candidate.pool, account: context.wallet, args: [candidate.outcome, [argument]], blockNumber, functionName: 'withdrawForkedEscalationDeposits' }),
 		])
+		const liveForkThreshold = forkTime > gameEnd ? nonDecisionThreshold : forkThreshold
 		const economics = computeWinningEconomics({
-			actualForkThresholdAttoRep: forkTime > gameEnd ? nonDecisionThreshold : forkThreshold,
+			// The first winning claim of a carried game freezes the threshold; zero means no claim yet.
+			actualForkThresholdAttoRep: frozenForkThreshold === 0n ? liveForkThreshold : frozenForkThreshold,
 			bindingCapitalAttoRep: bindingCapital,
 			cumulativeAmountAttoRep: allocation.retainedCumulativeAttoRep,
 			depositAmountAttoRep: allocation.rewardAmountAttoRep,

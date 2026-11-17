@@ -1,4 +1,4 @@
-import { EcosystemSnapshot, OperationDefinition, OperationEvidence, PoolSnapshot } from '../types.ts'
+import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PoolSnapshot } from '../types.ts'
 
 import { amount, choose, eligible, encodePreflightCall, encodeStep, eventEvidence, eventTopic, mixSeed, planBase } from '../planning.ts'
 

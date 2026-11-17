@@ -7,12 +7,12 @@ import { getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 
 import {
-	ProtocolIndexReference,
-	CollectionKind,
-	PreparedProtocolIndexCollection,
-	ProtocolIndexPreparationBudget,
+	type ProtocolIndexReference,
+	type CollectionKind,
+	type PreparedProtocolIndexCollection,
+	type ProtocolIndexPreparationBudget,
 	prepareCollection,
-	CollectionCommitment,
+	type CollectionCommitment,
 	validateManifestEnvelope,
 	MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES,
 	MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES,
@@ -31,7 +31,7 @@ import {
 	isReference,
 	parseProtocolIndexReference,
 } from './protocol-index-format.ts'
-import { isValidatedProtocolIndex, parseProtocolIndex, immutableProtocolIndex, AuctionBidRecord, AuctionRefundRecord, auctionBidRecord, auctionRefundRecord, ProtocolIndexIdentity } from './protocol-index-schema.ts'
+import { isValidatedProtocolIndex, parseProtocolIndex, immutableProtocolIndex, type AuctionBidRecord, type AuctionRefundRecord, auctionBidRecord, auctionRefundRecord, type ProtocolIndexIdentity } from './protocol-index-schema.ts'
 
 const GENERATION_NAME = /^[0-9a-f]{64}$/
 const TEMPORARY_GENERATION_NAME = /^\.tmp-[0-9]+-[0-9a-f-]+$/

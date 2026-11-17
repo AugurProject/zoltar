@@ -6,12 +6,12 @@ import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
 import type { CoordinatorGamePolicy } from '#core/game-policy'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
 import { batchRead, batchValue, type BatchReader } from '#core/batch-read'
-import { type ActiveReport } from '#monitoring/oracle-log-state'
+import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DurableTransactionIntent, PositionRecord } from '#state/position-store'
 import { decimalWeth } from '#state/operator-state'
-import { type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import type { OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 export function dateFromBlockTimestamp(timestamp: bigint) {
 	const milliseconds = timestamp * 1_000n

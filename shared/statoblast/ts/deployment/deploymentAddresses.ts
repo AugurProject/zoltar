@@ -8,6 +8,15 @@ type SecurityPoolFactoryAddressInputs = {
 	securityPoolForker: Address
 	securityPoolOperationsDelegate: Address
 	securityPoolEventEmitter: Address
+	securityPoolCapitalLedgerDeployer: Address
+	securityPoolCommitmentIndexDeployer: Address
+	securityPoolCapitalFeeStreamsDeployer: Address
+	securityPoolSettlementBookDeployer: Address
+	securityPoolPortfolioSettlementDeployer: Address
+	securityPoolReporterLedgerDeployer: Address
+	securityPoolPortfolioForkCoordinatorDeployer: Address
+	securityPoolPortfolioServicesDeployer: Address
+	securityPoolPortfolioAuctionDeployer: Address
 	shareTokenFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
@@ -124,6 +133,15 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 					securityPoolForker: addresses.securityPoolForker,
 					securityPoolOperationsDelegate,
 					securityPoolEventEmitter,
+					securityPoolCapitalLedgerDeployer: addresses.securityPoolCapitalLedgerDeployer,
+					securityPoolCommitmentIndexDeployer: addresses.securityPoolCommitmentIndexDeployer,
+					securityPoolCapitalFeeStreamsDeployer: addresses.securityPoolCapitalFeeStreamsDeployer,
+					securityPoolSettlementBookDeployer: addresses.securityPoolSettlementBookDeployer,
+					securityPoolPortfolioSettlementDeployer: addresses.securityPoolPortfolioSettlementDeployer,
+					securityPoolReporterLedgerDeployer: addresses.securityPoolReporterLedgerDeployer,
+					securityPoolPortfolioForkCoordinatorDeployer: addresses.securityPoolPortfolioForkCoordinatorDeployer,
+					securityPoolPortfolioServicesDeployer: addresses.securityPoolPortfolioServicesDeployer,
+					securityPoolPortfolioAuctionDeployer: addresses.securityPoolPortfolioAuctionDeployer,
 					shareTokenFactory: addresses.shareTokenFactory,
 					zoltar: addresses.zoltar,
 					zoltarQuestionData: addresses.zoltarQuestionData,

@@ -26,9 +26,9 @@ function holdingsFeeRange(market: LiveMarket, balances: LiveBalances, feeCollate
 }
 
 export function BackingDetails({ market, balances }: { market: LiveMarket; balances?: LiveBalances | undefined }) {
-	if (market.loadError !== undefined) return null
+	if (market.loadError !== undefined) return undefined
 	const valuation = market.valuation
-	if (valuation === undefined || market.settlementCollateralAttoEth === 0n || market.shareTokenSupplyAttoShares === 0n) return null
+	if (valuation === undefined || market.settlementCollateralAttoEth === 0n || market.shareTokenSupplyAttoShares === 0n) return undefined
 	const feeCollateralAttoEth = market.settlementCollateralAttoEth - valuation.projectedCollateralAttoEth
 	const feeReduction = (feeCollateralAttoEth * 1_000_000n) / market.settlementCollateralAttoEth
 	const scopedBalances = liveBalancesForMarket(balances, market)

@@ -5,7 +5,7 @@ import { requiredDeploymentRoles, type DeploymentRole } from '#config/deployment
 import { rpcFailureWithContext, type Address, type TransactionLog } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
-import { type Configuration } from '#config/configuration'
+import type { Configuration } from '#config/configuration'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { compactFinalityWindow, ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'

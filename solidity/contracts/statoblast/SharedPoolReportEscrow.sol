@@ -21,10 +21,17 @@ contract SharedPoolReportEscrow {
 	OpenOracle public immutable openOracle;
 	IERC20 public immutable weth;
 	ReputationToken public immutable reputationToken;
+	/// @dev Gas the report promises its settlement callback.
+	uint32 private immutable callbackGasLimit;
+	/// @dev Allowance for entering the callback before its gas check runs. It is far
+	/// above today's entry cost so that a gas repricing cannot make every settlement
+	/// fail, and far below the callback budget an accepted report needs.
+	uint256 private constant CALLBACK_ENTRY_GAS_MARGIN = 100_000;
 	uint256 public reportId;
 	event ReportCompleted(uint256 indexed reportId, address indexed priceFeed, bool accepted);
 
-	constructor(address _sponsor, OpenOracle _openOracle, IERC20 _weth, ReputationToken _reputationToken) {
+	constructor(address _sponsor, OpenOracle _openOracle, IERC20 _weth, ReputationToken _reputationToken, uint32 _callbackGasLimit) {
+		callbackGasLimit = _callbackGasLimit;
 		feed = msg.sender;
 		sponsor = _sponsor;
 		openOracle = _openOracle;
@@ -42,6 +49,16 @@ contract SharedPoolReportEscrow {
 
 	function openOracleCallback(uint256 id, uint256 amount1, uint256 amount2, uint256, address, address) external {
 		require(msg.sender == address(openOracle) && id == reportId, 'Wrong escrow report');
+		// OpenOracle forwards less than the promised gas when its settler supplies
+		// too little, and rejects the settlement only if almost none is left after
+		// this call. A callback that merely reverted would hand its unused gas back
+		// and let an under-funded settlement stand without accepting the price.
+		// Consuming everything forwarded makes OpenOracle revert that settlement.
+		if (gasleft() < uint256(callbackGasLimit) - CALLBACK_ENTRY_GAS_MARGIN) {
+			assembly ('memory-safe') {
+				invalid()
+			}
+		}
 		ISharedReportReceiver(feed).settleReport(id, amount1, amount2);
 		emit ReportCompleted(id, feed, ISharedReportReceiver(feed).reportOutcome(id) == 1);
 		withdrawFunding();

@@ -2,28 +2,14 @@ import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
-import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
+import type { WriteClient } from '../../testSupport/simulator/utils/clients'
 import { BURN_ADDRESS } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import {
-	getEscalationGameOutcomeState,
-	getEscrowedRepByVault,
-	getQuestionResolution,
-	getTotalEscrowedRep,
-	readHasReachedNonDecision,
-	readNonDecisionState,
-	readCanTriggerOwnFork,
-	readNonDecisionTimestamp,
-	readCarryPeaks,
-	readCarryTotal,
-	readIsForkCarryFundingComplete,
-	readNullifierRoot,
-	readForkedEscrowByVaultAndOutcome,
-} from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getEscalationGameOutcomeState, getQuestionResolution, readHasReachedNonDecision, readNonDecisionState, readCanTriggerOwnFork, readNonDecisionTimestamp, readCarryPeaks, readCarryTotal, readIsForkCarryFundingComplete, readNullifierRoot } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame } from '../../types/contractArtifact'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { SparseNullifierTree } from '../carryProofHelpers'
 import { ESCALATION_TIME_LENGTH, NON_DECISION_STATE_NONE, NON_DECISION_STATE_LOCAL, NON_DECISION_STATE_INHERITED_THRESHOLD_TIE, zeroHash, zeroPeakArray } from './carryHelpers'
@@ -41,7 +27,6 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		fundEscalationGame,
 		advanceForkContinuationPastStart,
 		depositOnOutcomeViaProofTestSecurityPool,
-		recordForkedEscrowForOutcomeViaTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPool,
 		createCarryProof,
 		initializeSnapshotWithResolutionBalancesViaTestSecurityPool,
@@ -56,76 +41,6 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 	beforeEach(() => {
 		mockWindow = fixture.mockWindow
 		client = fixture.client
-	})
-
-	test('forked escrow events expose updated escrow totals and outcome balance', async () => {
-		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 0n], [0n, reportBond, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-
-		const recordHash = await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'recordForkedEscrowForOutcome',
-				args: [client.account.address, QuestionOutcome.Yes, reportBond, reportBond],
-			}),
-		)
-		const receipt = await client.waitForTransactionReceipt({ hash: recordHash })
-		const decodedLogs = receipt.logs.map(log => {
-			try {
-				return decodeEventLog({
-					abi: statoblast_EscalationGame_EscalationGame.abi,
-					data: log.data,
-					topics: log.topics,
-				})
-			} catch (error) {
-				if (!isIgnorableLogDecodeError(error)) throw error
-				return undefined
-			}
-		})
-		const escrowRecordedLog = decodedLogs.find(log => log?.eventName === 'ForkedEscrowRecorded')
-		if (escrowRecordedLog === undefined) throw new Error('missing ForkedEscrowRecorded log')
-
-		const yesState = await getEscalationGameOutcomeState(client, child.escalationGameAddress, QuestionOutcome.Yes)
-		const vaultEscrow = await getEscrowedRepByVault(client, child.escalationGameAddress, client.account.address)
-		const totalEscrow = await getTotalEscrowedRep(client, child.escalationGameAddress)
-		assert.strictEqual(escrowRecordedLog.args.depositor, client.account.address, 'forked escrow log should identify the vault')
-		assert.strictEqual(escrowRecordedLog.args.outcome, BigInt(QuestionOutcome.Yes), 'forked escrow log should identify the outcome')
-		assert.strictEqual(escrowRecordedLog.args.sourcePrincipalTotalAttoRep, reportBond, 'forked escrow log should expose the new source principal total')
-		assert.strictEqual(escrowRecordedLog.args.childRepTotalAttoRep, reportBond, 'forked escrow log should expose the new child REP total')
-		assert.strictEqual(escrowRecordedLog.args.disputeStakedRepByVaultAttoRep, vaultEscrow, 'forked escrow log should expose the updated vault escrow')
-		assert.strictEqual(escrowRecordedLog.args.totalDisputeStakedAttoRep, totalEscrow, 'forked escrow log should expose the updated total escrow')
-		assert.strictEqual(escrowRecordedLog.args.outcomeBalanceAttoRep, yesState.balanceAttoRep, 'forked escrow log should expose the updated outcome balance')
-
-		const exportHash = await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: child.testSecurityPoolAddress,
-				functionName: 'exportForkedEscrowByOutcomeWithoutTransfer',
-				args: [client.account.address],
-			}),
-		)
-		const exportReceipt = await client.waitForTransactionReceipt({ hash: exportHash })
-		const vaultEscrowLog = exportReceipt.logs
-			.map(log => {
-				try {
-					return decodeEventLog({
-						abi: statoblast_EscalationGame_EscalationGame.abi,
-						data: log.data,
-						topics: log.topics,
-					})
-				} catch (error) {
-					if (!isIgnorableLogDecodeError(error)) throw error
-					return undefined
-				}
-			})
-			.find(log => log?.eventName === 'VaultEscrowUpdated')
-		if (vaultEscrowLog === undefined) throw new Error('missing VaultEscrowUpdated log')
-		const vaultEscrowAfterExport = await getEscrowedRepByVault(client, child.escalationGameAddress, client.account.address)
-		const totalEscrowAfterExport = await getTotalEscrowedRep(client, child.escalationGameAddress)
-		assert.strictEqual(vaultEscrowLog.args.vault, client.account.address, 'vault escrow log should identify the vault')
-		assert.strictEqual(vaultEscrowLog.args.disputeStakedRepByVaultAttoRep, vaultEscrowAfterExport, 'vault escrow log should expose the updated vault escrow')
-		assert.strictEqual(vaultEscrowLog.args.totalDisputeStakedAttoRep, totalEscrowAfterExport, 'vault escrow log should expose the updated total escrow')
 	})
 
 	test('fork carry funding completeness requires aggregate REP backing at a one-to-one ratio', async () => {
@@ -152,20 +67,6 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		await fundEscalationGame(child.escalationGameAddress, parentCarryTotal)
 		assert.strictEqual(await readIsForkCarryFundingComplete(client, child.escalationGameAddress), true, 'one-to-one aggregate REP should complete funding without a vault record')
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
-	})
-
-	test('preserved continuation balances do not rebase when forked escrow arrives after the live balance already shrank', async () => {
-		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 0n], [0n, 3n * reportBond, 0n], [0n, reportBond, 0n], [zeroHash(), zeroHash(), zeroHash()])
-
-		const yesBalanceBeforeEscrow = (await getEscalationGameOutcomeState(client, child.escalationGameAddress, QuestionOutcome.Yes)).balanceAttoRep
-		assert.strictEqual(yesBalanceBeforeEscrow, reportBond, 'test setup should model a preserved live balance that is already smaller than inherited unresolved total')
-
-		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond, 3n)
-
-		const yesState = await getEscalationGameOutcomeState(client, child.escalationGameAddress, QuestionOutcome.Yes)
-		assert.strictEqual(yesState.balanceAttoRep, reportBond, 'forked escrow funding should not mutate a preserved live continuation balance')
-		assert.deepStrictEqual(await readForkedEscrowByVaultAndOutcome(client, child.escalationGameAddress, client.account.address, QuestionOutcome.Yes), [3n * reportBond, 0n, 3n, 0n], 'funding progress should still track the inherited principal separately from the preserved live balance')
 	})
 
 	test('fork continuation snapshot preserves tied parent leaders below non-decision', async () => {

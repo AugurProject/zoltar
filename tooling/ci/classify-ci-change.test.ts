@@ -8,12 +8,38 @@ import { ciScopes, classifyCiChange, type CiScope, getCiChangedFiles } from './c
 const scopes = (paths: readonly string[]) => classifyCiChange(paths).expandedScopes
 
 const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[] = [
-	[['README.md'], ['docs']],
 	[['shared/README.md'], ['docs']],
+	[['docs/how-to/trading-deploy-contracts.html', 'docs/assets/css/docs.css', 'docs/data/notes.md'], ['docs']],
 	[['ui/AGENTS.md', 'ui/trading/AGENTS.md'], ['docs']],
 	[['solidity/contracts/README.md', 'docs/how-to/trading-deploy-contracts.html'], ['docs']],
-	[['bots/chaos/README.md', 'bots/open-oracle-arbitrager/README.md', 'bots/liquidator/README.md'], ['docs']],
+	[['bots/chaos/README.md', 'bots/liquidator/README.md', 'bots/open-oracle-arbitrager/docs/notes.md'], ['docs']],
+	// Documentation data read only by the documentation checks stays in the documentation scope.
+	[['docs/manifest.json'], ['docs']],
+	[['docs/assets/screenshots/fingerprints.json'], ['docs']],
+	[['docs/data/open-oracle-coordinator.json'], ['docs']],
 	[['augurScan/src/ARCHITECTURE.md'], ['docs']],
+	// Documentation that code or tests execute or read selects its consumers as well as the documentation checks.
+	[
+		['docs/runtime/interactiveTools.ts', 'docs/assets/js/interactiveTools.js'],
+		['core', 'docs'],
+	],
+	[['docs/runtime/docsShell.ts'], ['core', 'docs']],
+	[['docs/assets/js/responsiveDocs.js'], ['core', 'docs']],
+	[['docs/tsconfig.json'], ['core', 'docs']],
+	[['docs/charts/diagramControl.ts'], ['core', 'docs']],
+	[['docs/reference/invariants.html'], ['core', 'docs']],
+	[['docs/explanation/escalation-game.html'], ['core', 'docs']],
+	[['docs/documentation.html'], ['core', 'docs']],
+	[['docs/how-to/trading-set-up-development.html'], ['core', 'docs']],
+	[['README.md'], ['core', 'docs']],
+	[['testnetwork/README.md'], ['core', 'docs']],
+	[['augurScan/README.md'], ['augur-scan', 'docs']],
+	[['bots/open-oracle-arbitrager/README.md'], ['arbitrager', 'docs']],
+	[['bots/README.md'], ['arbitrager', 'docs']],
+	[
+		['bots/open-oracle-arbitrager/RECOVERY.md', 'bots/open-oracle-arbitrager/MARKETS.md'],
+		['arbitrager', 'docs'],
+	],
 	[['.vscode/settings.json', '.vscode/tasks.json'], ['docs']],
 	[
 		['solidity/contracts/README.md', 'bots/chaos/src/run.ts'],
@@ -43,7 +69,18 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 ]
 for (const [paths, expected] of routingCases) test(`routes ${paths.join(', ')}`, () => expect(scopes(paths)).toEqual(expected))
 
-test.each(['.github/workflows/ci.yml', 'package.json', 'knip.ts', 'tooling/ci/classify-ci-change.mts', 'future-component/file.ts', '.agents/skills/example/scripts/run.ts', '.claude/skills/example/scripts/run.sh', '.claude/settings.json'])('uses full CI for %s', path => {
+test.each([
+	'docs/mainnet-deployment-addresses.json',
+	'docs/sepolia-no-deployment-addresses.json',
+	'.github/workflows/ci.yml',
+	'package.json',
+	'knip.ts',
+	'tooling/ci/classify-ci-change.mts',
+	'future-component/file.ts',
+	'.agents/skills/example/scripts/run.ts',
+	'.claude/skills/example/scripts/run.sh',
+	'.claude/settings.json',
+])('uses full CI for %s', path => {
 	expect(scopes([path])).toEqual(ciScopes)
 	expect(classifyCiChange([path]).forcedFull).toBe(true)
 })
@@ -66,8 +103,15 @@ test('requires PostgreSQL integration for augurScan behavior and safe full runs'
 	expect(classifyCiChange([], { full: true }).augurScanIntegration).toBe(true)
 })
 
+test('runtime documentation selects its package jobs', () => {
+	expect(classifyCiChange(['augurScan/README.md']).packageMatrix.map(entry => entry.package)).toEqual(['augur-scan'])
+	expect(classifyCiChange(['bots/open-oracle-arbitrager/EXECUTION.md']).packageMatrix.map(entry => entry.package)).toEqual(['arbitrager'])
+	expect(classifyCiChange(['docs/runtime/interactiveTools.ts']).packageMatrix).toEqual([])
+	expect(classifyCiChange(['docs/runtime/interactiveTools.ts']).forcedFull).toBe(false)
+})
+
 test('matrices are valid, deterministic JSON for empty and non-empty selections', () => {
-	const docs = classifyCiChange(['README.md'])
+	const docs = classifyCiChange(['docs/how-to/trading-deploy-contracts.html'])
 	expect(JSON.parse(docs.packageMatrixJson)).toEqual({ include: [] })
 	expect(docs.hasPackages).toBe(false)
 	const mixed = classifyCiChange(['bots/liquidator/src/run.ts', 'shared/trading/ts/trading/math.ts', 'bots/shared/src/ethereum.ts'])

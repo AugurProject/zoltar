@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, type Hex } from '../../src/ethereum.ts'
 import { type Projection, projectionsFrom } from '../../src/projections.ts'
 import type { StoredLog } from '../../src/types.ts'
+import { encodedAmmPairTransfer } from '../support/amm-pair-transfer.ts'
 
 const hash = `0x${'12'.repeat(32)}` as Hex
 const pool = getAddress('0x1111111111111111111111111111111111111111')
@@ -197,8 +198,8 @@ describe('state projections', () => {
 	})
 
 	test('retains LP share transfers and approvals only when the emitter is an Augur AMM pair', () => {
-		const transfer = { ...log('Transfer', { from: pool, to: vault, amount: '50' }), contractKind: 'ammPair' }
-		const approval = { ...log('Approval', { owner: pool, spender: vault, amount: '50' }), contractKind: 'ammPair' }
+		const transfer = { ...log('Transfer', { from: pool, to: vault, value: '50' }), contractKind: 'ammPair' }
+		const approval = { ...log('Approval', { owner: pool, spender: vault, value: '50' }), contractKind: 'ammPair' }
 		expect(projectionsFrom(transfer).at(-1)).toMatchObject({
 			type: 'domainEvent',
 			domain: 'trading',
@@ -213,6 +214,17 @@ describe('state projections', () => {
 			semanticEventKind: 'Approval',
 		})
 		expect(projectionsFrom(log('Approval', { owner: pool, spender: vault, value: '50' })).some(item => item.type === 'domainEvent')).toBe(false)
+	})
+
+	test('stores an AMM pair LP transfer under the compiled ERC-20 argument names', () => {
+		const { topics, data, decoded } = encodedAmmPairTransfer(pool, vault, 50n, vault)
+		const transfer: StoredLog = { ...log('Transfer', {}, vault, 'ammPair'), topics, data, decoded }
+		const projection = projectionsFrom(transfer).at(-1)
+		if (projection?.type !== 'domainEvent') throw new Error('LP transfer did not project a domain event')
+		// The trading, catalog, portfolio, and detail LP queries read these exact keys from amm_trade_events.event_data.
+		expect(projection).toMatchObject({ domain: 'trading', entityIdentity: vault.toLowerCase(), semanticEventKind: 'Transfer' })
+		expect(Object.keys(projection.data).sort()).toEqual(['from', 'to', 'value'])
+		expect(projection.data['value']).toBe('50')
 	})
 
 	test('adds stable timeline identities for registries, markets, and universes', () => {
@@ -335,6 +347,7 @@ describe('state projections', () => {
 		const cases = [
 			['ClaimCheckpointProgress', { claimId: `0x${'1'.repeat(64)}`, nextSourceGame: vault, pendingSteps: '2', complete: false }, 'escalation', 'escalation', pool.toLowerCase()],
 			['ReportOperationAttempted', { reportId: '7', sponsor: vault, operationIndex: '0', success: true }, 'oracle', 'price-feed', pool.toLowerCase()],
+			['PortfolioDeployed', { portfolio: vault, creator: pool }, 'risk', 'portfolio', vault.toLowerCase()],
 			['PortfolioRegistered', { portfolio: vault, originUniverseId: '0' }, 'risk', 'portfolio', vault.toLowerCase()],
 			['EthReceived', { sender: vault, amountAttoEth: atomic(1n) }, 'risk', 'pool', pool.toLowerCase()],
 			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],

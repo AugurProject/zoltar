@@ -1,4 +1,5 @@
-import { computeEscalationFinalityElapsed } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import { computeEscalationBindingCapitalAttoRep, computeEscalationFinalityElapsed } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import { getReportingMaxContribution } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingMaxContribution.js'
 import { getDisplayedLeadingEscalationOutcome, hasReportingOpened } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
@@ -52,6 +53,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		earliestForkTime: 0n,
 		forkThresholdAttoRep: rep(200n),
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
@@ -500,7 +502,62 @@ describe('deposit deadline preview', () => {
 
 	test('respects the fresh response window for resumed games', () => {
 		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 4000000n, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
-		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
+		// The resumed curve is already past the median, so support must meet it; the leader adding support leaves the fresh window in force.
+		expect(previewReportingDeadline(details, 'no', rep(10n))).toBeUndefined()
+		expect(previewReportingDeadline(details, 'no', rep(90n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
+		// A change of leader restarts the response period from the report.
+		expect(previewReportingDeadline(details, 'yes', rep(90n))).toEqual({ deadline: details.currentTime + 3n * 86400n, extension: details.currentTime - 100n, reachesNonDecision: false })
+	})
+	test('restarts the response period when a report takes the lead and keeps an earlier restart otherwise', () => {
+		const details = createResponsePeriodDetails()
+		const leadAmount = requiredSupport(details) - rep(5n)
+		const restarted = details.currentTime + 3n * 86400n
+		expect(previewReportingDeadline(details, 'yes', leadAmount)).toEqual({ deadline: restarted, extension: restarted - details.escalationEndTime, reachesNonDecision: false })
+		expect(previewReportingDeadline(details, 'no', requiredSupport(details) - rep(8n))).toEqual({ deadline: details.escalationEndTime, extension: 0n, reachesNonDecision: false })
+	})
+})
+
+/** The curve has passed the median and No strictly leads inside a response period restarted by a change of leader. */
+function createResponsePeriodDetails(overrides: Partial<ActiveReportingDetails> = {}) {
+	const base = createReportingDetails()
+	const currentTime = base.activationTime + computeEscalationFinalityElapsed(base.startBondAttoRep, base.nonDecisionThresholdAttoRep, rep(20n))
+	return createReportingDetails({ currentTime, escalationEndTime: currentTime + 1000n, responseRestartedUntil: currentTime + 1000n, ...overrides })
+}
+
+/** The UI reads the rising curve one submission reserve ahead. */
+function requiredSupport(details: ActiveReportingDetails) {
+	return computeEscalationBindingCapitalAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, details.currentTime + 60n - details.activationTime)
+}
+
+describe('support required after the curve passes the median', () => {
+	test('rejects a report that leaves its side below the required support and accepts one that meets it', () => {
+		const details = createResponsePeriodDetails()
+		const required = requiredSupport(details)
+		expect(required).toBeGreaterThan(rep(20n))
+		const rejected = previewReportingContribution(details, 'yes', required - rep(5n) - 1n)
+		expect(rejected.actualDepositAmount).toBeUndefined()
+		expect(rejected.reason).toContain('must reach the current required support')
+		expect(previewReportingContribution(details, 'yes', required - rep(5n))).toEqual({ actualDepositAmount: required - rep(5n), reason: undefined })
+		// The rule binds the leader too.
+		expect(previewReportingContribution(details, 'no', rep(3n)).reason).toContain('must reach the current required support')
+		expect(previewReportingDeadline(details, 'yes', rep(10n))).toBeUndefined()
+	})
+	test('accepts any amount while the curve is at or below the median or the leaders tie', () => {
+		expect(previewReportingContribution(createReportingDetails(), 'yes', rep(4n))).toEqual({ actualDepositAmount: rep(4n), reason: undefined })
+		const tied = createResponsePeriodDetails({ sides: [side('invalid', rep(1n)), side('yes', rep(8n)), side('no', rep(8n))] })
+		expect(previewReportingContribution(tied, 'invalid', rep(3n))).toEqual({ actualDepositAmount: rep(3n), reason: undefined })
+	})
+	test('raises the lead preset to the required support', () => {
+		const details = createResponsePeriodDetails()
+		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({ amountAttoRep: requiredSupport(details) - rep(5n), reason: undefined })
+		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({ amountAttoRep: requiredSupport(details) - rep(5n), reason: undefined })
+	})
+	test('Max is unavailable when the funding source cannot reach the required support', () => {
+		const details = createResponsePeriodDetails()
+		const base = { details, forkConfirmed: false, selectedOutcome: 'yes', usesWalletFunding: true } as const
+		expect(getReportingMaxContribution({ ...base, availableReportingRep: rep(10n) }).amountAttoRep).toBeUndefined()
+		expect(getReportingMaxContribution({ ...base, availableReportingRep: rep(10n) }).reason).toContain('must reach the current required support')
+		expect(getReportingMaxContribution({ ...base, availableReportingRep: rep(40n) })).toEqual({ amountAttoRep: rep(40n), reason: undefined, stopsBelowFork: false })
 	})
 })
 

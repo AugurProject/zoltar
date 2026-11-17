@@ -1,7 +1,7 @@
-import { type Workflow, type WorkflowStep } from './workflow-history.js'
+import type { Workflow, WorkflowStep } from './workflow-history.js'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parsePublicRetirement } from './retirement-dashboard.js'
-import { type PendingTransactionObservationView } from './pending-transaction-summary.js'
+import type { PendingTransactionObservationView } from './pending-transaction-summary.js'
 
 export type RepBalance = {
 	balance?: string | number | undefined
@@ -61,8 +61,8 @@ export type Obligation = {
 	automaticRetryCount?: number | undefined
 	automaticRetryLimit?: number | undefined
 	blockers: string[]
-	dueAt?: string | undefined
 	ecosystem?: string | undefined
+	expiresAt?: string | undefined
 	id?: string | undefined
 	label?: string | undefined
 	notBefore?: string | undefined
@@ -347,8 +347,8 @@ export function parseSnapshot(value: unknown): Snapshot {
 			automaticRetryCount: nonnegativeIntegerValue(entry['automaticRetryCount']),
 			automaticRetryLimit: nonnegativeIntegerValue(entry['automaticRetryLimit']),
 			blockers: strings(entry['blockers']),
-			dueAt: stringValue(entry['dueAt']),
 			ecosystem: stringValue(entry['ecosystem']),
+			expiresAt: stringValue(entry['expiresAt']),
 			id: stringValue(entry['id']),
 			label: stringValue(entry['label']),
 			notBefore: stringValue(entry['notBefore']),

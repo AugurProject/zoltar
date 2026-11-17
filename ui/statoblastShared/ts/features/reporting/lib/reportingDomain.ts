@@ -2,10 +2,14 @@ import * as reportingCopy from '../../../copy/reporting.js'
 import {
 	getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount,
 	getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount,
-	computeEscalationFinalityElapsed,
+	computeEscalationCurveAttoRep,
+	ESCALATION_ACTIVATION_DELAY,
+	getEscalationRequiredSupportAttoRep,
 	projectEscalationDeposit,
+	projectEscalationEndTime,
 	type EscalationBalanceTuple,
 } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import { TRANSACTION_SUBMISSION_RESERVE_SECONDS } from '@zoltar/ui-core-shared/transactions/submissionTiming.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails } from '../../../types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -13,7 +17,7 @@ type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined
 	reason: string | undefined
 }
-export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
+export const ESCALATION_GAME_ACTIVATION_DELAY = ESCALATION_ACTIVATION_DELAY
 const LOAD_REPORTING_PRESETS_REASON = reportingCopy.loadingReportingDetails
 const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
@@ -52,6 +56,28 @@ function getEscalationBalanceTuple(sides: EscalationSide[]): EscalationBalanceTu
 	const yesBalance = sides.find(side => side.key === 'yes')?.balance ?? 0n
 	const noBalance = sides.find(side => side.key === 'no')?.balance ?? 0n
 	return [invalidBalance, yesBalance, noBalance]
+}
+function getContinuationTiming(details: ActiveReportingDetails) {
+	if (!details.forkContinuation || details.forkResumedAt === undefined || details.forkElapsedAtStart === undefined) return undefined
+	return { forkElapsedAtStart: details.forkElapsedAtStart, forkResumedAt: details.forkResumedAt }
+}
+/**
+ * Support a report's side must reach to be accepted, or zero while any accepted amount is.
+ * The curve keeps rising, so it is read one submission reserve ahead: an amount offered here still meets it when the transaction lands.
+ */
+function getReportingRequiredSupport(details: ActiveReportingDetails) {
+	const timestamp = details.currentTime + TRANSACTION_SUBMISSION_RESERVE_SECONDS
+	const continuation = getContinuationTiming(details)
+	if (details.forkContinuation && continuation === undefined) return 0n
+	let elapsed = timestamp - details.activationTime
+	if (continuation !== undefined) elapsed = continuation.forkElapsedAtStart + (continuation.forkResumedAt !== 0n && timestamp > continuation.forkResumedAt ? timestamp - continuation.forkResumedAt : 0n)
+	return getEscalationRequiredSupportAttoRep(getEscalationBalanceTuple(details.sides), computeEscalationCurveAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, elapsed))
+}
+/** Why the game rejects a report that leaves its side at `resultingBalance`, when that is below the required support. */
+export function getReportingBelowRequiredSupportReason(details: ActiveReportingDetails, selectedBalance: bigint, resultingBalance: bigint) {
+	const requiredSupport = getReportingRequiredSupport(details)
+	if (resultingBalance >= requiredSupport) return undefined
+	return reportingCopy.reportBelowRequiredSupport(formatCurrencyBalanceWithUnit(requiredSupport - selectedBalance, 'REP'), formatCurrencyBalanceWithUnit(requiredSupport, 'REP'))
 }
 function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
 	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
@@ -119,7 +145,9 @@ function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, se
 	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: reportingCopy.selectedSideIsUnavailable }
 	if ((isPoolQuestionFinalized(details) && details.questionOutcome === selectedOutcome) || isUniqueWinner(selectedSide.balance, largestOtherBalance)) return { amountAttoRep: 0n, reason: undefined }
 	const requiredLeadAmount = largestOtherBalance + 1n - selectedSide.balance
-	const amountAttoRep = details.startBondAttoRep > requiredLeadAmount ? details.startBondAttoRep : requiredLeadAmount
+	const requiredSupportAmount = getReportingRequiredSupport(details) - selectedSide.balance
+	const minimumAcceptedAmount = details.startBondAttoRep > requiredSupportAmount ? details.startBondAttoRep : requiredSupportAmount
+	const amountAttoRep = minimumAcceptedAmount > requiredLeadAmount ? minimumAcceptedAmount : requiredLeadAmount
 	const availableRoom = getAvailableRoom(details, selectedSide.balance)
 	const effectiveAmount = amountAttoRep > availableRoom ? availableRoom : amountAttoRep
 	if (availableRoom === 0n)
@@ -277,6 +305,8 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 			actualDepositAmount: undefined,
 			reason: 'Increase the report amount slightly to avoid a tie at the minimum report.',
 		}
+	const belowRequiredSupportReason = getReportingBelowRequiredSupportReason(details, selectedSide.balance, selectedSide.balance + projectedDeposit.acceptedAmountAttoRep)
+	if (belowRequiredSupportReason !== undefined) return { actualDepositAmount: undefined, reason: belowRequiredSupportReason }
 	return {
 		actualDepositAmount: projectedDeposit.acceptedAmountAttoRep,
 		reason: undefined,
@@ -304,16 +334,18 @@ export function previewReportingDeadline(details: ReportingDetails, outcome: Rep
 	const projected = projectEscalationDeposit({ amountAttoRep: amount, balancesAttoRep: getEscalationBalanceTuple(details.sides), nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep, outcome, startBondAttoRep: details.startBondAttoRep })
 	if (projected === undefined) return undefined
 	if (projected.reachesNonDecision) return { deadline: details.currentTime, extension: 0n, reachesNonDecision: true }
-	const balances = [...projected.projectedBalancesAttoRep].sort((a, b) => {
-		if (a < b) return -1
-		return a > b ? 1 : 0
+	const continuation = getContinuationTiming(details)
+	if (details.forkContinuation && (continuation === undefined || continuation.forkResumedAt === 0n)) return undefined
+	const projectedDeadline = projectEscalationEndTime({
+		activationTime: details.activationTime,
+		continuation,
+		nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep,
+		projection: projected,
+		responseRestartedUntil: details.responseRestartedUntil ?? 0n,
+		startBondAttoRep: details.startBondAttoRep,
+		timestamp: details.currentTime,
 	})
-	const elapsed = computeEscalationFinalityElapsed(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, balances[1] ?? 0n)
-	let deadline = details.activationTime + elapsed
-	if (details.forkContinuation) {
-		if (details.forkResumedAt === undefined || details.forkElapsedAtStart === undefined || details.forkResumedAt === 0n) return undefined
-		const remaining = elapsed > details.forkElapsedAtStart ? elapsed - details.forkElapsedAtStart : 0n
-		deadline = details.forkResumedAt + (remaining > ESCALATION_GAME_ACTIVATION_DELAY ? remaining : ESCALATION_GAME_ACTIVATION_DELAY)
-	}
-	return { deadline, extension: deadline > details.escalationEndTime ? deadline - details.escalationEndTime : 0n, reachesNonDecision: false }
+	// A report never moves the deadline earlier.
+	const deadline = projectedDeadline > details.escalationEndTime ? projectedDeadline : details.escalationEndTime
+	return { deadline, extension: deadline - details.escalationEndTime, reachesNonDecision: false }
 }

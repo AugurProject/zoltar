@@ -8,7 +8,7 @@ import { useLayoutEffect, useRef } from 'preact/hooks'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
-import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import type { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'

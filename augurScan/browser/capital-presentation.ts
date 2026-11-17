@@ -1,6 +1,6 @@
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import { collateralUnit } from '../src/collateral.ts'
-import { exactNumber, exactUnit, percentFromBps } from './format.ts'
+import { exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
 
 // A capital position is one owner's principal and commitment in the capital ledger of one portfolio universe.
@@ -126,4 +126,34 @@ export const liquidationSummary = (item: Readonly<Record<string, unknown>>, { un
 			parts = []
 	}
 	return [...parts, universe === undefined || !showUniverse ? undefined : `universe ${shortIdentifier(universe, 9, 6)}`].filter((part): part is string => part !== undefined && part !== '').join(' · ') || 'Capital evidence unavailable'
+}
+
+/**
+ * One universe's fee economics in two lines: the configured rates with what has accrued and been funded, and
+ * what owners claimed, what was burned unassigned, and what is still vesting. Collateral amounts use the
+ * ledger's collateral token.
+ */
+export const feeEconomicsSummary = (item: Readonly<Record<string, unknown>>): { readonly rates: string; readonly flows: string } => {
+	const collateral = collateralUnit(item)
+	const cash = (value: unknown) => amount(value, collateral.decimals, collateral.symbol)
+	const fees = isPlainRecord(item['fees']) ? item['fees'] : undefined
+	const rate = (value: unknown) => (integer(value) === undefined ? 'unavailable' : percentFromBps(String(value)))
+	return {
+		rates: fees === undefined ? 'Rates unavailable' : `${rate(fees['annualFeeBps'])} annual fee · ${rate(fees['purchaseFeeBps'])} purchase fee · ${cash(fees['vestingOutstandingAttoEth'])} vesting to owners`,
+		flows: `${cash(item['accrued_atto_eth'])} annual fees accrued · ${cash(item['purchase_fees_atto_eth'])} purchase fees, ${cash(item['earnings_funded_atto_eth'])} to owners · ${cash(item['claimed_atto_eth'])} and ${amount(item['claimed_atto_rep'], 18, 'REP')} claimed · ${cash(item['burned_atto_eth'])} and ${amount(item['burned_atto_rep'], 18, 'REP')} burned unassigned`,
+	}
+}
+
+/**
+ * A question's linear fee stream as of `asOfSeconds`, the snapshot block's time: its yearly rate and end, that
+ * its end has passed, or that it has none.
+ */
+export const questionFeeStreamSummary = (item: Readonly<Record<string, unknown>>, asOfSeconds: bigint | undefined): string => {
+	const collateral = collateralUnit(item)
+	if (integer(item['rate_atto_eth_per_second']) === '0') return 'No fee stream'
+	const end = integer(item['end_timestamp'])
+	const rate = `${amount(item['rate_atto_eth_per_year'], collateral.decimals, collateral.symbol)} per year`
+	if (end === undefined) return rate
+	const date = utcDateTime(Number(end) * 1000)
+	return asOfSeconds !== undefined && BigInt(end) <= asOfSeconds ? `Ended ${date} · was ${rate}` : `${rate} · ends ${date}`
 }

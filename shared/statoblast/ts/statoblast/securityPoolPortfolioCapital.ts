@@ -240,6 +240,20 @@ export function buildPortfolioCapitalTakeOverWithBoundsRequest(parameters: Capit
 }
 
 /**
+ * Unpaid cure of a position under an adverse observation whose deficit the shared spare absorbs. The ledger applies the
+ * cure and awards nothing, so the call asks for no award. Zero consent makes it revert instead of acquiring anything
+ * if the cure no longer restores the position.
+ */
+export function buildPortfolioCapitalCureRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; expectedAcceptedPriceEpoch: bigint; expectedSourceBatch: bigint }) {
+	return buildPortfolioCapitalTakeOverWithBoundsRequest({
+		...parameters,
+		minimumAward: 0n,
+		maximumOwnRep: 0n,
+		bounds: { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: parameters.expectedAcceptedPriceEpoch, expectedSourceBatch: parameters.expectedSourceBatch },
+	})
+}
+
+/**
  * What `claimEarnings` pays at the snapshot block. It checkpoints first, so a passive owner's earnings stay uncredited
  * until then. One `eth_call` runs that checkpoint and the reads that depend on it without keeping any state change.
  */

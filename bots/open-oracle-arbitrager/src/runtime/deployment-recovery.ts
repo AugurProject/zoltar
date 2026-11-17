@@ -1,10 +1,10 @@
-import { type Configuration } from '#config/configuration'
+import type { Configuration } from '#config/configuration'
 import { verifyCanonicalExecutorDeployed } from '#config/runtime-deployment'
-import { type ReadClient } from '#core/operator-types'
+import type { ReadClient } from '#core/operator-types'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
 import { recordOperation, type OperatorState } from '#state/operator-state'
-import { type DeploymentRecoveryReconciliation, type DeploymentRecoveryState } from './signer-operations.ts'
+import type { DeploymentRecoveryReconciliation, DeploymentRecoveryState } from './signer-operations.ts'
 
 /** Loads the journal left by an interrupted executor deployment and pauses the operator until it is reconciled. */
 export async function loadDeploymentRecovery(intentPath: string, config: Configuration, state: Pick<OperatorState, 'operationLog' | 'paused' | 'status'>): Promise<DeploymentRecoveryState> {

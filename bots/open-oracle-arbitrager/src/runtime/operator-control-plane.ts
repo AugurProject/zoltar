@@ -3,63 +3,36 @@ import { canonicalExecutorSalt } from '#execution/executor-identity'
 import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { resolve } from 'node:path'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { assertDistinctPersistentPaths, mutableStrategy, runnableOperatorSettings, type Configuration } from '#config/configuration'
+import { assertDistinctPersistentPaths, mutableStrategy, type Configuration } from '#config/configuration'
 import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, mergeStoredDeploymentUpdate, prepareDeploymentTokenTransition, type DeploymentSettings } from '#config/deployment-settings'
 import { loadOperatorSettingsWithRevision, operatorConfigurationRevisionConflict, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import type { DashboardEnvironment } from '@zoltar/bot-shared/config/environment'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { executorDeploymentPlan } from '#execution/executor-deployment-primitives'
-import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, presetNetworkChainId, updateSubmissionEndpointChecks } from '@zoltar/bot-shared/monitoring/connectivity'
-import { type QuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
+import type { QuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
-import { loadExecutionHistory, operatorSnapshot, queuedSignerChange, recordOperation, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
-import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock } from '#state/position-store'
+import { operatorSnapshot, queuedSignerChange, recordOperation, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
+import type { ExclusiveProcessLock } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
 import { networkConfiguration } from '#config/network'
-import { loadPriceHistory } from '#monitoring/market-monitor'
 import { requireSafeDeploymentTransition } from './deployment-transition.ts'
 import { EXECUTOR_DEPLOYMENT_MESSAGES, RESUME_REQUIRES_CONFIGURED_CHAIN } from '#state/executor-deployment-recovery'
 import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from './executor-deployment-control.ts'
 import { acquireConfigurationSignerOperation, clearDeploymentRecovery, executorDeploymentRecoveryStatus, persistExecutorDeploymentIntentForRecovery, runConfigurationSignerOperation, type DeploymentRecoveryState } from './signer-operations.ts'
 import { createOperatorSettingsControls, queuedSettingsSections } from './operator-settings-controls.ts'
 import { emptyPendingOperatorUpdates } from './pending-operator-updates.ts'
+import { preflightOperatorProfile } from './profile-preflight.ts'
 
 /** The primary and public RPCs alone, as the dashboard snapshot and connectivity response report them. */
 function endpointConnectivity(connectivity: QuorumConnectivitySettings) {
 	return { publicRpcUrls: connectivity.publicRpcUrls, readRpcUrl: connectivity.readRpcUrl }
-}
-
-async function preflightOperatorProfile(settingsFile: string, target: PersistedOperatorSettings) {
-	const chain = runnableOperatorSettings(settingsFile, target).network.chain
-	const deploymentIntent = await loadExecutorDeploymentIntentForChain(executorDeploymentIntentPath(settingsFile, target.network), chain.id)
-	if (deploymentIntent !== undefined) await assertStoredExecutorDeploymentIntent(deploymentIntent, chain.id)
-	if (target.networkConfigured) {
-		await checkConnectivity(target.connectivity, chain.id)
-		await checkIndependentRpcChains(target.connectivity.quorumRpcUrls, chain.id)
-		await checkSubmissionEndpoints(target.submission, chain.id)
-	}
-	let journalLock: ExclusiveProcessLock | undefined
-	let signerLock: ExclusiveProcessLock | undefined
-	try {
-		if (target.runtime.execute || target.runtime.ui) journalLock = await acquirePositionJournalLock(target.runtime.positionFile)
-		if (target.runtime.execute) {
-			if (target.privateKey === undefined) throw new Error('Execution requires an active signer')
-			signerLock = await acquireExecutionSignerLock(chain.id, privateKeyToAccount(target.privateKey).address)
-		}
-		await Promise.all([loadPositionJournal(target.runtime.positionFile, chain.id), loadExecutionHistory(target.runtime.historyFile, chain.id), loadPriceHistory(target.runtime.priceHistoryFile, chain.id)])
-	} finally {
-		const releases = [signerLock, journalLock].filter(lock => lock !== undefined).map(lock => lock.release())
-		const results = await Promise.allSettled(releases)
-		const errors = results.filter(result => result.status === 'rejected').map(result => result.reason)
-		if (errors.length !== 0) throw new AggregateError(errors, 'Failed to release target chain profile preflight locks')
-	}
 }
 
 export function startOperatorControlPlane(parameters: {

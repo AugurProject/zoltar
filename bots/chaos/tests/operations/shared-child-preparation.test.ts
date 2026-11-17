@@ -11,7 +11,7 @@ import { address, snapshotFixture } from './fixture.ts'
 const options: PlanningOptions = {
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
-	immutableTopologyCapacity: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10, maxStagedOperationsPerPool: 10, maximumAggregateItems: 100 },
+	immutableTopologyCapacity: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10, maximumAggregateItems: 100 },
 	maximumBlockIntervalSeconds: 15,
 	maxEthSpendAttoEth: (10n ** 18n).toString(),
 	maxRepSpendAttoRep: (10n ** 18n).toString(),

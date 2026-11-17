@@ -74,6 +74,73 @@ test('manual takeover requires all consent bounds and rejects a changed price be
 	expect(button.disabled).toBe(true)
 })
 
+test('a position that unused pool commitment restores is offered as an unpaid cure, never as a paid takeover', async () => {
+	// Half of the pool commitment is unused, which covers this position's deficit.
+	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 10n * unit })
+	const reader = capitalClient(snapshot)
+	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
+	reader.setRead('liquidationStarted', 1n, capital)
+	reader.setRead('acceptedPriceEpoch', 4n, capital)
+	reader.install()
+	const requests: PortfolioTransaction[] = []
+	const actions = {
+		ownerReason: undefined,
+		scope: undefined,
+		busy: undefined,
+		runPortfolioAction: async (_action: string, _label: string, build: () => PortfolioTransaction | Promise<PortfolioTransaction>) => {
+			requests.push(await build())
+		},
+	}
+	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
+	lifecycle.trackRendered(view)
+	const [takeOverButton, cureButton] = Array.from(view.container.querySelectorAll('button'))
+	if (takeOverButton === undefined || cureButton === undefined) throw new Error('Missing takeover or cure button')
+	expect(cureButton.disabled).toBe(true)
+	const fields = view.container.querySelectorAll('input')
+	// Every takeover bound is filled in, including a positive minimum award: the takeover still stays unavailable.
+	for (const [offset, value] of ['2', '10', '1', '20', '200', '100'].entries()) {
+		const field = fields[offset]
+		if (field === undefined) throw new Error('Missing takeover field')
+		await act(() => {
+			field.value = value
+			field.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+	}
+	await waitFor(() => expect(cureButton.disabled).toBe(false))
+	expect(takeOverButton.disabled).toBe(true)
+	expect(view.container.textContent).toContain('Cure it instead; no award is paid.')
+	await act(() => cureButton.click())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing cure transaction')
+	const decoded = decodeFunctionData({ abi: capitalArtifact.abi, data: request.data })
+	if (decoded.functionName !== 'takeOverWithBounds') throw new Error('Wrong cure entry point')
+	// No award is requested, and zero consent keeps the call from acquiring anything if the cure stops being enough.
+	expect(decoded.args).toEqual([2n, 10n * unit, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 4n, expectedSourceBatch: 0n }])
+	await request.validateBeforeSubmit?.()
+	reader.setRead('acceptedPriceEpoch', 5n, capital)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('changed')
+})
+
+test('a position the unused commitment cannot restore keeps the takeover and disables the cure', async () => {
+	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
+	const reader = capitalClient(snapshot)
+	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
+	reader.setRead('liquidationStarted', 1n, capital)
+	reader.setRead('acceptedPriceEpoch', 4n, capital)
+	reader.install()
+	const actions = { ownerReason: undefined, scope: undefined, busy: undefined, runPortfolioAction: async () => undefined }
+	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
+	lifecycle.trackRendered(view)
+	const field = view.container.querySelector('input')
+	if (field === null) throw new Error('Missing takeover target field')
+	await act(() => {
+		field.value = '2'
+		field.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	await waitFor(() => expect(view.container.textContent).toContain('Unused pool commitment cannot restore this position. Take it over.'))
+	expect(view.container.querySelectorAll('button')[1]?.disabled).toBe(true)
+})
+
 test('entering another target clears the bounds typed for the previous position but a new block keeps them', async () => {
 	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
 	installTakeoverReader(snapshot)
@@ -124,4 +191,18 @@ test.each([
 	await fill(view.container.querySelector('input') ?? undefined, '2')
 	await waitFor(() => expect(view.container.textContent).toContain(reason))
 	expect(view.container.querySelector('button')?.disabled).toBe(true)
+})
+
+test('a disabled reason both actions share renders once and describes both buttons', async () => {
+	const snapshot = capitalSnapshot()
+	capitalClient(snapshot).install()
+	const actions = { ownerReason: undefined, scope: undefined, busy: undefined, runPortfolioAction: async () => undefined }
+	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
+	lifecycle.trackRendered(view)
+	const reason = 'Enter a positive position ID.'
+	expect(view.container.textContent?.split(reason)).toHaveLength(2)
+	const described = [...view.container.querySelectorAll('button')].map(button => button.getAttribute('aria-describedby'))
+	expect(described).toHaveLength(2)
+	expect(described[0]).toBeTruthy()
+	expect(described[1]).toBe(described[0])
 })

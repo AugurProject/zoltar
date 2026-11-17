@@ -312,7 +312,7 @@ function applyEventInit(element: EventTarget, init?: FireEventInit): void {
 		for (const key of Object.keys(target)) {
 			const value = target[key]
 			if (value !== undefined) {
-				;(element as unknown as Record<string, unknown>)[key] = value
+				Reflect.set(element, key, value)
 			}
 		}
 	}

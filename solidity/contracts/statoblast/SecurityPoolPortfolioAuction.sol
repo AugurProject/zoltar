@@ -51,6 +51,8 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	address public immutable vaultImplementation;
 	uint256 public openingConservativePrice;
 	uint256 public minimumCollateralAttoRepPerLot;
+	bool private constant REQUIRE_FRESH_QUOTE = true;
+	bool private constant ALLOW_EXPIRED_QUOTE = false;
 	bool public opened;
 	bool public finalized;
 	bool private entered;
@@ -97,7 +99,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
 		require(targetLots != 0 && inventoryAttoRep != 0, 'Collateral repair auction has no saleable lots');
 		ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
-		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp), 'Collateral repair auction quote is not funded and fresh');
+		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote is not funded and fresh');
 		openingConservativePrice = feed.conservativePrice();
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
@@ -108,7 +110,9 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	}
 
 	/// @notice Only the collateral purchase amount is paid upfront.
-	/// Purchased REP must back the commitment at the bidder's chosen health target.
+	/// The bid's minimum REP must back the commitment at the bidder's chosen health
+	/// target at the opening price. A higher closing price guarantees only the
+	/// protocol's own backing requirement at that price.
 	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthFactorBps) external nonReentrant returns (uint256 bidId, address vault) {
 		require(opened && !finalized, 'Collateral repair auction is not accepting bids');
 		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
@@ -126,6 +130,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 
 	/// @notice Closing never requires a bidder transaction. The quote is tested
 	/// at the immutable deadline, so a late closer cannot select a later price.
+	/// A quote that no longer covers the exposure, or a fork before the deadline, cancels the sale.
 	function finalize() external nonReentrant returns (SecurityPoolUniformPriceAuction.Clearing memory result) {
 		require(msg.sender == forkAuthority, 'Only collateral repair auction fork authority');
 		require(!finalized && block.timestamp >= closesAt, 'Collateral repair auction closing unavailable');
@@ -133,11 +138,21 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		if (opened) {
 			ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
 			uint256 forkTime = portfolio.zoltar().getForkTime(universeId);
-			bool eligible =
-				(forkTime == 0 || forkTime > closesAt) &&
-					_fundedQuote(feed, closesAt) &&
-					feed.conservativePrice() <= openingConservativePrice;
-			result = engine.finalize(eligible ? targetLots : 0);
+			// The closing quote is the last one accepted before the deadline, however old.
+			// Requiring it to be fresh at that exact second would let a few timed
+			// disputes of pending reports void the sale. It is never older than the
+			// fresh quote the opening required, and no report is accepted after closing.
+			bool eligible = (forkTime == 0 || forkTime > closesAt) && _fundedQuote(feed, closesAt, ALLOW_EXPIRED_QUOTE);
+			// A higher closing price does not cancel the sale: one marginally higher
+			// report would otherwise void every funded bid and leave the branch
+			// impaired for good. Every winning lot instead receives at least the REP
+			// that backs it at the closing conservative price, and fewer lots fill
+			// when the inventory cannot provide that.
+			uint256 floorAttoRepPerLot;
+			if (eligible)
+				floorAttoRepPerLot =
+					Math.ceilDiv(capital.commitmentIndex().requiredRep(lotAttoEth, feed.conservativePrice(), capital.securityMultiplierBps(), 10_000), repGrid) * repGrid;
+			result = engine.finalize(eligible ? targetLots : 0, floorAttoRepPerLot);
 			engine.withdrawRaised(payable(forkAuthority));
 		}
 		// All sold inventory enters capital custody. Any indivisible remainder is
@@ -183,11 +198,11 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		return engine.settleAndWithdrawRefund(bidId, msg.sender, recipient);
 	}
 
-	function _fundedQuote(ICollateralRepairAuctionPriceFeed feed, uint256 atTime) private view returns (bool) {
+	function _fundedQuote(ICollateralRepairAuctionPriceFeed feed, uint256 atTime, bool requireFresh) private view returns (bool) {
 		return
 			feed.lastSettlementTimestamp() != 0 &&
 			feed.lastSettlementTimestamp() <= atTime &&
-			feed.priceValidUntil() > atTime &&
+			(!requireFresh || feed.priceValidUntil() > atTime) &&
 			feed.acceptedExposureLimitAttoEth() >= portfolio.oracleExposure(universeId) &&
 			feed.acceptedRepExposureLimitAttoRep() >= inventoryAttoRep;
 	}

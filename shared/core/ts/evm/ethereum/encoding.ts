@@ -1,4 +1,4 @@
-import { type Address, type Hash, type Hex, type TransactionReceipt } from './types.js'
+import type { Address, Hash, Hex, TransactionReceipt } from './types.js'
 
 import { bytesToHex as nobleBytesToHex, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 

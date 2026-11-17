@@ -17,6 +17,8 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 		nextStep: 'Try again at the new price, or raise the slippage tolerance in Settings.',
 	},
 	{ reasons: ['Deadline expired', 'Transaction deadline has passed'], cause: 'The transaction deadline passed.', nextStep: 'Try again, or allow more time in Settings.' },
+	// The router refuses an expired or already used liquidity permit before the pair checks the deadline.
+	{ reasons: ['LP permit or allowance'], cause: 'The liquidity permit expired or was already used.', nextStep: 'Try again to sign a new permit, or allow more time in Settings.' },
 	{
 		reasons: ['Question ended', 'Question resolved', 'Universe forked', 'Fork continuation pending', 'Pool inactive', 'Forked', 'Fork await', 'Fork paused'],
 		cause: 'Trading has ended for this market.',

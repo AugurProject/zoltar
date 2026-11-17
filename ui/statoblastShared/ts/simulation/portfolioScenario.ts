@@ -8,7 +8,7 @@ import { createRangeProgressReporter, requireQaAccount } from '@zoltar/ui-core-s
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact } from '../contractArtifact.js'
 import { createMarket } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { loadAllSecurityPools } from '../protocol/securityPools.js'
-import { portfolioContractRequest, portfolioCreationRequest, portfolioReadClient, sendPortfolioTransaction } from '../protocol/securityPoolPortfolio.js'
+import { portfolioAddressFromCreationReceipt, portfolioContractRequest, portfolioCreationRequest, portfolioReadClient, sendPortfolioTransaction } from '../protocol/securityPoolPortfolio.js'
 import { settleSeededOracleReport, settleOracleReportIfNeeded, type ScenarioSeedParameters } from './statoblastScenarioSeeding.js'
 import { portfolioAdmissionCreationRequest } from '../protocol/securityPoolPortfolioAdmission.js'
 import { prepareSeededPortfolioMint } from './portfolioScenarioMint.js'
@@ -50,8 +50,7 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 		}),
 		'Deploy portfolio',
 	)
-	const portfolio = deployment.receipt.contractAddress
-	if (portfolio === null || portfolio === undefined) throw new Error('Expected deployed portfolio address')
+	const portfolio = portfolioAddressFromCreationReceipt(deployment.receipt)
 	const services = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'services' })
 	await sendPortfolioTransaction(client, { account: owner, to: collateral.address, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [services, (1n << 256n) - 1n] }) }, 'Approve simulated collateral')
 

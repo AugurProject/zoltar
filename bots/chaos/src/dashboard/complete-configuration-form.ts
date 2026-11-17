@@ -5,9 +5,9 @@ import { requestJson, put } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import type { ReconcileUnknownMutation } from './dashboard-refresh.ts'
 
-function element<T extends HTMLElement>(id: string, constructor: { new (): T }) {
+function element<T extends HTMLElement>(id: string, elementConstructor: { new (): T }) {
 	const value = document.getElementById(id)
-	if (!(value instanceof constructor)) throw new Error(`Missing configuration control ${id}`)
+	if (!(value instanceof elementConstructor)) throw new Error(`Missing configuration control ${id}`)
 	return value
 }
 

@@ -91,11 +91,6 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		entered = false;
 	}
 
-	modifier beforeDeadline(uint256 deadline) {
-		require(block.timestamp <= deadline, 'Deadline expired');
-		_;
-	}
-
 	constructor(ITwoWayConstantProductFactory _factory) {
 		require(address(_factory) != address(0), 'Factory is zero');
 		factory = _factory;
@@ -120,7 +115,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		return addLiquidityWithEth(pair, cash, maxYes, maxNo, minimum, recipient, deadline);
 	}
 
-	function enterPosition(ITwoWayConstantProductPair pair, uint256 mintAttoEth, BinaryOutcomes.BinaryOutcome longOutcome, uint256 minLongSharesOut, address recipient, uint256 deadline) public payable nonReentrant beforeDeadline(deadline) returns (EnterResult memory result) {
+	function enterPosition(ITwoWayConstantProductPair pair, uint256 mintAttoEth, BinaryOutcomes.BinaryOutcome longOutcome, uint256 minLongSharesOut, address recipient, uint256 deadline) public payable nonReentrant returns (EnterResult memory result) {
 		_validatePair(pair);
 		bool longYes = _isDirectionalOutcome(longOutcome);
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
@@ -131,7 +126,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		_approvePair(pair);
-		(uint256 additionalLong, uint256 feeAmount) = pair.swapExactInput(!longYes, mintedInvalid, 0, address(this));
+		(uint256 additionalLong, uint256 feeAmount) = pair.swapExactInput(!longYes, mintedInvalid, 0, address(this), deadline);
 		uint256 totalLong = mintedInvalid + additionalLong;
 		require(totalLong >= minLongSharesOut, 'Minimum long shares');
 		_transferPosition(pool, recipient, longYes, mintedInvalid, totalLong);
@@ -141,19 +136,19 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		result = EnterResult(spent, mintedInvalid, mintedInvalid, additionalLong, totalLong, mintedInvalid, feeAmount, TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter));
 	}
 
-	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
 		ITwoWayConstantProductPair pair = factory.createPair(pool);
 		require(pair.totalSupply() == 0, 'Pair already initialized');
-		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient);
+		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient, deadline);
 	}
 
-	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
 		_validatePair(pair);
 		require(pair.totalSupply() == 0, 'Pair already initialized');
-		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient);
+		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient, deadline);
 	}
 
-	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
 		_validatePair(pair);
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
@@ -162,7 +157,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		_approvePair(pair);
-		(uint256 yesUsed, uint256 noUsed, uint256 liquidity) = pair.addLiquidity(mintedYes, mintedNo, minLiquidity, recipient);
+		(uint256 yesUsed, uint256 noUsed, uint256 liquidity) = pair.addLiquidity(mintedYes, mintedNo, minLiquidity, recipient, deadline);
 		// Complete sets supply equal YES and NO, so the reserve ratio alone sets the deposit mix. A swap toward even
 		// odds raises the minority-side deposit and the minted LP together, which minLiquidity cannot detect.
 		require(yesUsed <= maxYesUsed && noUsed <= maxNoUsed, 'Liquidity price slippage');
@@ -174,7 +169,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		result = LiquidityResult(pair, mintedInvalid, yesUsed, noUsed, yesReturned, noReturned, mintedInvalid, liquidity);
 	}
 
-	function removeLiquidityWithPermit(ITwoWayConstantProductPair pair, uint256 liquidity, uint256 minYesOut, uint256 minNoOut, address recipient, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external nonReentrant beforeDeadline(deadline) returns (uint256 yesOut, uint256 noOut) {
+	function removeLiquidityWithPermit(ITwoWayConstantProductPair pair, uint256 liquidity, uint256 minYesOut, uint256 minNoOut, address recipient, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external nonReentrant returns (uint256 yesOut, uint256 noOut) {
 		_validatePair(pair);
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		try pair.permit(msg.sender, address(this), liquidity, deadline, v, r, s) {} catch {
@@ -242,7 +237,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		bool wasApproved = callbackShareToken.isApprovedForAll(address(this), address(request.pair));
 		if (!wasApproved) callbackShareToken.setApprovalForAll(address(request.pair), true);
 		receiveInternalShareCallback = true;
-		request.pair.swapExactOutput(longYes, request.completeSetShares, swapInput, address(this));
+		request.pair.swapExactOutput(longYes, request.completeSetShares, swapInput, address(this), request.deadline);
 		receiveInternalShareCallback = false;
 		if (!wasApproved) callbackShareToken.setApprovalForAll(address(request.pair), false);
 		_redeemReceivedShares(request);
@@ -337,7 +332,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.No)) == expected[2], 'Router NO residue');
 	}
 
-	function _initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient) private returns (LiquidityResult memory result) {
+	function _initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) private returns (LiquidityResult memory result) {
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
@@ -346,7 +341,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		(uint256 yesUsed, uint256 noUsed) = TwoWayConstantProductMath.initialLiquidityAmounts(mintedInvalid, conditionalYesBpsValue);
 		_approvePair(pair);
-		uint256 liquidity = pair.initialize(yesUsed, noUsed, minLiquidity, recipient);
+		uint256 liquidity = pair.initialize(yesUsed, noUsed, minLiquidity, recipient, deadline);
 		uint256 yesReturned = mintedYes - yesUsed;
 		uint256 noReturned = mintedNo - noUsed;
 		_transferShares(pool, recipient, mintedInvalid, yesReturned, noReturned);

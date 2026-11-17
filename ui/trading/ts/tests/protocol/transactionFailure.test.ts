@@ -12,6 +12,7 @@ describe('transaction failure explanations', () => {
 		['Minimum long shares', 'The price moved past your slippage limit.'],
 		['Liquidity price slippage', 'The price moved past your slippage limit.'],
 		['Deadline expired', 'The transaction deadline passed.'],
+		['LP permit or allowance', 'The liquidity permit expired or was already used.'],
 		['Question ended', 'Trading has ended for this market.'],
 		['Over capacity', 'The security pool does not have enough minting capacity for this size.'],
 		['Vault backing insufficient', 'The security pool does not have enough backing for this size.'],

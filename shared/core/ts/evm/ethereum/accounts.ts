@@ -2,7 +2,7 @@ import { concatBytes, hexToBytes as nobleHexToBytes } from '@noble/hashes/utils.
 
 import { bigintToBytes, checksumAddressFromBytes, ensure0x, getAddress, hexToBytes, normalizeHexData, normalizeQuantityValue, stripHexPrefix } from './encoding.js'
 
-import { type Account, type Address, type Hex, type ParsedTransaction } from './types.js'
+import type { Account, Address, Hex, ParsedTransaction } from './types.js'
 
 import { Transaction as MicroTransaction, addr, eip191Signer } from 'micro-eth-signer'
 

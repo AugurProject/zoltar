@@ -13,7 +13,7 @@ type TernaryFrame = {
 	hasColon: boolean
 }
 
-type NestedTernaryFinding = {
+export type NestedTernaryFinding = {
 	file: string
 	line: number
 	column: number
@@ -76,7 +76,8 @@ function findTernaryColonFrame(frames: TernaryFrame[], parenDepth: number, brack
 	return undefined
 }
 
-function scanSolidityFile(filePath: string, source: string): NestedTernaryFinding[] {
+/** Reports every conditional expression that opens inside another one still awaiting its branches. */
+export function scanSolidityFile(filePath: string, source: string): NestedTernaryFinding[] {
 	const findings: NestedTernaryFinding[] = []
 	const frames: TernaryFrame[] = []
 	let line = 1
@@ -237,4 +238,4 @@ async function main(): Promise<void> {
 	process.exitCode = 1
 }
 
-await main()
+if (import.meta.main) await main()

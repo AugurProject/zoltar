@@ -16,6 +16,7 @@ interface IPortfolioPurchaseRoot {
 	function purchaseFeeBps() external view returns (uint256);
 	function annualFeeBps() external view returns (uint256);
 	function minimumPurchaseFeeAttoEth() external view returns (uint256);
+	function sourceGame(uint248 universeId, uint256 questionId) external view returns (address);
 }
 interface IPurchaseForkReadiness {
 	function isReady(uint248 universeId) external view returns (bool);
@@ -81,6 +82,9 @@ contract SecurityPoolPortfolioPurchase {
 		SecurityPoolPortfolioSettlement engine = root.settlement();
 		uint256 nativeTime = engine.feeTimestamp(pool.universeId());
 		if (address(pool.escalationGame()) != address(0)) return (0, 0);
+		// Reporting that began in an ancestor universe stays open here until this
+		// branch's own game is materialized. Holding fees ended when it began.
+		if (root.sourceGame(pool.universeId(), pool.questionId()) != address(0)) return (0, 0);
 		(SecurityPoolSettlementBook.Question memory question, ) = engine.ledger().question(engine.bookIds(pool.universeId()), pool.questionId());
 		if (question.finalAfter != 0) return (0, 0);
 		uint256 calculated = Math.mulDiv(question.feePrincipalAttoEth, root.annualFeeBps(), SecurityPoolUtils.BPS_DENOMINATOR * 365 days);

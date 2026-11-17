@@ -39,7 +39,7 @@ import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEth
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants.js'
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint.js'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities.js'
-import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum.js'
+import type { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum.js'
 import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.js'
 import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients.js'
 import { ensureInfraDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'

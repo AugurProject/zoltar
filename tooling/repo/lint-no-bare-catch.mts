@@ -4,7 +4,7 @@ import * as ts from 'typescript'
 import { repositoryRoot as projectRoot } from './root.mts'
 import { walkFiles } from './walk.mts'
 
-type CatchFinding = {
+export type CatchFinding = {
 	file: string
 	line: number
 	column: number
@@ -101,6 +101,11 @@ function catchClauseSilencesGeneralErrors(node: ts.CatchClause) {
 	return ts.isIdentifier(thenStatement.expression) && thenStatement.expression.text === node.variableDeclaration.name.text
 }
 
+/** Parses one source and reports its catch clauses that drop the error: no binding, an unused binding, or a rethrow limited to non-Error values. */
+export function findCatchFindingsInSource(filePath: string, text: string): CatchFinding[] {
+	return findCatchFindings(ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, path.extname(filePath).endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS))
+}
+
 function findCatchFindings(sourceFile: ts.SourceFile): CatchFinding[] {
 	const matches: CatchFinding[] = []
 	const visit = (node: ts.Node): void => {
@@ -140,9 +145,7 @@ async function main(): Promise<void> {
 	const catchFindings: CatchFinding[] = []
 
 	for (const filePath of files) {
-		const text = await fs.readFile(filePath, 'utf8')
-		const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, path.extname(filePath).endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
-		catchFindings.push(...findCatchFindings(sourceFile))
+		catchFindings.push(...findCatchFindingsInSource(filePath, await fs.readFile(filePath, 'utf8')))
 	}
 
 	if (catchFindings.length === 0) return
@@ -163,4 +166,4 @@ async function main(): Promise<void> {
 	process.exitCode = 1
 }
 
-await main()
+if (import.meta.main) await main()

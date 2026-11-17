@@ -879,3 +879,42 @@ describe('durable lifecycle obligations', () => {
 		expect(state.obligations).toHaveLength(1)
 	})
 })
+
+describe('lifecycle obligation deadlines', () => {
+	test('records the plan deadline on a tracked obligation', () => {
+		const { obligation } = trackedObligation({ ...plan('10'), deadlineTimestamp: '1000' }, 900n)
+
+		expect(obligation.expiresAt).toBe('1970-01-01T00:16:40.000Z')
+	})
+
+	test('leaves an obligation without a plan deadline unscheduled', () => {
+		const { obligation } = trackedObligation()
+
+		expect(obligation.expiresAt).toBeUndefined()
+		expect('expiresAt' in obligation).toBe(false)
+	})
+
+	test('refreshes the deadline when the same identity becomes actionable again', () => {
+		const first = { ...plan('10'), deadlineTimestamp: '1000' }
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(first)], presence(first), true, 10n, 900n)
+		synchronizeLifecycleObligations(state, [], presence(first, false), true, 11n, 1_001n)
+		const refreshed = { ...plan('12'), deadlineTimestamp: '2000' }
+		synchronizeLifecycleObligations(state, [evaluation(refreshed)], presence(refreshed), true, 12n, 1_100n)
+
+		expect(state.obligations).toHaveLength(1)
+		expect(state.obligations[0]?.expiresAt).toBe('1970-01-01T00:33:20.000Z')
+	})
+
+	test('clears the deadline when the refreshed plan no longer has one', () => {
+		const first = { ...plan('10'), deadlineTimestamp: '1000' }
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(first)], presence(first), true, 10n, 900n)
+		synchronizeLifecycleObligations(state, [], presence(first, false), true, 11n, 1_001n)
+		const refreshed = plan('12')
+		synchronizeLifecycleObligations(state, [evaluation(refreshed)], presence(refreshed), true, 12n, 1_100n)
+
+		expect(state.obligations).toHaveLength(1)
+		expect(state.obligations[0]?.expiresAt).toBeUndefined()
+	})
+})

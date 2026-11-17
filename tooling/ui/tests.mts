@@ -1,6 +1,6 @@
-import { promises as fs } from 'fs'
+import { promises as fs } from 'node:fs'
 import * as process from 'node:process'
-import * as path from 'path'
+import * as path from 'node:path'
 import { walkFiles } from '../repo/walk.mts'
 import { getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAppId } from './appPaths.mts'
 
