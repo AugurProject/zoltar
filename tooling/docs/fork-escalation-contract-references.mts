@@ -417,7 +417,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 					},
 				],
 				effect:
-					'Freezes the final outcome and effective fork threshold, reserves the cumulative winning payout and burn liability, and retires all losing local escrow without visiting deposits. Each later winning claim subtracts its payout and burn from that reserve. Burns terminal REP above the reserve; the ordinary minimum-outcome surplus was already paid irrevocably as deposits arrived. A repeated call with no surplus succeeds. See [reporter liability invariant](./invariants.html#escalation).',
+					'Freezes the final outcome, reserves the cumulative winning payout and burn liability at the recorded `settlementForkThresholdAttoRep`, and retires all losing local escrow without visiting deposits. Each later winning claim subtracts its payout and burn from that reserve. Burns terminal REP above the reserve; the ordinary minimum-outcome surplus was already paid irrevocably as deposits arrived. A repeated call with no surplus succeeds. See [reporter liability invariant](./invariants.html#escalation).',
 				preconditions: 'Ordinary game, not a fork continuation, with `nonDecisionState = None` and a final outcome. Game REP must cover the initial winner reserve (`Winner reserve underfunded`).',
 				signals: '`OrdinarySettlementInitialized` once; `OrdinaryResidualRepBurned` and REP `Transfer` only when surplus is positive',
 			},

@@ -128,7 +128,7 @@
 							<td><code>settleOrdinaryGame()</code></td>
 							<td>Anyone</td>
 							<td>Ordinary game, not a fork continuation, with <code>nonDecisionState = None</code> and a final outcome. Game REP must cover the initial winner reserve (<code>Winner reserve underfunded</code>).</td>
-							<td>Freezes the final outcome and effective fork threshold, reserves the cumulative winning payout and burn liability, and retires all losing local escrow without visiting deposits. Each later winning claim subtracts its payout and burn from that reserve. Burns terminal REP above the reserve; the ordinary minimum-outcome surplus was already paid irrevocably as deposits arrived. A repeated call with no surplus succeeds. See <a href="../invariants.html#escalation">reporter liability invariant</a>.</td>
+							<td>Freezes the final outcome, reserves the cumulative winning payout and burn liability at the recorded <code>settlementForkThresholdAttoRep</code>, and retires all losing local escrow without visiting deposits. Each later winning claim subtracts its payout and burn from that reserve. Burns terminal REP above the reserve; the ordinary minimum-outcome surplus was already paid irrevocably as deposits arrived. A repeated call with no surplus succeeds. See <a href="../invariants.html#escalation">reporter liability invariant</a>.</td>
 							<td><code>OrdinarySettlementInitialized</code> once; <code>OrdinaryResidualRepBurned</code> and REP <code>Transfer</code> only when surplus is positive</td>
 						</tr>
 						<tr>
