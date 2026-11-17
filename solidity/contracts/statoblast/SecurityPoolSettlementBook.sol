@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { SecurityPoolSettlementPricing } from './SecurityPoolSettlementPricing.sol';
 import { SecurityPoolSettlementMath as SettlementMath } from './SecurityPoolSettlementMath.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
@@ -15,6 +16,7 @@ import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 /// A fork copies immutable roots, including ALL inherited outcome liabilities, in constant work.
 contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
 	uint48 public constant MINIMUM_FORK_RESPONSE = 3 days;
@@ -102,7 +104,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	function scaledQuestion(uint64 bookId, uint256 questionId) public view override returns (Question memory state, uint64 frozenBookId) {
 		Book storage book = _book(bookId);
-		state = questionStates[uint64(tree.get(book.questionRoot, questionId))].question;
+		state = questionStates[uint64(questionMap.get(book.questionRoot, questionId))].question;
 		state = _materializeFees(book, state);
 		if (state.finalAfter != 0) frozenBookId = uint64(frozenHistory.ceiling(book.frozenRoot, state.finalAfter));
 	}
@@ -352,7 +354,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	function _scaledRecovery(uint64 bookId, Book storage book, uint256 questionId, Question memory state) internal view override returns (uint256 scaledRecoveryEntitlement) {
-		uint64 stateId = uint64(tree.get(book.questionRoot, questionId));
+		uint64 stateId = uint64(questionMap.get(book.questionRoot, questionId));
 		StoredQuestionState storage snapshot = questionStates[stateId];
 		unchecked {
 			// Allocate current units at the branch's index, then carry the snapshot's
@@ -493,7 +495,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	function _writeQuestionWithRecovery(uint64 bookId, Book storage book, uint256 questionId, Question memory state, uint256 correction) private {
-		uint64 previousId = uint64(tree.get(book.questionRoot, questionId));
+		uint64 previousId = uint64(questionMap.get(book.questionRoot, questionId));
 		Question storage previous = questionStates[previousId].question;
 		uint64 frozen =
 			previous.finalAfter == 0 ? 0 : uint64(frozenHistory.ceiling(book.frozenRoot, previous.finalAfter));
@@ -511,7 +513,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		}
 		uint64 stateId = ++lastQuestionStateId;
 		questionStates[stateId] = StoredQuestionState(state, correction, recoveryStates[bookId].index);
-		book.questionRoot = tree.set(book.questionRoot, questionId, stateId, 0);
+		book.questionRoot = questionMap.set(book.questionRoot, questionId, stateId);
 	}
 
 	function _changeFinalityCorrection(uint64 bookId, uint48 finalAfter, uint256 correction, bool increase) private {

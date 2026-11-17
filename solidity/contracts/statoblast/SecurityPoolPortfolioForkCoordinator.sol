@@ -13,7 +13,7 @@ import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
-import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolPortfolioAuction } from './SecurityPoolPortfolioAuction.sol';
 import { SecurityPoolUniformPriceAuction } from './SecurityPoolUniformPriceAuction.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -55,7 +55,7 @@ interface IPortfolioRecoveryShares {
 /// Principal outside pledged positions and old vested income remain in the parent.
 contract SecurityPoolPortfolioForkCoordinator {
 	using SafeERC20Ops for IERC20;
-	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 
 	IPortfolioForkRoot public immutable portfolio;
 	Zoltar public immutable zoltar;
@@ -142,7 +142,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 	mapping(uint248 => Branch) private branchStates;
 	mapping(uint248 => mapping(address => Choice)) public choices;
 	mapping(uint248 => mapping(uint256 => uint256)) public recoveredQuestionShares;
-	SecurityPoolPersistentMap.Store private fixedTree;
+	SecurityPoolQuestionMap.Store private fixedTree;
 	FixedOutcome[] private fixedOutcomes;
 
 	event ForkFrozen(uint248 indexed universeId, uint256 backing, uint256 cash, uint256 units, uint256 recoveryAttoRep);
@@ -291,7 +291,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		// A later fork cannot overwrite a question outcome already fixed in an ancestor.
 		if (fixedTree.get(root, questionId) == 0) {
 			fixedOutcomes.push(FixedOutcome(outcome));
-			root = fixedTree.set(root, questionId, fixedOutcomes.length - 1, 0);
+			root = fixedTree.set(root, questionId, fixedOutcomes.length - 1);
 		}
 		branch.fixedRoot = root;
 	}

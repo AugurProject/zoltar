@@ -74,6 +74,52 @@ describe('Statoblast: central internal settlement units', () => {
 	const repair = (bookId: bigint, cash: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'topUp', args: [bookId, cash] }))
 	const recoveryMintQuote = (bookId: bigint, questionId: bigint, cash: bigint) => client.readContract({ ...target(), functionName: 'quoteMintRecoveryRep', args: [bookId, questionId, cash] })
 
+	test('#1257 crafted question IDs cannot inflate settlement read or update gas', async () => {
+		const measure = async (crafted: boolean) => {
+			await deployBook(1n)
+			await mint(1n, 0n, 1000n)
+			for (let index = 0; index < 24; index++) {
+				const id = crafted ? 1n << BigInt(index * 10) : BigInt(index + 1)
+				await mint(1n, id, 1000n)
+			}
+			const read = await client.estimateContractGas({ ...target(), functionName: 'question', args: [1n, 0n] })
+			const update = await client.estimateContractGas({ ...target(), functionName: 'mint', args: [1n, 0n, 1000n, 0n, 0] })
+			const redemption = await client.estimateContractGas({ ...target(), functionName: 'redeem', args: [1n, 0n, 1000n, 0n, 0] })
+			return { read, update, redemption }
+		}
+		const sequential = await measure(false)
+		const crafted = await measure(true)
+		console.log('#1257 settlement gas', { sequential, crafted })
+		for (const operation of ['read', 'update', 'redemption'] as const) {
+			expect(crafted[operation]).toBeLessThanOrEqual(sequential[operation] + 30_000n)
+		}
+	})
+
+	test('#1257 full-width question IDs retain independent snapshots across sibling and repeated forks', async () => {
+		const first = (1n << 256n) - 1n
+		const second = 1n << 255n
+		await mint(1n, first, 1000n)
+		await mint(1n, 0n, 2000n)
+		await seal(1n)
+		await child(1n, 3000n)
+		await child(1n, 3000n)
+		await redeem(2n, first, 400n)
+		await mint(2n, second, 500n)
+		expect((await question(1n, first))[0].outcomeSupplyAttoShares).toBe(1000n)
+		expect((await question(3n, first))[0].outcomeSupplyAttoShares).toBe(1000n)
+		expect((await question(2n, first))[0].outcomeSupplyAttoShares).toBe(600n)
+		expect((await question(3n, second))[0].outcomeSupplyAttoShares).toBe(0n)
+		await mint(3n, second, 700n)
+		expect((await question(2n, second))[0].outcomeSupplyAttoShares).toBe(500n)
+		await seal(2n)
+		await child(2n, 3100n)
+		await redeem(4n, second, 200n)
+		expect((await question(4n, second))[0].outcomeSupplyAttoShares).toBe(300n)
+		expect((await question(2n, second))[0].outcomeSupplyAttoShares).toBe(500n)
+		expect((await question(3n, second))[0].outcomeSupplyAttoShares).toBe(700n)
+		expect((await question(4n, 0n))[0].outcomeSupplyAttoShares).toBe(2000n)
+	})
+
 	test('#1247 a tiny-deficit donation preserves large REP ownership and resumes fees and fresh-question entry', async () => {
 		const recovery = 10n ** 24n
 		await mint(1n, 1n, 1000n)
