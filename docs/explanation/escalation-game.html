@@ -111,11 +111,17 @@
 					<li><strong>Interruption by another fork.</strong> The pool's universe forks while the game remains unresolved. The game has no local result and continues in the child pools instead; see <a href="./statoblast.html#forks-migration">forks and migration</a>.</li>
 				</ol>
 
-				<p>Settlement rewards the side that held its ground. Winning deposits get their principal back plus a bonus. The runner-up's stake, the binding capital, pays for it: three fifths becomes the bonus pool and two fifths, the <a href="../reference/glossary.html#escalation-haircut">escalation haircut</a>, is burned, unless the fork this game triggered already burned it as the <a href="../reference/glossary.html#fork-haircut">fork haircut</a>.</p>
+				<p>Settlement rewards the winning side. Winning deposits get their principal back plus a bonus. The runner-up's stake, the binding capital, pays for it: three fifths becomes the bonus pool and two fifths, the <a href="../reference/glossary.html#escalation-haircut">escalation haircut</a>, is burned, unless the fork this game triggered already burned it as the <a href="../reference/glossary.html#fork-haircut">fork haircut</a>.</p>
 
 				<p>As ordinary reports increase the smallest of the three outcome balances, that increase leaves dispute escrow. The portfolio distributes it as <a href="./fees.html#portfolio-fees">separate REP income</a>. The other two balances remain in escrow to cover any winning outcome. Final settlement burns any extra beyond its reserved liabilities; a game carried across a fork also burns its terminal residual.</p>
 
 				<p>The bonus is only available on the portion of winning deposits up to the <a href="../reference/glossary.html#reward-eligible-cap">reward-eligible cap</a>, one and a half times binding capital; deposits beyond that cap simply get their principal back. Settlement also compares the universe's current fork threshold, in full, with the non-decision threshold the game fixed when it opened. If the current fork threshold is the lower of the two, every winning withdrawal is multiplied by the current fork threshold divided by that non-decision threshold, which can push the final transfer below principal. The comparison is skipped when the universe forked after the game ended. The <a href="../reference/contracts/escalationgame.html#winning-deposit-payout">EscalationGame reference</a> works one payout through with exact numbers.</p>
+
+				<h3>Late deposits and bonus sharing</h3>
+
+				<p>Bonus shares depend on eligible deposit amounts and their positions within the reward-eligible cap, not on how long REP was staked. A deposit accepted just before finality can therefore earn a bonus if capacity remains under the cap, reducing earlier reporters' shares despite spending less time at risk. Deposits beyond the cap earn no bonus, and a late depositor still risks losing REP if another outcome wins.</p>
+
+				<p>This is an accepted design tradeoff: the game keeps amount-based rewards rather than adding time-weighted bonus accounting, especially for claims inherited through forks. A top-up on the already leading outcome does not restart the response period; doing so for every such deposit would let repeated top-ups delay finality. The cap limits eligible stake but does not eliminate late bonus capture. See <a href="https://github.com/AugurProject/zoltar/issues/1284">issue #1284</a> for the tradeoff considered.</p>
 
 				<h3>Escalation game continuation</h3>
 
