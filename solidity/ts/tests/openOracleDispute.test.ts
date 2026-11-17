@@ -3,7 +3,7 @@ import { bytesToHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, 
 import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY } from '../testSupport/openOracle/statePreimage'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import assert from '../testSupport/simulator/utils/assert'
-import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'

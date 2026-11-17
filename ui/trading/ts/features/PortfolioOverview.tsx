@@ -95,7 +95,7 @@ function actionItemPresentation(item: PortfolioActionItem) {
 
 /** Each market that needs the account's attention, soonest deadline first: its states as badges and the action that resolves each one. */
 export function PortfolioActionItems({ groups, nowSeconds }: { groups: readonly PortfolioActionGroup[]; nowSeconds: bigint }) {
-	if (groups.length === 0) return null
+	if (groups.length === 0) return undefined
 	return (
 		<section className='portfolio-action-items' aria-labelledby='portfolio-action-items-heading'>
 			<h3 id='portfolio-action-items-heading'>{portfolioCopy.needsAttention}</h3>
@@ -131,19 +131,19 @@ export function PortfolioActionItems({ groups, nowSeconds }: { groups: readonly 
 /** Sell while the market trades, opening the ticket in Sell mode on the held outcome; Redeem once it has closed and something is redeemable. */
 export function PortfolioRowActions({ row }: { row: PortfolioRow }) {
 	const { pool, title } = row.entry.market
-	if (!row.canSell && !row.canRedeem) return null
+	if (!row.canSell && !row.canRedeem) return undefined
 	return (
 		<>
 			{row.canSell ? (
 				<a className='button-link primary' href={marketTicketHref(pool, { mode: 'exit', side: row.sellSide })} aria-label={portfolioCopy.actionFor(portfolioCopy.sell, title)}>
 					{portfolioCopy.sell}
 				</a>
-			) : null}
+			) : undefined}
 			{row.canRedeem ? (
 				<a className='button-link primary' href={getTradingRouteHref(`#/market/${pool}`)} aria-label={portfolioCopy.actionFor(portfolioCopy.redeem, title)}>
 					{portfolioCopy.redeem}
 				</a>
-			) : null}
+			) : undefined}
 		</>
 	)
 }

@@ -1,6 +1,6 @@
 import { getAddress } from './encoding.js'
 
-import { type Chain, type Hash } from './types.js'
+import type { Chain, Hash } from './types.js'
 
 import { amounts } from 'micro-eth-signer'
 

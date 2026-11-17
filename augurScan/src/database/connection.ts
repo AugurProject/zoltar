@@ -1,4 +1,4 @@
-import { type ReservedSQL, SQL } from 'bun'
+import type { ReservedSQL, SQL } from 'bun'
 import { destroyReservedConnection, type IndexerLease, type PersistedIndexerOwnershipState, releaseReservedConnection, runSerializedIndexerLeaseOperation } from './history.ts'
 import { assertIndexerLeaseObservation, assertIndexerLeaseReleaseObservation, IndexerLeaseReleaseError, type IntegrityIssue, type LiveEvent, lockLiveEventWriter } from './records.ts'
 import type { ScannerDatabase } from './block-persistence.ts'

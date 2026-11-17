@@ -18,7 +18,7 @@ type Props = {
 }
 
 export function AppRouteContent({ deploy, readBackendMessage, route, zoltarView }: Props) {
-	if (!shouldRenderAppRouteContent(route, readBackendMessage)) return null
+	if (!shouldRenderAppRouteContent(route, readBackendMessage)) return undefined
 
 	switch (route) {
 		case 'deploy':

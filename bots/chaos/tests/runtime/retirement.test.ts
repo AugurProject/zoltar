@@ -13,7 +13,7 @@ import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracl
 import { buildV3RetirementPlan, readV3PositionsWithQuorum, reconcileV3PositionJournal } from '../../src/runtime/retirement-v3-positions.ts'
 import type { V3PositionAnchor, V3PositionObservation } from '../../src/runtime/retirement-types.ts'
 import { retirementPlanFromEvaluations } from '../../src/runtime/retirement-operation-policy.ts'
-import { type DurableWorkflow } from '../../src/state/operator-state.ts'
+import type { DurableWorkflow } from '../../src/state/operator-state.ts'
 import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'

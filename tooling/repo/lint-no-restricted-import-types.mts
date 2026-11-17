@@ -26,7 +26,9 @@ function isRestrictedSpecifier(specifier: string): boolean {
 	return restrictedPackages.some(name => specifier === name || specifier.startsWith(`${name}/`))
 }
 
-function findRestrictedImportTypes(sourceFile: ts.SourceFile): RestrictedImportTypeFinding[] {
+/** @internal Exported for the lint's own tests. */
+export function findRestrictedImportTypes(file: string, source: string): RestrictedImportTypeFinding[] {
+	const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, scriptKindFor(file))
 	const findings: RestrictedImportTypeFinding[] = []
 	const record = (node: ts.Node, specifier: ts.Node) => {
 		const position = sourceFile.getLineAndCharacterOfPosition(specifier.getStart(sourceFile))
@@ -46,21 +48,8 @@ function findRestrictedImportTypes(sourceFile: ts.SourceFile): RestrictedImportT
 	return findings
 }
 
-const fixtures: readonly [file: string, source: string, expectedFindings: number][] = [
-	['fixture.ts', "export type Value = import('viem').Address", 1],
-	['fixture.d.ts', "export type Module = typeof import('abitype/zod')", 1],
-	['fixture.mjs', 'export const chains = import(`viem/chains`)', 1],
-	['fixture.cjs', 'module.exports = require(`viem`)', 1],
-	['fixture.cjs', "module.exports = require('viem/actions')", 1],
-	['fixture.cjs', "module.exports = require('viem')", 0],
-	['fixture.ts', "export const value = import('viem')", 0],
-	['fixture.ts', "export type Local = import('./local.js').Value", 0],
-	['fixture.ts', "import { http } from 'viem'\nexport const value = http", 0],
-]
-for (const [file, source, expectedFindings] of fixtures) {
-	const count = findRestrictedImportTypes(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, scriptKindFor(file))).length
-	if (count !== expectedFindings) throw new Error(`Restricted import-type lint self-test failed for ${JSON.stringify(source)}: expected ${expectedFindings}, found ${count}`)
-}
+/** @internal Exported for the lint's own tests. */
+export const isRestrictedImportCheckedSource = (file: string): boolean => sourceExtensions.test(file) && !generatedPathPattern.test(file)
 
 /**
  * Lists the tracked and untracked-but-not-ignored files under the requested paths (the whole repository by default) that
@@ -85,9 +74,8 @@ if (import.meta.main) {
 	const findings: RestrictedImportTypeFinding[] = []
 	for (const listedFile of files) {
 		const file = listedFile.split(path.sep).join('/')
-		if (!sourceExtensions.test(file) || generatedPathPattern.test(file)) continue
-		const text = await fs.readFile(path.join(repositoryRoot, file), 'utf8')
-		findings.push(...findRestrictedImportTypes(ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKindFor(file))))
+		if (!isRestrictedImportCheckedSource(file)) continue
+		findings.push(...findRestrictedImportTypes(file, await fs.readFile(path.join(repositoryRoot, file), 'utf8')))
 	}
 	if (findings.length > 0) {
 		console.log("Inline import types, template-literal specifiers, and subpath require() calls for 'viem' and 'abitype' are not allowed. Import EVM primitives through the shared boundary ('@zoltar/core-shared/evm/ethereum', or 'src/ethereum.ts' inside AugurScan) instead.")

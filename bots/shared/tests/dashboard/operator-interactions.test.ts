@@ -19,9 +19,9 @@ afterEach(async () => {
 	dom = undefined
 })
 
-function required<T extends Element>(selector: string, constructor: { new (): T }) {
+function required<T extends Element>(selector: string, elementConstructor: { new (): T }) {
 	const found = document.querySelector(selector)
-	if (!(found instanceof constructor)) throw new Error(`Missing ${selector}`)
+	if (!(found instanceof elementConstructor)) throw new Error(`Missing ${selector}`)
 	return found
 }
 

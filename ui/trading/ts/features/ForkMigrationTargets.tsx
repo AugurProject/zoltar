@@ -86,7 +86,7 @@ function formatMigratedShares(target: ForkTarget, market: CollateralMarket) {
  */
 export function MigratedShareLinks({ context, market = {} }: { context: ForkMigrationContext; market?: CollateralMarket }) {
 	const migratedTargets = context.availableTargets.filter(target => target.canonicalPool !== undefined && SHARE_OUTCOMES.some(outcome => migratedSharesOf(target, outcome) > 0n))
-	if (migratedTargets.length === 0) return null
+	if (migratedTargets.length === 0) return undefined
 	return (
 		<WorkflowSubsection className='fork-migrated-shares' title={forkCopy.migratedSharesTitle}>
 			<UserMessage className='detail' detail={forkCopy.migratedSharesDetail} />

@@ -11,10 +11,10 @@ import {
 	OPEN_ORACLE_REPORT_SUBMITTED_TOPIC,
 	type OpenOracleStatePreimage,
 } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
+import { type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
 import { WETH_ADDRESS } from '../constants'
 import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_tokens_ShareToken_ShareToken } from '../../../../types/contractArtifact'
-import { QuestionOutcome } from '../../types/types'
+import type { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
 import { requireAddress } from '../utilities'

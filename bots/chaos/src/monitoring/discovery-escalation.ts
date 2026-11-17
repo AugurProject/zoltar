@@ -3,7 +3,7 @@ import { type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString } from '../core/units.ts'
-import { type EcosystemDeployments, type PoolSnapshot } from '../operations/types.ts'
+import type { EcosystemDeployments, PoolSnapshot } from '../operations/types.ts'
 import { type ChaosReadClient, contractSimulationReverted, drainConcurrent } from './discovery-client.ts'
 
 export function relevantTokenSpenders(deployments: EcosystemDeployments, pools: readonly PoolSnapshot[], token: Address): Address[] {

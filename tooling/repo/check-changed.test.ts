@@ -28,7 +28,7 @@ test('check-changed passes every Biome file type through and leaves generated-pa
 test('scoped checking includes custom rules for source and dependency changes', async () => {
 	const { getStaticCheckCommands } = await import('./static-checks.mts')
 	const full = getStaticCheckCommands()
-	expect(full).toHaveLength(6)
+	expect(full).toHaveLength(8)
 	for (const paths of [['ui/statoblastShared/ts/components/Example.tsx'], ['package.json'], ['tooling/repo/static-checks.mts']]) {
 		expect(getStaticCheckCommands(paths)).toEqual(full)
 	}

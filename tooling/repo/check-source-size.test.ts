@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { countSolidityCommentOnlyLines, countSourceLines, inspectSourceSizes, isProductionSource } from './check-source-size.mts'
+import { countSolidityCommentOnlyLines, countSourceLines, inspectSourceSizes, inspectTestSourceSizes, isProductionSource, isTestSource } from './check-source-size.mts'
 import { runGit } from './git.mts'
 import { repositoryRoot } from './root.mts'
 
@@ -15,7 +15,7 @@ function withSourceSizeRepository(verify: (root: string, check: () => ReturnType
 		const tooling = path.join(root, 'tooling/repo')
 		mkdirSync(tooling, { recursive: true })
 		for (const file of ['check-source-size.mts', 'git.mts', 'root.mts']) copyFileSync(path.join(repositoryRoot, 'tooling/repo', file), path.join(tooling, file))
-		writeFileSync(path.join(tooling, 'source-size-policy.ts'), 'export const productionSourceLineLimit = 600\nexport const sourceSizeAllowances = new Map()\n')
+		writeFileSync(path.join(tooling, 'source-size-policy.ts'), 'export const productionSourceLineLimit = 600\nexport const sourceSizeAllowances = new Map()\nexport const testSourceLineLimit = 1500\nexport const testSourceSizeAllowances = new Map()\n')
 		mkdirSync(path.join(root, 'solidity/contracts'), { recursive: true })
 		writeFileSync(path.join(root, 'solidity/contracts/Deleted.sol'), source(700))
 		writeFileSync(path.join(root, 'solidity/contracts/Current.sol'), source(10))
@@ -43,7 +43,10 @@ test('CLI checks the worktree when a tracked production source has been deleted'
 
 test('CLI preserves missing-file diagnostics for allowances on deleted sources', () => {
 	withSourceSizeRepository((root, check) => {
-		writeFileSync(path.join(root, 'tooling/repo/source-size-policy.ts'), "export const productionSourceLineLimit = 600\nexport const sourceSizeAllowances = new Map([['solidity/contracts/Deleted.sol', { maxLines: 700, reason: 'Temporary allowance.' }]])\n")
+		writeFileSync(
+			path.join(root, 'tooling/repo/source-size-policy.ts'),
+			"export const productionSourceLineLimit = 600\nexport const sourceSizeAllowances = new Map([['solidity/contracts/Deleted.sol', { maxLines: 700, reason: 'Temporary allowance.' }]])\nexport const testSourceLineLimit = 1500\nexport const testSourceSizeAllowances = new Map()\n",
+		)
 		const result = check()
 		expect(result.status).toBe(1)
 		expect(result.stderr).toContain('solidity/contracts/Deleted.sol: 0 lines; configured limit 700 (missing-file)')
@@ -79,6 +82,34 @@ test('recognizes production sources and excludes generated, vendored, fixture, a
 	])
 		expect(isProductionSource(file)).toBe(true)
 	for (const file of ['ui/zoltar/js/App.js', 'ui/zoltar/ts/tests/App.test.tsx', 'bots/chaos/src/contracts/abi.generated.ts', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol']) expect(isProductionSource(file)).toBe(false)
+})
+
+test('recognizes test files and their helpers and excludes production, generated, and fixture files', () => {
+	for (const file of ['ui/zoltar/ts/tests/App.test.tsx', 'ui/coreShared/ts/tests/testUtils/queries.ts', 'shared/core/ts/evm/ethereum.test.ts', 'tooling/repo/check-changed.test.ts', 'bots/chaos/tests/runtime/operator.test.ts', 'solidity/ts/tests/eventReplay/eventReplayModel.ts', 'augurScan/tests/unit/live-ui.spec.ts'])
+		expect(isTestSource(file)).toBe(true)
+	for (const file of ['ui/zoltar/ts/app/App.tsx', 'solidity/ts/testSupport/coverage/traceToSource.ts', 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts', 'augurScan/tests/fixtures/blocks.ts', 'ui/zoltar/js/tests/App.test.js', 'solidity/contracts/test/Harness.sol', 'README.test.md'])
+		expect(isTestSource(file)).toBe(false)
+	for (const file of ['ui/zoltar/ts/tests/App.test.tsx', 'shared/core/ts/evm/ethereum.test.ts']) expect(isProductionSource(file)).toBe(false)
+})
+
+test('holds test sources to their own wider limit and allowance register', () => {
+	const testFile = 'ui/zoltar/ts/tests/protocol/zoltar.test.ts'
+	expect(inspectTestSourceSizes(new Map([[testFile, source(1500)]]), new Map())).toEqual([])
+	expect(inspectTestSourceSizes(new Map([[testFile, source(1501)]]), new Map())).toEqual([{ file: testFile, kind: 'oversized', limit: 1500, lines: 1501 }])
+	const allowances = new Map([[testFile, { maxLines: 1800, reason: 'Split by behavior area.' }]])
+	expect(inspectTestSourceSizes(new Map([[testFile, source(1800)]]), allowances)).toEqual([])
+	expect(inspectTestSourceSizes(new Map([[testFile, source(1801)]]), allowances)).toEqual([{ file: testFile, kind: 'allowance-exceeded', limit: 1800, lines: 1801 }])
+	expect(inspectTestSourceSizes(new Map([[testFile, source(1700)]]), allowances)).toEqual([{ file: testFile, kind: 'stale-allowance', limit: 1800, lines: 1700 }])
+})
+
+test('keeps the production and test registers separate', () => {
+	const files = new Map([
+		['ui/zoltar/ts/new-module.ts', source(700)],
+		['ui/zoltar/ts/tests/new-module.test.ts', source(700)],
+	])
+	expect(inspectSourceSizes(files, new Map()).map(finding => finding.file)).toEqual(['ui/zoltar/ts/new-module.ts'])
+	expect(inspectTestSourceSizes(files, new Map())).toEqual([])
+	expect(inspectTestSourceSizes(files, new Map([['ui/zoltar/ts/new-module.ts', { maxLines: 1600, reason: 'Production modules are not test sources.' }]]))).toEqual([{ detail: 'allowances may only name test source files', file: 'ui/zoltar/ts/new-module.ts', kind: 'invalid-allowance-path', limit: 1600, lines: 700 }])
 })
 
 test('rejects new oversized files with useful limits', () => {

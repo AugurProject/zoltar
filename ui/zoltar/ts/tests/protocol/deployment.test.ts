@@ -17,6 +17,7 @@ import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_Zolta
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 
 const require = createRequire(import.meta.url)
 const rootSolcPath = fileURLToPath(new URL('../../../../../node_modules/solc/index.js', import.meta.url))
@@ -48,11 +49,11 @@ type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitFo
 	>
 
 function asWriteClient(client: MockWriteClient): WriteClient {
-	return {
+	return testDouble<WriteClient>({
 		getBlock: async () => ({ baseFeePerGas: 1n }) as never,
 		getTransactionCount: async () => 0n,
 		...client,
-	} as unknown as WriteClient
+	})
 }
 
 function hashReceipt(status: TransactionReceipt['status']): TransactionReceipt {

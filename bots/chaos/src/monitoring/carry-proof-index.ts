@@ -2,7 +2,7 @@ import { getAddress, zeroHash, type Address, type Hash } from '@zoltar/bot-share
 import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakRoots, CARRY_NULLIFIER_DEPTH, computeCarryNullifierRootFromProof, createSparseNullifier, getCarryNullifierPath, hashCarryLeaf as hashSharedCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 
-import { type CanonicalUintString } from '../core/units.ts'
+import type { CanonicalUintString } from '../core/units.ts'
 
 const CARRY_MMR_MAXIMUM_PEAKS = 64
 

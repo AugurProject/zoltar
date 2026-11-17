@@ -99,8 +99,7 @@ export function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition
 						const selected = snapshot.reports.find(candidate => candidate.reportId === reportId)
 						const quote = selected === undefined ? undefined : disputeQuote(snapshot, selected, options)
 						const quoteMatches =
-							quote !== undefined &&
-							quote.affordable &&
+							quote?.affordable &&
 							quote.external1 === external1 &&
 							quote.external2 === external2 &&
 							quote.internal1 === requiredMetadataAmount(context.previousPlan.metadata, 'internal1') &&

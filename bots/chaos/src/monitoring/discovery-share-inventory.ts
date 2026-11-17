@@ -3,10 +3,10 @@ import type { DiscoveryIssue } from '../operations/types.ts'
 import { DISCOVERY_AGGREGATE_ITEM_LIMIT, type EcosystemDiscoveryContext } from './discovery-context.ts'
 import { erc1155Abi, shareTokenAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
-import { type EcosystemDeployments, type OracleGameSnapshot, type PairSnapshot, type PoolSnapshot, type QuestionSnapshot, type ShareInventory, type UniverseSnapshot } from '../operations/types.ts'
+import type { EcosystemDeployments, OracleGameSnapshot, PairSnapshot, PoolSnapshot, QuestionSnapshot, ShareInventory, UniverseSnapshot } from '../operations/types.ts'
 import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency } from './discovery-client.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from './protocol-index.ts'
-import { type Address } from '@zoltar/bot-shared/ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 
 export function trustedIndexedReportsForDiscovery(parameters: { deployments: EcosystemDeployments; wallet: Address; reports: readonly OracleGameSnapshot[]; universes: readonly UniverseSnapshot[]; pools: readonly PoolSnapshot[] }) {
 	const coordinatorReports = canonicalPoolReportRoutes(parameters.pools)

@@ -1,5 +1,5 @@
 import * as Plot from '@observablehq/plot'
-import { type JsonRecord } from './api-validation.ts'
+import type { JsonRecord } from './api-validation.ts'
 import { chartValueBounds } from './chart-values.ts'
 import { utcDateTime } from './format.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'

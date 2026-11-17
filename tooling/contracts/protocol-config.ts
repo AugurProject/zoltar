@@ -1,4 +1,4 @@
-import { type ProtocolConfig } from '../../shared/core/ts/deployment/protocolConfig'
+import type { ProtocolConfig } from '../../shared/core/ts/deployment/protocolConfig'
 
 // Frozen mainnet protocol configuration, guarded against environment or global override drift.
 type ProtocolConfigInput = Partial<{

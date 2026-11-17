@@ -1,11 +1,11 @@
 import { isContractProjectSource, parseContractProject, type ContractProject } from './contractProjects.js'
-import { createHash } from 'crypto'
-import { promises as fs } from 'fs'
-import * as path from 'path'
+import { createHash } from 'node:crypto'
+import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
 import solc from 'solc'
 import openOracleSolc from 'solc-0-8-28'
 import * as funtypes from 'funtypes'
-import * as url from 'url'
+import * as url from 'node:url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
@@ -173,8 +173,8 @@ class CompilationError extends Error {
 	}
 
 	override toString() {
-		const unescape = (str: string) => str.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-		return `${this.name}: ${this.message}\n errors:\n${this.errors.map((error, index) => `  [${index}] ${unescape(error)}`).join('\n')}`
+		const unescapeWhitespace = (str: string) => str.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+		return `${this.name}: ${this.message}\n errors:\n${this.errors.map((error, index) => `  [${index}] ${unescapeWhitespace(error)}`).join('\n')}`
 	}
 }
 

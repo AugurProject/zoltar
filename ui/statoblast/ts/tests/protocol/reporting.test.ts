@@ -8,6 +8,7 @@ import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shar
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { EscalationSide } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -67,7 +68,7 @@ function buildCarrySnapshotPeaksForTest(leafHashes: readonly Hex[]) {
 // Mocks the reads behind loadReportingDetails for an active escalation game; deposit pages come from the supplied reader.
 function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number, startIndex: bigint) => unknown) {
 	const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-	return {
+	return testDouble<Parameters<typeof loadReportingDetails>[0]>({
 		getBlock: async () => createBlockWithTimestamp(88n),
 		getCode: async () => '0x1234' as Hex,
 		multicall: createMulticallStub(async request => {
@@ -105,7 +106,7 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 			}
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		}),
-	} as unknown as Parameters<typeof loadReportingDetails>[0]
+	})
 }
 
 describe('reporting protocol client', () => {
@@ -293,7 +294,7 @@ describe('reporting protocol client', () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const poolHeldVaultRepBackingAttoRep = 70n
 		const escrowedRep = 30n
-		const client = {
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(88n),
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
@@ -342,7 +343,7 @@ describe('reporting protocol client', () => {
 				}
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof loadReportingDetails>[0]
+		})
 
 		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
 
@@ -360,7 +361,7 @@ describe('reporting protocol client', () => {
 	test('loadReportingDetails marks unrelated external-fork unresolved parent deposits as migration-required, not withdrawable', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ef')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = {
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(88n),
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
@@ -412,7 +413,7 @@ describe('reporting protocol client', () => {
 				}
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof loadReportingDetails>[0]
+		})
 
 		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
 
@@ -435,7 +436,7 @@ describe('reporting protocol client', () => {
 	] as const)('loadReportingDetails keeps inherited settlement available independently of old per-vault migration deadlines ($forkActivationTime, $blockTimestamp)', async ({ blockTimestamp, forkActivationTime, expected }) => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const forkDataReads: unknown[] = []
-		const client = {
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(blockTimestamp),
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
@@ -467,7 +468,7 @@ describe('reporting protocol client', () => {
 				}
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof loadReportingDetails>[0]
+		})
 
 		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
 
@@ -479,7 +480,7 @@ describe('reporting protocol client', () => {
 	test('loadReportingDetails keeps parent settlement locked when the unrelated external fork happened after escalation ended', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ee')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = {
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(88n),
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
@@ -530,7 +531,7 @@ describe('reporting protocol client', () => {
 				}
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof loadReportingDetails>[0]
+		})
 
 		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
 
@@ -541,7 +542,7 @@ describe('reporting protocol client', () => {
 
 	test('loadReportingDetails keeps pool-level finality and previews the live reduced bond when no game exists', async () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = {
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(88n),
 			getCode: async () => '0x' as Hex,
 			multicall: createMulticallStub(async request => {
@@ -565,7 +566,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof loadReportingDetails>[0]
+		})
 
 		const details = await loadReportingDetails(client, securityPoolAddress, vaultAddress)
 
@@ -584,7 +585,7 @@ describe('reporting protocol client', () => {
 	test('loadReportingDetails skips forkContinuation when escalation game code is missing', async () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		let forkContinuationRead = false
-		const client = {
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(88n),
 			getCode: async () => '0x' as Hex,
 			multicall: createMulticallStub(async request => {
@@ -603,7 +604,7 @@ describe('reporting protocol client', () => {
 				}
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof loadReportingDetails>[0]
+		})
 
 		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
 
@@ -613,7 +614,7 @@ describe('reporting protocol client', () => {
 
 	test('loadReportingDetails requires the forkContinuation getter for deployed escalation games', async () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = {
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(88n),
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
@@ -629,14 +630,14 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof loadReportingDetails>[0]
+		})
 
 		await expect(loadReportingDetails(client, securityPoolAddress, undefined)).rejects.toThrow(missingForkContinuationGetterMessage)
 	})
 
 	test('loadReportingDetails keeps a known child outcome locked until the pool becomes operational', async () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = {
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(88n),
 			getCode: async () => '0x' as Hex,
 			multicall: createMulticallStub(async request => {
@@ -652,7 +653,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof loadReportingDetails>[0]
+		})
 
 		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
 
@@ -701,7 +702,7 @@ describe('reporting protocol client', () => {
 	test('buildForkCarriedEscalationProofs rejects malformed historical carry nodes instead of dropping entries', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
-		const client = {
+		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
 			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
@@ -727,7 +728,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+		})
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [1n])).rejects.toThrow('Unexpected historical carry node parent deposit index response')
 	})
@@ -735,7 +736,7 @@ describe('reporting protocol client', () => {
 	test('buildForkCarriedEscalationProofs requires the forkContinuation getter', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
-		const client = {
+		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
 			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
@@ -757,7 +758,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
-		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+		})
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [])).rejects.toThrow(missingForkContinuationGetterMessage)
 	})
@@ -788,7 +789,7 @@ describe('reporting protocol client', () => {
 		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
-		const client = {
+		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
 			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
@@ -832,7 +833,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 				throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
 			}),
-		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+		})
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([
 			{
@@ -870,7 +871,7 @@ describe('reporting protocol client', () => {
 		const parentCarryRoot = hashCarryParentForTest(inheritedLeafHash, childLocalLeafHash)
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = parentCarryRoot
-		const client = {
+		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
 			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
@@ -930,7 +931,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 				throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
 			}),
-		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+		})
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [9n, 1n])).resolves.toMatchObject([
 			{ leafIndex: 0n, parentDepositIndex: 9n },
@@ -964,7 +965,7 @@ describe('reporting protocol client', () => {
 		const frozenRoot = hashCarryParentForTest(inheritedLeafHash, zeroHash)
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
-		const client = {
+		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
 			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
@@ -1004,7 +1005,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 				throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
 			}),
-		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+		})
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [inheritedLeaf.parentDepositIndex])).resolves.toMatchObject([
 			{
@@ -1029,7 +1030,7 @@ describe('reporting protocol client', () => {
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
 		const inheritedNullifierRoot = computeSingleConsumedNullifierRootForTest(firstLeaf.parentDepositIndex)
-		const client = {
+		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
 			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
@@ -1072,7 +1073,7 @@ describe('reporting protocol client', () => {
 				}
 				throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
 			}),
-		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+		})
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: 1n, parentDepositIndex: secondLeaf.parentDepositIndex }])
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Parent deposit #9 is already settled.')
@@ -1096,7 +1097,7 @@ describe('reporting protocol client', () => {
 			const snapshotPeaks = buildCarrySnapshotPeaksForTest(leafHashes)
 			const targetLeaf = leaves[targetGlobalIndex]
 			if (targetLeaf === undefined) throw new Error('Missing target test leaf')
-			const client = {
+			const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 				getBlockNumber: async () => 1n,
 				getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 				multicall: createMulticallStub(async request => {
@@ -1126,7 +1127,7 @@ describe('reporting protocol client', () => {
 					if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 					throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
 				}),
-			} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+			})
 
 			await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [targetLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: BigInt(targetGlobalIndex), merkleMountainRangePeakIndex: targetPeakHeight, parentDepositIndex: targetLeaf.parentDepositIndex }])
 		}

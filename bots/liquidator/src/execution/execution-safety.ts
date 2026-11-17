@@ -1,6 +1,6 @@
 import type { finalizedReceiptWithQuorum } from '#execution/recovery'
-import { type RuntimeState } from '#state/operator-state'
-import { type Hex } from '@zoltar/bot-shared/ethereum'
+import type { RuntimeState } from '#state/operator-state'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 
 const shutdownChecks = new WeakMap<object, () => boolean>()

@@ -1,4 +1,4 @@
-import * as path from 'path'
+import * as path from 'node:path'
 import { getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
 import { normalizeBundlerPath } from './bundlerPaths.mts'
 import { computeSimulationSnapshotKey, getSimulationSnapshotPaths, pruneStaleSimulationSnapshots, simulationSnapshotKeyDefine } from './simulationSnapshots.mts'
