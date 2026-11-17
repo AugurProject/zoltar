@@ -145,6 +145,35 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_depositRepOnOutcome(outcome, maximumDepositAttoRep);
 	}
 
+	/// @notice Pulls only the caller's REP; beneficiaries acquire native deposits, never caller funds or allowances.
+	function depositRepOnOutcomeForBatch(BinaryOutcomes.BinaryOutcome outcome, address[] calldata beneficiaries, uint256[] calldata amountsAttoRep) external {
+		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
+		_validateGameForDeposit(game);
+		uint256 count = beneficiaries.length;
+		require(count > 0 && count <= 16 && count == amountsAttoRep.length, 'Invalid contribution count');
+		uint256 total;
+		for (uint256 index = 0; index < count; index++) {
+			require(beneficiaries[index] != address(0) && amountsAttoRep[index] >= startBondAttoRep, 'Invalid contribution');
+			total += amountsAttoRep[index];
+		}
+		(uint256 accepted, uint256 cumulative) = game.previewDepositOnOutcome(outcome, total);
+		require(accepted == total, 'Contributions would be trimmed');
+		_validateAcceptedDeposit(outcome, uint8(outcome), outcomeState[uint8(outcome)].balanceAttoRep, total, cumulative);
+		// A challenge must actually lead, or complete the threshold tie that authorizes a fork.
+		for (uint8 index = 0; index < 3; index++) {
+			if (index != uint8(outcome))
+				require(cumulative > outcomeState[index].balanceAttoRep || cumulative == nonDecisionThresholdAttoRep, 'Challenge does not lead');
+		}
+		IERC20(game.repToken()).safeTransferFrom(msg.sender, address(this), total);
+		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), total);
+		// Admission is checked once against the full report. The internal append path is
+		// unreachable through delegate dispatch and does not admit independent small replies.
+		for (uint256 index = 0; index < count; index++) {
+			_appendDeposit(beneficiaries[index], outcome, amountsAttoRep[index], outcomeState[uint8(outcome)].balanceAttoRep + amountsAttoRep[index]);
+		}
+		_afterDeposit();
+	}
+
 	/// @notice Game delegatecall target: like `depositRepOnOutcome`, after a permit, falling back to an existing allowance.
 	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
@@ -197,6 +226,13 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), amountAttoRep);
+		parentDepositIndex = _appendDeposit(depositor, outcome, amountAttoRep, expectedCumulativeRepAmountAttoRep);
+		_afterDeposit();
+	}
+
+	function _appendDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
+		uint8 outcomeIndex = uint8(outcome);
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		// Whoever led before must be able to answer a change of strict leader, whatever the curve allows.
 		BinaryOutcomes.BinaryOutcome previousLeader = _strictStakeLeader();
 		bool hadReport =
@@ -242,6 +278,9 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			emit NonDecisionReached(nonDecisionTimestamp);
 		}
 		_accrueOrdinarySurplus(depositor, amountAttoRep);
+	}
+
+	function _afterDeposit() private {
 		_scheduleReporterFinality();
 		IEscalationGameSecurityPoolContext(IEscalationGameDepositContext(address(this)).securityPool()).refreshPortfolioFees();
 	}
