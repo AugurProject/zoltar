@@ -152,6 +152,20 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 	const values = await Promise.all(quantities.map(name => read(target.address, auctionAbi, name)))
 	const [initialized, finalized, rawClearing] = await Promise.all([read(target.address, auctionAbi, 'initialized'), read(target.address, auctionAbi, 'finalized'), read(target.address, auctionAbi, 'clearing')])
 	const clearing = tuple(rawClearing, 10, 'clearing')
+	// Bids, clearing proceeds and refunds are amounts of the auction's collateral token, not native ETH.
+	// Token metadata is optional: a failed read keeps the accounting snapshot and leaves explicit raw collateral units.
+	const collateral: Record<string, unknown> = {}
+	try {
+		const token = getAddress(String(await read(target.address, auctionAbi, 'collateralToken')))
+		try {
+			collateral['collateral'] = await readCollateralMetadata(token, read)
+		} catch (error) {
+			collateral['collateralMetadataError'] = errorMessage(error)
+			collateral['collateral'] = { address: token.toLowerCase(), symbol: 'collateral units', decimals: 0 }
+		}
+	} catch (error) {
+		collateral['collateralMetadataError'] = errorMessage(error)
+	}
 	return {
 		...Object.fromEntries(quantities.map((name, index) => [name, exact(values[index], name)])),
 		initialized: flag(initialized, 'initialized'),
@@ -168,6 +182,7 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 			fullBeforeLots: exact(clearing[8], 'clearing.fullBeforeLots'),
 			raiseLimitReached: flag(clearing[9], 'clearing.raiseLimitReached'),
 		},
+		...collateral,
 	}
 }
 

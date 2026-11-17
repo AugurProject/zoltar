@@ -93,6 +93,23 @@ test('samples a complete auction state through tagged reads', async () => {
 	})
 })
 
+test('records the auction collateral token metadata so attoEth amounts use its decimals', async () => {
+	const token = getAddress('0x5555555555555555555555555555555555555555')
+	const metadata: Readonly<Record<string, unknown>> = { collateralToken: token, symbol: 'USDC', decimals: 6n, initialized: true, finalized: false, clearing: [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false] }
+	const read: StateRead = async (_address, _abi, functionName) => metadata[functionName] ?? 1n
+	const snapshot = await sampleEntityStateWithRead({ entityType: 'auction', entityIdentity: pool.toLowerCase(), address: pool }, read)
+	expect(snapshot.readStatus).toBe('success')
+	expect(snapshot.readResult?.['collateral']).toEqual({ address: token.toLowerCase(), symbol: 'USDC', decimals: 6 })
+
+	const unreadable: StateRead = async (address, abi, functionName, args) => {
+		if (functionName === 'symbol') throw new Error('metadata unavailable')
+		return await read(address, abi, functionName, args)
+	}
+	const fallback = await sampleEntityStateWithRead({ entityType: 'auction', entityIdentity: pool.toLowerCase(), address: pool }, unreadable)
+	expect(fallback.readStatus).toBe('success')
+	expect(fallback.readResult).toMatchObject({ collateral: { address: token.toLowerCase(), symbol: 'collateral units', decimals: 0 }, collateralMetadataError: 'metadata unavailable' })
+})
+
 test('stores bounded tagged-read failures as availability evidence', async () => {
 	const read: StateRead = async () => {
 		throw new Error('historical state unavailable\nprovider detail')
