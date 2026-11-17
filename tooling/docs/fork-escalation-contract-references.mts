@@ -1,7 +1,7 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const forkEscalationContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '995b9d1b84778032e4121ba63fb7be38a361c4b7a8ae905f204a8a408930f326',
+		compiledAbiFingerprint: '216952a91e5e77c9beaa85e26e8478cf34295800f7e18645f0188fc4a68c2c12',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects [non-decision](./glossary.html#non-decision-threshold), and settles local or carried deposits.',
 		readAbiFingerprint: 'e1ac66a4d2eb1a643f075bc98437af17692f1c82a67bd4da44c21e321dba4b2d',

@@ -10,8 +10,8 @@ export type BootstrapDescendantHashProfile = 'deterministic' | 'mainnet' | 'sepo
 
 // Every descendant except the security pool deployer and its deployment worker hashes identically on all profiles.
 const PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
-	escalationGameCreationCodePartOne: '0x40c56464db08b4048d991e2a1d83310015b1f4b07d349e4dfba089442dd034b6',
-	escalationGameCreationCodePartTwo: '0xd64e67811c0a1a8b0190afe9970ed4dda09c36615441ace8c33049bb2a60c160',
+	escalationGameCreationCodePartOne: '0xd847135f3357399a58107578526b996fb9595ecb7ee63220a09349c997dcdb05',
+	escalationGameCreationCodePartTwo: '0xdeb7e8ca8cb12dc82dd6b4183473754ad19d6c2486262e890995dbd7a696d613',
 	escalationGameProofVerifier: '0x952e7fb065531350d379c8e2af2f3d0d3322609a5ef82b9acb61d1030f65237c',
 	oracleReportDelegate: '0x501edaed1a7f5e323df3b193bfc494b495c390fe3e6013fd5e57dcb938415396',
 	priceCoordinatorCreationCodeFirstChunk: '0x836ab6115d2e1b5beff05c885424cd37dacc7935236223d91cb33b969e713f28',
@@ -27,8 +27,8 @@ const PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Rec
 	securityPoolForkCreationCodeSecondChunk: '0x8f46b99358cf90a6acdade878e05f001e6ca02ca97964ed2be7ca02117b49591',
 	securityPoolServicesCreationCodeFirstChunk: '0x6f9a626b08127bbb0822cf0d1b7621e9b5d0bf64f15735b3e1c0c76fe1390937',
 	securityPoolServicesCreationCodeSecondChunk: '0xadae7873855726c8c706df59eb312e3f1da401a3f428f58c627467079e3e70ab',
-	securityPoolSettlementBookCreationCodeFirstChunk: '0xf1c396181eb533a0654b4116e8466785468ac50f7d4b875f12d11c8c7d78ab16',
-	securityPoolSettlementBookCreationCodeSecondChunk: '0x8405e8f5092af0669abb9193c957a398231f76ea9f6573d4f22b185227e105cc',
+	securityPoolSettlementBookCreationCodeFirstChunk: '0x8eca41426363f2123b52d20ea421c1c547b4020ac5d2b738ac1d3fe077c740c1',
+	securityPoolSettlementBookCreationCodeSecondChunk: '0xf722ca05e3b7471918ad98680224de81de4a1e6d450047e7ed7b3edff1a96269',
 	sharedPoolPriceFeedCreationCodeFirstChunk: '0x08a91fb762e56fe4a3c12faa27c3daffb8c03724739eb243fee0f7609685c89c',
 	sharedPoolPriceFeedCreationCodeSecondChunk: '0x0fe438fb7e40d481e3b99ae8754761c1f986dc5fa1b44e16f1130d6e0d4f8a89',
 }
@@ -36,33 +36,33 @@ const PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Rec
 export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		securityPoolDeployer: '0x8bdbd1966cead13dc46dd22046c6e75962a0f11ff55ea69cc690c98bd3c3de5d',
-		securityPoolDeploymentWorker: '0x5d76c2c48310623fe1137ee531f895d13b99524e838e911ced0518a087feaf98',
+		securityPoolDeployer: '0x8fc45f819d389f0e489d0351b7604fd5d1f86cfde328975aaa912924360f2710',
+		securityPoolDeploymentWorker: '0x5cc78e905694187915578a678ff472e546fbeae95801c5189241e6f5e14527a4',
 	},
 	deterministic: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		securityPoolDeployer: '0xcb275851454a3d1cd39c94eb422a0e5be2614c9eb0d9ff48b2dfde4e9a757894',
-		securityPoolDeploymentWorker: '0xa054d79dff2068b21205f1d0e906125757b8c259cecb2aec36bc15135577d383',
+		securityPoolDeployer: '0x827516c5d863453e124ae853ff99e28d9dd7c1683a5d4130318e40762d2bc240',
+		securityPoolDeploymentWorker: '0x5e3c78c0dc81bdd05f0e2129e6fa3a839d116fe5dcce38dedddb7c0bbb8f645e',
 	},
 	mainnet: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		securityPoolDeployer: '0xe9bd4bed3b427f6aafe98cdfdbb90eecca44174aeee831dc159511590322e90c',
-		securityPoolDeploymentWorker: '0x53ec854b01f4796d74acab3be2be304d0d4e9aa7d472c51a674eca60e0952799',
+		securityPoolDeployer: '0x388bdc7d0276664162fa75f977e8fc25c3f7795ddaf0479b58d2f5fbccf77929',
+		securityPoolDeploymentWorker: '0x091c700fec988c10e034e45596a7b1bc742734714d1524189b0d1c7abfef778a',
 	},
 }
 
 // Only descendants that embed a selected Zoltar address differ between the two genesis deployments.
 export const EXPECTED_NO_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
-		securityPoolDeployer: '0x8ec54b19a174a708d145d1e97cd8ad05d133b84343d06810e5c0d8084c0d56df',
-		securityPoolDeploymentWorker: '0x94db136e16661013a19ae9ca24f6f15c8af2154e4419a689e011b33295c079f5',
+		securityPoolDeployer: '0x2ee4b8259b6be0c5b6306b933106d1a8c3f29a3a221d051b9e1081eb664ccab3',
+		securityPoolDeploymentWorker: '0x1051994c04f2ef3c71520189835631ac441178c3f9c97e595b9cfc1b217daab5',
 	},
 	deterministic: {
-		securityPoolDeployer: '0x302262d00c6d31250b5e7c1f99909c37b6c2e629a9ac0ff613584bbfa0e2d564',
-		securityPoolDeploymentWorker: '0x66f24dae7a7c6109baaa53337f47c3d97945b7555e307f92ed62ccc272ff187d',
+		securityPoolDeployer: '0xcf00a05a585aa39f5eb503a0fb07d574f23c7336c49dd91d87501b0f2e5309c7',
+		securityPoolDeploymentWorker: '0xa554f1f601ba2d2fa19a1b5ca0f58ee68401d543c29ed166ed3469a916637f4d',
 	},
 	mainnet: {
-		securityPoolDeployer: '0x0ea03d42ee85b6a452f96fa22539c02bd8d9efda2b38996c4506ba5fb01252d3',
-		securityPoolDeploymentWorker: '0xe1270f1a1c35bb75442e9dc9e974d1a638933d9bf7fc2fd629c3333ec47d1339',
+		securityPoolDeployer: '0x82310c2716d457a246b2ee6771d48a0ed989ce4ef92b52673bad55ccbd0fcb3e',
+		securityPoolDeploymentWorker: '0xe2e3d28a413d1bf912e10eb91ec61fe8f0217e893ff2273cc35cb1595f59d63a',
 	},
 }
