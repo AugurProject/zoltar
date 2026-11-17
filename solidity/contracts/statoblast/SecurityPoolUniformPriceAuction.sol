@@ -132,7 +132,8 @@ contract SecurityPoolUniformPriceAuction {
 		require(lots * lotAttoEth <= type(uint128).max - depositedAttoEth, 'Auction deposits exceed the supported range');
 		require(minimumAttoRepPerLot > 0 && minimumAttoRepPerLot % repGrid == 0, 'Auction bid must use the REP price grid');
 		require(minimumAttoRepPerLot <= maximumBidAttoRepPerLot, 'Auction bid exceeds the REP inventory per lot');
-		require(_pricePrefix(minimumAttoRepPerLot, PriceBoundary.Exclusive) < Math.min(targetLots, inventoryAttoRep / minimumAttoRepPerLot), 'Better bids already exclude this bid');
+		// Equal limits fill in submission order, so a new bid ranks after every equal one.
+		require(_pricePrefix(minimumAttoRepPerLot, PriceBoundary.Inclusive) < Math.min(targetLots, inventoryAttoRep / minimumAttoRepPerLot), 'Better bids already exclude this bid');
 		require(bidCount < type(uint96).max, 'Auction bid identifiers exhausted');
 		// The controller transfers bidder collateral directly into this engine before registration.
 		require(collateralToken.balanceOf(address(this)) + withdrawnCollateral >= depositedAttoEth + lots * lotAttoEth, 'Auction bid collateral missing');
@@ -199,15 +200,16 @@ contract SecurityPoolUniformPriceAuction {
 		fill.refundAttoEth = (bid.lots - fill.filledLots) * lotAttoEth;
 	}
 
-	/// @notice Refund only a bid excluded by strictly better, binding demand.
-	/// Better demand never decreases: bids cannot be cancelled or repriced. A
+	/// @notice Refund only a bid excluded by binding demand that ranks before it:
+	/// a lower limit, or an equal limit submitted earlier. That demand never
+	/// decreases: bids cannot be cancelled or repriced and later equal bids rank after. A
 	/// refunded bid stays in the tree, permanently outside every winning prefix,
 	/// so neither clearing nor lazy fee ownership needs a deletion or a scan.
 	function earlyRefundAttoEth(uint256 bidId) public view returns (uint256) {
 		Bid storage bid = bids[bidId];
 		if (!initialized || finalized || bid.bidder == address(0) || bid.settled) return 0;
 		uint256 capacity = Math.min(targetLots, inventoryAttoRep / bid.minimumAttoRepPerLot);
-		if (_pricePrefix(bid.minimumAttoRepPerLot, PriceBoundary.Exclusive) < capacity) return 0;
+		if (_bidPrefix(bidId) < capacity) return 0;
 		return bid.lots * lotAttoEth;
 	}
 
@@ -353,14 +355,11 @@ contract SecurityPoolUniformPriceAuction {
 		return bidderIds[bidder][index];
 	}
 
+	/// @dev Price-time priority: the tree orders equal limits by bid id, so the winning
+	/// lots are exactly the first `filledLots` of the order. A late oversized bid at the
+	/// marginal limit cannot crowd out equal bids submitted before it.
 	function _acceptedPrefix(uint256 rawLots) private view returns (uint256) {
-		Clearing storage result = clearing;
-		if (rawLots <= result.fullBeforeLots) return rawLots;
-		if (result.marginalDemandLots == 0 || rawLots >= result.fullBeforeLots + result.marginalDemandLots)
-			return result.filledLots;
-		return
-			result.fullBeforeLots +
-			Math.mulDiv(rawLots - result.fullBeforeLots, result.marginalFillLots, result.marginalDemandLots);
+		return Math.min(rawLots, clearing.filledLots);
 	}
 
 	function _remainingWeight(uint256 id, uint256 start) private view returns (uint256) {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import {
 	test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -84,7 +84,7 @@ describe('ERC20 portfolio collateral', () => {
 		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: applyLibraries(factoryArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
 		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
 		await approveToken(buyer, token, router)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithCollateral', args: [pool, cash, 5_000n, 1n, buyer.account.address, fixture.base.questionData.endTime - 1n, 2n * cash] }))
+		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithCollateral', args: [pool, cash, 5_000n, maxUint256, maxUint256, 1n, buyer.account.address, fixture.base.questionData.endTime - 1n, 2n * cash] }))
 		expect(await buyer.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [router] })).toBe(0n)
 		expect(await buyer.getBalance({ address: router })).toBe(0n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setFee', args: [100n] }))

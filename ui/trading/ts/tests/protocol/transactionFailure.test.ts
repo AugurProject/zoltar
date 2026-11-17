@@ -17,7 +17,7 @@ describe('transaction failure explanations', () => {
 		['Over capacity', 'The security pool does not have enough minting capacity for this size.'],
 		['Vault backing insufficient', 'The security pool does not have enough backing for this size.'],
 		['Net input is zero', 'The amount is too small to trade.'],
-		['Pair already initialized', 'Someone already added the first liquidity.'],
+		['Already initialized', 'Someone already added the first liquidity.'],
 	])('explains the %s revert string with a cause and a next step', (reason, cause) => {
 		const message = describeTransactionFailure(revertError(reason), 'Trade failed')
 		expect(message.startsWith(`${cause} `)).toBeTrue()

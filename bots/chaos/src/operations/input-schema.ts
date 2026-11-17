@@ -71,11 +71,14 @@ schemas['statoblast.shares.redeem-winning'] = [pool]
 for (const id of ['trading.pair.create-and-initialize', 'trading.pair.initialize-eth', 'trading.liquidity.add-eth', 'trading.position.enter']) {
 	const entering = id === 'trading.position.enter'
 	const adding = id === 'trading.liquidity.add-eth'
+	// Initialization takes the price plus maximum YES and NO deposits before its minimum LP tokens.
+	const initializing = !entering && !adding
+	const minimumIndex = (entering ? 3 : 4) + (initializing ? 1 : 0)
 	schemas[id] = [
 		{ key: 'target', label: id === 'trading.pair.create-and-initialize' ? 'Security pool' : 'Trading pair', kind: 'choice', choices: id === 'trading.pair.create-and-initialize' ? 'pools' : 'pairs', path: ['args', 0] },
 		amountField(['args', 1], 'Mint cash (ETH, excluding fees)'),
-		amountField(['args', adding ? 4 : 3], entering ? 'Minimum long shares' : 'Minimum LP tokens', entering ? 'minimumOutput' : 'minimumLiquidity'),
-		integer('deadline', 'Deadline (Unix seconds)', ['args', adding ? 6 : 5]),
+		amountField(['args', minimumIndex], entering ? 'Minimum long shares' : 'Minimum LP tokens', entering ? 'minimumOutput' : 'minimumLiquidity'),
+		integer('deadline', 'Deadline (Unix seconds)', ['args', minimumIndex + 2]),
 		...(entering
 			? [
 					{
