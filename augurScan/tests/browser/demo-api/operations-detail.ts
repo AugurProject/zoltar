@@ -130,28 +130,34 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		}
 	}
 	if (domain === 'auctions') {
+		const auctionCollateral = { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 }
 		const bid = evidence('BidSubmitted', { bidId: '1', bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', vault: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', lots: '3', minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), targetHealthBps: '12000' })
 		return {
 			chainId,
 			asOf: operations.asOf,
 			data: {
 				identity: identity[0],
-				snapshot: {
-					entity_identity: identity[0],
-					block_number: operations.asOf.blockNumber,
-					read_status: 'success',
-					source_method: 'augurscan.auction-state.v1',
-					// The auction's collateral is 6-decimal USDC, so attoEth amounts are USDC base units.
-					read_result: {
-						collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 },
-						initialized: true,
-						finalized: true,
-						lotAttoEth: (10n ** 6n).toString(),
-						targetLots: '3',
-						bidCount: '1',
-						clearing: { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 6n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() },
-					},
-				},
+				// `auctionSnapshot=failed` makes the latest tagged read a failure; the collateral token still comes from the earlier successful read.
+				snapshot:
+					context.pageUrl.searchParams.get('auctionSnapshot') === 'failed'
+						? { entity_identity: identity[0], block_number: operations.asOf.blockNumber, read_status: 'failed', source_method: 'augurscan.auction-state.v1', read_result: null, read_failure_reason: 'historical state unavailable' }
+						: {
+								entity_identity: identity[0],
+								block_number: operations.asOf.blockNumber,
+								read_status: 'success',
+								source_method: 'augurscan.auction-state.v1',
+								// The auction's collateral is 6-decimal USDC, so attoEth amounts are USDC base units.
+								read_result: {
+									collateral: auctionCollateral,
+									initialized: true,
+									finalized: true,
+									lotAttoEth: (10n ** 6n).toString(),
+									targetLots: '3',
+									bidCount: '1',
+									clearing: { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 6n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() },
+								},
+							},
+				collateral: auctionCollateral,
 				finalization: evidence('AuctionFinalized', { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 6n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() }),
 				demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
 				demandCurve: [{ minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), lots: '3', cumulativeLots: '3', amountAttoEth: (3n * 10n ** 6n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 6n).toString() }],

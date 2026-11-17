@@ -238,6 +238,10 @@ No event or view reports how much of an accrual each owner earned: the commitmen
 
 `data.events` lists the game's own events and the reporter ledger's `GameRegistered` and `ReporterFinalityScheduled` for that game. The escalation catalog's `event_name` is the game's latest own event; a reporter-ledger event is reported only for a game that has none. The ledger's `ReporterBalanceChanged` names a universe and a question but no game, so it is a timeline entry of the `reporter-ledger` entity instead.
 
+### Auction detail
+
+Auction `AttoEth` amounts (lots, demand, proceeds, refunds and fees) are base units of the auction's collateral token, not native ETH. `data.collateral` is that token's `{ address, symbol, decimals }` from the auction's latest successful tagged read at or below the selected block, or null before a read samples it, in which case amounts are raw collateral base units. `data.snapshot` remains the latest read, which can be a failure; the token is immutable, so a failed read does not hide it. Global timeline catalog rows carry the same `collateral` for the `auction` entity and null for other entities, and rich-list `auction_claims` entries carry it as `collateral`.
+
 ### Direct read observations
 
 `chainId` is required. `kind` defaults to `all` and accepts `all`, `address-balance`, or `token-metadata`. `canonical` defaults to `canonical` and also accepts `orphaned` or `all`. For balance observations, `address` matches either the balance owner or the asset contract; for metadata observations, it matches the token contract. `limit` defaults to 100 and caps at 250.

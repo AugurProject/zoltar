@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { latestAuctionCollateral } from './auction-collateral.ts'
 
 // Migration mints emit TransferSingle. Counting Migrate as another credit would
 // double count the child balance; the source remains held but becomes locked.
@@ -53,13 +54,7 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 // Refunds are amounts of the auction's immutable collateral token, so the latest tagged auction read that sampled it names their units.
 export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>
 	await sql`
-		SELECT refunds.auction_address, refunds.pending_atto_eth, (
-			SELECT snapshot.read_result->'collateral' FROM entity_state_snapshots snapshot
-			JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash AND block.canonical
-			WHERE snapshot.chain_id = ${chainId} AND snapshot.entity_type = 'auction' AND snapshot.entity_identity = refunds.auction_address
-				AND snapshot.canonical AND snapshot.block_number <= ${snapshotBlock} AND snapshot.read_status = 'success' AND snapshot.read_result->'collateral' IS NOT NULL
-			ORDER BY snapshot.block_number DESC, snapshot.observed_at DESC LIMIT 1
-		) AS collateral
+		SELECT refunds.auction_address, refunds.pending_atto_eth, ${latestAuctionCollateral(sql, chainId, snapshotBlock, sql`refunds.auction_address`)} AS collateral
 		FROM (
 			SELECT auction_address, sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
 			FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}

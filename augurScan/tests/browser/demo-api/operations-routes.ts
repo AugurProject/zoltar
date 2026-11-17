@@ -88,6 +88,26 @@ export async function demoOperationsCatalogRoute(env: DemoEnvironment, path: str
 			evidence_status: demoTimelineEvidenceStatus(false, 'chain-reorg'),
 			invalidation_reason: 'chain-reorg',
 		},
+		// `auctionTimeline=1` adds settled auction bids: one in a sampled 6-decimal USDC collateral, one before any sampled read.
+		...(context.pageUrl.searchParams.get('auctionTimeline') === '1'
+			? [
+					{ auction: demoAddress('8'), refund: '1500000', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 }, logIndex: 6 },
+					{ auction: demoAddress('9'), refund: '2500000', collateral: null, logIndex: 5 },
+				].map(({ auction, refund, collateral, logIndex }) => ({
+					entity_type: 'auction',
+					entity_identity: auction,
+					semantic_event_kind: 'BidSettled',
+					source_contract: auction,
+					summary_data: { bidId: '1', bidder: demoAddress('1'), filledLots: '0', refundAttoEth: refund },
+					collateral,
+					block_number: operations.asOf.blockNumber,
+					block_hash: operations.asOf.blockHash,
+					tx_hash: demoHash,
+					log_index: logIndex,
+					canonical: true,
+					evidence_status: demoTimelineEvidenceStatus(true),
+				}))
+			: []),
 	]
 	const demoTradingFixture = [
 		{

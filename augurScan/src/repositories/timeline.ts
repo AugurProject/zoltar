@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { latestAuctionCollateral } from './auction-collateral.ts'
 import { literalContainsPattern } from './like-pattern.ts'
 
 export type TimelineFilters = {
@@ -49,7 +50,9 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 					WHEN invalidation.reason = 'projection-rebuild' THEN 'projection-superseded'
 					ELSE 'noncanonical-unknown' END AS evidence_status,
 				invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
-				invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at
+				invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at,
+				-- Auction amounts are in the auction's collateral token, which its tagged reads sample.
+				CASE WHEN timeline.entity_type = 'auction' THEN ${latestAuctionCollateral(sql, chainId, asOfBlock, sql`timeline.entity_identity`)} END AS collateral
 			FROM protocol_timeline_entries timeline
 			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
 			LEFT JOIN LATERAL (

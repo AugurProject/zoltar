@@ -140,8 +140,10 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	})
 	if (summaryPresentation.label !== 'Evidence state' || summaryPresentation.value !== 'Event-derived') summary.append(operationCard(summaryPresentation.label, summaryPresentation.value))
 	const nativeSymbol = nativeSymbolFor(requiredChainId())
-	// Auction amounts are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
-	const auctionCollateral = route.kind === 'auction' ? collateralUnit(snapshot) : undefined
+	// Auction amounts are in the auction's collateral token, which the response names from the latest successful tagged read
+	// (the latest snapshot can be a failed read). Without sampled token metadata they stay in raw collateral units.
+	const auctionUnit = collateralUnit({ collateral: data['collateral'] })
+	const auctionCollateral = route.kind === 'auction' ? auctionUnit : undefined
 	if (route.kind === 'pool') {
 		const state = data['read_status'] === 'success' && isPlainRecord(data['read_result']) ? data['read_result'] : {}
 		for (const [label, value] of poolSummaryMetrics(state, nativeSymbol)) summary.append(operationCard(label, value))
@@ -420,8 +422,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	const demand = operationRecords(data['demandCurve'])
 	if (demand.length > 0) {
 		// Levels arrive in fill order: the lowest REP-per-lot minimum fills first.
-		const demandCollateral = collateralUnit(snapshot)
-		const demandLots = (lots: unknown, amount: unknown): string => (typeof amount === 'string' ? `${operationCounted(lots, 'lot')} (${exactUnit(amount, demandCollateral.decimals, demandCollateral.symbol)})` : operationCounted(lots, 'lot'))
+		const demandLots = (lots: unknown, amount: unknown): string => (typeof amount === 'string' ? `${operationCounted(lots, 'lot')} (${exactUnit(amount, auctionUnit.decimals, auctionUnit.symbol)})` : operationCounted(lots, 'lot'))
 		const demandRows = demand.map(point => operationRow(`Minimum ${exactUnit(String(point['minimumAttoRepPerLot'] ?? '0'), 18, 'REP')} per lot`, `${demandLots(point['lots'], point['amountAttoEth'])} · cumulative ${demandLots(point['cumulativeLots'], point['cumulativeDemandAttoEth'])}`, undefined, undefined))
 		addPanel('history', operationsPanel('Demand curve data', demandRows, 'No bids match this view.'))
 	}
