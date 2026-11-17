@@ -47,6 +47,7 @@ describe('canonical test discovery', () => {
 		expect(canonicalFiles).toContain('solidity/ts/tests/statoblast/securityPoolCommitmentStateful.test.ts')
 		expect(canonicalFiles).not.toContain('tooling/ui/browserSmoke.test.ts')
 		expect(canonicalFiles).not.toContain('tooling/ui/productionBuild.test.ts')
+		expect(canonicalFiles).not.toContain('tooling/ui/layoutAudit.test.ts')
 		expect(canonicalFiles.some(file => file.includes('/js/'))).toBe(false)
 		expect(new Set(canonicalFiles).size).toBe(canonicalFiles.length)
 		for (const weightedPath of KNOWN_FILE_WEIGHTS.keys()) expect(canonicalFiles).toContain(weightedPath)
@@ -59,7 +60,11 @@ describe('canonical test discovery', () => {
 		if (typeof smokeCommand !== 'string') throw new Error('package.json must define test:browser:smoke')
 
 		const smokeTestCommands = smokeCommand.split(' && ').filter(command => command.startsWith('bun ./tooling/testing/bun-test.mts '))
-		expect(smokeTestCommands).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/browserSmoke.test.ts', 'bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/productionBuild.test.ts'])
+		expect(smokeTestCommands).toEqual([
+			'bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/browserSmoke.test.ts',
+			'bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/layoutAudit.test.ts',
+			'bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/productionBuild.test.ts',
+		])
 		expect(smokeTestCommands.map(command => command.split(' ').at(-1)).sort()).toEqual([...EXPLICIT_TEST_TIER_FILES].sort())
 	})
 

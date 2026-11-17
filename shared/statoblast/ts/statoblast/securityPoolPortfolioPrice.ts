@@ -138,7 +138,7 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 }
 export type PortfolioPriceSnapshot = Awaited<ReturnType<typeof loadPortfolioPriceSnapshot>>
 
-/** Reports without a requested size carry 5% more than the current minimum so exposure growth during the challenge period cannot void them. */
+/** Reports without a requested size carry 5% more than the current minimum, a margin for exposure growth the minimum does not cover. */
 const PORTFOLIO_REPORT_FUNDING_HEADROOM_DIVISOR = 20n
 export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWeth = 0n) {
 	const observation = snapshot.observation
@@ -149,7 +149,8 @@ export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, pro
 	decodeUint(requestedWeth, 'Requested WETH', 128)
 	const inventoryWeth = (observation.minimumRepAttoRep * 10n ** 18n + price - 1n) / price
 	const required = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
-	// The feed judges the report against exposure at settlement, so an exact-minimum report is void once exposure grows by one attoETH.
+	// The feed judges the report against exposure at settlement. Its minimum already covers ordinary growth within
+	// the accepted limit; the margin covers growth that a newer acceptance or a funded growth proof can still authorize.
 	const suggested = requestedWeth === 0n ? required + required / PORTFOLIO_REPORT_FUNDING_HEADROOM_DIVISOR : requestedWeth
 	const weth = decodeUint(suggested > required ? suggested : required, 'Initial WETH report', 128)
 	const rep = decodeUint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)

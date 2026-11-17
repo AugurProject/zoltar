@@ -892,6 +892,11 @@ describe('Shared portfolio oracle security regressions', () => {
 	test('direct capital commitments increase the report floor without a per-question synchronization', async () => {
 		const exposure = 100n * 10n ** 18n + 1n
 		await fixture.prepare(1_000n * 10n ** 18n, exposure)
+		// While the accepted price is fresh, growth may still reach its accepted limit before a new report settles.
+		const acceptedLimit = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'acceptedExposureLimitAttoEth' })
+		assert.ok(acceptedLimit > exposure, 'setup should leave unused accepted headroom')
+		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumToken1ReportAttoEth' }), await configuredMinimum(acceptedLimit))
+		await mockWindow.advanceTime(BigInt(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'priceValidityWindowSeconds' })))
 		const expected = await configuredMinimum(exposure)
 		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumToken1ReportAttoEth' }), expected)
 		await requestPrice(client, priceOracle)

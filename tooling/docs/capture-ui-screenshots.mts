@@ -1,17 +1,15 @@
-import { spawn, type ChildProcess } from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { parseArgs } from 'node:util'
 import { createDevToolsSession, type DevToolsSession } from '../ui/browserSmoke.mts'
 import { getChromiumPath } from '../ui/chromiumPath.js'
-import type { UiAppId } from '../ui/appPaths.mts'
+import { startDevServer, stopDevServer } from '../ui/devServerProcess.mts'
 import { UI_SCREENSHOTS, type UiScreenshotCrop, type UiScreenshotSpec, type UiScreenshotStep } from './ui-screenshot-specs.mts'
 import { clickScreenshotControl, computeScreenshotFingerprint, readPngSize, readScreenshotFingerprints, SCREENSHOT_FINGERPRINT_PATH, screenshotApp, screenshotAppIds, screenshotOutputPath, pickMatch, updateEmbeddingPages } from './ui-screenshots.mts'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 }
-const SERVER_LISTEN_TIMEOUT_MILLISECONDS = 60_000
 const APP_READY_ATTEMPTS = 1200
 const SETTLE_MILLISECONDS = 1500
 
@@ -89,34 +87,6 @@ const PAGE_HELPERS = `(() => {
 })()`
 
 const quote = (value: string) => JSON.stringify(value)
-
-/** Builds the app from this checkout and serves it on a free port, so another checkout's server on the fixed port is never captured. */
-async function startDevServer(appId: UiAppId): Promise<{ readonly server: ChildProcess; readonly baseUrl: string }> {
-	console.log(`Building the ${appId} UI (the first build compiles contracts and can take several minutes)...`)
-	const build = Bun.spawn([process.execPath, './tooling/ui/apps.mts', appId], { cwd: repositoryRoot, stdout: 'ignore', stderr: 'inherit' })
-	if ((await build.exited) !== 0) throw new Error(`Building the ${appId} UI failed`)
-	const server = spawn(process.execPath, ['./tooling/ui/dev-server.ts', appId], { cwd: repositoryRoot, env: { ...process.env, UI_DEV_SERVER_PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'] })
-	let output = ''
-	const collect = (chunk: unknown) => {
-		output = `${output}${String(chunk)}`.slice(-10_000)
-	}
-	server.stdout?.on('data', collect)
-	server.stderr?.on('data', collect)
-	const deadline = Date.now() + SERVER_LISTEN_TIMEOUT_MILLISECONDS
-	while (Date.now() < deadline) {
-		const port = /listening at http:\/\/localhost:(\d+)/.exec(output)?.[1]
-		if (port !== undefined) return { server, baseUrl: `http://127.0.0.1:${port}` }
-		if (server.exitCode !== null) throw new Error(`The ${appId} development server exited with code ${server.exitCode.toString()}:\n${output}`)
-		await Bun.sleep(200)
-	}
-	stopDevServer(server)
-	throw new Error(`The ${appId} development server did not start listening within ${(SERVER_LISTEN_TIMEOUT_MILLISECONDS / 1000).toString()} seconds:\n${output}`)
-}
-
-// The server shares this process group, so an interrupt stops it together with the capture.
-function stopDevServer(server: ChildProcess) {
-	if (server.exitCode === null) server.kill('SIGTERM')
-}
 
 async function runHelper(session: DevToolsSession, call: string, context: string) {
 	const failure = await session.evaluate(`window.__docsScreenshot.${call}`)
