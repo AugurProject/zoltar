@@ -86,8 +86,9 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.report()
 		await context.open()
 		const loser = await context.bid(context.other, 2n, 100n * unit)
+		// Equal limits fill in submission order: the owner's earlier bid fills first, leaving the tied bid a partial fill.
+		await context.bid(context.owner, 3n)
 		const tied = await context.bid(context.other, 5n)
-		await context.bid(context.owner, 5n)
 		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, zeroAddress] })).rejects.toThrow('Collateral repair auction refund recipient missing')
 		await expect(context.owner.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, context.owner.account.address] })).rejects.toThrow('Auction bid belongs to another bidder')
 		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tied.id, context.other.account.address] })).rejects.toThrow('Bid may still win')

@@ -28,15 +28,17 @@ export async function simulateLiquidity(client: WalletClient, configuration: Dep
 			async (block, deadline) => {
 				mintAttoEth = await loadBudgetMint(client, market, amount, block.blockNumber)
 				if (pairAddress === undefined) {
-					if (tokenFunded(market)) return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithCollateral', account, args: [market.pool, mintAttoEth, conditionalYesBps, 0n, account, deadline, amount], blockNumber: block.blockNumber })
-					return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, mintAttoEth, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+					if (tokenFunded(market))
+						return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithCollateral', account, args: [market.pool, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, account, deadline, amount], blockNumber: block.blockNumber })
+					return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
 				}
-				if (tokenFunded(market)) return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithCollateral', account, args: [pairAddress, mintAttoEth, conditionalYesBps, 0n, account, deadline, amount], blockNumber: block.blockNumber })
-				return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, mintAttoEth, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+				if (tokenFunded(market)) return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithCollateral', account, args: [pairAddress, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, account, deadline, amount], blockNumber: block.blockNumber })
+				return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
 			},
 			(block, deadline) => submissionDeadline(client, market, operation, block, deadline),
 		)
-		return { blockNumber, blockHash, operation, mintAttoEth, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: 0n, expectedNoDeposit: 0n }
+		// A pair someone else initialized first takes a proportional deposit; bound it like an add.
+		return { blockNumber, blockHash, operation, mintAttoEth, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: simulation.result.yesUsed, expectedNoDeposit: simulation.result.noUsed }
 	}
 	if (pairAddress === undefined) throw new Error('The trading pool is unavailable')
 	if (operation === 'add') {

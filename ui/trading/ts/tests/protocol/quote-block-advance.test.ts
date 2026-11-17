@@ -185,7 +185,8 @@ describe('submitting a quote after the chain advances', () => {
 			])
 			const submitted = decodeFunctionData({ abi: routerAbi, data: chain.sends[0] ?? '0x' })
 			expect(submitted.functionName).toBe(existingPair === undefined ? 'createPairAndInitializeWithEth' : 'initializeWithEth')
-			expect(submitted.args).toEqual([existingPair ?? pool, 10n, 5_000n, 9n, account, quote.deadline])
+			// The simulated 5 YES and 5 NO deposits, raised by the slippage setting, bound a pair initialized first by someone else.
+			expect(submitted.args).toEqual([existingPair ?? pool, 10n, 5_000n, 6n, 6n, 9n, account, quote.deadline])
 		}
 	})
 

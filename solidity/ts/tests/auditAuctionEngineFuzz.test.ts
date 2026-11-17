@@ -89,13 +89,11 @@ function modelClearing(config: Config, bids: readonly ModelBid[], maximum: bigin
 	const attoRepPerLot = unrounded - (unrounded % config.grid)
 	const principal = filled * attoRepPerLot
 	const sold = reached ? principal : config.inventory
+	// Price-time priority: equal limits fill in submission (id) order.
 	let cumulative = 0n
 	for (const bid of order) {
-		if (bid.min < marginal) fills.set(bid.id, bid.lots)
-		else if (bid.min === marginal) {
-			fills.set(bid.id, ((cumulative + bid.lots) * marginalFill) / demand - (cumulative * marginalFill) / demand)
-			cumulative += bid.lots
-		}
+		fills.set(bid.id, minOf(bid.lots, maxOf(filled - cumulative, 0n)))
+		cumulative += bid.lots
 	}
 	return { attoRepPerLot, filledLots: filled, raisedAttoEth: filled * config.lot, soldAttoRep: sold, roundingAttoRep: sold - principal, marginalMinimumAttoRepPerLot: marginal, marginalFillLots: marginalFill, marginalDemandLots: demand, fullBeforeLots: fullBefore, raiseLimitReached: reached, fills }
 }
@@ -143,11 +141,8 @@ function specViolations(config: Config, bids: readonly ModelBid[], maximum: bigi
 		if (fill > 0n && bid.min > result.attoRepPerLot) problems.push(`winner ${bid.id} receives less than its minimum`)
 		if (bid.min < result.marginalMinimumAttoRepPerLot && fill !== bid.lots && result.filledLots !== 0n) problems.push(`better bid ${bid.id} is not fully filled`)
 		if (bid.min > result.marginalMinimumAttoRepPerLot && fill !== 0n) problems.push(`worse bid ${bid.id} fills`)
-		if (bid.min === result.marginalMinimumAttoRepPerLot && result.marginalDemandLots !== 0n) {
-			// Pro rata with cumulative rounding stays strictly within one lot of the exact share.
-			const exactNumerator = bid.lots * result.marginalFillLots
-			if (fill * result.marginalDemandLots >= exactNumerator + result.marginalDemandLots || (fill + 1n) * result.marginalDemandLots <= exactNumerator) problems.push(`tied bid ${bid.id} deviates a whole lot from pro rata`)
-		}
+		// Time priority: a tied bid fills exactly the part of its lots inside the winning prefix.
+		if (fill !== minOf(bid.lots, maxOf(result.filledLots - positionBefore, 0n))) problems.push(`tied bid ${bid.id} breaks price-time priority`)
 		positionBefore += bid.lots
 	}
 	if (sum !== result.filledLots) problems.push('sum of fills != filled lots')
@@ -155,10 +150,10 @@ function specViolations(config: Config, bids: readonly ModelBid[], maximum: bigi
 	return problems
 }
 
-// "Cannot win": alone at its price, behind only strictly better demand, with the whole
-// target and no floor, the bid still fills nothing.
+// "Cannot win": behind only the demand that ranks before it (a lower limit, or an equal
+// limit submitted earlier), with the whole target and no floor, the bid still fills nothing.
 function cannotWin(config: Config, bids: readonly ModelBid[], bid: ModelBid) {
-	const others = bids.filter(other => other.id !== bid.id && other.min !== bid.min)
+	const others = bids.filter(other => other.min < bid.min || (other.min === bid.min && other.id < bid.id))
 	return modelClearing(config, [...others, bid], config.target, 0n).fills.get(bid.id) === 0n
 }
 

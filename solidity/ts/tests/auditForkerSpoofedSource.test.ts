@@ -56,8 +56,9 @@ describe('audit: the forker rejects a child pool resolved through a spoofed sour
 		expect(await systemState()).toBe(0n)
 
 		const spoof = await deployContract(owner, encodeDeployData({ abi: spoofArtifact.abi, bytecode: `0x${spoofArtifact.evm.bytecode.object}`, args: [child, pool().address] }))
-		await expect(owner.writeContract({ ...forker(), functionName: 'preparePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Child pool is not from the source factory')
-		await expect(owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Child pool is not from the source factory')
+		// Genesis is an ancestor of the spoof's claimed universe, never a descendant, so the forker refuses before deploying.
+		await expect(owner.writeContract({ ...forker(), functionName: 'preparePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Target universe does not descend from source')
+		await expect(owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Target universe does not descend from source')
 		expect(await systemState()).toBe(0n)
 		await redeemShares(trader, pool().address)
 	})

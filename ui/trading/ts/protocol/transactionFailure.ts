@@ -33,7 +33,7 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 	},
 	{ reasons: ['Invalid output', 'Balance below reserve'], cause: 'The market does not have enough liquidity for an order this large.', nextStep: 'Try a smaller amount.' },
 	{ reasons: ['Exchange rate undefined'], cause: 'The security pool has no collateral rate yet.', nextStep: 'Wait for the security pool to be funded, then try again.' },
-	{ reasons: ['Pair already initialized', 'Already initialized'], cause: 'Someone already added the first liquidity.', nextStep: 'Reload the market and add liquidity instead.' },
+	{ reasons: ['Already initialized'], cause: 'Someone already added the first liquidity.', nextStep: 'Reload the market and add liquidity instead.' },
 ]
 
 const INSUFFICIENT_FUNDS: TransactionFailureExplanation = { cause: 'Your wallet does not have enough ETH for this amount plus gas.', nextStep: 'Lower the amount or add ETH to your wallet.' }

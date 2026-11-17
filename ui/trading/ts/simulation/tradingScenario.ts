@@ -2,6 +2,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { collateralAsset } from '../protocol/collateral.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { discoverLiveUniverseMarketPage } from '../protocol/live.js'
 import type { BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { reportBootstrapProgress, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
@@ -61,8 +62,8 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 			await readClient.waitForTransactionReceipt({ hash })
 		}
 		const liquidityHash = !nativeFunding
-			? await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithCollateral', args: [market.pool, mintAttoEth, 5_000n, 0n, account, block.timestamp + 1_200n, budget] })
-			: await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, mintAttoEth, 5_000n, 0n, account, block.timestamp + 1_200n], value: 10n ** 16n })
+			? await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithCollateral', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, account, block.timestamp + 1_200n, budget] })
+			: await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, account, block.timestamp + 1_200n], value: 10n ** 16n })
 		const liquidityReceipt = await readClient.waitForTransactionReceipt({ hash: liquidityHash })
 		if (liquidityReceipt.status !== 'success') throw new Error('Trading simulation liquidity initialization reverted')
 		const portfolio = await readClient.readContract({ abi: factoryArtifact.abi, address: addresses.securityPoolFactory, functionName: 'getSecurityPoolPortfolio', args: [market.pool] })
