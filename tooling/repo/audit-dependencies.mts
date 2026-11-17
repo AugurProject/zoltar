@@ -3,6 +3,7 @@ import path from 'node:path'
 import { acceptedAuditAdvisories } from './projects.ts'
 import { repositoryRoot } from './root.mts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
+import { validatePicomatchAuditScope } from './picomatch-audit-scope.ts'
 
 function fail(reason: string): never {
 	throw new Error(`Zod audit exception requires review: ${reason}`)
@@ -77,7 +78,9 @@ export function validateLegacyZodAuditScope(lockfile: unknown): void {
 }
 
 if (import.meta.main) {
-	validateLegacyZodAuditScope(Bun.JSONC.parse(readFileSync(path.join(repositoryRoot, 'bun.lock'), 'utf8')))
+	const lockfile: unknown = Bun.JSONC.parse(readFileSync(path.join(repositoryRoot, 'bun.lock'), 'utf8'))
+	validateLegacyZodAuditScope(lockfile)
+	validatePicomatchAuditScope(lockfile)
 	const child = Bun.spawn([process.execPath, 'audit', ...acceptedAuditAdvisories.map(advisory => `--ignore=${advisory}`)], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
 	process.exit(await child.exited)
 }

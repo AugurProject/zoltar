@@ -69,8 +69,15 @@ const packageInstallTask = (projectPath: string, groups?: readonly string[]): Pr
  * not import that compiler chain, and the four production simulation workers contain only patched Zod v4. The audit
  * runner enforces the inspected legacy versions and dependency paths and rejects vulnerable runtime Zod copies before
  * ignoring this advisory. Recheck reachability if compiler imports change; do not replace v3 with an incompatible v4.
+ *
+ * GHSA-fc5q-39xc-vjpf: Picomatch <= 4.0.7 has no patched release. Its callers are Knip's repository-file tooling,
+ * Tevm's unused Vite/Vitest/unplugin build/test dependencies, and the compiler import resolver described above.
+ * These paths use repository-controlled patterns, not application or remote input. The audit runner pins the inspected
+ * copies and caller versions, rejects new callers/direct workspace use, and productionBuild.test.ts verifies that neither
+ * Picomatch nor Micromatch ships in any app or simulation worker. Remove the exception when a patched release exists.
+ * Advisory: https://github.com/advisories/GHSA-fc5q-39xc-vjpf
  */
-export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5'] as const
+export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5', 'GHSA-fc5q-39xc-vjpf'] as const
 
 export const dependencyAuditCommand: readonly string[] = ['bun', path.join(defaultRepositoryRoot, 'tooling/repo/audit-dependencies.mts')]
 
