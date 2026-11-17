@@ -77,7 +77,7 @@ export async function sharedQuorumReadTargets<T extends { endpoint: string; clie
 		await Promise.allSettled(
 			readers.map(async reader => {
 				const block = await reader.client.getBlock()
-				if (block.number === undefined) throw new Error('RPC head has no confirmed block number')
+				if (block.number === undefined) throw new ConnectivityDegradedError('RPC head has no confirmed block number')
 				return { reader, number: block.number }
 			}),
 		),

@@ -84,7 +84,7 @@ describe('Escalation math parity', () => {
 		return zeroHashes
 	}
 
-	const createNullifierPath = (parentDepositIndex: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }], [parentDepositIndex]))) & ((1n << BigInt(NULLIFIER_DEPTH)) - 1n)
+	const createNullifierPath = (leafIndex: bigint) => leafIndex
 
 	class SparseNullifierTree {
 		private readonly zeroHashes = buildZeroHashes()

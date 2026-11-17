@@ -20,8 +20,9 @@ export function operationalFailureDisposition(error: unknown): OperationalFailur
 		return 'safety-paused'
 	}
 	if (error instanceof RpcError) {
-		if (error.code !== undefined) return 'safety-paused'
 		const message = error.message.toLowerCase()
+		if (error.code === -32002 || error.code === -32603 || (error.code === -32000 && /header not found|block not found|missing trie node/.test(message))) return 'connectivity-degraded'
+		if (error.code !== undefined) return 'safety-paused'
 		if (message.includes('timed out') || message.includes('fetch failed') || /^http (408|425|429|5\d\d)\b/.test(message)) return 'connectivity-degraded'
 	}
 	if (error instanceof Error) {

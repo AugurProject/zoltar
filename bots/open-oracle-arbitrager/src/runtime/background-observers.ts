@@ -44,8 +44,8 @@ export function createOperatorHeadWatcher(parameters: { config: Pick<Configurati
 }
 
 /**
- * Chooses the head the next scan wake should be measured against. The scan uses the lowest head every
- * quorum reader agrees on; when the watcher is already past it, waking for that watcher head would only
+ * Chooses the head the next scan wake should be measured against. The scan uses the newest head supported
+ * by its configured RPC quorum; when the watcher is already past it, waking for that watcher head would only
  * re-scan a block the lagging readers cannot serve yet, so the wait is measured from the watcher's view.
  */
 function scanWakeHead(observed: Pick<ObservedHead, 'hash' | 'number'> | undefined, scanned: Pick<ObservedHead, 'hash' | 'number'>) {

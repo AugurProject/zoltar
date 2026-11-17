@@ -38,6 +38,7 @@ export const minimumOutcomeCountReason = 'Remove is unavailable: keep at least 2
 export const remove = 'Remove'
 export const formatRemoveOutcomeLabel = (outcomeNumber: number) => `Remove outcome ${outcomeNumber}`
 export const yesNoOutcomesMakeBinaryError = 'Yes and No outcomes make a Binary question. Choose Binary.'
+export const malformedOutcomeReservedError = 'Malformed is reserved by the protocol. Use another outcome name.'
 export const invalidOutcomeReservedError = 'Invalid is added to every question. Use another outcome name.'
 export const categoricalOutcomeLabelsHelpText = 'Use concise, mutually exclusive labels. Users should be able to tell at a glance which outcome would win.'
 export const questionDetailsUnavailable = 'Question details are unavailable.'

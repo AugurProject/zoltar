@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakRoots, CARRY_NULLIFIER_DEPTH, computeCarryNullifierRootFromProof, createSparseNullifier, getCarryNullifierPath, hashCarryParent } from './carryProof.js'
-import { concatHex, encodeAbiParameters, keccak256, toHex, zeroHash, type Hex } from './ethereum.js'
+import { concatHex, keccak256, toHex, zeroHash, type Hex } from './ethereum.js'
 
 const CONSUMED_LEAF = toHex(1n, { size: 32 })
 
@@ -50,11 +50,9 @@ describe('carry proof primitives', () => {
 		}
 	})
 
-	test('derives the nullifier path from the low 64 bits of the encoded parent deposit index', () => {
-		for (const parentDepositIndex of [0n, 1n, 2n ** 200n]) {
-			const expected = BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }], [parentDepositIndex]))) & ((1n << 64n) - 1n)
-			expect(getCarryNullifierPath(parentDepositIndex)).toBe(expected)
-		}
+	test('uses the unique carry leaf position directly as the nullifier path', () => {
+		for (const leafIndex of [0n, 1n, (1n << 64n) - 1n]) expect(getCarryNullifierPath(leafIndex)).toBe(leafIndex)
+		expect(() => getCarryNullifierPath(1n << 64n)).toThrow('64-bit')
 	})
 
 	test('recomputes sparse nullifier roots from absence and consumption proofs', () => {

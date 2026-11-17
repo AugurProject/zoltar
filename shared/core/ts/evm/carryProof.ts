@@ -3,7 +3,6 @@ import { concatHex, encodeAbiParameters, keccak256, parseAbiParameters, type Add
 export const CARRY_NULLIFIER_DEPTH = 64
 const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const NULLIFIER_CONSUMED_LEAF: Hex = '0x0000000000000000000000000000000000000000000000000000000000000001'
-const NULLIFIER_PATH_ABI = parseAbiParameters('uint256 parentDepositIndex')
 const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
 
 export type CarryLeaf = {
@@ -108,14 +107,14 @@ function buildZeroHashes() {
 	return zeroHashes
 }
 
-export function createSparseNullifier(consumedParentDepositIndexes: readonly bigint[]) {
+export function createSparseNullifier(consumedLeafIndexes: readonly bigint[]) {
 	const nodes = new Map<string, Hex>()
 	const zeroHashes = buildZeroHashes()
 	const getNode = (level: number, index: bigint) => nodes.get(`${level}:${index.toString()}`) ?? zeroHashes[level]
 
-	const getProof = (parentDepositIndex: bigint) => {
+	const getProof = (leafIndex: bigint) => {
 		const siblings: Hex[] = []
-		let index = getCarryNullifierPath(parentDepositIndex)
+		let index = getCarryNullifierPath(leafIndex)
 		for (let level = 0; level < CARRY_NULLIFIER_DEPTH; level += 1) {
 			const siblingHash = getNode(level, index ^ 1n)
 			if (siblingHash === undefined) throw new Error('Missing nullifier sibling hash')
@@ -125,8 +124,8 @@ export function createSparseNullifier(consumedParentDepositIndexes: readonly big
 		return siblings
 	}
 
-	const consume = (parentDepositIndex: bigint) => {
-		let index = getCarryNullifierPath(parentDepositIndex)
+	const consume = (leafIndex: bigint) => {
+		let index = getCarryNullifierPath(leafIndex)
 		let currentHash = NULLIFIER_CONSUMED_LEAF
 		for (let level = 0; level < CARRY_NULLIFIER_DEPTH; level += 1) {
 			nodes.set(`${level}:${index.toString()}`, currentHash)
@@ -144,18 +143,19 @@ export function createSparseNullifier(consumedParentDepositIndexes: readonly big
 		return nodes.get(`${CARRY_NULLIFIER_DEPTH}:0`) ?? fallbackRoot
 	}
 
-	for (const parentDepositIndex of consumedParentDepositIndexes) consume(parentDepositIndex)
+	for (const leafIndex of consumedLeafIndexes) consume(leafIndex)
 	return { consume, getProof, getRoot }
 }
 
-/** The sparse nullifier slot: the low 64 bits of keccak256(abi.encode(parentDepositIndex)). */
-export function getCarryNullifierPath(parentDepositIndex: bigint) {
-	return BigInt.asUintN(CARRY_NULLIFIER_DEPTH, BigInt(keccak256(encodeAbiParameters(NULLIFIER_PATH_ABI, [parentDepositIndex]))))
+/** A carry leaf keeps its unique 64-bit MMR position through every descendant snapshot. */
+export function getCarryNullifierPath(leafIndex: bigint) {
+	if (leafIndex < 0n || leafIndex >= 1n << BigInt(CARRY_NULLIFIER_DEPTH)) throw new Error('Nullifier leaf index must fit the 64-bit carry tree')
+	return leafIndex
 }
 
-export function computeCarryNullifierRootFromProof(parentDepositIndex: bigint, siblings: readonly Hex[], leafValue: Hex) {
+export function computeCarryNullifierRootFromProof(leafIndex: bigint, siblings: readonly Hex[], leafValue: Hex) {
 	if (siblings.length !== CARRY_NULLIFIER_DEPTH) throw new Error(`Nullifier proof has ${siblings.length.toString()} siblings instead of ${CARRY_NULLIFIER_DEPTH.toString()}`)
-	let path = getCarryNullifierPath(parentDepositIndex)
+	let path = getCarryNullifierPath(leafIndex)
 	let root = leafValue
 	for (const sibling of siblings) {
 		root = (path & 1n) === 0n ? hashCarryParent(root, sibling) : hashCarryParent(sibling, root)

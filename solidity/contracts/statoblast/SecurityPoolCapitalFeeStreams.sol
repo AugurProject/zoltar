@@ -3,8 +3,8 @@ pragma solidity 0.8.35;
 
 /// @notice Exact vesting of independently funded ETH and REP fee budgets.
 /// @dev The authority holds the tokens. Nothing here transfers assets or visits
-/// an old stream. Income follows an integer rate plus its exact remainder at the
-/// original end time. Later funding never accelerates an existing stream.
+/// an old stream. All streams share the immutable reward duration, so rates and
+/// integrals keep exact numerators over that denominator until income is released. Later funding never accelerates an existing stream.
 contract SecurityPoolCapitalFeeStreams {
 	uint256 private constant MAX_TIMESTAMP = type(uint48).max;
 	uint256 private constant MAX_OUTSTANDING = type(uint128).max;
@@ -18,15 +18,15 @@ contract SecurityPoolCapitalFeeStreams {
 	uint256 public outstandingRep;
 	uint256 public deferredEth;
 	uint256 public deferredRep;
-	uint256 private lastEthIntegral;
-	uint256 private lastRepIntegral;
+	uint256 private lastEthIntegralNumerator;
+	uint256 private lastRepIntegralNumerator;
 
 	struct Expiry {
 		uint48 end;
-		uint256 ethRate;
-		uint256 repRate;
-		uint256 ethIntegral;
-		uint256 repIntegral;
+		uint256 ethRateNumerator;
+		uint256 repRateNumerator;
+		uint256 ethIntegralNumerator;
+		uint256 repIntegralNumerator;
 	}
 	mapping(uint48 => Expiry) private expiries;
 
@@ -61,14 +61,14 @@ contract SecurityPoolCapitalFeeStreams {
 		outstandingEth += ethAmount;
 		outstandingRep += repAmount;
 		_requireBudget();
-		uint256 ethRate = ethAmount / rewardDuration;
-		uint256 repRate = repAmount / rewardDuration;
+		uint256 ethRateNumerator = ethAmount;
+		uint256 repRateNumerator = repAmount;
 		uint48 end = releasedThrough + rewardDuration;
 		Expiry memory previous = expiries[lastExpiryId];
 		if (previous.end != end) ++lastExpiryId;
-		expiries[lastExpiryId] = Expiry(end, previous.ethRate + ethRate, previous.repRate + repRate, previous.ethIntegral + ethRate * end + (ethAmount % rewardDuration), previous.repIntegral + repRate * end + (repAmount % rewardDuration));
-		lastEthIntegral += ethRate * releasedThrough;
-		lastRepIntegral += repRate * releasedThrough;
+		expiries[lastExpiryId] = Expiry(end, previous.ethRateNumerator + ethRateNumerator, previous.repRateNumerator + repRateNumerator, previous.ethIntegralNumerator + ethRateNumerator * end, previous.repIntegralNumerator + repRateNumerator * end);
+		lastEthIntegralNumerator += ethRateNumerator * releasedThrough;
+		lastRepIntegralNumerator += repRateNumerator * releasedThrough;
 	}
 
 	/// @notice Return income earned since the previous checkpoint. The authority
@@ -77,8 +77,8 @@ contract SecurityPoolCapitalFeeStreams {
 		require(until <= block.timestamp, 'Future fee checkpoint');
 		uint48 expiredId;
 		(ethAmount, repAmount, expiredId) = _preview(until);
-		lastEthIntegral += ethAmount;
-		lastRepIntegral += repAmount;
+		lastEthIntegralNumerator += ethAmount * rewardDuration;
+		lastRepIntegralNumerator += repAmount * rewardDuration;
 		outstandingEth -= ethAmount;
 		outstandingRep -= repAmount;
 		releasedThrough = until;
@@ -113,8 +113,12 @@ contract SecurityPoolCapitalFeeStreams {
 	function _preview(uint48 until) private view returns (uint256 ethAmount, uint256 repAmount, uint48 expiredId) {
 		require(until >= releasedThrough, 'Fee time moved backwards');
 		expiredId = _expired(until);
-		(uint256 ethIntegral, uint256 repIntegral) = _integral(until, expiredId);
-		return (ethIntegral - lastEthIntegral, repIntegral - lastRepIntegral, expiredId);
+		(uint256 ethIntegralNumerator, uint256 repIntegralNumerator) = _integral(until, expiredId);
+		return (
+			(ethIntegralNumerator - lastEthIntegralNumerator) / rewardDuration,
+			(repIntegralNumerator - lastRepIntegralNumerator) / rewardDuration,
+			expiredId
+		);
 	}
 
 	function fundedOutstanding() external view returns (uint256 ethAmount, uint256 repAmount) {
@@ -127,12 +131,18 @@ contract SecurityPoolCapitalFeeStreams {
 	/// so binary search makes at most 48 probes. Its lower bound skips all settled
 	/// history; only the fixed horizon's still-unreleased checkpoints are searched.
 	/// The uint128 outstanding domain and minimum one-second duration bound
-	/// lifetime rates below 2^176 and weighted integrals below 2^224, even with reuse.
-	function _integral(uint48 timestamp, uint48 expiredId) private view returns (uint256 ethIntegral, uint256 repIntegral) {
+	/// lifetime funded budgets below 2^176 and timestamp-weighted integral
+	/// numerators below 2^224: at most one outstanding uint128 budget can be reused
+	/// per second. The common duration denominator needs no extra scaling bits.
+	function _integral(uint48 timestamp, uint48 expiredId) private view returns (uint256 ethIntegralNumerator, uint256 repIntegralNumerator) {
 		Expiry storage latest = expiries[lastExpiryId];
 		Expiry storage expired = expiries[expiredId];
-		ethIntegral = (latest.ethRate - expired.ethRate) * timestamp + expired.ethIntegral;
-		repIntegral = (latest.repRate - expired.repRate) * timestamp + expired.repIntegral;
+		ethIntegralNumerator =
+			(latest.ethRateNumerator - expired.ethRateNumerator) * timestamp +
+			expired.ethIntegralNumerator;
+		repIntegralNumerator =
+			(latest.repRateNumerator - expired.repRateNumerator) * timestamp +
+			expired.repIntegralNumerator;
 	}
 
 	function _expired(uint48 timestamp) private view returns (uint48) {

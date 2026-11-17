@@ -144,7 +144,13 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 		const count = uint(view['snapshotLeafCount'])
 		const { leaves, consumed } = await history(gameAddress, outcome)
 		const inherited = leaves.slice(0, Number(count))
-		const nullifiers = createSparseNullifier(consumed)
+		const nullifiers = createSparseNullifier(
+			consumed.map(parentIndex => {
+				const leaf = leaves.find(entry => entry.parentDepositIndex === parentIndex)
+				if (leaf === undefined) throw new Error('Consumed carry deposit is absent from history')
+				return leaf.index
+			}),
+		)
 		if (nullifiers.getRoot() !== hash(view['currentNullifierRoot'])) throw new Error('Claim nullifier commitment mismatch')
 		const peaks = array(view['snapshotPeaks'])
 		const snapshotRoot = bagCarryPeaks(
@@ -178,7 +184,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 							leafIndex: membership.leafIndex.toString(),
 							merkleMountainRangePeakIndex: membership.merkleMountainRangePeakIndex.toString(),
 							merkleMountainRangeSiblings: membership.merkleMountainRangeSiblings,
-							nullifierSiblings: nullifiers.getProof(leaf.parentDepositIndex),
+							nullifierSiblings: nullifiers.getProof(leaf.index),
 						}
 			let sourcePrincipal = leaf.amountAttoRep
 			let principal = leaf.amountAttoRep

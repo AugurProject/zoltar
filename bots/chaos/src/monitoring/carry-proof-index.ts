@@ -36,7 +36,7 @@ export interface CarryLeafSlot {
 
 interface SparseNullifierEntry {
 	parentDepositIndex: string
-	/** Decimal encoding of the low 64 bits of keccak256(abi.encode(parentDepositIndex)). */
+	/** Decimal encoding of the unique carry MMR leaf position. */
 	path: string
 }
 
@@ -147,12 +147,12 @@ export function createMerkleMountainRangeProof(hashes: readonly Hash[], globalLe
 	}
 }
 
-function nullifierParent(parentDepositIndex: string) {
-	return unsignedInteger(parentDepositIndex, 'Nullifier parentDepositIndex')
+function nullifierLeafIndex(leafIndex: string) {
+	return unsignedInteger(leafIndex, 'Nullifier leafIndex')
 }
 
-export function nullifierPath(parentDepositIndex: string) {
-	return getCarryNullifierPath(nullifierParent(parentDepositIndex))
+export function nullifierPath(leafIndex: string) {
+	return getCarryNullifierPath(nullifierLeafIndex(leafIndex))
 }
 
 function assertNoNullifierPathCollisions(entries: readonly SparseNullifierEntry[]) {
@@ -179,32 +179,30 @@ function validateSparseNullifierState(state: SparseNullifierState) {
 		parents.add(entry.parentDepositIndex)
 		if (previous !== undefined && parent <= previous) throw new Error('Nullifier entries are not in canonical parent-deposit order')
 		previous = parent
-		const expectedPath = nullifierPath(entry.parentDepositIndex).toString()
-		if (entry.path !== expectedPath) throw new Error(`Nullifier path for parent deposit ${entry.parentDepositIndex} is invalid`)
 	}
 }
 
 function sparseNullifier(state: SparseNullifierState) {
 	validateSparseNullifierState(state)
-	return createSparseNullifier(state.consumed.map(entry => BigInt(entry.parentDepositIndex)))
+	return createSparseNullifier(state.consumed.map(entry => BigInt(entry.path)))
 }
 
 export function sparseNullifierRoot(state: SparseNullifierState): Hash {
 	return sparseNullifier(state).getRoot()
 }
 
-export function createSparseNullifierProof(state: SparseNullifierState, parentDepositIndex: string): Hash[] {
-	return sparseNullifier(state).getProof(nullifierParent(parentDepositIndex))
+export function createSparseNullifierProof(state: SparseNullifierState, leafIndex: string): Hash[] {
+	return sparseNullifier(state).getProof(nullifierLeafIndex(leafIndex))
 }
 
-export function computeNullifierRootFromProof(parentDepositIndex: string, siblings: readonly Hash[], leafValue: Hash): Hash {
+export function computeNullifierRootFromProof(leafIndex: string, siblings: readonly Hash[], leafValue: Hash): Hash {
 	if (siblings.length !== CARRY_NULLIFIER_DEPTH) throw new Error(`Nullifier proof has ${siblings.length.toString()} siblings instead of ${CARRY_NULLIFIER_DEPTH.toString()}`)
 	requireHash(leafValue, 'Nullifier leaf value')
-	const parent = nullifierParent(parentDepositIndex)
+	const path = nullifierLeafIndex(leafIndex)
 	for (let depth = 0; depth < CARRY_NULLIFIER_DEPTH; depth += 1) {
 		const sibling = siblings[depth]
 		if (sibling === undefined) throw new Error(`Nullifier sibling ${depth.toString()} is missing`)
 		requireHash(sibling, `Nullifier sibling ${depth.toString()}`)
 	}
-	return computeCarryNullifierRootFromProof(parent, siblings, leafValue)
+	return computeCarryNullifierRootFromProof(path, siblings, leafValue)
 }

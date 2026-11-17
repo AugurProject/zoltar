@@ -59,7 +59,7 @@ export function storageFixture() {
 		const snapshot = carryCommitment(inherited)
 		const current = carryCommitment([...inherited, ...local])
 		let nullifier = emptySparseNullifierState()
-		if (outcome === 0n) for (const index of new Set(allConsumed(game))) nullifier = consumeSparseNullifier(nullifier, index)
+		if (outcome === 0n) for (const index of new Set(allConsumed(game))) nullifier = consumeSparseNullifier(nullifier, index, [...inherited, ...local].findIndex(slot => slot.leaf.parentDepositIndex === index).toString())
 		return {
 			balanceAttoRep: 10n,
 			snapshotLeafCount: BigInt(snapshot.leafCount),

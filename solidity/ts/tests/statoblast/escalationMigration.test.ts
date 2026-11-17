@@ -171,7 +171,7 @@ describe('Statoblast: portfolio reporting carry and atomic claims', () => {
 			leafIndex: 2n,
 			merkleMountainRangePeakIndex: 0n,
 			merkleMountainRangeSiblings: [hashParent(await readCarryLeafHash(owner, source, 1n), await readCarryLeafHash(owner, source, 2n))],
-			nullifierSiblings: tree.getProof(localId),
+			nullifierSiblings: tree.getProof(2n),
 		})
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: grandchild.pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [local]] }))
 		const after = await state(grandchild.pool, grandchild.universe)

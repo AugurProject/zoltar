@@ -117,7 +117,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			leafIndex: 2n,
 			merkleMountainRangePeakIndex: 0n,
 			merkleMountainRangeSiblings: [hashParent(rootLeaf, childLeafA)],
-			nullifierSiblings: nullifiers.getProof(childLocalParentDepositIndex),
+			nullifierSiblings: nullifiers.getProof(2n),
 		})
 		// The offset inside the height-0 peak (0) would alias global leaf 0, which the
 		// child inherited from the root. It must not verify.
@@ -126,7 +126,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, lowerPeakProof] }))
 		const payout = (await getERC20Balance(client, repToken, childDepositorB)) - balanceBefore
 		assert.strictEqual(payout, 2n * REPORT_BOND, 'the authenticated child-local depositor receives its complete original stake')
-		nullifiers.consume(childLocalParentDepositIndex)
+		nullifiers.consume(2n)
 
 		// Settle the remaining leaves; the inherited aggregate must reconcile exactly.
 		const rootProof = await createCarryProof(client, root.escalationGame, {
@@ -148,7 +148,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			leafIndex: 1n,
 			merkleMountainRangePeakIndex: 1n,
 			merkleMountainRangeSiblings: [rootLeaf, childLeafB],
-			nullifierSiblings: nullifiers.getProof(firstChildParentDepositIndex),
+			nullifierSiblings: nullifiers.getProof(1n),
 		})
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, firstChildProof] }))
 		assert.strictEqual((await readYesState(grandchild.escalationGame)).currentCarryTotalAttoRep, 0n, 'every inherited leaf settled, so no inherited principal may remain')

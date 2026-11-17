@@ -148,7 +148,15 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 			const commitment = carryCommitment(slots)
 			if (commitment.leafCount !== state.snapshotLeafCount.toString() || commitment.peaks.some((peak, index) => peak.toLowerCase() !== state.snapshotPeaks[index]?.toLowerCase())) throw new Error('Stored parent carry snapshot root is not reconstructible')
 			const consumed = new Set([...(await inheritedConsumed(info.parentGame, outcome)), ...(await localConsumed(route.escalationGame, outcome))])
-			const nullifier = { consumed: [...consumed].sort((left, right) => compareIntegers(BigInt(left), BigInt(right))).map(parentDepositIndex => ({ parentDepositIndex, path: nullifierPath(parentDepositIndex).toString() })) }
+			const nullifier = {
+				consumed: [...consumed]
+					.sort((left, right) => compareIntegers(BigInt(left), BigInt(right)))
+					.map(parentDepositIndex => {
+						const index = slots.findIndex(slot => slot.leaf.parentDepositIndex === parentDepositIndex)
+						if (index < 0) throw new Error('Consumed carry deposit is absent from history')
+						return { parentDepositIndex, path: nullifierPath(index.toString()).toString() }
+					}),
+			}
 			if (sparseNullifierRoot(nullifier).toLowerCase() !== state.currentNullifierRoot.toLowerCase()) throw new Error('Stored carry nullifier root is not reconstructible')
 			for (const [index, slot] of slots.entries()) {
 				const leaf = slot.leaf
@@ -179,7 +187,7 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 				parentDepositIndex: candidate.parentDepositIndex,
 				sourceNodeId: candidate.sourceNodeId,
 				...mmr,
-				nullifierSiblings: createSparseNullifierProof(nullifier, candidate.parentDepositIndex),
+				nullifierSiblings: createSparseNullifierProof(nullifier, mmr.leafIndex),
 			},
 		}
 	})

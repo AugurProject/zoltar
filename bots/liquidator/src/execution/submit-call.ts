@@ -1,7 +1,7 @@
 import { estimateExecutionGas, PREFLIGHT_BALANCE } from './gas-estimate.ts'
 import { simulateWithRevalidation } from './simulation.ts'
 import { createPublicClient, createWalletClient, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { MAX_PRIORITY_FEE_PER_GAS, maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, transactionMaxBlockNumber } from '@zoltar/bot-shared/execution/transaction-submission'
+import { MAX_PRIORITY_FEE_PER_GAS, cappedMaximumFeePerGas, maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, transactionMaxBlockNumber } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumPendingNonce, settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { OperatorSettings } from '#config/settings'
@@ -22,6 +22,7 @@ type Call = {
 	gas: bigint | 'estimate'
 	gasBudgetExceeded?: (() => never) | undefined
 	label: string
+	maxFeePerGasCap?: bigint | undefined
 	lastValidBlockNumber?: bigint | undefined
 	preSubmit?: (() => Promise<unknown> | unknown) | undefined
 	revalidateSimulationRevert?: (() => Promise<unknown>) | undefined
@@ -70,7 +71,13 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 	assertExecutionActive(state)
 	// Match the EIP-1559 envelope used by prepareSignedTransaction so contracts
 	// that reimburse tx.gasprice see the same effective fee during preflight.
-	const fees = { maxFeePerGas: maximumFeePerGas(block.baseFeePerGas, transactionMaxBlockNumber(block.number, call.lastValidBlockNumber) - block.number), maxPriorityFeePerGas: MAX_PRIORITY_FEE_PER_GAS }
+	const validityBlocks = transactionMaxBlockNumber(block.number, call.lastValidBlockNumber) - block.number
+	const maxFeePerGas = call.maxFeePerGasCap === undefined ? maximumFeePerGas(block.baseFeePerGas, validityBlocks) : cappedMaximumFeePerGas(block.baseFeePerGas, call.maxFeePerGasCap, validityBlocks)
+	if (maxFeePerGas < block.baseFeePerGas) {
+		call.gasBudgetExceeded?.()
+		throw new Error('Transaction fee cap is below the current base fee')
+	}
+	const fees = { maxFeePerGas, maxPriorityFeePerGas: maxFeePerGas < MAX_PRIORITY_FEE_PER_GAS ? maxFeePerGas : MAX_PRIORITY_FEE_PER_GAS }
 	// Estimate before enforcing the configured spend ceiling. RPC affordability
 	// must not turn an over-budget opportunity into an ambiguous contract revert.
 	const gas = call.gas === 'estimate' ? await estimateExecutionGas(pinned.readers, { account, data: call.data, to: call.to, value: call.value, blockNumber: pinned.blockNumber, balanceOverride: PREFLIGHT_BALANCE, ...fees }, settings.connectivity.rpcQuorum, validateCanonicalBlock, revalidateRevert) : call.gas
@@ -94,6 +101,7 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 	assertExecutionActive(state)
 	const signed = await prepareSignedTransaction({
 		baseFeePerGas: block.baseFeePerGas,
+		maxFeePerGasCap: call.maxFeePerGasCap,
 		blockNumber: block.number,
 		chainId: settings.network.chainId,
 		data: call.data,

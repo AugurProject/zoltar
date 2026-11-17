@@ -298,6 +298,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 				method: 'eth_getBlockByNumber',
 				params: [blockTag, includeTransactions],
 			})
+			if (block === null) throw new RpcError('RPC block not found', { code: -32000 })
 			const normalizedBlock = normalizeBlock(block, includeTransactions, blockTag === 'pending')
 			if (parameters?.blockNumber !== undefined && normalizedBlock.number !== parameters.blockNumber) {
 				throw new Error(`RPC returned block ${normalizedBlock.number?.toString() ?? 'without a number'}, which does not match requested block ${parameters.blockNumber.toString()}`)

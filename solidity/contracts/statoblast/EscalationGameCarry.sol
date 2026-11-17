@@ -162,7 +162,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function _verifyAndConsumeCarriedDepositProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) internal {
 		require(forkCarrySnapshotInitialized(), 'Fork snapshot incomplete');
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
-		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.nullifierSiblings);
+		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.leafIndex, proof.nullifierSiblings);
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeCarriedDeposit, (outcomeIndex, proof.parentDepositIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep, proof.leafIndex, _getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex))));
 	}
 
@@ -229,13 +229,13 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(computedRoot == proofVerifier.bagCarryPeaks(state.snapshotPeaks, state.snapshotLeafCount), 'Bad carry proof');
 	}
 
-	function _verifyAndAdvanceNullifier(uint8 outcomeIndex, uint256 parentDepositIndex, bytes32[] calldata siblings) private {
+	function _verifyAndAdvanceNullifier(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 leafIndex, bytes32[] calldata siblings) private {
 		require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');
 		bytes32 currentRoot = _getCurrentNullifierRoot(outcomeIndex);
-		bytes32 emptyRoot = proofVerifier.computeNullifierRoot(parentDepositIndex, siblings, bytes32(0));
+		bytes32 emptyRoot = proofVerifier.computeNullifierRoot(leafIndex, siblings, bytes32(0));
 		require(emptyRoot == currentRoot, 'Bad nullifier proof');
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		state.currentNullifierRoot = proofVerifier.computeNullifierRoot(parentDepositIndex, siblings, bytes32(uint256(1)));
+		state.currentNullifierRoot = proofVerifier.computeNullifierRoot(leafIndex, siblings, bytes32(uint256(1)));
 		state.proofConsumedDepositIndexes.push(parentDepositIndex);
 	}
 
