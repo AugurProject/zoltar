@@ -94,9 +94,9 @@ contract SecurityPoolResolutionPremiumBook {
 		if (state.units == 0) return;
 		_removeSchedule(book, state);
 		if (state.portfolioEndTime == 0) {
-			// A thinly funded branch prices new premium in many units per token. A
-			// rate above the question domain earns at that maximum; the remainder is
-			// unused at the deadline. Reporting must never fail on a premium rate.
+			// Scaled units preserve fractional premium rates within the uint128 domain.
+			// The original funded deadline stays fixed when reporting is extended;
+			// any fractional rate tail earns in full at that deadline.
 			uint256 rate = state.units / MAXIMUM_REPORTING_WINDOW;
 			require(rate <= type(uint128).max, 'Premium rate exceeds question domain');
 			state.rate = uint128(rate);
