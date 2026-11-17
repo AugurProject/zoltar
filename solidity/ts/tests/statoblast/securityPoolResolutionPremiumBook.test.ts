@@ -36,6 +36,31 @@ describe('Statoblast: question-linked resolution premium expiry', () => {
 		await node.setBaselineSnapshot()
 	})
 
+	test.each([false, true])('#1246 two one-unit premiums earn completely across the funded window (chunked: %s)', async chunked => {
+		await fund(1n, 1n)
+		await fund(2n, 1n)
+		await schedule(1n, window)
+		await schedule(2n, window)
+		let earned = 0n
+		let unused = 0n
+		for (const timestamp of chunked ? [day, 3 * day, 20 * day, window, window + 1] : [window + 1]) {
+			const cash = await checkpoint(timestamp)
+			earned += cash[0]
+			unused += cash[1]
+		}
+		expect(earned).toBe(2n)
+		expect(unused).toBe(0n)
+		expect((await totals()).slice(0, 2)).toEqual([0n, 0n])
+	})
+
+	test('#1246 a small six-decimal premium earns over the full reporting window', async () => {
+		await fund(1n, 1_000_000n)
+		await schedule(1n, window)
+		const [earned, unused] = await checkpoint(window + 1)
+		expect(earned).toBeGreaterThanOrEqual(999_999n)
+		expect(earned + unused).toBe(1_000_000n)
+	})
+
 	test('three-day finality stops income and releases the entire unearned 49-day tail', async () => {
 		await fund(1n)
 		await schedule(1n, 3 * day)

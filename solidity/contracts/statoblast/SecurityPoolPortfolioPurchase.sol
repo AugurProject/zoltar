@@ -40,8 +40,8 @@ contract SecurityPoolPortfolioPurchase {
 		IPortfolioPurchaseRoot root = IPortfolioPurchaseRoot(portfolio);
 		SecurityPoolPortfolioSettlement engine = root.settlement();
 		uint64 bookId = engine.bookIds(universeId);
-		(SecurityPoolSettlementBook.Question memory question, ) = engine.ledger().question(bookId, questionId);
-		uint256 principal = _addedPrincipal(question, cash);
+		engine.ledger().validateMintFeePrecision(bookId, questionId, cash, root.annualFeeBps());
+		uint256 principal = engine.ledger().quoteMintPrincipal(bookId, questionId, cash);
 		premium = Math.mulDiv(principal, root.annualFeeBps() * RESOLUTION_WINDOW, SecurityPoolUtils.BPS_DENOMINATOR * 365 days, Math.Rounding.Ceil);
 		fee = _basePurchaseFee(root, cash) + premium;
 	}
@@ -51,16 +51,9 @@ contract SecurityPoolPortfolioPurchase {
 		return
 			Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backingValueAttoEth, root.purchaseFeeBps(), SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil));
 	}
-	function _addedPrincipal(SecurityPoolSettlementBook.Question memory question, uint256 cash) private pure returns (uint256 principal) {
-		require(question.outcomeSupplyAttoShares == 0 || question.units != 0, 'Question backing exhausted');
-		uint256 shares =
-			question.outcomeSupplyAttoShares == 0
-				? cash
-				: Math.mulDiv(cash, question.outcomeSupplyAttoShares, question.units);
-		principal =
-			question.outcomeSupplyAttoShares == 0
-				? cash
-				: Math.mulDiv(question.feePrincipalAttoEth, shares, question.outcomeSupplyAttoShares, Math.Rounding.Ceil);
+	function quoteMintRecoveryRep(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256) {
+		SecurityPoolPortfolioSettlement engine = IPortfolioPurchaseRoot(portfolio).settlement();
+		return engine.ledger().quoteMintRecoveryRep(engine.bookIds(universeId), questionId, cash);
 	}
 	function availableMintCapacity(uint248 universeId) external view returns (uint256) {
 		IPortfolioPurchaseRoot root = IPortfolioPurchaseRoot(portfolio);
@@ -71,8 +64,7 @@ contract SecurityPoolPortfolioPurchase {
 		SecurityPoolPortfolioSettlement engine = root.settlement();
 		SecurityPoolSettlementBook book = engine.ledger();
 		uint64 bookId = engine.bookIds(universeId);
-		(uint256 cash, uint256 units, , , ) = book.totals(bookId);
-		if (cash != units || book.recoveryRep(bookId) != 0) return 0;
+		if (!book.isCashFunded(bookId)) return 0;
 		uint256 active = capital.commitmentIndex().eligibleActiveCommitment(capital.conservativePrice());
 		uint256 demand = capital.demandAttoEth();
 		return active > demand ? active - demand : 0;
@@ -82,15 +74,13 @@ contract SecurityPoolPortfolioPurchase {
 		SecurityPoolPortfolioSettlement engine = root.settlement();
 		uint256 nativeTime = engine.feeTimestamp(pool.universeId());
 		if (address(pool.escalationGame()) != address(0)) return (0, 0);
-		// Reporting that began in an ancestor universe stays open here until this
-		// branch's own game is materialized. Holding fees ended when it began.
 		if (root.sourceGame(pool.universeId(), pool.questionId()) != address(0)) return (0, 0);
-		(SecurityPoolSettlementBook.Question memory question, ) = engine.ledger().question(engine.bookIds(pool.universeId()), pool.questionId());
+		(SecurityPoolSettlementBook.Question memory question, ) = engine.ledger().scaledQuestion(engine.bookIds(pool.universeId()), pool.questionId());
 		if (question.finalAfter != 0) return (0, 0);
 		uint256 calculated = Math.mulDiv(question.feePrincipalAttoEth, root.annualFeeBps(), SecurityPoolUtils.BPS_DENOMINATOR * 365 days);
 		require(calculated <= type(uint96).max, 'Question fee domain exceeded');
 		if (calculated == 0) return (0, 0);
-		uint256 duration = Math.min(type(uint48).max - nativeTime, engine.ledger().availableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()) / calculated);
+		uint256 duration = Math.min(type(uint48).max - nativeTime, engine.ledger().scaledAvailableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()) / calculated);
 		if (duration == 0) return (0, 0);
 		return (uint96(calculated), uint48(nativeTime + duration));
 	}

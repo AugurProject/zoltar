@@ -353,7 +353,9 @@ contract SecurityPoolPortfolioForkCoordinator {
 	}
 	function _createBranchAuctionIfNeeded(uint248 child, Branch storage branch, Fork storage fork, IERC20 token) private {
 		uint256 freshInventoryAttoRep = fork.backing - branch.chosenBacking;
-		uint256 settlementShortfallAttoEth = fork.cash - branch.parentCash;
+		SecurityPoolPortfolioSettlement settlement = portfolio.settlement();
+		uint256 targetCash = settlement.ledger().requiredForkCash(settlement.bookIds(branch.parent));
+		uint256 settlementShortfallAttoEth = targetCash - branch.parentCash;
 		if (
 			fork.units != 0 &&
 			freshInventoryAttoRep != 0 &&
@@ -444,7 +446,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		}
 		SecurityPoolSettlementBook ledger = settlement.ledger();
 		uint64 bookId = settlement.bookIds(source);
-		(question, ) = ledger.question(bookId, questionId);
+		(question, ) = ledger.scaledQuestion(bookId, questionId);
 		require(ledger.hasLiveForkRecoveryRight(bookId, questionId, 0), 'No live source recovery right');
 	}
 

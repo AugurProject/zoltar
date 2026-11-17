@@ -18,6 +18,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	bool public importsOpen;
 	bool private importsInitialized;
 	uint64 public healthObservationEpoch;
+	uint48 private distressRestart;
 	uint256 private observedPrice;
 	mapping(uint64 => uint48) private observationTimes;
 	struct Account {
@@ -208,6 +209,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @notice Record which existing live positions are healthy at a fresh price.
 	/// @dev Epochs distinguish recovery and relapse even within the same block.
+	function restartLiquidationClock() external onlyCapitalLedger {
+		distressRestart = uint48(block.timestamp);
+	}
+
 	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
@@ -242,7 +247,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			cursor = node.parent;
 		}
 		if (epoch == healthObservationEpoch) return 0;
-		return observationTimes[epoch + 1];
+		return uint48(Math.max(observationTimes[epoch + 1], distressRestart));
 	}
 
 	/// @dev The controller calls only after an actual healthy mutation at a fresh
@@ -288,6 +293,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				removed = removed >= minimumCommitment + shortfall ? removed - shortfall : 0;
 			}
 		}
+		// A minimum-size cut must not turn removal of unsupported commitment
+		// into an immediate withdrawal of REP that still backs a live position.
+		if (supported != 0 && removed == account.commitment) removed = 0;
 		uint256 remaining = account.commitment - removed;
 		result.removed = removed;
 		if (removed != 0) {

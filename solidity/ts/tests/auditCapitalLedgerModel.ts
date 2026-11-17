@@ -427,6 +427,8 @@ export const cure = (m: Model, id: bigint, target: bigint, ownerExit: boolean) =
 			removed = removed >= MINC + shortfall ? removed - shortfall : 0n
 		}
 	}
+	// A cure may not release principal while any commitment remains supported.
+	if (supported !== 0n && removed === p.k) removed = 0n
 	const remaining = p.k - removed
 	if (removed !== 0n) {
 		if (remaining === 0n) {
@@ -500,6 +502,8 @@ export type TakeoverResult = { cured: boolean; full: boolean; merged: boolean; a
 const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, maxOwn: bigint, bounds: Bounds | undefined, sponsored = false): TakeoverResult => {
 	if (started(m, id) === 0n) fail('Adverse observation missing')
 	const source = positionOf(m, id)
+	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')
+	requireModel(k > 0n && k <= source.k, 'Invalid takeover commitment')
 	if (cure(m, id, 0n, false) !== 0n && (!inTree(source) || source.price >= m.liq)) {
 		requireModel(minAward === 0n, 'Takeover award below minimum')
 		return { cured: true, full: false, merged: false, award: 0n, debit: 0n, sourceOwner: source.owner, sourceBatch: source.batch, receiverPrincipal: 0n, receiverCommitment: 0n }
@@ -625,6 +629,9 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 				m.cons = ceilDiv(price * PPM, PPM - m.priceError)
 				m.liq = (price * PPM) / (PPM + m.priceError)
 				requireModel(m.liq !== 0n, 'Liquidation price rounds to zero')
+				if (!m.importing && m.now >= m.validUntil) {
+					for (const position of live(m)) position.distress = undefined
+				}
 				m.validUntil = op.until
 				if (!m.importing) observe(m)
 			}

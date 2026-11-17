@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { SecurityPoolSettlementPricing } from './SecurityPoolSettlementPricing.sol';
+import { SecurityPoolSettlementMath as SettlementMath } from './SecurityPoolSettlementMath.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
@@ -11,91 +13,14 @@ import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 /// authenticates complete-set or winning-outcome burns and supplies irreversible finality.
 /// Finality uses a portfolio clock paused during forks; fee deadlines retain native calendar time.
 /// A fork copies immutable roots, including ALL inherited outcome liabilities, in constant work.
-contract SecurityPoolSettlementBook {
+contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
-	uint256 public constant EXCHANGE_RATE_SCALE = 1e18;
-	uint256 private constant RECOVERY_SCALE = 1 << 128;
 	uint48 public constant MINIMUM_FORK_RESPONSE = 3 days;
 	address public immutable portfolio;
-	uint256 public immutable minimumOutcomeExchangeRate;
-	uint64 public lastBookId;
-	uint64 public lastFrozenBookId;
-	uint64 private lastQuestionStateId;
-	uint64 private lastFeeModeId;
-	SecurityPoolPersistentMap.Store private tree;
-	SecurityPoolFrozenHistory.Store private frozenHistory;
 
-	bool private constant INCREASE_BALANCE = true;
-	bool private constant DECREASE_BALANCE = false;
-	// cashAttoEth is a liability backed by settlement custody; units allocate that cash.
-	// securityPoolSettlementBook.test.ts covers unit conservation, fork copies and both clocks.
-	// Only a fully backed, REP-free book accrues fees. Finality uses portfolio time.
-	struct Book {
-		uint256 cashAttoEth;
-		uint256 units;
-		uint256 feeCashAttoEth;
-		uint64 questionRoot;
-		uint64 finalityRoot;
-		uint64 frozenRoot;
-		uint48 portfolioTimestamp;
-		bool isSealed;
-		uint64 feeRateRoot;
-		uint64 feeEndRoot;
-		uint64 feeModeRoot;
-		bool feesEnabled;
-		uint48 minimumFinalAfter;
-		uint48 feeTimeOffset;
-		uint256 finalizedUnitsPrefix;
-		uint256 recoveryAttoRep;
-	}
-
-	// units are cash-allocation weights, not outcome shares; feeStart/feeEnd are native time.
-	// finalAfter is portfolio time and remains independent of the native fee deadline.
-	struct Question {
-		uint256 units;
-		uint256 outcomeSupplyAttoShares;
-		uint48 finalAfter;
-		uint96 feeRateAttoEthPerSecond;
-		uint48 feeStart;
-		uint48 feeEnd;
-		uint256 feePrincipalAttoEth;
-	}
-
-	struct FrozenBook {
-		uint256 cashAttoEth;
-		uint256 units;
-		uint64 sourceBookId;
-		uint256 recoveryAttoRep;
-	}
-
-	/// @dev Modular corrections keep a question's REP entitlement independent of
-	/// rounded ETH units. Units and REP custody are each below 2^128, so the true
-	/// scaled entitlement fits uint256 even when the cumulative index wraps.
-	struct RecoveryState {
-		uint256 index;
-		uint64 finalityRoot;
-		uint256 finalizedPrefix;
-	}
-
-	struct FeeMode {
-		uint256 fundedSeconds;
-		uint48 nativeTimestamp;
-		bool funded;
-	}
-
-	mapping(uint64 => Book) public books;
-	mapping(uint64 => FrozenBook) public frozenBooks;
-	struct StoredQuestionState {
-		Question question;
-		uint256 recoveryCorrection;
-		uint256 recoveryIndex;
-	}
-	mapping(uint64 => StoredQuestionState) private questionStates;
-	mapping(uint64 => FeeMode) private feeModes;
-	mapping(uint64 => RecoveryState) private recoveryStates;
-
+	event SettlementRepaired(uint64 indexed bookId, uint256 cashAttoEth);
 	event BookCreated(uint64 indexed bookId, uint64 indexed sourceBookId, uint256 cashAttoEth, uint256 units);
 	event SettlementMinted(uint64 indexed bookId, uint256 indexed questionId, uint256 cashAttoEth, uint256 outcomeShares);
 	event SettlementRedeemed(uint64 indexed bookId, uint256 indexed questionId, uint256 outcomeShares, uint256 units, uint256 cashAttoEth);
@@ -104,11 +29,9 @@ contract SecurityPoolSettlementBook {
 	event FeeStreamReplaced(uint64 indexed bookId, uint256 indexed questionId, uint96 rateAttoEthPerSecond, uint48 end);
 	event AggregateFeesAccrued(uint64 indexed bookId, uint48 portfolioTimestamp, uint256 cashAttoEth);
 
-	constructor(address authority, uint256 minimumExchangeRate) {
+	constructor(address authority, uint256 minimumExchangeRate) SecurityPoolSettlementPricing(minimumExchangeRate) {
 		require(authority != address(0), 'Invalid settlement authority');
-		require(minimumExchangeRate > 0 && minimumExchangeRate <= EXCHANGE_RATE_SCALE, 'Invalid minimum exchange rate');
 		portfolio = authority;
-		minimumOutcomeExchangeRate = minimumExchangeRate;
 	}
 
 	modifier onlyPortfolio() {
@@ -119,6 +42,7 @@ contract SecurityPoolSettlementBook {
 	function createBook(uint48 portfolioTimestamp) external onlyPortfolio returns (uint64 bookId) {
 		require(portfolioTimestamp <= block.timestamp, 'Future settlement clock');
 		bookId = ++lastBookId;
+		fundingTargets[bookId] = FundingTarget(1, 1);
 		books[bookId].portfolioTimestamp = portfolioTimestamp;
 		books[bookId].feesEnabled = true;
 		_setFeeMode(books[bookId], true);
@@ -138,11 +62,12 @@ contract SecurityPoolSettlementBook {
 	function createChildBook(uint64 sourceBookId, uint256 fundedCashAttoEth, uint256 recoveryAttoRep) external onlyPortfolio returns (uint64 bookId) {
 		Book storage source = _book(sourceBookId);
 		require(source.isSealed, 'Settlement source not sealed');
-		require(fundedCashAttoEth <= source.units, 'Child cash exceeds liabilities');
+		require(fundedCashAttoEth <= requiredForkCash(sourceBookId), 'Child cash exceeds liabilities');
 		require(recoveryAttoRep == 0 || source.units != 0, 'Recovery REP has no claimants');
 		require(recoveryAttoRep >= source.recoveryAttoRep && recoveryAttoRep < RECOVERY_SCALE, 'Invalid child recovery REP');
 		bookId = ++lastBookId;
 		Book storage child = books[bookId];
+		fundingTargets[bookId] = _childTarget(sourceBookId, source);
 		child.cashAttoEth = fundedCashAttoEth;
 		child.recoveryAttoRep = recoveryAttoRep;
 		child.units = source.units;
@@ -166,12 +91,16 @@ contract SecurityPoolSettlementBook {
 				recoveryStates[bookId].index += increment;
 			}
 		}
-		_setFeeMode(child, fundedCashAttoEth == source.units && recoveryAttoRep == 0 && source.feesEnabled);
+		_setFeeMode(child, isCashFunded(bookId) && source.feesEnabled);
 		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, source.units);
 	}
 
-	/// @notice Return economic outcome supply, including inherited shares not materialized locally.
-	function question(uint64 bookId, uint256 questionId) public view returns (Question memory state, uint64 frozenBookId) {
+	/// @notice Full-precision claim weights for fork recovery and conservation checks.
+	function scaledUnits(uint64 bookId) external view returns (uint256) {
+		return _book(bookId).units;
+	}
+
+	function scaledQuestion(uint64 bookId, uint256 questionId) public view override returns (Question memory state, uint64 frozenBookId) {
 		Book storage book = _book(bookId);
 		state = questionStates[uint64(tree.get(book.questionRoot, questionId))].question;
 		state = _materializeFees(book, state);
@@ -181,7 +110,7 @@ contract SecurityPoolSettlementBook {
 	/// @notice Whether sealing at the fork clock preserves this question as a live source liability.
 	function hasLiveForkRecoveryRight(uint64 bookId, uint256 questionId, uint48 forkTimestamp) external view returns (bool) {
 		Book storage book = _book(bookId);
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		// A zero-unit final question has no funded FrozenBook. Its immutable
 		// source cutoff still closes recovery rights to separate premium cash.
 		uint48 cutoff = book.isSealed ? book.portfolioTimestamp : forkTimestamp;
@@ -212,45 +141,57 @@ contract SecurityPoolSettlementBook {
 		returns (uint256 cashAttoEth, uint256 units, uint256 feeCashAttoEth, uint48 portfolioTimestamp, bool isSealed)
 	{
 		Book storage book = _book(bookId);
-		return (book.cashAttoEth, book.units, book.feeCashAttoEth, book.portfolioTimestamp, book.isSealed);
+		return (
+			book.cashAttoEth,
+			Math.ceilDiv(book.units, UNIT_SCALE),
+			book.feeCashAttoEth,
+			book.portfolioTimestamp,
+			book.isSealed
+		);
 	}
 
-	function quoteMint(uint64 bookId, uint256 questionId, uint256 cashAttoEth) external view returns (uint256 outcomeShares) {
+	/// @notice Donate the active cash deficit while preserving all recovery REP.
+	function topUp(uint64 bookId, uint256 cashAttoEth) external onlyPortfolio {
 		Book storage book = _activeBook(bookId);
-		require(book.cashAttoEth == book.units && book.recoveryAttoRep == 0, 'Settlement in runoff');
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
-		require(frozenBookId == 0 && state.finalAfter == 0, 'Settlement mint closed');
-		if (state.outcomeSupplyAttoShares == 0) return cashAttoEth;
-		require(state.units > 0 && Math.mulDiv(state.units, EXCHANGE_RATE_SCALE, state.outcomeSupplyAttoShares) >= minimumOutcomeExchangeRate, 'Outcome exchange below minimum');
-		return Math.mulDiv(cashAttoEth, state.outcomeSupplyAttoShares, state.units);
+		require(cashAttoEth != 0 && cashAttoEth == _missingCash(bookId, book), 'Supply the entire settlement deficit');
+		book.cashAttoEth += cashAttoEth;
+		_syncFeeMode(bookId, book);
+		emit SettlementRepaired(bookId, cashAttoEth);
 	}
 
-	function mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint48 portfolioTimestamp) public onlyPortfolio returns (uint256 outcomeShares) {
+	function mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint48 portfolioTimestamp) external onlyPortfolio returns (uint256) {
+		return _mint(bookId, questionId, cashAttoEth, minimumShares, 0, portfolioTimestamp);
+	}
+
+	function mintWithRecoveryRep(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint256 recoveryAttoRep, uint48 portfolioTimestamp) external onlyPortfolio returns (uint256) {
+		return _mint(bookId, questionId, cashAttoEth, minimumShares, recoveryAttoRep, portfolioTimestamp);
+	}
+
+	function _mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint256 recoveryAttoRep, uint48 portfolioTimestamp) private returns (uint256 outcomeShares) {
 		Book storage book = _activeBook(bookId);
 		_freezeMatured(bookId, book, portfolioTimestamp);
-		require(book.cashAttoEth == book.units && book.recoveryAttoRep == 0, 'Settlement in runoff');
 		require(cashAttoEth > 0, 'Zero settlement funding');
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
-		require(frozenBookId == 0 && state.finalAfter == 0, 'Settlement mint closed');
-		if (state.outcomeSupplyAttoShares == 0) {
-			require(state.units == 0, 'Outcome accounting mismatch');
-			outcomeShares = cashAttoEth;
-		} else {
-			require(state.units > 0, 'Outcome exchange exhausted');
-			require(Math.mulDiv(state.units, EXCHANGE_RATE_SCALE, state.outcomeSupplyAttoShares) >= minimumOutcomeExchangeRate, 'Outcome exchange below minimum');
-			outcomeShares = Math.mulDiv(cashAttoEth, state.outcomeSupplyAttoShares, state.units);
-		}
+		outcomeShares = quoteMint(bookId, questionId, cashAttoEth);
+		(Question memory state, ) = scaledQuestion(bookId, questionId);
 		require(outcomeShares > 0 && outcomeShares >= minimumShares, 'Insufficient outcome shares');
-		state.feePrincipalAttoEth +=
-			state.outcomeSupplyAttoShares == 0
-				? cashAttoEth
-				: Math.mulDiv(state.feePrincipalAttoEth, outcomeShares, state.outcomeSupplyAttoShares, Math.Rounding.Ceil);
-		state.units += cashAttoEth;
+		require(recoveryAttoRep == _mintRecoveryRep(bookId, book, questionId, state, outcomeShares), 'Recovery REP funding mismatch');
+		uint256 entitlement = _mintEntitlement(bookId, book, questionId, state);
+		book.recoveryAttoRep += recoveryAttoRep;
+		require(book.recoveryAttoRep < RECOVERY_SCALE, 'Recovery REP exceeds precision bound');
+		uint256 addedUnits = _mintUnits(bookId, book, cashAttoEth);
+		state.feePrincipalAttoEth += SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, outcomeShares, addedUnits);
+		require(state.feePrincipalAttoEth < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
+		state.units += addedUnits;
 		state.outcomeSupplyAttoShares += outcomeShares;
 		book.cashAttoEth += cashAttoEth;
-		book.units += cashAttoEth;
+		book.units += addedUnits;
+		SettlementMath.netCash(book.cashAttoEth, feeRemainders[bookId]);
 		require(book.units < RECOVERY_SCALE, 'Settlement units exceed precision bound');
-		_writeQuestion(bookId, book, questionId, state);
+		uint256 correction;
+		unchecked {
+			correction = entitlement + recoveryAttoRep * RECOVERY_SCALE - state.units * recoveryStates[bookId].index;
+		}
+		_writeQuestionWithRecovery(bookId, book, questionId, state, correction);
 		emit SettlementMinted(bookId, questionId, cashAttoEth, outcomeShares);
 	}
 
@@ -258,7 +199,7 @@ contract SecurityPoolSettlementBook {
 	function redeem(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint256 minimumCashAttoEth, uint48 portfolioTimestamp) public onlyPortfolio returns (uint256 cashAttoEth, uint256 unitsBurned, uint256 recoveryAttoRep) {
 		Book storage book = _book(bookId);
 		if (!book.isSealed) _freezeMatured(bookId, book, portfolioTimestamp);
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		require(outcomeShares > 0 && outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
 		uint256 scaledRecovery = _scaledRecovery(bookId, book, questionId, state);
 		recoveryAttoRep = _quoteRecovery(book, state, frozenBookId, outcomeShares, scaledRecovery);
@@ -268,15 +209,16 @@ contract SecurityPoolSettlementBook {
 				: Math.mulDiv(state.units, outcomeShares, state.outcomeSupplyAttoShares);
 		if (frozenBookId == 0) {
 			require(!book.isSealed, 'Use child settlement book');
-			cashAttoEth = _cashForUnits(book.cashAttoEth, book.units, unitsBurned);
+			cashAttoEth = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned);
 			book.cashAttoEth -= cashAttoEth;
 			book.recoveryAttoRep -= recoveryAttoRep;
 			book.units -= unitsBurned;
+			_clearEmptyBook(bookId, book);
 			_changeFinalityUnits(book, state.finalAfter, unitsBurned, DECREASE_BALANCE);
 		} else {
 			FrozenBook storage frozen = frozenBooks[frozenBookId];
 			require(frozen.sourceBookId == bookId, 'Use source final claim');
-			cashAttoEth = _cashForUnits(frozen.cashAttoEth, frozen.units, unitsBurned);
+			cashAttoEth = SettlementMath.cashForUnits(frozen.cashAttoEth, frozen.units, 0, unitsBurned);
 			frozen.cashAttoEth -= cashAttoEth;
 			frozen.recoveryAttoRep -= recoveryAttoRep;
 			frozen.units -= unitsBurned;
@@ -286,7 +228,7 @@ contract SecurityPoolSettlementBook {
 		state.feePrincipalAttoEth = Math.mulDiv(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
 		if (state.feeRateAttoEthPerSecond != 0) {
 			_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, DECREASE_BALANCE);
-			state.feeRateAttoEthPerSecond = uint96(Math.mulDiv(state.feeRateAttoEthPerSecond, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares));
+			state.feeRateAttoEthPerSecond = Math.mulDiv(state.feeRateAttoEthPerSecond, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
 			_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, INCREASE_BALANCE);
 		}
 		state.outcomeSupplyAttoShares -= outcomeShares;
@@ -300,7 +242,8 @@ contract SecurityPoolSettlementBook {
 			}
 		}
 		_writeQuestionWithRecovery(bookId, book, questionId, state, correction);
-		_syncFeeMode(book);
+		_syncFeeMode(bookId, book);
+		unitsBurned = Math.ceilDiv(unitsBurned, UNIT_SCALE);
 		emit SettlementRedeemed(bookId, questionId, outcomeShares, unitsBurned, cashAttoEth);
 	}
 
@@ -310,12 +253,12 @@ contract SecurityPoolSettlementBook {
 	function replaceFeeStream(uint64 bookId, uint256 questionId, uint96 rateAttoEthPerSecond, uint48 end, uint48 portfolioTimestamp) external onlyPortfolio {
 		Book storage book = _activeBook(bookId);
 		_freezeMatured(bookId, book, portfolioTimestamp);
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		require(frozenBookId == 0, 'Final claim fees closed');
 		uint48 feeClockTimestamp = _feeTimestamp(book);
 		require(rateAttoEthPerSecond == 0 || (state.finalAfter == 0 && end > feeClockTimestamp), 'Invalid question fee interval');
 		if (rateAttoEthPerSecond != 0) {
-			uint256 duration = Math.min(end - feeClockTimestamp, _feeBudget(state) / rateAttoEthPerSecond);
+			uint256 duration = Math.min(end - feeClockTimestamp, _feeBudget(bookId, book, state) / rateAttoEthPerSecond);
 			if (duration == 0) rateAttoEthPerSecond = 0;
 			else end = feeClockTimestamp + uint48(duration);
 		}
@@ -340,7 +283,7 @@ contract SecurityPoolSettlementBook {
 		_freezeMatured(bookId, book, portfolioTimestamp);
 		require(!enabled || _feeTimestamp(book) <= block.timestamp, 'Fee activation is in the future');
 		book.feesEnabled = enabled;
-		_syncFeeMode(book);
+		_syncFeeMode(bookId, book);
 	}
 
 	/// @notice Schedule a bound outcome's irreversible deadline; ordinary question end is insufficient.
@@ -348,7 +291,7 @@ contract SecurityPoolSettlementBook {
 	function scheduleFinality(uint64 bookId, uint256 questionId, uint48 finalAfter, uint48 portfolioTimestamp) external onlyPortfolio {
 		Book storage book = _activeBook(bookId);
 		_freezeMatured(bookId, book, portfolioTimestamp);
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		require(frozenBookId == 0, 'Final claim immutable');
 		require(finalAfter == 0 || finalAfter >= portfolioTimestamp, 'Finality already elapsed');
 		require(finalAfter == 0 || state.feeRateAttoEthPerSecond == 0 || state.feeEnd <= _feeTimestamp(book), 'Stop fees before finality');
@@ -366,7 +309,7 @@ contract SecurityPoolSettlementBook {
 
 	function quoteRedemption(uint64 bookId, uint256 questionId, uint256 outcomeShares) public view returns (uint256 cashAttoEth, uint256 unitsBurned) {
 		Book storage book = _book(bookId);
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		// Losing outcome tokens may remain after every payable claim is burned.
 		if (state.outcomeSupplyAttoShares == 0) return (0, 0);
 		require(outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
@@ -375,16 +318,23 @@ contract SecurityPoolSettlementBook {
 			outcomeShares == state.outcomeSupplyAttoShares
 				? state.units
 				: Math.mulDiv(state.units, outcomeShares, state.outcomeSupplyAttoShares);
-		if (frozenBookId == 0) return (_cashForUnits(book.cashAttoEth, book.units, unitsBurned), unitsBurned);
+		if (frozenBookId == 0)
+			return (
+				SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned),
+				Math.ceilDiv(unitsBurned, UNIT_SCALE)
+			);
 		FrozenBook storage frozen = frozenBooks[frozenBookId];
 		if (frozen.sourceBookId != bookId) return (0, 0);
-		return (_cashForUnits(frozen.cashAttoEth, frozen.units, unitsBurned), unitsBurned);
+		return (
+			SettlementMath.cashForUnits(frozen.cashAttoEth, frozen.units, 0, unitsBurned),
+			Math.ceilDiv(unitsBurned, UNIT_SCALE)
+		);
 	}
 
 	/// @notice Quote REP directly from outcome-share ownership, before rounding ETH units.
 	function quoteRecoveryRep(uint64 bookId, uint256 questionId, uint256 outcomeShares) external view returns (uint256) {
 		Book storage book = _book(bookId);
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		if (state.outcomeSupplyAttoShares == 0) return 0;
 		require(outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
 		if (outcomeShares == 0 || (frozenBookId != 0 && frozenBooks[frozenBookId].sourceBookId != bookId)) return 0;
@@ -401,7 +351,7 @@ contract SecurityPoolSettlementBook {
 		return Math.mulDiv(scaledRecovery, shares, state.outcomeSupplyAttoShares) / RECOVERY_SCALE;
 	}
 
-	function _scaledRecovery(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private view returns (uint256 scaledRecoveryEntitlement) {
+	function _scaledRecovery(uint64 bookId, Book storage book, uint256 questionId, Question memory state) internal view override returns (uint256 scaledRecoveryEntitlement) {
 		uint64 stateId = uint64(tree.get(book.questionRoot, questionId));
 		StoredQuestionState storage snapshot = questionStates[stateId];
 		unchecked {
@@ -424,10 +374,12 @@ contract SecurityPoolSettlementBook {
 		uint48 nextFeeTime = portfolioTimestamp + book.feeTimeOffset;
 		if (feeModes[uint64(tree.floor(book.feeModeRoot, previousFeeTime))].funded && nextFeeTime > previousFeeTime) {
 			uint256 fees = _feeIntegral(book, nextFeeTime) - _feeIntegral(book, previousFeeTime);
-			book.cashAttoEth -= fees;
+			(uint256 cashFees, uint256 remainder) = SettlementMath.feeCash(fees, _netCash(bookId, book), book.units, feeRemainders[bookId]);
 			book.units -= fees;
-			book.feeCashAttoEth += fees;
-			if (fees != 0) emit AggregateFeesAccrued(bookId, portfolioTimestamp, fees);
+			feeRemainders[bookId] = remainder;
+			book.cashAttoEth -= cashFees;
+			book.feeCashAttoEth += cashFees;
+			if (cashFees != 0) emit AggregateFeesAccrued(bookId, portfolioTimestamp, cashFees);
 		}
 		book.portfolioTimestamp = portfolioTimestamp;
 		if (portfolioTimestamp <= book.minimumFinalAfter) return 0;
@@ -440,7 +392,7 @@ contract SecurityPoolSettlementBook {
 		}
 		book.finalizedUnitsPrefix = prefix;
 		if (units == 0) return 0;
-		uint256 cashAttoEth = _cashForUnits(book.cashAttoEth, book.units, units);
+		uint256 cashAttoEth = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], units);
 		RecoveryState storage recovery = recoveryStates[bookId];
 		uint256 correctionPrefix = tree.prefixTotalModular(recovery.finalityRoot, portfolioTimestamp - 1);
 		uint256 scaledRecovery;
@@ -452,22 +404,19 @@ contract SecurityPoolSettlementBook {
 		book.cashAttoEth -= cashAttoEth;
 		book.recoveryAttoRep -= recoveryAttoRep;
 		book.units -= units;
+		_clearEmptyBook(bookId, book);
 		frozenBookId = ++lastFrozenBookId;
 		frozenBooks[frozenBookId] = FrozenBook(cashAttoEth, units, bookId, recoveryAttoRep);
 		book.frozenRoot = frozenHistory.append(book.frozenRoot, portfolioTimestamp - 1, frozenBookId);
-		_syncFeeMode(book);
+		_syncFeeMode(bookId, book);
 		emit FinalClaimsFrozen(bookId, frozenBookId, portfolioTimestamp, units, cashAttoEth);
 	}
 
 	/// @notice Remaining collateral that may fund fees, excluding the rounded-up backing floor.
-	function availableFeeBudget(uint64 bookId, uint256 questionId) external view returns (uint256) {
-		(Question memory state, ) = question(bookId, questionId);
-		return _feeBudget(state);
-	}
-
-	function _feeBudget(Question memory state) private view returns (uint256) {
-		uint256 reserved = Math.mulDiv(state.outcomeSupplyAttoShares, minimumOutcomeExchangeRate, EXCHANGE_RATE_SCALE, Math.Rounding.Ceil);
-		return state.units > reserved ? state.units - reserved : 0;
+	function scaledAvailableFeeBudget(uint64 bookId, uint256 questionId) public view returns (uint256) {
+		Book storage book = _book(bookId);
+		(Question memory state, ) = scaledQuestion(bookId, questionId);
+		return _feeBudget(bookId, book, state);
 	}
 
 	function _materializeFees(Book storage book, Question memory state) private view returns (Question memory) {
@@ -487,7 +436,7 @@ contract SecurityPoolSettlementBook {
 		return remainingRate * nativeTimestamp + tree.prefixTotal(book.feeEndRoot, nativeTimestamp);
 	}
 
-	function _changeFeeRate(Book storage book, uint48 end, uint96 rate, bool increase) private {
+	function _changeFeeRate(Book storage book, uint48 end, uint256 rate, bool increase) private {
 		if (rate == 0) return;
 		uint256 previous = tree.get(book.feeRateRoot, end);
 		uint256 next = increase ? previous + rate : previous - rate;
@@ -503,18 +452,23 @@ contract SecurityPoolSettlementBook {
 		return mode.fundedSeconds + (mode.funded ? nativeTimestamp - mode.nativeTimestamp : 0);
 	}
 
-	function _syncFeeMode(Book storage book) private {
+	function _clearEmptyBook(uint64 bookId, Book storage book) private {
+		if (book.units != 0) return;
+		feeRemainders[bookId] = 0;
+		fundingTargets[bookId] = FundingTarget(1, 1);
+	}
+
+	function _syncFeeMode(uint64 bookId, Book storage book) private {
 		FeeMode storage mode = feeModes[uint64(tree.floor(book.feeModeRoot, _feeTimestamp(book)))];
-		bool funded = book.cashAttoEth == book.units && book.recoveryAttoRep == 0 && book.feesEnabled;
+		bool funded = isCashFunded(bookId) && book.feesEnabled;
 		if (mode.funded != funded) _setFeeMode(book, funded);
 	}
 
 	function _setFeeMode(Book storage book, bool funded) private {
 		uint48 feeClockTimestamp = _feeTimestamp(book);
 		uint256 elapsed = book.feeModeRoot == 0 ? 0 : _fundedSeconds(book, feeClockTimestamp);
-		uint64 modeId = ++lastFeeModeId;
-		feeModes[modeId] = FeeMode(elapsed, feeClockTimestamp, funded);
-		book.feeModeRoot = tree.set(book.feeModeRoot, feeClockTimestamp, modeId, 0);
+		feeModes[++lastFeeModeId] = FeeMode(elapsed, feeClockTimestamp, funded);
+		book.feeModeRoot = tree.set(book.feeModeRoot, feeClockTimestamp, lastFeeModeId, 0);
 	}
 
 	function _feeTimestamp(Book storage book) private view returns (uint48) {
@@ -529,7 +483,7 @@ contract SecurityPoolSettlementBook {
 	}
 
 	function _writeQuestion(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private {
-		(Question memory previous, ) = question(bookId, questionId);
+		(Question memory previous, ) = scaledQuestion(bookId, questionId);
 		uint256 correction;
 		unchecked {
 			correction =
@@ -569,20 +523,5 @@ contract SecurityPoolSettlementBook {
 			next = increase ? previous + correction : previous - correction;
 		}
 		recovery.finalityRoot = tree.setModular(recovery.finalityRoot, finalAfter, next, next);
-	}
-
-	function _cashForUnits(uint256 cashAttoEth, uint256 units, uint256 redeemedUnits) private pure returns (uint256) {
-		if (redeemedUnits == 0) return 0;
-		return redeemedUnits == units ? cashAttoEth : Math.mulDiv(cashAttoEth, redeemedUnits, units);
-	}
-
-	function _book(uint64 bookId) private view returns (Book storage book) {
-		require(bookId != 0 && bookId <= lastBookId, 'Unknown settlement book');
-		return books[bookId];
-	}
-
-	function _activeBook(uint64 bookId) private view returns (Book storage book) {
-		book = _book(bookId);
-		require(!book.isSealed, 'Settlement book sealed');
 	}
 }

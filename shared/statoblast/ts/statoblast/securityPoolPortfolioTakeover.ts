@@ -18,6 +18,7 @@ export function portfolioTakeoverSource(snapshot: { liquidationPrice: bigint; se
 			else removed = removed >= 2n * minimum - rest ? removed - (minimum - rest) : 0n
 		}
 	}
+	if (supported !== 0n && removed === position.commitment) removed = 0n
 	const commitment = position.commitment - removed
 	const retirementFulfilled = removed !== 0n && position.remainingCommitment !== 0n && commitment <= position.remainingCommitment
 	return { removed, commitment, rep: position.rep, batch: retirementFulfilled ? 0n : position.batch, remainingCommitment: retirementFulfilled ? 0n : position.remainingCommitment, healthy: commitment <= supported }

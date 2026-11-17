@@ -190,15 +190,16 @@ test('the preliminary cure is unpaid and removes exactly the rounded-up deficit,
 	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 100n * unit, rep: position.rep, healthy: false })
 })
 
-test('the preliminary cure never leaves a commitment below the minimum', () => {
+test('the preliminary cure respects minimum commitments without freeing backed REP', () => {
 	const observation = portfolioObservation()
 	const position = observation.positions[0]
 	if (position === undefined) throw new Error('Fixture position missing')
+	const principalAttoRep = position.rep
 	// A 60 ETH minimum: the cut rounds up to 60 and would leave 40.
 	observation.snapshot.economics.minimumCommitmentAttoEth = 60n * unit
-	// Spare covers the whole commitment, so all of it is removed and the principal is freed.
+	// Even with spare for the whole commitment, a cure cannot free REP that still backs it.
 	observation.snapshot.demandAttoEth = 0n
-	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 100n * unit, commitment: 0n, healthy: true })
+	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 100n * unit, rep: principalAttoRep, healthy: false })
 	// Spare of 70 cannot finish the commitment and no smaller cut leaves a whole minimum: nothing is removed.
 	observation.snapshot.demandAttoEth = 30n * unit
 	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 100n * unit, healthy: false })

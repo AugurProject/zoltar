@@ -1,6 +1,6 @@
 import { collateralBalance } from './burnEvidence'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as delegateArtifact,
@@ -124,16 +124,20 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 
 	const setCommitment = (client: WriteClient, commitment: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'setCommitment', args: [commitment] }))
 
-	test('a winner materializes and cures its own lot, keeping all its REP, while the caller gains nothing', async () => {
+	test('a minimum winner retires ordinarily when demand is zero without releasing REP through a cure', async () => {
 		await activate(0n)
 		await setPrice(3n * ATTO_ETH_PER_ETH)
 		const callerBefore = await owner(caller.account.address)
 		await materialize(2n)
-		await setCommitment(second, 0n)
+		const hash = await setCommitment(second, 0n)
+		const receipt = await caller.getTransactionReceipt({ hash })
+		expect(receipt.logs.some(log => log.topics[0] === keccak256('CommitmentCured(uint96,uint256)'))).toBe(false)
 		const secondOwner = await owner(second.account.address)
 		expect((await position(secondOwner.positionId)).commitment).toBe(0n)
-		// The deficit is below the minimum commitment, so the floor removes the whole lot.
-		expect(secondOwner.freeAttoRep).toBe(REP)
+		// Zero demand lets the ordinary queue release the lot; owner settlement credits its REP.
+		expect((await position(secondOwner.positionId)).releasedRep).toBe(REP)
+		await writeContractAndWait(second, () => second.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'claimEarnings' }))
+		expect((await owner(second.account.address)).freeAttoRep).toBe(REP)
 		expect(await owner(caller.account.address)).toEqual(callerBefore)
 		expect((await owner(caller.account.address)).feesAttoRep).toBe(0n)
 		expect(await caller.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [capital] })).toBe(3n * REP)

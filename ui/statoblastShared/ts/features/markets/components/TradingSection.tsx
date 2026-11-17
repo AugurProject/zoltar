@@ -415,7 +415,7 @@ export function TradingSection({
 					allowanceLoading={collateralFunding?.loading ?? true}
 					approvedAmount={collateralFunding?.collateral?.allowance}
 					guardMessage={mintGuardMessage}
-					disabled={tradingActiveAction !== undefined}
+					disabled={tradingActiveAction !== undefined || collateralFunding?.approvalActive === true}
 					onApprove={amount => {
 						if (amount !== undefined) void collateralFunding?.approve(amount)
 					}}
@@ -426,6 +426,37 @@ export function TradingSection({
 					tokenSymbol={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback}
 					tokenUnits={collateralFunding?.collateral?.decimals ?? 18}
 				/>
+				{collateralFunding?.recoveryApplicable && (
+					<>
+						<UserMessage detail={collateralCopy.recoveryContributionHint} />
+						<MetricGrid>
+							<MetricField label={collateralCopy.recoveryContribution}>
+								<CurrencyValue exactWhenRoundedToZero value={collateralFunding?.recovery?.required} suffix={commonCopy.rep} />
+							</MetricField>
+							<MetricField label={collateralCopy.maximumRecoveryContribution}>
+								<CurrencyValue precision='exact' value={collateralFunding?.recovery?.maximum} suffix={commonCopy.rep} />
+							</MetricField>
+						</MetricGrid>
+						<TokenApprovalControl
+							amountPrecision='exact'
+							actionLabel={tradingCopy.mintCompleteSets}
+							tokenSymbol={commonCopy.rep}
+							tokenUnits={18}
+							approvedAmount={collateralFunding?.recovery?.allowance}
+							requiredAmount={collateralFunding?.recovery?.maximum}
+							allowanceError={collateralFunding?.error}
+							allowanceLoading={collateralFunding?.loading ?? true}
+							guardMessage={mintGuardMessage}
+							disabled={tradingActiveAction !== undefined || collateralFunding?.approvalActive === true || collateralFunding?.recovery === undefined || collateralFunding.error !== undefined}
+							pending={collateralFunding?.pendingRecovery ?? false}
+							pendingLabel={commonCopy.formatApprovingToken(commonCopy.rep)}
+							resetKey={`${selectedPool?.securityPoolAddress}:${collateralFunding?.recovery?.required}`}
+							onApprove={amount => {
+								if (amount !== undefined) void collateralFunding?.approveRecovery(amount)
+							}}
+						/>
+					</>
+				)}
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.mintCompleteSets}

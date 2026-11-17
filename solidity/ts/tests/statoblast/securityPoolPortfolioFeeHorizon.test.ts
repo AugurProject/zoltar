@@ -16,8 +16,8 @@ describe('Statoblast: funded portfolio time-fee horizon', () => {
 		const reserve = (question.outcomeSupplyAttoShares * portfolioEconomics.minimumOutcomeRate + unit - 1n) / unit
 		const budget = question.units - reserve
 		expect(question.feeRateAttoEthPerSecond).toBeGreaterThan(0n)
-		expect(BigInt(question.feeEnd) - BigInt(timestamp)).toBe(budget / question.feeRateAttoEthPerSecond)
+		expect(BigInt(question.feeEnd) - BigInt(timestamp)).toBe((budget * 1_000_000_000n) / question.feeRateAttoEthPerSecond)
 		expect(BigInt(question.feeEnd)).toBeLessThan(fixture.secondEndTime)
-		expect(question.feeRateAttoEthPerSecond * (BigInt(question.feeEnd) - BigInt(timestamp))).toBeLessThanOrEqual(budget)
+		expect(question.feeRateAttoEthPerSecond * (BigInt(question.feeEnd) - BigInt(timestamp))).toBeLessThanOrEqual(budget * 1_000_000_000n)
 	})
 })

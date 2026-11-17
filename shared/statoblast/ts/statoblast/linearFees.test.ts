@@ -18,3 +18,7 @@ test('linear projection stops at both funded expiry and the earlier question or 
 	expect(previewLinearFeeCheckpoint({ ...state, linearFee: { rateAttoEthPerSecond: 0n, endTime: 0n } })?.estimatedRetentionFeeAttoEth).toBe(0n)
 	expect(previewLinearFeeCheckpoint({ ...state, settlementCollateralAttoEth: 59n })).toBeUndefined()
 })
+
+test('fixed-point rates preserve fractional raw collateral per second', () => {
+	expect(previewLinearFeeCheckpoint({ ...state, linearFee: { rateAttoEthPerSecond: 950_000_000n, rateScale: 1_000_000_000n, endTime: 100n } })?.estimatedRetentionFeeAttoEth).toBe(19n)
+})

@@ -144,16 +144,13 @@ export const feeEconomicsSummary = (item: Readonly<Record<string, unknown>>): { 
 	}
 }
 
-/**
- * A question's linear fee stream as of `asOfSeconds`, the snapshot block's time: its yearly rate and end, that
- * its end has passed, or that it has none.
- */
+/** Historical stream events contain claim-unit rates, not a cash rate without the book's cash index. */
 export const questionFeeStreamSummary = (item: Readonly<Record<string, unknown>>, asOfSeconds: bigint | undefined): string => {
-	const collateral = collateralUnit(item)
-	if (integer(item['rate_atto_eth_per_second']) === '0') return 'No fee stream'
+	const rate = integer(item['rate_claim_units_per_second'])
+	if (rate === undefined) return 'Fee stream unavailable'
+	if (rate === '0') return 'No fee stream'
 	const end = integer(item['end_timestamp'])
-	const rate = `${amount(item['rate_atto_eth_per_year'], collateral.decimals, collateral.symbol)} per year`
-	if (end === undefined) return rate
+	if (end === undefined) return 'Active fee stream'
 	const date = utcDateTime(Number(end) * 1000)
-	return asOfSeconds !== undefined && BigInt(end) <= asOfSeconds ? `Ended ${date} · was ${rate}` : `${rate} · ends ${date}`
+	return asOfSeconds !== undefined && BigInt(end) <= asOfSeconds ? `Ended ${date}` : `Active fee stream · ends ${date}`
 }

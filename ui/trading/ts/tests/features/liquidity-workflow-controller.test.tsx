@@ -183,7 +183,7 @@ describe('liquidity workflow controller state', () => {
 		}
 	})
 
-	test('bounds add-liquidity holding fees by the market submission window', async () => {
+	test.each([0n, 100n])('bounds add-liquidity holding fees using mint cash after %s bps purchase fees', async purchaseFeeBps => {
 		let controller: Controller | undefined
 		const unit = 10n ** 18n
 		const feeAccounting = {
@@ -195,6 +195,7 @@ describe('liquidity workflow controller state', () => {
 		}
 		const endingMarket = {
 			...market,
+			mintFees: { securityMultiplierBps: 20_000n, purchaseFeeBps, minimumPurchaseFeeAttoEth: 0n, annualFeeBps: 100n, feePrincipalAttoEth: 100n * unit },
 			...feeAccounting,
 			endTime: 101n,
 			shareTokenSupplyAttoShares: 100n * unit,

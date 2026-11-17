@@ -13,6 +13,7 @@ import {
 	trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter as routerArtifact,
 	trading_TwoWayConstantProductPair_TwoWayConstantProductPair as pairArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
 } from '../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
@@ -145,6 +146,9 @@ describe('audit4: LP claims survive a universe fork', () => {
 
 		const activationDeadline = await client.readContract({ abi: zoltarForkAbi, address: getZoltarAddress(), functionName: 'getForkRecapitalizationDeadline', args: [universeId] })
 		await fixture.mockWindow.setTime(activationDeadline + 1n)
+		// Prepare branch custody separately, as the production fork workflow does.
+		const forks = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'forkController' })
+		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'prepareBranch', args: [universeId, 1n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'migrate', args: [yesId, [1n]] }))
 		const childUniverse = await client.readContract({ abi: zoltarForkAbi, address: getZoltarAddress(), functionName: 'getChildUniverseId', args: [universeId, 1n] })
 		expect(await balance(account, (childUniverse << 8n) | 1n)).toBe(await balance(account, yesId))

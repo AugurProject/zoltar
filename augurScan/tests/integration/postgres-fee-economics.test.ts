@@ -105,11 +105,11 @@ test.skipIf(url === undefined)('fee economics sum each universe own book, purcha
 		expect(await feeEconomicsRows(connection, chainId, '0')).toEqual([])
 
 		const streams = await questionFeeStreamRows(connection, chainId, '3', 10)
-		expect(streams.map((row: Record<string, unknown>) => [row['question_id'], row['rate_atto_eth_per_second'], row['end_timestamp'], row['question_title'], row['universe_id']])).toEqual([
+		expect(streams.map((row: Record<string, unknown>) => [row['question_id'], row['rate_claim_units_per_second'], row['end_timestamp'], row['question_title'], row['universe_id']])).toEqual([
 			['43', '0', '0', null, '0'],
 			['42', '3', '1900000000', 'Will it rain?', '0'],
 		])
-		expect((await questionFeeStreamRows(connection, chainId, '2', 10)).map((row: Record<string, unknown>) => [row['question_id'], row['rate_atto_eth_per_second']])).toEqual([['42', '2']])
+		expect((await questionFeeStreamRows(connection, chainId, '2', 10)).map((row: Record<string, unknown>) => [row['question_id'], row['rate_claim_units_per_second']])).toEqual([['42', '2']])
 
 		const api = async (path: string) => {
 			const response = await handleApi(new Request(`http://localhost${path}`), connection)
@@ -124,10 +124,12 @@ test.skipIf(url === undefined)('fee economics sum each universe own book, purcha
 		// The owners' share of the purchase fee is not derived from an unknown premium.
 		expect(body.data.universes[1]).not.toHaveProperty('earnings_funded_atto_eth')
 		expect(body.data.universes[1]?.['premium_funded_atto_eth']).toBeNull()
-		expect(body.data.questionStreams).toMatchObject({ truncated: true, items: [{ question_id: '43', rate_atto_eth_per_year: '0' }] })
+		expect(body.data.questionStreams).toMatchObject({ truncated: true, items: [{ question_id: '43', rate_claim_units_per_year: '0' }] })
 		const full = (await (await api(`/api/v1/state/fees?chainId=${chainId}`)).json()) as typeof body
-		// 3 base units per second over a 365-day year.
-		expect(full.data.questionStreams.items[1]).toMatchObject({ question_id: '42', rate_atto_eth_per_year: '94608000', block_number: '3' })
+		// Internal claim units annualized over 365 days; these are not raw collateral amounts.
+		expect(full.data.questionStreams.items[1]).toMatchObject({ question_id: '42', rate_claim_units_per_second: '3', rate_claim_units_per_year: '94608000', claim_unit_scale: '1000000000', block_number: '3' })
+		expect(full.data.questionStreams.items[1]).not.toHaveProperty('rate_atto_eth_per_second')
+		expect(full.data.questionStreams.items[1]).not.toHaveProperty('rate_atto_eth_per_year')
 		expect(((await (await api(`/api/v1/state/fees?chainId=${chainId}&atBlock=2`)).json()) as typeof body).data.universes[0]).toMatchObject({ accrued_atto_eth: '20' })
 		// The origin's latest fee read fails. Its book and services contract are known from the earlier read, so its totals stand.
 		await connection`INSERT INTO blocks (chain_id, number, hash, parent_hash, canonical, timestamp) VALUES (${chainId}, 4, ${blockHash(4)}, ${zeroHash}, true, now())`
@@ -146,7 +148,7 @@ test.skipIf(url === undefined)('fee economics sum each universe own book, purcha
 		const riskCatalog = (await (await api(`/api/v1/state/risk?chainId=${chainId}`)).json()) as { data: RiskFees }
 		for (const risk of [overview.data.risk, riskCatalog.data]) {
 			expect(risk.feeEconomics[0]).toMatchObject({ universe_id: '0', accrued_atto_eth: '25' })
-			expect(risk.questionFeeStreams.map(stream => [stream['question_id'], stream['rate_atto_eth_per_year']])).toEqual([
+			expect(risk.questionFeeStreams.map(stream => [stream['question_id'], stream['rate_claim_units_per_year']])).toEqual([
 				['43', '0'],
 				['42', '94608000'],
 			])

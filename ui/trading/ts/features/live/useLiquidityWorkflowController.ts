@@ -1,3 +1,4 @@
+import { estimateBudgetMint, recoveryMintBlocker } from '../../protocol/minting.js'
 import { collateralAsset } from '../../protocol/collateral.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { capSubmissionDeadline } from '../../protocol/submissionWindow.js'
@@ -80,10 +81,12 @@ export function useLiquidityWorkflowController({
 	const estimate = parsed === undefined ? undefined : estimateLiquidity(market, operation, parsed, conditionalBps)
 	const bounds = estimate === undefined ? undefined : liquiditySlippageBounds(liquidityExpectation(estimate), settings.slippageBps)
 	let previewBlocker: string | undefined
-	if (estimate === undefined || bounds === undefined) {
+	const recoveryBlocker = operation === 'remove' ? undefined : recoveryMintBlocker(market)
+	if (recoveryBlocker !== undefined) previewBlocker = recoveryBlocker
+	else if (estimate === undefined || bounds === undefined) {
 		if (parsed !== undefined && parsed > 0n) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
 	} else if (estimate.operation === 'add')
-		previewBlocker = liquidityHoldingFeeBlocker(market, estimate.amount, bounds.maximumYesDeposit, bounds.maximumNoDeposit, capSubmissionDeadline(market, 'add', nowSeconds + settings.validityMinutes * 60n), {
+		previewBlocker = liquidityHoldingFeeBlocker(market, estimateBudgetMint(market, estimate.amount) ?? 0n, bounds.maximumYesDeposit, bounds.maximumNoDeposit, capSubmissionDeadline(market, 'add', nowSeconds + settings.validityMinutes * 60n), {
 			completeSetShares: estimate.completeSets,
 			yesUsed: estimate.yesUsed,
 			noUsed: estimate.noUsed,

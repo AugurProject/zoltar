@@ -1,3 +1,4 @@
+import { recoveryRepPurchase } from '../copy/marketBlockers.js'
 import { portfolioMintFee, portfolioMintWithinBudget, type PortfolioMintFees } from '@zoltar/trading-shared/trading/portfolioMint'
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
@@ -24,16 +25,23 @@ function mintWithMargin(budget: bigint, state: PortfolioMintFees) {
 	return portfolioMintWithinBudget(budget > margin ? budget - margin : 0n, state)
 }
 
-export function estimateBudgetMint(market: Pick<LiveMarket, 'mintFees' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>, budget: bigint) {
-	if (market.mintFees === undefined) return undefined
+export function recoveryMintBlocker(market: Pick<LiveMarket, 'settlementRecoveryAttoRep'>) {
+	return (market.settlementRecoveryAttoRep ?? 0n) > 0n ? recoveryRepPurchase : undefined
+}
+
+export function estimateBudgetMint(market: Pick<LiveMarket, 'mintFees' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>, budget: bigint) {
+	if (market.mintFees === undefined || recoveryMintBlocker(market) !== undefined) return undefined
 	return mintWithMargin(budget, { ...market.mintFees, cashAttoEth: market.settlementCollateralAttoEth, outcomeSupplyAttoShares: market.shareTokenSupplyAttoShares })
 }
 
 export async function loadBudgetMint(client: PublicClient, market: LiveMarket, budget: bigint, blockNumber: bigint) {
 	const capital = await client.readContract({ abi: poolArtifact.abi, address: market.pool, functionName: 'portfolioCustody', blockNumber })
 	const central = await loadCentralPortfolioQuestion(client, market.pool, capital, blockNumber)
+	if (central.settlementRecoveryAttoRep > 0n) throw new Error(recoveryRepPurchase)
 	const fees = await loadMintFees(client, central, blockNumber)
 	const cash = mintWithMargin(budget, { ...fees, cashAttoEth: central.settlementCollateralAttoEth, outcomeSupplyAttoShares: central.shareTokenSupplyAttoShares })
 	if (cash === 0n) throw new Error('ETH budget is too small to cover the portfolio purchase fee')
+	const recovery = await client.readContract({ abi: portfolioArtifact.abi, address: central.portfolioAddress, functionName: 'quoteMintRecoveryRep', args: [market.universeId, market.questionId, cash], blockNumber })
+	if (recovery > 0n) throw new Error(recoveryRepPurchase)
 	return cash
 }

@@ -7,7 +7,7 @@ const BPS = 10_000n
 /** Mirrors TwoWayConstantProductPair.MINIMUM_LIQUIDITY, the LP locked forever by the first deposit. */
 export const MINIMUM_LIQUIDITY = 1_000n
 
-type PoolState = Pick<LiveMarket, 'mintFees' | 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
+type PoolState = Pick<LiveMarket, 'mintFees' | 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>
 
 /**
  * What a liquidity operation moves, in one shape for both the wallet simulation and the public-state estimate.
