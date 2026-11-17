@@ -338,7 +338,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		earliestForkTime,
 		escalationEndTime,
 		escalationGameAddress,
-		forkThresholdAttoRep: settlementForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),
+		forkThresholdAttoRep: settlementForkThreshold ?? forkThresholdAttoRep,
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThresholdAttoRep,

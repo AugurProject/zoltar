@@ -124,6 +124,18 @@ describe('reporting protocol client', () => {
 		expect((await loadReportingDetails(client, securityPoolAddress, undefined)).forkThresholdAttoRep).toBe(61n)
 	})
 
+	test('a game with no recorded threshold uses the live fork threshold even after a later fork', async () => {
+		const base = createActiveReportingClient(() => [])
+		const client = {
+			...base,
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getForkTime') return 200n
+				return base.readContract(request)
+			}),
+		}
+		expect((await loadReportingDetails(client, securityPoolAddress, undefined)).forkThresholdAttoRep).toBe(100n)
+	})
+
 	test('loadReportingDetails reads the response period restarted by a change of leader', async () => {
 		const base = createActiveReportingClient(() => [])
 		const client = { ...base, readContract: createReadContractStub(async request => (request.functionName === 'responseRestartedUntil' ? 140n : base.readContract(request))) }

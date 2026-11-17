@@ -64,7 +64,7 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; recordedForkThreshold?: bigint } = {}): StateRead =>
+	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; recordedForkThreshold?: bigint; forkTime?: bigint } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
 		const kind = ['getInheritedClaimAllocation', 'getClaimCheckpointProgress'].includes(name) ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
@@ -90,7 +90,7 @@ const fixtureRead =
 			case 'universeId':
 				return 1n
 			case 'getForkTime':
-				return 0n
+				return options.forkTime ?? 0n
 			case 'getForkThresholdAttoRep':
 				return 500n
 			case 'settlementForkThresholdAttoRep':
@@ -142,6 +142,11 @@ test('claim evidence uses the threshold the game recorded instead of the live on
 	expect(live.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '500' })
 	const recorded = await sampleClaimPositions(root, fixtureRead({ recordedForkThreshold: 900n }), state)
 	expect(recorded.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '900' })
+})
+
+test('a game with no recorded threshold uses the live threshold even after a later fork', async () => {
+	const result = await sampleClaimPositions(root, fixtureRead({ forkTime: 200n }), state)
+	expect(result.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '500' })
 })
 
 test('claim snapshots continue past empty consumed-node pages', async () => {

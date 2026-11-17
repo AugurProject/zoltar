@@ -126,12 +126,10 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 	const poolResolution = uint(await call(ctx.forker, 'securityPoolForker', 'getQuestionOutcome', [ctx.pool]))
 	const zoltar = address(await call(ctx.pool, 'securityPool', 'zoltar'))
 	const universe = uint(await call(ctx.pool, 'securityPool', 'universeId'))
-	const forkTime = uint(await call(zoltar, 'zoltar', 'getForkTime', [universe]))
 	const readForkThreshold = async () => {
-		// Every accepted deposit and a continuation's resume record the threshold settlement scales by; zero means the game never changed.
+		// Every accepted deposit and a continuation's resume record the threshold settlement scales by; zero means the game never changed, so the first deposit would record the live threshold.
 		const recorded = uint(await call(gameAddress, 'escalationGame', 'settlementForkThresholdAttoRep'))
 		if (recorded !== 0n) return recorded
-		if (forkTime > uint(state['endTimestamp'])) return uint(state['nonDecisionThresholdAttoRep'])
 		return uint(await call(zoltar, 'zoltar', 'getForkThresholdAttoRep', [universe]))
 	}
 	const forkThreshold = await readForkThreshold()
