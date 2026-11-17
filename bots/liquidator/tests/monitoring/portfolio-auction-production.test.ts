@@ -18,7 +18,9 @@ describe('portfolio operator funded auction capital integration', () => {
 		await context.open()
 		// Set purchased collateral explicitly so the later price makes these
 		// positions distressed, independently of the shared bidding helper default.
-		const first = await context.bid(context.owner, 2n, (35n * unit) / 10n)
+		// Equal limits fill in submission order, so both bids fit the four-lot
+		// target and the second winner keeps three lots for a partial repair.
+		const first = await context.bid(context.owner, 1n, (35n * unit) / 10n)
 		const second = await context.bid(context.other, 3n, (35n * unit) / 10n)
 		await context.closingQuote()
 		await context.finalize()
