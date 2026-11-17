@@ -229,10 +229,11 @@ contract EscalationGameProofVerifier {
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
-	function computeNullifierRoot(uint256 parentDepositIndex, bytes32[] calldata siblings, bytes32 leafValue) external pure returns (bytes32 root) {
+	function computeNullifierRoot(uint256 leafIndex, bytes32[] calldata siblings, bytes32 leafValue) external pure returns (bytes32 root) {
 		require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');
 		root = leafValue;
-		uint256 path = uint256(keccak256(abi.encode(parentDepositIndex)));
+		require(leafIndex <= type(uint64).max, 'Nullifier leaf index exceeds 64 bits');
+		uint256 path = leafIndex;
 		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
 			bytes32 siblingHash = siblings[depth];
 			if (((path >> depth) & 1) == 0) {

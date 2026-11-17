@@ -13,9 +13,18 @@ const poolAddress = getAddress('0x0000000000000000000000000000000000000010')
 async function fixture() {
 	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
 	const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
+	const signTransaction = account.signTransaction
+	if (signTransaction === undefined) throw new Error('Fixture signer missing')
+	const signed: Parameters<typeof signTransaction>[0][] = []
 	const state = initialRuntimeState(false, account.address, settings.network.chainId)
 	const wallet = createWalletClient({
-		account,
+		account: {
+			...account,
+			signTransaction: async (request: Parameters<typeof signTransaction>[0]) => {
+				signed.push(request)
+				return signTransaction(request)
+			},
+		},
 		chain: mainnet,
 		transport: custom({
 			request: async () => {
@@ -23,7 +32,7 @@ async function fixture() {
 			},
 		}),
 	})
-	return { settings, state, wallet }
+	return { settings, state, wallet, signed }
 }
 
 test('submission uses a common block when honest RPC endpoints differ by one head', async () => {
@@ -68,6 +77,7 @@ test('submission uses a common block when honest RPC endpoints differ by one hea
 					data: '0x',
 					gas: 21_000n,
 					label: 'Pinned block regression',
+					maxFeePerGasCap: 10n,
 					preSubmit: () => {
 						throw new Error('Stop before submission')
 					},
@@ -76,6 +86,8 @@ test('submission uses a common block when honest RPC endpoints differ by one hea
 			),
 		).rejects.toThrow('Stop before submission')
 		expect(simulations).toEqual(['0x64', '0x64'])
+		expect(f.signed).toHaveLength(1)
+		expect(f.signed[0]).toMatchObject({ maxFeePerGas: 10n, maxPriorityFeePerGas: 10n })
 		expect(f.state.pendingTransactions).toHaveLength(0)
 	} finally {
 		for (const server of servers) server.stop(true)

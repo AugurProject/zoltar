@@ -2,14 +2,14 @@ import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { NetworkConfiguration } from '#config/network'
 import type { Chain, PublicClient, Transport } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 type ContextualRpcRead = <Value>(method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string) => Promise<Value>
 
 /**
- * Agrees on the lowest head every available reader reports, then requires the configured quorum to
+ * Selects the newest head supported by the configured quorum, then requires those readers to
  * return the same block hash for it. The returned block is reused by the scan; it is not read again.
  */
 export async function selectQuorumHead<TClient>(readClients: readonly TClient[], endpoints: readonly string[], contextualRpcRead: ContextualRpcRead, quorumRequirement: RpcQuorumRequirement) {
@@ -28,20 +28,25 @@ export async function selectQuorumHead<TClient>(readClients: readonly TClient[],
 		const failures = settledHeads.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
 		throw new ConnectivityDegradedError(`Canonical head does not satisfy the configured RPC quorum requirement: ${failures.join('; ')}`)
 	}
-	const sharedHead = availableHeads.reduce((minimum, observation) => (observation.head < minimum ? observation.head : minimum), availableHeads[0]?.head ?? 0n)
+	const sharedHead = sharedQuorumBlockNumber(
+		availableHeads.map(observation => observation.head),
+		quorumRequirement,
+	)
 	const settledBlocks = await Promise.allSettled(
-		availableHeads.map(async observation => {
-			const block = await contextualRpcRead(
-				'eth_getBlockByNumber',
-				async requestClient => {
-					const value = await requestClient.getBlock({ blockNumber: sharedHead })
-					if (value.hash == null || value.number == null) throw new Error('Canonical head block is missing its hash or number')
-					return { ...value, hash: value.hash, number: value.number }
-				},
-				endpoints[observation.index] ?? '',
-			)
-			return { block, endpoint: observation.endpoint, index: observation.index }
-		}),
+		availableHeads
+			.filter(observation => observation.head >= sharedHead)
+			.map(async observation => {
+				const block = await contextualRpcRead(
+					'eth_getBlockByNumber',
+					async requestClient => {
+						const value = await requestClient.getBlock({ blockNumber: sharedHead })
+						if (value.hash == null || value.number == null) throw new ConnectivityDegradedError('Canonical head block is missing its hash or number')
+						return { ...value, hash: value.hash, number: value.number }
+					},
+					endpoints[observation.index] ?? '',
+				)
+				return { block, endpoint: observation.endpoint, index: observation.index }
+			}),
 	)
 	const availableBlocks = availableSettledValues(settledBlocks)
 	if (availableBlocks.length < quorumRequirement) {

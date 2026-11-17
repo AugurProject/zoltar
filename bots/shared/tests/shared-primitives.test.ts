@@ -1475,3 +1475,9 @@ describe('shared bot primitives', () => {
 		}
 	})
 })
+
+test.each(['header not found', 'block not found', 'missing trie node'])('a provider availability error does not veto two agreeing readers: %s', async message => {
+	const unavailable = new RpcError(message, { code: -32000 })
+	expect(operationalFailureDisposition(unavailable)).toBe('connectivity-degraded')
+	expect(await settledQuorumValue('head', [Promise.resolve({ endpoint: 'a', value: 10n }), Promise.resolve({ endpoint: 'b', value: 10n }), Promise.reject(unavailable)], 2)).toBe(10n)
+})

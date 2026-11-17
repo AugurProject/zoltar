@@ -8,7 +8,7 @@ export async function loadSponsoredOperationReport(client: ReadClient, snapshot:
 	const feed = { abi: sharedPoolPriceFeedAbi, address: snapshot.priceFeed, blockNumber }
 	const id = await client.readContract({ ...feed, functionName: 'sponsorOperationReport', args: [snapshot.owner] })
 	if (id === 0n || (await client.readContract({ ...feed, functionName: 'reportOutcome', args: [id] })) !== 0n) return undefined
-	const [escrow, sponsor] = await client.readContract({ ...feed, functionName: 'reportCandidates', args: [id] })
+	const [escrow, sponsor, , maxSettlementBaseFee] = await client.readContract({ ...feed, functionName: 'reportCandidates', args: [id] })
 	if (sponsor.toLowerCase() !== snapshot.owner.toLowerCase()) throw new Error('Report sponsor index mismatch')
 	const oracle = await client.readContract({ ...feed, functionName: 'openOracle' })
 	const game = await client.readContract({ address: oracle, abi: openOracleAbi, functionName: 'storedGame', args: [id], blockNumber })
@@ -18,5 +18,5 @@ export async function loadSponsoredOperationReport(client: ReadClient, snapshot:
 	const ownReport = game[2].toLowerCase() === escrow.toLowerCase()
 	const weth = (credits[0] ?? 0n) + (ownReport ? game[0] : 0n)
 	const rep = (credits[1] ?? 0n) + (ownReport ? game[1] : 0n)
-	return { id, oracle, game, helper, reservedRep: rep + (weth * snapshot.acceptedPrice) / 10n ** 18n }
+	return { id, oracle, game, helper, maxSettlementBaseFee, reservedRep: rep + (weth * snapshot.acceptedPrice) / 10n ** 18n }
 }

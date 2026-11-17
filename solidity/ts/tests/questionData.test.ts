@@ -118,6 +118,11 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, answer), expectedName, `${context} outcome name mismatch`)
 	}
 
+	test.each(['Invalid', 'invalid', ' INVALID ', 'Malformed', 'malformed', '\u00a0Invalid\u00a0', 'In\u200bvalid', '\ufeffMalformed', 'Invalid\u2060'])('reserves protocol outcome name %s at the contract boundary', async label => {
+		const question = await futureQuestion({ title: `Reserved label ${label}` })
+		await assert.rejects(createQuestion(client, question, sortStringArrayByKeccak(['Yes', label])), /Reserved protocol outcome label/)
+	})
+
 	test('can make categorical question', async () => {
 		const outcomeLabels = ['Yes', 'No']
 		const testCategoricalQuestion = await futureQuestion({ title: 'test categorical question', description: 'test categorical description' })

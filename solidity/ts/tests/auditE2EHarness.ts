@@ -273,7 +273,7 @@ export function createE2E(fixture: Fixture) {
 			leafIndex: leaf.leafIndex,
 			merkleMountainRangeSiblings: siblings,
 			merkleMountainRangePeakIndex: peakHeight,
-			nullifierSiblings: tree.getProof(leaf.parentDepositIndex),
+			nullifierSiblings: tree.getProof(leaf.leafIndex),
 		}
 	}
 	/** Claims `claimed` (all owned by one depositor) in a single transaction and returns the wallet delta. */
@@ -286,7 +286,7 @@ export function createE2E(fixture: Fixture) {
 		const proofs: ReturnType<typeof proofFor>[] = []
 		for (const leaf of claimed) {
 			proofs.push(proofFor(leaves, leaf, tree))
-			tree.consume(leaf.parentDepositIndex)
+			tree.consume(leaf.leafIndex)
 		}
 		await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, proofs], gas: BRANCH_GAS }))
 		return (await rep(universe, beneficiary)) - before

@@ -446,7 +446,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			leafIndex: 0n,
 			merkleMountainRangeSiblings: [] as readonly Hex[],
 			merkleMountainRangePeakIndex: 0n,
-			nullifierSiblings: new SparseNullifierTree().getProof(yesParentDepositIndex),
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
 		}
 		const walletRepBeforeClaim = await getERC20Balance(client, repTokenAddress, client.account.address)
 

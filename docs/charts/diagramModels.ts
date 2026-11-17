@@ -97,7 +97,7 @@ export const diagramGraphSpecs = {
 	'fig-mmr-proof-anatomy': diagram(
 		{
 			ariaDescription:
-				'The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane hashes the stable parent deposit index and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.',
+				'The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane uses the unique carry leaf position and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.',
 			ariaLabel: 'A carried-deposit proof has an MMR membership lane and a separate nullifier lane',
 			height: 470,
 			width: 940,
@@ -117,8 +117,8 @@ export const diagramGraphSpecs = {
 			),
 			section(
 				'nullifier',
-				[node('deposit-index', 'parentDepositIndex', 'blue', ['stable replay identity']), node('nullifier-siblings', 'Nullifier siblings', 'slate', ['fixed depth = 64']), node('nullifier-root', 'Current nullifier root', 'gold', ['empty leaf proves unspent'])],
-				[edge('nullifier-index-siblings', 'deposit-index', 'nullifier-siblings', 'hash path'), edge('nullifier-siblings-root', 'nullifier-siblings', 'nullifier-root')],
+				[node('deposit-index', 'leafIndex', 'blue', ['unique carry position']), node('nullifier-siblings', 'Nullifier siblings', 'slate', ['fixed depth = 64']), node('nullifier-root', 'Current nullifier root', 'gold', ['empty leaf proves unspent'])],
+				[edge('nullifier-index-siblings', 'deposit-index', 'nullifier-siblings', '64-bit position'), edge('nullifier-siblings-root', 'nullifier-siblings', 'nullifier-root')],
 				{ description: 'Prove the stable deposit identity remains unspent', title: 'Nullifier lane' },
 			),
 		],

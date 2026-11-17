@@ -172,8 +172,8 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 		// The same deposit twice in one transaction: the second proof meets a consumed nullifier, whichever path it brings.
 		await expect(simulate(childAAA.pool, YES, [honest, honest])).rejects.toThrow('Bad nullifier proof')
 		const advanced = empty()
-		advanced.consume(honest.parentDepositIndex)
-		await expect(simulate(childAAA.pool, YES, [honest, { ...honest, nullifierSiblings: advanced.getProof(honest.parentDepositIndex) }])).rejects.toThrow('Bad nullifier proof')
+		advanced.consume(honest.leafIndex)
+		await expect(simulate(childAAA.pool, YES, [honest, { ...honest, nullifierSiblings: advanced.getProof(honest.leafIndex) }])).rejects.toThrow('Bad nullifier proof')
 		// Losing outcomes never pay, here or in the sibling.
 		for (const outcome of OUTCOMES) {
 			if (outcome !== YES) await expect(simulate(childAAA.pool, outcome, [e2e.proofFor(snapshot[outcome], leafAt(snapshot[outcome], 0), empty())])).rejects.toThrow('Not winning outcome')
@@ -205,7 +205,7 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 				const proof = e2e.proofFor(leaves, leaf, tree)
 				const hash = await writeContractAndWait(r6, () => r6.writeContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, [proof]], gas: BRANCH_GAS }))
 				gas.push((await r6.getTransactionReceipt({ hash })).gasUsed)
-				tree.consume(leaf.parentDepositIndex)
+				tree.consume(leaf.leafIndex)
 				expect((await e2e.rep(child.universe, leaf.depositor)) - before).toBe(expected.payout)
 				paid += expected.payout
 				burn += expected.burn

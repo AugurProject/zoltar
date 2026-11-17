@@ -29,6 +29,10 @@ Reference documents:
 | [RECOVERY.md](./RECOVERY.md) | The durable position journal, its states, and the `recovery-required` runbook |
 | [Shared bot behaviour](../README.md) | Environment variables, the signer lock, the RPC agreement requirement, dashboard access, and market consensus settings common to every bot |
 
+## Supported collateral
+
+The reference arbitrager supports WETH as report `token1`. It does not dispute or settle reports for portfolios with USDC or another non-WETH collateral token: funding, hedging and recovery all use WETH. Such portfolios need a separate corrector and settler; running this bot does not satisfy that requirement for them.
+
 ## How the flow works
 
 A Zoltar `OpenOraclePriceCoordinator` creates an OpenOracle report, also called a game, that locks WETH and another ERC-20 at the current reporter's proposed exchange rate. The arbitrager wallet compares that rate with executable Uniswap liquidity. When the replacement report can be hedged profitably, the wallet calls the stateless executor, which swaps the required inventory atomically and submits the OpenOracle dispute while preserving the wallet as the replacement reporter. After the dispute window, the bot settles the final report, withdraws the position's exact OpenOracle balances, and closes its durable position record only after canonical receipts and exact asset recovery pass the [finality rule](./EXECUTION.md#read-agreement-and-finality). If a later reporter replaces the bot, it derives the exact one-token credit from the authenticated old and new report amounts, withdraws only that amount through a parent-bound executor call, and verifies the `ReplacementCreditWithdrawn` event under the same rule. The record then becomes **replaced** and continues consuming its risk slot: the bot has recovered the funds, but it does not label the one-sided inventory as realized profit or automatically trade it back to the original mix.

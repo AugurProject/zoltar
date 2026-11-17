@@ -9,10 +9,10 @@ import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 type Stream = { start: bigint; duration: bigint; eth: bigint; rep: bigint }
 const vested = (budget: bigint, stream: Stream, timestamp: bigint) => {
 	const elapsed = timestamp > stream.start ? timestamp - stream.start : 0n
-	if (elapsed >= stream.duration) return budget
-	return (budget / stream.duration) * elapsed
+	if (elapsed >= stream.duration) return budget * stream.duration
+	return budget * elapsed
 }
-const totalVested = (streams: readonly Stream[], timestamp: bigint) => [streams.reduce((sum, stream) => sum + vested(stream.eth, stream, timestamp), 0n), streams.reduce((sum, stream) => sum + vested(stream.rep, stream, timestamp), 0n)]
+const totalVested = (streams: readonly Stream[], timestamp: bigint) => [streams.reduce((sum, stream) => sum + vested(stream.eth, stream, timestamp), 0n) / (streams[0]?.duration ?? 1n), streams.reduce((sum, stream) => sum + vested(stream.rep, stream, timestamp), 0n) / (streams[0]?.duration ?? 1n)]
 
 describe('Statoblast: fixed-horizon dual-token capital fee streams', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -49,6 +49,25 @@ describe('Statoblast: fixed-horizon dual-token capital fee streams', () => {
 		await setBaselineSnapshot()
 	})
 
+	test('same-duration fractions combine exactly without a scaling-rounding shortfall', async () => {
+		const thirds = await deploy(3n)
+		await getAnvilWindowEthereum().setTime(9n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: thirds.harness, functionName: 'addTwice', args: [1n, 0n, 2n, 0n] }))
+		for (const [time, expected] of [
+			[11n, 1n],
+			[12n, 2n],
+			[13n, 3n],
+		] as const)
+			expect([...(await client.readContract({ abi: artifact.abi, address: thirds.address, functionName: 'preview', args: [time] }))]).toEqual([expected, 0n])
+	})
+
+	test('low-decimal fees vest throughout the horizon instead of at its last second', async () => {
+		await add(10n, 80n, 40n)
+		expect(await totalEarned(60n)).toEqual([40n, 20n])
+		expect(await totalEarned(109n)).toEqual([79n, 39n])
+		expect(await totalEarned(110n)).toEqual([80n, 40n])
+	})
+
 	test('independent end times preserve every funded attoETH and never accelerate old income', async () => {
 		const streams = [
 			{ start: 10n, duration: 100n, eth: 1003n, rep: 2005n },
@@ -67,10 +86,10 @@ describe('Statoblast: fixed-horizon dual-token capital fee streams', () => {
 	test('funding in the same second merges storage while preserving each stream remainder', async () => {
 		await getAnvilWindowEthereum().setTime(9n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'addTwice', args: [101n, 199n, 199n, 101n] }))
-		expect(await totalEarned(109n)).toEqual([198n, 198n])
+		expect(await totalEarned(109n)).toEqual([297n, 297n])
 		expect(await totalEarned(110n)).toEqual([300n, 300n])
 		await add(20n, 107n, 209n)
-		expect(await totalEarned(110n)).toEqual([390n, 480n])
+		expect(await totalEarned(110n)).toEqual([396n, 488n])
 		expect(await totalEarned(120n)).toEqual([407n, 509n])
 	})
 

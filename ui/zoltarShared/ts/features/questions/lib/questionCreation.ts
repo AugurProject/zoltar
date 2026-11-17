@@ -2,7 +2,7 @@ import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortS
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import * as marketTypeCopy from '@zoltar/ui-core-shared/copy/marketType.js'
-import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '@zoltar/ui-core-shared/lib/outcomeLabels.js'
+import { appendInvalidOutcomeLabelIfMissing } from '@zoltar/ui-core-shared/lib/outcomeLabels.js'
 import { normalizeCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { MarketFormState } from '../../../types/app.js'
@@ -53,6 +53,10 @@ function createQuestionData(form: MarketFormState): QuestionData {
 	if (questionData.endTime <= questionData.startTime) throw new Error('End time must be after start time.')
 	return questionData
 }
+function normalizeReservedOutcomeLabel(label: string) {
+	return label.replace(/[\u0000-\u0020\u0085\u00a0\u00ad\u1680\u2000-\u200f\u2028-\u202f\u205f\u2060\u2066-\u2069\u3000\ufeff]/g, '').toLowerCase()
+}
+
 function normalizeOutcomeLabel(label: string) {
 	return label.trim()
 }
@@ -74,7 +78,8 @@ function getCategoricalOutcomeLabels(form: MarketFormState) {
 	if (missingRequiredOutcomeLabels.length > 0) throw new Error(getRequiredCategoricalOutcomeMessage(missingRequiredOutcomeLabels))
 	const outcomeLabels = getTypedCategoricalOutcomeLabels(form)
 	// Every question already has an Invalid outcome, so a user-named one would be a second, indistinguishable Invalid.
-	if (outcomeLabels.some(isInvalidOutcomeLabel)) throw new Error(marketCopy.invalidOutcomeReservedError)
+	if (outcomeLabels.some(label => normalizeReservedOutcomeLabel(label) === 'invalid')) throw new Error(marketCopy.invalidOutcomeReservedError)
+	if (outcomeLabels.some(label => normalizeReservedOutcomeLabel(label) === 'malformed')) throw new Error(marketCopy.malformedOutcomeReservedError)
 	// Labels that differ only in case read as the same outcome.
 	if (new Set(outcomeLabels.map(normalizeCaseInsensitiveText)).size !== outcomeLabels.length) throw new Error('Outcomes must be unique.')
 	const sortedOutcomeLabels = sortStringArrayByKeccak(outcomeLabels)

@@ -266,7 +266,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 			leafIndex: 1n,
 			merkleMountainRangePeakIndex: 1n,
 			merkleMountainRangeSiblings: [parentLeafHash],
-			nullifierSiblings: nullifierTree.getProof(computeLocalParentDepositIndex(child.escalationGameAddress, QuestionOutcome.Yes, 0n)),
+			nullifierSiblings: nullifierTree.getProof(1n),
 		}
 
 		await assert.rejects(
@@ -316,12 +316,12 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		await claimDepositForWinningViaTestSecurityPool(grandchild.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
 
 		const nullifierTree = new SparseNullifierTree()
-		const inheritedChildLocalProof = await createCarryProof(child.escalationGameAddress, childLocalParentDepositIndex, 1n, 1n, [parentLeafHash], nullifierTree.getProof(childLocalParentDepositIndex), 1n)
+		const inheritedChildLocalProof = await createCarryProof(child.escalationGameAddress, childLocalParentDepositIndex, 1n, 1n, [parentLeafHash], nullifierTree.getProof(1n), 1n)
 		const childLocalBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), childLocalDepositor)
 		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, inheritedChildLocalProof)
 		const childLocalBalanceAfter = await getERC20Balance(client, getRepTokenAddress(0n), childLocalDepositor)
 		assert.ok(childLocalBalanceAfter > childLocalBalanceBefore, 'the committed depositor should receive the inherited payout')
-		nullifierTree.consume(childLocalParentDepositIndex)
+		nullifierTree.consume(1n)
 
 		const inheritedParentProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [childLocalLeafHash], nullifierTree.getProof(0n), 1n)
 		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, inheritedParentProof)
@@ -355,9 +355,9 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const nullifierTree = new SparseNullifierTree()
-		const inheritedChildLocalProof = await createCarryProof(child.escalationGameAddress, childLocalParentDepositIndex, 1n, 1n, [parentLeafHash], nullifierTree.getProof(childLocalParentDepositIndex), 1n)
+		const inheritedChildLocalProof = await createCarryProof(child.escalationGameAddress, childLocalParentDepositIndex, 1n, 1n, [parentLeafHash], nullifierTree.getProof(1n), 1n)
 		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, inheritedChildLocalProof)
-		nullifierTree.consume(childLocalParentDepositIndex)
+		nullifierTree.consume(1n)
 
 		await claimDepositForWinningViaTestSecurityPool(grandchild.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
 

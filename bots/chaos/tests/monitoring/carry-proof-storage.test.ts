@@ -151,14 +151,14 @@ test('matches Statoblast UI reference vectors for multiple MMR peaks and consume
 			leafIndex: '1',
 			merkleMountainRangePeakIndex: '1',
 			merkleMountainRangeSiblings: ['0xa0ebcd7d728cddad423416b7e319cf69a5e7af4d5702891f3f7b55282b9bb242', '0xe1eea733fcdf27da77be796af99d98288d5a9966e69b65bfb26705f0d1b677b8'],
-			nullifierSiblingsHash: '0xa676fe0e06d31936e21d2b993fc1f7903742856f4f7cd9a925a72bf4e67c437f',
+			nullifierSiblingsHash: '0xb0e1f666b1199eb49ddd0e67c05d510598159fd4061ccd7e8b157edc2278c237',
 		},
 		{
 			parentDepositIndex: '7922816251426433759354395033602',
 			leafIndex: '2',
 			merkleMountainRangePeakIndex: '0',
 			merkleMountainRangeSiblings: ['0xc408daae22afc1ac502346d55051a1afca1778a34b4b4df97771c07e856b453d'],
-			nullifierSiblingsHash: '0xa676fe0e06d31936e21d2b993fc1f7903742856f4f7cd9a925a72bf4e67c437f',
+			nullifierSiblingsHash: '0x31e5eb081fec5b85fbb9b9a49b083569d8ac2f6965285b2352c0f74391bcaf39',
 		},
 	])
 })

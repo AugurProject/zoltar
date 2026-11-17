@@ -357,7 +357,7 @@ describe('entry crash recovery', () => {
 
 	test('retains an absent entry until two RPCs serve the same finality descendant', async () => {
 		const position = pendingEntryPosition()
-		await expect(expireEntryWithQuorum(missingReceiptClients(undefined, [112n, 100n]), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')).rejects.toThrow('invalid block')
+		await expect(expireEntryWithQuorum(missingReceiptClients(undefined, [112n, 100n]), { ...recoveryConfiguration, rpcQuorum: 2 as const }, position, 112n, '2026-07-24T00:02:00.000Z')).rejects.toThrow('requires at least')
 		await expect(expireEntryWithQuorum(missingReceiptClients(undefined, [112n, 112n], [`0x${'cc'.repeat(32)}`, `0x${'dd'.repeat(32)}`]), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')).rejects.toThrow('RPC disagreement')
 	})
 
@@ -512,7 +512,7 @@ describe('atomic lifecycle crash recovery', () => {
 
 	test('retains an absent lifecycle attempt until two RPCs serve the same finality descendant', async () => {
 		const position = withdrawingPosition()
-		await expect(recoverPendingLifecycleWithQuorum(missingReceiptClients(undefined, [112n, 100n]), recoveryConfiguration, position, 112n)).rejects.toThrow('invalid block')
+		await expect(recoverPendingLifecycleWithQuorum(missingReceiptClients(undefined, [112n, 100n]), { ...recoveryConfiguration, rpcQuorum: 2 as const }, position, 112n)).rejects.toThrow('requires at least')
 		await expect(recoverPendingLifecycleWithQuorum(missingReceiptClients(undefined, [112n, 112n], [`0x${'cc'.repeat(32)}`, `0x${'dd'.repeat(32)}`]), recoveryConfiguration, position, 112n)).rejects.toThrow('RPC disagreement')
 	})
 

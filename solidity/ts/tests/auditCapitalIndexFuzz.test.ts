@@ -884,15 +884,15 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 				let rep = 0n
 				for (const stream of streams) {
 					if (at >= stream.start + target.duration) {
-						eth += stream.eth
-						rep += stream.rep
+						eth += stream.eth * target.duration
+						rep += stream.rep * target.duration
 						continue
 					}
 					const elapsed = at > stream.start ? at - stream.start : 0n
-					eth += (stream.eth / target.duration) * elapsed
-					rep += (stream.rep / target.duration) * elapsed
+					eth += stream.eth * elapsed
+					rep += stream.rep * elapsed
 				}
-				return [eth, rep] as const
+				return [eth / target.duration, rep / target.duration] as const
 			}
 			let releasedThrough = target.deployedAt
 			const amount = () => (random.chance(0.1) ? 0n : BigInt(1 + random.int(1_000_000)) * 10n ** BigInt(random.int(20)) + BigInt(random.int(100_000)))

@@ -90,9 +90,9 @@ export function verifySparseNullifierAbsence(state: SparseNullifierState, parent
 	return rootFromProof
 }
 
-export function consumeSparseNullifier(state: SparseNullifierState, parentDepositIndex: string): SparseNullifierState {
+export function consumeSparseNullifier(state: SparseNullifierState, parentDepositIndex: string, leafIndex = parentDepositIndex): SparseNullifierState {
 	if (state.consumed.some(entry => entry.parentDepositIndex === parentDepositIndex)) throw new Error(`Parent deposit ${parentDepositIndex} is already nullified`)
-	const entry = { parentDepositIndex, path: nullifierPath(parentDepositIndex).toString() }
+	const entry = { parentDepositIndex, path: nullifierPath(leafIndex).toString() }
 	const consumed = [...state.consumed.map(value => ({ ...value })), entry].sort((left, right) => {
 		const leftParent = BigInt(left.parentDepositIndex)
 		const rightParent = BigInt(right.parentDepositIndex)

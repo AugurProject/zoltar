@@ -41,6 +41,7 @@ contract ZoltarQuestionData {
 			uint256 previous = type(uint256).max;
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
 				require(bytes(outcomeOptions[index]).length > 0, 'Outcome option label must not be an empty string');
+				require(!_isReservedOutcomeLabel(bytes(outcomeOptions[index])), 'Reserved protocol outcome label');
 				uint256 iHash = uint256(keccak256(abi.encode(outcomeOptions[index])));
 				require(iHash < previous, 'Outcome option hashes must be provided in descending sorted order');
 				previous = iHash;
@@ -53,6 +54,43 @@ contract ZoltarQuestionData {
 		emit QuestionCreated(questionId, questionCreatedTimestamp[questionId], questionData, outcomeOptions);
 
 		return questionId;
+	}
+
+	function _isReservedOutcomeLabel(bytes memory label) private pure returns (bool) {
+		bytes memory normalized = new bytes(label.length);
+		uint256 length;
+		for (uint256 i; i < label.length; ) {
+			uint256 whitespaceLength = _outcomeWhitespaceLength(label, i);
+			if (whitespaceLength != 0) {
+				i += whitespaceLength;
+				continue;
+			}
+			uint8 character = uint8(label[i++]);
+			normalized[length++] = bytes1(character >= 65 && character <= 90 ? character + 32 : character);
+		}
+		assembly {
+			mstore(normalized, length)
+		}
+		bytes32 hash = keccak256(normalized);
+		return hash == keccak256('invalid') || hash == keccak256('malformed');
+	}
+
+	function _outcomeWhitespaceLength(bytes memory label, uint256 index) private pure returns (uint256) {
+		uint8 first = uint8(label[index]);
+		if (first <= 0x20) return 1;
+		if (index + 1 >= label.length) return 0;
+		uint8 second = uint8(label[index + 1]);
+		if (first == 0xc2 && (second == 0x85 || second == 0xa0 || second == 0xad)) return 2;
+		if (index + 2 >= label.length) return 0;
+		uint8 third = uint8(label[index + 2]);
+		if (first == 0xe1 && second == 0x9a && third == 0x80) return 3;
+		if (first == 0xe2) {
+			if (second == 0x80 && ((third >= 0x80 && third <= 0x8f) || (third >= 0xa8 && third <= 0xaf))) return 3;
+			if (second == 0x81 && (third == 0x9f || third == 0xa0 || (third >= 0xa6 && third <= 0xa9))) return 3;
+		}
+		if (first == 0xe3 && second == 0x80 && third == 0x80) return 3;
+		if (first == 0xef && second == 0xbb && third == 0xbf) return 3;
+		return 0;
 	}
 
 	function getQuestionCount() external view returns (uint256) {
