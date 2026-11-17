@@ -59,12 +59,13 @@ export class SparseNullifierTree {
 		return hash
 	}
 
-	private getPath(parentDepositIndex: bigint) {
-		return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }], [parentDepositIndex]))) & this.pathMask
+	private getPath(leafIndex: bigint) {
+		if (leafIndex < 0n || leafIndex > this.pathMask) throw new Error('Nullifier leaf index exceeds 64 bits')
+		return leafIndex
 	}
 
-	getProof(parentDepositIndex: bigint) {
-		const path = this.getPath(parentDepositIndex)
+	getProof(leafIndex: bigint) {
+		const path = this.getPath(leafIndex)
 		const siblings: Hex[] = []
 		let nodeIndex = path
 		for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
@@ -76,8 +77,8 @@ export class SparseNullifierTree {
 		return siblings
 	}
 
-	consume(parentDepositIndex: bigint) {
-		const path = this.getPath(parentDepositIndex)
+	consume(leafIndex: bigint) {
+		const path = this.getPath(leafIndex)
 		let nodeIndex = path
 		let nodeHash = `0x${'0'.repeat(63)}1` as Hex
 		this.nodes.set(`0:${nodeIndex}`, nodeHash)

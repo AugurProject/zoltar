@@ -54,7 +54,7 @@ export async function scanCarryStorage(context: {
 				multicall3: context.multicall3,
 				proof: candidate.proof,
 				resultingCarryRoot: candidate.state.currentCarryRoot,
-				resultingNullifierRoot: computeNullifierRootFromProof(candidate.parentDepositIndex, candidate.proof.nullifierSiblings, toHex(1n, { size: 32 })),
+				resultingNullifierRoot: computeNullifierRootFromProof(candidate.proof.leafIndex, candidate.proof.nullifierSiblings, toHex(1n, { size: 32 })),
 				preflightExpectedResult: '0x',
 			}
 			const calls = claimCheckpointWithdrawalCalls(checkpoint)
@@ -152,7 +152,7 @@ export async function scanCarryStorage(context: {
 			sourceNodeId: candidate.sourceNodeId,
 			proof,
 			resultingCarryRoot: candidate.state.currentCarryRoot,
-			resultingNullifierRoot: computeNullifierRootFromProof(candidate.parentDepositIndex, proof.nullifierSiblings, toHex(1n, { size: 32 })),
+			resultingNullifierRoot: computeNullifierRootFromProof(proof.leafIndex, proof.nullifierSiblings, toHex(1n, { size: 32 })),
 			amountToWithdrawAttoRep: economics.amountToWithdrawAttoRep.toString(),
 			burnAmountAttoRep: economics.burnAmountAttoRep.toString(),
 			preflightExpectedResult: '0x',

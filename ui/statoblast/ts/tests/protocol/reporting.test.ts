@@ -34,7 +34,7 @@ function computeEmptyNullifierRootForTest() {
 }
 
 function computeSingleConsumedNullifierRootForTest(parentDepositIndex: bigint) {
-	let path = BigInt.asUintN(64, BigInt(keccak256(encodeAbiParameters(parseAbiParameters('uint256 parentDepositIndex'), [parentDepositIndex]))))
+	let path = parentDepositIndex
 	let currentHash = ('0x' + '00'.repeat(31) + '01') as Hex
 	let zeroHash = ('0x' + '00'.repeat(32)) as Hex
 	for (let depth = 0; depth < 64; depth += 1) {
@@ -1064,13 +1064,13 @@ describe('reporting protocol client', () => {
 		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
 		const firstLeaf = { amountAttoRep: 3n, cumulativeAmountAttoRep: 3n, depositor, parentDepositIndex: 9n, sourceNodeId: 1n }
-		const secondLeaf = { amountAttoRep: 5n, cumulativeAmountAttoRep: 8n, depositor, parentDepositIndex: 10n, sourceNodeId: 2n }
+		const secondLeaf = { amountAttoRep: 5n, cumulativeAmountAttoRep: 8n, depositor, parentDepositIndex: (1n << 200n) + 10n, sourceNodeId: 2n }
 		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, firstLeaf.sourceNodeId)
 		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, secondLeaf.sourceNodeId)
 		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
-		const inheritedNullifierRoot = computeSingleConsumedNullifierRootForTest(firstLeaf.parentDepositIndex)
+		const inheritedNullifierRoot = computeSingleConsumedNullifierRootForTest(0n)
 		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
 			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),

@@ -198,14 +198,14 @@ export const integral = (m: Model, at: bigint) => {
 	let rep = 0n
 	for (const stream of m.streams) {
 		if (at >= stream.end) {
-			eth += stream.eth
-			rep += stream.rep
+			eth += stream.eth * DAY
+			rep += stream.rep * DAY
 		} else if (at > stream.start) {
-			eth += (stream.eth / DAY) * (at - stream.start)
-			rep += (stream.rep / DAY) * (at - stream.start)
+			eth += stream.eth * (at - stream.start)
+			rep += stream.rep * (at - stream.start)
 		}
 	}
-	return [eth, rep] as const
+	return [eth / DAY, rep / DAY] as const
 }
 const release = (m: Model, until: bigint) => {
 	const [beforeEth, beforeRep] = integral(m, m.releasedThrough)

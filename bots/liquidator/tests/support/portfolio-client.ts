@@ -121,7 +121,7 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 	const client = new Proxy(network, {
 		get(target, property) {
 			if (property === 'getChainId') return async () => 1
-			if (property === 'getBlock') return async () => ({ number: snapshot.blockNumber, hash: snapshot.blockHash, timestamp: snapshot.timestamp })
+			if (property === 'getBlock') return async () => ({ number: snapshot.blockNumber, hash: snapshot.blockHash, timestamp: snapshot.timestamp, baseFeePerGas: values['baseFeePerGas'] ?? 0n })
 			if (property === 'getCode') return async (parameters: { address: string }) => codes.get(getAddress(parameters.address))
 			if (property === 'getBalance') return async () => observation.walletAttoEth
 			if (property === 'readContract')

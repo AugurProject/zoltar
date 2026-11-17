@@ -121,12 +121,18 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 			pool,
 			state.portfolioScopes.map(scope => ({ scope, targets: [] })),
 			target.selection,
-			async () => undefined,
+			async ({ client, blockNumber }) => {
+				const block = await client.getBlock({ blockNumber })
+				if (block.baseFeePerGas === undefined) throw new Error('Sponsored report block has no base fee')
+				return block.baseFeePerGas
+			},
 			readers,
 		)
-	const current = (await refresh()).observation
+	const initial = await refresh()
+	const current = initial.observation
 	const pending = current.pendingOperationReport
 	if (pending === undefined) return 'none'
+	if (initial.details > pending.maxSettlementBaseFee) return 'waiting'
 	if (!current.selected || !current.approvedUniverse || !settings.runtime.execute || !settings.portfolioPolicy.allowFundedTakeovers) return 'waiting'
 	const [amount1, amount2, reporter, reportedAt, settledAt, token1, oppoTime, settlementTime, halt, recipient, bounty, token2, count, delay, fee, multiplier, callback, callbackGas, protocolFee, flags] = pending.game
 	if (settledAt === 0n && current.snapshot.timestamp < reportedAt + settlementTime) return 'waiting'
@@ -144,7 +150,9 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 				}
 	const gas = settledAt !== 0n ? 'estimate' : callbackGas + callbackGas / 63n + 350_000n
 	const revalidate = async () => {
-		const next = (await refresh()).observation.pendingOperationReport
+		const refreshed = await refresh()
+		const next = refreshed.observation.pendingOperationReport
+		if (next !== undefined && refreshed.details > next.maxSettlementBaseFee) throw new PortfolioOpportunityExpired('Report settlement base fee exceeds its ceiling')
 		if (next === undefined || next.id !== pending.id || next.game.some((value, index) => value !== pending.game[index])) throw new PortfolioOpportunityExpired('Sponsored report changed before settlement')
 	}
 	if (current.walletAttoEth < settings.strategy.maximumGasCostAttoEth + settings.portfolioPolicy.walletReserveAttoEth) throw new PortfolioOpportunityExpired('Report settlement would consume ETH reserve')
@@ -156,6 +164,7 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 		{
 			...request,
 			gas,
+			maxFeePerGasCap: pending.maxSettlementBaseFee,
 			reportOperations: { feed: current.snapshot.priceFeed, reportId: pending.id },
 			label: settledAt !== 0n ? 'Recover sponsored report after failed callback' : 'Settle sponsored takeover report',
 			preSubmit: revalidate,
