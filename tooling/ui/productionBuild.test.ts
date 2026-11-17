@@ -177,6 +177,8 @@ for (const appId of UI_APP_IDS) {
 		const workerBundle = await fs.readFile(workerBundlePath, 'utf8')
 		const appSourceMap = JSON.parse(await fs.readFile(appSourceMapPath, 'utf8')) as { sources: string[] }
 		const workerSourceMap = JSON.parse(await fs.readFile(workerSourceMapPath, 'utf8')) as { sources: string[]; sourcesContent: string[] }
+		// The unpatched Picomatch audit exception is limited to build/test tooling.
+		for (const source of [...appSourceMap.sources, ...workerSourceMap.sources]) expect(source.replaceAll('\\', '/')).not.toMatch(/\/(?:picomatch|micromatch)\//)
 
 		expect(appBundle).not.toContain('./vendor/')
 		expect(appBundle).not.toContain('./js/')
