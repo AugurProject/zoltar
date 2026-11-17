@@ -65,9 +65,11 @@ export function auditContainment(tools: LayoutAuditTools) {
 
 	/**
 	 * Walks from a piece of content up through its containing blocks and records the first box that cuts it off or that
-	 * it visibly escapes. A scroll container ends the walk: content inside it can be scrolled to.
+	 * it visibly escapes. A scroll container ends the walk: content inside it can be scrolled to. When the content is the
+	 * owner's own box, such as a form field, the owner is not measured against itself: browsers give fields
+	 * `overflow: clip`, and a field's border box always overhangs its own padding box.
 	 */
-	const checkContainment = (owner: Element, rect: DOMRect, text: string) => {
+	const checkContainment = (owner: Element, rect: DOMRect, text: string, contentIsOwnerBox = false) => {
 		let skipUntil: Element | null | undefined
 		let positionedEscape = false
 		let spilled = false
@@ -78,7 +80,7 @@ export function auditContainment(tools: LayoutAuditTools) {
 				skipUntil = undefined
 			}
 			if (isRoot(current)) break
-			if (!isInline(current)) {
+			if (!isInline(current) && !(contentIsOwnerBox && current === owner)) {
 				const box = paddingBox(current)
 				const amount = overhang(rect, box)
 				const xOut = amount.left > tolerance || amount.right > tolerance
@@ -125,7 +127,7 @@ export function auditContainment(tools: LayoutAuditTools) {
 	if (fullAudit) for (const atom of textAtoms) checkContainment(atom.owner, unionRect(atom.rects), atom.text)
 	if (fullAudit)
 		for (const control of controls) {
-			if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) checkContainment(control, control.getBoundingClientRect(), textOf(control))
+			if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) checkContainment(control, control.getBoundingClientRect(), textOf(control), true)
 		}
 	if (fullAudit)
 		for (const media of document.querySelectorAll('img, svg, canvas, video')) {

@@ -178,6 +178,8 @@ describe('layout audit stays quiet for intentional patterns', () => {
 
 	test('a long value inside an input, which scrolls', async () => {
 		expect(await audit('<input style="width: 90px" value="1979.166666666666664885">')).toEqual([])
+		// Newer Chromium gives form controls `overflow: clip` in its user-agent stylesheet; a field is content, not a box that clips itself.
+		expect(await audit('<input style="width: 90px; overflow: clip; border: 4px solid" value="1979.166666666666664885"><select style="width: 120px; overflow: clip; border: 4px solid"><option>Short</option></select>')).toEqual([])
 	})
 
 	test('the body of a closed details element', async () => {
