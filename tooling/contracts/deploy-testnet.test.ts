@@ -547,6 +547,8 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants['securityPoolCapitalCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolServicesCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolServicesCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolSettlementBookCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 1n }))
+		expect(bootstrapDescendants['securityPoolSettlementBookCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolAuctionVaultImplementation']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 3n }))
 		expect(bootstrapDescendants['securityPoolForkCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolAuctionCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 1n }))
@@ -746,6 +748,8 @@ describe('testnet deployment plan', () => {
 			'securityPoolCapitalCreationCodeSecondChunk',
 			'securityPoolServicesCreationCodeFirstChunk',
 			'securityPoolServicesCreationCodeSecondChunk',
+			'securityPoolSettlementBookCreationCodeFirstChunk',
+			'securityPoolSettlementBookCreationCodeSecondChunk',
 			'securityPoolForkCreationCodeFirstChunk',
 			'securityPoolAuctionCreationCodeFirstChunk',
 			'securityPoolForkCreationCodeSecondChunk',
