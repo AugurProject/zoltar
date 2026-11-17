@@ -546,6 +546,8 @@ export const securityPoolFactoryAbi = [
 			{ name: '_openOraclePriceCoordinatorFactory', type: 'address', internalType: 'contract OpenOraclePriceCoordinatorFactory' },
 			{ name: 'operationsDelegate', type: 'address', internalType: 'address' },
 			{ name: 'eventEmitter', type: 'address', internalType: 'contract SecurityPoolEventEmitter' },
+			{ name: '_portfolioCreationCodeHash', type: 'bytes32', internalType: 'bytes32' },
+			{ name: 'portfolioModuleDeployers', type: 'address[9]', internalType: 'address[9]' },
 		],
 	},
 	{
@@ -561,6 +563,15 @@ export const securityPoolFactoryAbi = [
 			{ name: 'questionId', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'statoblastSecurityMultiplierBps', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
+		name: 'PortfolioDeployed',
+		anonymous: false,
+		inputs: [
+			{ name: 'portfolio', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'creator', type: 'address', internalType: 'address', indexed: true },
 		],
 	},
 	{
@@ -595,6 +606,16 @@ export const securityPoolFactoryAbi = [
 			{ name: 'statoblastSecurityMultiplierBps', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool' }],
+	},
+	{
+		type: 'function',
+		name: 'deployPortfolio',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'creationCode', type: 'bytes', internalType: 'bytes' },
+			{ name: 'configuration', type: 'bytes', internalType: 'bytes' },
+		],
+		outputs: [{ name: 'portfolio', type: 'address', internalType: 'address' }],
 	},
 	{
 		type: 'function',
@@ -665,7 +686,9 @@ export const securityPoolFactoryAbi = [
 		outputs: [{ name: '', type: 'address', internalType: 'address' }],
 	},
 	{ type: 'function', name: 'initializePortfolioPriceFeedForUniverse', stateMutability: 'nonpayable', inputs: [{ name: 'universeId', type: 'uint248', internalType: 'uint248' }], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'isPortfolio', stateMutability: 'view', inputs: [{ name: '', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'portfolioCount', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'portfolioCreationCodeHash', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }] },
 	{
 		type: 'function',
 		name: 'portfoliosRange',
@@ -1441,33 +1464,6 @@ export const escalationGameAbi = [
 	{ type: 'event', name: 'ForkContinuationResumed', anonymous: false, inputs: [{ name: 'resumedAt', type: 'uint256', internalType: 'uint256', indexed: false }] },
 	{
 		type: 'event',
-		name: 'ForkedEscrowExported',
-		anonymous: false,
-		inputs: [
-			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'repReceiver', type: 'address', internalType: 'address', indexed: false },
-			{ name: 'sourcePrincipalByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]', indexed: false },
-			{ name: 'childRepByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]', indexed: false },
-			{ name: 'totalChildRepToTransferAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'transferredRep', type: 'bool', internalType: 'bool', indexed: false },
-		],
-	},
-	{
-		type: 'event',
-		name: 'ForkedEscrowRecorded',
-		anonymous: false,
-		inputs: [
-			{ name: 'depositor', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome', indexed: true },
-			{ name: 'sourcePrincipalTotalAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'childRepTotalAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'disputeStakedRepByVaultAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'totalDisputeStakedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'outcomeBalanceAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-		],
-	},
-	{
-		type: 'event',
 		name: 'GameContinuedFromFork',
 		anonymous: false,
 		inputs: [
@@ -1522,18 +1518,6 @@ export const escalationGameAbi = [
 			{ name: 'totalDisputeStakedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
 		],
 	},
-	{
-		type: 'event',
-		name: 'VaultUnresolvedTotalsExported',
-		anonymous: false,
-		inputs: [
-			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'repReceiver', type: 'address', internalType: 'address', indexed: false },
-			{ name: 'principalByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]', indexed: false },
-			{ name: 'principalToTransferAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'transferredRep', type: 'bool', internalType: 'bool', indexed: false },
-		],
-	},
 	{ type: 'fallback', stateMutability: 'nonpayable' },
 	{ type: 'function', name: 'activationTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'canTriggerOwnFork', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
@@ -1553,6 +1537,7 @@ export const escalationGameAbi = [
 	},
 	{ type: 'function', name: 'computeIterativeAttritionCostAttoRep', stateMutability: 'view', inputs: [{ name: 'timeSinceStart', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'computeTimeSinceStartFromAttritionCostAttoRep', stateMutability: 'view', inputs: [{ name: 'attritionCostAttoRep', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'continuationSettlementForkThresholdAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'creditedSurplusAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -1565,45 +1550,6 @@ export const escalationGameAbi = [
 		outputs: [],
 	},
 	{ type: 'function', name: 'disputeStakedRepByVaultAttoRep', stateMutability: 'view', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' }] },
-	{ type: 'function', name: 'drainAllRep', stateMutability: 'nonpayable', inputs: [{ name: 'receiver', type: 'address', internalType: 'address' }], outputs: [{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' }] },
-	{
-		type: 'function',
-		name: 'exportForkedEscrowByOutcome',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'vault', type: 'address', internalType: 'address' },
-			{ name: 'repReceiver', type: 'address', internalType: 'address' },
-		],
-		outputs: [
-			{ name: 'sourcePrincipalByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'childRepByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'exportForkedEscrowByOutcomeWithoutTransfer',
-		stateMutability: 'nonpayable',
-		inputs: [{ name: 'vault', type: 'address', internalType: 'address' }],
-		outputs: [
-			{ name: 'sourcePrincipalByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'childRepByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'exportUnresolvedDeposit',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'depositIndex', type: 'uint256', internalType: 'uint256' },
-			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
-		],
-		outputs: [
-			{ name: 'depositor', type: 'address', internalType: 'address' },
-			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'parentDepositIndex', type: 'uint256', internalType: 'uint256' },
-		],
-	},
-	{ type: 'function', name: 'exportVaultUnresolvedTotalsWithoutTransfer', stateMutability: 'nonpayable', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [{ name: 'principalByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' }] },
 	{ type: 'function', name: 'fixedQuestionOutcome', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' }] },
 	{ type: 'function', name: 'forkCarrySnapshotInitialized', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'forkCarrySnapshotOutcomesInitialized', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8', internalType: 'uint8' }] },
@@ -1673,21 +1619,6 @@ export const escalationGameAbi = [
 			{ name: 'carryLeafCounts', type: 'uint256[3]', internalType: 'uint256[3]' },
 			{ name: 'carryTotalsAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' },
 			{ name: 'nullifierRoots', type: 'bytes32[3]', internalType: 'bytes32[3]' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'getForkedEscrowByVaultAndOutcome',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'depositor', type: 'address', internalType: 'address' },
-			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
-		],
-		outputs: [
-			{ name: 'sourcePrincipalAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'sourcePrincipalClaimedAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'childAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'childRepClaimedAttoRep', type: 'uint256', internalType: 'uint256' },
 		],
 	},
 	{
@@ -1803,19 +1734,8 @@ export const escalationGameAbi = [
 		],
 		outputs: [{ name: 'parentDepositIndex', type: 'uint256', internalType: 'uint256' }],
 	},
-	{
-		type: 'function',
-		name: 'recordForkedEscrowForOutcome',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'depositor', type: 'address', internalType: 'address' },
-			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
-			{ name: 'sourcePrincipalAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'childRepAmountAttoRep', type: 'uint256', internalType: 'uint256' },
-		],
-		outputs: [],
-	},
 	{ type: 'function', name: 'repToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract ReputationToken' }] },
+	{ type: 'function', name: 'responseRestartedUntil', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'resumeFromFork', stateMutability: 'nonpayable', inputs: [], outputs: [] },
 	{ type: 'function', name: 'securityPool', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract ISecurityPool' }] },
 	{ type: 'function', name: 'settleOrdinaryGame', stateMutability: 'nonpayable', inputs: [], outputs: [] },
@@ -2504,7 +2424,10 @@ export const securityPoolUniformPriceAuctionAbi = [
 		type: 'function',
 		name: 'finalize',
 		stateMutability: 'nonpayable',
-		inputs: [{ name: 'maximumFilledLots', type: 'uint256', internalType: 'uint256' }],
+		inputs: [
+			{ name: 'maximumFilledLots', type: 'uint256', internalType: 'uint256' },
+			{ name: 'floorAttoRepPerLot', type: 'uint256', internalType: 'uint256' },
+		],
 		outputs: [
 			{
 				name: 'result',
@@ -2572,7 +2495,10 @@ export const securityPoolUniformPriceAuctionAbi = [
 		type: 'function',
 		name: 'previewFinalization',
 		stateMutability: 'view',
-		inputs: [{ name: 'maximumFilledLots', type: 'uint256', internalType: 'uint256' }],
+		inputs: [
+			{ name: 'maximumFilledLots', type: 'uint256', internalType: 'uint256' },
+			{ name: 'floorAttoRepPerLot', type: 'uint256', internalType: 'uint256' },
+		],
 		outputs: [
 			{
 				name: 'result',
@@ -3223,19 +3149,6 @@ export const securityPoolPortfolioAbi = [
 		inputs: [
 			{ name: '_factory', type: 'address', internalType: 'contract ISecurityPoolFactory' },
 			{
-				name: 'origin',
-				type: 'tuple',
-				internalType: 'struct SecurityPoolPortfolio.OriginConfig',
-				components: [
-					{ name: 'collateralToken', type: 'address', internalType: 'contract IERC20' },
-					{ name: 'minimumReportCollateral', type: 'uint256', internalType: 'uint256' },
-					{ name: 'universeId', type: 'uint248', internalType: 'uint248' },
-					{ name: 'securityMultiplierBps', type: 'uint256', internalType: 'uint256' },
-					{ name: 'reportPriorityFeeAttoEthPerGas', type: 'uint256', internalType: 'uint256' },
-				],
-			},
-			{ name: 'horizon', type: 'uint256', internalType: 'uint256' },
-			{
 				name: 'deployment',
 				type: 'tuple',
 				internalType: 'struct SecurityPoolPortfolio.Deployers',
@@ -3251,6 +3164,19 @@ export const securityPoolPortfolioAbi = [
 					{ name: 'auctions', type: 'address', internalType: 'contract IPortfolioAuctionDeployer' },
 				],
 			},
+			{
+				name: 'origin',
+				type: 'tuple',
+				internalType: 'struct SecurityPoolPortfolio.OriginConfig',
+				components: [
+					{ name: 'collateralToken', type: 'address', internalType: 'contract IERC20' },
+					{ name: 'minimumReportCollateral', type: 'uint256', internalType: 'uint256' },
+					{ name: 'universeId', type: 'uint248', internalType: 'uint248' },
+					{ name: 'securityMultiplierBps', type: 'uint256', internalType: 'uint256' },
+					{ name: 'reportPriorityFeeAttoEthPerGas', type: 'uint256', internalType: 'uint256' },
+				],
+			},
+			{ name: 'horizon', type: 'uint256', internalType: 'uint256' },
 			{ name: 'admission', type: 'address', internalType: 'contract ISecurityPoolQuestionAdmissionPolicy' },
 			{
 				name: 'config',
@@ -3704,6 +3630,7 @@ export const securityPoolCommitmentIndexAbi = [
 			{ name: 'minimumCommitment', type: 'uint256', internalType: 'uint256' },
 			{ name: 'demand', type: 'uint256', internalType: 'uint256' },
 			{ name: 'target', type: 'uint256', internalType: 'uint256' },
+			{ name: 'ownerExit', type: 'bool', internalType: 'bool' },
 		],
 		outputs: [
 			{
@@ -5360,6 +5287,7 @@ export const twoWayConstantProductPairAbi = [
 			{ name: 'maxNo', type: 'uint256', internalType: 'uint256' },
 			{ name: 'minLiquidity', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
+			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [
 			{ name: 'yesUsed', type: 'uint256', internalType: 'uint256' },
@@ -5420,6 +5348,7 @@ export const twoWayConstantProductPairAbi = [
 			{ name: 'noAmount', type: 'uint256', internalType: 'uint256' },
 			{ name: 'minLiquidity', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
+			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [{ name: 'liquidity', type: 'uint256', internalType: 'uint256' }],
 	},
@@ -5523,6 +5452,7 @@ export const twoWayConstantProductPairAbi = [
 			{ name: 'amountIn', type: 'uint256', internalType: 'uint256' },
 			{ name: 'minAmountOut', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
+			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [
 			{ name: 'amountOut', type: 'uint256', internalType: 'uint256' },
@@ -5538,6 +5468,7 @@ export const twoWayConstantProductPairAbi = [
 			{ name: 'amountOut', type: 'uint256', internalType: 'uint256' },
 			{ name: 'maxAmountIn', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
+			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [
 			{ name: 'amountIn', type: 'uint256', internalType: 'uint256' },
@@ -6002,7 +5933,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x809b2950b9e6046222e77df2efd353b8f03e875a9807bf77ee568d03ff055885',
 		runtimeCodeLength: 21474,
 		immutableReferences: {
-			'40342': [
+			'39674': [
 				{ length: 32, start: 3148 },
 				{ length: 32, start: 3284 },
 				{ length: 32, start: 6451 },
@@ -6013,7 +5944,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 18753 },
 				{ length: 32, start: 20453 },
 			],
-			'40345': [
+			'39677': [
 				{ length: 32, start: 3366 },
 				{ length: 32, start: 9180 },
 				{ length: 32, start: 10071 },
@@ -6021,60 +5952,60 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 17566 },
 				{ length: 32, start: 19584 },
 			],
-			'40347': [
+			'39679': [
 				{ length: 32, start: 2331 },
 				{ length: 32, start: 7766 },
 				{ length: 32, start: 15286 },
 				{ length: 32, start: 17387 },
 			],
-			'40350': [
+			'39682': [
 				{ length: 32, start: 8031 },
 				{ length: 32, start: 12697 },
 				{ length: 32, start: 17442 },
 			],
-			'40352': [
+			'39684': [
 				{ length: 32, start: 12072 },
 				{ length: 32, start: 17667 },
 				{ length: 32, start: 19651 },
 			],
-			'40355': [
+			'39687': [
 				{ length: 32, start: 4143 },
 				{ length: 32, start: 14022 },
 			],
-			'40357': [{ length: 32, start: 10201 }],
-			'40359': [
+			'39689': [{ length: 32, start: 10201 }],
+			'39691': [
 				{ length: 32, start: 12385 },
 				{ length: 32, start: 16951 },
 				{ length: 32, start: 17707 },
 			],
-			'40361': [
+			'39693': [
 				{ length: 32, start: 10142 },
 				{ length: 32, start: 18210 },
 			],
-			'40363': [{ length: 32, start: 9079 }],
-			'40365': [{ length: 32, start: 5444 }],
-			'40367': [{ length: 32, start: 3912 }],
-			'40369': [
+			'39695': [{ length: 32, start: 9079 }],
+			'39697': [{ length: 32, start: 5444 }],
+			'39699': [{ length: 32, start: 3912 }],
+			'39701': [
 				{ length: 32, start: 13012 },
 				{ length: 32, start: 19689 },
 			],
-			'40371': [
+			'39703': [
 				{ length: 32, start: 3822 },
 				{ length: 32, start: 15543 },
 			],
-			'40373': [
+			'39705': [
 				{ length: 32, start: 5166 },
 				{ length: 32, start: 19727 },
 			],
-			'40376': [{ length: 32, start: 1349 }],
-			'40379': [
+			'39708': [{ length: 32, start: 1349 }],
+			'39711': [
 				{ length: 32, start: 1657 },
 				{ length: 32, start: 2712 },
 				{ length: 32, start: 4290 },
 				{ length: 32, start: 11419 },
 				{ length: 32, start: 11537 },
 			],
-			'40382': [
+			'39714': [
 				{ length: 32, start: 175 },
 				{ length: 32, start: 1473 },
 				{ length: 32, start: 1936 },
@@ -6094,10 +6025,10 @@ export const portfolioRuntimeIdentities = {
 		},
 	},
 	SecurityPoolCapitalLedger: {
-		runtimeCodeHash: '0xfc06b39fdba10bf85dbf4c003f309c99bd628d0601e1ef7af845726cc73bda9f',
-		runtimeCodeLength: 23425,
+		runtimeCodeHash: '0x990b1d85c632a4c9ec3e17399ec87a1f0f6286721265180d6df8873231801a88',
+		runtimeCodeLength: 23444,
 		immutableReferences: {
-			'26735': [
+			'25959': [
 				{ length: 32, start: 1078 },
 				{ length: 32, start: 1520 },
 				{ length: 32, start: 1866 },
@@ -6113,20 +6044,20 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 8358 },
 				{ length: 32, start: 8639 },
 				{ length: 32, start: 9258 },
-				{ length: 32, start: 20553 },
+				{ length: 32, start: 20566 },
 			],
-			'26738': [
+			'25962': [
 				{ length: 32, start: 1685 },
 				{ length: 32, start: 1776 },
 			],
-			'26741': [
+			'25965': [
 				{ length: 32, start: 4537 },
 				{ length: 32, start: 5262 },
 				{ length: 32, start: 7215 },
 				{ length: 32, start: 8762 },
 				{ length: 32, start: 9006 },
 			],
-			'26744': [
+			'25968': [
 				{ length: 32, start: 2005 },
 				{ length: 32, start: 6610 },
 				{ length: 32, start: 10366 },
@@ -6134,10 +6065,10 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 11565 },
 				{ length: 32, start: 12543 },
 				{ length: 32, start: 12879 },
-				{ length: 32, start: 20711 },
-				{ length: 32, start: 22434 },
+				{ length: 32, start: 20724 },
+				{ length: 32, start: 22453 },
 			],
-			'26746': [
+			'25970': [
 				{ length: 32, start: 1949 },
 				{ length: 32, start: 3716 },
 				{ length: 32, start: 6802 },
@@ -6146,39 +6077,39 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 11509 },
 				{ length: 32, start: 12490 },
 				{ length: 32, start: 12826 },
-				{ length: 32, start: 20620 },
-				{ length: 32, start: 22497 },
+				{ length: 32, start: 20633 },
+				{ length: 32, start: 22516 },
 			],
-			'26749': [
+			'25973': [
 				{ length: 32, start: 6353 },
 				{ length: 32, start: 7448 },
-				{ length: 32, start: 14753 },
+				{ length: 32, start: 14764 },
 			],
-			'26751': [
+			'25975': [
 				{ length: 32, start: 7518 },
 				{ length: 32, start: 10826 },
-				{ length: 32, start: 13987 },
-				{ length: 32, start: 20044 },
-				{ length: 32, start: 21590 },
+				{ length: 32, start: 13990 },
+				{ length: 32, start: 20057 },
+				{ length: 32, start: 21603 },
 			],
-			'26753': [
+			'25977': [
 				{ length: 32, start: 7162 },
 				{ length: 32, start: 13326 },
-				{ length: 32, start: 13818 },
-				{ length: 32, start: 14025 },
-				{ length: 32, start: 14393 },
-				{ length: 32, start: 14483 },
-				{ length: 32, start: 15503 },
-				{ length: 32, start: 18281 },
-				{ length: 32, start: 21628 },
+				{ length: 32, start: 13821 },
+				{ length: 32, start: 14028 },
+				{ length: 32, start: 14404 },
+				{ length: 32, start: 14494 },
+				{ length: 32, start: 15514 },
+				{ length: 32, start: 18294 },
+				{ length: 32, start: 21641 },
 			],
 		},
 	},
 	SecurityPoolCommitmentIndex: {
-		runtimeCodeHash: '0x06afa915b596c3059f2e45ef47484d49bd9df7c29bceec3145151dfc31aa90c7',
-		runtimeCodeLength: 20173,
+		runtimeCodeHash: '0xbaebc33bd1252428cf3dc8ad50e7f4167f69e2ec1193ee07ce199292b0750e00',
+		runtimeCodeLength: 20189,
 		immutableReferences: {
-			'31102': [
+			'30333': [
 				{ length: 32, start: 502 },
 				{ length: 32, start: 1307 },
 				{ length: 32, start: 1538 },
@@ -6188,18 +6119,18 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 3548 },
 				{ length: 32, start: 3942 },
 				{ length: 32, start: 4400 },
-				{ length: 32, start: 4515 },
-				{ length: 32, start: 5396 },
-				{ length: 32, start: 5546 },
-				{ length: 32, start: 5693 },
-				{ length: 32, start: 6217 },
-				{ length: 32, start: 6560 },
-				{ length: 32, start: 6759 },
-				{ length: 32, start: 7034 },
-				{ length: 32, start: 7137 },
-				{ length: 32, start: 10240 },
-				{ length: 32, start: 10496 },
-				{ length: 32, start: 13029 },
+				{ length: 32, start: 4541 },
+				{ length: 32, start: 4701 },
+				{ length: 32, start: 5582 },
+				{ length: 32, start: 5732 },
+				{ length: 32, start: 5879 },
+				{ length: 32, start: 6403 },
+				{ length: 32, start: 6774 },
+				{ length: 32, start: 7049 },
+				{ length: 32, start: 7152 },
+				{ length: 32, start: 11901 },
+				{ length: 32, start: 12157 },
+				{ length: 32, start: 13045 },
 			],
 		},
 	},
@@ -6207,14 +6138,14 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0xbdd1c2be884846eafc945bdb2524663b64e70cbd79803f6f08e3def9b1a2ad95',
 		runtimeCodeLength: 3300,
 		immutableReferences: {
-			'26091': [
+			'25315': [
 				{ length: 32, start: 193 },
 				{ length: 32, start: 311 },
 				{ length: 32, start: 1023 },
 				{ length: 32, start: 2123 },
 				{ length: 32, start: 2418 },
 			],
-			'26093': [
+			'25317': [
 				{ length: 32, start: 841 },
 				{ length: 32, start: 1090 },
 			],
@@ -6224,7 +6155,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x6a28c00d4300913688196836d0a41df0870404340aa975dd2428dd9c96869d38',
 		runtimeCodeLength: 17568,
 		immutableReferences: {
-			'49277': [
+			'48618': [
 				{ length: 32, start: 579 },
 				{ length: 32, start: 1419 },
 				{ length: 32, start: 1720 },
@@ -6247,7 +6178,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 10840 },
 				{ length: 32, start: 13940 },
 			],
-			'49280': [
+			'48621': [
 				{ length: 32, start: 3685 },
 				{ length: 32, start: 5699 },
 				{ length: 32, start: 6039 },
@@ -6261,7 +6192,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x4948e642d5bdee625657636d5c76f18be6c0c58ad430d3e593bc5127581ba646',
 		runtimeCodeLength: 22618,
 		immutableReferences: {
-			'54548': [
+			'53964': [
 				{ length: 32, start: 589 },
 				{ length: 32, start: 1228 },
 				{ length: 32, start: 1848 },
@@ -6277,7 +6208,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 8049 },
 				{ length: 32, start: 8870 },
 			],
-			'58280': [
+			'57696': [
 				{ length: 32, start: 8599 },
 				{ length: 32, start: 10430 },
 				{ length: 32, start: 16937 },
@@ -6288,7 +6219,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x532e35a3fda1fe44552ddf2be916c4d5fa3af45a070fe8585f098792db79b936',
 		runtimeCodeLength: 16689,
 		immutableReferences: {
-			'51254': [
+			'50595': [
 				{ length: 32, start: 1753 },
 				{ length: 32, start: 2530 },
 				{ length: 32, start: 2692 },
@@ -6299,7 +6230,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 10585 },
 				{ length: 32, start: 11482 },
 			],
-			'51257': [
+			'50598': [
 				{ length: 32, start: 1023 },
 				{ length: 32, start: 1451 },
 				{ length: 32, start: 2359 },
@@ -6317,16 +6248,16 @@ export const portfolioRuntimeIdentities = {
 		},
 	},
 	SecurityPoolPortfolioPurchase: {
-		runtimeCodeHash: '0x5e4454b2c6012be4ac5c11fd93b093a6a0c11fca677518036ea60ac39cee0e1d',
-		runtimeCodeLength: 6199,
+		runtimeCodeHash: '0x36e823f8af845a468b8b94a511aacbfc62e02dab9582be5e9d79610b776ed9ac',
+		runtimeCodeLength: 6421,
 		immutableReferences: {
-			'47032': [
+			'46352': [
 				{ length: 32, start: 134 },
 				{ length: 32, start: 390 },
 				{ length: 32, start: 909 },
 				{ length: 32, start: 1820 },
 				{ length: 32, start: 2202 },
-				{ length: 32, start: 4059 },
+				{ length: 32, start: 4316 },
 			],
 		},
 	},
@@ -6334,7 +6265,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x4295140e9ed24da4cf98545a53e740d4149c773b59647e15b51a3b3fbe176fd1',
 		runtimeCodeLength: 20338,
 		immutableReferences: {
-			'44405': [
+			'43716': [
 				{ length: 32, start: 522 },
 				{ length: 32, start: 1004 },
 				{ length: 32, start: 3657 },
@@ -6347,7 +6278,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 14563 },
 				{ length: 32, start: 15420 },
 			],
-			'44408': [
+			'43719': [
 				{ length: 32, start: 864 },
 				{ length: 32, start: 3524 },
 				{ length: 32, start: 5197 },
@@ -6363,10 +6294,10 @@ export const portfolioRuntimeIdentities = {
 		},
 	},
 	SecurityPoolPortfolioServices: {
-		runtimeCodeHash: '0xf0dee8e174e244de21e1e87557639cf494d6fe58177da593fa3dfb7148b49bb2',
-		runtimeCodeLength: 18769,
+		runtimeCodeHash: '0x64de751364a9b0253741a94d386be8028d5ba881b17af4b41f9d46f612346481',
+		runtimeCodeLength: 18812,
 		immutableReferences: {
-			'47554': [
+			'46893': [
 				{ length: 32, start: 47 },
 				{ length: 32, start: 512 },
 				{ length: 32, start: 1906 },
@@ -6378,17 +6309,17 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 5843 },
 				{ length: 32, start: 8753 },
 				{ length: 32, start: 8983 },
-				{ length: 32, start: 9720 },
-				{ length: 32, start: 10812 },
-				{ length: 32, start: 12915 },
-				{ length: 32, start: 12989 },
-				{ length: 32, start: 14488 },
-				{ length: 32, start: 16352 },
-				{ length: 32, start: 17438 },
-				{ length: 32, start: 17636 },
-				{ length: 32, start: 17787 },
+				{ length: 32, start: 9763 },
+				{ length: 32, start: 10855 },
+				{ length: 32, start: 12958 },
+				{ length: 32, start: 13032 },
+				{ length: 32, start: 14531 },
+				{ length: 32, start: 16395 },
+				{ length: 32, start: 17481 },
+				{ length: 32, start: 17679 },
+				{ length: 32, start: 17830 },
 			],
-			'47557': [
+			'46896': [
 				{ length: 32, start: 1668 },
 				{ length: 32, start: 4078 },
 				{ length: 32, start: 4563 },
@@ -6396,11 +6327,11 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 5644 },
 				{ length: 32, start: 7627 },
 				{ length: 32, start: 8830 },
-				{ length: 32, start: 9069 },
-				{ length: 32, start: 10146 },
-				{ length: 32, start: 10728 },
-				{ length: 32, start: 11995 },
-				{ length: 32, start: 14907 },
+				{ length: 32, start: 9111 },
+				{ length: 32, start: 10189 },
+				{ length: 32, start: 10771 },
+				{ length: 32, start: 12038 },
+				{ length: 32, start: 14950 },
 			],
 		},
 	},
@@ -6408,7 +6339,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x015d256935bf962b6ef05cf0a05b17851ab9835235de4394df89d71b22338a8e',
 		runtimeCodeLength: 13069,
 		immutableReferences: {
-			'29527': [
+			'28758': [
 				{ length: 32, start: 451 },
 				{ length: 32, start: 1111 },
 				{ length: 32, start: 1779 },
@@ -6428,7 +6359,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x8118144cba32493c3187ca4e9d15760c6b6f1a1cbaeed389f5d4d6db40698208',
 		runtimeCodeLength: 8758,
 		immutableReferences: {
-			'25080': [
+			'24304': [
 				{ length: 32, start: 408 },
 				{ length: 32, start: 671 },
 				{ length: 32, start: 1199 },
@@ -6439,131 +6370,129 @@ export const portfolioRuntimeIdentities = {
 		},
 	},
 	SecurityPoolPortfolioAuction: {
-		runtimeCodeHash: '0xb07437df0d0c8c41466c5ba8102f827b79ea6f0fe0037037c240b63a09c882df',
-		runtimeCodeLength: 12412,
+		runtimeCodeHash: '0x62d8f5cf9d1c799189c02f966bd363b1b141676a1fa9f100bcb7e54675a2de80',
+		runtimeCodeLength: 12353,
 		immutableReferences: {
-			'43144': [
-				{ length: 32, start: 3657 },
-				{ length: 32, start: 5264 },
+			'42477': [
+				{ length: 32, start: 3632 },
+				{ length: 32, start: 5241 },
 			],
-			'43147': [
+			'42480': [
 				{ length: 32, start: 428 },
-				{ length: 32, start: 5814 },
-				{ length: 32, start: 8087 },
-				{ length: 32, start: 10011 },
+				{ length: 32, start: 5822 },
+				{ length: 32, start: 8132 },
+				{ length: 32, start: 10056 },
 			],
-			'43150': [
+			'42483': [
 				{ length: 32, start: 778 },
-				{ length: 32, start: 3049 },
-				{ length: 32, start: 3228 },
-				{ length: 32, start: 3724 },
-				{ length: 32, start: 5666 },
-				{ length: 32, start: 6428 },
-				{ length: 32, start: 8427 },
+				{ length: 32, start: 3024 },
+				{ length: 32, start: 3203 },
+				{ length: 32, start: 3699 },
+				{ length: 32, start: 5671 },
+				{ length: 32, start: 6432 },
+				{ length: 32, start: 8472 },
 			],
-			'43153': [
-				{ length: 32, start: 1099 },
-				{ length: 32, start: 3297 },
-				{ length: 32, start: 3397 },
-				{ length: 32, start: 3807 },
-				{ length: 32, start: 4135 },
-				{ length: 32, start: 4437 },
-				{ length: 32, start: 4742 },
-				{ length: 32, start: 4959 },
-				{ length: 32, start: 6018 },
-				{ length: 32, start: 6354 },
-				{ length: 32, start: 8314 },
+			'42486': [
+				{ length: 32, start: 1090 },
+				{ length: 32, start: 3272 },
+				{ length: 32, start: 3372 },
+				{ length: 32, start: 3782 },
+				{ length: 32, start: 4110 },
+				{ length: 32, start: 4412 },
+				{ length: 32, start: 4717 },
+				{ length: 32, start: 4934 },
+				{ length: 32, start: 6027 },
+				{ length: 32, start: 8359 },
 			],
-			'43156': [
-				{ length: 32, start: 5617 },
-				{ length: 32, start: 5708 },
-				{ length: 32, start: 9943 },
+			'42489': [
+				{ length: 32, start: 5602 },
+				{ length: 32, start: 5713 },
+				{ length: 32, start: 9988 },
 			],
-			'43158': [
+			'42491': [
 				{ length: 32, start: 508 },
-				{ length: 32, start: 5765 },
-				{ length: 32, start: 7958 },
-				{ length: 32, start: 8174 },
+				{ length: 32, start: 5770 },
+				{ length: 32, start: 8003 },
+				{ length: 32, start: 8219 },
 			],
-			'43160': [
-				{ length: 32, start: 1172 },
-				{ length: 32, start: 2951 },
-				{ length: 32, start: 7334 },
-				{ length: 32, start: 7381 },
-				{ length: 32, start: 7476 },
-				{ length: 32, start: 7749 },
-				{ length: 32, start: 9887 },
+			'42493': [
+				{ length: 32, start: 1163 },
+				{ length: 32, start: 2926 },
+				{ length: 32, start: 7380 },
+				{ length: 32, start: 7521 },
+				{ length: 32, start: 7794 },
+				{ length: 32, start: 9932 },
 			],
-			'43162': [
-				{ length: 32, start: 1059 },
-				{ length: 32, start: 2069 },
-				{ length: 32, start: 2736 },
-				{ length: 32, start: 5397 },
-				{ length: 32, start: 7035 },
-				{ length: 32, start: 7902 },
+			'42495': [
+				{ length: 32, start: 1050 },
+				{ length: 32, start: 2044 },
+				{ length: 32, start: 2711 },
+				{ length: 32, start: 5364 },
+				{ length: 32, start: 7043 },
+				{ length: 32, start: 7947 },
 			],
-			'43164': [{ length: 32, start: 4329 }],
-			'43166': [
+			'42497': [{ length: 32, start: 4304 }],
+			'42499': [
 				{ length: 32, start: 850 },
-				{ length: 32, start: 3961 },
-				{ length: 32, start: 6599 },
-				{ length: 32, start: 8357 },
+				{ length: 32, start: 3936 },
+				{ length: 32, start: 6602 },
+				{ length: 32, start: 8402 },
 			],
-			'43168': [
+			'42501': [
 				{ length: 32, start: 603 },
-				{ length: 32, start: 5119 },
-				{ length: 32, start: 6066 },
-				{ length: 32, start: 6305 },
+				{ length: 32, start: 5094 },
+				{ length: 32, start: 6075 },
 			],
-			'43170': [
-				{ length: 32, start: 991 },
-				{ length: 32, start: 10108 },
+			'42503': [
+				{ length: 32, start: 998 },
+				{ length: 32, start: 6689 },
+				{ length: 32, start: 10153 },
 			],
-			'43173': [
-				{ length: 32, start: 3092 },
-				{ length: 32, start: 3550 },
-				{ length: 32, start: 8688 },
+			'42506': [
+				{ length: 32, start: 3067 },
+				{ length: 32, start: 3525 },
+				{ length: 32, start: 8733 },
 			],
 		},
 	},
 	SecurityPoolUniformPriceAuction: {
-		runtimeCodeHash: '0x0632e5477756ab1670876f577cc46d7d5f5578181a028a16baec4069f1a86937',
-		runtimeCodeLength: 14867,
+		runtimeCodeHash: '0x28f5e23b774113c9d5795ce4196c8d0df73796c24ff658e5987fd5f3a408d5d3',
+		runtimeCodeLength: 15016,
 		immutableReferences: {
-			'59422': [
+			'58838': [
 				{ length: 32, start: 456 },
 				{ length: 32, start: 534 },
 				{ length: 32, start: 1250 },
 				{ length: 32, start: 1536 },
-				{ length: 32, start: 2199 },
-				{ length: 32, start: 2406 },
-				{ length: 32, start: 4827 },
-				{ length: 32, start: 5745 },
+				{ length: 32, start: 1786 },
+				{ length: 32, start: 2692 },
+				{ length: 32, start: 2899 },
+				{ length: 32, start: 5358 },
 			],
-			'59549': [
-				{ length: 32, start: 1843 },
-				{ length: 32, start: 2677 },
-				{ length: 32, start: 9347 },
+			'58965': [
+				{ length: 32, start: 2383 },
+				{ length: 32, start: 3170 },
+				{ length: 32, start: 9488 },
 			],
 		},
 	},
 	SecurityPoolAuctionVault: { runtimeCodeHash: '0x987f52a0a0ccaac98b7fef51307fdb88e50be3a5c6c384b068baef0dcd63cccd', runtimeCodeLength: 4257, immutableReferences: {} },
 	Multicall3: { runtimeCodeHash: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade', runtimeCodeLength: 2576, immutableReferences: {} },
 	SecurityPoolResolutionPremiumBook: {
-		runtimeCodeHash: '0x0ab6334924f595554a4d19ec1a24f4caf7d24062fc38183da992049cbdde5c1b',
-		runtimeCodeLength: 10763,
+		runtimeCodeHash: '0xa2c6765f911e3c35994f10840ec96b18d79726fd95167b4c2ec8bc6e8093f5a2',
+		runtimeCodeLength: 11426,
 		immutableReferences: {
-			'52992': [
+			'52336': [
 				{ length: 32, start: 267 },
-				{ length: 32, start: 512 },
-				{ length: 32, start: 1376 },
-				{ length: 32, start: 1634 },
-				{ length: 32, start: 1774 },
-				{ length: 32, start: 2564 },
-				{ length: 32, start: 2993 },
-				{ length: 32, start: 3076 },
-				{ length: 32, start: 3184 },
-				{ length: 32, start: 3355 },
+				{ length: 32, start: 517 },
+				{ length: 32, start: 616 },
+				{ length: 32, start: 874 },
+				{ length: 32, start: 1006 },
+				{ length: 32, start: 1816 },
+				{ length: 32, start: 2245 },
+				{ length: 32, start: 2328 },
+				{ length: 32, start: 2436 },
+				{ length: 32, start: 2607 },
 			],
 		},
 	},

@@ -206,6 +206,9 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
 	const ordinarySettlementInitialized = !forkContinuationSnapshot && (await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementInitialized' }))
 	const frozenOrdinaryForkThreshold = ordinarySettlementInitialized ? await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementForkThresholdAttoRep' }) : undefined
+	// A game without ordinary settlement freezes its threshold at the first winning claim; zero means no claim yet.
+	const continuationForkThreshold = ordinarySettlementInitialized ? 0n : await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'continuationSettlementForkThresholdAttoRep' })
+	const frozenContinuationForkThreshold = continuationForkThreshold === 0n ? undefined : continuationForkThreshold
 	const continuationTiming = forkContinuationSnapshot
 		? await Promise.all([
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt', args: [] }),
@@ -213,72 +216,79 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			])
 		: undefined
 	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
-	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, earliestForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
-		client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'startBondAttoRep',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'nonDecisionThresholdAttoRep',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'activationTime',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'totalCostAttoRep',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'getBindingCapitalAttoRep',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		readEscalationOutcomeState(client, escalationGameAddress, 'invalid'),
-		readEscalationOutcomeState(client, escalationGameAddress, 'yes'),
-		readEscalationOutcomeState(client, escalationGameAddress, 'no'),
-		client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'getEscalationGameEndDate',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: SECURITY_POOL_QUESTION_OUTCOME_ABI,
-			functionName: 'getQuestionOutcome',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress],
-		}),
-		client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getForkTime',
-			address: getInfraContractAddresses().zoltar,
-			args: [universeId],
-		}),
-		client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getEarliestForkTime',
-			address: getInfraContractAddresses().zoltar,
-			args: [universeId],
-		}),
-		client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'hasReachedNonDecision',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		walletReportingStatePromise,
-	])
+	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, responseRestartedUntil, _questionOutcome, universeForkTime, earliestForkTime, hasReachedNonDecision, walletReportingState] =
+		await Promise.all([
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'startBondAttoRep',
+				address: escalationGameAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'nonDecisionThresholdAttoRep',
+				address: escalationGameAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'activationTime',
+				address: escalationGameAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'totalCostAttoRep',
+				address: escalationGameAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'getBindingCapitalAttoRep',
+				address: escalationGameAddress,
+				args: [],
+			}),
+			readEscalationOutcomeState(client, escalationGameAddress, 'invalid'),
+			readEscalationOutcomeState(client, escalationGameAddress, 'yes'),
+			readEscalationOutcomeState(client, escalationGameAddress, 'no'),
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'getEscalationGameEndDate',
+				address: escalationGameAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'responseRestartedUntil',
+				address: escalationGameAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: SECURITY_POOL_QUESTION_OUTCOME_ABI,
+				functionName: 'getQuestionOutcome',
+				address: getInfraContractAddresses().securityPoolForker,
+				args: [securityPoolAddress],
+			}),
+			client.readContract({
+				abi: Zoltar_Zoltar.abi,
+				functionName: 'getForkTime',
+				address: getInfraContractAddresses().zoltar,
+				args: [universeId],
+			}),
+			client.readContract({
+				abi: Zoltar_Zoltar.abi,
+				functionName: 'getEarliestForkTime',
+				address: getInfraContractAddresses().zoltar,
+				args: [universeId],
+			}),
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'hasReachedNonDecision',
+				address: escalationGameAddress,
+				args: [],
+			}),
+			walletReportingStatePromise,
+		])
 	const balances: [bigint, bigint, bigint] = [invalidOutcomeState.balanceAttoRep, yesOutcomeState.balanceAttoRep, noOutcomeState.balanceAttoRep]
 	const useCarrySnapshot = forkContinuationSnapshot !== undefined
 	const [invalidDeposits, yesDeposits, noDeposits, invalidParentSnapshotDeposits, yesParentSnapshotDeposits, noParentSnapshotDeposits] = await Promise.all([
@@ -330,7 +340,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		earliestForkTime,
 		escalationEndTime,
 		escalationGameAddress,
-		forkThresholdAttoRep: frozenOrdinaryForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),
+		forkThresholdAttoRep: frozenOrdinaryForkThreshold ?? frozenContinuationForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThresholdAttoRep,
@@ -347,6 +357,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		forkContinuation: forkContinuationSnapshot,
 		forkResumedAt: continuationTiming?.[0],
 		forkElapsedAtStart: continuationTiming?.[1],
+		responseRestartedUntil,
 		universeId,
 		parentWithdrawalEnabled: settlementState === 'resolved',
 		...walletReportingState,

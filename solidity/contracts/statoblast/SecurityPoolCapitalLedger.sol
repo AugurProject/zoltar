@@ -241,7 +241,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		require(!useReport, 'Reports price growth only');
 		require(commitment == 0 || commitment >= minimumCommitmentAttoEth, 'Commitment below minimum');
 		uint256 current = position.commitment;
-		if (isPriceValid()) current -= _cure(id, commitment);
+		if (isPriceValid()) current -= _cure(id, commitment, commitment == 0);
 		if (current > commitment && !pending)
 			commitmentIndex.requestRetirement(id, commitment, minimumCommitmentAttoEth);
 		_serveRetirement(0);
@@ -367,9 +367,9 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 
 	/// @dev Cut unbacked commitment down to `target`. Only the owner's own
 	/// `setCommitment` and a takeover, which needs an adverse observation, cure.
-	function _cure(uint96 id, uint256 target) private returns (uint256 removed) {
+	function _cure(uint96 id, uint256 target, bool ownerExit) private returns (uint256 removed) {
 		require(id != 0 && id != auctionCohort.positionId, 'Materialize an individual auction vault');
-		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target);
+		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit);
 		removed = result.removed;
 		if (removed != 0) {
 			owners[result.owner].account.freeAttoRep += result.freedRep;
@@ -411,11 +411,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
+		require(commitmentIndex.liquidationStarted(id) != 0, 'Adverse observation missing');
 		SecurityPoolCommitmentIndex.Account memory beforeCure = commitmentIndex.accountOf(id);
 		require(beforeCure.owner != receiverOwner && beforeCure.maxHealthyPrice < liquidationPrice, 'Position does not need takeover');
-		require(commitmentIndex.liquidationStarted(id) != 0, 'Adverse observation missing');
 		require(commitment > 0 && commitment <= beforeCure.commitment, 'Invalid takeover commitment');
-		uint256 cured = _cure(id, 0);
+		uint256 cured = _cure(id, 0, false);
 		// A keeper must be able to leave a successful cure in place. No assets
 		// transfer and no award is paid when nominal excess alone restores health.
 		if (cured != 0 && commitmentIndex.liquidationStarted(id) == 0) {

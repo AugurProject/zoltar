@@ -611,7 +611,7 @@
 						<summary><code>AUTHORITY</code><span class="invariant-title">Portfolio identity and question admission</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">The canonical factory namespace binds every question ledger to its portfolio. The immutable admission policy controls registration. A fixed one-question portfolio uses the same capital, settlement and reporting contracts as an open portfolio.</div>
+							<div class="invariant-property">The canonical factory deploys every portfolio from its pinned creation code and module deployers, and only a portfolio it deployed can open a pool namespace. Every registered question ledger therefore belongs to a factory-deployed portfolio, and the factory namespace binds each ledger to it. The immutable admission policy controls registration. A fixed one-question portfolio uses the same capital, settlement and reporting contracts as an open portfolio.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -624,7 +624,10 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolio.sol"><code>SecurityPoolPortfolio.sol</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory.sol</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolio.sol"><code>SecurityPoolPortfolio.sol</code></a
+										>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditPortfolioAuthenticity.test.ts"><code>auditPortfolioAuthenticity.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -772,7 +775,7 @@
 						<summary><code>AUCTIONS</code><span class="invariant-title">Uniform branch auction and automatic owners</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Only freshly unchosen provider REP is auction inventory; reporter escrow and previously owed recovery REP are excluded. Winners pay the same grid-rounded REP-per-lot price. Winning principal and obligations enter aggregate accounting at closing even if a bidder delays activating individual controls.</div>
+							<div class="invariant-property">Only freshly unchosen provider REP is auction inventory; reporter escrow and previously owed recovery REP are excluded. Winners pay the same grid-rounded REP-per-lot price, and every winning lot receives at least the REP that backs it at the closing conservative price. Winning principal and obligations enter aggregate accounting at closing even if a bidder delays activating individual controls.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

@@ -114,21 +114,6 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		parameters: 'address indexed vault,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedAttoRep',
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	},
-	{
-		name: 'ForkedEscrowRecorded',
-		parameters: 'address indexed depositor,BinaryOutcomes.BinaryOutcome indexed outcome,uint256 sourcePrincipalTotalAttoRep,uint256 childRepTotalAttoRep,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedAttoRep,uint256 outcomeBalanceAttoRep',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	},
-	{
-		name: 'VaultUnresolvedTotalsExported',
-		parameters: 'address indexed vault,address repReceiver,uint256[3] principalByOutcomeAttoRep,uint256 principalToTransferAttoRep,bool transferredRep',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	},
-	{
-		name: 'ForkedEscrowExported',
-		parameters: 'address indexed vault,address repReceiver,uint256[3] sourcePrincipalByOutcomeAttoRep,uint256[3] childRepByOutcomeAttoRep,uint256 totalChildRepToTransferAttoRep,bool transferredRep',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	},
 ]
 export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = [
 	{
@@ -146,4 +131,4 @@ export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArgum
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = '111bb40cb197c7ea3a1dee6a0131dff21f1c0d8d1bf7ce039b9f3542a567fd69'
+export const referencedEventAbiFingerprint = '31e4c5ba0a89b1028aead6086f5c292c2b4eee0700b5a204c58deb9111e98066'

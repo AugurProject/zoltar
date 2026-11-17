@@ -1,7 +1,8 @@
 import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as poolArtifact } from '../../../../types/contractArtifact'
 import { type AccountAddress, QuestionOutcome } from '../../types/types'
-import { type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
+import type { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
+import { createWriteClient, type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
 import { CONTRACT_PAGE_SIZE } from './pagination'
 import { getRepTokenAddress, getZoltarAddress } from './zoltar'
 import { getInfraContractAddresses } from './deployStatoblast'
@@ -337,17 +338,14 @@ export const readForkCarrySnapshotInitialized = async (client: ReadClient, escal
 		args: [],
 	})
 
-export const readForkedEscrowByVaultAndOutcome = async (client: ReadClient, escalationGame: AccountAddress, vault: AccountAddress, outcome: QuestionOutcome): Promise<readonly [bigint, bigint, bigint, bigint]> => {
-	const forkedEscrow = requireArray(
-		await client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'getForkedEscrowByVaultAndOutcome',
-			address: escalationGame,
-			args: [vault, outcome],
-		}),
-		'Forked escrow by vault and outcome',
-	)
-	return [requireBigInt(forkedEscrow[0], 'Forked escrow source principal'), requireBigInt(forkedEscrow[1], 'Forked escrow transferred principal'), requireBigInt(forkedEscrow[2], 'Forked escrow child REP'), requireBigInt(forkedEscrow[3], 'Forked escrow transferred child REP')]
+/** Test-only: empties the REP a standalone game holds directly, by sending a transfer as the game. */
+export const drainEscalationGameRepForTest = async (ethereum: AnvilWindowEthereum, repToken: AccountAddress, escalationGame: AccountAddress, receiver: AccountAddress) => {
+	await ethereum.impersonateAccount(escalationGame)
+	await ethereum.setBalance(escalationGame, 10n ** 18n)
+	const game = createWriteClient(ethereum, BigInt(escalationGame))
+	const amountAttoRep = await game.readContract({ abi: ReputationToken_ReputationToken.abi, address: repToken, functionName: 'balanceOf', args: [escalationGame] })
+	if (amountAttoRep === 0n) return
+	await writeContractAndWait(game, () => game.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repToken, functionName: 'transfer', args: [receiver, amountAttoRep] }))
 }
 
 type CarryLeaf = {

@@ -37,12 +37,11 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
 					: forkResumedAt + uint256(requiredElapsed - forkElapsedAtStart);
-			uint256 minimumResponseEnd = forkResumedAt + ACTIVATION_DELAY;
-			if (leadResponseEnd > minimumResponseEnd) minimumResponseEnd = leadResponseEnd;
+			uint256 minimumResponseEnd = _responseEnd();
 			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
-		uint256 ordinaryCurveEnd = activationTime + _finalityElapsed();
-		return ordinaryCurveEnd > leadResponseEnd ? ordinaryCurveEnd : leadResponseEnd;
+		endTime = activationTime + _finalityElapsed();
+		if (responseRestartedUntil > endTime) endTime = responseRestartedUntil;
 	}
 
 	/// @dev Finality is strictly after this last second at or below binding capital.
@@ -146,13 +145,15 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function _computeAllocatedWinningWithdrawal(uint8 outcomeIndex, uint256 principalAttoRep, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) private view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 bindingCapitalAttoRep = getBindingCapitalAttoRep();
 		uint256 winningOutcomeBalanceAttoRep = outcomeState[outcomeIndex].balanceAttoRep;
-		uint256 actualForkThresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
-		uint256 forkTime = _getUniverseForkTime();
-		if (forkTime > getEscalationGameEndDate()) {
-			actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;
-		}
+		uint256 actualForkThresholdAttoRep = continuationSettlementForkThresholdAttoRep;
+		if (actualForkThresholdAttoRep == 0) actualForkThresholdAttoRep = _liveSettlementForkThresholdAttoRep();
 		return
 			proofVerifier.computeAllocatedWinningWithdrawal(principalAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
+	}
+
+	function _liveSettlementForkThresholdAttoRep() internal view returns (uint256 thresholdAttoRep) {
+		thresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
+		if (_getUniverseForkTime() > getEscalationGameEndDate()) thresholdAttoRep = nonDecisionThresholdAttoRep;
 	}
 
 	function _computeCarriedWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {

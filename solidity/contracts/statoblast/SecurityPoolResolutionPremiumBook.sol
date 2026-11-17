@@ -11,6 +11,7 @@ contract SecurityPoolResolutionPremiumBook {
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
 	uint256 public constant UNIT_SCALE = 1e9;
 	uint48 public constant MAXIMUM_REPORTING_WINDOW = 3 days + 7 weeks;
+	uint256 private constant MAXIMUM_INHERITED_UNITS_PER_CASH = 1e12;
 	address public immutable services;
 	uint256 public totalCash;
 	SecurityPoolPersistentMap.Store private tree;
@@ -93,6 +94,9 @@ contract SecurityPoolResolutionPremiumBook {
 		if (state.units == 0) return;
 		_removeSchedule(book, state);
 		if (state.portfolioEndTime == 0) {
+			// A thinly funded branch prices new premium in many units per token. A
+			// rate above the question domain earns at that maximum; the remainder is
+			// unused at the deadline. Reporting must never fail on a premium rate.
 			uint256 rate = state.units / MAXIMUM_REPORTING_WINDOW;
 			require(rate <= type(uint128).max, 'Premium rate exceeds question domain');
 			state.rate = uint128(rate);
@@ -155,10 +159,26 @@ contract SecurityPoolResolutionPremiumBook {
 		parent.assignedCash += amount - branchCash[child];
 		branchCash[child] = amount;
 	}
-	function createChild(uint248 source, uint248 child) external onlyServices {
+	/// @return dustCash Cash the caller must burn: a share too thin to carry the inherited units.
+	function createChild(uint248 source, uint248 child) external onlyServices returns (uint256 dustCash) {
 		Book storage parent = books[source];
 		require(parent.isSealed && !books[child].exists, 'Invalid premium child');
-		books[child] = Book(branchCash[child], parent.units, 0, 0, parent.refundedPrefix, parent.questionRoot, parent.rateRoot, parent.endRoot, parent.refundRoot, parent.tailRoot, parent.portfolioTimestamp, parent.portfolioTimestamp + 3 days, parent.refundedBefore, true, false);
+		uint256 cash = branchCash[child];
+		if (cash == 0 || parent.units / cash > MAXIMUM_INHERITED_UNITS_PER_CASH * UNIT_SCALE) {
+			// Inherited units without cash are worth nothing, and a book holding only
+			// such units could never price new funding. Units carrying only dust would
+			// price new funding in so many units that, after a few thinly chosen forks,
+			// the unit domain overflows and purchases revert. Either branch starts
+			// empty. Its dust leaves the source's assigned cash and is burned: the
+			// neutral cash that recovery divides must not change once choices close.
+			parent.assignedCash -= cash;
+			parent.cash -= cash;
+			totalCash -= cash;
+			branchCash[child] = 0;
+			books[child] = Book(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, parent.portfolioTimestamp, parent.portfolioTimestamp + 3 days, parent.refundedBefore, true, false);
+			return cash;
+		}
+		books[child] = Book(cash, parent.units, 0, 0, parent.refundedPrefix, parent.questionRoot, parent.rateRoot, parent.endRoot, parent.refundRoot, parent.tailRoot, parent.portfolioTimestamp, parent.portfolioTimestamp + 3 days, parent.refundedBefore, true, false);
 	}
 	function recover(uint248 source, uint256 id, uint256 shares, uint256 supply) external onlyServices returns (uint256 cash) {
 		Book storage book = books[source];

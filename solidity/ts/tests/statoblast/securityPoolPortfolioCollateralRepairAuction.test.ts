@@ -172,12 +172,29 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [loser.id] })).resolves.toMatchObject({ materialized: false, principal: 0n })
 	})
 
-	test('missing a closing quote refunds bid ETH', async () => {
+	test('the opening quote, expired by the deadline, still closes the sale', async () => {
+		const context = await prepare()
+		await context.report()
+		await context.open()
+		const bid = await context.bid(context.other, 2n)
+		// No report follows the opening one, so no price is valid at the deadline.
+		await context.mock.setTime(context.deadline)
+		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'priceValidUntil' })).toBeLessThan(context.deadline)
+		await context.finalize()
+		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(2n)
+	})
+
+	test('a closing price the inventory cannot back fills nothing and refunds bid ETH', async () => {
 		const context = await prepare()
 		await context.report()
 		await context.open()
 		const before = await context.balance(context.other.account.address)
 		const bid = await context.bid(context.other, 2n)
+		// At 2,000 REP per ETH one lot needs more REP than the whole inventory holds.
+		await addRepToMigrationBalance(context.owner, context.source, 30_000n * unit)
+		await splitMigrationRep(context.owner, context.source, 30_000n * unit, [1])
+		await approveToken(context.owner, context.token, context.feed)
+		await context.closingQuote(2_000n * unit)
 		await context.finalize()
 		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(0n)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [bid.id] }))

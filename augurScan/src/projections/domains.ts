@@ -39,8 +39,6 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'DepositOnOutcome',
 		'ForkCarryCheckpoint',
 		'ForkContinuationResumed',
-		'ForkedEscrowExported',
-		'ForkedEscrowRecorded',
 		'GameContinuedFromFork',
 		'GameStarted',
 		'InheritedThresholdTie',
@@ -51,7 +49,6 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'OrdinaryResidualRepBurned',
 		'ForkContinuationResidualRepBurned',
 		'VaultEscrowUpdated',
-		'VaultUnresolvedTotalsExported',
 	]),
 	// The reporter ledger names the game it registers or schedules, so both join that game's history.
 	...definitions('escalation', 'escalation', ['GameRegistered', 'ReporterFinalityScheduled'], ['game']),
@@ -63,7 +60,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('risk', 'vault', ['AuctionBidMaterialized'], ['vault']),
 	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled'], ['positionId', 'sourceId']),
 	...definitions('risk', 'portfolio', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
-	...definitions('risk', 'portfolio', ['PortfolioRegistered'], ['portfolio']),
+	...definitions('risk', 'portfolio', ['PortfolioDeployed', 'PortfolioRegistered'], ['portfolio']),
 	// The portfolio auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.
 	...definitions('risk', 'portfolio-auction', ['AuctionOpened', 'WinningVaultCreated', 'AuctionClosed']),
 	...definitions('fork', 'portfolio-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen'], ['universeId']),

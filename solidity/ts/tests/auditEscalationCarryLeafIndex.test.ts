@@ -72,7 +72,6 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 				}),
 			)
 		}
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: continuation.securityPool, functionName: 'recordForkedEscrowForOutcome', args: [client.account.address, QuestionOutcome.Yes, sourceYes.currentCarryTotalAttoRep, sourceYes.currentCarryTotalAttoRep] }))
 		return continuation
 	}
 

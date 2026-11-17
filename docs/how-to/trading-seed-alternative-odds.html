@@ -37,7 +37,7 @@
 						</ul>
 					</li>
 					<li>Approve the trading pool as an operator on the canonical ShareToken with <code>setApprovalForAll</code>; <code>initialize</code> pulls both deposits from the caller.</li>
-					<li>Call <code>initialize(yesAmount, noAmount, minLiquidity, recipient)</code> on the trading pool with those deposits. Set <code>minLiquidity</code> to the smaller deposit minus 1,000.</li>
+					<li>Call <code>initialize(yesAmount, noAmount, minLiquidity, recipient, deadline)</code> on the trading pool with those deposits. Set <code>minLiquidity</code> to the smaller deposit minus 1,000 and <code>deadline</code> to the latest timestamp at which the call may still execute.</li>
 					<li>Check the result: <code>getReserves()</code> returns your two deposits and <code>tradingStatus()</code> returns <code>Open</code>. If <code>initialize</code> reverted with <code>Already initialized</code>, someone else seeded the trading pool first.</li>
 				</ol>
 				<p><a href="../explanation/trading/pricing.html">Conditional pricing</a> works through the 70% example and explains why the larger reserve is the side you are betting against.</p>

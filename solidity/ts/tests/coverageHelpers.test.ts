@@ -348,12 +348,25 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	test('security pool factory constructor, range, and child authorization guards expose exact reasons', async () => {
 		const factoryArtifact = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory
+		// Any nonzero hash constructs: the deployers may be deployed after the factory, so only the hash is checked here.
+		const portfolioCreationCodeHash = `0x${'11'.repeat(32)}` as const
+		const portfolioModuleDeployers = [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress] as const
 		await assert.rejects(
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, `0x${'00'.repeat(32)}`, portfolioModuleDeployers],
+				}),
+			}),
+			/Portfolio creation code hash missing/,
+		)
+		await assert.rejects(
+			client.sendTransaction({
+				data: encodeDeployData({
+					abi: factoryArtifact.abi,
+					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
 				}),
 			}),
 			/Operations delegate zero/,
@@ -363,7 +376,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, client.account.address, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, client.account.address, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
 				}),
 			}),
 			/Operations delegate has no code/,
@@ -381,7 +394,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
 				}),
 			}),
 			/Accounting delegate has no code/,
@@ -399,7 +412,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, eventEmitter],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, eventEmitter, portfolioCreationCodeHash, portfolioModuleDeployers],
 			}),
 		)
 		await assert.rejects(

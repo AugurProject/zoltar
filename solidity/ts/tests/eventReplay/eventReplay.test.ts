@@ -715,11 +715,10 @@ describe('event-only replay', () => {
 		if (poolState.repTransferredAtFork !== 60n) throw new Error('child fork activation state mismatch')
 	})
 
-	test('escalation reducers track stable leaves, escrow, claims, exports, and residual settlement', () => {
+	test('escalation reducers track stable leaves, escrow, claims, and accrued surplus', () => {
 		const game = '0x1111111111111111111111111111111111111111'
 		const vault = '0x2222222222222222222222222222222222222222'
 		const secondVault = '0x3333333333333333333333333333333333333333'
-		const receiver = '0x4444444444444444444444444444444444444444'
 		const rootA = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 		const rootB = `0x${'0'.repeat(64)}` as Hex
 		const logs = [
@@ -777,34 +776,6 @@ describe('event-only replay', () => {
 			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 5, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
 			createReplayLog({
 				emitter: game,
-				eventName: 'ForkedEscrowRecorded',
-				logIndex: 6,
-				args: {
-					depositor: vault,
-					outcome: 2n,
-					sourcePrincipalTotalAttoRep: 20n,
-					childRepTotalAttoRep: 15n,
-					disputeStakedRepByVaultAttoRep: 15n,
-					totalDisputeStakedAttoRep: 15n,
-					outcomeBalanceAttoRep: 20n,
-				},
-			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'ForkedEscrowExported',
-				logIndex: 9,
-				args: {
-					vault,
-					repReceiver: receiver,
-					sourcePrincipalByOutcomeAttoRep: [0n, 0n, 20n],
-					childRepByOutcomeAttoRep: [0n, 0n, 15n],
-					totalChildRepToTransferAttoRep: 15n,
-					transferredRep: true,
-				},
-			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 10, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
-			createReplayLog({
-				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 11,
 				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, amountAttoRep: 4n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 4n },
@@ -823,19 +794,6 @@ describe('event-only replay', () => {
 					resultingTotalDisputeStakedAttoRep: 4n,
 				},
 			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'VaultUnresolvedTotalsExported',
-				logIndex: 13,
-				args: {
-					vault: secondVault,
-					repReceiver: zeroAddress,
-					principalByOutcomeAttoRep: [0n, 0n, 4n],
-					principalToTransferAttoRep: 4n,
-					transferredRep: false,
-				},
-			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 14, args: { vault: secondVault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
 			createReplayLog({ emitter: game, eventName: 'EscalationSurplusAccrued', logIndex: 15, args: { amountAttoRep: 2n, cumulativeSurplusAttoRep: 2n } }),
 		]
 
@@ -845,11 +803,10 @@ describe('event-only replay', () => {
 		if (replayed.escalationConsumptions.get(game)?.get('5:1')?.reason !== 0n) throw new Error('carry consumption mismatch')
 		if (replayed.escalationClaims.get(game)?.get('1:5')?.amountToWithdrawAttoRep !== 9n) throw new Error('claim accounting mismatch')
 		if (replayed.escalationVaultEscrowedRep.get(game)?.get(vault) !== 0n) throw new Error('vault escrow mismatch')
-		if (replayed.escalationTotalEscrowedRep.get(game) !== 0n) throw new Error('total escrow mismatch')
-		if (replayed.escalationLocalUnresolvedByVault.get(game)?.get(secondVault)?.[2] !== 0n) throw new Error('vault unresolved export mismatch')
-		const forkedEscrow = replayed.escalationForkedEscrow.get(game)?.get(`${vault}:2`)
-		if (forkedEscrow?.sourcePrincipalClaimedAttoRep !== 20n || forkedEscrow.childRepClaimedAttoRep !== 15n) throw new Error('forked escrow settlement mismatch')
-		if (replayed.escalationForkedExports.get(game)?.get(vault)?.totalChildRepToTransferAttoRep !== 15n) throw new Error('forked escrow export mismatch')
+		if (replayed.escalationVaultEscrowedRep.get(game)?.get(secondVault) !== 4n) throw new Error('second vault escrow mismatch')
+		if (replayed.escalationTotalEscrowedRep.get(game) !== 4n) throw new Error('total escrow mismatch')
+		if (replayed.escalationLocalUnresolvedByVault.get(game)?.get(vault)?.[1] !== 0n) throw new Error('consumed vault unresolved mismatch')
+		if (replayed.escalationLocalUnresolvedByVault.get(game)?.get(secondVault)?.[2] !== 4n) throw new Error('vault unresolved mismatch')
 		if (replayed.escalationSurplusAccrued.get(game) !== 2n) throw new Error('source-accrued REP surplus mismatch')
 	})
 

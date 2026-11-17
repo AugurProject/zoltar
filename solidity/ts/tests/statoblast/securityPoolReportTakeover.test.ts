@@ -166,12 +166,18 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		const preimage = (await loadOpenOracleEventState(sponsor, report)).latest
 		await fixture.base.mockWindow.advanceTime(481n)
 		const attacker = fixture.owner()
-		await writeContractAndWait(attacker, () => attacker.writeContract({ abi: oracleArtifact.abi, address: getInfraContractAddresses().openOracle, functionName: 'settle', args: [report, getOpenOracleGameTuple(preimage.game), getOpenOracleHelperTuple(preimage.helper)], gas: 1_500_000n }))
+		// The escrow burns an under-funded callback's gas, so OpenOracle rejects the whole settlement (InvalidGasLimit).
+		await expect(writeContractAndWait(attacker, () => attacker.writeContract({ abi: oracleArtifact.abi, address: getInfraContractAddresses().openOracle, functionName: 'settle', args: [report, getOpenOracleGameTuple(preimage.game), getOpenOracleHelperTuple(preimage.helper)], gas: 1_500_000n }))).rejects.toThrow(
+			'0x98bdb2e0',
+		)
 		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(0n)
 		expect(await sponsor.readContract({ ...feed, functionName: 'acceptedEpoch' })).toBe(epoch)
 		expect(await sponsor.readContract({ ...capital(), functionName: 'isPriceValid' })).toBe(false)
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...feed, functionName: 'recoverReport', args: [report] }))
+		// The report is still unsettled, so it cannot be recovered as failed; a funded settlement accepts it and runs the takeover.
+		await expect(sponsor.writeContract({ ...feed, functionName: 'recoverReport', args: [report] })).rejects.toThrow('Report not settled')
+		await openOracleSettle(attacker, report)
 		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(1n)
+		expect(await sponsor.readContract({ ...feed, functionName: 'acceptedEpoch' })).toBe(epoch + 1n)
 		expect((await sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [sponsor.account.address] }))[1]).toBe(100n * unit)
 	})
 })

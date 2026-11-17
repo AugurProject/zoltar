@@ -17,7 +17,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [['bots/chaos/src/monitoring/protocol-index.ts', 635]]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
-		['docs/charts/chartRuntime.ts', 875],
+		['docs/charts/chartRuntime.ts', 874],
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 964],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 607],
 	]),
@@ -42,7 +42,7 @@ export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2057],
 		['bots/open-oracle-arbitrager/tests/dashboard/dashboard-refresh.test.ts', 1576],
 		['shared/core/ts/evm/ethereum.test.ts', 3826],
-		['solidity/ts/tests/coverageHelpers.test.ts', 1765],
+		['solidity/ts/tests/coverageHelpers.test.ts', 1778],
 		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
 		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1859],
 		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2339],

@@ -10,6 +10,8 @@ function fixture() {
 	settings.portfolioPolicy.maximumReportFundingAttoEth = unit / 100n
 	const position = observation.positions[0]
 	if (position === undefined) throw new Error('Missing target')
+	// Two calls and their per-call overhead fill the feed's 6,000,000 operation allowance exactly.
+	settings.portfolioPolicy.reportOperationGasLimit = 2_900_000
 	return { observation, settings, position, run: (market = true) => portfolioReportTakeoverPlan(observation, position, settings, observation.snapshot.ownerPrincipalAttoRep, market) }
 }
 

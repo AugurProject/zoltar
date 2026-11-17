@@ -13,6 +13,9 @@ import { PERMIT_TYPES, splitSignature } from '../../testSupport/simulator/utils/
 import { flushSolidityBytecodeCoverageForTest, getSolidityBytecodeCoverageProfileHitCountForTest } from '../../testSupport/coverage/traceToSource'
 import { ensureDefined } from '../../testSupport/simulator/utils/testUtils'
 
+/** Direct pair calls take a deadline; these tests exercise other properties. */
+const NO_DEADLINE = 2n ** 64n
+
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 const rate = 10n ** 18n
 const universe = 17n
@@ -213,7 +216,7 @@ describe('factory, pair, and router integration', () => {
 		const payload = encodeFunctionData({ abi: pairArtifact.abi, functionName: 'sync' })
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingReentrantRecipient.abi, address: recipient, functionName: 'configure', args: [pair, payload] }))
 		const reservesBefore = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
-		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, rate, 1n, recipient] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, rate, 1n, recipient, NO_DEADLINE] }))
 		const reservesAfter = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
 		expect(await client.readContract({ abi: mocks.TradingReentrantRecipient.abi, address: recipient, functionName: 'reentryBlocked' })).toBe(true)
 		expect(reservesAfter[0]).toBeGreaterThan(reservesBefore[0])
@@ -224,12 +227,12 @@ describe('factory, pair, and router integration', () => {
 	test('closes swaps and additions while awaiting continuation or inactive, but always permits removal', async () => {
 		await initialize()
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setAwaitingForkContinuation', args: [true] }))
-		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Fork continuation pending')
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Fork continuation pending')
 		await expect(client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, 1n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 1n })).rejects.toThrow('Fork continuation pending')
 
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setAwaitingForkContinuation', args: [false] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setSystemState', args: [1] }))
-		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Pool inactive')
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Pool inactive')
 		await expect(client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, 1n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 1n })).rejects.toThrow('Pool inactive')
 
 		const liquidity = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
@@ -251,7 +254,7 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
 		const frontRunNo = (seed * rate) / 4n
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 2n, frontRunNo] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [false, frontRunNo, 1n, account] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [false, frontRunNo, 1n, account, NO_DEADLINE] }))
 		const [yesReserve, noReserve] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
 		expect((noReserve * 10_000n) / (yesReserve + noReserve)).toBeGreaterThan(4_900n)
 		await expect(client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, deposit, maximumYes, maximumNo, minimumLiquidity, account, 10n ** 12n], value: deposit })).rejects.toThrow('Liquidity price slippage')
@@ -298,7 +301,7 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
 		const swapYes = 1_234n * rate + 567n
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 1n, swapYes] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, swapYes, 1n, account] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, swapYes, 1n, account, NO_DEADLINE] }))
 		for (const deposit of [1n, 333n, 4_001n]) {
 			const state = await readPoolState()
 			const quote = await client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, deposit, unboundedShares, unboundedShares, 0n, account, deadline], value: deposit })
@@ -337,7 +340,7 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, universe << 8n, 1n] }))
 		await expect(client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeTransferFrom', args: [account, pair, universe << 8n, 1n, '0x'] })).rejects.toThrow('Unsupported share id')
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionData.abi, address: questionData, functionName: 'setEndTime', args: [question, 1n] }))
-		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Question ended')
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Question ended')
 		const liquidity = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account, 10n ** 12n] }))
 		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })).toBe(0n)
@@ -367,7 +370,7 @@ describe('factory, pair, and router integration', () => {
 			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, inputId, amount + donation] }))
 			if (donation > 0n) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeTransferFrom', args: [account, pair, inputId, donation, '0x'] }))
 			const before = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getEffectiveReserves' })
-			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [yesForNo, amount, 1n, account] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [yesForNo, amount, 1n, account, NO_DEADLINE] }))
 			const after = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
 			expect(after[0] * after[1]).toBeGreaterThanOrEqual(before[0] * before[1])
 			expect(await tokenBalance(pair, 1n)).toBe(after[0])
@@ -395,7 +398,7 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, 1_000n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 1_000n }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 1n, rate] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, rate, 1n, account] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, rate, 1n, account, NO_DEADLINE] }))
 		expect(await tokenBalance(pair, 0n)).toBe(0n)
 	})
 
@@ -419,7 +422,7 @@ describe('factory, pair, and router integration', () => {
 			const inputOutcome = yesForNo ? 1n : 2n
 			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | inputOutcome, 20n * rate] }))
 			const before = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getEffectiveReserves' })
-			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [yesForNo, 20n * rate, 1n, account] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [yesForNo, 20n * rate, 1n, account, NO_DEADLINE] }))
 			const after = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getEffectiveReserves' })
 			expect(after[0] * after[1]).toBeGreaterThanOrEqual(before[0] * before[1])
 		}
@@ -427,7 +430,7 @@ describe('factory, pair, and router integration', () => {
 			const inputOutcome = yesForNo ? 1n : 2n
 			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | inputOutcome, 100n * rate] }))
 			const before = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getEffectiveReserves' })
-			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [yesForNo, 10n * rate, 100n * rate, account] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [yesForNo, 10n * rate, 100n * rate, account, NO_DEADLINE] }))
 			const after = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getEffectiveReserves' })
 			expect(after[0] * after[1]).toBeGreaterThanOrEqual(before[0] * before[1])
 		}
@@ -440,10 +443,10 @@ describe('factory, pair, and router integration', () => {
 		const requiredInput = quote[0]
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 1n, requiredInput + rate] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
-		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [true, requestedOutput, requiredInput - 1n, account] })).rejects.toThrow('Swap slippage')
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [true, requestedOutput, requiredInput - 1n, account, NO_DEADLINE] })).rejects.toThrow('Swap slippage')
 		const inputBefore = await tokenBalance(account, 1n)
 		const outputBefore = await tokenBalance(account, 2n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [true, requestedOutput, requiredInput, account] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [true, requestedOutput, requiredInput, account, NO_DEADLINE] }))
 		const inputCharged = inputBefore - (await tokenBalance(account, 1n))
 		const outputDelivered = (await tokenBalance(account, 2n)) - outputBefore
 		expect(outputDelivered).toBe(requestedOutput)
@@ -468,12 +471,48 @@ describe('factory, pair, and router integration', () => {
 		expect(pairBalancesAfter[2] + noOut).toBe(pairBalancesBefore[2])
 	})
 
+	test('lets a dust LP position exit when only one side of its share rounds to zero', async () => {
+		const yesId = (universe << 8n) | 1n
+		const noId = (universe << 8n) | 2n
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, yesId, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, noId, 1_001n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'initialize', args: [1_001n, 1_001n, 1n, account, NO_DEADLINE] }))
+		// Move the price until one LP unit is worth less than one NO share.
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 2_000n, 1n, account, NO_DEADLINE] }))
+		const [yesReserve, noReserve] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
+		expect(noReserve).toBeLessThan(1_001n)
+		const yesBefore = await tokenBalance(account, 1n)
+		const noBefore = await tokenBalance(account, 2n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [1n, 0n, 0n, account, 10n ** 12n] }))
+		expect((await tokenBalance(account, 1n)) - yesBefore).toBe(yesReserve / 1_001n)
+		expect((await tokenBalance(account, 2n)) - noBefore).toBe(0n)
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })).toBe(0n)
+		// The permanently locked minimum liquidity keeps both reserves positive.
+		const locked = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
+		expect(locked[0]).toBeGreaterThan(0n)
+		expect(locked[1]).toBeGreaterThan(0n)
+	})
+
+	test('direct pair calls reject an expired deadline', async () => {
+		await initialize()
+		const expired = (await client.getBlock()).timestamp - 1n
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 1n, 10n * rate] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 2n, 10n * rate] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, rate, 1n, account, expired] })).rejects.toThrow('Deadline expired')
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [true, rate, 10n * rate, account, expired] })).rejects.toThrow('Deadline expired')
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'addLiquidity', args: [rate, rate, 1n, account, expired] })).rejects.toThrow('Deadline expired')
+		// The same swap succeeds while its deadline is still ahead.
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, rate, 1n, account, NO_DEADLINE] }))
+	})
+
 	test('does not resume trading after lifecycle closure', async () => {
 		await initialize()
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionData.abi, address: questionData, functionName: 'setEndTime', args: [question, 1n] }))
 		for (let attempt = 0; attempt < 2; attempt++) {
-			await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Question ended')
-			await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [true, 1n, 10n, account] })).rejects.toThrow('Question ended')
+			await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Question ended')
+			await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [true, 1n, 10n, account, NO_DEADLINE] })).rejects.toThrow('Question ended')
 		}
 	})
 
@@ -492,7 +531,7 @@ describe('factory, pair, and router integration', () => {
 		test(`closes swaps after ${outcomeName} resolution while preserving raw LP removal`, async () => {
 			await initialize()
 			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockForker.abi, address: forker, functionName: 'setQuestionOutcome', args: [pool, outcome] }))
-			await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Question resolved')
+			await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Question resolved')
 			const liquidity = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account, 10n ** 12n] }))
 			expect(await tokenBalance(pair, 0n)).toBe(0n)
@@ -502,8 +541,8 @@ describe('factory, pair, and router integration', () => {
 	test('benchmarks every hot operation against a funded pool fixture', async () => {
 		await initialize()
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
-		await measuredTransaction('exact-input-swap', () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 100n * rate, 1n, account] }))
-		await measuredTransaction('exact-output-swap', () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [false, 10n * rate, 100n * rate, account] }))
+		await measuredTransaction('exact-input-swap', () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 100n * rate, 1n, account, NO_DEADLINE] }))
+		await measuredTransaction('exact-output-swap', () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [false, 10n * rate, 100n * rate, account, NO_DEADLINE] }))
 		await measuredTransaction('eth-entry', () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1_000n, 1, 1n, account, 10n ** 12n], value: 1_000n }))
 		await measuredTransaction('add-liquidity', () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, 1_000n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 1_000n }))
 		const liquidity = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
@@ -526,7 +565,7 @@ describe('factory, pair, and router integration', () => {
 
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 20_000n }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [currentPair, true] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'initialize', args: [10_000n * rate, 10_000n * rate, 1n, account] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'initialize', args: [10_000n * rate, 10_000n * rate, 1n, account, NO_DEADLINE] }))
 		const liquidity = await client.readContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'balanceOf', args: [account] })
 		await expect(client.writeContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account, 0n] })).rejects.toThrow('Deadline expired')
 		const permitDeadline = 10n ** 12n
@@ -567,6 +606,9 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(permitOwnerClient, () => permitOwnerClient.writeContract({ abi: routerArtifact.abi, address: currentRouter, functionName: 'removeLiquidityWithPermit', args: [currentPair, permittedLiquidity, 1n, 1n, permitOwner.address, permitDeadline, permit.v, permit.r, permit.s] }))
 		expect(await client.readContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'allowance', args: [permitOwner.address, currentRouter] })).toBe(0n)
 		await expect(permitOwnerClient.writeContract({ abi: routerArtifact.abi, address: currentRouter, functionName: 'removeLiquidityWithPermit', args: [currentPair, permittedLiquidity, 1n, 1n, permitOwner.address, permitDeadline, permit.v, permit.r, permit.s] })).rejects.toThrow('LP permit or allowance')
+		// An expired deadline fails the same way without a standing allowance: the permit is refused before the pair checks its own deadline.
+		const expiredDeadline = (await client.getBlock()).timestamp - 1n
+		await expect(permitOwnerClient.writeContract({ abi: routerArtifact.abi, address: currentRouter, functionName: 'removeLiquidityWithPermit', args: [currentPair, permittedLiquidity, 1n, 1n, permitOwner.address, expiredDeadline, permit.v, permit.r, permit.s] })).rejects.toThrow('LP permit or allowance')
 
 		const preSubmittedLiquidity = liquidity / 8n
 		const preSubmittedPermit = await signPermit({ value: preSubmittedLiquidity })

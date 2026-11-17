@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, getCreate2Address, parseAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, getCreate2Address, keccak256, parseAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createStatoblastInitCodes } from './initCodes.js'
 
 const proxy: Address = '0x0000000000000000000000000000000000000001'
@@ -17,7 +17,8 @@ const artifacts = {
 	openOraclePriceCoordinatorFactory: artifact(6),
 	priceCoordinatorDeploymentWorker: artifact(7),
 	sharedPoolPriceFeedDeploymentWorker: artifact(8),
-	securityPoolFactory: artifact(9, 'address,address,address,address,address,address,address,address,address'),
+	securityPoolFactory: artifact(9, 'address,address,address,address,address,address,address,address,address,bytes32,address[9]'),
+	securityPoolPortfolio: artifact(26),
 	securityPoolForker: artifact(10, 'address,address'),
 	securityPoolForkerPortfolioDelegate: artifact(11, 'address'),
 	securityPoolOperationsDelegate: artifact(12),
@@ -64,5 +65,37 @@ describe('shared capital infrastructure init codes', () => {
 		expect(constructorArgs(builders.getSecurityPoolPortfolioAuctionDeployerByteCode())).toBe('0x')
 		expect(new Set(modules).size).toBe(9)
 		expect(addresses.securityPoolPortfolioAuctionDeployer).toBe(getCreate2Address({ bytecode: builders.getSecurityPoolPortfolioAuctionDeployerByteCode(), from: proxy, salt: zeroSalt }))
+	})
+
+	test('the factory pins the portfolio creation code hash and the module deployers in portfolio constructor order', () => {
+		const addresses = builders.createInfraContractAddresses(weth, { getZoltarAddress: () => zoltar, getZoltarQuestionDataAddress: () => questionData })()
+		const factoryCode = builders.getSecurityPoolFactoryByteCode(addresses)
+		const deployers = [
+			addresses.securityPoolCapitalLedgerDeployer,
+			addresses.securityPoolCommitmentIndexDeployer,
+			addresses.securityPoolCapitalFeeStreamsDeployer,
+			addresses.securityPoolSettlementBookDeployer,
+			addresses.securityPoolPortfolioSettlementDeployer,
+			addresses.securityPoolReporterLedgerDeployer,
+			addresses.securityPoolPortfolioForkCoordinatorDeployer,
+			addresses.securityPoolPortfolioServicesDeployer,
+			addresses.securityPoolPortfolioAuctionDeployer,
+		] as const
+		expect(constructorArgs(factoryCode)).toBe(
+			encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address,address,address,bytes32,address[9]'), [
+				addresses.securityPoolForker,
+				addresses.zoltarQuestionData,
+				addresses.escalationGameFactory,
+				addresses.openOracle,
+				addresses.zoltar,
+				addresses.shareTokenFactory,
+				addresses.openOraclePriceCoordinatorFactory,
+				addresses.securityPoolOperationsDelegate,
+				addresses.securityPoolEventEmitter,
+				keccak256(builders.getSecurityPoolPortfolioCreationCode()),
+				deployers,
+			]),
+		)
+		expect(addresses.securityPoolFactory).toBe(getCreate2Address({ bytecode: factoryCode, from: proxy, salt: zeroSalt }))
 	})
 })

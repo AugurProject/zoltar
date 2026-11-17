@@ -129,8 +129,8 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 	let fundingError: string | undefined
 	if (snapshot?.reportingOpen && snapshot.observation !== undefined && price !== undefined && price > 0n && requestedWeth !== undefined) {
 		try {
-			minimumWethAttoEth = quotePortfolioPriceFunding(snapshot, price, 0n).weth
 			funding = quotePortfolioPriceFunding(snapshot, price, requestedWeth)
+			minimumWethAttoEth = funding.minimumWeth
 		} catch (error) {
 			fundingError = getErrorMessage(error, 'Invalid report funding.')
 		}
