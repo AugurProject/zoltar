@@ -127,13 +127,14 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, 255 as QuestionOutcome, reportBond))
 	})
 
-	test('depositOnOutcome rejects tie adjustments that would drop the accepted deposit below the minimum bond', async () => {
+	test('depositOnOutcome accepts a start-bond deposit that the tie adjustment leaves one attoREP below the bond', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
-		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /below start bond/i)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const balances = await getBalances(client, escalationGameAddress)
 		assert.strictEqual(balances.invalid, reportBond, 'original leading balance should stay untouched')
-		assert.strictEqual(balances.yes, 0n, 'tying minimum deposit should not be partially accepted')
+		assert.strictEqual(balances.yes, reportBond - 1n, 'the start bond applies to the offered amount, before the tie adjustment')
+		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, reportBond - 1n), 'an offered amount below the start bond must still revert')
 	})
 
 	test('getEscalationGameDeposits paginates deposits without adding synthetic entries', async () => {

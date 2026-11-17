@@ -34,7 +34,6 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
 		_emitCarryDepositConsumed(outcomeIndex, proof.depositor, proof.amountAttoRep, proof.parentDepositIndex, proof.sourceNodeId, CarryConsumptionReason.WinningClaim);
 		uint256 burnAmountAttoRep;
-		_freezeContinuationForkThreshold();
 		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeCarriedWinningWithdrawal(outcomeIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep, proof.leafIndex);
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditExternalClaimOwners, (forkCarrySourceGame, depositor, proof.parentDepositIndex, amountToWithdrawAttoRep, burnAmountAttoRep)));
 		_burnWinningHaircut(burnAmountAttoRep, winnerHaircutPaidByFork);
@@ -116,11 +115,6 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		return outcomeState[uint8(outcome)].localNodeIds.length;
 	}
 
-	function _freezeContinuationForkThreshold() private {
-		if (continuationSettlementForkThresholdAttoRep == 0)
-			continuationSettlementForkThresholdAttoRep = _liveSettlementForkThresholdAttoRep();
-	}
-
 	function _getPayoutQuestionResolution() private view returns (BinaryOutcomes.BinaryOutcome questionResolution) {
 		questionResolution = getFinalQuestionResolution();
 		require(questionResolution == ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool), 'Pool/game outcome mismatch');
@@ -135,7 +129,6 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		depositor = deposit.depositor;
 		originalDepositAmountAttoRep = deposit.amountAttoRep;
 		uint256 burnAmountAttoRep;
-		if (!ordinarySettlementInitialized) _freezeContinuationForkThreshold();
 		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeWinningWithdrawal(uint8(outcome), deposit.amountAttoRep, deposit.cumulativeAmountAttoRep);
 		if (ordinarySettlementInitialized) ordinaryWinningReserveAttoRep -= amountToWithdrawAttoRep + burnAmountAttoRep;
 		_consumeEscrowedRepForBundle(depositor, originalDepositAmountAttoRep);

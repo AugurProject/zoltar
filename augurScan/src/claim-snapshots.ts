@@ -127,12 +127,10 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 	const zoltar = address(await call(ctx.pool, 'securityPool', 'zoltar'))
 	const universe = uint(await call(ctx.pool, 'securityPool', 'universeId'))
 	const forkTime = uint(await call(zoltar, 'zoltar', 'getForkTime', [universe]))
-	const ordinarySettled = !ctx.continuation && flag(await call(gameAddress, 'escalationGame', 'ordinarySettlementInitialized'))
 	const readForkThreshold = async () => {
-		if (ordinarySettled) return uint(await call(gameAddress, 'escalationGame', 'ordinarySettlementForkThresholdAttoRep'))
-		// A game without ordinary settlement freezes its threshold at the first winning claim; zero means no claim yet.
-		const frozen = uint(await call(gameAddress, 'escalationGame', 'continuationSettlementForkThresholdAttoRep'))
-		if (frozen !== 0n) return frozen
+		// Every accepted deposit and a continuation's resume record the threshold settlement scales by; zero means the game never changed.
+		const recorded = uint(await call(gameAddress, 'escalationGame', 'settlementForkThresholdAttoRep'))
+		if (recorded !== 0n) return recorded
 		if (forkTime > uint(state['endTimestamp'])) return uint(state['nonDecisionThresholdAttoRep'])
 		return uint(await call(zoltar, 'zoltar', 'getForkThresholdAttoRep', [universe]))
 	}

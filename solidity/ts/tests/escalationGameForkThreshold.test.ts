@@ -63,76 +63,50 @@ describe('Escalation Game Fork Threshold Test', () => {
 	}
 	const capitalBalance = (owner = client.account.address) => client.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'ownerCollateral', args: [owner] })
 
-	test('withdrawal amount scaled by actual fork threshold after decrease', async () => {
+	test('a fork threshold that falls while the game is open scales the winning payout', async () => {
 		const depositAmount = 100n * 10n ** 18n
-
-		// Advance time past the question's end date to allow escalation game deposit
 		await mockWindow.setTime(questionEndDate + 1n)
-
-		// Deploy escalation game and deposit on Yes
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
-		const escalationGameAddress = securityPoolAddresses.escalationGame
-
-		// Get escalation threshold (fixed)
-		const escalationThreshold = await getNonDecisionThresholdAttoRep(client, escalationGameAddress)
-
-		// Get current total supply of REP
-		const repToken = getRepTokenAddress(GENESIS_UNIVERSE)
-		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
-
-		// Ensure initial fork threshold > escalationThreshold (should be twice)
-		const initialForkThreshold = initialTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
-		assert.ok(initialForkThreshold > escalationThreshold, 'initial fork threshold must be greater than escalation threshold')
-
-		// Lower the tracked universe theoretical supply to make actual fork threshold less than escalationThreshold
-		const newTotalSupply = initialTotalSupply / 10n // reduce to 10% to get significant ratio
+		// The first deposit deploys the game and fixes its non-decision threshold from the healthy supply.
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
+		const escalationThreshold = await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame)
+		const initialTotalSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(GENESIS_UNIVERSE))
+		assert.ok(initialTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor > escalationThreshold, 'initial fork threshold must be greater than escalation threshold')
+		const newTotalSupply = initialTotalSupply / 10n
 		await overrideGenesisTheoreticalSupply(newTotalSupply)
-
-		const actualForkThreshold = newTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
-		assert.ok(actualForkThreshold < escalationThreshold, 'actual fork threshold should be lower after override')
-
-		// Advance time to allow the escalation game to finish and outcome to be known
+		assert.ok(newTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor < escalationThreshold, 'actual fork threshold should be lower after override')
+		// The game's last change records the reduced threshold.
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: securityPoolAddresses.escalationGame, functionName: 'settlementForkThresholdAttoRep' }), newTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor)
 		await mockWindow.advanceTime(10n * DAY)
 
-		// Withdraw via SecurityPool's withdrawFromEscalationGame
 		const repBefore = await capitalBalance()
 		const walletRepBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: statoblast_SecurityPool_SecurityPool.abi,
-					address: securityPoolAddresses.securityPool,
-					functionName: 'withdrawFromEscalationGame',
-					args: [QuestionOutcome.Yes, [0n]], // deposit index 0
-				}),
-		)
-		const repAfter = await capitalBalance()
-		const walletRepAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-
-		assert.deepStrictEqual(repAfter, repBefore, 'reporter settlement must not create underwriting collateral')
-		assert.strictEqual(walletRepAfter - walletRepBefore, depositAmount / 5n, 'winning payout should be scaled by the lowered fork threshold after applying the single-sided winner payout schedule')
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n, 1n])
+		assert.deepStrictEqual(await capitalBalance(), repBefore, 'reporter settlement must not create underwriting collateral')
+		assert.strictEqual((await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)) - walletRepBefore, depositAmount / 5n, 'winning payout should be scaled by the lowered fork threshold after applying the single-sided winner payout schedule')
 	})
 
-	test('ordinary settlement freezes a reduced payout before later supply changes', async () => {
+	test('supply changes after the last deposit neither shrink nor enlarge the ordinary payout', async () => {
 		const depositAmount = 100n * 10n ** 18n
 		await mockWindow.setTime(questionEndDate + 1n)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
 		const initialSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(GENESIS_UNIVERSE))
 		await overrideGenesisTheoreticalSupply(initialSupply / 10n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
+		// Restoring the supply once the game can no longer change does not lift the recorded scaling.
+		await overrideGenesisTheoreticalSupply(initialSupply)
 		await mockWindow.advanceTime(10n * DAY)
 		const before = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
-		await overrideGenesisTheoreticalSupply(initialSupply)
+		await overrideGenesisTheoreticalSupply(initialSupply / 20n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: securityPoolAddresses.escalationGame, functionName: 'settleOrdinaryGame' }))
-		assert.strictEqual(await reporterBalance(), depositAmount / 10n, 'the reserve should cover precisely the remaining frozen claim')
+		assert.strictEqual(await reporterBalance(), depositAmount / 10n, 'the reserve should cover precisely the remaining recorded claim')
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [1n])
-		assert.strictEqual((await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)) - before, depositAmount / 5n, 'supply changes after settlement must neither enlarge nor shrink the reserved payout')
+		assert.strictEqual((await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)) - before, depositAmount / 5n, 'supply changes after the last deposit must neither enlarge nor shrink the reserved payout')
 		assert.strictEqual(await reporterBalance(), 0n)
 	})
 
-	test('reduced-threshold scaling remains active immediately before and exactly at game end, but not one second after', async () => {
+	test('settlement scales by the recorded threshold whenever the universe later forks', async () => {
 		const proofVerifier = await deployContract(
 			client,
 			encodeDeployData({
@@ -177,11 +151,19 @@ describe('Escalation Game Fork Threshold Test', () => {
 			}),
 		)
 
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
+				address: harness,
+				functionName: 'recordSettlementForkThreshold',
+			}),
+		)
+
 		const expectedScaledPayout = (winningDeposit * actualForkThreshold) / nonDecisionThresholdAttoRep
 		for (const boundaryCase of [
 			{ expectedPayout: expectedScaledPayout, forkTime: gameEndDate - 1n, name: 'one second before' },
 			{ expectedPayout: expectedScaledPayout, forkTime: gameEndDate, name: 'exactly at' },
-			{ expectedPayout: winningDeposit, forkTime: gameEndDate + 1n, name: 'one second after' },
+			{ expectedPayout: expectedScaledPayout, forkTime: gameEndDate + 1n, name: 'one second after' },
 		]) {
 			await writeContractAndWait(client, () =>
 				client.writeContract({
@@ -197,7 +179,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 				functionName: 'computeWinningWithdrawal',
 				args: [winningDeposit, winningDeposit],
 			})
-			assert.strictEqual(amountToWithdrawAttoRep, boundaryCase.expectedPayout, `${boundaryCase.name} game end should preserve the documented fork-threshold payout boundary`)
+			assert.strictEqual(amountToWithdrawAttoRep, boundaryCase.expectedPayout, `a fork ${boundaryCase.name} game end must not change the recorded payout scaling`)
 			assert.strictEqual(burnAmount, 0n, 'the single-sided boundary harness should not create a reward haircut')
 		}
 	})

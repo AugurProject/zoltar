@@ -170,10 +170,9 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 			{ label: 'ordinarySettlementInitialized', slot: '446', offset: 0, type: 'bool' },
 			{ label: 'ordinarySettlementOutcome', slot: '446', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
 			{ label: 'ordinaryWinningReserveAttoRep', slot: '447', offset: 0, type: 'uint256' },
-			{ label: 'ordinarySettlementForkThresholdAttoRep', slot: '448', offset: 0, type: 'uint256' },
-			{ label: 'creditedSurplusAttoRep', slot: '449', offset: 0, type: 'uint256' },
-			{ label: 'responseRestartedUntil', slot: '450', offset: 0, type: 'uint256' },
-			{ label: 'continuationSettlementForkThresholdAttoRep', slot: '451', offset: 0, type: 'uint256' },
+			{ label: 'creditedSurplusAttoRep', slot: '448', offset: 0, type: 'uint256' },
+			{ label: 'responseRestartedUntil', slot: '449', offset: 0, type: 'uint256' },
+			{ label: 'settlementForkThresholdAttoRep', slot: '450', offset: 0, type: 'uint256' },
 		],
 	)
 

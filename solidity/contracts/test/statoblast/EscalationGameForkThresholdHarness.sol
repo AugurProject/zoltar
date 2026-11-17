@@ -60,6 +60,10 @@ contract EscalationGameForkThresholdHarness is EscalationGameCalculations {
 		outcomeState[1].balanceAttoRep = winningBalanceAttoRep;
 	}
 
+	function recordSettlementForkThreshold() external {
+		settlementForkThresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
+	}
+
 	function computeWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) external view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		return _computeWinningWithdrawal(1, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}

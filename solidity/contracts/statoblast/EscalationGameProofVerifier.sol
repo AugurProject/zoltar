@@ -40,13 +40,15 @@ contract EscalationGameProofVerifier {
 	function computeAcceptedDepositAmount(uint256 outcomeIndex, uint256 requestedAmountAttoRep, uint256 currentBalanceAttoRep, uint256 roomAttoRep, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256[3] calldata balancesAttoRep) external pure returns (uint256 acceptedAmountAttoRep, uint256 newBalanceAttoRep) {
 		acceptedAmountAttoRep = requestedAmountAttoRep > roomAttoRep ? roomAttoRep : requestedAmountAttoRep;
 		newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep;
+		// The start bond applies to the amount offered. The tie trim below may then
+		// leave a start-bond report one attoREP under the bond, behind the leader.
+		require(acceptedAmountAttoRep >= startBondAttoRep || newBalanceAttoRep == nonDecisionThresholdAttoRep, 'Below start bond');
 		uint256 maxBalanceAttoRep = _maxOutcomeBalance(balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2]);
 		bool otherHasMax = _otherOutcomeHasBalance(outcomeIndex, balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2], maxBalanceAttoRep);
 		if (newBalanceAttoRep == maxBalanceAttoRep && otherHasMax && maxBalanceAttoRep < nonDecisionThresholdAttoRep) {
 			acceptedAmountAttoRep -= 1;
 			newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep;
 		}
-		require(acceptedAmountAttoRep >= startBondAttoRep || newBalanceAttoRep == nonDecisionThresholdAttoRep, 'Below start bond');
 	}
 
 	function computeWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) external pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {

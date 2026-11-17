@@ -59,7 +59,6 @@ abstract contract EscalationGameStorage {
 	bool public ordinarySettlementInitialized;
 	BinaryOutcomes.BinaryOutcome internal ordinarySettlementOutcome;
 	uint256 public ordinaryWinningReserveAttoRep;
-	uint256 public ordinarySettlementForkThresholdAttoRep;
 	// Ordinary deposits irrevocably release the minimum outcome balance. Reporter
 	// principal remains nominal because only one outcome can claim in each child.
 	uint256 public creditedSurplusAttoRep;
@@ -67,10 +66,11 @@ abstract contract EscalationGameStorage {
 	// curve alone cannot guarantee one: a challenger resting just below the leader
 	// pushes the curve deadline to the leader's own stake, then flips at that second.
 	uint256 public responseRestartedUntil;
-	// A continuation scales winning claims by the universe's fork threshold. The first
-	// claim freezes it, as ordinary settlement does: otherwise REP burned between two
-	// claims, including each claim's own haircut, would pay later claimants less.
-	uint256 public continuationSettlementForkThresholdAttoRep;
+	// Winning claims scale by the universe's fork threshold as it stood when the game
+	// last changed: every accepted deposit and a continuation's resume record it. REP
+	// burned once the game can no longer change, including each claim's own haircut,
+	// cannot pay any winner less.
+	uint256 public settlementForkThresholdAttoRep;
 
 	function _strictStakeLeader() internal view returns (BinaryOutcomes.BinaryOutcome leader) {
 		uint256 highest;

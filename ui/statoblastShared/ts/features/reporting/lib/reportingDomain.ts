@@ -303,7 +303,7 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (projectedDeposit === undefined)
 		return {
 			actualDepositAmount: undefined,
-			reason: 'Increase the report amount slightly to avoid a tie at the minimum report.',
+			reason: 'The escalation game would not accept this report amount.',
 		}
 	const belowRequiredSupportReason = getReportingBelowRequiredSupportReason(details, selectedSide.balance, selectedSide.balance + projectedDeposit.acceptedAmountAttoRep)
 	if (belowRequiredSupportReason !== undefined) return { actualDepositAmount: undefined, reason: belowRequiredSupportReason }

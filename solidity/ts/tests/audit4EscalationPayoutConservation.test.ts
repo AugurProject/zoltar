@@ -129,17 +129,17 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 		let burned = 0n
 
 		// 1. Healthy threshold: the inherited leaf, whose principal already left as surplus, is paid in full.
-		// The first claim freezes the threshold every later claim of this game is scaled by.
+		// The last deposit recorded the threshold every claim of this game is scaled by.
 		const frozen = await threshold()
 		expect(frozen).toBeGreaterThanOrEqual(nonDecision)
-		expect(await owner.readContract({ ...g, functionName: 'continuationSettlementForkThresholdAttoRep' })).toBe(0n)
+		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(frozen)
 		const tree = new SparseNullifierTree()
 		const firstExpected = scaledClaim(first.amount, first.cumulative, binding, balances[INVALID], await threshold(), nonDecision)
 		expect(firstExpected.payout).toBe(40n * K + 16n * K)
 		expect(await e2e.claimInherited(r6, child.pool, INVALID, inherited, [first], tree)).toBe(firstExpected.payout)
 		paid += firstExpected.payout
 		burned += firstExpected.burn
-		expect(await owner.readContract({ ...g, functionName: 'continuationSettlementForkThresholdAttoRep' })).toBe(frozen)
+		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(frozen)
 
 		// 2. Holders burn until the universe's fork threshold is below the game's non-decision threshold.
 		for (const holder of everyone) {

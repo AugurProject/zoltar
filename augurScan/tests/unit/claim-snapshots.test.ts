@@ -64,7 +64,7 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; ordinarySettled?: boolean; frozenForkThreshold?: bigint } = {}): StateRead =>
+	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; recordedForkThreshold?: bigint } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
 		const kind = ['getInheritedClaimAllocation', 'getClaimCheckpointProgress'].includes(name) ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
@@ -93,12 +93,8 @@ const fixtureRead =
 				return 0n
 			case 'getForkThresholdAttoRep':
 				return 500n
-			case 'ordinarySettlementInitialized':
-				return options.ordinarySettled ?? false
-			case 'ordinarySettlementForkThresholdAttoRep':
-				return 7n
-			case 'continuationSettlementForkThresholdAttoRep':
-				return options.frozenForkThreshold ?? 0n
+			case 'settlementForkThresholdAttoRep':
+				return options.recordedForkThreshold ?? 0n
 			case 'getOutcomeState':
 				return {
 					balanceAttoRep: 150n,
@@ -134,18 +130,18 @@ test('reconstructs inherited membership and independent unspent proofs with tagg
 	expect(result.positions.every(position => position['nullifier_root'] === createSparseNullifier([]).getRoot())).toBe(true)
 })
 
-test('ordinary claim evidence uses the frozen threshold and telescoping interval payouts', async () => {
-	const result = await sampleClaimPositions(root, fixtureRead({ ordinarySettled: true }), state)
+test('ordinary claim evidence uses the recorded threshold and telescoping interval payouts', async () => {
+	const result = await sampleClaimPositions(root, fixtureRead({ recordedForkThreshold: 7n }), state)
 	expect(result.positions.map(position => position['payout_atto_rep'])).toEqual(['0', '0', '1'])
 	expect(result.positions.map(position => position['burn_atto_rep'])).toEqual(['13', '13', '14'])
 	expect(result.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '7' })
 })
 
-test('unsettled claim evidence uses the threshold frozen at the first winning claim instead of the live one', async () => {
+test('claim evidence uses the threshold the game recorded instead of the live one', async () => {
 	const live = await sampleClaimPositions(root, fixtureRead(), state)
 	expect(live.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '500' })
-	const frozen = await sampleClaimPositions(root, fixtureRead({ frozenForkThreshold: 900n }), state)
-	expect(frozen.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '900' })
+	const recorded = await sampleClaimPositions(root, fixtureRead({ recordedForkThreshold: 900n }), state)
+	expect(recorded.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '900' })
 })
 
 test('claim snapshots continue past empty consumed-node pages', async () => {
@@ -224,7 +220,7 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 				return 0n
 			case 'getForkThresholdAttoRep':
 				return 1000n
-			case 'continuationSettlementForkThresholdAttoRep':
+			case 'settlementForkThresholdAttoRep':
 				return 0n
 			case 'getOutcomeState':
 				return { balanceAttoRep: 0n, snapshotLeafCount: 0n, snapshotPeaks: Array.from({ length: 64 }, () => zero), currentNullifierRoot: createSparseNullifier([]).getRoot(), localHeadNodeId: 0n }
