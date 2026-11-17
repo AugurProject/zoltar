@@ -294,7 +294,11 @@ export function useReportingOperations(
 					throw new Error(reportingCopy.reportingRepApprovalRequired)
 				}
 				// Wallet deposits transferFrom the accepted amount against an approval sized to the preview, so cap the maximum at that previewed amount.
-				const maximumDepositAttoRep = preflight.contributionFunding === 'wallet' ? preflight.actualDepositAmount : preflight.reportAmount
+				// The game only previews offers of at least the start bond, so an accepted amount trimmed below it (a tie, or a fill to the threshold)
+				// is submitted as the start bond the user offered; the pool still transfers only the previewed accepted amount.
+				const minimumOfferAttoRep = preflight.reportAmount < preflight.latestDetails.startBondAttoRep ? preflight.reportAmount : preflight.latestDetails.startBondAttoRep
+				const walletMaximumAttoRep = preflight.actualDepositAmount > minimumOfferAttoRep ? preflight.actualDepositAmount : minimumOfferAttoRep
+				const maximumDepositAttoRep = preflight.contributionFunding === 'wallet' ? walletMaximumAttoRep : preflight.reportAmount
 				return {
 					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, maximumDepositAttoRep, preflight.actualDepositAmount, preflight.contributionFunding, triggersFork)),
 					amountAttoRep: preflight.actualDepositAmount,
