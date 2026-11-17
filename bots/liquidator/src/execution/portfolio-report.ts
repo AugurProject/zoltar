@@ -91,11 +91,28 @@ export async function executePortfolioReportRequest(wallet: Wallet, settings: Op
 		const nextFunding = assertPortfolioReportFunding(latest, settings)
 		if (latest.observation.acceptedPriceEpoch !== observation.acceptedPriceEpoch || nextFunding.price !== funding.price || nextFunding.weth > funding.weth || nextFunding.rep > funding.rep) throw new PortfolioOpportunityExpired('Report quote changed before signing')
 	}
-	await submit(wallet, settings, state, pool, { ...request, reportSponsorship, gas: 'estimate', label, preSubmit: revalidate, revalidateSimulationRevert: revalidate }, 'liquidation')
+	await submit(
+		wallet,
+		settings,
+		state,
+		pool,
+		{
+			...request,
+			reportSponsorship,
+			gas: 'estimate',
+			label,
+			preSubmit: revalidate,
+			revalidateSimulationRevert: revalidate,
+			gasBudgetExceeded: () => {
+				throw new PortfolioOpportunityExpired('Sponsored report settlement exceeds gas budget; retry later')
+			},
+		},
+		'liquidation',
+	)
 }
 
 /** Discover and settle the sponsor's pending report after a restart or independent renewal. */
-export async function executePendingPortfolioReport(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, target: PortfolioObservation, submit = submitCall): Promise<'none' | 'waiting' | 'submitted'> {
+export async function executePendingPortfolioReport(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, target: PortfolioObservation, submit = submitCall, readers?: Parameters<typeof readPortfolioExecutionSnapshot>[6]): Promise<'none' | 'waiting' | 'submitted'> {
 	if (target.pendingOperationReport === undefined) return 'none'
 	const refresh = () =>
 		readPortfolioExecutionSnapshot(
@@ -105,6 +122,7 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 			state.portfolioScopes.map(scope => ({ scope, targets: [] })),
 			target.selection,
 			async () => undefined,
+			readers,
 		)
 	const current = (await refresh()).observation
 	const pending = current.pendingOperationReport
@@ -135,7 +153,17 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 		settings,
 		state,
 		pool,
-		{ ...request, gas, reportOperations: { feed: current.snapshot.priceFeed, reportId: pending.id }, label: settledAt !== 0n ? 'Recover sponsored report after failed callback' : 'Settle sponsored takeover report', preSubmit: revalidate, revalidateSimulationRevert: revalidate },
+		{
+			...request,
+			gas,
+			reportOperations: { feed: current.snapshot.priceFeed, reportId: pending.id },
+			label: settledAt !== 0n ? 'Recover sponsored report after failed callback' : 'Settle sponsored takeover report',
+			preSubmit: revalidate,
+			revalidateSimulationRevert: revalidate,
+			gasBudgetExceeded: () => {
+				throw new PortfolioOpportunityExpired('Sponsored report settlement exceeds gas budget; retry later')
+			},
+		},
 		'liquidation',
 	)
 	return 'submitted'

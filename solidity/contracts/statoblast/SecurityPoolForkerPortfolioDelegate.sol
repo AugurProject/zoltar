@@ -117,7 +117,8 @@ contract SecurityPoolForkerPortfolioDelegate {
 			return (child, portfolio, address(0));
 		SecurityPoolReporterLedger reporters = SecurityPoolReporterLedger(portfolio.reporterLedger(targetUniverse));
 		reporters.checkpoint(targetUniverse);
-		(SecurityPoolReporterLedger.Question memory reporterState, ) = reporters.question(targetUniverse, source.questionId());
+		(SecurityPoolReporterLedger.Question memory reporterState, bool finalClaim) = reporters.question(targetUniverse, source.questionId());
+		require(!finalClaim || reporterState.balanceAttoRep != 0, 'Question finalized in source universe');
 		sourceGame = reporterState.sourceGame;
 		require(sourceGame == address(0) || sourceGame == address(source.escalationGame()), 'Use last live reporter source');
 		if (address(child) != address(0)) {
@@ -147,6 +148,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 		if (address(game) != address(0)) return game.getFinalQuestionResolution();
 		ISecurityPoolPortfolioNative portfolio = ISecurityPoolPortfolioNative(pool.securityPoolFactory().getSecurityPoolPortfolio(pool));
 		(bool isFixed, uint256 fixedValue) = portfolio.inheritedFixedOutcome(pool.universeId(), pool.questionId());
+		require(!isFixed || fixedValue < uint256(BinaryOutcomes.BinaryOutcome.None), 'Unsupported inherited reporter outcome');
 		uint48 anchor = portfolio.portfolioTimeForNative(pool.universeId(), 0);
 		return
 			isFixed && portfolio.portfolioTime(pool.universeId()) > anchor + 3 days
