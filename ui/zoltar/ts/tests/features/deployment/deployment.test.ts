@@ -9,7 +9,7 @@ import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '@zoltar/
 import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import type { DeploymentStatus, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
+import type { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
@@ -20,6 +20,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { SEPOLIA_REP_ALLOCATIONS } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
@@ -157,7 +158,7 @@ void describe('deployment helpers', () => {
 			for (const stepId of deployableIds) {
 				const step = deploymentSteps.find(candidate => candidate.id === stepId)
 				if (step === undefined) throw new Error(`Expected ${stepId} Sepolia deployment step`)
-				await step.deploy(writeClient as unknown as UiWriteClient)
+				await step.deploy(testDouble<UiWriteClient>(writeClient))
 			}
 
 			expect(await readClient.getCode({ address: SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress })).not.toBeUndefined()

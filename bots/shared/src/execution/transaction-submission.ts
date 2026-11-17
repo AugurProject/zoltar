@@ -270,8 +270,8 @@ async function authenticatedRelayRequest(parameters: RelayAuthentication & { bod
 	}
 	if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) throw new Error('Relay returned an invalid JSON-RPC envelope')
 	const value = decoded as JsonRpcResponse
-	const hasResult = Object.prototype.hasOwnProperty.call(value, 'result')
-	const hasError = Object.prototype.hasOwnProperty.call(value, 'error')
+	const hasResult = Object.hasOwn(value, 'result')
+	const hasError = Object.hasOwn(value, 'error')
 	if (value.jsonrpc !== '2.0' || value.id !== 1 || hasResult === hasError) throw new Error('Relay returned an invalid JSON-RPC envelope')
 	if (hasError) {
 		if (typeof value.error !== 'object' || value.error === null || typeof value.error.code !== 'number' || !Number.isInteger(value.error.code) || typeof value.error.message !== 'string') throw new Error('Relay returned an invalid JSON-RPC error')

@@ -19,7 +19,7 @@ function getWorkerScope() {
 
 const scope = getWorkerScope()
 
-let enginePromise: ReturnType<typeof createSimulationEngine> | undefined = undefined
+let enginePromise: ReturnType<typeof createSimulationEngine> | undefined
 
 function postEvent(event: SimulationWorkerEvent) {
 	scope.postMessage(event)

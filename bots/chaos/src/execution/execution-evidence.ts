@@ -1,9 +1,9 @@
 import { parseAbiItem } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { OperationEvidence } from '../operations/types.ts'
-import { type PendingTransactionIntent } from '../state/operator-state.ts'
-import { type BalanceEvidenceObservation, type StorageEvidenceObservation } from './receipt-validation.ts'
-import { type ExecutionEnvironment } from './execution-context.ts'
+import type { PendingTransactionIntent } from '../state/operator-state.ts'
+import type { BalanceEvidenceObservation, StorageEvidenceObservation } from './receipt-validation.ts'
+import type { ExecutionEnvironment } from './execution-context.ts'
 import { agreedEthBalance, agreedTokenBalance, requiredConnectivity, executionReadClients } from './execution-quorum.ts'
 
 export async function captureBalanceEvidence(environment: ExecutionEnvironment, evidence: readonly OperationEvidence[], blockNumber: bigint) {

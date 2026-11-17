@@ -5,7 +5,7 @@ import type { PendingTransactionIntent } from '../state/operator-state.ts'
 import { balanceObservations, captureBalanceEvidence, captureStorageEvidence, storageObservations } from './execution-evidence.ts'
 import { agreedPendingNonce, executionReadClients, requiredConnectivity } from './execution-quorum.ts'
 import { assertRequestedTransactionHash, type ExecutionEnvironment } from './execution-context.ts'
-import { requireSuccessfulReceipt } from './receipt-validation.ts'
+import type { requireSuccessfulReceipt } from './receipt-validation.ts'
 import { transactionMatchesIntent } from './recovery-policy.ts'
 
 function baselineMap(intent: PendingTransactionIntent) {

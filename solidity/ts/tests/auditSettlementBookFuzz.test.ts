@@ -306,7 +306,7 @@ const generate = (model: Model, random: Random, blockStart: number, index: numbe
 	const open = ids.filter(id => model.books.get(id)?.isSealed === false)
 	const needChild = ids.filter(id => {
 		const book = model.books.get(id)
-		return book !== undefined && book.isSealed && book.children < 2
+		return book?.isSealed && book.children < 2
 	})
 	if (needChild.length !== 0 && model.books.size < MAX_BOOKS && random.int(3) !== 0) {
 		const b = random.pick(needChild)

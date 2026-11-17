@@ -269,7 +269,7 @@ export function LiveTrading({
 				</a>
 			}
 		/>
-	) : null
+	) : undefined
 	if (isTradingLookupRoute(route)) {
 		const routePresentation = liveLookupRoutePresentation(route)
 		return (
@@ -326,7 +326,7 @@ export function LiveTrading({
 				{universeForkedNotice}
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
-					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
+					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : undefined}
 					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolDiscoveryFailed(discoveryError) : undefined} />
 					{discoveryState === 'ready' && visibleMarkets.length === 0 ? (
 						<EmptyState
@@ -338,8 +338,8 @@ export function LiveTrading({
 								</a>
 							}
 						/>
-					) : null}
-					{(discoveryState === 'error' && visibleMarkets.length === 0) || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : (
+					) : undefined}
+					{(discoveryState === 'error' && visibleMarkets.length === 0) || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? undefined : (
 						<LivePortfolio
 							discoveryComplete={discoveryState === 'ready'}
 							entries={visiblePortfolioEntries}
@@ -387,15 +387,15 @@ export function LiveTrading({
 			{showsMarketPage ? <MarketPageHeader market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} actions={walletAction} /> : <RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />}
 			<ErrorNotice message={connectionMessage} />
 			<ErrorNotice message={selected !== undefined && discoveryState === 'error' ? liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery) : undefined} />
-			{showsMarketCreated ? <UserMessage placement='section' tone='success' announcement='polite' className='market-created-notice' detail={liveCopy.marketCreated} /> : null}
+			{showsMarketCreated ? <UserMessage placement='section' tone='success' announcement='polite' className='market-created-notice' detail={liveCopy.marketCreated} /> : undefined}
 			<div className='market-stack'>
 				{selected === undefined ? (
 					<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
 						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} lookupRoute={creatingMarket ? 'create-market' : 'market'} address={routePool} />
 					</SectionBlock>
-				) : null}
+				) : undefined}
 				{(() => {
-					if (selected === undefined) return null
+					if (selected === undefined) return undefined
 					if (creatingMarket && selected.pair !== undefined)
 						return (
 							<SectionBlock variant='plain'>
@@ -453,9 +453,9 @@ export function LiveTrading({
 						<SectionBlock className='market-workspace'>
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
 							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
-								{activeView === 'settlement' ? <LiveSettlementControls {...workflowPanelProps} services={settlementServices} /> : null}
-								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} walletEthStatus={walletEthStatus} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
-								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
+								{activeView === 'settlement' ? <LiveSettlementControls {...workflowPanelProps} services={settlementServices} /> : undefined}
+								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} walletEthStatus={walletEthStatus} nowSeconds={nowSeconds} services={liquidityServices} /> : undefined}
+								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : undefined}
 								{activeView === 'trade' && selectedPairInitialized ? (
 									<LivePositionControls
 										market={selected}
@@ -469,7 +469,7 @@ export function LiveTrading({
 										externallyLocked={ticketLocked}
 										onOpenSettlement={marketOpen ? undefined : () => openView('settlement')}
 									/>
-								) : null}
+								) : undefined}
 							</div>
 						</SectionBlock>
 					)

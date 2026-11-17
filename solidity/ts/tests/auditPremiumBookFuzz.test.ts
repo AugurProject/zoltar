@@ -116,7 +116,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			return { ok: true, touched: [op.u], returns: [units] }
 		}
 		case 'sched': {
-			if (book !== undefined && book.isSealed) return reject('sealed')
+			if (book?.isSealed) return reject('sealed')
 			const state = book?.questions.get(op.q)
 			if (book === undefined || state === undefined || state.units === 0n) return { ok: true, touched: [op.u] }
 			if (state.end === 0) {
@@ -143,7 +143,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			return { ok: true, touched: [op.u], returns: [cash] }
 		}
 		case 'check': {
-			if (book !== undefined && book.isSealed) return { ok: true, touched: [op.u], returns: [0n, 0n] }
+			if (book?.isSealed) return { ok: true, touched: [op.u], returns: [0n, 0n] }
 			if (book === undefined || op.ts < book.ts || op.ts > blockTime) return reject('invalid clock')
 			let earned = 0n
 			for (const state of book.questions.values()) {

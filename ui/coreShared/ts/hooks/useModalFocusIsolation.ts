@@ -118,7 +118,7 @@ function getFocusableElements(dialogElement: HTMLElement | null) {
 
 /** A return target must still be in the document, enabled, and outside inert content, or focusing it silently drops focus to the body. */
 function canReturnFocusTo(element: HTMLElement | null | undefined): element is HTMLElement {
-	return element !== null && element !== undefined && element.isConnected && !element.matches(':disabled') && element.closest('[inert]') === null
+	return element?.isConnected === true && !element.matches(':disabled') && element.closest('[inert]') === null
 }
 
 /** Focuses the heading of the section that held the dialog's launcher, or the main landmark, so keyboard users keep their place. */

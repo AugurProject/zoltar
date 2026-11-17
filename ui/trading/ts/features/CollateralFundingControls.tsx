@@ -4,11 +4,11 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import type { useCollateralFunding } from './live/useCollateralFunding.js'
 
 export function CollateralFundingControls({ funding, required, disabled, reason, actionLabel }: { actionLabel: string; funding: ReturnType<typeof useCollateralFunding>; required: bigint | undefined; disabled: boolean; reason: string | undefined }) {
-	if (!funding.applicable) return null
+	if (!funding.applicable) return undefined
 	const { asset } = funding
 	return (
 		<div className='collateral-funding'>
-			{funding.readError === undefined ? null : <RetryableNotice message={funding.readError} retryLabel={common.retry} onRetry={funding.retry} disabled={disabled} />}
+			{funding.readError === undefined ? undefined : <RetryableNotice message={funding.readError} retryLabel={common.retry} onRetry={funding.retry} disabled={disabled} />}
 			<TokenApprovalControl
 				actionLabel={actionLabel}
 				allowanceError={funding.readError === undefined ? funding.error : undefined}

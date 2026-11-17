@@ -123,7 +123,7 @@ const favoritesCache = new Map<string, FavoriteEntry[]>()
 cacheResetters.add(() => favoritesCache.clear())
 let storageListenerInstalled = false
 let storeRevision = 0
-let cachedStorage: Storage | undefined = undefined
+let cachedStorage: Storage | undefined
 
 /** Caches belong to one storage object; a replaced storage (a new document in tests, or a storage reset) starts clean. */
 function syncCachesWithStorage() {

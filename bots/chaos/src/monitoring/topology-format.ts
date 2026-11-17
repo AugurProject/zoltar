@@ -1,17 +1,17 @@
 import { parseTopologyIdentity as parseIdentity, type ImmutableTopologyIdentity } from './topology-identity.ts'
 import { parseJsonDocument } from '@zoltar/bot-shared/config/durable-file'
 
-import { type Hex } from '@zoltar/bot-shared/ethereum'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { compareUnsignedStrings } from '../core/units.ts'
 
 import { manifestWithDigest } from '../state/content-digest.ts'
 import { assertExactKeys, normalizedHash32 as hash, requiredRecord, uint256String as unsignedIntegerString } from '../state/validators.ts'
 import {
-	ImmutableTopologyDiscoveryCursors,
-	CanonicalImmutableTopologyCache,
+	type ImmutableTopologyDiscoveryCursors,
+	type CanonicalImmutableTopologyCache,
 	IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
 	parseCountedRegistryCursor,
-	ImmutableTopologyResidentLimits,
+	type ImmutableTopologyResidentLimits,
 	IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES,
 	IMMUTABLE_TOPOLOGY_MAXIMUM_RESIDENT_ITEMS,
 	requireResidentLimit,

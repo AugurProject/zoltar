@@ -246,7 +246,7 @@ export function TradingSection({
 	const closeActiveModal = () => setActiveModal(undefined)
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
-		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
+		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes({ selectedShareOutcome: tradingForm.selectedShareOutcome, shareBalances, shareMigrationTargets: tradingDetails?.shareMigrationTargets, tradingForkUniverse }) })
 	}
 	const clearTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: '' })

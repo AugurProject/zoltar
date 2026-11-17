@@ -1,5 +1,5 @@
 import { CLAIM_CHECKPOINT_MAX_STEPS, isFinalClaimCheckpointBatch, shouldInspectClaimCheckpointParent, planClaimCheckpointPreparation, prepareClaimCheckpointBatch, type ClaimCheckpointIdentity, type ClaimCheckpointNode } from '@zoltar/statoblast-shared/escalationGame/claimCheckpoint'
-import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as claimArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '../contractArtifact.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'

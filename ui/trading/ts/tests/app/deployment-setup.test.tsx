@@ -145,7 +145,7 @@ describe('trading deployment setup', () => {
 	})
 
 	test('waits for the simulated environment before inspecting the deployment', async () => {
-		let releaseReady: (() => void) | undefined = undefined
+		let releaseReady: (() => void) | undefined
 		const ready = new Promise<void>(resolve => {
 			releaseReady = resolve
 		})

@@ -1,4 +1,4 @@
-import { type Abi, type AbiParameter } from '../types.js'
+import type { Abi, AbiParameter } from '../types.js'
 
 function findMatchingParenthesis(value: string, openingIndex: number) {
 	let depth = 0
@@ -46,7 +46,7 @@ function splitTopLevelCommaSeparated(value: string) {
 }
 
 function canonicalizeHumanReadableAbiType(type: string) {
-	const typeMatch = /^(?<baseType>[^\[]+)(?<arraySuffix>(?:\[[0-9]*\])*)$/u.exec(type)
+	const typeMatch = /^(?<baseType>[^[]+)(?<arraySuffix>(?:\[[0-9]*\])*)$/u.exec(type)
 	if (typeMatch === null) return type
 	const baseType = typeMatch.groups?.['baseType']
 	const arraySuffix = typeMatch.groups?.['arraySuffix'] ?? ''

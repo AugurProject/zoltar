@@ -739,7 +739,7 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 				actual = reasonOf(error)
 			}
 			const issues: string[] = []
-			if (actual !== undefined && actual.startsWith('UNKNOWN')) issues.push(`UNKNOWN-REVERT: ${op.c} reverted with ${actual}`)
+			if (actual?.startsWith('UNKNOWN')) issues.push(`UNKNOWN-REVERT: ${op.c} reverted with ${actual}`)
 			else if (expected === undefined && actual !== undefined) issues.push(`LIVENESS: ${op.c} must succeed but reverted with '${actual}'`)
 			else if (expected !== undefined && actual === undefined) issues.push(`UNEXPECTED-SUCCESS: ${op.c} must revert with '${expected}'`)
 			else if (expected !== undefined && actual !== undefined && expected !== actual) issues.push(`REVERT-REASON: ${op.c} reverted with '${actual}', model expects '${expected}'`)

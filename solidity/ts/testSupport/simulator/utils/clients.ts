@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, custom, EIP1193Provider, http, publicActions } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, createWalletClient, custom, type EIP1193Provider, http, publicActions } from '@zoltar/core-shared/evm/ethereum'
 import type { Chain, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { addressString } from './bigint'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'

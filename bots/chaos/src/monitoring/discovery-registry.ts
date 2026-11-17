@@ -1,6 +1,6 @@
 import { requirePositiveLimit } from './discovery-client.ts'
 import { type CountedRegistryCursor, emptyCountedRegistryCursor } from './topology-schema.ts'
-import { type Hash } from '@zoltar/bot-shared/ethereum'
+import type { Hash } from '@zoltar/bot-shared/ethereum'
 import { createHash } from 'node:crypto'
 
 export async function collectCountedPages<T>(parameters: { count: bigint; label: string; maximumItems: number; pageSize: number; readPage: (start: bigint, count: bigint) => Promise<readonly T[]>; start: bigint }) {

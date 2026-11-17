@@ -1,5 +1,5 @@
 import { collateralSpendContinuation } from './collateral-approval.ts'
-import { EcosystemSnapshot, OperationDefinition, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from '../types.ts'
+import type { EcosystemSnapshot, OperationDefinition, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from '../types.ts'
 
 import { inputInteger, inputMatches } from '../input-values.ts'
 

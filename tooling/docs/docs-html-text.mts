@@ -1,4 +1,4 @@
-import { Element, Node, Window } from 'happy-dom'
+import { Element, type Node, Window } from 'happy-dom'
 
 const blockTags = new Set(['article', 'aside', 'blockquote', 'dd', 'details', 'div', 'dl', 'dt', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'li', 'main', 'nav', 'ol', 'p', 'section', 'summary', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul'])
 const ignoredTags = new Set(['noscript', 'script', 'style', 'template'])

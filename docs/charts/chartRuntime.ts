@@ -398,9 +398,9 @@ function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 	const rectangleElements = Array.from(chart.querySelectorAll<SVGRectElement>('g[aria-label="rect"] > rect'))
 	const lineElements = Array.from(chart.querySelectorAll<SVGPathElement>('g[aria-label="line"] > path'))
 	const textElements = Array.from(chart.querySelectorAll<SVGTextElement>('g[aria-label="text"] > text'))
-	orderedRectangles.forEach((item, index) => copyDataAttributes(rectangleElements[index], item.attributes))
-	data.lines.forEach((item, index) => copyDataAttributes(lineElements[index], item.attributes))
-	data.texts.forEach((item, index) => copyDataAttributes(textElements[index], item.attributes))
+	for (const [index, item] of orderedRectangles.entries()) copyDataAttributes(rectangleElements[index], item.attributes)
+	for (const [index, item] of data.lines.entries()) copyDataAttributes(lineElements[index], item.attributes)
+	for (const [index, item] of data.texts.entries()) copyDataAttributes(textElements[index], item.attributes)
 	return chart
 }
 

@@ -21,7 +21,7 @@
 		"test:unit": "bun test tests/unit",
 		"test:api": "bun test tests/api",
 		"test:replay": "bun test tests/replay",
-		"test:integration": "bun test tests/integration",
+		"test:integration": "bun ../tooling/testing/bun-test.mts tests/integration",
 		"typecheck": "bun run metadata:build && bun x tsc --noEmit",
 		"check:boundaries": "bun scripts/check-import-boundaries.ts",
 		"check:restricted-import-types": "bun ../tooling/repo/lint-no-restricted-import-types.mts .",
