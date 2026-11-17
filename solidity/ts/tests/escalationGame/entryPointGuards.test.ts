@@ -134,7 +134,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		const balances = await getBalances(client, escalationGameAddress)
 		assert.strictEqual(balances.invalid, reportBond, 'original leading balance should stay untouched')
 		assert.strictEqual(balances.yes, reportBond - 1n, 'the start bond applies to the offered amount, before the tie adjustment')
-		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, reportBond - 1n), 'an offered amount below the start bond must still revert')
+		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, reportBond - 1n), /Below start bond/, 'an offered amount below the start bond must still revert')
 	})
 
 	test('getEscalationGameDeposits paginates deposits without adding synthetic entries', async () => {
