@@ -287,7 +287,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolPortfolio', 'checkpointCapitalFees', 'excluded-dangerous', undefined, 'Capital mutations checkpoint shared fees; direct randomized checkpointing adds no owner action.'),
 	entry('SecurityPoolPortfolio', 'checkpointQuestionSettlement', 'excluded-dangerous', undefined, 'Question accounting checkpoints already route through the bound question host.'),
 	entry('SecurityPoolPortfolio', 'createCompleteSet', 'selectable', 'statoblast.complete-set.create'),
-	entry('SecurityPoolPortfolio', 'creditForkFees', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolPortfolio', 'forkWithReporterQuestion', 'excluded-dangerous', undefined, 'Own-question initiation runs through the canonical question forker with an anchored readiness simulation.'),
 	entry('SecurityPoolPortfolio', 'freezeForFork', 'excluded-dangerous', undefined, 'Shared fork state is coordinated through the fork controller; raw portfolio freezing is not an independent owner action.'),
 	entry('SecurityPoolPortfolio', 'mintQuestionSettlement', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),

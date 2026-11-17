@@ -280,12 +280,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		factory.initializePortfolioPriceFeedForUniverse(child);
 		if (zoltar.getForkTime(child) == 0 && capitalLedger[child].isPriceValid()) services.activateFees(child);
 	}
-	function creditForkFees(uint248 universeId, uint256 amount) external onlyForkController {
-		if (amount != 0) {
-			collateralToken.safeApprove(address(capitalLedger[universeId]), amount);
-			capitalLedger[universeId].creditTimedFees(amount);
-		}
-	}
 	function addQuestion(uint256 questionId) public returns (ISecurityPool pool) {
 		require(setupStage == SETUP_COMPLETE, 'Portfolio setup incomplete');
 		require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
