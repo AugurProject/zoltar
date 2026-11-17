@@ -212,8 +212,12 @@ contract SharedPoolPriceFeed {
 	}
 
 	/// @notice Report collateral covers aggregate standing commitment or funded demand.
+	/// While the accepted price is fresh, ordinary growth may reach its accepted
+	/// limit before a report requested now settles, so the minimum covers that limit.
 	function minimumToken1ReportAttoEth() public view returns (uint256) {
-		return minimumReportCollateral + Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER);
+		uint256 exposure = aggregateExposureAttoEth();
+		if (isPriceValid()) exposure = Math.max(exposure, acceptedExposureLimitAttoEth);
+		return minimumReportCollateral + Math.ceilDiv(exposure, OPEN_INTEREST_DIVIDER);
 	}
 
 	/// @notice Auction inventory needs a challenged REP-side budget as well as

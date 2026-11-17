@@ -80,21 +80,22 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [firstId] })).toBe(0n)
 	})
 
-	test('a smaller renewal preserves affordable reporting and a growth proof keeps its owner collateral floor', async () => {
+	test('a newer smaller report can supersede a growth report, whose proof keeps its owner collateral floor', async () => {
 		await fixture.deposit(1_000n * unit)
 		const owner = fixture.owner()
 		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const otherCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
 		const target = { abi: feedArtifact.abi, address: await feed() }
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), 2n * unit, 100n * unit)
 		const largeReport = await getPendingReportId(owner, coordinator)
+		await fixture.base.mockWindow.advanceTime(1n)
+		// Requested while no price is accepted, this candidate needs only the live exposure.
+		await requestPriceWithValue(owner, otherCoordinator, await getRequestPriceCostAttoEth(owner, otherCoordinator), unit, 2n * unit)
+		const smallReport = await getPendingReportId(owner, otherCoordinator)
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, largeReport)
 		await fixture.authorize(100n * unit)
-		expect(await owner.readContract({ ...target, functionName: 'minimumToken1ReportAttoEth' })).toBeLessThan(2n * unit)
-		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
-		const smallReport = await getPendingReportId(owner, coordinator)
-		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, smallReport)
 		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [smallReport] })).toBe(1n)
 		await expect(fixture.authorize(200n * unit)).rejects.toThrow('Accepted report exposure exceeded')
@@ -231,6 +232,29 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'pendingReportId' })).toBe(0n)
 	})
 
+	test('growth within the accepted limit cannot make a minimum-sized pending renewal uneconomic', async () => {
+		await fixture.prepare(1_000n * unit, 100n * unit)
+		const owner = fixture.owner()
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coverage = await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })
+		expect(await owner.readContract({ ...target, functionName: 'aggregateExposureAttoEth' })).toBeLessThan(coverage)
+		// The sponsor asks for nothing above the quoted minimum.
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
+		const reportId = await getPendingReportId(owner, coordinator)
+		// A tiny increase that the accepted report still secures.
+		await fixture.authorize(100n * unit + 100n)
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, reportId)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
+		expect(await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })).toBe(coverage)
+		// Once the accepted price lapses no ordinary growth is possible, so a renewal again needs only the live exposure.
+		await fixture.base.mockWindow.advanceTime(BigInt(await owner.readContract({ ...target, functionName: 'priceValidityWindowSeconds' })))
+		expect(await owner.readContract({ ...target, functionName: 'isPriceValid' })).toBe(false)
+		const floor = await owner.readContract({ ...target, functionName: 'minimumReportCollateral' })
+		expect(await owner.readContract({ ...target, functionName: 'minimumToken1ReportAttoEth' })).toBe(floor + unit + 1n)
+	})
+
 	test('a pending smaller candidate cannot prevent currently secured growth or retirement', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		const owner = fixture.owner()
@@ -247,7 +271,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, reportId)
 		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
-		expect(await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })).toBeLessThan(coverage)
+		// Requested while the accepted price was fresh, the candidate had to cover the accepted limit.
+		expect(await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })).toBe(coverage)
 	})
 
 	test('delayed settlement cannot restart the portfolio validity clock', async () => {
