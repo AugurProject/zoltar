@@ -69,8 +69,13 @@ const packageInstallTask = (projectPath: string, groups?: readonly string[]): Pr
  * not import that compiler chain, and the four production simulation workers contain only patched Zod v4. The audit
  * runner enforces the inspected legacy versions and dependency paths and rejects vulnerable runtime Zod copies before
  * ignoring this advisory. Recheck reachability if compiler imports change; do not replace v3 with an incompatible v4.
+ *
+ * GHSA-fc5q-39xc-vjpf: picomatch <= 4.0.7 backtracks exponentially on single-branch repeated extglobs and has no patched
+ * release. Its only paths are build and test tooling: knip > fdir, vitest > vite > tinyglobby > fdir, and the tevm bundler
+ * plugin > unplugin. Those tools match only glob patterns written in this repository's configuration, and no shipped app
+ * bundle, bot, indexer or shared runtime source contains or imports picomatch, so no user or remote pattern reaches it.
  */
-export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5'] as const
+export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5', 'GHSA-fc5q-39xc-vjpf'] as const
 
 export const dependencyAuditCommand: readonly string[] = ['bun', path.join(defaultRepositoryRoot, 'tooling/repo/audit-dependencies.mts')]
 
