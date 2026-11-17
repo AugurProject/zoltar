@@ -1,7 +1,7 @@
 import { useOpenOracleLiveReport } from './useOpenOracleLiveReport.js'
 import { createReportWrapShortfall } from '../lib/createFunding.js'
 import { useSignal } from '@preact/signals'
-import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatUnits, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
@@ -197,6 +197,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					openOracleResult.value = result
 					if (result.priceSettlement?.status === 'unconfirmed') {
 						openOracleFeedback.value = createWarningActionFeedback(actionName, openOracleCopy.priceSettlementUnconfirmed, openOracleCopy.priceSettlementUnconfirmedDetail, result.hash)
+					} else if (result.priceSettlement?.status === 'deferred') {
+						openOracleFeedback.value = createWarningActionFeedback(actionName, openOracleCopy.reportPriceDeferred, openOracleCopy.formatPriceSettlementDeferral(formatUnits(result.priceSettlement.maxSettlementBaseFee, 9)), result.hash)
 					} else if (result.priceSettlement?.status === 'rejected') {
 						openOracleFeedback.value = createWarningActionFeedback(actionName, openOracleCopy.reportPriceRejected, openOracleCopy.formatPriceSettlementRejection(result.priceSettlement.reason), result.hash)
 					} else {

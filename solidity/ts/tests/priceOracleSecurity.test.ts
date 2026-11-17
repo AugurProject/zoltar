@@ -14,7 +14,7 @@ import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/
 import { deployContract } from '../testSupport/deployContract'
 import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { type WriteClient, createWriteClient } from '../testSupport/simulator/utils/clients'
+import { type WriteClient, createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import assert from '../testSupport/simulator/utils/assert'
@@ -71,6 +71,7 @@ const findFeedLog = <EventName extends FeedLog['eventName']>(logs: TransactionRe
 const findPendingReportRecoveredLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PendingReportRecovered')
 const findPriceReportedLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PriceReported')
 const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PriceReportRejected')
+const findPriceReportDeferredLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PriceReportDeferred')
 
 describe('Shared portfolio oracle security regressions', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -746,7 +747,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, receiver), wethBefore, 'failed direct refund must restore sponsor WETH')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver), repBefore, 'failed direct refund must restore sponsor REP')
 	})
-	test('oracle settlement accepts the exact nonzero basefee cap and rejects one attoETH above it', async () => {
+	test('oracle settlement accepts the exact nonzero basefee cap and defers one attoETH above it until recovery', async () => {
 		const requestBaseFeeAttoEthPerGas = 1n * 10n ** 9n
 		const expectedSettlementBaseFeeCap = ((requestBaseFeeAttoEthPerGas + DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) * ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) / 10000n
 		const minimumWethReport = calculateOracleMinimumWethReportAttoEth({
@@ -800,11 +801,19 @@ describe('Shared portfolio oracle security regressions', () => {
 		const rejectedReceipt = await client.waitForTransactionReceipt({
 			hash: rejectedHash,
 		})
-		const rejectedLog = findPriceReportRejectedLog(rejectedReceipt.logs)
-		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
+		const deferredLog = findPriceReportDeferredLog(rejectedReceipt.logs)
+		if (deferredLog === undefined) throw new Error('missing PriceReportDeferred log')
 		assert.strictEqual(findPriceReportedLog(rejectedReceipt.logs), undefined, 'settlement one attoETH above the basefee cap must not report a price')
-		assert.strictEqual(rejectedLog.args.reason, 'Base fee too high', 'settlement one attoETH above the cap should expose the basefee rejection reason')
+		assert.strictEqual(findPriceReportRejectedLog(rejectedReceipt.logs), undefined, 'a settler-chosen basefee must not finally reject the report')
+		assert.strictEqual(deferredLog.args.baseFee, rejectedSettlementBaseFee, 'the deferral should expose the settlement block basefee')
+		assert.strictEqual(deferredLog.args.maxSettlementBaseFee, expectedSettlementBaseFeeCap, 'the deferral should expose the report basefee cap')
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'settlement one attoETH above the basefee cap must leave the stale price invalid')
+		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'reportOutcome', args: [rejectedReportId] }), 0n, 'the deferred report must remain pending')
+
+		await setNextBlockBaseFee(expectedSettlementBaseFeeCap)
+		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: await writeContractAndWait(client, () => client.writeContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'recoverReport', args: [rejectedReportId], gasPrice: expectedSettlementBaseFeeCap })) })
+		assert.ok(findPriceReportedLog(recoveryReceipt.logs) !== undefined, 'recovery at the basefee cap should accept the deferred report')
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'recovery at the basefee cap should validate the price')
 	})
 
 	test('report flags and fixed callback budget match the shared-feed settlement contract', async () => {

@@ -166,7 +166,7 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 			gas,
 			maxFeePerGasCap: pending.maxSettlementBaseFee,
 			reportOperations: { feed: current.snapshot.priceFeed, reportId: pending.id },
-			label: settledAt !== 0n ? 'Recover sponsored report after failed callback' : 'Settle sponsored takeover report',
+			label: settledAt !== 0n ? 'Recover settled sponsored report' : 'Settle sponsored takeover report',
 			preSubmit: revalidate,
 			revalidateSimulationRevert: revalidate,
 			gasBudgetExceeded: () => {

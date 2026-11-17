@@ -1094,6 +1094,16 @@ export const sharedPoolPriceFeedAbi = [
 	},
 	{
 		type: 'event',
+		name: 'PriceReportDeferred',
+		anonymous: false,
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'baseFee', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'maxSettlementBaseFee', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
 		name: 'PriceReportRejected',
 		anonymous: false,
 		inputs: [
@@ -1227,34 +1237,6 @@ export const sharedPoolPriceFeedAbi = [
 			{ name: 'sponsor', type: 'address', internalType: 'address' },
 			{ name: 'coordinator', type: 'address', internalType: 'address' },
 			{ name: 'maxSettlementBaseFee', type: 'uint256', internalType: 'uint256' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'reportOperationBatch',
-		stateMutability: 'view',
-		inputs: [{ name: 'reportId', type: 'uint256', internalType: 'uint256' }],
-		outputs: [
-			{
-				name: '',
-				type: 'tuple',
-				internalType: 'struct IReportOperations.Batch',
-				components: [
-					{ name: 'gasLimit', type: 'uint32', internalType: 'uint32' },
-					{ name: 'minimumPrice', type: 'uint256', internalType: 'uint256' },
-					{ name: 'maximumPrice', type: 'uint256', internalType: 'uint256' },
-					{ name: 'deadline', type: 'uint48', internalType: 'uint48' },
-					{
-						name: 'operations',
-						type: 'tuple[]',
-						internalType: 'struct IReportOperations.Operation[]',
-						components: [
-							{ name: 'gasLimit', type: 'uint32', internalType: 'uint32' },
-							{ name: 'data', type: 'bytes', internalType: 'bytes' },
-						],
-					},
-				],
-			},
 		],
 	},
 	{ type: 'function', name: 'reportOutcome', stateMutability: 'view', inputs: [{ name: 'reportId', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint8', internalType: 'uint8' }] },

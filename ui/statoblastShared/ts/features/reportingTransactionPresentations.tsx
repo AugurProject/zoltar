@@ -1,3 +1,4 @@
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { createTransactionScope, securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import * as reportingCopy from '../copy/reporting.js'
@@ -105,6 +106,14 @@ export function createOpenOracleTransactionIntent(actionName: OpenOracleActionRe
 
 export function createOpenOracleSuccessPresentation(result: OpenOracleActionResult, context?: OpenOracleTransactionContext) {
 	if (result.priceSettlement?.status === 'unconfirmed') return buildPresentation({ hash: result.hash, rows: getOpenOracleTransactionRows(context), title: openOracleCopy.priceSettlementUnconfirmed, detail: openOracleCopy.priceSettlementUnconfirmedDetail, tone: 'warning' })
+	if (result.priceSettlement?.status === 'deferred')
+		return buildPresentation({
+			hash: result.hash,
+			rows: getOpenOracleTransactionRows(context),
+			title: openOracleCopy.reportPriceDeferred,
+			detail: openOracleCopy.formatPriceSettlementDeferral(formatUnits(result.priceSettlement.maxSettlementBaseFee, 9)),
+			tone: 'warning',
+		})
 	if (result.priceSettlement?.status === 'rejected')
 		return buildPresentation({
 			hash: result.hash,

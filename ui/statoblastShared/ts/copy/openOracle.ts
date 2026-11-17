@@ -186,6 +186,12 @@ export function formatPriceSettlementRejection(reason: string) {
 	return reason === 'Report stale' ? 'Price expired before settlement. Request a new price.' : `Pool rejected this price: ${reason}. Request a new price.`
 }
 
+export const reportPriceDeferred = 'Report settled; price pending recovery'
+
+export function formatPriceSettlementDeferral(maxSettlementBaseFeeGwei: string) {
+	return `The base fee was above this report's ${maxSettlementBaseFeeGwei} gwei limit, so the pool kept the report pending. Recover it from the portfolio price panel once the base fee is at or below the limit, before the price expires.`
+}
+
 export const priceExpiredDuringReview = 'Price expired while reviewing. Review settlement again; the pool will reject this price.'
 export const priceSettlementUnconfirmed = 'Report settled; price acceptance unconfirmed'
 export const priceSettlementUnconfirmedDetail = 'The pool did not confirm accepting this price. Check the pool oracle before using it.'
