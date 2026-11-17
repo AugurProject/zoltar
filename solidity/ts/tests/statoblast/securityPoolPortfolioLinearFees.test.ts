@@ -164,6 +164,15 @@ describe('Statoblast: portfolio holding fee backing floor', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ minimumOutcomeRate })
 	test('capital checkpoints stop fees at the floor and purchases and redemptions remain available', async () => {
 		await fixture.prepare()
+		// The budget above this floor lasts about 31 seconds, and stream ends round down to the book's
+		// granularity. Buy 20 seconds before a granularity boundary so the stream ends at that boundary.
+		const settlement = await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const book = await fixture.owner().readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
+		const granularity = await fixture.owner().readContract({ abi: bookArtifact.abi, address: book, functionName: 'feeEndGranularity' })
+		const boundary = ((await fixture.base.mockWindow.getTime()) / granularity + 1n) * granularity + granularity
+		await fixture.base.mockWindow.setTime(boundary - 700n)
+		await fixture.refreshPrice()
+		await fixture.base.mockWindow.setTime(boundary - 21n)
 		await fixture.mint(100n * unit)
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
 		const checkpoint = () => writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital, functionName: 'checkpoint' }))

@@ -19,7 +19,7 @@ describe('Statoblast: settlement cash per claim unit', () => {
 	beforeAll(async () => {
 		await setupTestAccounts(node.getAnvilWindowEthereum())
 		client = createWriteClient(node.getAnvilWindowEthereum(), TEST_ADDRESSES[0])
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 1n] }) }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 1n, 1n] }) }) })
 		if (receipt.contractAddress === undefined) throw new Error('Settlement unit-index ledger missing')
 		address = receipt.contractAddress
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createBook', args: [0] }))

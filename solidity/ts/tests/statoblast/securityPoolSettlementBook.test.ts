@@ -50,7 +50,7 @@ describe('Statoblast: central internal settlement units', () => {
 	const quote = async (bookId: bigint, id: bigint, shares: bigint) => [...(await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [bookId, id, shares] }))]
 
 	const deployBook = async (minimumRate: bigint) => {
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, minimumRate] }) }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, minimumRate, 1n] }) }) })
 		if (receipt.contractAddress === undefined) throw new Error('Settlement ledger deployment address missing')
 		address = receipt.contractAddress
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createBook', args: [0] }))
