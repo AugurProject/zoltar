@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
@@ -11,6 +12,7 @@ abstract contract SecurityPoolSettlementState {
 	uint64 internal lastQuestionStateId;
 	uint64 internal lastFeeModeId;
 	SecurityPoolPersistentMap.Store internal tree;
+	SecurityPoolQuestionMap.Store internal questionMap;
 	SecurityPoolFrozenHistory.Store internal frozenHistory;
 
 	bool internal constant INCREASE_BALANCE = true;
