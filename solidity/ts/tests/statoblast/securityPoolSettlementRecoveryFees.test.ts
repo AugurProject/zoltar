@@ -51,7 +51,7 @@ describe('Statoblast: child holding fees preserve inherited recovery REP', () =>
 		await setupTestAccounts(ethereum)
 		await ethereum.advanceTime(3n * YEAR)
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 1n] }) }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 1n, 1n] }) }) })
 		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Settlement ledger deployment address missing')
 		address = receipt.contractAddress
 		await setBaselineSnapshot()

@@ -105,8 +105,8 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 				recovery.index += increment;
 				weight = increment * _fundedSeconds(source, forkTime);
 			}
-			recovery.forkIncrementRoot = _addForkWeight(recovery.forkIncrementRoot, forkTime, increment);
-			recovery.forkWeightRoot = _addForkWeight(recovery.forkWeightRoot, forkTime, weight);
+			recovery.forkIncrementRoot = _addModular(recovery.forkIncrementRoot, forkTime, increment);
+			recovery.forkWeightRoot = _addModular(recovery.forkWeightRoot, forkTime, weight);
 		}
 		_setFeeMode(child, isCashFunded(bookId) && source.feesEnabled);
 		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, source.units);
@@ -424,11 +424,11 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	/// @dev Each leaf value is its own weight; a zero residue deletes a leaf that adds nothing.
-	function _addForkWeight(uint64 root, uint48 key, uint256 weight) private returns (uint64) {
+	function _addModular(uint64 root, uint48 key, uint256 residue) private returns (uint64) {
 		unchecked {
-			weight += tree.get(root, key);
+			residue += tree.get(root, key);
 		}
-		return tree.setModular(root, key, weight, weight);
+		return tree.setModular(root, key, residue, residue);
 	}
 
 	function recoveryRep(uint64 bookId) external view returns (uint256) {
@@ -565,15 +565,15 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		uint64 frozen =
 			previous.finalAfter == 0 ? 0 : uint64(frozenHistory.ceiling(book.frozenRoot, previous.finalAfter));
 		if (frozen == 0) {
-			if (previous.finalAfter == state.finalAfter) {
-				uint256 change;
-				unchecked {
-					change = correction - questionStates[previousId].recoveryCorrection;
+			uint256 previousCorrection = questionStates[previousId].recoveryCorrection;
+			// Residues modulo 2^256: subtracting is adding the negation.
+			unchecked {
+				if (previous.finalAfter == state.finalAfter)
+					_changeFinalityCorrection(bookId, state.finalAfter, correction - previousCorrection);
+				else {
+					_changeFinalityCorrection(bookId, previous.finalAfter, 0 - previousCorrection);
+					_changeFinalityCorrection(bookId, state.finalAfter, correction);
 				}
-				_changeFinalityCorrection(bookId, state.finalAfter, change, INCREASE_BALANCE);
-			} else {
-				_changeFinalityCorrection(bookId, previous.finalAfter, questionStates[previousId].recoveryCorrection, DECREASE_BALANCE);
-				_changeFinalityCorrection(bookId, state.finalAfter, correction, INCREASE_BALANCE);
 			}
 		}
 		uint64 stateId = ++lastQuestionStateId;
@@ -581,14 +581,9 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		book.questionRoot = tree.set(book.questionRoot, questionId, stateId, 0);
 	}
 
-	function _changeFinalityCorrection(uint64 bookId, uint48 finalAfter, uint256 correction, bool increase) private {
-		if (finalAfter == 0 || correction == 0) return;
+	function _changeFinalityCorrection(uint64 bookId, uint48 finalAfter, uint256 residue) private {
+		if (finalAfter == 0 || residue == 0) return;
 		RecoveryState storage recovery = recoveryStates[bookId];
-		uint256 previous = tree.get(recovery.finalityRoot, finalAfter);
-		uint256 next;
-		unchecked {
-			next = increase ? previous + correction : previous - correction;
-		}
-		recovery.finalityRoot = tree.setModular(recovery.finalityRoot, finalAfter, next, next);
+		recovery.finalityRoot = _addModular(recovery.finalityRoot, finalAfter, residue);
 	}
 }

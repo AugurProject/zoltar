@@ -63,11 +63,7 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		return Math.mulDiv(addedUnits, state.outcomeSupplyAttoShares, state.units);
 	}
 	function quoteMintPrincipal(uint64 bookId, uint256 questionId, uint256 cashAttoEth) external view returns (uint256) {
-		uint256 shares = quoteMint(bookId, questionId, cashAttoEth);
-		Book storage book = _book(bookId);
-		(Question memory state, ) = scaledQuestion(bookId, questionId);
-		uint256 principal = SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, _mintUnits(bookId, book, cashAttoEth));
-		require(state.feePrincipalAttoEth + principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
+		(Book storage book, uint256 principal, , ) = _quoteMintPrincipal(bookId, questionId, cashAttoEth);
 		return
 			book.units == 0
 				? cashAttoEth
@@ -75,15 +71,18 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 	}
 	function validateMintFeePrecision(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 annualBps) external view {
 		if (annualBps == 0 || cashAttoEth == 0) return;
-		uint256 shares = quoteMint(bookId, questionId, cashAttoEth);
-		Book storage book = _book(bookId);
-		(Question memory state, ) = scaledQuestion(bookId, questionId);
-		uint256 addedUnits = _mintUnits(bookId, book, cashAttoEth);
-		uint256 principal =
-			state.feePrincipalAttoEth +
-				SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, addedUnits);
-		require(principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
+		(Book storage book, , uint256 principal, uint256 addedUnits) = _quoteMintPrincipal(bookId, questionId, cashAttoEth);
 		SettlementMath.validateFeePrecision(principal, _netCash(bookId, book) + cashAttoEth * UNIT_SCALE, book.units + addedUnits, annualBps);
+	}
+	/// @dev The minted principal increment and the question's resulting principal, which must stay below the REP precision bound.
+	function _quoteMintPrincipal(uint64 bookId, uint256 questionId, uint256 cashAttoEth) private view returns (Book storage book, uint256 increment, uint256 principal, uint256 addedUnits) {
+		uint256 shares = quoteMint(bookId, questionId, cashAttoEth);
+		book = _book(bookId);
+		(Question memory state, ) = scaledQuestion(bookId, questionId);
+		addedUnits = _mintUnits(bookId, book, cashAttoEth);
+		increment = SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, addedUnits);
+		principal = state.feePrincipalAttoEth + increment;
+		require(principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
 	}
 	function quoteMintRecoveryRep(uint64 bookId, uint256 questionId, uint256 cashAttoEth) public view returns (uint256) {
 		uint256 addedShares = quoteMint(bookId, questionId, cashAttoEth);

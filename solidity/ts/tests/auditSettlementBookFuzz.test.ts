@@ -16,8 +16,10 @@ import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 
 const SEEDS = Number(process.env['AUDIT_FUZZ_SEEDS'] ?? '6')
 const FIRST_SEED = Number(process.env['AUDIT_FUZZ_FIRST_SEED'] ?? '1')
-// Seeds 7016 and 7027 reach a recovery REP requirement above the 2^128 bound (#1320).
-const REGRESSION_SEEDS = process.env['AUDIT_FUZZ_SEEDS'] === undefined ? [7016, 7027] : []
+// Seeds 7016 and 7027 reach a recovery REP requirement above the 2^128 bound (#1320) with
+// unrounded fee-stream ends, so they always run at fee end granularity 1.
+const PRECISION_BOUND_SEEDS = [7016, 7027]
+const REGRESSION_SEEDS = process.env['AUDIT_FUZZ_SEEDS'] === undefined ? PRECISION_BOUND_SEEDS : []
 const STEPS = Number(process.env['AUDIT_FUZZ_STEPS'] ?? '150')
 const SHRINK_MS = Number(process.env['AUDIT_FUZZ_SHRINK_MS'] ?? '60000')
 const QUESTIONS = [1, 2, 3, 4, 5, 6] as const
@@ -708,7 +710,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		const random = makeRandom(seed)
 		const minimum = random.pick([1n, 1n, 1n, SCALE / 2n, SCALE / 2n, (SCALE * 9n) / 10n, 333_333_333_333_333_333n, 333_333_333_333_333_333n, seed % 9 === 0 ? SCALE : SCALE - 1n])
 		// Derived from the seed so the random stream, and every existing seed's operations, stay unchanged.
-		const granularity = [1n, 16n, 4_096n][seed % 3] ?? 1n
+		const granularity = PRECISION_BOUND_SEEDS.includes(seed) ? 1n : ([1n, 16n, 4_096n][seed % 3] ?? 1n)
 		const recorded: Op[] = []
 		let drained = false
 		const failure = await run(
