@@ -1207,7 +1207,7 @@ describe('ReportingSection', () => {
 				createProps({
 					reportingActiveAction: 'reportOutcome',
 					reportingForm: createReportingForm({
-						reportAmount: '3',
+						reportAmount: '4',
 						selectedOutcome: 'yes',
 					}),
 				}),
@@ -1215,7 +1215,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Reporting Yes · 3 REP…')).toBe(true)
+		expect(document.body.textContent?.includes('Reporting Yes · 4 REP…')).toBe(true)
 		expect(document.body.textContent?.includes('Loading…')).toBe(false)
 	})
 

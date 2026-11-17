@@ -530,8 +530,8 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(21)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(21)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(23)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(23)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.oracleReportDelegate).toBe(getCreateAddress({ from: infrastructure.priceCoordinatorDeploymentWorker, nonce: 3n }))

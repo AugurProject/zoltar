@@ -188,8 +188,8 @@ export function formatPriceSettlementRejection(reason: string) {
 
 export const reportPriceDeferred = 'Report settled; price pending recovery'
 
-export function formatPriceSettlementDeferral(maxSettlementBaseFeeGwei: string) {
-	return `The base fee was above this report's ${maxSettlementBaseFeeGwei} gwei limit, so the pool kept the report pending. Recover it from the portfolio price panel once the base fee is at or below the limit, before the price expires.`
+export function formatPriceSettlementDeferral(maxSettlementBaseFeeNanoEthPerGas: string) {
+	return `The base fee was above this report's ${maxSettlementBaseFeeNanoEthPerGas} nanoETH per gas limit, so the pool kept the report pending. Recover it from the portfolio price panel once the base fee is at or below the limit, before the price expires.`
 }
 
 export const priceExpiredDuringReview = 'Price expired while reviewing. Review settlement again; the pool will reject this price.'

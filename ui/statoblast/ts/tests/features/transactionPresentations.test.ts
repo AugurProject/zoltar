@@ -45,7 +45,7 @@ describe('transaction presentations', () => {
 		const deferred = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'deferred', maxSettlementBaseFee: 33n * 10n ** 9n } })
 		expect(deferred.tone).toBe('warning')
 		expect(deferred.title).toBe('Report settled; price pending recovery')
-		expect(deferred.detail).toContain('33 gwei limit')
+		expect(deferred.detail).toContain('33 nanoETH per gas limit')
 	})
 
 	test('shows a stale coordinator rejection as a warning after successful report settlement', () => {

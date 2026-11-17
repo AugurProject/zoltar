@@ -41,8 +41,8 @@ describe('Statoblast portfolio: fee-stream end keys chosen by dust buyers', () =
 		await approveToken(victim, collateral, services)
 		await fixture.prepare()
 
-		// Unrounded stream length of a first purchase of n wei into an empty question of a book whose
-		// unit price is exactly 1e-9 wei (SecurityPoolPortfolioPurchase.feeStream and the book budget).
+		// Unrounded stream length of a first purchase of n attoETH into an empty question of a book whose
+		// unit price is exactly 1e-9 attoETH (SecurityPoolPortfolioPurchase.feeStream and the book budget).
 		const duration = (n: bigint) => {
 			const units = n * 10n ** 9n
 			const reservedCash = (n * minimumRate + 10n ** 18n - 1n) / 10n ** 18n

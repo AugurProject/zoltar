@@ -12,7 +12,7 @@ import { openOracleSettleWithGasPrice, wrapWeth } from '../../testSupport/simula
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 const batchAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
-const gwei = 10n ** 9n
+const attoEthPerNanoEth = 10n ** 9n
 const REPORT_PENDING = 0n
 const REPORT_ACCEPTED = 1n
 const REPORT_REJECTED = 2n
@@ -55,14 +55,14 @@ describe('Statoblast: shared price feed defers settlements above the report base
 		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const operations = [{ gasLimit: 500_000, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [unit, sponsor.account.address] }) }]
-		// Requested at a 1 gwei base fee with the default 10 gwei report priority fee: a 33 gwei ceiling.
-		await setNextBlockBaseFee(1n * gwei)
+		// Requested at a 1 nanoETH per gas base fee with the default 10 nanoETH per gas report priority fee: a 33 nanoETH per gas ceiling.
+		await setNextBlockBaseFee(1n * attoEthPerNanoEth)
 		await writeContractAndWait(sponsor, () =>
-			sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, reportWeth, bounty, { gasLimit: 600_000, minimumPrice: unit, maximumPrice: unit, deadline: Number(timestamp + 5_000n), operations }], value: bounty, gasPrice: 2n * gwei }),
+			sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, reportWeth, bounty, { gasLimit: 600_000, minimumPrice: unit, maximumPrice: unit, deadline: Number(timestamp + 5_000n), operations }], value: bounty, gasPrice: 2n * attoEthPerNanoEth }),
 		)
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		const [escrow, , , ceiling] = await sponsor.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })
-		expect(ceiling).toBe(33n * gwei)
+		expect(ceiling).toBe(33n * attoEthPerNanoEth)
 		return { sponsor, settler, feed, weth, escrow, report, ceiling }
 	}
 
@@ -80,7 +80,7 @@ describe('Statoblast: shared price feed defers settlements above the report base
 
 	const freeAttoRep = async (owner: `0x${string}`) => (await fixture.owner().readContract({ ...capital(), functionName: 'ownerAccount', args: [owner] })).freeAttoRep
 
-	test('a third-party settlement one wei above the ceiling leaves the report pending and its funding released', async () => {
+	test('a third-party settlement one attoETH per gas above the ceiling leaves the report pending and its funding released', async () => {
 		const { sponsor, feed, weth, escrow, report, receipt, spike, lastSettlementBefore } = await settleAboveCeiling()
 
 		expect(feedEvents(receipt.logs, feed.address)).toEqual(['PriceReportDeferred'])
@@ -133,7 +133,7 @@ describe('Statoblast: shared price feed defers settlements above the report base
 		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(REPORT_REJECTED)
 		expect(await sponsor.readContract({ ...feed, functionName: 'lastSettlementTimestamp' })).toBe(lastSettlementBefore)
 		expect(await freeAttoRep(sponsor.account.address)).toBe(3_000n * unit)
-		await setNextBlockBaseFee(1n * gwei)
-		await expect(sponsor.writeContract({ ...feed, functionName: 'recoverReport', args: [report], gasPrice: 2n * gwei, gas: 5_000_000n })).rejects.toThrow('No report to recover')
+		await setNextBlockBaseFee(1n * attoEthPerNanoEth)
+		await expect(sponsor.writeContract({ ...feed, functionName: 'recoverReport', args: [report], gasPrice: 2n * attoEthPerNanoEth, gas: 5_000_000n })).rejects.toThrow('No report to recover')
 	})
 })

@@ -71,7 +71,8 @@ test.each([
 			submitted = true
 			// A stale settled report is retired at any base fee, so its recovery carries no settlement ceiling.
 			expect(call.maxFeePerGasCap).toBe(stale ? undefined : 10n)
-			expect(call.label).toBe(stale ? 'Retire stale sponsored report' : settledAt === 0n ? 'Settle sponsored takeover report' : 'Recover settled sponsored report')
+			const settledLabel = stale ? 'Retire stale sponsored report' : 'Recover settled sponsored report'
+			expect(call.label).toBe(settledAt === 0n ? 'Settle sponsored takeover report' : settledLabel)
 			if (stale) expect(call.data).toBe(encodeFunctionData({ abi: sharedPoolPriceFeedAbi, functionName: 'recoverReport', args: [7n] }))
 			call.gasBudgetExceeded?.()
 			throw new Error('Gas budget failure would safety-pause')

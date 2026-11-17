@@ -152,6 +152,9 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 					}),
 				}
 	const gas = settledAt !== 0n ? 'estimate' : callbackGas + callbackGas / 63n + 350_000n
+	let label = 'Settle sponsored takeover report'
+	if (staleRecovery) label = 'Retire stale sponsored report'
+	else if (settledAt !== 0n) label = 'Recover settled sponsored report'
 	const revalidate = async () => {
 		const refreshed = await refresh()
 		const next = refreshed.observation.pendingOperationReport
@@ -169,7 +172,7 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 			gas,
 			maxFeePerGasCap: staleRecovery ? undefined : pending.maxSettlementBaseFee,
 			reportOperations: { feed: current.snapshot.priceFeed, reportId: pending.id },
-			label: staleRecovery ? 'Retire stale sponsored report' : settledAt !== 0n ? 'Recover settled sponsored report' : 'Settle sponsored takeover report',
+			label,
 			preSubmit: revalidate,
 			revalidateSimulationRevert: revalidate,
 			gasBudgetExceeded: () => {
