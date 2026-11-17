@@ -240,7 +240,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 				outcomeState[1].balanceAttoRep != 0 ||
 				outcomeState[2].balanceAttoRep != 0;
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
-		_recordSettlementForkThreshold(game.securityPool());
 		BinaryOutcomes.BinaryOutcome nextLeader = _strictStakeLeader();
 		if (hadReport && nextLeader != BinaryOutcomes.BinaryOutcome.None && nextLeader != previousLeader)
 			responseRestartedUntil = block.timestamp + ACTIVATION_DELAY;
@@ -281,8 +280,11 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	}
 
 	function _afterDeposit() private {
+		address poolAddress = IEscalationGameDepositContext(address(this)).securityPool();
+		// Every accepted deposit, single or batch, records the threshold settlement scales by.
+		_recordSettlementForkThreshold(poolAddress);
 		_scheduleReporterFinality();
-		IEscalationGameSecurityPoolContext(IEscalationGameDepositContext(address(this)).securityPool()).refreshPortfolioFees();
+		IEscalationGameSecurityPoolContext(poolAddress).refreshPortfolioFees();
 	}
 
 	function _accrueOrdinarySurplus(address depositor, uint256 depositedAttoRep) private {
