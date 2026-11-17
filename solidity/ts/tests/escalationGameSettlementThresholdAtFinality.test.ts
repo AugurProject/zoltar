@@ -89,6 +89,40 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		expect(await e2e.claimLocal(r6, child.pool, INVALID, [second.localIndex], second.depositor)).toBe(secondEntitlement)
 	})
 
+	test('a batch deposit records the settlement fork threshold like a single deposit', async () => {
+		const { base } = fixture
+		const owner = fixture.owner()
+		const U0 = base.genesisUniverse
+		const source = fixture.poolFor(base.questionId).securityPool
+		const [r2, r3, r4, r5] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5)]
+		await fixture.prepare()
+		await fixture.mint(10n * unit)
+		await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		await e2e.deposit(r2, source, YES, 70n * K)
+		await e2e.deposit(r3, source, NO, 50n * K)
+		const g = e2e.game(await e2e.gameOf(source))
+		const threshold = () => owner.readContract({ ...e2e.zoltar(), functionName: 'getForkThresholdAttoRep', args: [U0] })
+		const healthy = await threshold()
+		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(healthy)
+
+		// Burning REP while the game is open lowers the live threshold; the next accepted deposit must record it.
+		const burned = (await e2e.rep(U0, r5.account.address)) / 2n
+		await approveToken(r5, getRepTokenAddress(U0), getZoltarAddress())
+		await writeContractAndWait(r5, () => r5.writeContract({ ...e2e.zoltar(), functionName: 'burnRep', args: [U0, burned], gas: BRANCH_GAS }))
+		const reduced = await threshold()
+		expect(reduced).toBeLessThan(healthy)
+		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(healthy)
+
+		await approveToken(r3, getRepTokenAddress(U0), g.address)
+		const batch = (amounts: readonly [bigint, bigint]) => writeContractAndWait(r3, () => r3.writeContract({ ...g, functionName: 'depositRepOnOutcomeForBatch', args: [NO, [r3.account.address, r4.account.address], [...amounts]], gas: BRANCH_GAS }))
+		// The start-bond tie trim cannot apply to a batch: a batch that would exactly tie the leader is rejected whole.
+		await expect(batch([10n * K, 10n * K])).rejects.toThrow('Contributions would be trimmed')
+		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(healthy)
+		await batch([15n * K, 15n * K])
+		expect(await e2e.balances(g.address)).toEqual([0n, 70n * K, 80n * K])
+		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(reduced)
+	})
+
 	test('an ordinary game pays its entitlement at finality when REP is burned before settlement', async () => {
 		const { base } = fixture
 		const owner = fixture.owner()
