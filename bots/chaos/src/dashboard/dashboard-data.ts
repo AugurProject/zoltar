@@ -1,7 +1,7 @@
-import { type Workflow, type WorkflowStep } from './workflow-history.js'
+import type { Workflow, WorkflowStep } from './workflow-history.js'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parsePublicRetirement } from './retirement-dashboard.js'
-import { type PendingTransactionObservationView } from './pending-transaction-summary.js'
+import type { PendingTransactionObservationView } from './pending-transaction-summary.js'
 
 export type RepBalance = {
 	balance?: string | number | undefined

@@ -1,7 +1,7 @@
 import type { Configuration } from './api-validation.ts'
 import { parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
-import { parsePortfolioPolicy, serializePortfolioPolicy } from '../config/portfolio-policy.ts'
+import { parsePortfolioPolicy, type serializePortfolioPolicy } from '../config/portfolio-policy.ts'
 
 export type StrategyUpdate = {
 	maximumGasCostEth: string

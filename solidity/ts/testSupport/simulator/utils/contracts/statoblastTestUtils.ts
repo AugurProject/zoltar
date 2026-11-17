@@ -1,6 +1,6 @@
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
-import { WriteClient } from '../clients'
+import type { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
+import type { WriteClient } from '../clients'
 import assert from '../assert'
 import { getIsPriceValid, getLastPrice, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, openOracleSettle, requestPriceWithValue } from './statoblast'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '../../../../types/contractArtifact'

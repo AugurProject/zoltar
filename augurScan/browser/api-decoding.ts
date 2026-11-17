@@ -18,24 +18,7 @@ import {
 	isUniverseStateEntityValue,
 } from './api-validation.ts'
 
-import {
-	type AccountTransaction,
-	type ActivityRecord,
-	type AddressIdentity,
-	type ChartRow,
-	type ContractRecord,
-	type EntityHistory,
-	type ItemsPage,
-	type LogDetail,
-	type NetworkRecord,
-	type NetworkResponse,
-	type PoolRecord,
-	type PoolStateRecord,
-	type QuestionRecord,
-	type RichListRecord,
-	type StateCatalog,
-	type UniverseRecord,
-} from './browser-types.ts'
+import type { AccountTransaction, ActivityRecord, AddressIdentity, ChartRow, ContractRecord, EntityHistory, ItemsPage, LogDetail, NetworkRecord, NetworkResponse, PoolRecord, PoolStateRecord, QuestionRecord, RichListRecord, StateCatalog, UniverseRecord } from './browser-types.ts'
 
 import type { AmmPriceHistoryRecord, RepEthPriceHistoryRecord } from './browser-types.ts'
 import type { UniswapPriceObservation } from './chart-values.ts'

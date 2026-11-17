@@ -267,7 +267,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 							/>
 						</div>
 						<UserMessage className='detail' detail={<>{settlementBalanceStatus(balanceState, sourceBalance, market, sourceOutcome, sourceLocked)}</>} />
-						{forkContextLoading && currentForkContext === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: settlementCopy.loadingForkDetails, detailIsLoading: true }} /> : null}
+						{forkContextLoading && currentForkContext === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: settlementCopy.loadingForkDetails, detailIsLoading: true }} /> : undefined}
 						{forkContextState === 'error' ? (
 							<>
 								<ErrorNotice message={forkContextError ?? settlementCopy.forkDetailsUnavailable} />
@@ -277,19 +277,19 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 									</button>
 								</div>
 							</>
-						) : null}
-						{currentForkContext === undefined ? null : (
+						) : undefined}
+						{currentForkContext === undefined ? undefined : (
 							<div className='fork-migration-context' aria-busy={forkContextLoading}>
 								<ForkMigrationTargets context={currentForkContext} selectedTargets={selectedForkTargets} sourceOutcome={sourceOutcome} sourceBalance={sourceBalance} disabled={workflowLocked || forkContextLoading} onChange={updateForkTargets} />
 								<MigratedShareLinks market={market} context={currentForkContext} />
 							</div>
 						)}
-						{forkMigrationBatchWarning(selectedForkTargets) === undefined ? null : (
+						{forkMigrationBatchWarning(selectedForkTargets) === undefined ? undefined : (
 							<WarningSurface role='status' surface='flat' variant='compact'>
 								<p>{forkMigrationBatchWarning(selectedForkTargets)}</p>
 							</WarningSurface>
 						)}
-						{migrationBalance === undefined ? null : (
+						{migrationBalance === undefined ? undefined : (
 							<WarningSurface role='status' surface='flat' variant='compact'>
 								<p>
 									<strong>{settlementCopy.migrationAmount(migrationBalance)}</strong>
@@ -303,7 +303,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 					</>
 				)
 			})()}
-			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={appCopy.formatWalletBalancesUnavailable(balanceError)} retry={retryBalances} disabled={workflowLocked} /> : null}
+			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={appCopy.formatWalletBalancesUnavailable(balanceError)} retry={retryBalances} disabled={workflowLocked} /> : undefined}
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={actionAvailability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submitCurrent()}>
 				{approval?.operation === 'redeem-complete-set' ? (
 					<section className='trade-estimate' aria-label={settlementCopy.estimateHeading}>
@@ -321,7 +321,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 							}
 						/>
 					</section>
-				) : null}
+				) : undefined}
 			</QuotedTransactionPanel>
 		</div>
 	)

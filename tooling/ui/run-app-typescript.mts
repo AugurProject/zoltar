@@ -82,7 +82,6 @@ export const getApplicationTypeScriptNodeOptions = (existingNodeOptions: string 
 		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(token.value)
 		if (match === null) {
 			retainedTokens.push(token.raw)
-			continue
 		}
 	}
 	if (retainedTokens.length === 0) return undefined

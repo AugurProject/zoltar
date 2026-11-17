@@ -1,4 +1,4 @@
-import { type Account, type Address, type Chain, type ExtendableClient, type PublicClient, type Transport, type WalletClient } from '../types.js'
+import type { Account, Address, Chain, ExtendableClient, PublicClient, Transport, WalletClient } from '../types.js'
 
 import { buildPublicClientActions, buildRpcTransactionRequest, isAlreadyKnownTransactionError, rpcBalanceOverride, withDefaultAccount } from './actions.js'
 

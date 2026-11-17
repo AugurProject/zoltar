@@ -57,7 +57,7 @@ async function simulationFixture(mode: Mode) {
 		refreshes: () => refreshes,
 		run: () => executePortfolioTakeover(wallet, settings, state, createRpcEndpointPool(endpoints), observation, 1n, async () => true, { refresh, submit: submitCall }),
 		close: async () => {
-			servers.forEach(server => server.stop(true))
+			for (const server of servers) server.stop(true)
 			await rm(directory, { recursive: true, force: true })
 		},
 	}

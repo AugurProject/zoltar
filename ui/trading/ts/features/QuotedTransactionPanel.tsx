@@ -64,7 +64,7 @@ export function QuotedTransactionPanel({
 		<>
 			{children}
 			<div className='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
-				{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
+				{transactionHash === undefined ? undefined : <TradingTransactionHash hash={transactionHash} />}
 				<ErrorNotice message={receiptWarning} />
 				<ErrorNotice message={error} />
 				{/* The spinner belongs to a blocked action that is waiting; once a transaction runs or confirms, its status line speaks instead. */}

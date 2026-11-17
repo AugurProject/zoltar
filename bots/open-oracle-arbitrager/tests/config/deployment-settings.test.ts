@@ -4,7 +4,7 @@ import { canonicalCoreDeployment, canonicalUniswapDeployment } from '@zoltar/bot
 import example from '../../config/operator.example.json'
 import { expect, test } from 'bun:test'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings } from '#config/deployment-settings'
-import { type Address } from '@zoltar/bot-shared/ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 
 const address = (digit: string) => `0x${digit.repeat(40)}` as Address
 

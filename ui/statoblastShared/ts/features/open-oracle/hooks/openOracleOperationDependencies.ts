@@ -4,7 +4,7 @@ import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js
 import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, settleOracleReport, withdrawOpenOracleBalance } from '../../../protocol/openOracle.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { parseOpenOracleCreateFormSubmission } from '../lib/openOracle.js'
+import type { parseOpenOracleCreateFormSubmission } from '../lib/openOracle.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleWithdrawableBalances } from '../../../types/contracts.js'
 import type { OpenOracleRawReadResult, OpenOracleReadClient } from '../lib/openOracleTokenAccess.js'

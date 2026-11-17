@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
-import { type OperatorSettings } from '../config/settings.ts'
+import type { OperatorSettings } from '../config/settings.ts'
 import { cloneRuntimeTopology, setRuntimeExecutionAddress, bindRuntimeStateToSigner, recordActivity, type RuntimeState } from '../state/operator-state.ts'
 
 export const CONFIGURATION_COMMIT_INDETERMINATE = 'ConfigurationCommitIndeterminate'

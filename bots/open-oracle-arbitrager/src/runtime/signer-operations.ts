@@ -1,8 +1,8 @@
 import { acquireExecutorDeploymentIntentLock, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
-import { type ExecutorDeploymentRecoveryStatus } from '#state/executor-deployment-recovery'
-import { type Hex } from '@zoltar/bot-shared/ethereum'
+import type { ExecutorDeploymentRecoveryStatus } from '#state/executor-deployment-recovery'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { ProcessLockHeldError } from '@zoltar/bot-shared/execution/process-lock'
-import { type SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
+import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 
 /**
  * Mirrors the durable executor deployment journal so the scan can skip signing and the dashboard can name the pending transaction.

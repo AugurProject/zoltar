@@ -24,9 +24,9 @@ const base = { owner, factory, origin, questionAdmissionPolicy, maximumQuestionH
 describe('shared capital portfolio deployment', () => {
 	test('encodes module deployment addresses and pool economics without a shared owner health target', () => {
 		const request = buildPortfolioDeploymentRequest(base)
-		const constructor = abi.find(entry => entry.type === 'constructor')
-		if (constructor === undefined || constructor.type !== 'constructor') throw new Error('Missing test constructor')
-		const encoded = encodeAbiParameters(constructor.inputs, [factory, origin, base.maximumQuestionHorizonSeconds, deployers, questionAdmissionPolicy, economics])
+		const constructorAbi = abi.find(entry => entry.type === 'constructor')
+		if (constructorAbi === undefined || constructorAbi.type !== 'constructor') throw new Error('Missing test constructor')
+		const encoded = encodeAbiParameters(constructorAbi.inputs, [factory, origin, base.maximumQuestionHorizonSeconds, deployers, questionAdmissionPolicy, economics])
 		expect(request).toEqual({ account: owner, data: `0x1234${encoded.slice(2)}` })
 	})
 

@@ -170,7 +170,7 @@ describe('AddressValue', () => {
 			if (!(text instanceof HTMLElement) || !(full instanceof HTMLElement)) throw new Error('Address measurement elements are missing')
 			expect(forms.map(form => form.textContent)).toEqual(['0x123456…345678', '0x1234…5678', '0x12…5678'])
 			Reflect.defineProperty(full, 'scrollWidth', { configurable: true, value: 420 })
-			forms.forEach((form, index) => Reflect.defineProperty(form, 'scrollWidth', { configurable: true, value: [150, 110, 90][index] }))
+			for (const [index, form] of forms.entries()) Reflect.defineProperty(form, 'scrollWidth', { configurable: true, value: [150, 110, 90][index] })
 			const activeForm = () => forms.find(form => form.getAttribute('data-active') === 'true')?.textContent
 			for (const [width, expected] of [
 				[200, '0x123456…345678'],

@@ -133,12 +133,12 @@ export async function createSimulationBackend(
 	const pendingRequests = new Map<number, PendingRequest>()
 	const progressListeners = new Set<() => void>()
 	let nextRequestId = 1
-	let currentState: SimulationWorkerState | undefined = undefined
-	let bootstrapPromise: Promise<void> | undefined = undefined
+	let currentState: SimulationWorkerState | undefined
+	let bootstrapPromise: Promise<void> | undefined
 	let disposed = false
-	let terminalError: Error | undefined = undefined
+	let terminalError: Error | undefined
 	let bootstrapWarning = initialBootstrapWarning
-	let rejectReady: ((error: Error) => void) | undefined = undefined
+	let rejectReady: ((error: Error) => void) | undefined
 
 	const rejectPendingRequests = (error: Error) => {
 		for (const pendingRequest of pendingRequests.values()) {

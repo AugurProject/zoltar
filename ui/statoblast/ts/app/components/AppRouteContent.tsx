@@ -41,7 +41,7 @@ function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 're
 }
 
 export function AppRouteContent({ deploy, openOracle, portfolios, readBackendMessage, route, questions, questionView, universeDirectory, migration }: Props) {
-	if (!shouldRenderRouteContent({ readBackendMessage, route })) return null
+	if (!shouldRenderRouteContent({ readBackendMessage, route })) return undefined
 
 	switch (route) {
 		case 'deploy':

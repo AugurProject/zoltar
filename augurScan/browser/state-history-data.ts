@@ -1,6 +1,6 @@
 import type { EntityHistory, StateEntity, StateTab } from './browser-types.ts'
 import { decodeEntityHistory } from './api-decoding.ts'
-import { type EntityHistoryCoverageValue } from './api-validation.ts'
+import type { EntityHistoryCoverageValue } from './api-validation.ts'
 import { collectCursorCollections, compareCanonicalEventPosition } from './canonical-pagination.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 

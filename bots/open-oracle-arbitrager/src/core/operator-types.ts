@@ -1,6 +1,6 @@
 import type { Account, Address, Chain, PublicClient, Transport, WalletClient } from '@zoltar/bot-shared/ethereum'
 import type { Configuration } from '#config/configuration'
-import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
+import type { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
 import type { ArbitrageQuote } from '#core/strategy'
 import type { Venue } from '#core/venue-strategy'
 import type { EvaluatedOpportunitySnapshot, SkippedOpportunitySnapshot } from '#state/opportunity-snapshot'

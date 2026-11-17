@@ -1,6 +1,6 @@
 import { bigintToSafeNumber, formatEther, type Address } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { type Configuration } from '#config/configuration'
+import type { Configuration } from '#config/configuration'
 import { opportunityDecision } from '#execution/execution-orchestration'
 import { gamePolicyMismatch, type CoordinatorGamePolicy } from '#core/game-policy'
 import { decimalSignedEth, decimalWeth } from '#state/operator-state'

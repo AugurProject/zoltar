@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { listRepositoryFiles } from './git.mts'
 import { repositoryRoot } from './root.mts'
-import { productionSourceLineLimit, sourceSizeAllowances, type SourceSizeAllowance } from './source-size-policy.ts'
+import { productionSourceLineLimit, type SourceSizeAllowance, sourceSizeAllowances, testSourceLineLimit, testSourceSizeAllowances } from './source-size-policy.ts'
 
 const productionRoots = /^(?:augurScan\/(?:src|public|browser|scripts)|bots\/[^/]+\/(?:src|scripts|contracts)|shared\/[^/]+\/ts|solidity\/(?:contracts|ts)|ui\/[^/]+\/(?:ts|build|scripts)|tooling|docs\/(?:charts|runtime))\//
 const sourceExtension = /\.(?:[cm]?[jt]sx?|sol)$/
@@ -18,6 +18,23 @@ export type SourceSizeFinding = {
 }
 
 export const isProductionSource = (file: string): boolean => productionRoots.test(file) && sourceExtension.test(file) && !excludedSegment.test(file) && !excludedFile.test(file)
+
+const testRoots = /^(?:augurScan|bots|docs|shared|solidity|tooling|ui)\//
+const testExtension = /\.[cm]?[jt]sx?$/
+const testLocation = /(?:\/tests?\/|\.(?:spec|test)\.[cm]?[jt]sx?$)/
+const excludedTestSegment = /\/(?:artifacts|dist|fixtures|js|node_modules|snapshots|vendor)\//
+const excludedTestFile = /\.generated\.[cm]?[jt]sx?$/
+
+/** Test files and the helpers beside them: everything under a `test` or `tests` directory, plus `.test.` and `.spec.` files anywhere. */
+export const isTestSource = (file: string): boolean => testRoots.test(file) && testExtension.test(file) && testLocation.test(file) && !excludedTestSegment.test(file) && !excludedTestFile.test(file)
+
+export type SourceSizeScope = {
+	readonly includes: (file: string) => boolean
+	readonly label: string
+}
+
+const productionScope: SourceSizeScope = { includes: isProductionSource, label: 'production' }
+const testScope: SourceSizeScope = { includes: isTestSource, label: 'test' }
 
 const countPhysicalLines = (source: string): number => {
 	if (source === '') return 0
@@ -79,14 +96,14 @@ export const countSolidityCommentOnlyLines = (source: string): number => {
 // Solidity comment-only lines are excluded so NatSpec and explanatory comments never push a contract over its size limit.
 export const countSourceLines = (source: string, file: string): number => countPhysicalLines(source) - (file.endsWith('.sol') ? countSolidityCommentOnlyLines(source) : 0)
 
-export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowances: ReadonlyMap<string, SourceSizeAllowance> = sourceSizeAllowances, limit = productionSourceLineLimit): SourceSizeFinding[] {
+export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowances: ReadonlyMap<string, SourceSizeAllowance> = sourceSizeAllowances, limit = productionSourceLineLimit, scope: SourceSizeScope = productionScope): SourceSizeFinding[] {
 	const findings: SourceSizeFinding[] = []
 	const validAllowances = new Map<string, SourceSizeAllowance>()
 	for (const [file, allowance] of allowances) {
 		const lines = files.has(file) ? countSourceLines(files.get(file) ?? '', file) : 0
 		let valid = true
-		if (!isProductionSource(file)) {
-			findings.push({ detail: 'allowances may only name production source files', file, lines, limit: allowance.maxLines, kind: 'invalid-allowance-path' })
+		if (!scope.includes(file)) {
+			findings.push({ detail: `allowances may only name ${scope.label} source files`, file, lines, limit: allowance.maxLines, kind: 'invalid-allowance-path' })
 			valid = false
 		}
 		if (!Number.isSafeInteger(allowance.maxLines) || allowance.maxLines <= limit) {
@@ -100,7 +117,7 @@ export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowance
 		if (valid) validAllowances.set(file, allowance)
 	}
 	for (const [file, source] of files) {
-		if (!isProductionSource(file)) continue
+		if (!scope.includes(file)) continue
 		const lines = countSourceLines(source, file)
 		const allowance = validAllowances.get(file)
 		if (allowance === undefined && lines > limit) findings.push({ file, lines, limit, kind: 'oversized' })
@@ -111,8 +128,10 @@ export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowance
 	return findings.sort((left, right) => left.file.localeCompare(right.file))
 }
 
+export const inspectTestSourceSizes = (files: ReadonlyMap<string, string>, allowances: ReadonlyMap<string, SourceSizeAllowance> = testSourceSizeAllowances, limit = testSourceLineLimit): SourceSizeFinding[] => inspectSourceSizes(files, allowances, limit, testScope)
+
 function trackedSources(repositoryRoot: string): Map<string, string> {
-	const tracked = listRepositoryFiles({ cwd: repositoryRoot }).filter(isProductionSource)
+	const tracked = listRepositoryFiles({ cwd: repositoryRoot }).filter(file => isProductionSource(file) || isTestSource(file))
 	const sources = new Map<string, string>()
 	for (const file of tracked) {
 		try {
@@ -126,13 +145,18 @@ function trackedSources(repositoryRoot: string): Map<string, string> {
 	return sources
 }
 
-if (import.meta.main) {
-	const findings = inspectSourceSizes(trackedSources(repositoryRoot))
+function reportSourceSizes(label: string, limit: number, findings: readonly SourceSizeFinding[]) {
 	if (findings.length === 0) {
-		console.log(`Production source-size guard passed (${productionSourceLineLimit.toString()} line limit).`)
-	} else {
-		console.error(`Production source-size guard failed (${productionSourceLineLimit.toString()} line limit).`)
-		for (const finding of findings) console.error(`${finding.file}: ${finding.lines.toString()} lines; configured limit ${finding.limit.toString()} (${finding.kind})${finding.detail === undefined ? '' : `; ${finding.detail}`}`)
-		process.exitCode = 1
+		console.log(`${label} source-size guard passed (${limit.toString()} line limit).`)
+		return
 	}
+	console.error(`${label} source-size guard failed (${limit.toString()} line limit).`)
+	for (const finding of findings) console.error(`${finding.file}: ${finding.lines.toString()} lines; configured limit ${finding.limit.toString()} (${finding.kind})${finding.detail === undefined ? '' : `; ${finding.detail}`}`)
+	process.exitCode = 1
+}
+
+if (import.meta.main) {
+	const sources = trackedSources(repositoryRoot)
+	reportSourceSizes('Production', productionSourceLineLimit, inspectSourceSizes(sources))
+	reportSourceSizes('Test', testSourceLineLimit, inspectTestSourceSizes(sources))
 }
