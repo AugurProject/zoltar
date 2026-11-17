@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
@@ -9,12 +10,14 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 /// without visiting questions. Forks copy roots and preserve exact funded units.
 contract SecurityPoolResolutionPremiumBook {
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	uint256 public constant UNIT_SCALE = 1e9;
 	uint48 public constant MAXIMUM_REPORTING_WINDOW = 3 days + 7 weeks;
 	uint256 private constant MAXIMUM_INHERITED_UNITS_PER_CASH = 1e12;
 	address public immutable services;
 	uint256 public totalCash;
 	SecurityPoolPersistentMap.Store private tree;
+	SecurityPoolQuestionMap.Store private questionMap;
 	uint64 private lastQuestionId;
 	// Cash is held by Services; units allocate it. Every timestamp in this book uses portfolio time.
 	// securityPoolResolutionPremiumBook.test.ts checks funding, refunds and fork conservation.
@@ -199,7 +202,7 @@ contract SecurityPoolResolutionPremiumBook {
 		totalCash -= cash;
 	}
 	function _question(Book storage book, uint256 id) private view returns (Question memory state) {
-		state = questions[uint64(tree.get(book.questionRoot, id))];
+		state = questions[uint64(questionMap.get(book.questionRoot, id))];
 		if (state.portfolioEndTime == 0) return state;
 		// A child response window cannot restore units already refunded in any ancestor.
 		if (state.portfolioEndTime < book.refundedBefore) return Question(0, 0, 0, 0, 0);
@@ -253,6 +256,6 @@ contract SecurityPoolResolutionPremiumBook {
 	function _write(Book storage book, uint256 id, Question memory state) private {
 		uint64 stateId = ++lastQuestionId;
 		questions[stateId] = state;
-		book.questionRoot = tree.set(book.questionRoot, id, stateId, 0);
+		book.questionRoot = questionMap.set(book.questionRoot, id, stateId);
 	}
 }
