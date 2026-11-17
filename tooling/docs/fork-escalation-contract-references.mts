@@ -1,7 +1,7 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const forkEscalationContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '1d0cce0218df23774c9f6d6ffb5492853eb1f88be56bca14a6aaed213254b9a8',
+		compiledAbiFingerprint: '342d3256edf6d7f0b17cb2c86364477d0805017cad30f6303e327b55db7a795a',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects [non-decision](./glossary.html#non-decision-threshold), and settles local or carried deposits.',
 		readAbiFingerprint: 'f786acd708ed5cdd22cafa4bc873a00f1fe1be459e5fb65070bee884ed5cb8be',
@@ -285,6 +285,16 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				preconditions:
 					'Current game is ordinary or a resumed portfolio continuation without a fixed outcome; provisional resolution `None` or response period open; pool operational; universe unforked; outcome non-`None`; caller allowance to this game covers the accepted REP; preview accepts a positive amount within the remaining threshold room. While the provisional resolution is non-`None`, the outcome\u2019s resulting balance is at least `totalCostAttoRep` (`Invalid deposit preview`).',
 				signals: 'REP `Transfer`, `LocalDepositAppended`, `DepositOnOutcome`, `EscalationSurplusAccrued` when the ordinary minimum increases, and `NonDecisionReached` when the deposit reaches non-decision',
+			},
+			{
+				call: '`depositRepOnOutcomeForBatch(outcome, beneficiaries, amountsAttoRep)`',
+				caller: 'Any REP holder or collective challenge escrow',
+				effect:
+					'Spends only the caller’s REP and creates one native deposit and carry leaf for each beneficiary. Combined support must lead or reach the non-decision threshold; admission checks the full report once against the live curve. Finality and fees are refreshed after the batch. Contributors retain their individual payout and fork-migration rights; activation grants no additional ownership.',
+				declarations: [{ name: 'depositRepOnOutcomeForBatch' }],
+				preconditions:
+					'The direct-report lifecycle checks apply. One to sixteen nonzero beneficiaries, matching amount entries, each at least the start bond; the full sum must be accepted without trimming. The caller approves this game for the full sum. For collective funding, deploy the [challenge escrow](https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationChallengeEscrow.sol) as `EscalationChallengeEscrow(game, outcome, deadline)` with a fixed deadline no later than the current game deadline. Contributors approve that escrow and call `contribute(amountAttoRep, validUntil)`; the round deadline must be no later than their `validUntil`. Each round keeps at most sixteen contributors; a larger new contribution can replace the smallest pending one, refunding its full amount to its original owner. Pending funds do not affect game balances or deadlines and their owner may call `withdraw()` until activation, including after expiry or a fork. A sufficient contribution activates automatically; anyone may also call `activate()`. Every activation consumes the full recorded contributions for their original owners. Public funding remains visible to opponents, and the required support continues to rise with the curve.',
+				signals: 'Native `LocalDepositAppended` and `DepositOnOutcome` events per contributor; ordinary surplus and non-decision events when applicable.',
 			},
 			{
 				call: '`depositRepOnOutcomeWithPermit(outcome, maximumDepositAttoRep, deadline, v, r, s)` through `fallback()`',

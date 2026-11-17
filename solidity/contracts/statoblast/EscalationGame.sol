@@ -65,6 +65,11 @@ contract EscalationGame is EscalationGameSettlement {
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.depositRepOnOutcome, (outcome, maximumDepositAttoRep)));
 	}
 
+	/// @notice Caller-funded atomic report with separate native claim ownership for up to sixteen contributors.
+	function depositRepOnOutcomeForBatch(BinaryOutcomes.BinaryOutcome outcome, address[] calldata beneficiaries, uint256[] calldata amountsAttoRep) external {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.depositRepOnOutcomeForBatch, (outcome, beneficiaries, amountsAttoRep)));
+	}
+
 	function _initializeStartParams(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) private {
 		if (owner != msg.sender) revert('Only owner');
 		require(activationTime == 0 && _nonDecisionThresholdAttoRep > _startBondAttoRep && _startBondAttoRep > 0, 'Invalid game start');
