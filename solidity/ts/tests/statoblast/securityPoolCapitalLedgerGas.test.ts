@@ -114,7 +114,7 @@ describe('Statoblast: production bounded takeover gas', () => {
 				const request = {
 					...fixture.capital,
 					functionName: 'takeOverWithBounds',
-					args: [id, source.commitment, source.rep, owner.freeAttoRep, { maximumOwnerPrincipal: owner.freeAttoRep + source.rep, maximumOwnerCommitment: source.commitment, expectedTargetHealthFactorBps: owner.targetHealthFactorBps, expectedAcceptedPriceEpoch: epoch, expectedSourceBatch: source.batch }],
+					args: [id, source.commitment, 0n, owner.freeAttoRep, { maximumOwnerPrincipal: owner.freeAttoRep + source.rep, maximumOwnerCommitment: source.commitment, expectedTargetHealthFactorBps: owner.targetHealthFactorBps, expectedAcceptedPriceEpoch: epoch, expectedSourceBatch: source.batch }],
 				} as const
 				// Receipt gas includes storage refunds; only the upfront estimate is
 				// suitable for the transaction's gas allowance and gas-cost screen.
@@ -123,11 +123,16 @@ describe('Statoblast: production bounded takeover gas', () => {
 				const hash = await writeContractAndWait(buyer, () => buyer.writeContract({ ...request, gas: estimate }))
 				const used = (await buyer.waitForTransactionReceipt({ hash })).gasUsed
 				expect(estimate).toBeGreaterThan(used)
-				expect(estimate).toBeLessThan(3_500_000n)
-				expect(await fixture.position(id)).toMatchObject({ rep: 0n, commitment: 0n })
+				// Keeping the source alive requires both source and receiver tree rekeys.
+				// The 512-owner bound includes that additional backing-preserving work.
+				expect(estimate).toBeLessThan(3_750_000n)
+				expect((await fixture.position(id)).rep).toBe(source.rep)
+				expect((await fixture.position(id)).commitment).toBeGreaterThan(0n)
 				const receiver = await fixture.owner(1)
 				expect(receiver.freeAttoRep).toBe(0n)
-				expect(await fixture.position(receiver.positionId)).toMatchObject({ owner: buyer.account.address, rep: owner.freeAttoRep + source.rep, commitment: source.commitment, batch: source.batch, remainingCommitment: source.remainingCommitment })
+				const repaired = await fixture.position(receiver.positionId)
+				expect(repaired).toMatchObject({ owner: buyer.account.address, rep: owner.freeAttoRep, batch: source.batch })
+				expect(repaired.commitment + (await fixture.position(id)).commitment).toBe(source.commitment)
 				expect((await buyer.readContract({ ...fixture.capital, functionName: 'totals' }))[1]).toBe(demand)
 				measurements.push({ owners: count, estimate, used })
 			}

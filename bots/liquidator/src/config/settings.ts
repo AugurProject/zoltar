@@ -61,6 +61,7 @@ const ROOT_KEYS = ['approvedUniverses', 'centralizedMarkets', 'childMarketConfig
 const RUNTIME_KEYS = ['execute', 'once', 'pollMilliseconds', 'stateFile', 'ui', 'uiHost', 'uiPort']
 const STRATEGY_KEYS = ['maximumGasCostEth', 'walletReserveRep']
 const PORTFOLIO_POLICY_KEYS = [
+	'takeoverIncomeHorizonSeconds',
 	'allowFundedTakeovers',
 	'maximumCommitmentEth',
 	'maximumOwnFundingRep',

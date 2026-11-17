@@ -416,6 +416,7 @@
 			<header class="page">
 				<p class="kicker">Design explainer · pull request #1164</p>
 				<h1>Shared security pools and uniform-price Collateral Repair Auctions</h1>
+				<p><strong>Historical design snapshot.</strong> This page describes PR #1164. Its time-ramped principal awards have been superseded by <a href="backing-preserving-repairs.html">backing-preserving commitment repairs</a>; consult the current liquidation documentation for implemented behavior.</p>
 				<p class="lede">Pull request <a href="https://github.com/AugurProject/zoltar/pull/1164">#1164</a> lets many Statoblast questions share one pool of REP security and one set of underwriting commitments, instead of each question running its own isolated SecurityPool. It also rebuilds the post-fork Collateral Repair Auction as a uniform-price auction of whole ETH lots whose winners automatically become funded capital providers. This page explains what the change does, how the new system works, the math and incentives behind it, and where its weak points are. It closes with the page author's assessment of the pull request and concrete suggestions for improving it.</p>
 				<ul class="meta">
 					<li>Branch <code>t3code/multi-question-security-pool</code> → <code>main</code></li>

@@ -1,3 +1,4 @@
+import { portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -233,11 +234,22 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			const takeoverBounds = { maximumOwnerPrincipal: 100n * unit, maximumOwnerCommitment: 10n * unit, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: acceptedPriceEpoch, expectedSourceBatch: 0n }
 			const winnerCommitment = (await owner.readContract({ ...capital, functionName: 'auctionPosition', args: [winner.id] })).commitment
 			await revertedGasOf('liquidation failure: takeover rejected by bounds', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, { ...takeoverBounds, maximumOwnerPrincipal: 1n }] }))
-			await gasOf('liquidation: keeper takes over an unmaterialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
+			const winnerPosition = await owner.readContract({ ...capital, functionName: 'auctionPosition', args: [winner.id] })
+			const conservativePrice = await owner.readContract({ ...capital, functionName: 'conservativePrice' })
+			const liquidationPrice = await owner.readContract({ ...capital, functionName: 'liquidationPrice' })
+			const securityMultiplierBps = await owner.readContract({ ...capital, functionName: 'securityMultiplierBps' })
+			const repair = portfolioTakeoverSource(
+				{ conservativePrice, liquidationPrice, securityMultiplierBps, totalCommitmentAttoEth: totalCommitment, demandAttoEth: demand, economics: { minimumCommitmentAttoEth: unit } },
+				{ rep: winnerPosition.principal, commitment: winnerPosition.commitment, batch: 0n, remainingCommitment: 0n },
+			)
+			const repairable = repair.healthy || repair.maximumTakeoverCommitment >= unit
+			if (repairable) await gasOf('liquidation: keeper repairs an unmaterialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
+			else await revertedGasOf('minimum winner requires additional backing', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
 			await restore(liquidation)
 			await writeContractAndWait(stranger, () => stranger.writeContract({ ...capital, functionName: 'materializeAuctionBid', args: [winner.id] }))
 			const materializedId = await positionIdOf(winner.vault)
-			await gasOf('liquidation: keeper takes over a materialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverWithBounds', args: [materializedId, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
+			if (repairable) await gasOf('liquidation: keeper repairs a materialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverWithBounds', args: [materializedId, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
+			else await revertedGasOf('materialized minimum winner requires additional backing', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverWithBounds', args: [materializedId, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
 			await restore(finalized)
 
 			// Fork transition: the winner's first operation after the child forks is

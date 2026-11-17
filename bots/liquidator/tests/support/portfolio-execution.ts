@@ -18,6 +18,9 @@ export async function portfolioTakeoverFixture(directoryPrefix: string) {
 	settings.paused = false
 	const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
 	const observation = portfolioObservation()
+	// Keep projected repair income above the large gas allowances used by
+	// simulation and signing tests, whose subject is execution failure handling.
+	observation.snapshot.economics.annualFeeBps = 1000n
 	observation.snapshot.owner = account.address
 	observation.snapshot.ownerPrincipalAttoRep = 100n * unit
 	observation.snapshot.ownerAccount.freeAttoRep = 100n * unit

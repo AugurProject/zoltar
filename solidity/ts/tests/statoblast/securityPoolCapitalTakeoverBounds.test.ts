@@ -17,20 +17,20 @@ describe('Statoblast: takeover owner consent bounds', () => {
 		await fixture.price(2n * E)
 		await fixture.getAnvilWindowEthereum().advanceTime(3601n)
 		const epoch = await fixture.client().readContract({ ...fixture.capital, functionName: 'acceptedPriceEpoch' })
-		return { source, bounds: { maximumOwnerPrincipal: (5525n * E) / 10n, maximumOwnerCommitment: receiverCommitment + 50n * E, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: epoch, expectedSourceBatch: 0n } }
+		return { source, bounds: { maximumOwnerPrincipal: 500n * E, maximumOwnerCommitment: receiverCommitment + 50n * E, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: epoch, expectedSourceBatch: 0n } }
 	}
 	test('a bounded takeover accepts the exact final principal and commitment consent', async () => {
 		const { source, bounds } = await prepare()
 		const buyer = fixture.client(1)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 1n, 500n * E, bounds] }))
+		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 0n, 500n * E, bounds] }))
 		expect(await fixture.position((await fixture.owner(1)).positionId)).toMatchObject({ rep: bounds.maximumOwnerPrincipal, commitment: bounds.maximumOwnerCommitment })
-		expect(await fixture.position(source)).toMatchObject({ rep: (525n * E) / 10n, commitment: 50n * E })
+		expect(await fixture.position(source)).toMatchObject({ rep: 105n * E, commitment: 50n * E })
 	})
 	test('an existing receiver must consent to its entire resulting position, including previous principal and commitment', async () => {
 		const { source, bounds } = await prepare(100n * E)
 		const buyer = fixture.client(1)
 		const call = (maximumOwnerPrincipal: bigint, maximumOwnerCommitment: bigint) =>
-			writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 1n, 0n, { ...bounds, maximumOwnerPrincipal, maximumOwnerCommitment }] }))
+			writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 0n, 0n, { ...bounds, maximumOwnerPrincipal, maximumOwnerCommitment }] }))
 		await expect(call((525n * E) / 10n, bounds.maximumOwnerCommitment)).rejects.toThrow('Takeover owner principal exceeds limit')
 		await expect(call(bounds.maximumOwnerPrincipal, 50n * E)).rejects.toThrow('Takeover owner commitment exceeds limit')
 		expect(await fixture.position((await fixture.owner(1)).positionId)).toMatchObject({ rep: 500n * E, commitment: 100n * E })
@@ -42,7 +42,7 @@ describe('Statoblast: takeover owner consent bounds', () => {
 		const buyer = fixture.client(1)
 		await fixture.deposit(1, E)
 		const previous = await fixture.owner(1)
-		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 1n, 501n * E, bounds] }))).rejects.toThrow('Takeover owner principal exceeds limit')
+		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 0n, 501n * E, bounds] }))).rejects.toThrow('Takeover owner principal exceeds limit')
 		expect(await fixture.owner(1)).toEqual(previous)
 		expect(await fixture.position(source)).toMatchObject({ rep: 105n * E, commitment: 100n * E })
 	})
@@ -62,7 +62,7 @@ describe('Statoblast: takeover owner consent bounds', () => {
 				balance: await buyer.readContract({ ...fixture.token, functionName: 'balanceOf', args: [fixture.capital.address] }),
 			}
 			const reason = { principal: 'Takeover owner principal exceeds limit', commitment: 'Takeover owner commitment exceeds limit', target: 'Takeover owner target changed', price: 'Takeover price epoch changed', cohort: 'Takeover source cohort changed' }[mutation]
-			await expect(writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 1n, 500n * E, bounds] }))).rejects.toThrow(reason)
+			await expect(writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 0n, 500n * E, bounds] }))).rejects.toThrow(reason)
 			expect(await fixture.position(source)).toEqual(previous.source)
 			expect(await fixture.owner(1)).toEqual(previous.buyer)
 			expect(await buyer.readContract({ ...fixture.token, functionName: 'balanceOf', args: [fixture.capital.address] })).toBe(previous.balance)
