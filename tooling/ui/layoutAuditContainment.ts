@@ -67,7 +67,8 @@ export function auditContainment(tools: LayoutAuditTools) {
 	 * Walks from a piece of content up through its containing blocks and records the first box that cuts it off or that
 	 * it visibly escapes. A scroll container ends the walk: content inside it can be scrolled to. When the content is the
 	 * owner's own box, such as a form field, the owner is not measured against itself: browsers give fields
-	 * `overflow: clip`, and a field's border box always overhangs its own padding box.
+	 * `overflow: clip`, and a field's border box always overhangs its own padding box. The field is still measured
+	 * against its ancestors, including a textarea, whose own scrolling only concerns the text inside it.
 	 */
 	const checkContainment = (owner: Element, rect: DOMRect, text: string, contentIsOwnerBox = false) => {
 		let skipUntil: Element | null | undefined

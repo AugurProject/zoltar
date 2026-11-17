@@ -52,6 +52,14 @@ describe('layout audit reports', () => {
 		expect(finding.fix).toContain('white-space: nowrap')
 	})
 
+	test('a form field cut off by a container that hides its overflow', async () => {
+		for (const field of ['<input style="width: 120px; overflow: clip; border: 4px solid">', '<textarea style="width: 120px"></textarea>']) {
+			const finding = only(await audit(`<div class="field-slot" style="width: 60px; overflow: hidden">${field}</div>`), 'clipped')
+			expect(finding.element.path).toBe('div.field-slot')
+		}
+		expect(await audit('<div style="width: 200px; overflow: hidden"><textarea style="width: 120px">Notes</textarea></div>')).toEqual([])
+	})
+
 	test('vertical clipping by a capped height', async () => {
 		const finding = only(await audit('<div class="card" style="max-height: 40px; overflow: hidden; width: 200px">First line of text<br>Second line<br>Third line</div>'), 'clipped')
 		expect(finding.message).toContain('of height')
