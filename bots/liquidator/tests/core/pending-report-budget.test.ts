@@ -1,6 +1,6 @@
-import { openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
+import { openOracleAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 import { expect, test } from 'bun:test'
-import { createRpcEndpointPool, createWalletClient, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { createRpcEndpointPool, createWalletClient, encodeFunctionData, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { decodeFunctionResult, encodeAbiParameters, mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { executePendingPortfolioReport } from '../../src/execution/portfolio-report.ts'
@@ -10,12 +10,18 @@ import { portfolioClient } from '../support/portfolio-client.ts'
 import type { PortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
 import { ownerAddress, targetAddress } from '../support/portfolio-observation.ts'
 
+// The fixture snapshot is at timestamp 3700 and the report observation at 1 + 480.
+const freshWindow = 10_000n
+const staleWindow = 780n
+
 test.each([
-	{ settledAt: 0n, baseFee: 1n },
-	{ settledAt: 3600n, baseFee: 1n },
-	{ settledAt: 0n, baseFee: 11n },
-	{ settledAt: 3600n, baseFee: 11n },
-])('sponsored report gas budget defers settlement or recovery without a safety pause (settled %s)', async ({ settledAt, baseFee }) => {
+	{ settledAt: 0n, baseFee: 1n, validityWindow: freshWindow },
+	{ settledAt: 3600n, baseFee: 1n, validityWindow: freshWindow },
+	{ settledAt: 0n, baseFee: 11n, validityWindow: freshWindow },
+	{ settledAt: 3600n, baseFee: 11n, validityWindow: freshWindow },
+	{ settledAt: 3600n, baseFee: 11n, validityWindow: staleWindow },
+])('sponsored report gas budget defers settlement or recovery without a safety pause (settled %s)', async ({ settledAt, baseFee, validityWindow }) => {
+	const stale = settledAt !== 0n && 1n + 480n + validityWindow <= 3700n
 	const gameAbi = openOracleAbi.find(item => item.type === 'function' && item.name === 'storedGame')
 	if (gameAbi === undefined || gameAbi.type !== 'function') throw new Error('Stored game ABI missing')
 	const pending: NonNullable<PortfolioObservation['pendingOperationReport']> = {
@@ -23,6 +29,7 @@ test.each([
 		oracle: targetAddress,
 		reservedRep: 0n,
 		maxSettlementBaseFee: 10n,
+		staleAt: 1n + 480n + validityWindow,
 		game: decodeFunctionResult({ abi: openOracleAbi, functionName: 'storedGame', data: encodeAbiParameters(gameAbi.outputs, [1n, 1n, targetAddress, 1n, settledAt, ownerAddress, 0n, 480n, 0n, zeroAddress, 101n, targetAddress, 1n, 0n, 0n, 100n, targetAddress, 7_000_000n, 0n, 1n]) }),
 		helper: Object.assign([targetAddress, 0n, 0n] as const, { creator: targetAddress, blockTimestamp: 0n, blockNumber: 0n }),
 	}
@@ -35,6 +42,7 @@ test.each([
 		storedGame: pending.game,
 		storedHelper: pending.helper,
 		tokenHolder: 0n,
+		priceValidityWindowSeconds: validityWindow,
 	})
 	f.settings.runtime.execute = true
 	const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
@@ -61,15 +69,21 @@ test.each([
 		f.observation,
 		async (_wallet, _settings, _state, _pool, call) => {
 			submitted = true
-			expect(call.maxFeePerGasCap).toBe(10n)
+			// A stale settled report is retired at any base fee, so its recovery carries no settlement ceiling.
+			expect(call.maxFeePerGasCap).toBe(stale ? undefined : 10n)
+			expect(call.label).toBe(stale ? 'Retire stale sponsored report' : settledAt === 0n ? 'Settle sponsored takeover report' : 'Recover settled sponsored report')
+			if (stale) expect(call.data).toBe(encodeFunctionData({ abi: sharedPoolPriceFeedAbi, functionName: 'recoverReport', args: [7n] }))
 			call.gasBudgetExceeded?.()
 			throw new Error('Gas budget failure would safety-pause')
 		},
 		[{ endpoint: 'https://read.example', client: f.client }],
 	)
-	if (baseFee > 10n) {
+	if (baseFee > 10n && !stale) {
 		expect(await execution).toBe('waiting')
 		expect(submitted).toBe(false)
-	} else await expect(execution).rejects.toBeInstanceOf(PortfolioOpportunityExpired)
+	} else {
+		await expect(execution).rejects.toBeInstanceOf(PortfolioOpportunityExpired)
+		expect(submitted).toBe(true)
+	}
 	expect(state.paused).toBe(false)
 })
