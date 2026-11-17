@@ -332,7 +332,7 @@ describe('event-only replay', () => {
 				logIndex: 6,
 				args: {
 					reportId: 1n,
-					reason: 'Base fee too high',
+					reason: 'Report stale',
 					pendingReportId: 0n,
 					pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n,
 					lastPrice: 12n,

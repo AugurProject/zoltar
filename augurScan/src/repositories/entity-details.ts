@@ -55,7 +55,7 @@ export const reportDetailData = async (
 			log.event_name, log.arguments, log.summary, block.timestamp AS block_timestamp
 		FROM logs log JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
 		JOIN coordinators coordinator ON (coordinator.emitter_address = log.emitter_address
-				AND log.event_name IN ('PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'ReportFundingAssigned'))
+				AND log.event_name IN ('PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'ReportFundingAssigned'))
 			OR (log.event_name = 'ReportCompleted' AND lower(log.arguments->>'priceFeed') = coordinator.emitter_address)
 		WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.arguments->>'reportId' = ${reportId}
 			AND (log.block_number, log.log_index, log.tx_hash) < (${decisions.block}::bigint, ${decisions.log}::integer, ${decisions.tx})

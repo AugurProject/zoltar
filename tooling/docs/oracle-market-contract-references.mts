@@ -170,7 +170,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				call: '`recoverSettledPendingReport()`',
 				caller: 'Anyone',
 				effect:
-					'Retries acceptance of the feed’s latest settled candidate from OpenOracle’s stored amounts and original observation timestamp. Use feed.recoverReport(reportId) for another unprocessed settled candidate. A still-valid candidate accepts its price and attempts sponsor operations; an invalid candidate is rejected. Both outcomes return isolated escrow credits to the original sponsor.',
+					'Retries acceptance of the feed’s latest settled candidate from OpenOracle’s stored amounts and original observation timestamp, after a failed callback or a settlement block above the report’s base-fee cap. Use feed.recoverReport(reportId) for another unprocessed settled candidate. A still-valid candidate accepts its price and attempts sponsor operations; an invalid candidate is rejected. Both outcomes return isolated escrow credits to the original sponsor. A still-valid candidate reverts with `Base fee too high` while the current base fee exceeds its cap.',
 				declarations: [
 					{
 						name: 'recoverSettledPendingReport',

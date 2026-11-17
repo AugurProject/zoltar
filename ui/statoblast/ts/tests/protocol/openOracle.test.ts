@@ -393,18 +393,22 @@ describe('openOracle protocol client', () => {
 		})
 	}
 
-	for (const status of ['accepted', 'rejected'] as const) {
+	const settlementOutcomes = {
+		accepted: { eventName: 'PriceReported', data: encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]), expected: { status: 'accepted' } },
+		rejected: { eventName: 'PriceReportRejected', data: encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report uneconomic', 0n, 0n, 0n, 0n]), expected: { status: 'rejected', reason: 'Report uneconomic' } },
+		deferred: { eventName: 'PriceReportDeferred', data: encodeAbiParameters(parseAbiParameters('uint256,uint256'), [34n, 33n]), expected: { status: 'deferred', maxSettlementBaseFee: 33n } },
+	} as const
+	for (const status of ['accepted', 'rejected', 'deferred'] as const) {
 		test(`settlement filters unrelated logs before the ${status} coordinator outcome`, async () => {
 			const preimage = createOpenOraclePreimage(7n)
 			preimage.game.callbackContract = vaultAddress
 			const abi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
-			const data = status === 'accepted' ? encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]) : encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Base fee too high', 0n, 0n, 0n, 0n])
-			const eventName = status === 'accepted' ? ('PriceReported' as const) : ('PriceReportRejected' as const)
+			const { data, eventName } = settlementOutcomes[status]
 			const log = { address: vaultAddress, data, topics: encodeEventTopics({ abi, eventName, args: { reportId: 7n } }) }
 			const logs = [{ ...log, address: token1Address }, { ...log, topics: encodeEventTopics({ abi, eventName, args: { reportId: 8n } }) }, { ...log, topics: [] }, log]
 			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs }) }
 			const result = await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
-			expect(result.priceSettlement).toEqual(status === 'accepted' ? { status } : { status, reason: 'Base fee too high' })
+			expect(result.priceSettlement).toEqual(settlementOutcomes[status].expected)
 		})
 	}
 

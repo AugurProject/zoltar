@@ -110,6 +110,7 @@ export function getOpenOraclePriceSettlement(receipt: Partial<Pick<TransactionRe
 		try {
 			const decoded = decodeEventLog({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, data: log.data, topics: log.topics })
 			if (decoded.eventName === 'PriceReportRejected' && decoded.args.reportId === reportId) return { status: 'rejected', reason: decoded.args.reason }
+			if (decoded.eventName === 'PriceReportDeferred' && decoded.args.reportId === reportId) return { status: 'deferred', maxSettlementBaseFee: decoded.args.maxSettlementBaseFee }
 			if (decoded.eventName === 'PriceReported' && decoded.args.reportId === reportId) return { status: 'accepted' }
 		} catch (error) {
 			if (!isIgnorableLogDecodeError(error)) throw error
