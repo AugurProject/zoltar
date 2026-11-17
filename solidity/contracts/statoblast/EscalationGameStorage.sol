@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import {
-	EscalationClaimBundle,
-	ForkedEscrowState,
-	Node,
-	NonDecisionState,
-	OutcomeState
-} from './EscalationGameTypes.sol';
+import { EscalationClaimBundle, Node, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { EscalationClaimCheckpoint } from './EscalationClaimCheckpointTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { DelegateCall } from './DelegateCall.sol';
@@ -37,9 +31,6 @@ abstract contract EscalationGameStorage {
 		uint256 unresolvedAttoRep;
 		// Original unconsumed principal indexed by BinaryOutcome (Invalid, Yes, No).
 		uint256[3] localUnresolvedPrincipalByOutcome;
-		bool localUnresolvedTotalsExported;
-		// Each branch retains its independent escrow accounting.
-		mapping(uint8 => ForkedEscrowState) forkedEscrowByOutcome;
 		// Only the new report generating surplus relinquishes this collateral credit.
 		uint256 collateralBackingAttoRep;
 	}
@@ -60,7 +51,6 @@ abstract contract EscalationGameStorage {
 	address internal forkCarryRootClaimSourceGame;
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 	NonDecisionState public nonDecisionState;
-	uint256 internal forkCarryBackingExportedBeforeResumeAttoRep;
 	uint8 public forkCarrySnapshotOutcomesInitialized;
 	bytes32 internal forkCarrySnapshotId;
 	// A checkpoint stores only frozen grandparent-and-earlier transforms. The
@@ -73,8 +63,14 @@ abstract contract EscalationGameStorage {
 	// Ordinary deposits irrevocably release the minimum outcome balance. Reporter
 	// principal remains nominal because only one outcome can claim in each child.
 	uint256 public creditedSurplusAttoRep;
-	// A new strict leader must remain challengeable for a full response period.
-	uint256 internal leadResponseEnd;
+	// A deposit that takes the lead restarts the response period. The attrition
+	// curve alone cannot guarantee one: a challenger resting just below the leader
+	// pushes the curve deadline to the leader's own stake, then flips at that second.
+	uint256 public responseRestartedUntil;
+	// A continuation scales winning claims by the universe's fork threshold. The first
+	// claim freezes it, as ordinary settlement does: otherwise REP burned between two
+	// claims, including each claim's own haircut, would pay later claimants less.
+	uint256 public continuationSettlementForkThresholdAttoRep;
 
 	function _strictStakeLeader() internal view returns (BinaryOutcomes.BinaryOutcome leader) {
 		uint256 highest;
@@ -88,15 +84,19 @@ abstract contract EscalationGameStorage {
 	}
 
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
-		// A provisional leader cannot close a guaranteed response period.
-		// Equality remains open, matching finality.
-		return
-			provisionalResolution == BinaryOutcomes.BinaryOutcome.None ||
-			block.timestamp <= leadResponseEnd ||
-			(forkContinuation &&
-				fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None &&
-				forkResumedAt != 0 &&
-				block.timestamp <= forkResumedAt + ACTIVATION_DELAY);
+		// A provisional leader cannot close a guaranteed response period: the one
+		// an unresolved continuation starts with, or one restarted by a change of
+		// leader. Equality remains open, matching finality.
+		if (provisionalResolution == BinaryOutcomes.BinaryOutcome.None) return true;
+		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None || (forkContinuation && forkResumedAt == 0))
+			return false;
+		return block.timestamp <= _responseEnd();
+	}
+
+	/// @dev Last second of the current guaranteed response period, or zero when none applies.
+	function _responseEnd() internal view returns (uint256 end) {
+		if (forkContinuation) end = forkResumedAt + ACTIVATION_DELAY;
+		if (responseRestartedUntil > end) end = responseRestartedUntil;
 	}
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {

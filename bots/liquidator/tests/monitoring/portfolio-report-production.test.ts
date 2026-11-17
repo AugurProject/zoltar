@@ -20,14 +20,14 @@ import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 describe('liquidator sponsored report integration', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	test.each([
-		{ targets: 1, healFirst: false, external: false, expire: false, callbackFailure: false },
-		{ targets: 2, healFirst: false, external: false, expire: false, callbackFailure: false },
-		{ targets: 2, healFirst: true, external: false, expire: false, callbackFailure: false },
-		{ targets: 2, healFirst: false, external: true, expire: false, callbackFailure: false },
-		{ targets: 2, healFirst: true, external: true, expire: false, callbackFailure: false },
-		{ targets: 2, healFirst: false, external: true, expire: true, callbackFailure: false },
-		{ targets: 2, healFirst: false, external: true, expire: false, callbackFailure: true },
-	])('settles a batch with %s, preserving later funding after failure', async ({ targets, healFirst, external, expire, callbackFailure }) => {
+		{ targets: 1, healFirst: false, external: false, expire: false, starvedSettlement: false },
+		{ targets: 2, healFirst: false, external: false, expire: false, starvedSettlement: false },
+		{ targets: 2, healFirst: true, external: false, expire: false, starvedSettlement: false },
+		{ targets: 2, healFirst: false, external: true, expire: false, starvedSettlement: false },
+		{ targets: 2, healFirst: true, external: true, expire: false, starvedSettlement: false },
+		{ targets: 2, healFirst: false, external: true, expire: true, starvedSettlement: false },
+		{ targets: 2, healFirst: false, external: true, expire: false, starvedSettlement: true },
+	])('settles a batch with %s, preserving later funding after failure', async ({ targets, healFirst, external, expire, starvedSettlement }) => {
 		await fixture.prepare(700n * unit, 100n * unit)
 		if (targets === 2) {
 			const third = createWriteClient(fixture.base.mockWindow, TEST_ADDRESSES[2])
@@ -56,7 +56,9 @@ describe('liquidator sponsored report integration', () => {
 		settings.selectedPortfolios = [scope]
 		settings.approvedUniverses = [scope.universeId]
 		settings.portfolioPolicy.maximumReportFundingAttoEth = 10n * unit
-		settings.portfolioPolicy.reportOperationsGasLimit = targets * 3_100_000
+		// The feed accepts at most 6,000,000 operation gas: two calls of 2,900,000 plus 100,000 overhead each.
+		settings.portfolioPolicy.reportOperationGasLimit = 2_900_000
+		settings.portfolioPolicy.reportOperationsGasLimit = targets * 3_000_000
 		settings.portfolioPolicy.maximumOwnFundingAttoRep = 2000n * unit
 		settings.portfolioPolicy.maximumPrincipalAttoRep = 20_000n * unit
 		settings.portfolioPolicy.maximumTotalPrincipalAttoRep = 30_000n * unit
@@ -99,7 +101,11 @@ describe('liquidator sponsored report integration', () => {
 			if (external) {
 				const pending = restarted.pendingOperationReport
 				if (pending === undefined) throw new Error('Missing sponsored report')
-				await writeContractAndWait(fixture.owner(), () => fixture.owner().sendTransaction({ ...(callbackFailure ? { gas: 1_500_000n } : {}), to: pending.oracle, data: encodeFunctionData({ abi: openOracleAbi, functionName: 'settle', args: [pending.id, pending.game, [pending.id, ...pending.helper]] }) }))
+				const settle = (gas?: bigint) =>
+					writeContractAndWait(fixture.owner(), () => fixture.owner().sendTransaction({ ...(gas === undefined ? {} : { gas }), to: pending.oracle, data: encodeFunctionData({ abi: openOracleAbi, functionName: 'settle', args: [pending.id, pending.game, [pending.id, ...pending.helper]] }) }))
+				// A settlement that starves the callback reverts in OpenOracle (InvalidGasLimit): it publishes nothing and skips nothing.
+				if (starvedSettlement) await expect(settle(1_500_000n)).rejects.toThrow('0x98bdb2e0')
+				else await settle()
 				await reconcileSponsoredReports(wallet, settings, state, pool)
 				expect(state.sponsoredReports).toHaveLength(1)
 				expect(state.activities.some(activity => activity.message.startsWith('Settle sponsored takeover report:'))).toBe(false)
@@ -109,9 +115,11 @@ describe('liquidator sponsored report integration', () => {
 				state.activities = durable.activities
 				await fixture.base.mockWindow.request({ method: 'anvil_mine', params: ['0xc'] })
 				await reconcileSponsoredReports(wallet, settings, state, pool)
-				if (callbackFailure) {
+				if (starvedSettlement) {
+					// The report is still pending, so the sponsor settles it with the promised callback gas.
 					expect(state.sponsoredReports).toHaveLength(1)
-					await executePendingPortfolioReport(wallet, settings, state, pool, await observe())
+					expect((await observe()).snapshot.priceValid).toBe(false)
+					expect(await executePendingPortfolioReport(wallet, settings, state, pool, await observe())).toBe('submitted')
 				}
 				const count = state.activities.length
 				await reconcileSponsoredReports(wallet, settings, state, pool)
@@ -119,17 +127,14 @@ describe('liquidator sponsored report integration', () => {
 			} else await executePendingPortfolioReport(wallet, settings, state, pool, await observe())
 			const completed = await observe()
 			expect(completed.pendingOperationReport).toBeUndefined()
-			expect(completed.snapshot.priceValid).toBe(!callbackFailure)
-			const expectedSucceeded = expire || callbackFailure ? 0 : targets - Number(healFirst)
+			expect(completed.snapshot.priceValid).toBe(true)
+			const expectedSucceeded = expire ? 0 : targets - Number(healFirst)
 			expect(completed.snapshot.ownerCommitmentAttoEth).toBe(BigInt(expectedSucceeded) * 100n * unit)
-			const outcome = state.activities.find(activity => activity.message.startsWith(callbackFailure ? 'Recover sponsored report after failed callback:' : 'Settle sponsored takeover report:') && activity.status !== 'pending')
-			if (callbackFailure) expect(outcome?.message).toContain('no operation outcomes reported')
-			else {
-				expect(outcome?.message).toContain(`${expectedSucceeded} succeeded, ${targets - expectedSucceeded} failed`)
-			}
+			const outcome = state.activities.find(activity => activity.message.startsWith('Settle sponsored takeover report:') && activity.status !== 'pending')
+			expect(outcome?.message).toContain(`${expectedSucceeded} succeeded, ${targets - expectedSucceeded} failed`)
 			if (healFirst) expect(outcome?.message).toContain('1 failed; 2 succeeded')
 			expect(state.sponsoredReports).toHaveLength(0)
-			if (expire || callbackFailure) {
+			if (expire) {
 				expect(Object.values(state.portfolioFunding ?? {})[0]?.amount).toBeGreaterThan(0n)
 				expect(unusedPortfolioFunding(state, completed).amount).toBeGreaterThan(0n)
 			} else {

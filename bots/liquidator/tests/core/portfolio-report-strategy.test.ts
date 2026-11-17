@@ -9,6 +9,8 @@ function fixture() {
 	settings.portfolioPolicy.maximumReportFundingAttoEth = unit / 100n
 	const position = observation.positions[0]
 	if (position === undefined) throw new Error('Missing target')
+	// Two calls and their per-call overhead fill the feed's 6,000,000 operation allowance exactly.
+	settings.portfolioPolicy.reportOperationGasLimit = 2_900_000
 	return { observation, settings, position, run: (market = true) => portfolioReportTakeoverPlan(observation, position, settings, observation.snapshot.ownerPrincipalAttoRep, market) }
 }
 
@@ -47,7 +49,7 @@ test('report batches grow to their gas budget and reserve combined funding and p
 	expect(batch.plans).toHaveLength(2)
 	expect(batch.plan?.ownFunding).toBe(117n * unit)
 	expect(value.observation.snapshot.ownerPrincipalAttoRep).toBe(0n)
-	value.settings.portfolioPolicy.reportOperationsGasLimit = 3_100_000
+	value.settings.portfolioPolicy.reportOperationsGasLimit = 3_000_000
 	expect(value.run().plans).toHaveLength(1)
 	value.settings.portfolioPolicy.reportOperationsGasLimit = 6_200_000
 	value.settings.portfolioPolicy.maximumOwnFundingAttoRep = 100n * unit
@@ -75,4 +77,38 @@ test.each(['funding', 'principal'])('skips a target that exceeds remaining %s an
 	else value.settings.portfolioPolicy.maximumPrincipalAttoRep = 300n * unit
 	expect(value.run().plans?.map(item => item.target)).toEqual([1n, 3n])
 	expect(value.run().plan?.ownFunding).toBe((8775n * unit) / 100n)
+})
+
+test('a batch never asks for more callback gas than the feed accepts, whatever the configured budget', () => {
+	const value = fixture()
+	value.observation.positions.push({ ...value.position, id: 2n }, { ...value.position, id: 3n })
+	value.observation.snapshot.totalCommitmentAttoEth = 300n * unit
+	value.observation.snapshot.demandAttoEth = 300n * unit
+	// Three calls would need 4,000,000 + 9,000,000 callback gas; the feed rejects anything above 10,000,000.
+	value.settings.portfolioPolicy.reportOperationsGasLimit = 9_000_000
+	expect(value.run().plans).toHaveLength(2)
+	// The default 3,000,000 per call leaves room for one.
+	value.settings.portfolioPolicy.reportOperationGasLimit = 3_000_000
+	expect(value.run().plans).toHaveLength(1)
+})
+
+test('a batch cures a position the spare restores, without an award, to open the next one to takeover', () => {
+	const value = fixture()
+	// The spare covers either deficit but not both.
+	Object.assign(value.position, { rep: 100n * unit })
+	value.observation.positions.push({ ...value.position, id: 2n })
+	value.observation.snapshot.totalCommitmentAttoEth = 200n * unit
+	value.observation.snapshot.demandAttoEth = 195n * unit
+	value.settings.portfolioPolicy.reportOperationsGasLimit = 6_000_000
+	const batch = value.run()
+	expect(batch.plans?.map(item => [item.target, item.plan.unpaidCure, item.plan.minimumAward === 0n])).toEqual([
+		[1n, true, true],
+		[2n, false, false],
+	])
+	// The sponsor's funding, award floor and consent come from the paid takeover alone.
+	expect(batch.plan).toMatchObject({ positionId: 2n, unpaidCure: false, minimumAward: batch.plans?.[1]?.plan.minimumAward })
+	expect(batch.plan?.maximumOwnerCommitment).toBeGreaterThan(0n)
+	// Without room for the takeover the cure buys nothing and is not sponsored.
+	value.settings.portfolioPolicy.reportOperationsGasLimit = 3_000_000
+	expect(value.run().plan).toBeUndefined()
 })

@@ -32,10 +32,12 @@ function buildSwapPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pa
 	const maximumInput = swapMaximumInput(pair, mode, yesForNo, principal, bound, amount(yesForNo ? shares.yes : shares.no))
 	if (maximumInput === undefined) return undefined
 	const method = swapMethod(mode)
+	const deadline = protocolQuestionDeadline(snapshot, pool)
+	if (deadline === undefined) return undefined
 	steps.push(
 		encodeStep({
 			abi: twoWayConstantProductPairAbi,
-			args: [yesForNo, principal, bound, snapshot.wallet.address],
+			args: [yesForNo, principal, bound, snapshot.wallet.address, BigInt(deadline)],
 			evidence: [eventEvidence(pair.address, 'Swap(address,address,bool,bool,uint256,uint256,uint256,uint256,uint256)')],
 			functionName: method,
 			id: method,
@@ -45,7 +47,7 @@ function buildSwapPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pa
 		}),
 	)
 	return planBase({
-		deadlineTimestamp: protocolQuestionDeadline(snapshot, pool),
+		deadlineTimestamp: deadline,
 		definitionId: `trading.swap.${mode}`,
 		ecosystem: 'trading',
 		label: `Swap ${mode}`,

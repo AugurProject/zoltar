@@ -6,6 +6,7 @@ import {
 	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalSetCommitmentRequest,
 	buildPortfolioCapitalSetHealthRequest,
+	buildPortfolioCapitalCureRequest,
 	buildPortfolioCapitalTakeOverRequest,
 	buildPortfolioCapitalTakeOverWithBoundsRequest,
 	buildPortfolioCapitalWithdrawPrincipalRequest,
@@ -121,6 +122,12 @@ describe('personal portfolio capital SDK', () => {
 		expect(() => buildPortfolioCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedTargetHealthFactorBps: 9_999n } })).toThrow('100%')
 		expect(() => buildPortfolioCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedSourceBatch: 1n << 96n } })).toThrow('uint96')
 		expect(() => buildPortfolioCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, maximumOwnerPrincipal: -1n } })).toThrow('uint256')
+	})
+	test('an unpaid cure asks for no award and consents to no exposure', () => {
+		const request = buildPortfolioCapitalCureRequest({ ...base, positionId: 3n, commitment: 20n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n })
+		expect(request).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n }] })
+		expect(() => buildPortfolioCapitalCureRequest({ ...base, positionId: 0n, commitment: 20n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n })).toThrow('Position id')
 	})
 	test('retirement service selects one pending position or explicitly requests bounded global progress', () => {
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalServeRetirementRequest(base).data })).toEqual({ functionName: 'serveRetirement', args: [0n] })

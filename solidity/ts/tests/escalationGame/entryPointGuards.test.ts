@@ -1,12 +1,11 @@
 import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeFunctionData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, MAX_UINT256 } from '../../testSupport/simulator/utils/constants'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution, readHasReachedNonDecision, readNonDecisionState, readCanTriggerOwnFork, readEscalationGameEndDate, readFinalQuestionResolution, readNonDecisionTimestamp } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame } from '../../types/contractArtifact'
 import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL, zeroHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
@@ -22,7 +21,6 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		resumeEscalationFromFork,
 		initializeSnapshotViaTestSecurityPool,
 		depositOnOutcomeViaProofTestSecurityPool,
-		recordForkedEscrowForOutcomeViaTestSecurityPool,
 		claimDepositForWinningViaTestSecurityPool,
 		depositOnOutcomeViaTestSecurityPool,
 	} = fixture
@@ -44,70 +42,6 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 				args: [client.account.address, QuestionOutcome.None],
 			}),
 			/No outcome/,
-		)
-		await assert.rejects(
-			client.writeContract({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				address: deployment.escalationGameAddress,
-				functionName: 'recordForkedEscrowForOutcome',
-				args: [client.account.address, QuestionOutcome.Yes, 1n, 0n],
-			}),
-			/execution reverted|Reverted without a reason/i,
-		)
-		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(deployment.testSecurityPoolAddress, client.account.address, QuestionOutcome.None, 1n, 0n), /No outcome/)
-		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(deployment.testSecurityPoolAddress, zeroAddress, QuestionOutcome.Yes, 1n, 0n), /Depositor is zero/)
-		await assert.rejects(
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: deployment.testSecurityPoolAddress,
-				functionName: 'exportForkedEscrowByOutcome',
-				args: [client.account.address, zeroAddress],
-			}),
-			/Recipient is zero/,
-		)
-		await assert.rejects(
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: deployment.testSecurityPoolAddress,
-				functionName: 'exportVaultUnresolvedDeposits',
-				args: [zeroAddress],
-			}),
-			/Vault is zero/,
-		)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: deployment.testSecurityPoolAddress,
-				functionName: 'exportVaultUnresolvedDeposits',
-				args: [client.account.address],
-			}),
-		)
-		await assert.rejects(
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: deployment.testSecurityPoolAddress,
-				functionName: 'exportVaultUnresolvedDeposits',
-				args: [client.account.address],
-			}),
-			/Vault totals exported/,
-		)
-		await assert.rejects(
-			client.writeContract({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				address: deployment.escalationGameAddress,
-				functionName: 'drainAllRep',
-				args: [client.account.address],
-			}),
-			/Only pool/,
-		)
-		await assert.rejects(
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: deployment.testSecurityPoolAddress,
-				functionName: 'drainAllRep',
-				args: [zeroAddress],
-			}),
-			/Recipient is zero/,
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -147,23 +81,6 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 				args: [],
 			}),
 			/No sweepable REP/,
-		)
-
-		const escrowed = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(escrowed.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
-		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(escrowed.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 1n), /Fork snapshot incomplete/)
-		await initializeSnapshotViaTestSecurityPool(escrowed.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await recordForkedEscrowForOutcomeViaTestSecurityPool(escrowed.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 1n)
-		await resumeEscalationFromFork(escrowed.escalationGameAddress)
-		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
-		await assert.rejects(
-			client.writeContract({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				address: escrowed.escalationGameAddress,
-				functionName: 'sweepResidualRepToSecurityPool',
-				args: [],
-			}),
-			/Escrowed REP remains/,
 		)
 	})
 
@@ -282,27 +199,10 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		await startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
 		await initializeSnapshotViaTestSecurityPool(testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await resumeEscalationFromFork(escalationGameAddress)
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		// The resumed curve already exceeds the empty game's median, so the deposit must meet it rather than only the start bond.
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
 		await mockWindow.advanceTime(4n * DAY)
 
 		await assert.rejects(claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 0n, QuestionOutcome.Yes), /SafeERC20Ops token returned false from ERC20 call/)
-	})
-
-	test('local unresolved export rejects none outcome', async () => {
-		const { testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await assert.rejects(
-			writeContractAndWait(client, async () =>
-				client.sendTransaction({
-					to: testSecurityPoolAddress,
-					data: encodeFunctionData({
-						abi: escalationGameProofTestPoolArtifact.abi,
-						functionName: 'exportLocalUnresolvedDeposit',
-						args: [0n, QuestionOutcome.None],
-					}),
-					gas: 10_000_000n,
-				}),
-			),
-			/No outcome/,
-		)
 	})
 })

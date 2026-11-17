@@ -347,6 +347,7 @@ describe('state projections', () => {
 		const cases = [
 			['ClaimCheckpointProgress', { claimId: `0x${'1'.repeat(64)}`, nextSourceGame: vault, pendingSteps: '2', complete: false }, 'escalation', 'escalation', pool.toLowerCase()],
 			['ReportOperationAttempted', { reportId: '7', sponsor: vault, operationIndex: '0', success: true }, 'oracle', 'price-feed', pool.toLowerCase()],
+			['PortfolioDeployed', { portfolio: vault, creator: pool }, 'risk', 'portfolio', vault.toLowerCase()],
 			['PortfolioRegistered', { portfolio: vault, originUniverseId: '0' }, 'risk', 'portfolio', vault.toLowerCase()],
 			['EthReceived', { sender: vault, amountAttoEth: atomic(1n) }, 'risk', 'pool', pool.toLowerCase()],
 			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],

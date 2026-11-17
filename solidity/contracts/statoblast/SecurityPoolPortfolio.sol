@@ -125,7 +125,9 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	event UniversePrepared(uint248 indexed universeId, address capitalLedger);
 	event SetupAdvanced(uint8 stage);
 
-	constructor(ISecurityPoolFactory _factory, OriginConfig memory origin, uint256 horizon, Deployers memory deployment, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
+	/// @dev The canonical factory supplies itself and its pinned module deployers as
+	/// the leading arguments; the creator chooses only the configuration that follows.
+	constructor(ISecurityPoolFactory _factory, Deployers memory deployment, OriginConfig memory origin, uint256 horizon, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0, 'Invalid portfolio economics');
 		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');

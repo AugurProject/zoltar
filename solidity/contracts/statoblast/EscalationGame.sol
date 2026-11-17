@@ -45,12 +45,14 @@ contract EscalationGame is EscalationGameSettlement {
 	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep) {
 		// Keep one reason for this read-only quote path so the size-constrained game
 		// can retain the state-changing paths' more specific failure reasons.
-		require(outcome != BinaryOutcomes.BinaryOutcome.None && nonDecisionState == NonDecisionState.None && _isDepositResolutionOpen(getQuestionResolution()), 'Invalid deposit preview');
+		BinaryOutcomes.BinaryOutcome provisional = getQuestionResolution();
+		require(outcome != BinaryOutcomes.BinaryOutcome.None && nonDecisionState == NonDecisionState.None && _isDepositResolutionOpen(provisional), 'Invalid deposit preview');
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balanceAttoRep;
 		require(currentBalance < nonDecisionThresholdAttoRep && amountAttoRep >= startBondAttoRep, 'Invalid deposit preview');
-		return
-			_getAcceptedDepositAmount(outcomeIndex, amountAttoRep, currentBalance, nonDecisionThresholdAttoRep - currentBalance);
+		(acceptedAmountAttoRep, resultingCumulativeAmountAttoRep) = _getAcceptedDepositAmount(outcomeIndex, amountAttoRep, currentBalance, nonDecisionThresholdAttoRep - currentBalance);
+		// Past the median, only support that meets the rising curve is accepted.
+		require(provisional == BinaryOutcomes.BinaryOutcome.None || resultingCumulativeAmountAttoRep >= totalCostAttoRep(), 'Invalid deposit preview');
 	}
 
 	function recordDepositFromSecurityPool(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeAttoRep) external returns (uint256 parentDepositIndex) {

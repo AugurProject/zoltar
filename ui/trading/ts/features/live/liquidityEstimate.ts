@@ -43,7 +43,8 @@ export function estimateLiquidity(market: PoolState, operation: LiquidityOperati
 		if (market.lpTotalSupply === 0n || amount > market.lpTotalSupply) return undefined
 		const yesOut = (market.yesReserve * amount) / market.lpTotalSupply
 		const noOut = (market.noReserve * amount) / market.lpTotalSupply
-		return yesOut === 0n || noOut === 0n ? undefined : { operation, amount, yesOut, noOut }
+		// The pair lets a dust position exit when only one side rounds to zero, and rejects a removal that returns nothing.
+		return yesOut === 0n && noOut === 0n ? undefined : { operation, amount, yesOut, noOut }
 	}
 	const mintAmount = estimateBudgetMint(market, amount)
 	const completeSets = mintAmount === undefined ? undefined : collateralAttoEthToAttoShares(mintAmount, market)

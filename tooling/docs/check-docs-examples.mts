@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
-import { checkMmrConformanceVector } from './check-docs-worked-examples.mts'
-
+import { checkEscalationResponseExamples, checkMmrConformanceVector } from './check-docs-worked-examples.mts'
 import { Window } from 'happy-dom'
 import { computeCanonicalEscalationBindingCapital, computeCanonicalEscalationDeadlineDays, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateResolutionModel, ESCALATION_TIME_LENGTH_SECONDS } from '../../docs/charts/chartModels'
 import { getWinningEscalationDepositClaimAmount } from '../../shared/statoblast/ts/escalationGame/escalationMath'
@@ -456,6 +455,7 @@ assert.equal(
 	true,
 	'repeat-deposit Plot should reject a game whose non-decision state was already reached',
 )
+checkEscalationResponseExamples()
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 4, noBalance: 7, runningCost: 5, yesBalance: 6 }), { atCost: 2, result: 'None' }, 'resolution chart should keep two outcomes at cost unresolved')
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 0, noBalance: 0, runningCost: 5, yesBalance: 0 }), { atCost: 0, result: 'Invalid' }, 'resolution chart should resolve an empty timed-out game to Invalid')
 const feeVectorPrecision = 10n ** 18n

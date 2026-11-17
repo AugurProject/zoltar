@@ -10,6 +10,13 @@ export function portfolioTakeoverSource(snapshot: { liquidationPrice: bigint; se
 		const desired = reduction > minimum ? reduction : minimum
 		removed = [position.commitment, desired, spare].reduce((smallest, value) => (value < smallest ? value : smallest))
 		if (removed < minimum && removed !== position.commitment) removed = 0n
+		// What the cure leaves stays the owner's live commitment, so it is at least the minimum:
+		// the whole commitment goes when spare allows, and otherwise the cut shrinks.
+		const rest = position.commitment - removed
+		if (rest !== 0n && rest < minimum) {
+			if (removed >= minimum && position.commitment <= spare) removed = position.commitment
+			else removed = removed >= 2n * minimum - rest ? removed - (minimum - rest) : 0n
+		}
 	}
 	const commitment = position.commitment - removed
 	const retirementFulfilled = removed !== 0n && position.remainingCommitment !== 0n && commitment <= position.remainingCommitment

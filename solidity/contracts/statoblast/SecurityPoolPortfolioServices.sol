@@ -193,7 +193,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		premiumLedger.choose(source, child, branchChosenK, totalSourceK);
 	}
 	function createPremiumChild(uint248 source, uint248 child) external onlyForkController {
-		premiumLedger.createChild(source, child);
+		_burn(child, premiumLedger.createChild(source, child));
 		premiumChildCreated[child] = true;
 		(, uint256 questionId, , , ) = IPortfolioServiceRoot(portfolio).capitalLedger(source).zoltar().universes(source);
 		premiumLedger.schedule(child, questionId, premiumLedger.minimumFinalAfter(child));

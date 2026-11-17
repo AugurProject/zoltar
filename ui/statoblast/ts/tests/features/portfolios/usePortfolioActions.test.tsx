@@ -9,7 +9,8 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { usePortfolioActions } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioActions.js'
-import { decodeFunctionData, encodeFunctionData, parseAbi, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { auctionCapitalSnapshot, capitalSnapshot, owner, portfolio, token, capital } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
@@ -39,18 +40,29 @@ function model(): Parameters<typeof usePortfolioActions>[0] {
 		nextApprovedQuestionPage: async () => undefined,
 	}
 }
-/** Renders the actions over `source` with an owner wallet that records each transaction and reports `token` as every deployed contract. */
+/** Renders the actions over `source` with an owner wallet that records each transaction, reports `token` as the first deployed contract and the factory's deployment event for `portfolio` after it. */
 async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>) {
-	const requests: { data?: Hex | undefined }[] = []
-	const writer = asWriteClient({ ...createMockWriteClient(request => requests.push(request)), waitForTransactionReceipt: async () => ({ status: 'success' as const, contractAddress: token }) })
+	// The factory creates the portfolio, so the receipt carries no contract address for it: only the factory's event names it.
+	const topic = (value: Address) => encodeAbiParameters(parseAbiParameters('address'), [value])
+	const deployed = () => ({ address: getInfraContractAddresses().securityPoolFactory, data: '0x' as const, topics: [toEventSelector(parseAbiItem('event PortfolioDeployed(address indexed portfolio, address indexed creator)')), topic(portfolio), topic(owner)] })
+	const requests: { to?: Address | null | undefined; data?: Hex | undefined }[] = []
+	const loaded: string[] = []
+	const writer = asWriteClient({ ...createMockWriteClient(request => requests.push(request)), waitForTransactionReceipt: async () => (requests.length === 1 ? { status: 'success' as const, contractAddress: token, logs: [] } : { status: 'success' as const, contractAddress: undefined, logs: [deployed()] }) })
 	installActiveEnvironmentForTesting({ ...source.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
-	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
+	const hook = await renderHookWithProps(usePortfolioActionsWrapper, {
+		model: {
+			...model(),
+			load: async address => {
+				loaded.push(address ?? '')
+			},
+		},
+	})
 	lifecycle.trackRendered(hook)
-	return { hook, requests }
+	return { hook, requests, loaded }
 }
 test('creation uses an explicit admission transaction before deployment and invalidates changed policies', async () => {
 	const source = capitalClient()
-	const { hook, requests } = await renderWithDeploymentWallet(source)
+	const { hook, requests, loaded } = await renderWithDeploymentWallet(source)
 	await act(() => hook.state().setOriginInput(portfolio))
 	expect(hook.state().deployReason).toContain('admission policy first')
 	await act(() => hook.state().deployAdmission())
@@ -61,6 +73,8 @@ test('creation uses an explicit admission transaction before deployment and inva
 	await act(() => hook.state().deploy())
 	expect(hook.state().error).toBeUndefined()
 	expect(requests).toHaveLength(2)
+	expect(requests[1]?.to).toBe(getInfraContractAddresses().securityPoolFactory)
+	expect(loaded).toEqual([portfolio])
 	await act(() => {
 		hook.state().setAdmissionMode('fixed')
 		hook.state().setFixedQuestions('5,7')

@@ -164,16 +164,16 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 			{ label: 'forkCarryRootClaimSourceGame', slot: '443', offset: 0, type: 'address' },
 			{ label: 'fixedQuestionOutcome', slot: '443', offset: 20, type: 'enum BinaryOutcomes.BinaryOutcome' },
 			{ label: 'nonDecisionState', slot: '443', offset: 21, type: 'enum NonDecisionState' },
-			{ label: 'forkCarryBackingExportedBeforeResumeAttoRep', slot: '444', offset: 0, type: 'uint256' },
-			{ label: 'forkCarrySnapshotOutcomesInitialized', slot: '445', offset: 0, type: 'uint8' },
-			{ label: 'forkCarrySnapshotId', slot: '446', offset: 0, type: 'bytes32' },
-			{ label: 'claimCheckpoints', slot: '447', offset: 0, type: 'mapping(bytes32 => struct EscalationClaimCheckpoint)' },
-			{ label: 'ordinarySettlementInitialized', slot: '448', offset: 0, type: 'bool' },
-			{ label: 'ordinarySettlementOutcome', slot: '448', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
-			{ label: 'ordinaryWinningReserveAttoRep', slot: '449', offset: 0, type: 'uint256' },
-			{ label: 'ordinarySettlementForkThresholdAttoRep', slot: '450', offset: 0, type: 'uint256' },
-			{ label: 'creditedSurplusAttoRep', slot: '451', offset: 0, type: 'uint256' },
-			{ label: 'leadResponseEnd', slot: '452', offset: 0, type: 'uint256' },
+			{ label: 'forkCarrySnapshotOutcomesInitialized', slot: '443', offset: 22, type: 'uint8' },
+			{ label: 'forkCarrySnapshotId', slot: '444', offset: 0, type: 'bytes32' },
+			{ label: 'claimCheckpoints', slot: '445', offset: 0, type: 'mapping(bytes32 => struct EscalationClaimCheckpoint)' },
+			{ label: 'ordinarySettlementInitialized', slot: '446', offset: 0, type: 'bool' },
+			{ label: 'ordinarySettlementOutcome', slot: '446', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'ordinaryWinningReserveAttoRep', slot: '447', offset: 0, type: 'uint256' },
+			{ label: 'ordinarySettlementForkThresholdAttoRep', slot: '448', offset: 0, type: 'uint256' },
+			{ label: 'creditedSurplusAttoRep', slot: '449', offset: 0, type: 'uint256' },
+			{ label: 'responseRestartedUntil', slot: '450', offset: 0, type: 'uint256' },
+			{ label: 'continuationSettlementForkThresholdAttoRep', slot: '451', offset: 0, type: 'uint256' },
 		],
 	)
 
@@ -182,9 +182,7 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 		{ label: 'claimBundle', slot: '0', offset: 0, type: 'struct EscalationClaimBundle' },
 		{ label: 'unresolvedAttoRep', slot: '1', offset: 0, type: 'uint256' },
 		{ label: 'localUnresolvedPrincipalByOutcome', slot: '2', offset: 0, type: 'uint256[3]' },
-		{ label: 'localUnresolvedTotalsExported', slot: '5', offset: 0, type: 'bool' },
-		{ label: 'forkedEscrowByOutcome', slot: '6', offset: 0, type: 'mapping(uint8 => struct ForkedEscrowState)' },
-		{ label: 'collateralBackingAttoRep', slot: '7', offset: 0, type: 'uint256' },
+		{ label: 'collateralBackingAttoRep', slot: '5', offset: 0, type: 'uint256' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct OutcomeState'), [
 		{ label: 'balanceAttoRep', slot: '0', offset: 0, type: 'uint256' },
@@ -212,12 +210,6 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 		{ label: 'parentDepositIndex', slot: '3', offset: 0, type: 'uint256' },
 		{ label: 'cumulativeAmountAttoRep', slot: '4', offset: 0, type: 'uint256' },
 		{ label: 'carryLeafIndex', slot: '5', offset: 0, type: 'uint256' },
-	])
-	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct ForkedEscrowState'), [
-		{ label: 'sourcePrincipalAttoRep', slot: '0', offset: 0, type: 'uint256' },
-		{ label: 'sourcePrincipalClaimedAttoRep', slot: '1', offset: 0, type: 'uint256' },
-		{ label: 'childAttoRep', slot: '2', offset: 0, type: 'uint256' },
-		{ label: 'childRepClaimedAttoRep', slot: '3', offset: 0, type: 'uint256' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimCheckpoint'), [
 		{ label: 'nextSourceGame', slot: '0', offset: 0, type: 'address' },

@@ -17,10 +17,55 @@ export type PortfolioTakeover = {
 	expectedDemand: bigint
 	expectedSourceBatch: bigint
 	netRewardAttoEth: bigint
+	/** The ledger's preliminary cure alone restores the target: the call pays no award and must ask for none. */
+	unpaidCure: boolean
 }
 
-/** Quote the complete residual after the transaction’s deterministic preliminary cure. */
+/**
+ * A cure that heals its target consumes shared spare and pays nothing. It is worth its gas only when
+ * another position, itself curable until then, is left without spare and becomes a profitable takeover.
+ */
+function unlockingCurePlan(observation: PortfolioObservation, position: PortfolioPosition, removed: bigint, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean): { reason: string; plan?: PortfolioTakeover } {
+	const { snapshot } = observation
+	const curedSnapshot = { ...snapshot, totalCommitmentAttoEth: snapshot.totalCommitmentAttoEth - removed }
+	const cured = { ...observation, snapshot: curedSnapshot, positions: observation.positions.filter(candidate => candidate !== position) }
+	const cureGas = settings.strategy.maximumGasCostAttoEth
+	for (const candidate of cured.positions) {
+		if (candidate.commitment === 0n || candidate.liquidationStarted === 0n || candidate.maxHealthyPrice >= snapshot.liquidationPrice || !portfolioCureOutcome(observation, candidate).healthy) continue
+		const unlocked = paidTakeoverPlan(cured, candidate, settings, totalPrincipal, marketAllowed).plan
+		if (unlocked === undefined || unlocked.netRewardAttoEth - cureGas < settings.portfolioPolicy.minimumNetRewardAttoEth) continue
+		if (observation.walletAttoEth < settings.strategy.maximumGasCostAttoEth * 4n + settings.portfolioPolicy.walletReserveAttoEth) continue
+		return {
+			reason: settings.portfolioPolicy.allowFundedTakeovers ? 'Unpaid cure ready; it opens another position to takeover' : 'Unpaid cure ready; automation is disabled',
+			plan: {
+				positionId: position.id,
+				// The ledger ignores every bound below when the cure heals. If it does not, zero consent makes the call revert.
+				commitment: position.commitment,
+				minimumAward: 0n,
+				ownFunding: 0n,
+				maximumOwnRep: 0n,
+				maximumOwnerPrincipal: 0n,
+				maximumOwnerCommitment: 0n,
+				expectedSourceBatch: 0n,
+				expectedTotalCommitment: snapshot.totalCommitmentAttoEth,
+				expectedDemand: snapshot.demandAttoEth,
+				netRewardAttoEth: unlocked.netRewardAttoEth - cureGas,
+				unpaidCure: true,
+			},
+		}
+	}
+	return { reason: 'Cure restores target health without a takeover' }
+}
+
+/** Quote the complete residual after the transaction’s deterministic preliminary cure, or the unpaid cure when it alone heals the target. */
 export function portfolioTakeoverPlan(observation: PortfolioObservation, position: PortfolioPosition, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean): { reason: string; plan?: PortfolioTakeover } {
+	const result = paidTakeoverPlan(observation, position, settings, totalPrincipal, marketAllowed)
+	if (result.healingCure === undefined) return result
+	return unlockingCurePlan(observation, position, result.healingCure, settings, totalPrincipal, marketAllowed)
+}
+
+/** A takeover that asks for an award. A target its own model predicts the cure will heal never gets one. */
+function paidTakeoverPlan(observation: PortfolioObservation, position: PortfolioPosition, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean): { reason: string; plan?: PortfolioTakeover; healingCure?: bigint } {
 	const { snapshot } = observation
 	const policy = settings.portfolioPolicy
 	const reject = (reason: string) => ({ reason })
@@ -31,7 +76,7 @@ export function portfolioTakeoverPlan(observation: PortfolioObservation, positio
 	if (snapshot.ownerAccount.targetHealthFactorBps !== policy.targetHealthFactorBps) return reject('Receiver health target does not match the configured target')
 	const receiver = snapshot.positions.find(position => position.commitment > 0n)
 	const source = portfolioCureOutcome(observation, position)
-	if (source.healthy) return reject('Cure restores target health without a takeover')
+	if (source.healthy) return source.removed === 0n ? reject('Cure restores target health without a takeover') : { reason: 'Cure restores target health without a takeover', healingCure: source.removed }
 	if (receiver !== undefined && receiver.batch !== source.batch) return reject('Receiver and target retirement cohorts differ')
 	const commitment = source.commitment
 	const maximumOwnerCommitment = policy.maximumCommitmentAttoEth - (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + snapshot.ownerCommitmentAttoEth
@@ -66,6 +111,7 @@ export function portfolioTakeoverPlan(observation: PortfolioObservation, positio
 			expectedTotalCommitment: snapshot.totalCommitmentAttoEth,
 			expectedDemand: snapshot.demandAttoEth,
 			netRewardAttoEth,
+			unpaidCure: false,
 		},
 	}
 }

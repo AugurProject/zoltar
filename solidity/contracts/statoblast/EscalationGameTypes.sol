@@ -105,13 +105,6 @@ struct CarriedDepositProof {
 	bytes32[] nullifierSiblings;
 }
 
-struct ForkedEscrowState {
-	uint256 sourcePrincipalAttoRep;
-	uint256 sourcePrincipalClaimedAttoRep;
-	uint256 childAttoRep;
-	uint256 childRepClaimedAttoRep;
-}
-
 // Escalation claims are deliberately not tokens. A bundle is keyed by, and
 // permanently owned by, the vault that originated its deposits.
 struct EscalationClaimBundle {

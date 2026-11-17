@@ -65,7 +65,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		for (const timestamp of [await fixture.base.mockWindow.getTime(), forkTime + 56n * DAY - 1n, forkTime + 63n * DAY]) {
 			await fixture.base.mockWindow.setTime(timestamp)
 			for (const outcome of [0n, 1n, 2n]) {
-				await expect(fixture.other().writeContract({ ...target, functionName: 'migrate', args: [fixture.base.genesisUniverse * 256n + outcome, [1n]] })).rejects.toThrow('Question finalized before fork')
+				await expect(fixture.other().writeContract({ ...target, functionName: 'migrate', args: [fixture.base.genesisUniverse * 256n + outcome, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')
 			}
 			expect(await shares()).toEqual(protectedBalances)
 		}

@@ -60,11 +60,11 @@ function previousPairCallMatches(context: OperationContinuationContext, pair: Pa
 }
 
 export function previousDirectActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pair: PairSnapshot, method: 'addLiquidity' | 'initialize', shareAmount: bigint, minimumLiquidity: bigint) {
-	return previousPairCallMatches(context, pair, method, args => args[0] === shareAmount && args[1] === shareAmount && args[2] === minimumLiquidity && decodedAddressMatches(args[3], snapshot.wallet.address))
+	return previousPairCallMatches(context, pair, method, args => args[0] === shareAmount && args[1] === shareAmount && args[2] === minimumLiquidity && decodedAddressMatches(args[3], snapshot.wallet.address) && args[4] === BigInt(context.previousPlan.deadlineTimestamp ?? '0'))
 }
 
 export function previousSwapActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pair: PairSnapshot, mode: 'exact-input' | 'exact-output', yesForNo: boolean, principal: bigint, bound: bigint) {
-	return previousPairCallMatches(context, pair, mode === 'exact-input' ? 'swapExactInput' : 'swapExactOutput', args => args[0] === yesForNo && args[1] === principal && args[2] === bound && decodedAddressMatches(args[3], snapshot.wallet.address))
+	return previousPairCallMatches(context, pair, mode === 'exact-input' ? 'swapExactInput' : 'swapExactOutput', args => args[0] === yesForNo && args[1] === principal && args[2] === bound && decodedAddressMatches(args[3], snapshot.wallet.address) && args[4] === BigInt(context.previousPlan.deadlineTimestamp ?? '0'))
 }
 
 export function previousRemoveActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pair: PairSnapshot, liquidity: bigint, minimumYes: bigint, minimumNo: bigint) {

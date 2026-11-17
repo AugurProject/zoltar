@@ -17,6 +17,9 @@ import { ensureDefined } from '../../testSupport/simulator/utils/testUtils'
 import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
 
+/** Direct pair calls take a deadline; these tests exercise other properties. */
+const NO_DEADLINE = 2n ** 64n
+
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 // Enough shares to exceed the 1,000-unit LP lock. Fee-bearing purchases are covered separately.
 const unit = 1_000_000n
@@ -89,7 +92,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const deadline = fixture.questionData.endTime - 1n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 5_000n, 1n, account, deadline], value: unit }))
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await expect(fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Question ended')
+		await expect(fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Question ended')
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account, 10n ** 12n] }))
 		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })).toBe(0n)

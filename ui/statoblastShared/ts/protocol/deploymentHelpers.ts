@@ -45,6 +45,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		priceCoordinatorDeploymentWorker: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker,
 		sharedPoolPriceFeedDeploymentWorker: statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker,
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
+		securityPoolPortfolio: statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
 		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
 		securityPoolForkerPortfolioDelegate: statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate,
 		securityPoolCapitalLedgerDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer,
@@ -101,7 +102,8 @@ export {
 
 export const applyStatoblastLibraries = statoblastInitCodes.applyLibraries
 
-export const getSecurityPoolPortfolioByteCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.bytecode.object)
+/** The linked creation code the canonical factory pins by hash and deploys for every portfolio. */
+export const getSecurityPoolPortfolioCreationCode = statoblastInitCodes.getSecurityPoolPortfolioCreationCode
 
 export const getSecurityPoolPortfolioRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.deployedBytecode.object)
 
@@ -194,21 +196,6 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 
 export function getOpenOracleAddress() {
 	return getInfraContractAddresses().openOracle
-}
-
-export function getPortfolioDeployers(profile: NetworkProfile = getRuntimeNetworkProfile()) {
-	const addresses = getInfraContractAddresses(profile)
-	return {
-		capital: addresses.securityPoolCapitalLedgerDeployer,
-		commitments: addresses.securityPoolCommitmentIndexDeployer,
-		fees: addresses.securityPoolCapitalFeeStreamsDeployer,
-		books: addresses.securityPoolSettlementBookDeployer,
-		settlement: addresses.securityPoolPortfolioSettlementDeployer,
-		services: addresses.securityPoolPortfolioServicesDeployer,
-		reporters: addresses.securityPoolReporterLedgerDeployer,
-		forks: addresses.securityPoolPortfolioForkCoordinatorDeployer,
-		auctions: addresses.securityPoolPortfolioAuctionDeployer,
-	}
 }
 
 type PortfolioModuleId =

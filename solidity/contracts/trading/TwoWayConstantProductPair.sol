@@ -113,7 +113,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		return TradingStatus.Open;
 	}
 
-	function initialize(uint256 yesAmount, uint256 noAmount, uint256 minLiquidity, address recipient) external nonReentrant returns (uint256 liquidity) {
+	function initialize(uint256 yesAmount, uint256 noAmount, uint256 minLiquidity, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 liquidity) {
 		require(totalSupply() == 0, 'Already initialized');
 		_requireLifecycleOpen(false);
 		require(recipient != address(0), 'Recipient is zero');
@@ -130,7 +130,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		emit LiquidityInitialized(msg.sender, recipient, yesAmount, noAmount, liquidity);
 	}
 
-	function addLiquidity(uint256 maxYes, uint256 maxNo, uint256 minLiquidity, address recipient) external nonReentrant returns (uint256 yesUsed, uint256 noUsed, uint256 liquidity) {
+	function addLiquidity(uint256 maxYes, uint256 maxNo, uint256 minLiquidity, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 yesUsed, uint256 noUsed, uint256 liquidity) {
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
 		_synchronize();
@@ -154,15 +154,16 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		yesOut = Math.mulDiv(yesReserve, liquidity, totalSupply());
 		noOut = Math.mulDiv(noReserve, liquidity, totalSupply());
 		require(yesOut >= minYes && noOut >= minNo, 'Liquidity slippage');
-		require(yesOut > 0 && noOut > 0, 'Liquidity output is zero');
+		// A dust position can round to zero on the scarce side. It must still exit.
+		require(yesOut > 0 || noOut > 0, 'Liquidity output is zero');
 		_burn(msg.sender, liquidity);
-		shareToken.safeTransferFrom(address(this), recipient, yesTokenId, yesOut, '');
-		shareToken.safeTransferFrom(address(this), recipient, noTokenId, noOut, '');
+		if (yesOut > 0) shareToken.safeTransferFrom(address(this), recipient, yesTokenId, yesOut, '');
+		if (noOut > 0) shareToken.safeTransferFrom(address(this), recipient, noTokenId, noOut, '');
 		_updateReserves();
 		emit LiquidityRemoved(msg.sender, recipient, yesOut, noOut, liquidity);
 	}
 
-	function swapExactInput(bool yesForNo, uint256 amountIn, uint256 minAmountOut, address recipient) external nonReentrant returns (uint256 amountOut, uint256 feeAmount) {
+	function swapExactInput(bool yesForNo, uint256 amountIn, uint256 minAmountOut, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountOut, uint256 feeAmount) {
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
 		_synchronize();
@@ -177,7 +178,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		emit Swap(msg.sender, recipient, yesForNo, false, amountIn, amountOut, feeAmount, yesReserve, noReserve);
 	}
 
-	function swapExactOutput(bool yesForNo, uint256 amountOut, uint256 maxAmountIn, address recipient) external nonReentrant returns (uint256 amountIn, uint256 feeAmount) {
+	function swapExactOutput(bool yesForNo, uint256 amountOut, uint256 maxAmountIn, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountIn, uint256 feeAmount) {
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
 		_synchronize();

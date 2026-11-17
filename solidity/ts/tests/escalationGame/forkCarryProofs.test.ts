@@ -25,7 +25,6 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		traceCarryLeafPage,
 		traceProofConsumedCarriedDepositIndexes,
 		assertEscrowAccounting,
-		recordForkedEscrowForOutcomeViaTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPoolWithGas,
 		claimDepositForWinningViaTestSecurityPool,
@@ -187,7 +186,6 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 
 		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, 2n, 0n], [0n, 2n * reportBond, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond, 2n * reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await fundEscalationGame(child.escalationGameAddress, 2n * reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
@@ -208,7 +206,6 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 
 		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
-		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, parentCarryTotal, parentCarryTotal)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		await assertCarryCommitmentStructure(parent.escalationGameAddress, 'parent before inherited proof settlement')
 		await assertCarryCommitmentStructure(child.escalationGameAddress, 'child before inherited proof settlement')
@@ -244,7 +241,6 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, reportBond, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
-		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond, 3n * reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
@@ -268,7 +264,6 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 
 		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
-		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, parentCarryTotal, parentCarryTotal)
 		await advanceForkContinuationPastStart(child.escalationGameAddress)
 
 		const nullifierTree = new SparseNullifierTree()

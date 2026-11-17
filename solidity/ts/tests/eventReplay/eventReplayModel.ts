@@ -144,28 +144,6 @@ export type EscalationClaimReplay = {
 	transferredRep: boolean
 }
 
-export type ForkedEscrowReplay = {
-	sourcePrincipalAttoRep: bigint
-	sourcePrincipalClaimedAttoRep: bigint
-	childAttoRep: bigint
-	childRepClaimedAttoRep: bigint
-}
-
-export type VaultUnresolvedExportReplay = {
-	repReceiver: Address
-	principalByOutcomeAttoRep: BigIntTriple
-	principalToTransferAttoRep: bigint
-	transferredRep: boolean
-}
-
-export type ForkedEscrowExportReplay = {
-	repReceiver: Address
-	sourcePrincipalByOutcomeAttoRep: BigIntTriple
-	childRepByOutcomeAttoRep: BigIntTriple
-	totalChildRepToTransferAttoRep: bigint
-	transferredRep: boolean
-}
-
 export type CoordinatorReportReplay = {
 	status: 'Requested' | 'Reported' | 'Rejected' | 'Recovered'
 	price?: bigint
@@ -231,9 +209,6 @@ export type ReplayState = {
 	escalationClaimBundles: Map<Address, Map<Address, EscalationClaimBundleReplay>>
 	escalationVaultEscrowedRep: Map<Address, Map<Address, bigint>>
 	escalationLocalUnresolvedByVault: Map<Address, Map<Address, BigIntTriple>>
-	escalationForkedEscrow: Map<Address, Map<string, ForkedEscrowReplay>>
-	escalationVaultExports: Map<Address, Map<Address, VaultUnresolvedExportReplay>>
-	escalationForkedExports: Map<Address, Map<Address, ForkedEscrowExportReplay>>
 	escalationSurplusAccrued: Map<Address, bigint>
 	escalationResidualRepBurned: Map<Address, bigint>
 	escalationTotalEscrowedRep: Map<Address, bigint>
@@ -278,9 +253,6 @@ export function createReplayState(): ReplayState {
 		escalationClaimBundles: new Map(),
 		escalationVaultEscrowedRep: new Map(),
 		escalationLocalUnresolvedByVault: new Map(),
-		escalationForkedEscrow: new Map(),
-		escalationVaultExports: new Map(),
-		escalationForkedExports: new Map(),
 		escalationSurplusAccrued: new Map(),
 		escalationResidualRepBurned: new Map(),
 		escalationTotalEscrowedRep: new Map(),
@@ -1063,54 +1035,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'VaultEscrowUpdated') {
 		getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter).set(requireAddress(log.args, 'vault'), requireBigInt(log.args, 'disputeStakedRepByVaultAttoRep'))
 		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedAttoRep'))
-		return
-	}
-	if (log.eventName === 'VaultUnresolvedTotalsExported') {
-		const vault = requireAddress(log.args, 'vault')
-		const principalByOutcomeAttoRep = requireBigIntTriple(log.args, 'principalByOutcomeAttoRep')
-		getOrCreateNestedMap(state.escalationVaultExports, log.emitter).set(vault, {
-			repReceiver: requireAddress(log.args, 'repReceiver'),
-			principalByOutcomeAttoRep,
-			principalToTransferAttoRep: requireBigInt(log.args, 'principalToTransferAttoRep'),
-			transferredRep: requireBoolean(log.args, 'transferredRep'),
-		})
-		getOrCreateNestedMap(state.escalationLocalUnresolvedByVault, log.emitter).set(vault, [0n, 0n, 0n])
-		return
-	}
-	if (log.eventName === 'ForkedEscrowRecorded') {
-		const depositor = requireAddress(log.args, 'depositor')
-		const outcome = requireBigInt(log.args, 'outcome')
-		getOrCreateNestedMap(state.escalationForkedEscrow, log.emitter).set(`${depositor}:${outcome.toString()}`, {
-			sourcePrincipalAttoRep: requireBigInt(log.args, 'sourcePrincipalTotalAttoRep'),
-			sourcePrincipalClaimedAttoRep: 0n,
-			childAttoRep: requireBigInt(log.args, 'childRepTotalAttoRep'),
-			childRepClaimedAttoRep: 0n,
-		})
-		getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter).set(depositor, requireBigInt(log.args, 'disputeStakedRepByVaultAttoRep'))
-		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedAttoRep'))
-		const resolutionBalancesAttoRep = state.escalationResolutionBalances.get(log.emitter) ?? [0n, 0n, 0n]
-		resolutionBalancesAttoRep[Number.parseInt(outcome.toString(), 10)] = requireBigInt(log.args, 'outcomeBalanceAttoRep')
-		state.escalationResolutionBalances.set(log.emitter, resolutionBalancesAttoRep)
-		return
-	}
-	if (log.eventName === 'ForkedEscrowExported') {
-		const vault = requireAddress(log.args, 'vault')
-		const sourcePrincipalByOutcomeAttoRep = requireBigIntTriple(log.args, 'sourcePrincipalByOutcomeAttoRep')
-		const childRepByOutcomeAttoRep = requireBigIntTriple(log.args, 'childRepByOutcomeAttoRep')
-		getOrCreateNestedMap(state.escalationForkedExports, log.emitter).set(vault, {
-			repReceiver: requireAddress(log.args, 'repReceiver'),
-			sourcePrincipalByOutcomeAttoRep,
-			childRepByOutcomeAttoRep,
-			totalChildRepToTransferAttoRep: requireBigInt(log.args, 'totalChildRepToTransferAttoRep'),
-			transferredRep: requireBoolean(log.args, 'transferredRep'),
-		})
-		for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) {
-			if (sourcePrincipalByOutcomeAttoRep[outcomeIndex] === 0n && childRepByOutcomeAttoRep[outcomeIndex] === 0n) continue
-			const escrow = state.escalationForkedEscrow.get(log.emitter)?.get(`${vault}:${outcomeIndex.toString()}`)
-			if (escrow === undefined) throw new Error('forked escrow export references unknown escrow')
-			escrow.sourcePrincipalClaimedAttoRep = escrow.sourcePrincipalAttoRep
-			escrow.childRepClaimedAttoRep = escrow.childAttoRep
-		}
 		return
 	}
 	if (log.eventName === 'EscalationSurplusAccrued') {

@@ -588,7 +588,8 @@ describe('ERC1155 Compliance Test Suite', () => {
 					args: [sourceTokenId, [1n]],
 				}),
 			),
-			/ShareToken source pool cannot migrate/,
+			// The pool is in fork migration and has no forker, so entering fork mode on its behalf fails.
+			/execution reverted/,
 		)
 		assert.strictEqual(
 			await client.readContract({

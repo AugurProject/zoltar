@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, encodeDeployData, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, portfolioAddressFromDeploymentLogs } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as policyArtifact,
@@ -64,22 +64,10 @@ try {
 		maximumQuestionHorizonSeconds: 20n * 365n * DAY,
 		questionAdmissionPolicy: policy,
 		economics: { purchaseFeeBps: 100n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: unit / 1_000n, minimumCommitmentAttoEth: unit, minimumOutcomeRate: 1_000n, rewardVestingSeconds: DAY },
-		deployers: {
-			capital: infra.securityPoolCapitalLedgerDeployer,
-			commitments: infra.securityPoolCommitmentIndexDeployer,
-			fees: infra.securityPoolCapitalFeeStreamsDeployer,
-			books: infra.securityPoolSettlementBookDeployer,
-			settlement: infra.securityPoolPortfolioSettlementDeployer,
-			reporters: infra.securityPoolReporterLedgerDeployer,
-			forks: infra.securityPoolPortfolioForkCoordinatorDeployer,
-			auctions: infra.securityPoolPortfolioAuctionDeployer,
-			services: infra.securityPoolPortfolioServicesDeployer,
-		},
-		artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
+		creationCode: applyLibraries(portfolioArtifact.evm.bytecode.object),
 	})
 	const deployed = await measure('1. Portfolio deployment', 'Deploy shared portfolio', owner, () => owner.sendTransaction({ ...deployment, gas: 16_777_216n }))
-	const portfolioAddress = deployed.contractAddress
-	if (portfolioAddress === undefined) throw new Error('Missing portfolio')
+	const portfolioAddress = portfolioAddressFromDeploymentLogs(deployed.logs, infra.securityPoolFactory)
 	const portfolio = { abi: portfolioArtifact.abi, address: portfolioAddress }
 	for (let step = 1; step <= 4; step++) await measure('1. Portfolio deployment', `Prepare portfolio stage ${step}`, trader, () => trader.sendTransaction({ ...buildPortfolioPrepareNextRequest({ caller: trader.account.address, portfolio: portfolioAddress }), gas: 16_777_216n }))
 	const question = makeQuestion('Shared portfolio gas benchmark', (await anvil.getTime()) + 365n * DAY)

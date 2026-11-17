@@ -25,10 +25,7 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	event GameContinuedFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork);
 	event ForkContinuationResumed(uint256 resumedAt);
 	event ClaimDeposit(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 indexed parentDepositIndex, uint256 originalDepositAmountAttoRep, uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep, bool transferredRep);
-	event VaultUnresolvedTotalsExported(address indexed vault, address repReceiver, uint256[3] principalByOutcomeAttoRep, uint256 principalToTransferAttoRep, bool transferredRep);
-	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
 	event VaultEscrowUpdated(address indexed vault, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep);
-	event ForkedEscrowExported(address indexed vault, address repReceiver, uint256[3] sourcePrincipalByOutcomeAttoRep, uint256[3] childRepByOutcomeAttoRep, uint256 totalChildRepToTransferAttoRep, bool transferredRep);
 	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 	event ForkContinuationResidualRepBurned(uint256 amountAttoRep);
 
@@ -77,10 +74,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		emit VaultEscrowUpdated(depositor, disputeStakedRepByVaultAttoRep(depositor), totalDisputeStakedAttoRep);
 	}
 
-	function _consumeEscrowedRepForOwner(address ownerAddress, uint256 amountAttoRep) internal {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeEscrowedRepForOwner, (ownerAddress, amountAttoRep)));
-	}
-
 	function _creditClaimOwners(address bundleId, uint256 amountAttoRep) internal {
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditClaimOwners, (bundleId, amountAttoRep)));
 	}
@@ -95,15 +88,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	}
 
 	function _getDepositDelegate() internal view virtual returns (address);
-
-	function _consumeUnresolvedRepForVault(address depositor, uint256 amountAttoRep) internal {
-		if (amountAttoRep == 0) return;
-		uint256 unresolvedAttoRep = vaultAccounting[depositor].unresolvedAttoRep;
-		require(unresolvedAttoRep >= amountAttoRep, 'Vault unresolved REP low');
-		require(totalLocalUnresolvedAttoRep >= amountAttoRep, 'Local unresolved REP low');
-		vaultAccounting[depositor].unresolvedAttoRep = unresolvedAttoRep - amountAttoRep;
-		totalLocalUnresolvedAttoRep -= amountAttoRep;
-	}
 
 	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep, uint256 leafIndex) internal {
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners, (bundleId, outcomeIndex, amountAttoRep, leafIndex)));
