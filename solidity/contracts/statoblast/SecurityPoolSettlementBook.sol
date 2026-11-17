@@ -430,7 +430,13 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		unchecked {
 			residue += tree.get(root, key);
 		}
-		return tree.setModular(root, key, residue, residue);
+		return _setModular(root, key, residue, residue);
+	}
+
+	/// @dev Every modular trie write goes through this one call site, so the optimizer emits the
+	/// trie update once instead of cloning it into individual callers.
+	function _setModular(uint64 root, uint48 key, uint256 value, uint256 weight) private returns (uint64) {
+		return tree.setModular(root, key, value, weight);
 	}
 
 	function recoveryRep(uint64 bookId) external view returns (uint256) {
@@ -505,13 +511,17 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		return remainingRate * nativeTimestamp + tree.prefixTotal(book.feeEndRoot, nativeTimestamp);
 	}
 
+	/// @dev The fee maps share the modular trie update with the finality and fork maps, which keeps
+	/// the book under the runtime size limit. Their aggregates cannot wrap: each change is at most a
+	/// uint96 rate, the rate total stays at most uint208.max, and every end is below 2^33, so the
+	/// end-weighted total stays below 2^241.
 	function _changeFeeRate(Book storage book, uint48 end, uint256 rate, bool increase) private {
 		if (rate == 0) return;
 		uint256 previous = tree.get(book.feeRateRoot, end);
 		uint256 next = increase ? previous + rate : previous - rate;
-		book.feeRateRoot = tree.set(book.feeRateRoot, end, next, next);
+		book.feeRateRoot = _setModular(book.feeRateRoot, end, next, next);
 		require(tree.total(book.feeRateRoot) <= type(uint208).max, 'Aggregate fee rate overflow');
-		book.feeEndRoot = tree.set(book.feeEndRoot, end, next, next * end);
+		book.feeEndRoot = _setModular(book.feeEndRoot, end, next, next * end);
 	}
 
 	function _fundedSeconds(Book storage book, uint48 nativeTimestamp) private view returns (uint256) {
@@ -548,7 +558,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		if (finalAfter == 0 || units == 0) return;
 		uint256 previous = tree.get(book.finalityRoot, finalAfter);
 		uint256 next = increase ? previous + units : previous - units;
-		book.finalityRoot = tree.setModular(book.finalityRoot, finalAfter, next, next);
+		book.finalityRoot = _setModular(book.finalityRoot, finalAfter, next, next);
 	}
 
 	function _writeQuestion(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private {
