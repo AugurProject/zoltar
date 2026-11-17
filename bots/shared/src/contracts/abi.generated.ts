@@ -6135,7 +6135,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x3532332cc8a487bc5cadf9937a4139648374826d89b587f3df6c842c0e2e6a93',
 		runtimeCodeLength: 17857,
 		immutableReferences: {
-			'48912': [
+			'48911': [
 				{ length: 32, start: 579 },
 				{ length: 32, start: 1419 },
 				{ length: 32, start: 1720 },
@@ -6158,7 +6158,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 10837 },
 				{ length: 32, start: 14229 },
 			],
-			'48915': [
+			'48914': [
 				{ length: 32, start: 3685 },
 				{ length: 32, start: 5699 },
 				{ length: 32, start: 6039 },
@@ -6169,10 +6169,10 @@ export const portfolioRuntimeIdentities = {
 		},
 	},
 	SecurityPoolSettlementBook: {
-		runtimeCodeHash: '0x668daca07b79846780cc8435c46e5f7a7ccb7ec2e379dad636d1d7b733603d1a',
-		runtimeCodeLength: 24127,
+		runtimeCodeHash: '0x22d6cfc23767e49dddd25165f81d6bda3c20b46124592e0db2014850d4e7cf53',
+		runtimeCodeLength: 24130,
 		immutableReferences: {
-			'54300': [
+			'54423': [
 				{ length: 32, start: 611 },
 				{ length: 32, start: 1249 },
 				{ length: 32, start: 2104 },
@@ -6188,11 +6188,11 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 8300 },
 				{ length: 32, start: 9152 },
 			],
-			'54303': [
+			'54426': [
 				{ length: 32, start: 1688 },
 				{ length: 32, start: 3664 },
 			],
-			'58253': [
+			'58376': [
 				{ length: 32, start: 8850 },
 				{ length: 32, start: 10712 },
 				{ length: 32, start: 17864 },
@@ -6200,10 +6200,10 @@ export const portfolioRuntimeIdentities = {
 		},
 	},
 	SecurityPoolReporterLedger: {
-		runtimeCodeHash: '0x532e35a3fda1fe44552ddf2be916c4d5fa3af45a070fe8585f098792db79b936',
-		runtimeCodeLength: 16689,
+		runtimeCodeHash: '0xcc5388fa183c05c41836224322692be0e7fcfa49421f8f0ac29f37393a717a9b',
+		runtimeCodeLength: 17031,
 		immutableReferences: {
-			'50922': [
+			'51035': [
 				{ length: 32, start: 1753 },
 				{ length: 32, start: 2530 },
 				{ length: 32, start: 2692 },
@@ -6214,7 +6214,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 10585 },
 				{ length: 32, start: 11482 },
 			],
-			'50925': [
+			'51038': [
 				{ length: 32, start: 1023 },
 				{ length: 32, start: 1451 },
 				{ length: 32, start: 2359 },
@@ -6235,7 +6235,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x36e823f8af845a468b8b94a511aacbfc62e02dab9582be5e9d79610b776ed9ac',
 		runtimeCodeLength: 6421,
 		immutableReferences: {
-			'46646': [
+			'46645': [
 				{ length: 32, start: 134 },
 				{ length: 32, start: 390 },
 				{ length: 32, start: 909 },
@@ -6246,8 +6246,8 @@ export const portfolioRuntimeIdentities = {
 		},
 	},
 	SecurityPoolPortfolioForkCoordinator: {
-		runtimeCodeHash: '0x4295140e9ed24da4cf98545a53e740d4149c773b59647e15b51a3b3fbe176fd1',
-		runtimeCodeLength: 20338,
+		runtimeCodeHash: '0x8123649826e4c042d5a59ac264ad74b9f85784dd36f7149a50ac8bec54fbaa17',
+		runtimeCodeLength: 20573,
 		immutableReferences: {
 			'43985': [
 				{ length: 32, start: 522 },
@@ -6258,9 +6258,9 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 7849 },
 				{ length: 32, start: 9167 },
 				{ length: 32, start: 11391 },
-				{ length: 32, start: 12969 },
-				{ length: 32, start: 14563 },
-				{ length: 32, start: 15420 },
+				{ length: 32, start: 12238 },
+				{ length: 32, start: 13832 },
+				{ length: 32, start: 14689 },
 			],
 			'43988': [
 				{ length: 32, start: 864 },
@@ -6272,8 +6272,8 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 8564 },
 				{ length: 32, start: 9059 },
 				{ length: 32, start: 10964 },
-				{ length: 32, start: 12870 },
-				{ length: 32, start: 15313 },
+				{ length: 32, start: 12139 },
+				{ length: 32, start: 14582 },
 			],
 		},
 	},
@@ -6281,7 +6281,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x64de751364a9b0253741a94d386be8028d5ba881b17af4b41f9d46f612346481',
 		runtimeCodeLength: 18812,
 		immutableReferences: {
-			'47187': [
+			'47186': [
 				{ length: 32, start: 47 },
 				{ length: 32, start: 512 },
 				{ length: 32, start: 1906 },
@@ -6303,7 +6303,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 17679 },
 				{ length: 32, start: 17830 },
 			],
-			'47190': [
+			'47189': [
 				{ length: 32, start: 1668 },
 				{ length: 32, start: 4078 },
 				{ length: 32, start: 4563 },
@@ -6443,7 +6443,7 @@ export const portfolioRuntimeIdentities = {
 		runtimeCodeHash: '0x3c885fbb04f22d430c0bd1287d38617e612c19dd57370a38265be6d2bd932b7c',
 		runtimeCodeLength: 14958,
 		immutableReferences: {
-			'59444': [
+			'59572': [
 				{ length: 32, start: 456 },
 				{ length: 32, start: 534 },
 				{ length: 32, start: 1250 },
@@ -6453,7 +6453,7 @@ export const portfolioRuntimeIdentities = {
 				{ length: 32, start: 2899 },
 				{ length: 32, start: 5358 },
 			],
-			'59571': [
+			'59699': [
 				{ length: 32, start: 2383 },
 				{ length: 32, start: 3170 },
 				{ length: 32, start: 9498 },
@@ -6463,10 +6463,10 @@ export const portfolioRuntimeIdentities = {
 	SecurityPoolAuctionVault: { runtimeCodeHash: '0x987f52a0a0ccaac98b7fef51307fdb88e50be3a5c6c384b068baef0dcd63cccd', runtimeCodeLength: 4257, immutableReferences: {} },
 	Multicall3: { runtimeCodeHash: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade', runtimeCodeLength: 2576, immutableReferences: {} },
 	SecurityPoolResolutionPremiumBook: {
-		runtimeCodeHash: '0xa2c6765f911e3c35994f10840ec96b18d79726fd95167b4c2ec8bc6e8093f5a2',
-		runtimeCodeLength: 11426,
+		runtimeCodeHash: '0x696d4aab03045f717e2421adfb25bff4fce86cc980e3ed176e81ce9d2b33aa90',
+		runtimeCodeLength: 11783,
 		immutableReferences: {
-			'52663': [
+			'52784': [
 				{ length: 32, start: 267 },
 				{ length: 32, start: 517 },
 				{ length: 32, start: 616 },
