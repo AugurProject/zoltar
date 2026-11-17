@@ -77,21 +77,21 @@ test('portfolio lifecycle needs only REP approval, deposit and bounded acquisiti
 	await fixtureValue.run()
 	const first = fixtureValue.calls[0]
 	if (first === undefined) throw new Error('Missing approval')
-	expect(decodeFunctionData({ abi: erc20Abi, data: first.data })).toEqual({ functionName: 'approve', args: [fixtureValue.observation.snapshot.capitalLedger, (585n * unit) / 10n] })
+	expect(decodeFunctionData({ abi: erc20Abi, data: first.data })).toEqual({ functionName: 'approve', args: [fixtureValue.observation.snapshot.capitalLedger, 9_000_000_000_000_000_002n] })
 	expect(fixtureValue.calls).toHaveLength(1)
 	fixtureValue.setAllowance(1000n * unit)
 	await fixtureValue.run()
 	const second = fixtureValue.calls[1]
 	if (second === undefined) throw new Error('Missing deposit')
-	expect(decodeFunctionData({ abi, data: second.data })).toMatchObject({ functionName: 'depositFor', args: [fixtureValue.observation.snapshot.owner, (585n * unit) / 10n] })
-	fixtureValue.observation.snapshot.ownerPrincipalAttoRep = (585n * unit) / 10n
-	fixtureValue.observation.snapshot.ownerAccount.freeAttoRep = (585n * unit) / 10n
+	expect(decodeFunctionData({ abi, data: second.data })).toMatchObject({ functionName: 'depositFor', args: [fixtureValue.observation.snapshot.owner, 9_000_000_000_000_000_002n] })
+	fixtureValue.observation.snapshot.ownerPrincipalAttoRep = 9_000_000_000_000_000_002n
+	fixtureValue.observation.snapshot.ownerAccount.freeAttoRep = 9_000_000_000_000_000_002n
 	await fixtureValue.run()
 	const third = fixtureValue.calls[2]
 	if (third === undefined) throw new Error('Missing acquisition')
 	expect(decodeFunctionData({ abi, data: third.data })).toMatchObject({
 		functionName: 'takeOverWithBounds',
-		args: [1n, 100n * unit, 99n * unit, (585n * unit) / 10n, { maximumOwnerPrincipal: 1000n * unit, maximumOwnerCommitment: 1000n * unit, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
+		args: [1n, 5_714_285_714_285_714_286n, 0n, 9_000_000_000_000_000_002n, { maximumOwnerPrincipal: 1000n * unit, maximumOwnerCommitment: 1000n * unit, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
 	})
 	expect(fixtureValue.calls).toHaveLength(3)
 })
@@ -251,7 +251,7 @@ test('virtual winner takeover uses the bid API and rejects materialization or id
 	if (call === undefined) throw new Error('Missing auction takeover')
 	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: call.data })).toMatchObject({
 		functionName: 'takeOverAuctionBid',
-		args: [44n, 100n * unit, 99n * unit, 100n * unit, { maximumOwnerPrincipal: 1000n * unit, maximumOwnerCommitment: 1000n * unit, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
+		args: [44n, 5_714_285_714_285_714_286n, 0n, 100n * unit, { maximumOwnerPrincipal: 1000n * unit, maximumOwnerCommitment: 1000n * unit, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
 	})
 	expect(call.label).toContain('auction bid 44')
 	delete position.auctionTarget

@@ -18,7 +18,7 @@ function fixture() {
 test('#1253 a stale adverse report cannot promise an award accrued while owners could not cure', () => {
 	const value = fixture()
 	const before = structuredClone(value.observation)
-	expect(value.run()).toEqual({ reason: 'Fresh report restarts takeover award clock' })
+	expect(value.run()).toEqual({ reason: 'A fresh report is required before projecting repair income' })
 	expect(value.observation).toEqual(before)
 })
 

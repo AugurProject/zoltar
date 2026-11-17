@@ -295,7 +295,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		}
 		// A minimum-size cut must not turn removal of unsupported commitment
 		// into an immediate withdrawal of REP that still backs a live position.
-		if (supported != 0 && removed == account.commitment) removed = 0;
+		if (account.rep != 0 && removed == account.commitment) removed = 0;
 		uint256 remaining = account.commitment - removed;
 		result.removed = removed;
 		if (removed != 0) {
@@ -316,21 +316,20 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			(currentBatch == 0 ? 0 : _eligible(roots[currentBatch], acceptedPrice)) +
 			_eligible(roots[nextBatch], acceptedPrice);
 	}
-	/// @notice Validate an individual takeover against the index's current
-	/// principal, cohort and adverse observation before custody moves any assets.
-	function takeoverQuote(uint96 id, address receiver, uint256 commitment, uint256 minimumCommitment, uint256 minimumAward, uint256 price) external view onlyCapitalLedger returns (Account memory source, uint256 award, uint256 debit) {
+	/// @notice Repair transfers only unsupported commitment. Principal and past
+	/// income stay with the source; the receiver supplies its own backing and
+	/// earns future fees. Elapsed time and repeated repairs preserve source ownership.
+	/// Keep the source's economic minimum: replacing its final commitment needs
+	/// additional healthy capacity and the ordinary retirement queue.
+	function takeoverQuote(uint96 id, address receiver, uint256 requested, uint256 minimumCommitment, uint256 price, uint256 repairPrice, uint256 multiplier) external view onlyCapitalLedger returns (Account memory source, uint256 commitment) {
 		source = accountOf(id);
 		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
-		uint48 started = liquidationStarted(id);
-		require(started != 0, 'Adverse observation missing');
-		require(commitment > 0 && commitment <= source.commitment, 'Invalid takeover commitment');
-		require(commitment == source.commitment || source.commitment - commitment >= minimumCommitment, 'Take entire residual commitment');
-		require(commitment >= minimumCommitment || commitment == source.commitment, 'Takeover below economic minimum');
-		uint256 proportional =
-			commitment == source.commitment ? source.rep : Math.mulDiv(source.rep, commitment, source.commitment);
-		award = Math.mulDiv(proportional, Math.min(block.timestamp - started, 1 hours), 1 hours);
-		require(award >= minimumAward, 'Takeover award below minimum');
-		debit = commitment == source.commitment ? proportional : award;
+		require(liquidationStarted(id) != 0, 'Adverse observation missing');
+		require(requested > 0, 'Invalid takeover commitment');
+		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep, 10_000, multiplier), 1e18, repairPrice);
+		uint256 retained = Math.max(supported, minimumCommitment);
+		require(source.commitment > retained, 'Position requires additional backing');
+		commitment = Math.min(requested, source.commitment - retained);
 	}
 	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) public pure returns (uint256) {
 		require(health >= 10_000 && price > 0, 'Invalid health or price');

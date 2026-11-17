@@ -12,7 +12,7 @@ export function portfolioSettings() {
 		...example,
 		selectedPortfolios: [{ address: portfolioAddress, universeId: '0' }],
 		approvedUniverses: ['0'],
-		portfolioPolicy: { allowFundedTakeovers: true, maximumPrincipalRep: '1000', maximumTotalPrincipalRep: '2000', maximumCommitmentEth: '1000', maximumOwnFundingRep: '1000', minimumNetRewardEth: '0.001', walletReserveEth: '0.01', targetHealthFactorBps: 15000 },
+		portfolioPolicy: { takeoverIncomeHorizonSeconds: 31_536_000, allowFundedTakeovers: true, maximumPrincipalRep: '1000', maximumTotalPrincipalRep: '2000', maximumCommitmentEth: '1000', maximumOwnFundingRep: '1000', minimumNetRewardEth: '0.001', walletReserveEth: '0.01', targetHealthFactorBps: 15000 },
 		strategy: { ...example.strategy, maximumGasCostEth: '0.001', walletReserveRep: '1' },
 	})
 }

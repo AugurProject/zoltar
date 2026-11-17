@@ -70,12 +70,12 @@ const packageInstallTask = (projectPath: string, groups?: readonly string[]): Pr
  * runner enforces the inspected legacy versions and dependency paths and rejects vulnerable runtime Zod copies before
  * ignoring this advisory. Recheck reachability if compiler imports change; do not replace v3 with an incompatible v4.
  *
- * GHSA-fc5q-39xc-vjpf: Picomatch <= 4.0.7 has no patched release. Its callers are Knip's repository-file tooling,
- * Tevm's unused Vite/Vitest/unplugin build/test dependencies, and the compiler import resolver described above.
- * These paths use repository-controlled patterns, not application or remote input. The audit runner pins the inspected
- * copies and caller versions, rejects new callers/direct workspace use, and productionBuild.test.ts verifies that neither
- * Picomatch nor Micromatch ships in any app or simulation worker. Remove the exception when a patched release exists.
- * Advisory: https://github.com/advisories/GHSA-fc5q-39xc-vjpf
+ * GHSA-fc5q-39xc-vjpf: picomatch 4.0.7 and 2.3.2 have no patched release. The v4 copy is used by Knip and
+ * transitive Vitest/Vite/unplugin build tooling; repository source imports none of those glob tools, and none appears
+ * in the four production simulation-worker source maps. Knip reads repository-owned configuration. The v2 copy is
+ * restricted to the same constant-pattern compiler import resolver described above. The audit runner pins these
+ * copies, their tooling versions and parent paths, and rejects direct workspace use except the existing Knip dev
+ * dependencies. Recheck reachability when build imports change; remove this exception when a patch is released.
  */
 export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5', 'GHSA-fc5q-39xc-vjpf'] as const
 

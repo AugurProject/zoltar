@@ -12,7 +12,7 @@ export type PortfolioReportTakeover = { target: PortfolioTarget; plan: Portfolio
 export function portfolioReportTakeoverPlan(observation: PortfolioObservation, position: PortfolioPosition, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean): { reason: string; plan?: PortfolioTakeover; plans?: PortfolioReportTakeover[] } {
 	if (settings.portfolioPolicy.maximumReportFundingAttoEth === 0n || observation.snapshot.acceptedPrice === 0n || observation.pendingOperationReport !== undefined) return { reason: 'Report sponsorship is disabled or already pending' }
 	if (observation.snapshot.priceValid && observation.snapshot.timestamp < observation.snapshot.priceValidUntil) return { reason: 'Use the existing fresh price' }
-	if (observation.snapshot.timestamp >= observation.snapshot.priceValidUntil) return { reason: 'Fresh report restarts takeover award clock' }
+	if (observation.snapshot.timestamp >= observation.snapshot.priceValidUntil) return { reason: 'A fresh report is required before projecting repair income' }
 	const projected = { ...observation, snapshot: { ...observation.snapshot, ownerAccount: { ...observation.snapshot.ownerAccount }, priceValid: true, priceValidUntil: observation.snapshot.timestamp + 1n } }
 	const targets = [position, ...observation.positions.filter(candidate => !samePortfolioTarget(portfolioTarget(candidate), portfolioTarget(position)))]
 	// The feed caps a report's callback gas, so the configured budget only applies below that cap.
@@ -45,7 +45,7 @@ export function portfolioReportTakeoverPlan(observation: PortfolioObservation, p
 		if (plan.expectedSourceBatch !== 0n && plans.length !== 0) continue
 		if (funding + plan.ownFunding > settings.portfolioPolicy.maximumOwnFundingAttoRep) continue
 		const source = portfolioCureOutcome(projected, target)
-		if ((projected.managedPrincipalAttoRep ?? projected.snapshot.ownerPrincipalAttoRep) + plan.ownFunding + source.rep > settings.portfolioPolicy.maximumPrincipalAttoRep) continue
+		if ((projected.managedPrincipalAttoRep ?? projected.snapshot.ownerPrincipalAttoRep) + plan.ownFunding > settings.portfolioPolicy.maximumPrincipalAttoRep) continue
 		first ??= plan
 		plans.push({ target: portfolioTarget(target), plan })
 		funding += plan.ownFunding
@@ -53,8 +53,8 @@ export function portfolioReportTakeoverPlan(observation: PortfolioObservation, p
 		gas += settings.portfolioPolicy.reportOperationGasLimit + 100_000
 		const principal = projected.snapshot.ownerPrincipalAttoRep + plan.ownFunding + plan.minimumAward
 		const commitment = projected.snapshot.ownerCommitmentAttoEth + plan.commitment
-		exposure += plan.ownFunding + source.rep
-		projected.managedPrincipalAttoRep = (projected.managedPrincipalAttoRep ?? projected.snapshot.ownerPrincipalAttoRep) + plan.ownFunding + source.rep
+		exposure += plan.ownFunding
+		projected.managedPrincipalAttoRep = (projected.managedPrincipalAttoRep ?? projected.snapshot.ownerPrincipalAttoRep) + plan.ownFunding
 		projected.managedCommitmentAttoEth = (projected.managedCommitmentAttoEth ?? projected.snapshot.ownerCommitmentAttoEth) + plan.commitment
 		projected.walletRep -= plan.ownFunding
 		projected.snapshot.ownerPrincipalAttoRep = principal

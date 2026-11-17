@@ -62,7 +62,7 @@ describe('manual takeover against native portfolio contracts', () => {
 			const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
 			lifecycle.trackRendered(view)
 			const fields = view.container.querySelectorAll('input')
-			for (const [index, value] of [source.id.toString(), '200', '0', '1000', scenario === 'rejected-bounds' ? '999' : '2000', '200'].entries()) {
+			for (const [index, value] of [source.id.toString(), '200', '1000', scenario === 'rejected-bounds' ? '999' : '2000', '200'].entries()) {
 				const field = fields[index]
 				if (field === undefined) throw new Error('Missing takeover bound')
 				await act(() => {
@@ -95,8 +95,11 @@ describe('manual takeover against native portfolio contracts', () => {
 				{ timeout: 30_000 },
 			)
 			const acquired = await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })
-			expect(acquired.ownerCommitmentAttoEth).toBe(200n * unit)
-			expect((await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })).ownerCommitmentAttoEth).toBe(0n)
-			expect(acquired.ownerPrincipalAttoRep).toBeGreaterThan(snapshot.ownerPrincipalAttoRep)
+			expect(acquired.ownerCommitmentAttoEth).toBeGreaterThan(0n)
+			expect(acquired.ownerCommitmentAttoEth).toBeLessThan(200n * unit)
+			const retained = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })
+			expect(retained.ownerPrincipalAttoRep).toBe(original.ownerPrincipalAttoRep)
+			expect(retained.ownerCommitmentAttoEth + acquired.ownerCommitmentAttoEth).toBe(original.ownerCommitmentAttoEth)
+			expect(acquired.ownerPrincipalAttoRep).toBe(snapshot.ownerPrincipalAttoRep)
 		}, 300_000)
 })

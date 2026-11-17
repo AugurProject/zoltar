@@ -40,7 +40,7 @@ describe('liquidator sponsored report integration', () => {
 			const target = observation.positions.find(position => position.owner === fixture.owner().account.address)
 			if (target === undefined) throw new Error('Source missing')
 			expect(observation.snapshot.priceValid).toBe(false)
-			await expect(executePortfolioTakeover(wallet, settings, state, pool, observation, target.id, async () => true)).rejects.toThrow('Fresh report restarts takeover award clock')
+			await expect(executePortfolioTakeover(wallet, settings, state, pool, observation, target.id, async () => true)).rejects.toThrow('A fresh report is required before projecting repair income')
 			expect(state.sponsoredReports ?? []).toHaveLength(0)
 			expect(state.pendingTransactions).toHaveLength(0)
 			expect(state.activities.some(activity => activity.status === 'confirmed')).toBe(false)
