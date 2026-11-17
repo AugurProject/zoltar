@@ -5,7 +5,7 @@ import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../so
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
-import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.ts'
+import { ensureInfraDeployed, getInfraContractAddresses, type getSecurityPoolAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.ts'
 import { createQuestion } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.ts'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { manipulatePriceOracle } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils.ts'

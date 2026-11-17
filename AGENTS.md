@@ -161,8 +161,8 @@ Automated formatters and linters enforce only part of this policy. Review the re
 - Keep at most one consecutive empty line.
 - Avoid non-null assertions; validate unexpected `undefined` and throw an understandable error.
 - Do not use TypeScript directive comments such as `@ts-expect-error`, `@ts-ignore`, or `@ts-nocheck`.
-- Avoid casts, especially double casts. Prefer inferred types, generic constraints, narrower APIs, or runtime validation.
-- Prefer `undefined` for absence. Use `null` only when an external API or schema requires it.
+- Avoid casts, especially double casts. Prefer inferred types, generic constraints, narrower APIs, or runtime validation. `bun run check:static` rejects `as unknown as` and `as any as`; a UI test stand-in for a larger interface goes through `testDouble` in `ui/coreShared/ts/tests/testUtils/testDouble.ts`. Tests in packages that cannot import that helper build a complete typed fake or narrow the parameter type of the code under test; do not add sanctioned files or reach for `as never` instead.
+- Prefer `undefined` for absence. Use `null` only when an external API or schema requires it: DOM and Web Storage results, JSON and JSON-RPC payloads, SQL values, and persisted state formats. Reading or forwarding such a `null` is expected; producing one for internal state is not. UI components render and return `undefined` for nothing, which `bun run check:static` enforces.
 - Prefer functions, plain data, pure transformations, and composition over classes.
 - Do not use Solidity custom errors. Use understandable revert strings.
 

@@ -1,5 +1,6 @@
 import type { Address, Hash, Hex, TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient, WriteClient } from '../../types/contracts.js'
+import { testDouble } from './testDouble.js'
 
 export type MockReadClient = Pick<ReadClient, 'readContract'>
 type MockLoaderClient = ReadClient
@@ -25,7 +26,7 @@ export function createBlockWithTimestamp(timestamp: bigint) {
 }
 
 export function createReadContractStub(handler: MockReadContractHandler): ReadClient['readContract'] {
-	return async request => (await handler(request as unknown as MockReadContractRequest)) as never
+	return async request => (await handler(testDouble<MockReadContractRequest>(request))) as never
 }
 
 export function createMulticallStub(handler: MockLoaderMulticallHandler): MockLoaderClient['multicall'] {
@@ -33,13 +34,13 @@ export function createMulticallStub(handler: MockLoaderMulticallHandler): MockLo
 }
 
 export function createMockLoaderClient({ getBlock, getLogs = async () => [], multicall, readContract }: { getBlock: () => Promise<{ timestamp: bigint }>; getLogs?: () => Promise<readonly unknown[]>; multicall: MockLoaderMulticallHandler; readContract: MockReadContractHandler }): MockLoaderClient {
-	return {
+	return testDouble<MockLoaderClient>({
 		getBlock,
 		getBlockNumber: async () => 0n,
 		getLogs,
 		multicall: createMulticallStub(multicall),
 		readContract: createReadContractStub(readContract),
-	} as unknown as MockLoaderClient
+	})
 }
 
 export function createMockReadClient(readContract: MockReadContractHandler): MockReadClient {
@@ -65,5 +66,5 @@ export function createMockWriteClient(
 }
 
 export function asWriteClient(client: MockWriteClient): WriteClient {
-	return client as unknown as WriteClient
+	return testDouble<WriteClient>(client)
 }

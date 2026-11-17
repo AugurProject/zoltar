@@ -92,12 +92,7 @@ export async function acquireExclusiveProcessLock(lockPath: string, subject: str
 	const lockDirectory = dirname(lockPath)
 	await filesystem.mkdir(lockDirectory, { mode: 0o700, recursive: true })
 	await assertSafeLockDirectory(lockDirectory, filesystem)
-	let handle: ProcessLockFileHandle
-	try {
-		handle = await filesystem.open(lockPath, constants.O_CREAT | constants.O_NOFOLLOW | constants.O_RDWR, 0o600)
-	} catch (error) {
-		throw error
-	}
+	const handle = await filesystem.open(lockPath, constants.O_CREAT | constants.O_NOFOLLOW | constants.O_RDWR, 0o600)
 	let acquired: boolean
 	try {
 		acquired = filesystem.tryLock(handle.fd)

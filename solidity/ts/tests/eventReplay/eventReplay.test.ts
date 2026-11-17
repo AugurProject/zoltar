@@ -227,7 +227,6 @@ describe('event-only replay', () => {
 				logIndex: 8,
 				args: {
 					securityPool: pool,
-					collateralRepairAuction: zeroAddress,
 					openOraclePriceCoordinator: coordinator,
 					shareToken,
 					parent: zeroAddress,
@@ -235,8 +234,6 @@ describe('event-only replay', () => {
 					questionId: 2n,
 					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeAttoEthPerGas: 10n,
-					currentRetentionRate: 4n,
-					settlementCollateralAttoEth: 0n,
 				},
 			}),
 			createReplayLog({
@@ -690,7 +687,6 @@ describe('event-only replay', () => {
 				logIndex: 0,
 				args: {
 					securityPool: pool,
-					collateralRepairAuction: zeroAddress,
 					openOraclePriceCoordinator: zeroAddress,
 					shareToken: zeroAddress,
 					parent,
@@ -698,15 +694,13 @@ describe('event-only replay', () => {
 					questionId: 2n,
 					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeAttoEthPerGas: 10n,
-					currentRetentionRate: 4n,
-					settlementCollateralAttoEth: 5n,
 				},
 			}),
 			createReplayLog({ emitter: pool, eventName: 'ShareTokenSupplySet', logIndex: 1, args: { shareTokenSupplyAttoShares: 40n } }),
 			createReplayLog({ emitter: pool, eventName: 'TotalRepBackingUnitsSet', logIndex: 2, args: { totalRepBackingUnits: 50n } }),
 			createReplayLog({ emitter: pool, eventName: 'AwaitingForkContinuationSet', logIndex: 3, args: { awaitingForkContinuation: true } }),
 			createReplayLog({ emitter: pool, eventName: 'EscalationGameSet', logIndex: 4, args: { escalationGame: game } }),
-			createReplayLog({ emitter: pool, eventName: 'PoolForkModeActivated', logIndex: 5, args: { repTransferredAttoRep: 60n, currentRetentionRate: 70n, systemState: 1n } }),
+			createReplayLog({ emitter: pool, eventName: 'PoolForkModeActivated', logIndex: 5, args: { repTransferredAttoRep: 60n, systemState: 1n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs)
@@ -718,14 +712,13 @@ describe('event-only replay', () => {
 		if (poolState.systemState !== 1n || !poolState.forkModeActive) throw new Error('child system state mismatch')
 		if (poolState.awaitingForkContinuation !== true) throw new Error('child continuation state mismatch')
 		if (poolState.escalationGame !== game) throw new Error('child escalation-game relationship mismatch')
-		if (poolState.repTransferredAtFork !== 60n || poolState.currentRetentionRate !== 70n) throw new Error('child fork activation state mismatch')
+		if (poolState.repTransferredAtFork !== 60n) throw new Error('child fork activation state mismatch')
 	})
 
-	test('escalation reducers track stable leaves, escrow, claims, exports, and residual settlement', () => {
+	test('escalation reducers track stable leaves, escrow, claims, and accrued surplus', () => {
 		const game = '0x1111111111111111111111111111111111111111'
 		const vault = '0x2222222222222222222222222222222222222222'
 		const secondVault = '0x3333333333333333333333333333333333333333'
-		const receiver = '0x4444444444444444444444444444444444444444'
 		const rootA = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 		const rootB = `0x${'0'.repeat(64)}` as Hex
 		const logs = [
@@ -783,34 +776,6 @@ describe('event-only replay', () => {
 			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 5, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
 			createReplayLog({
 				emitter: game,
-				eventName: 'ForkedEscrowRecorded',
-				logIndex: 6,
-				args: {
-					depositor: vault,
-					outcome: 2n,
-					sourcePrincipalTotalAttoRep: 20n,
-					childRepTotalAttoRep: 15n,
-					disputeStakedRepByVaultAttoRep: 15n,
-					totalDisputeStakedAttoRep: 15n,
-					outcomeBalanceAttoRep: 20n,
-				},
-			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'ForkedEscrowExported',
-				logIndex: 9,
-				args: {
-					vault,
-					repReceiver: receiver,
-					sourcePrincipalByOutcomeAttoRep: [0n, 0n, 20n],
-					childRepByOutcomeAttoRep: [0n, 0n, 15n],
-					totalChildRepToTransferAttoRep: 15n,
-					transferredRep: true,
-				},
-			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 10, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
-			createReplayLog({
-				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 11,
 				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, amountAttoRep: 4n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 4n },
@@ -829,19 +794,6 @@ describe('event-only replay', () => {
 					resultingTotalDisputeStakedAttoRep: 4n,
 				},
 			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'VaultUnresolvedTotalsExported',
-				logIndex: 13,
-				args: {
-					vault: secondVault,
-					repReceiver: zeroAddress,
-					principalByOutcomeAttoRep: [0n, 0n, 4n],
-					principalToTransferAttoRep: 4n,
-					transferredRep: false,
-				},
-			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 14, args: { vault: secondVault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
 			createReplayLog({ emitter: game, eventName: 'EscalationSurplusAccrued', logIndex: 15, args: { amountAttoRep: 2n, cumulativeSurplusAttoRep: 2n } }),
 		]
 
@@ -851,11 +803,10 @@ describe('event-only replay', () => {
 		if (replayed.escalationConsumptions.get(game)?.get('5:1')?.reason !== 0n) throw new Error('carry consumption mismatch')
 		if (replayed.escalationClaims.get(game)?.get('1:5')?.amountToWithdrawAttoRep !== 9n) throw new Error('claim accounting mismatch')
 		if (replayed.escalationVaultEscrowedRep.get(game)?.get(vault) !== 0n) throw new Error('vault escrow mismatch')
-		if (replayed.escalationTotalEscrowedRep.get(game) !== 0n) throw new Error('total escrow mismatch')
-		if (replayed.escalationLocalUnresolvedByVault.get(game)?.get(secondVault)?.[2] !== 0n) throw new Error('vault unresolved export mismatch')
-		const forkedEscrow = replayed.escalationForkedEscrow.get(game)?.get(`${vault}:2`)
-		if (forkedEscrow?.sourcePrincipalClaimedAttoRep !== 20n || forkedEscrow.childRepClaimedAttoRep !== 15n) throw new Error('forked escrow settlement mismatch')
-		if (replayed.escalationForkedExports.get(game)?.get(vault)?.totalChildRepToTransferAttoRep !== 15n) throw new Error('forked escrow export mismatch')
+		if (replayed.escalationVaultEscrowedRep.get(game)?.get(secondVault) !== 4n) throw new Error('second vault escrow mismatch')
+		if (replayed.escalationTotalEscrowedRep.get(game) !== 4n) throw new Error('total escrow mismatch')
+		if (replayed.escalationLocalUnresolvedByVault.get(game)?.get(vault)?.[1] !== 0n) throw new Error('consumed vault unresolved mismatch')
+		if (replayed.escalationLocalUnresolvedByVault.get(game)?.get(secondVault)?.[2] !== 4n) throw new Error('vault unresolved mismatch')
 		if (replayed.escalationSurplusAccrued.get(game) !== 2n) throw new Error('source-accrued REP surplus mismatch')
 	})
 
@@ -916,7 +867,6 @@ describe('event-only replay', () => {
 				logIndex: 4,
 				args: {
 					securityPool: pool,
-					collateralRepairAuction: auction,
 					openOraclePriceCoordinator: coordinator,
 					shareToken: repToken,
 					parent: zeroAddress,
@@ -924,8 +874,6 @@ describe('event-only replay', () => {
 					questionId: 12n,
 					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeAttoEthPerGas: 10n,
-					currentRetentionRate: 4n,
-					settlementCollateralAttoEth: 0n,
 				},
 			}),
 			createReplayLog({
@@ -1271,7 +1219,7 @@ describe('event-only replay', () => {
 		const replayed = replayZoltarEvents([...deploymentLogs, ...sourcePoolLogs, ...sourceGameLogs, ...forkerLogs, ...receiptLogs], new Set(), new Set([factory]))
 		const deployment = replayed.poolDeployments.get(child.securityPool)
 		if (deployment === undefined) throw new Error('child pool deployment replay missing')
-		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedCollateral, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
+		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
 			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
 				address: child.openOraclePriceCoordinator,
@@ -1279,7 +1227,6 @@ describe('event-only replay', () => {
 				functionName: 'initialReportPriorityFeeAttoEthPerGas',
 				args: [],
 			}),
-			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', args: [] }),
 			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
 			client.readContract({ address: child.escalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getForkCarryRoots', args: [] }),
 			client.readContract({ address: child.escalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getForkCarrySnapshot', args: [] }),
@@ -1299,12 +1246,10 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.parent, securityPoolAddresses.securityPool, 'child parent replay mismatch')
 		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
 		strictEqualTypeSafe(deployment.questionId, fixture.questionId, 'child question replay mismatch')
-		strictEqualTypeSafe(deployment.collateralRepairAuction, child.collateralRepairAuction, 'child auction replay mismatch')
 		strictEqualTypeSafe(deployment.coordinator, child.openOraclePriceCoordinator, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
 		strictEqualTypeSafe(deployment.initialReportPriorityFeeAttoEthPerGas, storedPriorityFee, 'child priority fee replay mismatch')
-		strictEqualTypeSafe(deployment.settlementCollateralAttoEth, storedCollateral, 'child collateral replay mismatch')
 		strictEqualTypeSafe(replayed.poolStates.get(child.securityPool)?.systemState, storedSystemState, 'child constructor system state replay mismatch')
 		if (replayed.escalationLifecycles.get(child.escalationGame)?.forkContinuation !== true) {
 			throw new Error('child continuation lifecycle was not replayed')

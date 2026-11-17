@@ -69,7 +69,10 @@ export async function demoAddressPortfolioRoute(env: DemoEnvironment, path: stri
 				truncated: false,
 				basis: 'Canonical indexed transfers',
 			},
-			pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100000000000000001' }],
+			pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100001', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } }],
+			auction_claims: [
+				{ type: 'BidSettled', entity: demoAddress('8'), data: { bidId: '1', bidder: address ?? demoAddress('1'), filledLots: '0', refundAttoEth: String(100001n) }, blockNumber: operations.asOf.blockNumber, provenance: 'historical interaction', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } },
+			],
 			escalation_payouts: {
 				items: claimState === 'unavailable' ? [] : [{ game_address: demoAddress('7'), snapshot_block: operations.asOf.blockNumber, snapshot_block_hash: demoHash, position: claimPosition }],
 				unavailable_games: claimState === 'unavailable' ? '1' : '0',
@@ -227,7 +230,6 @@ export async function demoAddressIdentityRoute(env: DemoEnvironment, path: strin
 			[pool.chain_id, pool.pool_address, 'Security Pool', 'securityPool'],
 			[pool.chain_id, pool.share_token_address, 'Share token', 'shareToken'],
 			[pool.chain_id, pool.coordinator_address, 'Price coordinator', 'priceCoordinator'],
-			[pool.chain_id, pool.collateral_repair_auction_address, 'Collateral repair auction', 'collateralRepairAuction'],
 		]),
 		...demoUniverses.map(universe => [universe.chain_id, universe.reputation_token_address, universe.universe_id === '0' ? 'Genesis REP' : `Child REP · universe ${shortIdentifier(universe.universe_id)}`, 'reputationToken']),
 		...demoRichList.flatMap(item => [...(item.rep_balances ?? []), ...(item.weth_balances ?? [])].map(token => [item.chain_id, token.address, 'contractLabel' in token ? token.contractLabel : token.name, 'universeId' in token ? 'reputationToken' : 'weth'])),

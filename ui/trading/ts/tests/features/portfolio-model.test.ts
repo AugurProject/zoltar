@@ -46,40 +46,40 @@ function row(value: PortfolioBalanceEntry) {
 	return first
 }
 
-function valueOf(marketOverrides: Partial<LiveMarket>, amounts: Amounts) {
+function positionValue(marketOverrides: Partial<LiveMarket>, amounts: Amounts) {
 	return row(entry(marketOverrides, amounts)).valuation
 }
 
 describe('portfolio position value', () => {
 	test('values complete sets at their backing and an insured long at its pool exit', () => {
-		expect(valueOf({}, { yes: 2n * SET, no: 2n * SET, invalid: 2n * SET })).toEqual({ kind: 'exit', attoEth: 2n * ATTO_ETH_PER_ETH, pendingResolution: false })
+		expect(positionValue({}, { yes: 2n * SET, no: 2n * SET, invalid: 2n * SET })).toEqual({ kind: 'exit', attoEth: 2n * ATTO_ETH_PER_ETH, pendingResolution: false })
 		const exitSets = maximumInsuredExit({ longOutcome: 'YES', longBalance: (3n * SET) / 2n, invalidBalance: SET, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 		expect(exitSets).toBeGreaterThan(0n)
 		expect(exitSets).toBeLessThan(SET)
 		// The INVALID the exit cannot use only pays if INVALID wins, so it is flagged rather than priced.
-		expect(valueOf({}, { yes: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets, pendingResolution: true })
-		expect(valueOf({}, { no: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets, pendingResolution: true })
+		expect(positionValue({}, { yes: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets, pendingResolution: true })
+		expect(positionValue({}, { no: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets, pendingResolution: true })
 		// A bare long share without INVALID insurance cannot be exited through the pool.
-		expect(valueOf({}, { yes: SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
+		expect(positionValue({}, { yes: SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
 		// Rounding leftovers below the displayed precision are not a pending payout.
-		expect(valueOf({}, { yes: SET, no: SET, invalid: SET + 10n ** 12n })).toEqual({ kind: 'exit', attoEth: ATTO_ETH_PER_ETH, pendingResolution: false })
+		expect(positionValue({}, { yes: SET, no: SET, invalid: SET + 10n ** 12n })).toEqual({ kind: 'exit', attoEth: ATTO_ETH_PER_ETH, pendingResolution: false })
 	})
 
 	test('includes LP reserve claims and exits against the reserves left after withdrawal', () => {
 		expect(lpReserveClaims(market, 5n * SET)).toEqual({ yes: 5n * SET, no: 5n * SET })
 		expect(lpReserveClaims({ ...market, lpTotalSupply: 0n }, 5n * SET)).toEqual({ yes: 0n, no: 0n })
-		expect(valueOf({}, { lp: 5n * SET, invalid: 5n * SET })).toEqual({ kind: 'exit', attoEth: 5n * ATTO_ETH_PER_ETH, pendingResolution: false })
+		expect(positionValue({}, { lp: 5n * SET, invalid: 5n * SET })).toEqual({ kind: 'exit', attoEth: 5n * ATTO_ETH_PER_ETH, pendingResolution: false })
 		// Without INVALID the LP claim cannot become complete sets, so it waits for resolution.
-		expect(valueOf({}, { lp: 5n * SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
+		expect(positionValue({}, { lp: 5n * SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
 		// Owning every LP token leaves no reserves to exit against, so only the complete sets count.
-		expect(valueOf({}, { lp: 10n * SET, invalid: 12n * SET, yes: 2n * SET })).toEqual({ kind: 'exit', attoEth: 10n * ATTO_ETH_PER_ETH, pendingResolution: true })
+		expect(positionValue({}, { lp: 10n * SET, invalid: 12n * SET, yes: 2n * SET })).toEqual({ kind: 'exit', attoEth: 10n * ATTO_ETH_PER_ETH, pendingResolution: true })
 	})
 
 	test('counts only winning shares, including the LP claim, after resolution', () => {
 		const held = { yes: 3n * SET, no: SET, invalid: 2n * SET, lp: 5n * SET }
-		expect(valueOf({ questionOutcome: 0 }, held)).toEqual({ kind: 'redemption', attoEth: 2n * ATTO_ETH_PER_ETH })
-		expect(valueOf({ questionOutcome: 1 }, held)).toEqual({ kind: 'redemption', attoEth: 8n * ATTO_ETH_PER_ETH })
-		expect(valueOf({ questionOutcome: 2 }, held)).toEqual({ kind: 'redemption', attoEth: 6n * ATTO_ETH_PER_ETH })
+		expect(positionValue({ questionOutcome: 0 }, held)).toEqual({ kind: 'redemption', attoEth: 2n * ATTO_ETH_PER_ETH })
+		expect(positionValue({ questionOutcome: 1 }, held)).toEqual({ kind: 'redemption', attoEth: 8n * ATTO_ETH_PER_ETH })
+		expect(positionValue({ questionOutcome: 2 }, held)).toEqual({ kind: 'redemption', attoEth: 6n * ATTO_ETH_PER_ETH })
 	})
 })
 
@@ -239,18 +239,18 @@ test('portfolio records REP-only redemption without inventing an ETH value', () 
 	expect(overview.recoveryRepCount).toBe(1)
 })
 
-test('keeps ETH, USDC and USDT portfolio totals separate', () => {
+test('keeps ETH, USDC and other token portfolio totals separate', () => {
 	const usdc = { token: '0x0000000000000000000000000000000000000001' as const, symbol: 'USDC', decimals: 6, native: false }
-	const usdt = { token: '0x0000000000000000000000000000000000000002' as const, symbol: 'USDT', decimals: 6, native: false }
+	const other = { token: '0x0000000000000000000000000000000000000002' as const, symbol: 'TKN', decimals: 6, native: false }
 	const amounts = { invalid: 1_000_000n, yes: 1_000_000n, no: 1_000_000n }
 	const overview = portfolioOverview(
-		[entry({}, { invalid: SET, yes: SET, no: SET }), entry({ collateral: usdc, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }, amounts), entry({ collateral: usdt, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }, amounts)],
+		[entry({}, { invalid: SET, yes: SET, no: SET }), entry({ collateral: usdc, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }, amounts), entry({ collateral: other, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }, amounts)],
 		NOW,
 	)
 	expect(overview.totalValueAttoEth).toBe(SET)
 	expect(overview.totalsByAsset?.map(total => [total.asset.symbol, total.value])).toEqual([
 		['ETH', SET],
 		['USDC', 1_000_000n],
-		['USDT', 1_000_000n],
+		['TKN', 1_000_000n],
 	])
 })

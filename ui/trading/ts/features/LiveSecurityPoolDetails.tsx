@@ -90,7 +90,7 @@ export function LiveSecurityPoolDetails({
 			<ErrorNotice message={connectionMessage} />
 			<SectionBlock title={liveCopy.securityPoolFacts}>
 				<div className='security-pool-details' aria-busy={refreshing}>
-					{refreshMessage === undefined ? null : <UserMessage className='detail' announcement='polite' detail={refreshMessage} />}
+					{refreshMessage === undefined ? undefined : <UserMessage className='detail' announcement='polite' detail={refreshMessage} />}
 					<RetryableNotice disabled={workflowLocked} message={errorMessage} onRetry={refreshing ? undefined : retry} retryLabel={hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool} />
 
 					{market.loadError !== undefined ? (
@@ -138,7 +138,6 @@ export function LiveSecurityPoolDetails({
 								<DataGrid dense>
 									<MetricField label={liveCopy.securityMultiplier}>{formatMultiplier(market.statoblastSecurityMultiplierBps, 4)}</MetricField>
 									<MetricField label={liveCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(market.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
-									<MetricField label={liveCopy.retentionRatePerSecond}>{formatMultiplier(market.currentRetentionRate, 18, 12)}</MetricField>
 									<MetricField label={liveCopy.commitmentLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth, collateralAsset(market))}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>

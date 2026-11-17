@@ -1,6 +1,5 @@
 import * as collateralCopy from '../../../copy/collateral.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { usePortfolioQuestionDetails } from '../hooks/usePortfolioQuestionDetails.js'
 import { useId } from 'preact/hooks'
@@ -88,16 +87,6 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 				<MetricField label={copy.estimatedPurchaseFee} loading={purchase.quoteLoading}>
 					<CurrencyValue value={purchase.quote?.purchaseFeeAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
-				{snapshot !== undefined && tokenRequiresAllowanceReset(snapshot.collateralToken) ? (
-					<PortfolioButton
-						model={actions}
-						action='resetPurchaseCollateral'
-						label={common.formatResetTokenApproval(snapshot.collateral.symbol)}
-						pendingLabel={common.formatResettingTokenApproval(snapshot.collateral.symbol)}
-						reason={actions.ownerReason ?? (snapshot.collateralAllowance === 0n ? common.notNeeded : undefined)}
-						onClick={() => purchase.approve(0n)}
-					/>
-				) : undefined}
 				<TokenApprovalControl
 					actionLabel={copy.mint}
 					allowanceError={model.error}
@@ -105,7 +94,6 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 					approvedAmount={snapshot?.collateralAllowance}
 					disabled={actions.busy !== undefined}
 					guardMessage={actions.ownerReason}
-					requiresAllowanceReset={tokenRequiresAllowanceReset(snapshot?.collateralToken)}
 					onApprove={amount => {
 						if (amount !== undefined) void purchase.approve(amount)
 					}}
@@ -116,6 +104,35 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 					tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}
 					tokenUnits={snapshot?.collateral.decimals ?? 18}
 				/>
+				{purchase.recoveryApplicable && (
+					<>
+						<UserMessage detail={collateralCopy.recoveryContributionHint} />
+						<MetricGrid>
+							<MetricField label={collateralCopy.recoveryContribution} loading={purchase.quoteLoading}>
+								<CurrencyValue exactWhenRoundedToZero value={purchase.quote?.recoveryAttoRep} suffix={common.rep} />
+							</MetricField>
+						</MetricGrid>
+						<PortfolioInput label={collateralCopy.maximumRecoveryContribution} hint={collateralCopy.recoveryBudgetHint} value={purchase.maximumRecoveryRep} onChange={purchase.setMaximumRecoveryRep} disabled={actions.busy !== undefined || purchase.quote === undefined || purchase.recovery === undefined} numeric />
+						<TokenApprovalControl
+							amountPrecision='exact'
+							actionLabel={copy.mint}
+							tokenSymbol={common.rep}
+							tokenUnits={18}
+							approvedAmount={purchase.recovery?.allowance}
+							requiredAmount={purchase.requiredRecoveryRep}
+							allowanceLoading={purchase.quoteLoading}
+							allowanceError={purchase.recoveryError ?? model.error}
+							guardMessage={actions.ownerReason}
+							disabled={actions.busy !== undefined || purchase.quote === undefined || purchase.recovery === undefined}
+							pending={actions.busy === 'approvePurchaseRecoveryRep'}
+							pendingLabel={common.formatApprovingToken(common.rep)}
+							resetKey={`${snapshot?.portfolio}:${snapshot?.owner}:${purchase.requiredRecoveryRep}`}
+							onApprove={amount => {
+								if (amount !== undefined) void purchase.approveRecoveryRep(amount)
+							}}
+						/>
+					</>
+				)}
 				<PortfolioButton model={actions} action='mintPortfolioCompleteSets' label={copy.mint} pendingLabel={copy.minting} reason={purchase.reason ?? (details.selected?.question === undefined ? copy.reviewQuestionDetails : undefined)} onClick={purchase.buy} />
 			</SectionBlock>
 		</>

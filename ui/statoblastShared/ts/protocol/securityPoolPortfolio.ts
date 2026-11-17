@@ -1,6 +1,16 @@
 import { collateralPresentation } from './collateral.js'
 import { encodeFunctionData, getAddress, parseAbi, parseAbiItem, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, loadPortfolioClaimableEarnings, type PortfolioReadClient, type PortfolioEconomicsConfig, type PortfolioOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import {
+	buildPortfolioDeploymentRequest,
+	buildPortfolioPrepareNextRequest,
+	decodeAuctionVaultBindings,
+	portfolioAddressFromDeploymentLogs,
+	loadPortfolioCapitalSnapshot,
+	loadPortfolioClaimableEarnings,
+	type PortfolioReadClient,
+	type PortfolioEconomicsConfig,
+	type PortfolioOriginConfig,
+} from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -19,7 +29,7 @@ import {
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
 	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
 } from '../contractArtifact.js'
-import { getInfraContractAddresses, getSecurityPoolPortfolioByteCode, getSecurityPoolPortfolioRuntimeCode, getPortfolioDeployers } from './deploymentHelpers.js'
+import { getInfraContractAddresses, getSecurityPoolPortfolioCreationCode, getSecurityPoolPortfolioRuntimeCode } from './deploymentHelpers.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
 import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { loadPortfolioAdmission } from './securityPoolPortfolioAdmission.js'
@@ -45,6 +55,7 @@ const linksAbi = parseAbi([
 	'function prepareNext()',
 	'function factory() view returns (address)',
 	'function originUniverseId() view returns (uint248)',
+	'function isPortfolio(address portfolio) view returns (bool)',
 ])
 type RuntimeArtifact = { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }
 
@@ -78,6 +89,15 @@ async function verifyModule(client: ReadClient, address: Address, artifact: Runt
 	if (getAddress(actual) !== getAddress(authority)) throw new Error(`${label} belongs to another authority.`)
 }
 
+/**
+ * The canonical factory deploys every portfolio from its pinned creation code and module deployers and records it.
+ * Runtime code alone proves nothing about the constructor arguments, so this record is what authenticates the modules.
+ */
+async function requireCanonicalPortfolio(client: Pick<ReadClient, 'readContract'>, portfolio: Address, blockNumber?: bigint) {
+	const recorded = await client.readContract({ address: getInfraContractAddresses().securityPoolFactory, abi: linksAbi, functionName: 'isPortfolio', args: [portfolio], ...(blockNumber === undefined ? {} : { blockNumber }) })
+	if (recorded !== true) throw new Error('Portfolio was not deployed by the canonical factory.')
+}
+
 /** A bounded setup status is readable before the custody modules exist. */
 export async function loadPortfolioSetup(client: ReadClient, portfolio: Address, owner: Address) {
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
@@ -90,6 +110,7 @@ export async function loadPortfolioSetup(client: ReadClient, portfolio: Address,
 		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'originUniverseId', blockNumber }),
 		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'auctionDeployer', blockNumber }),
+		requireCanonicalPortfolio(client, portfolio, blockNumber),
 	])
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(requireAddressValue(factoryValue, 'portfolio factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'portfolio protocol')) !== getAddress(infrastructure.zoltar)) throw new Error('Portfolio uses unrecognized protocol contracts.')
@@ -132,6 +153,7 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'questionCount', blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'auctionDelegate', blockNumber }),
 		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'auctionDeployer', blockNumber }),
+		requireCanonicalPortfolio(client, portfolio, blockNumber),
 	])
 	const feeStreams = requireAddressValue(feeStreamsValue, 'fee streams')
 	const lifecycle = requireAddressValue(lifecycleValue, 'capital lifecycle delegate')
@@ -218,7 +240,11 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 export type PortfolioAccountSnapshot = Awaited<ReturnType<typeof loadPortfolioAccount>>
 
 export function portfolioCreationRequest(owner: Address, origin: PortfolioOriginConfig, maximumQuestionHorizonSeconds: bigint, questionAdmissionPolicy: Address, economics: PortfolioEconomicsConfig) {
-	return buildPortfolioDeploymentRequest({ owner, origin, maximumQuestionHorizonSeconds, questionAdmissionPolicy, economics, factory: getInfraContractAddresses().securityPoolFactory, deployers: getPortfolioDeployers(), artifact: { abi: portfolioArtifact.abi, bytecode: getSecurityPoolPortfolioByteCode() } })
+	return buildPortfolioDeploymentRequest({ owner, origin, maximumQuestionHorizonSeconds, questionAdmissionPolicy, economics, factory: getInfraContractAddresses().securityPoolFactory, creationCode: getSecurityPoolPortfolioCreationCode() })
+}
+/** The factory creates the portfolio, so its address comes from the factory's deployment event, not the receipt. */
+export function portfolioAddressFromCreationReceipt(receipt: { logs: Parameters<typeof portfolioAddressFromDeploymentLogs>[0] }) {
+	return portfolioAddressFromDeploymentLogs(receipt.logs, getInfraContractAddresses().securityPoolFactory)
 }
 export function portfolioContractRequest(account: Address, to: Address, functionName: string, args: readonly unknown[] = []): PortfolioTransaction {
 	return { account, to, value: 0n, data: encodeFunctionData({ abi: portfolioArtifact.abi, functionName, args }) }

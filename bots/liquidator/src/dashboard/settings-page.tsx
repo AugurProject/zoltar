@@ -88,17 +88,11 @@ function StrategyPanel() {
 						</p>
 					</fieldset>
 					<fieldset id='log-scan-settings' class='settings-subgroup'>
-						<legend>Scanning and recovery</legend>
+						<legend>Scanning</legend>
 						<div class='field-grid'>
 							<IntegerField label='Positions per scan (1–256)' name='maximumPositionsPerScan' />
 							<IntegerField label='Stalled retirement (seconds)' name='stalledRetirementSeconds' />
-							<label>
-								<span>Latest log window (1–256 blocks)</span>
-								<input name='logLookbackBlocks' type='number' min='1' max='256' step='1' />
-							</label>
-							<SwitchField id='historical-log-recovery' label='Enable historical recovery backfill' name='historicalLogRecovery' />
 						</div>
-						<p class='section-note'>Historical recovery is off by default. When enabled, it checks older required blocks newest first and saves completed chunks.</p>
 					</fieldset>
 					<FormActions statusId='strategy-status' submitLabel='Save policy' />
 				</fieldset>

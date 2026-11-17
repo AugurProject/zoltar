@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { readContractCollateral, withCollateralIdentityCache } from '../../src/collateral-metadata.ts'
+import { readContractCollateral, usesCollateralUnits, withCollateralIdentityCache } from '../../src/collateral-metadata.ts'
 import { getAddress } from '../../src/ethereum.ts'
 import type { StateRead } from '../../src/snapshots.ts'
 
@@ -8,7 +8,7 @@ const portfolio = getAddress('0x2222222222222222222222222222222222222222')
 const factory = getAddress('0x3333333333333333333333333333333333333333')
 const token = getAddress('0x4444444444444444444444444444444444444444')
 
-for (const kind of ['securityPool', 'securityPoolPortfolio', 'sharedPoolPriceFeed', 'priceCoordinator', 'twoWayConstantProductPair', 'securityPoolPortfolioServices'])
+for (const kind of ['securityPool', 'securityPoolPortfolio', 'sharedPoolPriceFeed', 'priceCoordinator', 'ammPair', 'securityPoolPortfolioServices'])
 	test(`${kind} resolves pool collateral through its authenticated dependencies`, async () => {
 		const calls: string[] = []
 		const read: StateRead = async (_address, _abi, name) => {
@@ -38,6 +38,11 @@ for (const kind of ['securityPool', 'securityPoolPortfolio', 'sharedPoolPriceFee
 		expect(calls.filter(name => !['symbol', 'decimals'].includes(name))).toEqual(identities)
 		expect(calls.filter(name => name === 'decimals')).toHaveLength(2)
 	})
+
+test('collateral units apply to the contract kinds the generated configuration produces', () => {
+	for (const kind of ['securityPool', 'securityPoolCapitalLedger', 'sharedPoolPriceFeed', 'priceCoordinator', 'ammFactory', 'ammPair', 'ammRouter']) expect(usesCollateralUnits(kind)).toBe(true)
+	for (const kind of [undefined, 'weth', 'reputationToken', 'openOracle', 'zoltar', 'uniswapV2Pair']) expect(usesCollateralUnits(kind)).toBe(false)
+})
 
 test('unavailable or malformed metadata leaves amounts in raw units', async () => {
 	const read: StateRead = async (_address, _abi, name) => {

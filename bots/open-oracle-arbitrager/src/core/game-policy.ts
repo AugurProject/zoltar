@@ -28,6 +28,12 @@ function fieldMismatch(actual: bigint, expected: bigint, name: string) {
 	return actual === expected ? undefined : `${name} differs from the approved coordinator template`
 }
 
+/** A shared-feed report may add its sponsor's operation gas to the template callback gas, and the feed accepts its price like any other. */
+function callbackGasMismatch(actual: bigint, policy: CoordinatorGamePolicy) {
+	if (policy.reportEscrows === undefined) return fieldMismatch(actual, policy.callbackGasLimit, 'Callback gas limit')
+	return actual >= policy.callbackGasLimit && actual <= MAX_SAFE_CALLBACK_GAS_LIMIT ? undefined : 'Callback gas limit is outside the approved shared-feed range'
+}
+
 export function coordinatorPolicySafetyMismatch(policy: CoordinatorGamePolicy) {
 	if ((policy.flags & OPEN_ORACLE_FLAG_STORE_ALL) === 0n) return 'Stored OpenOracle state is required for durable lifecycle recovery'
 	if (policy.callbackGasLimit > MAX_SAFE_CALLBACK_GAS_LIMIT) return 'Callback gas limit exceeds the arbitrager safety bound'
@@ -50,7 +56,7 @@ export function gamePolicyMismatch(report: OpenOracleStatePreimage, policies: re
 	if (!sameAddress(game.token1, policy.token1) || !sameAddress(game.token2, policy.token2)) return 'Token pair differs from the approved coordinator template'
 	if (!sameAddress(game.protocolFeeRecipient, policy.protocolFeeRecipient)) return 'Protocol fee recipient differs from the approved coordinator template'
 	const mismatch =
-		fieldMismatch(game.callbackGasLimit, policy.callbackGasLimit, 'Callback gas limit') ??
+		callbackGasMismatch(game.callbackGasLimit, policy) ??
 		fieldMismatch(game.settlementTime, policy.settlementTime, 'Settlement time') ??
 		fieldMismatch(game.disputeDelay, policy.disputeDelay, 'Dispute delay') ??
 		fieldMismatch(game.feePercentage, policy.feePercentage, 'Fee percentage') ??

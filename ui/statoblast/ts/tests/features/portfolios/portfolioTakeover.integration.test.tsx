@@ -25,12 +25,20 @@ describe('manual takeover against native portfolio contracts', () => {
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: token.abi, address: getRepTokenAddress(fixture.base.genesisUniverse), functionName: 'transfer', args: [keeper.account.address, 1000n * unit] }))
 			await fixture.deposit(1000n * unit, keeper)
 			await fixture.refreshPrice(fixture.base.questionId, 3n * unit)
-			await fixture.base.mockWindow.advanceTime(3601n)
-			await fixture.refreshPrice(fixture.base.questionId, 3n * unit)
+			const distressed = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })
+			const initialSource = distressed.positions[0]
+			if (initialSource === undefined) throw new Error('Missing distressed position')
+			expect(initialSource.liquidationStarted).toBeGreaterThan(0n)
+			// Keep quotes fresh while the reward matures; a stale gap restarts its clock.
+			for (let renewal = 0; renewal < 8; renewal++) await fixture.refreshPrice(fixture.base.questionId, 3n * unit)
 			const snapshot = { ...(await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })), collateral: { symbol: 'WETH', decimals: 18 } }
 			const original = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })
 			const source = original.positions[0]
 			if (source === undefined) throw new Error('Missing distressed position')
+			expect(source.liquidationStarted).toBe(initialSource.liquidationStarted)
+			expect(snapshot.timestamp - source.liquidationStarted).toBeGreaterThanOrEqual(3600n)
+			expect(snapshot.priceValid).toBe(true)
+			expect(snapshot.timestamp).toBeLessThan(snapshot.priceValidUntil)
 			const backend = { ...createFakeBackend({ accountAddress: keeper.account.address }), createReadClient: () => keeper }
 			installActiveEnvironmentForTesting(backend, backend)
 			let submitted = false

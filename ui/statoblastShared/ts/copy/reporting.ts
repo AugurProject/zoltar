@@ -129,7 +129,7 @@ export const reminderSummary = (title: string) => `Check escalation: ${title}`
 export const deadlineMoved = (deadline: string) => `The response window now ends ${deadline} because a new report was added. Your status may have changed.`
 export const explainerTitle = 'How the escalation game works'
 export const explainerFirstReport = (bond: string) => `Put REP behind the outcome you believe is correct. The first report must be at least ${bond} REP.`
-export const explainerCompetition = 'Other reporters can overtake your side. Each new report can extend the response window, up to 7 weeks after the game starts.'
+export const explainerCompetition = 'Other reporters can overtake your side. Each new report can extend the response window, up to 7 weeks after the game starts, and a change of leader always leaves at least 3 days to respond.'
 export const explainerResolution = 'When the response window ends, the side with the most REP wins. Winning deposits get their REP back, and eligible early deposits may also earn a reward; losing deposits are lost.'
 export const explainerForkLead = 'If two sides both reach the '
 export const formatExplainerForkThresholdSeparator = (threshold: string) => ` (${threshold} REP), the game stops and a `
@@ -174,6 +174,7 @@ export const depositDeadlinePreview = (deadline: string, extension: string, unch
 
 export const dismissReminderUpdate = 'Dismiss'
 
+export const reportBelowRequiredSupport = (minimum: string, requiredSupport: string) => `Enter at least ${minimum}. This side must reach the current required support of ${requiredSupport}.`
 export const responseWindowEndsTooSoon = 'The response window ends too soon to report. Wait for the result.'
 
 export const recoverySource = 'Reporter recovery'

@@ -60,7 +60,7 @@ function isPreactSignalType(type: ts.Type): boolean {
 	if (valueProperty === undefined) return false
 
 	const declarations = valueProperty.getDeclarations()
-	return declarations !== undefined && declarations.some(isPreactSignalDeclaration)
+	return declarations?.some(isPreactSignalDeclaration) ?? false
 }
 
 function formatExpression(sourceFile: ts.SourceFile, node: ts.Node): string {
@@ -102,36 +102,44 @@ function findSignalComparisonFindings(sourceFile: ts.SourceFile, checker: ts.Typ
 	return findings
 }
 
-const configPath = ts.findConfigFile(projectRoot, ts.sys.fileExists, 'tsconfig.json')
-if (configPath === undefined) {
-	console.log('Unable to find tsconfig.json.')
-	process.exit(1)
+/** @internal Exported for the lint's own tests. */
+export const inspectSignalComparisons = (program: ts.Program): SignalComparisonFinding[] => {
+	const checker = program.getTypeChecker()
+	return program
+		.getSourceFiles()
+		.filter(shouldCheckSourceFile)
+		.flatMap(sourceFile => findSignalComparisonFindings(sourceFile, checker))
 }
 
-const configFile = ts.readConfigFile(configPath, ts.sys.readFile)
-if (configFile.error !== undefined) {
-	console.log(ts.formatDiagnosticsWithColorAndContext([configFile.error], formatDiagnosticsHost))
-	process.exit(1)
-}
-
-const parsedConfig = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath), undefined, configPath)
-if (parsedConfig.errors.length > 0) {
-	console.log(ts.formatDiagnosticsWithColorAndContext(parsedConfig.errors, formatDiagnosticsHost))
-	process.exit(1)
-}
-
-const program = ts.createProgram(parsedConfig.fileNames, parsedConfig.options)
-const checker = program.getTypeChecker()
-const findings = program
-	.getSourceFiles()
-	.filter(shouldCheckSourceFile)
-	.flatMap(sourceFile => findSignalComparisonFindings(sourceFile, checker))
-
-if (findings.length > 0) {
-	console.log('Signal wrappers must not be compared directly to undefined or null. Compare the signal value instead.')
-	for (const finding of findings) {
-		console.log(`${finding.file}:${finding.line}:${finding.column} - ${finding.expression}`)
+function createRepositoryProgram(): ts.Program {
+	const configPath = ts.findConfigFile(projectRoot, ts.sys.fileExists, 'tsconfig.json')
+	if (configPath === undefined) {
+		throw new Error('Unable to find tsconfig.json.')
 	}
-	console.log(`\nFound ${findings.length} direct signal wrapper comparison(s).`)
-	process.exitCode = 1
+
+	const configFile = ts.readConfigFile(configPath, ts.sys.readFile)
+	if (configFile.error !== undefined) {
+		throw new Error(ts.formatDiagnosticsWithColorAndContext([configFile.error], formatDiagnosticsHost))
+	}
+
+	const parsedConfig = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath), undefined, configPath)
+	if (parsedConfig.errors.length > 0) {
+		throw new Error(ts.formatDiagnosticsWithColorAndContext(parsedConfig.errors, formatDiagnosticsHost))
+	}
+
+	return ts.createProgram(parsedConfig.fileNames, parsedConfig.options)
+}
+
+if (import.meta.main) {
+	const program = createRepositoryProgram()
+	const findings = inspectSignalComparisons(program)
+
+	if (findings.length > 0) {
+		console.log('Signal wrappers must not be compared directly to undefined or null. Compare the signal value instead.')
+		for (const finding of findings) {
+			console.log(`${finding.file}:${finding.line}:${finding.column} - ${finding.expression}`)
+		}
+		console.log(`\nFound ${findings.length} direct signal wrapper comparison(s).`)
+		process.exitCode = 1
+	}
 }

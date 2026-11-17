@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { latestAuctionCollateral } from './auction-collateral.ts'
 
 // Migration mints emit TransferSingle. Counting Migrate as another credit would
 // double count the child balance; the source remains held but becomes locked.
@@ -49,12 +50,20 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 	return { items: rows.slice(0, 250), truncated: rows.length > 250, basis: 'Canonical indexed ERC-1155 transfers; incomplete deployment history can yield partial balances. Migrated source shares are locked, and complete-set inventory is not a redemption quote.' }
 }
 
+// BidSettled credits a bidder's refund; RefundWithdrawn pays out the bidder's whole outstanding credit.
+// Refunds are amounts of the auction's immutable collateral token, so the latest tagged auction read that sampled it names their units.
 export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>
 	await sql`
-		SELECT auction_address, sum(CASE WHEN event_name = 'EthRefundCredited' THEN (event_data->>'amountAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
-		FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
-			AND event_name IN ('EthRefundCredited', 'PendingEthRefundWithdrawn') AND lower(event_data->>'bidder') = ${address}
-		GROUP BY auction_address ORDER BY auction_address LIMIT 251
+		SELECT refunds.auction_address, refunds.pending_atto_eth, ${latestAuctionCollateral(sql, chainId, snapshotBlock, sql`refunds.auction_address`)} AS collateral
+		FROM (
+			SELECT auction_address, sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
+			FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
+				AND event_name IN ('BidSettled', 'RefundWithdrawn') AND lower(event_data->>'bidder') = ${address}
+			GROUP BY auction_address
+			HAVING sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END) <> 0
+			ORDER BY auction_address LIMIT 251
+		) refunds
+		ORDER BY refunds.auction_address
 	`
 
 export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>

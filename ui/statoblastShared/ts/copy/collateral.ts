@@ -3,7 +3,6 @@ export const token = 'token'
 export const selector = 'Collateral token'
 export const weth = 'WETH'
 export const usdc = 'USDC'
-export const usdt = 'USDT'
 export const wallet = 'Wallet collateral'
 /** Why a collateral-funded action is blocked. Statoblast and Trading show the same reason for the same funding state. */
 export const fundingLoading = 'Loading collateral balance and approval.'
@@ -19,3 +18,12 @@ export const reportStake = (symbol: string) => amount('Report stake', symbol)
 export const minimumReportStake = (symbol: string) => amount('Minimum report stake', symbol)
 export const walletBalance = (symbol: string) => `Wallet ${symbol}`
 export const released = (symbol: string) => `Released ${symbol}`
+export const recoveryContribution = 'Recovery REP contribution'
+export const maximumRecoveryContribution = 'Maximum recovery REP contribution'
+export const insufficientRecoveryRep = 'Insufficient REP for the proportional recovery contribution.'
+export const recoveryApprovalRequired = 'Recovery REP approval required.'
+export const recoveryBudgetRequired = 'Set a maximum REP contribution that covers the quote.'
+export const recoveryFundingLoading = 'Loading recovery REP funding.'
+export const recoveryContributionHint = 'These complete sets include inherited REP. Your proportional contribution preserves existing holders’ backing.'
+export const approvalPending = 'Wait for the current approval to finish.'
+export const recoveryBudgetHint = 'The default includes 1% headroom and rounding for holding fees until inclusion. Only the current proportional REP contribution is transferred.'

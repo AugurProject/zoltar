@@ -1,4 +1,4 @@
-import { type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import type { Hash, PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
 import { resolveConfiguredRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'

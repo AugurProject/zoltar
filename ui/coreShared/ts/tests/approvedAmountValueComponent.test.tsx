@@ -33,6 +33,13 @@ describe('ApprovedAmountValue', () => {
 		expect(documentQueries.getByText('2.00 REP')).not.toBeNull()
 	})
 
+	test('supports exact precision for a finite recovery approval', async () => {
+		const amount = 2_020_000_000_000_000_001n
+		trackRendered(await renderIntoDocument(<ApprovedAmountValue precision='exact' value={amount} requiredAmount={amount} suffix='REP' units={18} />))
+		expect(document.body.querySelector('.currency-value')?.textContent).toBe('2.020000000000000001 REP')
+		expect(document.body.querySelector('.approval-sufficient')).not.toBeNull()
+	})
+
 	test('renders placeholder while value is unavailable', async () => {
 		trackRendered(await renderIntoDocument(<ApprovedAmountValue value={undefined} requiredAmount={1n} suffix='REP' units={18} />))
 

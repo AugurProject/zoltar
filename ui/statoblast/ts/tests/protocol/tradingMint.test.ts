@@ -1,26 +1,31 @@
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { createBlockWithTimestamp, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { createCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createBlockWithTimestamp, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createCompleteSetInSecurityPool, redeemSharesInSecurityPool, requireCanonicalPoolPortfolio } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
 
 /** A portfolio-backed pool with ample collateral, approvals, and mint capacity, no escalation game, and the given question end. */
-function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint) {
+function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint, recovery = { required: 0n, balance: 10n ** 21n, allowance: 10n ** 21n }) {
 	return {
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-				if (request.functionName === 'services') return portfolio
+				if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+				if (request.functionName === 'recoveryTokens') return pool
+				if (request.address === pool && request.functionName === 'balanceOf') return recovery.balance
+				if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
+				if (request.functionName === 'isPortfolio') return true
 				if (request.functionName === 'getPool') return pool
+				if (request.functionName === 'quoteMintRecoveryRep') return recovery.required
 				if (request.functionName === 'purchaseQuote') return [0n, 0n]
 				if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 				if (request.functionName === 'questionData') return pool
@@ -68,11 +73,15 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-				if (request.functionName === 'services') return portfolio
+				if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+				if (request.functionName === 'recoveryTokens') return pool
+				if (request.address === pool && request.functionName === 'balanceOf') return recovery.balance
+				if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'universeId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
+				if (request.functionName === 'isPortfolio') return true
 				if (request.functionName === 'shareToken' || request.functionName === 'securityPoolForker') return portfolio
 				pinned.push(request.blockNumber)
 				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
@@ -113,6 +122,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 		let walletBalance = 1_000n
 		let timestamp = 1n
 		let game = zeroAddress
+		let canonicalPortfolio = true
 		let plans: readonly TransactionPlanStep[] = []
 		const send = mock((request: { to?: unknown; data?: `0x${string}`; value?: bigint }) => {
 			expect(request.to).toBe(portfolio)
@@ -125,7 +135,10 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			...asWriteClient(
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-					if (request.functionName === 'services') return portfolio
+					if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+					if (request.functionName === 'recoveryTokens') return pool
+					if (request.address === pool && request.functionName === 'balanceOf') return recovery.balance
+					if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 					if (request.functionName === 'balanceOf') return walletBalance
 					if (request.functionName === 'allowance') return 10n ** 21n
 					reads.push(request.functionName)
@@ -138,6 +151,8 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return pool
 						case 'getSecurityPoolPortfolio':
 							return portfolio
+						case 'isPortfolio':
+							return canonicalPortfolio
 						case 'questionId':
 							return 7n
 						case 'universeId':
@@ -146,6 +161,8 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return mode === 'child pool' ? 0n : 1n
 						case 'getQuestionEndDate':
 							return 100n
+						case 'quoteMintRecoveryRep':
+							return 0n
 						case 'purchaseQuote':
 							expect(request.args).toEqual([1n, 7n, 100n])
 							return [quoteFee, 1n]
@@ -184,6 +201,11 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			timestamp = 1n
 			game = pool
 			await expect(validate()).rejects.toThrow('escalation starts')
+			// A portfolio the factory did not deploy is rejected before its collateral token or spender is read.
+			game = zeroAddress
+			canonicalPortfolio = false
+			await expect(validate()).rejects.toThrow('not deployed by the canonical factory')
+			await expect(createCompleteSetInSecurityPool(client, pool, 100n)).rejects.toThrow('not deployed by the canonical factory')
 			expect(send).toHaveBeenCalledTimes(1)
 		} else {
 			await expect(createCompleteSetInSecurityPool(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
@@ -191,3 +213,56 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 		}
 	})
 }
+
+test('a funded recovery purchase binds REP and rechecks funding before submission', async () => {
+	const recovery = { required: 5n, balance: 10n, allowance: 7n }
+	const recoveryAbi = parseAbi(['function createCompleteSetWithRecoveryRep(uint248,uint256,uint256,address,uint256,uint256,uint256)'])
+	const send = mock((request: { data?: `0x${string}` }) => {
+		if (request.data === undefined) throw new Error('Missing funded purchase calldata')
+		expect(decodeFunctionData({ abi: recoveryAbi, data: request.data }).args?.[6]).toBe(7n)
+	})
+	let steps: readonly TransactionPlanStep[] = []
+	const client = {
+		...mintClient(send, 10n, 100n, recovery),
+		onTransactionPlan: (value: readonly TransactionPlanStep[]) => {
+			steps = value
+		},
+		estimateGas: async () => 100_000n,
+	}
+	await createCompleteSetInSecurityPool(client, pool, 100n)
+	const validate = steps[0]?.validateBeforeSubmit
+	if (validate === undefined) throw new Error('Missing funded purchase validation')
+	await validate()
+	recovery.allowance = 0n
+	await expect(validate()).rejects.toThrow('Recovery REP approval required')
+	recovery.allowance = 7n
+	recovery.balance = 0n
+	await expect(validate()).rejects.toThrow('Insufficient REP')
+	recovery.balance = 10n
+	recovery.required = 6n
+	await validate()
+	recovery.required = 8n
+	await expect(validate()).rejects.toThrow('Recovery REP quote changed')
+	expect(send).toHaveBeenCalledTimes(1)
+})
+
+test('a pool portfolio is trusted only when the factory that registered the pool deployed it, at the requested block', async () => {
+	for (const scenario of [
+		{ recorded: portfolio, deployed: true, failure: undefined },
+		{ recorded: portfolio, deployed: false, failure: 'not deployed by the canonical factory' },
+		{ recorded: zeroAddress, deployed: true, failure: 'Question has no portfolio' },
+	]) {
+		const reads: unknown[] = []
+		const client = createMockReadClient(async request => {
+			reads.push([request.address, request.functionName, request.args, request.blockNumber])
+			if (request.functionName === 'getSecurityPoolPortfolio') return scenario.recorded
+			if (request.functionName === 'isPortfolio') return scenario.deployed
+			throw new Error(`Unexpected read ${request.functionName}`)
+		})
+		const result = requireCanonicalPoolPortfolio(client, pool, pool, 7n)
+		if (scenario.failure === undefined) expect(await result).toBe(portfolio)
+		else await expect(result).rejects.toThrow(scenario.failure)
+		// Only the factory is consulted; nothing is read from the portfolio itself.
+		expect(reads).toEqual([[pool, 'getSecurityPoolPortfolio', [pool], 7n], ...(scenario.recorded === zeroAddress ? [] : [[pool, 'isPortfolio', [portfolio], 7n]])])
+	}
+})

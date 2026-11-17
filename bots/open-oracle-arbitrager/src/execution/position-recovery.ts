@@ -5,7 +5,7 @@ import { decimalSignedEth, decimalWeth, parseDecimalWeth, parseSignedDecimalEth 
 import type { ExecutionRecord } from '#state/execution-record'
 import { formatTokenAmount } from '#monitoring/market-monitor'
 import { realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from '#core/position-accounting'
-import { type PositionRecord } from '#state/position-store'
+import type { PositionRecord } from '#state/position-store'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { calculateTrackedNetProfitEth } from '#core/strategy'
 import { receiptGasCost } from '#execution/transaction-tracker'

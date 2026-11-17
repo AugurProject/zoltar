@@ -38,9 +38,9 @@ interface ITwoWayConstantProductPair {
 	function tradingStatus() external view returns (TradingStatus status);
 	function quoteExactInput(bool yesForNo, uint256 amountIn) external view returns (uint256 amountOut, uint256 feeAmount);
 	function quoteExactOutput(bool yesForNo, uint256 amountOut) external view returns (uint256 amountIn, uint256 feeAmount);
-	function initialize(uint256 yesAmount, uint256 noAmount, uint256 minLiquidity, address recipient) external returns (uint256 liquidity);
-	function addLiquidity(uint256 maxYes, uint256 maxNo, uint256 minLiquidity, address recipient) external returns (uint256 yesUsed, uint256 noUsed, uint256 liquidity);
+	function initialize(uint256 yesAmount, uint256 noAmount, uint256 minLiquidity, address recipient, uint256 deadline) external returns (uint256 liquidity);
+	function addLiquidity(uint256 maxYes, uint256 maxNo, uint256 minLiquidity, address recipient, uint256 deadline) external returns (uint256 yesUsed, uint256 noUsed, uint256 liquidity);
 	function removeLiquidity(uint256 liquidity, uint256 minYes, uint256 minNo, address recipient, uint256 deadline) external returns (uint256 yesOut, uint256 noOut);
-	function swapExactInput(bool yesForNo, uint256 amountIn, uint256 minAmountOut, address recipient) external returns (uint256 amountOut, uint256 feeAmount);
-	function swapExactOutput(bool yesForNo, uint256 amountOut, uint256 maxAmountIn, address recipient) external returns (uint256 amountIn, uint256 feeAmount);
+	function swapExactInput(bool yesForNo, uint256 amountIn, uint256 minAmountOut, address recipient, uint256 deadline) external returns (uint256 amountOut, uint256 feeAmount);
+	function swapExactOutput(bool yesForNo, uint256 amountOut, uint256 maxAmountIn, address recipient, uint256 deadline) external returns (uint256 amountIn, uint256 feeAmount);
 }

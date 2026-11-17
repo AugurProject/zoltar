@@ -98,7 +98,7 @@ function state() {
 		inventoryAvailable: !safetyRecovery,
 		lastScanAt: safetyRecovery ? undefined : new Date(now - 8_000).toISOString(),
 		lastScannedBlock: 8_842_011n,
-		obligations: safetyRecovery ? [] : [{ blockers: [], dueAt: new Date(now + 42_000).toISOString(), ecosystem: 'open-oracle', id: 'obligation-1', label: 'Settle report 8124', operationId: 'open-oracle.settle', status: 'pending', updatedAt: new Date(now - 8_000).toISOString() }],
+		obligations: safetyRecovery ? [] : [{ blockers: [], expiresAt: new Date(now + 42_000).toISOString(), ecosystem: 'open-oracle', id: 'obligation-1', label: 'Settle report 8124', operationId: 'open-oracle.settle', status: 'pending', updatedAt: new Date(now - 8_000).toISOString() }],
 		paused,
 		pendingTransactions: safetyRecovery
 			? []

@@ -42,9 +42,8 @@ async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.ht
 	for (const key of globalKeys) previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
 	const environment = installDomEnvironment(url)
 	Object.defineProperty(environment.window, 'innerWidth', { configurable: true, value: viewportWidth, writable: true })
-	const windowValues = environment.window as unknown as Record<string, unknown>
 	for (const key of globalKeys) {
-		Object.defineProperty(globalThis, key, { configurable: true, value: windowValues[key], writable: true })
+		Object.defineProperty(globalThis, key, { configurable: true, value: Reflect.get(environment.window, key), writable: true })
 	}
 	const route = new URL(url).pathname.replace(/^.*\/docs\//, '')
 	const source = await Bun.file(`docs/${route}`).text()
@@ -433,7 +432,7 @@ test('the page outline marks the section under the header, and nothing above the
 		if (firstLink === undefined || secondLink === undefined || thirdLink === undefined) throw new Error('The page outline needs at least three sections')
 		const ids = [firstLink, secondLink, thirdLink].map(link => decodeURIComponent(link.hash.slice(1)))
 		const current = () => Array.from(document.querySelectorAll('.docs-outline-list a[aria-current="location"]')).map(link => link.getAttribute('href'))
-		ids.forEach((id, index) => headingTops.set(id, 500 + index * 600))
+		for (const [index, id] of ids.entries()) headingTops.set(id, 500 + index * 600)
 		window.dispatchEvent(new Event('scroll'))
 		await Bun.sleep(30)
 		expect(current()).toEqual([])

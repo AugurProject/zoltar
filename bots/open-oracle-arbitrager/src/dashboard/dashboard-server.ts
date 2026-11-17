@@ -1,6 +1,6 @@
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import type { DeploymentSettings } from '#config/deployment-settings'
-import { type StoredCentralizedMarketSettings, type StoredRuntimeLimits } from '#config/settings-store'
+import type { StoredCentralizedMarketSettings, StoredRuntimeLimits } from '#config/settings-store'
 import { CONFIGURATION_REVISION_CONFLICT } from '@zoltar/bot-shared/config/durable-file'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
@@ -227,7 +227,7 @@ function renderReference(documents: readonly string[]) {
 			return `href="${typeof fragment === 'string' ? fragment : `#${titleId}`}"`
 		})
 		.replaceAll('href="../README.md', `href="${SHARED_BOT_GUIDE_URL}`)
-		.replace(/<a href="(https?:\/\/[^\"]+)"([^>]*)>/g, (_match, ...captures) => {
+		.replace(/<a href="(https?:\/\/[^"]+)"([^>]*)>/g, (_match, ...captures) => {
 			const [href, attributes] = captures
 			if (typeof href !== 'string' || typeof attributes !== 'string') throw new Error('README external link render was malformed')
 			const safeAttributes = attributes.replace(/\s+target="[^"]*"/g, '').replace(/\s+rel="[^"]*"/g, '')

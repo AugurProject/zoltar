@@ -96,6 +96,41 @@ test('portfolio lifecycle needs only REP approval, deposit and bounded acquisiti
 	expect(fixtureValue.calls).toHaveLength(3)
 })
 
+test('a healing cure is one transaction that asks for no award, consents to no exposure and leaves takeover funding recorded', async () => {
+	const fixtureValue = fixture()
+	const { observation } = fixtureValue
+	const position = observation.positions[0]
+	if (position === undefined) throw new Error('Fixture position missing')
+	// Two targets; the spare covers either deficit but not both, so curing the first opens the second.
+	position.rep = 100n * unit
+	observation.positions.push({ ...position, id: 2n })
+	observation.snapshot.totalCommitmentAttoEth = 200n * unit
+	observation.snapshot.demandAttoEth = 195n * unit
+	await fixtureValue.run()
+	expect(fixtureValue.calls).toHaveLength(1)
+	const call = fixtureValue.calls[0]
+	if (call === undefined) throw new Error('Missing cure')
+	expect(decodeFunctionData({ abi, data: call.data })).toMatchObject({
+		functionName: 'takeOverWithBounds',
+		args: [1n, 100n * unit, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
+	})
+	expect(call.label).toBe('Cure portfolio position 1 without an award')
+	expect(call.portfolioFunding).toBeUndefined()
+	// If the spare is gone before signing, the target is a paid takeover and the cure is not sent.
+	const drifted = fixture()
+	const target = drifted.observation.positions[0]
+	if (target === undefined) throw new Error('Fixture position missing')
+	target.rep = 100n * unit
+	drifted.observation.positions.push({ ...target, id: 2n })
+	drifted.observation.snapshot.totalCommitmentAttoEth = 200n * unit
+	drifted.observation.snapshot.demandAttoEth = 195n * unit
+	drifted.setMutation(() => {
+		drifted.observation.snapshot.demandAttoEth = 200n * unit
+	})
+	await expect(drifted.run()).rejects.toThrow('changed before submission')
+	expect(drifted.calls).toHaveLength(0)
+})
+
 test('post-approval revalidation rejects deteriorated collateral, stale price epoch, or policy changes before signing', async () => {
 	const changed = fixture()
 	changed.setMutation(() => {
@@ -114,7 +149,19 @@ test('post-approval revalidation rejects deteriorated collateral, stale price ep
 	await expect(stopped.run()).rejects.toThrow('disabled')
 	expect(stopped.calls).toHaveLength(0)
 	const recovery = fixture()
-	recovery.state.pendingStagedOperations.push({ coordinator: recovery.observation.snapshot.capitalLedger, operationId: 1n, queuedBlock: 1n, target: recovery.observation.snapshot.owner })
+	recovery.state.pendingTransactions.push({
+		hash: `0x${'ab'.repeat(32)}`,
+		kind: 'deposit',
+		label: 'Pending deposit',
+		maxBlockNumber: 120n,
+		mode: 'public',
+		nonce: 1n,
+		receiptExpectation: { type: 'transaction' },
+		requiresMarketEvidence: false,
+		sender: recovery.observation.snapshot.owner,
+		serializedTransaction: '0x',
+		submissionBlock: 1n,
+	})
 	await expect(recovery.run()).rejects.toThrow('recovery')
 	expect(recovery.calls).toHaveLength(0)
 })

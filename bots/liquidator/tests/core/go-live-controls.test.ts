@@ -151,15 +151,14 @@ describe('liquidator go-live controls', () => {
 		expect(fixture.settings().privateKey).toBeUndefined()
 	})
 
-	test('retains staged recovery and blocks clearing or replacing its signer', async () => {
-		const fixture = controls({ ...settings, privateKey: keyA }, [])
-		const operations = [{ coordinator: sender, operationId: 1n, queuedBlock: 2n, target: sender }]
-		fixture.state.pendingStagedOperations = operations
+	test('retains pending transaction recovery and blocks clearing or replacing its signer', async () => {
+		const pending = [{ ...pendingIntent('public'), sender: privateKeyToAccount(keyA).address }]
+		const fixture = controls({ ...settings, privateKey: keyA }, pending)
 		for (const privateKey of ['', keyB]) {
 			await expect(fixture.controller.setSigner({ privateKey, rememberSigner: true })).rejects.toThrow('recovery')
 		}
 		expect(fixture.events).toEqual([])
-		expect(fixture.state.pendingStagedOperations).toBe(operations)
+		expect(fixture.state.pendingTransactions).toBe(pending)
 	})
 
 	test('cannot clear a live signer and does not expose keys in rejection messages', async () => {
@@ -240,24 +239,11 @@ describe('liquidator go-live controls', () => {
 		expect(fixture.state.pendingTransactions).toBe(pending)
 	})
 
-	test('does not restore a pending signer while live and unpaused or while staged recovery remains', async () => {
+	test('does not restore a pending signer while live and unpaused', async () => {
 		const pending = [{ ...pendingIntent('public'), sender: privateKeyToAccount(keyB).address }]
 		const live = controls({ ...settings, paused: false, privateKey: keyA, runtime: { ...settings.runtime, execute: true } }, pending)
 		await expect(live.controller.setSigner({ privateKey: keyB, rememberSigner: true })).rejects.toThrow('recovery')
 		expect(live.events).toEqual([])
-		const staged = controls({ ...settings, privateKey: keyA }, pending)
-		staged.state.pendingStagedOperations = [{ coordinator: sender, operationId: 1n, queuedBlock: 2n, target: sender }]
-		await expect(staged.controller.setSigner({ privateKey: keyB, rememberSigner: true })).rejects.toThrow('recovery')
-		expect(staged.events).toEqual([])
-	})
-
-	test('restores a missing signer for read-only staged-outcome recovery', async () => {
-		const fixture = controls({ ...settings, privateKey: undefined }, [])
-		const operations = [{ coordinator: sender, operationId: 1n, queuedBlock: 2n, target: sender }]
-		fixture.state.pendingStagedOperations = operations
-		await fixture.controller.setSigner({ privateKey: keyB, rememberSigner: false })
-		expect(fixture.active()).toBe(keyB)
-		expect(fixture.state.pendingStagedOperations).toBe(operations)
 	})
 
 	test('keeps the delivery mode of a pending intent until recovery resolves it', async () => {

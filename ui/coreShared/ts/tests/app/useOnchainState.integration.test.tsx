@@ -17,6 +17,7 @@ import type { ChainBackend, ReadClient } from '../../wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE, createSimulationProfile, type NetworkProfile } from '../../wallet/networkProfile.js'
 import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { testDouble } from '../testUtils/testDouble.js'
 
 const FAKE_WETH_ADDRESS = '0x0000000000000000000000000000000000000ee1' as const
 
@@ -46,13 +47,13 @@ type BackendSubscriptionState = {
 }
 
 function createReadClient({ ethBalanceAttoEth = 0n, blockNumber = 10n, blockTimestamp = BigInt(Math.floor(Date.now() / 1000)) }: { ethBalanceAttoEth?: bigint; blockNumber?: bigint; blockTimestamp?: bigint } = {}) {
-	return {
+	return testDouble<ReadClient>({
 		getBalance: async () => ethBalanceAttoEth,
 		getBlock: async () => ({ number: blockNumber, timestamp: blockTimestamp }),
 		getChainId: async () => 1,
 		readContract: async () => 0n,
 		getCode: async () => '0x',
-	} as unknown as ReadClient
+	})
 }
 
 function createBackend({
@@ -894,7 +895,7 @@ describe('useOnchainState (integration)', () => {
 
 	test('reports chain-clock read failures and clears block and timestamp data', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a4')
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			getBalance: async () => 123n,
 			getBlock: async () => {
 				const error = new Error('block RPC failed')
@@ -903,7 +904,7 @@ describe('useOnchainState (integration)', () => {
 			},
 			readContract: async () => 0n,
 			getCode: async () => '0x',
-		} as unknown as ReadClient
+		})
 		const { backend } = createBackend({
 			accountAddress: account,
 			readClient,
@@ -943,12 +944,12 @@ describe('useOnchainState (integration)', () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a5')
 		let currentBlockNumber = 10n
 		let currentTimestamp = 20n
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			getBalance: async () => 123n,
 			getBlock: async () => ({ number: currentBlockNumber, timestamp: currentTimestamp }),
 			readContract: async () => 0n,
 			getCode: async () => '0x',
-		} as unknown as ReadClient
+		})
 		const { backend, subscriptionState } = createBackend({
 			accountAddress: account,
 			readClient,
@@ -1146,7 +1147,7 @@ describe('useOnchainState (integration)', () => {
 
 	test('keeps simultaneous deployment, ETH, and WETH failures distinct', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a9')
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			getBalance: async () => {
 				throw new Error('eth RPC failed')
 			},
@@ -1154,7 +1155,7 @@ describe('useOnchainState (integration)', () => {
 			getChainId: async () => 1,
 			readContract: async () => 0n,
 			getCode: async () => '0x',
-		} as unknown as ReadClient
+		})
 		const { backend } = createBackend({ accountAddress: account, readClient })
 		const dependencies = createOnchainStateDependencies({
 			loadDeploymentStatusOracleSnapshot: async () => {
@@ -1179,13 +1180,13 @@ describe('useOnchainState (integration)', () => {
 
 	test('neither reads nor reports WETH for an application that does not use it', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a9')
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			getBalance: async () => 7n,
 			getBlock: async () => ({ number: 1n, timestamp: 2n }),
 			getChainId: async () => 1,
 			readContract: async () => 0n,
 			getCode: async () => '0x',
-		} as unknown as ReadClient
+		})
 		const { backend } = createBackend({ accountAddress: account, readClient })
 		const loadErc20Balance = mock(async () => {
 			throw new Error('weth RPC failed')
@@ -1649,7 +1650,7 @@ describe('useOnchainState (integration)', () => {
 		let blockNumber = 100n
 		let blockTimestamp = 200n
 		let getBlockCalls = 0
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			getBalance: async () => ethBalanceAttoEth,
 			getBlock: async () => {
 				getBlockCalls += 1
@@ -1658,7 +1659,7 @@ describe('useOnchainState (integration)', () => {
 			getChainId: async () => 1,
 			readContract: async () => 0n,
 			getCode: async () => '0x',
-		} as unknown as ReadClient
+		})
 		const { backend } = createBackend({
 			accountAddress: account,
 			readClient,
@@ -2060,7 +2061,7 @@ describe('useOnchainState (integration)', () => {
 		const watcher = trackBlockWatcherStarts()
 		const account = getAddress('0x00000000000000000000000000000000000000a7')
 		let getBlockCalls = 0
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			getBalance: async () => 321n,
 			getBlock: async () => {
 				getBlockCalls += 1
@@ -2069,7 +2070,7 @@ describe('useOnchainState (integration)', () => {
 			getChainId: async () => 1,
 			readContract: async () => 0n,
 			getCode: async () => '0x',
-		} as unknown as ReadClient
+		})
 		const { backend } = createBackend({
 			accountAddress: account,
 			isBootstrapped: true,
@@ -2116,13 +2117,13 @@ describe('useOnchainState (integration)', () => {
 	test('invalidates an in-flight chain-clock read when clock loading is disabled', async () => {
 		const block = createDeferred<{ number: bigint; timestamp: bigint }>()
 		const account = getAddress('0x00000000000000000000000000000000000000a8')
-		const readClient = {
+		const readClient = testDouble<ReadClient>({
 			getBalance: async () => 321n,
 			getBlock: async () => await block.promise,
 			getChainId: async () => 1,
 			readContract: async () => 0n,
 			getCode: async () => '0x',
-		} as unknown as ReadClient
+		})
 		const { backend } = createBackend({ accountAddress: account, readClient })
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,

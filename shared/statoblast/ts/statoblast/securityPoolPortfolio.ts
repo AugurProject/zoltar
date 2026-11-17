@@ -1,5 +1,5 @@
 export { portfolioTakeoverSource } from './securityPoolPortfolioTakeover.js'
-import { type Abi, type Address, type Hex, encodeDeployData, encodeFunctionData, isAddress, isHex, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { type Address, type Hex, encodeAbiParameters, encodeFunctionData, isAddress, isHex, getAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
 export type PortfolioOriginConfig = {
 	collateralToken: Address
@@ -15,17 +15,6 @@ export type PortfolioEconomicsConfig = {
 	minimumCommitmentAttoEth: bigint
 	minimumOutcomeRate: bigint
 	rewardVestingSeconds: bigint
-}
-export type PortfolioDeployers = {
-	capital: Address
-	commitments: Address
-	fees: Address
-	books: Address
-	settlement: Address
-	reporters: Address
-	forks: Address
-	services: Address
-	auctions: Address
 }
 
 function uint(value: bigint, bits: number, label: string) {
@@ -43,8 +32,16 @@ export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
 	if (config.minimumOutcomeRate === 0n || config.minimumOutcomeRate > 10n ** 18n) throw new Error('Minimum outcome exchange rate must be positive and at most one.')
 }
 
-/** Compiled artifacts are injected so this SDK does not depend on generated contracts. */
-export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; origin: PortfolioOriginConfig; maximumQuestionHorizonSeconds: bigint; deployers: PortfolioDeployers; questionAdmissionPolicy: Address; economics: PortfolioEconomicsConfig; artifact: { abi: Abi; bytecode: Hex } }) {
+const portfolioFactoryAbi = parseAbi(['function deployPortfolio(bytes creationCode, bytes configuration) returns (address portfolio)'])
+// Every member is a static word, so the constructor's two structs encode exactly as this flat list.
+const portfolioConfigurationParameters = parseAbiParameters('address, uint256, uint248, uint256, uint256, uint256, address, uint256, uint256, uint256, uint256, uint256, uint48')
+
+/**
+ * The canonical factory deploys every portfolio from its pinned creation code and module deployers, so the creator
+ * supplies only the configuration. `creationCode` is the linked portfolio creation code; it is injected so this SDK
+ * does not depend on generated contracts, and the factory rejects any other code.
+ */
+export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; origin: PortfolioOriginConfig; maximumQuestionHorizonSeconds: bigint; questionAdmissionPolicy: Address; economics: PortfolioEconomicsConfig; creationCode: Hex }) {
 	address(parameters.origin.collateralToken, 'Collateral token')
 	uint(parameters.origin.minimumReportCollateral, 128, 'Report collateral floor')
 	if (parameters.origin.minimumReportCollateral === 0n) throw new Error('Report collateral floor must be positive.')
@@ -56,11 +53,39 @@ export function buildPortfolioDeploymentRequest(parameters: { owner: Address; fa
 	if (parameters.origin.securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 10500 BPS.')
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas === 0n) throw new Error('Report priority fee must be positive.')
 	address(parameters.questionAdmissionPolicy, 'Question admission policy')
-	for (const [name, value] of Object.entries(parameters.deployers)) address(value, `${name} deployer`)
 	uint(parameters.maximumQuestionHorizonSeconds, 48, 'Question horizon')
 	if (parameters.maximumQuestionHorizonSeconds === 0n) throw new Error('Question horizon must be positive.')
 	validatePortfolioEconomics(parameters.economics)
-	return { account: parameters.owner, data: encodeDeployData({ abi: parameters.artifact.abi, bytecode: parameters.artifact.bytecode, args: [parameters.factory, parameters.origin, parameters.maximumQuestionHorizonSeconds, parameters.deployers, parameters.questionAdmissionPolicy, parameters.economics] }) }
+	if (!isHex(parameters.creationCode, { strict: true }) || parameters.creationCode.length <= 2 || parameters.creationCode.length % 2 !== 0) throw new Error('Portfolio creation code must contain whole hexadecimal bytes.')
+	const { origin, economics } = parameters
+	const configuration = encodeAbiParameters(portfolioConfigurationParameters, [
+		origin.collateralToken,
+		origin.minimumReportCollateral,
+		origin.universeId,
+		origin.securityMultiplierBps,
+		origin.reportPriorityFeeAttoEthPerGas,
+		parameters.maximumQuestionHorizonSeconds,
+		parameters.questionAdmissionPolicy,
+		economics.purchaseFeeBps,
+		economics.annualFeeBps,
+		economics.minimumPurchaseFeeAttoEth,
+		economics.minimumCommitmentAttoEth,
+		economics.minimumOutcomeRate,
+		economics.rewardVestingSeconds,
+	])
+	return { account: parameters.owner, to: parameters.factory, value: 0n, data: encodeFunctionData({ abi: portfolioFactoryAbi, functionName: 'deployPortfolio', args: [parameters.creationCode, configuration] }) }
+}
+
+const portfolioDeployedTopic = toEventSelector(parseAbiItem('event PortfolioDeployed(address indexed portfolio, address indexed creator)'))
+
+/** The portfolio a factory deployment transaction created, read from that factory's own event. */
+export function portfolioAddressFromDeploymentLogs(logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[], factory: Address): Address {
+	for (const log of logs) {
+		const portfolioTopic = log.topics[1]
+		if (log.address.toLowerCase() !== factory.toLowerCase() || log.topics[0] !== portfolioDeployedTopic || portfolioTopic === undefined) continue
+		return getAddress(`0x${portfolioTopic.slice(26)}`)
+	}
+	throw new Error('Portfolio deployment event is missing.')
 }
 
 /** Each call completes one immutable setup stage; anyone can resume an interrupted setup. */
@@ -96,7 +121,8 @@ export {
 /** @public Explicitly bounded commitment takeovers for external keeper implementations. */
 export { buildPortfolioCapitalTakeOverRequest } from './securityPoolPortfolioCapital.js'
 export { buildPortfolioCapitalTakeOverWithBoundsRequest } from './securityPoolPortfolioCapital.js'
-export { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
+export { buildPortfolioCapitalCureRequest } from './securityPoolPortfolioCapital.js'
+export { buildPortfolioMintRequest, loadPortfolioMintQuote, portfolioRecoveryMintBudget, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
 /** @public External clients can register an admitted question independently of purchasing shares. */
 export { buildPortfolioAddQuestionRequest } from './securityPoolPortfolioMint.js'
 export {
@@ -112,6 +138,8 @@ export {
 /** @public Schemas for external clients that attach owner operations to price reports. */
 export type { PortfolioReportOperation, PortfolioReportOperations } from './securityPoolPortfolioPrice.js'
 export {
+	MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS,
+	PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS,
 	buildPortfolioPriceOperationsRequest,
 	loadPortfolioPriceSnapshot,
 	quotePortfolioPriceFunding,

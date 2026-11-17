@@ -86,7 +86,7 @@ export function operationInputCoverage(definition: Pick<OperationDefinition, 'id
 	if (methods.length === 0 && definition.method !== 'fallback') throw new Error(`Missing canonical argument coverage for ${definition.id}`)
 	for (const method of methods)
 		if (method.type === 'function') {
-			;(method.inputs ?? []).forEach((parameter, index) => visit(parameter, `args.${index}`, ''))
+			for (const [index, parameter] of (method.inputs ?? []).entries()) visit(parameter, `args.${index}`, '')
 			if (method.stateMutability === 'payable') add('ETH value', 'uint256', 'value')
 		}
 	if (definition.method === 'fallback') result.push({ label: 'Deployment bytecode and constructor', type: 'bytes', source: 'derived', reason: 'Uses the verified build and configured deployment dependencies.' })

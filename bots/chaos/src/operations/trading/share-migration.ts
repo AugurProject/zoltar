@@ -21,7 +21,7 @@ function shareMigrationPoolReady(pool: PoolSnapshot, forkTime: string) {
 
 function shareMigrationRouteAvailability(pool: PoolSnapshot, targetOutcome: string): { deadline?: bigint } | undefined {
 	const preparation = pool.childPoolPreparations[targetOutcome]
-	return preparation !== undefined && preparation.branchReady && preparation.childPool !== zeroAddress && preparation.historyReady ? {} : undefined
+	return preparation?.branchReady && preparation.childPool !== zeroAddress && preparation.historyReady ? {} : undefined
 }
 
 function shareMigrationRoutes(snapshot: EcosystemSnapshot): ShareMigrationRoute[] {

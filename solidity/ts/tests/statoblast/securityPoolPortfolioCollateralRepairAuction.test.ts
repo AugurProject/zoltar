@@ -95,7 +95,11 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		const bookId = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [context.child] })
 		expect((await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [bookId] }))[0]).toBe(10n * unit)
 		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'recoveryRep', args: [bookId] })).toBe(1_000n * unit - 30n * unit)
-		expect(await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'availableMintCapacity', args: [context.child] })).toBe(0n)
+		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'isCashFunded', args: [bookId] })).toBe(true)
+		expect(await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'availableMintCapacity', args: [context.child] })).toBe(195n * unit)
+		await expect(context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'quoteMintRecoveryRep', args: [context.child, fixture.base.questionId, unit] })).rejects.toThrow('Settlement mint closed')
+		expect(await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'quoteMintRecoveryRep', args: [context.child, fixture.secondQuestionId, unit] })).toBe(0n)
+		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.base.questionId, 10n * unit] })).toBe(970n * unit)
 		await approveToken(context.owner, context.token, first.vault)
 		const deposit = buildPortfolioAuctionVaultDepositRequest({ bidder: context.owner.account.address, vault: first.vault, capitalLedger: context.capital, amountAttoRep: unit, targetHealthFactorBps: 12_000n })
 		await writeContractAndWait(context.owner, () => context.owner.sendTransaction(deposit))
@@ -168,12 +172,29 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [loser.id] })).resolves.toMatchObject({ materialized: false, principal: 0n })
 	})
 
-	test('missing a closing quote refunds bid ETH', async () => {
+	test('the opening quote, expired by the deadline, still closes the sale', async () => {
+		const context = await prepare()
+		await context.report()
+		await context.open()
+		const bid = await context.bid(context.other, 2n)
+		// No report follows the opening one, so no price is valid at the deadline.
+		await context.mock.setTime(context.deadline)
+		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'priceValidUntil' })).toBeLessThan(context.deadline)
+		await context.finalize()
+		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(2n)
+	})
+
+	test('a closing price the inventory cannot back fills nothing and refunds bid ETH', async () => {
 		const context = await prepare()
 		await context.report()
 		await context.open()
 		const before = await context.balance(context.other.account.address)
 		const bid = await context.bid(context.other, 2n)
+		// At 2,000 REP per ETH one lot needs more REP than the whole inventory holds.
+		await addRepToMigrationBalance(context.owner, context.source, 30_000n * unit)
+		await splitMigrationRep(context.owner, context.source, 30_000n * unit, [1])
+		await approveToken(context.owner, context.token, context.feed)
+		await context.closingQuote(2_000n * unit)
 		await context.finalize()
 		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(0n)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [bid.id] }))

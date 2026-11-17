@@ -1,5 +1,6 @@
 import { demoTradingActivity } from '../demo-fixtures.ts'
-import { demoHash } from './chain-fixtures.ts'
+import { demoCapitalDetail } from './capital-fixtures.ts'
+import { demoAddress, demoHash } from './chain-fixtures.ts'
 import type { DemoEnvironment } from './environment.ts'
 import { demoOperations } from './operations.ts'
 
@@ -31,6 +32,11 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 				hasMore: false,
 			}
 		return { items: [item], limit: 100, hasMore: continuationFixture, ...(continuationFixture ? { nextCursor: 'demo-detail-older' } : {}) }
+	}
+	if (domain === 'capital') {
+		const detail = demoCapitalDetail(identity[0] ?? '', identity[1] ?? '', operations.asOf.blockNumber, operations.asOf.blockHash)
+		if (detail === undefined) throw new Error('404 Capital position not found')
+		return { chainId, asOf: operations.asOf, data: detail }
 	}
 	if (domain === 'reports') {
 		const report = operations.data.reports.find(item => item.open_oracle_address.toLowerCase() === identity[0]?.toLowerCase() && item.report_id === identity[1])
@@ -64,7 +70,17 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		const coordinatorDecisions = request.searchParams.has('decisionCursor')
 			? { items: [{ ...coordinatorDecision, event_name: 'PendingReportRecovered' }], limit: 100, hasMore: false }
 			: {
-					items: [coordinatorDecision],
+					// The report's escrow, not the feed, emits the completion.
+					items: [
+						{
+							event_name: 'ReportCompleted',
+							summary: `ReportCompleted · reportId=${identity[1]} · priceFeed=${coordinatorDecision.emitter_address} · accepted=false`,
+							arguments: { reportId: identity[1], priceFeed: coordinatorDecision.emitter_address, accepted: false },
+							emitter_address: '0x8888888888888888888888888888888888888888',
+							block_number: operations.asOf.blockNumber,
+						},
+						coordinatorDecision,
+					],
 					limit: 100,
 					hasMore: context.pageUrl.searchParams.get('decisionMore') === '1',
 					...(context.pageUrl.searchParams.get('decisionMore') === '1' ? { nextCursor: 'demo-decision-older' } : {}),
@@ -114,22 +130,37 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		}
 	}
 	if (domain === 'auctions') {
-		const bid = evidence('BidSubmitted', { bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', tick: '14', bidAmountAttoEth: (3n * 10n ** 18n).toString() })
+		const auctionCollateral = { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 }
+		const bid = evidence('BidSubmitted', { bidId: '1', bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', vault: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', lots: '3', minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), targetHealthBps: '12000' })
 		return {
 			chainId,
 			asOf: operations.asOf,
 			data: {
 				identity: identity[0],
-				snapshot: {
-					entity_identity: identity[0],
-					block_number: operations.asOf.blockNumber,
-					read_status: 'success',
-					source_method: 'auctionState(), computeClearing()',
-					read_result: { finalized: true, clearingTick: '14', attoEthRaised: '3000000000000000000', totalAttoRepPurchased: String(12000000000000000000n), computeClearing: { tick: '14', funded: true } },
-				},
-				finalization: evidence('AuctionFinalized', { clearingTick: '14', grossAcceptedAttoEth: String(3000000000000000000n), repSoldAttoRep: String(12000000000000000000n), funded: true }),
+				// `auctionSnapshot=failed` makes the latest tagged read a failure; the collateral token still comes from the earlier successful read.
+				snapshot:
+					context.pageUrl.searchParams.get('auctionSnapshot') === 'failed'
+						? { entity_identity: identity[0], block_number: operations.asOf.blockNumber, read_status: 'failed', source_method: 'augurscan.auction-state.v1', read_result: null, read_failure_reason: 'historical state unavailable' }
+						: {
+								entity_identity: identity[0],
+								block_number: operations.asOf.blockNumber,
+								read_status: 'success',
+								source_method: 'augurscan.auction-state.v1',
+								// The auction's collateral is 6-decimal USDC, so attoEth amounts are USDC base units.
+								read_result: {
+									collateral: auctionCollateral,
+									initialized: true,
+									finalized: true,
+									lotAttoEth: (10n ** 6n).toString(),
+									targetLots: '3',
+									bidCount: '1',
+									clearing: { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 6n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() },
+								},
+							},
+				collateral: auctionCollateral,
+				finalization: evidence('AuctionFinalized', { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 6n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() }),
 				demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
-				demandCurve: [{ tick: '14', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
+				demandCurve: [{ minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), lots: '3', cumulativeLots: '3', amountAttoEth: (3n * 10n ** 6n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 6n).toString() }],
 				events: evidencePage(bid),
 			},
 		}
@@ -137,7 +168,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 	if (domain === 'risk') {
 		const kind = parts[4]
 		const risk = operations.data.risk
-		const entity = kind === 'pools' ? risk.pools.find(item => item.pool_address.toLowerCase() === parts[6]?.toLowerCase()) : risk.vaults.find(item => item.pool_address.toLowerCase() === parts[6]?.toLowerCase() && item.vault_address.toLowerCase() === parts[7]?.toLowerCase())
+		const entity = kind === 'pools' ? risk.pools.find(item => item.pool_address.toLowerCase() === parts[6]?.toLowerCase()) : undefined
 		const offset = request.searchParams.has('cursor') ? 100 : 0
 		const historyMore = context.pageUrl.searchParams.get('riskHistoryMore') === '1'
 		const historyBlock = String(BigInt(operations.asOf.blockNumber) - BigInt(offset === 0 ? 5 : 500))
@@ -158,12 +189,10 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 			asOf: operations.asOf,
 			data: {
 				...(entity ?? {}),
-				approvalEvents: risk.approvalEvents,
 				history: {
 					stateSnapshots: [historyRecord('TaggedStateRead', 0)],
-					accountingSnapshots: [historyRecord('VaultAccountingCheckpoint', 1)],
-					lifecycleEvents: [historyRecord(offset === 0 ? 'VaultHealthChecked' : 'RepDepositedToVault', 2)],
-					liquidations: offset === 0 ? [] : [historyRecord('VaultLiquidated', 3)],
+					accountingSnapshots: [historyRecord('QuestionAccountingCheckpoint', 1)],
+					lifecycleEvents: [historyRecord(offset === 0 ? 'CompleteSetCreated' : 'EscalationGameSet', 2)],
 					limit: 100,
 					offset,
 					truncated: historyMore && offset === 0,
@@ -245,9 +274,11 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 				burned_atto_rep: '500000000000000000000',
 				migrator_count: 1,
 				child_count: 1,
-				pool_migration_events: 4,
-				obligations_initialized: 2,
-				obligations_materialized: 1,
+				portfolio_fork_events: 5,
+				branch_chooser_count: 2,
+				reporter_fork_frozen_count: 1,
+				reporter_migration_atto_rep: '1200000000000000000000',
+				reporter_protected_parent_atto_rep: '300000000000000000000',
 			},
 			branches: [{ child_universe_id: '1', outcome_index: '1', migrated_atto_rep: '4500000000000000000000', migrator_count: 1, migration_count: 1 }],
 			events: evidencePage(migration),

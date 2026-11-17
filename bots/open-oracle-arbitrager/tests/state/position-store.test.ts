@@ -109,6 +109,14 @@ describe('durable OpenOracle position journal', () => {
 		expect(await loadPositionJournalState(path, 1)).toEqual(saved)
 	})
 
+	test('archives the realized loss of an expired entry whose transaction later reverted', async () => {
+		const path = await journalPath()
+		const lateRevert = terminalPositionFixture(500, { expiredTransactionAttempts: [], realizedNetProfitEth: '-0.000021', status: 'expired-not-included' })
+		// Compaction keeps the first retained terminal records and archives the rest.
+		const saved = await saveTerminalJournal(path, [...Array.from({ length: 500 }, (_value, index) => terminalPositionFixture(index)), lateRevert])
+		expect(saved.archived).toMatchObject({ positionCount: 1, realizedNetProfitEth: '-0.000021' })
+	})
+
 	test('retains expired positions until every transaction attempt is impossible or reconciled', async () => {
 		const positions = [
 			...Array.from({ length: 500 }, (_value, index) => terminalPositionFixture(index)),

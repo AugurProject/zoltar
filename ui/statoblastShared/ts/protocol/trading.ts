@@ -1,15 +1,17 @@
+import { portfolioRecoveryMintBudget } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { loadRecoveryMintFunding } from './recoveryMintFunding.js'
 import { collateralPresentation } from './collateral.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { requireAddressValue, requireBigintValue } from './decoders.js'
 import { loadCentralPortfolioQuestion } from './securityPoolPortfolioState.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
-import { encodeFunctionData, getAddress, isAddress, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, getAddress, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
-import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { TradingActionResult, TradingDetails, TradingShareBalances } from '../types/contracts.js'
+import type { ReadClient, ReportingOutcomeKey, WriteClient, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ShareMigrationTarget, TradingActionResult, TradingDetails, TradingShareBalances } from '../types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { readSecurityPoolUniverseId } from './securityPoolActions.js'
@@ -24,12 +26,10 @@ type SecurityPoolMintCapacity = {
 	centralCheckpointTimestamp?: bigint
 	centralSettlement?: boolean
 	linearFee?: LinearFeeState
-	currentRetentionRate?: bigint
 	currentTimestamp?: bigint
 	/** An open escalation game closes minting, which is why `mintingCapacityAttoEth` then reads zero. */
 	escalationGameActive?: boolean
 	feeEndTimestamp?: bigint
-	feeIndexRemainder?: bigint
 	lastFeeCheckpointNativeTime?: bigint
 	settlementCollateralAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint
@@ -37,7 +37,6 @@ type SecurityPoolMintCapacity = {
 	shareTokenSupplyAttoShares: bigint
 	totalPoolHeldAttoRep: bigint
 	totalUnderwritingLimitAttoEth: bigint
-	totalFeesOwedRemainder?: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
 	const currentBlock = await client.getBlock()
@@ -57,14 +56,6 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 	return { ...central, currentTimestamp: currentBlock.timestamp, escalationGameActive, mintingCapacityAttoEth: escalationGameActive ? 0n : central.mintingCapacityAttoEth }
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
-	if (accountAddress === undefined) {
-		const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-		return {
-			maxRedeemableCompleteSetsAttoShares: undefined,
-			shareBalances: undefined,
-			universeId,
-		}
-	}
 	const [universeId, shareTokenAddress] = await readRequiredMulticall(client, [
 		{
 			address: securityPoolAddress,
@@ -79,6 +70,7 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 			args: [],
 		},
 	])
+	if (accountAddress === undefined) return { maxRedeemableCompleteSetsAttoShares: undefined, shareBalances: undefined, shareTokenAddress, universeId }
 	const shareBalancesResult = await client.readContract({
 		address: shareTokenAddress,
 		abi: statoblast_tokens_ShareToken_ShareToken.abi,
@@ -94,12 +86,25 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 	return {
 		maxRedeemableCompleteSetsAttoShares: getMinBigintValue([shareBalances.invalidAttoShares, shareBalances.yesAttoShares, shareBalances.noAttoShares]),
 		shareBalances,
+		shareTokenAddress,
 		universeId,
 	}
 }
+/**
+ * The portfolio the factory records for a pool, accepted only when that factory deployed it from its pinned
+ * creation code and module deployers. Its collateral token and spender are not read, and no approval is offered, otherwise.
+ */
+export async function requireCanonicalPoolPortfolio(client: Pick<ReadClient, 'readContract'>, factory: Address, pool: Address, blockNumber?: bigint) {
+	const block = blockNumber === undefined ? {} : { blockNumber }
+	const portfolio = getAddress(requireAddressValue(await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'getSecurityPoolPortfolio', args: [pool], ...block }), 'Portfolio'))
+	if (portfolio === zeroAddress) throw new Error('Question has no portfolio.')
+	if ((await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'isPortfolio', args: [portfolio], ...block })) !== true) throw new Error('Market portfolio was not deployed by the canonical factory.')
+	return portfolio
+}
+
 async function loadTradingCollateralIdentity(client: Pick<ReadClient, 'readContract'>, pool: Address, blockNumber?: bigint) {
 	const factory = await client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityPoolFactory', blockNumber })
-	const portfolio = requireAddressValue(await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'getSecurityPoolPortfolio', args: [pool], blockNumber }), 'Portfolio')
+	const portfolio = await requireCanonicalPoolPortfolio(client, factory, pool, blockNumber)
 	const [tokenValue, servicesValue] = await Promise.all([client.readContract({ address: portfolio, abi: purchaseAbi, functionName: 'collateralToken', blockNumber }), client.readContract({ address: portfolio, abi: purchaseAbi, functionName: 'services', blockNumber })])
 	const token = requireAddressValue(tokenValue, 'Collateral token')
 	const services = requireAddressValue(servicesValue, 'Collateral spender')
@@ -119,13 +124,20 @@ export async function loadTradingCollateral(client: ReadClient, pool: Address, o
 	const identity = cachedIdentity ?? (await loadTradingFundingIdentity(client, pool))
 	const { token, services } = identity
 	const [balance, allowance] = await Promise.all([client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] }), client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, services] })])
-	return { ...identity, balance, allowance }
+	return { ...identity, balance, allowance, owner }
 }
-export async function quoteTradingCollateral(client: ReadClient, collateral: Awaited<ReturnType<typeof loadTradingCollateral>>, amount: bigint) {
+export async function quoteTradingCollateral(client: ReadClient, collateral: Awaited<ReturnType<typeof loadTradingCollateral>>, amount: bigint, onRecoveryRequirement?: (required: bigint) => void) {
 	const { universeId, questionId } = collateral
-	const result = await client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] })
+	const [result, recoveryValue] = await Promise.all([
+		client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
+		client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
+	])
+	const required = requireBigintValue(recoveryValue, 'Recovery REP contribution')
+	portfolioRecoveryMintBudget(required)
+	onRecoveryRequirement?.(required)
+	const recovery = await loadRecoveryMintFunding(client, collateral.portfolio, universeId, collateral.owner, required)
 	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error('Invalid collateral fee quote.')
-	return { amount, maximumFee: (result[0] * 10_100n + 9_999n) / 10_000n }
+	return { amount, maximumFee: (result[0] * 10_100n + 9_999n) / 10_000n, recovery }
 }
 
 function getShareMigrationOutcomeValue(outcome: ReportingOutcomeKey) {
@@ -182,6 +194,30 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 		universeId,
 	} satisfies TradingActionResult
 }
+const SHARE_MIGRATION_SOURCE_OUTCOMES = ['invalid', 'yes', 'no'] as const
+/**
+ * Reads, in one multicall, each child universe's canonical pool in the source pool's share token and what `accountAddress`
+ * already migrated into it from each source outcome. `source` is the pool's already-loaded universe and share token.
+ */
+export async function loadShareMigrationTargets(client: Pick<ReadClient, 'multicall'>, source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, childUniverses: readonly Pick<ZoltarChildUniverseSummary, 'outcomeIndex' | 'universeId'>[], accountAddress: Address | undefined): Promise<ShareMigrationTarget[]> {
+	if (childUniverses.length === 0) return []
+	const { shareTokenAddress, universeId } = source
+	const canonicalPoolCalls = childUniverses.map(child => ({ address: shareTokenAddress, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'canonicalPoolByUniverse', args: [child.universeId] }))
+	const migratedAmountCalls =
+		accountAddress === undefined
+			? []
+			: childUniverses.flatMap(child => SHARE_MIGRATION_SOURCE_OUTCOMES.map(outcome => ({ address: shareTokenAddress, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'getMigratedShareAmountAttoShares', args: [getShareTokenId(universeId, outcome), child.universeId, accountAddress] })))
+	const results: readonly unknown[] = await readRequiredMulticall(client, [...canonicalPoolCalls, ...migratedAmountCalls])
+	return childUniverses.map((child, childIndex) => {
+		const canonicalPool = requireAddressValue(results[childIndex], 'canonical child pool')
+		const migrated = (outcomeOffset: number) => (accountAddress === undefined ? 0n : requireBigintValue(results[childUniverses.length + childIndex * SHARE_MIGRATION_SOURCE_OUTCOMES.length + outcomeOffset], 'migrated share amount'))
+		return {
+			canonicalPool: canonicalPool === zeroAddress ? undefined : canonicalPool,
+			migratedAttoShares: { invalidAttoShares: migrated(0), yesAttoShares: migrated(1), noAttoShares: migrated(2) },
+			outcomeIndex: child.outcomeIndex,
+		}
+	})
+}
 /** Migrates the wallet's whole balance of `shareOutcome`; `migratedAttoShares` is that balance, shown in the transaction review. */
 export async function migrateSharesFromUniverse<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: ReadWriteContractClient<TReceipt>, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[], migratedAttoShares?: bigint) {
 	const sortedTargetOutcomeIndexes = sortBigIntsAscending(targetOutcomeIndexes)
@@ -217,9 +253,12 @@ const purchaseAbi = parseAbi([
 	'function collateralToken() view returns (address)',
 	'function services() view returns (address)',
 	'function getSecurityPoolPortfolio(address pool) view returns (address)',
+	'function isPortfolio(address portfolio) view returns (bool)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
 	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
+	'function quoteMintRecoveryRep(uint248 universeId,uint256 questionId,uint256 cash) view returns(uint256)',
+	'function createCompleteSetWithRecoveryRep(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee,uint256 maximumRecoveryAttoRep)',
 	'function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee)',
 ])
 
@@ -234,32 +273,36 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 	}
 	const questionId = await validateBeforeSubmit()
 	const [universeId, factory] = await Promise.all([readSecurityPoolUniverseId(client, securityPoolAddress), client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'securityPoolFactory' })])
-	const portfolioValue = await client.readContract({ abi: purchaseAbi, address: factory, functionName: 'getSecurityPoolPortfolio', args: [securityPoolAddress] })
-	if (typeof portfolioValue !== 'string' || !isAddress(portfolioValue)) throw new Error('Invalid shared pool purchase authority.')
-	const portfolio = getAddress(portfolioValue)
-	if (portfolio === zeroAddress) throw new Error('Question has no portfolio.')
+	const portfolio = await requireCanonicalPoolPortfolio(client, factory, securityPoolAddress)
 	const quote = async () => {
 		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'getPool', args: [questionId, universeId] })
 		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== securityPoolAddress.toLowerCase()) throw new Error('Portfolio question pool is not canonical.')
-		const [quoted, capacity] = await Promise.all([client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }), client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'availableMintCapacity', args: [universeId] })])
+		const [quoted, capacity, recoveryValue] = await Promise.all([
+			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
+			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'availableMintCapacity', args: [universeId] }),
+			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
+		])
 		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || quoted.length !== 2 || typeof quoted[1] !== 'bigint') throw new Error('Invalid shared REP purchase quote.')
 		const fee = quoted[0]
 		if (typeof capacity !== 'bigint' || capacity < amount) throw new Error('Insufficient shared REP backing after queued retirement.')
 		if (typeof fee !== 'bigint' || fee < 0n) throw new Error('Invalid shared REP purchase quote.')
-		return fee
+		return { fee, recoveryAttoRep: requireBigintValue(recoveryValue, 'Recovery REP contribution') }
 	}
 	const collateral = await loadTradingCollateral(client, securityPoolAddress, client.account.address)
-	const purchaseFee = await quote()
+	const quoted = await quote()
+	const purchaseFee = quoted.fee
+	const maximumRecoveryAttoRep = portfolioRecoveryMintBudget(quoted.recoveryAttoRep)
 	const maximumFee = (purchaseFee * 10_100n + 9_999n) / 10_000n
 	const minimumShares = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'attoEthToAttoShares', args: [amount] })
+	const args = [universeId, questionId, amount, client.account.address, minimumShares, maximumFee] as const
+	const mintCall = maximumRecoveryAttoRep === 0n ? { functionName: 'createCompleteSet' as const, args } : { functionName: 'createCompleteSetWithRecoveryRep' as const, args: [...args, maximumRecoveryAttoRep] as const }
 	const callParams = {
 		address: portfolio,
 		abi: purchaseAbi,
-		functionName: 'createCompleteSet',
-		args: [universeId, questionId, amount, client.account.address, minimumShares, maximumFee],
+		...mintCall,
 		value: 0n,
 		reviewTitle: 'Buy complete sets',
-		reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, collateral.symbol, collateral.decimals)}. Includes 1% fee budget headroom; only the actual fee is transferred.`,
+		reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, collateral.symbol, collateral.decimals)}. Includes 1% fee budget headroom; only the actual fee is transferred. Recovery contribution: ${formatCurrencyBalanceWithUnit(quoted.recoveryAttoRep, commonCopy.rep)}. Maximum recovery REP contribution: ${formatCurrencyBalanceWithUnit(maximumRecoveryAttoRep, commonCopy.rep)}, including 1% headroom and rounding; only the actual contribution is transferred.`,
 	} as const
 	client.onTransactionPlan?.([
 		{
@@ -269,7 +312,12 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 				const latest = await loadTradingCollateral(client, securityPoolAddress, client.account.address)
 				if (latest.allowance < amount + maximumFee) throw new Error(collateralCopy.approvalRequired)
 				if (latest.balance < amount + maximumFee) throw new Error('Insufficient collateral for minting and purchase fees.')
-				if ((await quote()) > maximumFee) throw new Error('Purchase fee changed. Review the amount again.')
+				const fresh = await quote()
+				if (fresh.fee > maximumFee) throw new Error('Purchase fee changed. Review the amount again.')
+				if (fresh.recoveryAttoRep > maximumRecoveryAttoRep) throw new Error('Recovery REP quote changed. Review the amount again.')
+				const recovery = await loadRecoveryMintFunding(client, portfolio, universeId, client.account.address, fresh.recoveryAttoRep)
+				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
+				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
 				await validateBeforeSubmit()
 			},

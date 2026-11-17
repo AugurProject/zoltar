@@ -1,13 +1,11 @@
 import type { Configuration } from './api-validation.ts'
-import { integer, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
-import { parsePortfolioPolicy, serializePortfolioPolicy } from '../config/portfolio-policy.ts'
+import { parsePortfolioPolicy, type serializePortfolioPolicy } from '../config/portfolio-policy.ts'
 
 export type StrategyUpdate = {
 	maximumGasCostEth: string
 	walletReserveRep: string
-	logLookbackBlocks: number
-	historicalLogRecovery: boolean
 	portfolioPolicy: ReturnType<typeof serializePortfolioPolicy>
 }
 
@@ -25,18 +23,16 @@ const integerFields = [
 	['targetHealthFactorBps', 'Target health', 'bps'],
 	['maximumPositionsPerScan', 'Positions per scan', 'positions'],
 	['stalledRetirementSeconds', 'Stalled retirement', 'seconds'],
-	['logLookbackBlocks', 'Latest log window', 'blocks'],
 ] as const
 
 export function validateStrategyReview(next: StrategyUpdate) {
 	parseDecimalAmount(next.maximumGasCostEth, 'Maximum gas cost (ETH)')
 	parseDecimalAmount(next.walletReserveRep, 'Wallet REP reserve')
 	parsePortfolioPolicy(next.portfolioPolicy)
-	integer(next.logLookbackBlocks, 'Latest log window (blocks)', 1, 256)
 }
 
 export function strategyReviewRows(saved: Configuration, next: StrategyUpdate) {
-	const beforeValues: Record<string, string | number | boolean> = { ...saved.strategy, ...saved.portfolioPolicy, logLookbackBlocks: saved.runtime.logLookbackBlocks, historicalLogRecovery: saved.runtime.historicalLogRecovery }
+	const beforeValues: Record<string, string | number | boolean> = { ...saved.strategy, ...saved.portfolioPolicy }
 	const { portfolioPolicy, ...common } = next
 	return Object.entries({ ...common, ...portfolioPolicy }).flatMap(([name, after]) => {
 		const before = beforeValues[name]
@@ -45,6 +41,6 @@ export function strategyReviewRows(saved: Configuration, next: StrategyUpdate) {
 		if (amount !== undefined) return [{ label: amount[1], before: before === undefined ? '—' : formatAmount(String(before), amount[2]), after: formatAmount(String(after), amount[2]) }]
 		const integerField = integerFields.find(field => field[0] === name)
 		if (integerField !== undefined) return [{ label: integerField[1], before: `${before ?? '—'} ${integerField[2]}`, after: `${after} ${integerField[2]}` }]
-		return [{ label: name === 'allowFundedTakeovers' ? 'Funded takeovers and earnings claims' : 'Historical log recovery', before: before === true ? 'Enabled' : 'Disabled', after: after === true ? 'Enabled' : 'Disabled' }]
+		return [{ label: name === 'allowFundedTakeovers' ? 'Funded takeovers and earnings claims' : name, before: before === true ? 'Enabled' : 'Disabled', after: after === true ? 'Enabled' : 'Disabled' }]
 	})
 }

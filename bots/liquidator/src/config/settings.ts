@@ -1,7 +1,7 @@
 import { parsePortfolioInstructions, serializePortfolioInstructions, type PortfolioInstruction } from './portfolio-instructions.ts'
 import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolicy, type PortfolioPolicy, type PortfolioSelection } from './portfolio-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -42,8 +42,6 @@ export type OperatorSettings = {
 	privateKey: Hex | undefined
 	runtime: {
 		execute: boolean
-		historicalLogRecovery: boolean
-		logLookbackBlocks: number
 		once: boolean
 		pollMilliseconds: number
 		stateFile: string
@@ -60,7 +58,7 @@ export type OperatorSettings = {
 }
 
 const ROOT_KEYS = ['approvedUniverses', 'centralizedMarkets', 'childMarketConfigurations', 'connectivity', 'network', 'networkConfigured', 'paused', 'portfolioInstructions', 'portfolioPolicy', 'privateKey', 'runtime', 'selectedPortfolios', 'strategy', 'submission', 'version']
-const RUNTIME_KEYS = ['execute', 'historicalLogRecovery', 'logLookbackBlocks', 'once', 'pollMilliseconds', 'stateFile', 'ui', 'uiHost', 'uiPort']
+const RUNTIME_KEYS = ['execute', 'once', 'pollMilliseconds', 'stateFile', 'ui', 'uiHost', 'uiPort']
 const STRATEGY_KEYS = ['maximumGasCostEth', 'walletReserveRep']
 const PORTFOLIO_POLICY_KEYS = [
 	'allowFundedTakeovers',
@@ -164,8 +162,6 @@ export function parseSettings(value: unknown): OperatorSettings {
 		privateKey,
 		runtime: {
 			execute: boolean(runtime['execute'], 'runtime.execute'),
-			historicalLogRecovery: runtime['historicalLogRecovery'] === undefined ? false : boolean(runtime['historicalLogRecovery'], 'runtime.historicalLogRecovery'),
-			logLookbackBlocks: integer(runtime['logLookbackBlocks'] ?? 256, 'runtime.logLookbackBlocks', 1, 256),
 			once: boolean(runtime['once'], 'runtime.once'),
 			pollMilliseconds: integer(runtime['pollMilliseconds'], 'runtime.pollMilliseconds', 1_000, 3_600_000),
 			stateFile: resolve(string(runtime['stateFile'], 'runtime.stateFile')),

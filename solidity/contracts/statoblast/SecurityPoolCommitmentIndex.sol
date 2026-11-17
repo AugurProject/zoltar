@@ -18,6 +18,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	bool public importsOpen;
 	bool private importsInitialized;
 	uint64 public healthObservationEpoch;
+	uint48 private distressRestart;
 	uint256 private observedPrice;
 	mapping(uint64 => uint48) private observationTimes;
 	struct Account {
@@ -208,6 +209,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @notice Record which existing live positions are healthy at a fresh price.
 	/// @dev Epochs distinguish recovery and relapse even within the same block.
+	function restartLiquidationClock() external onlyCapitalLedger {
+		distressRestart = uint48(block.timestamp);
+	}
+
 	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
@@ -242,7 +247,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			cursor = node.parent;
 		}
 		if (epoch == healthObservationEpoch) return 0;
-		return observationTimes[epoch + 1];
+		return uint48(Math.max(observationTimes[epoch + 1], distressRestart));
 	}
 
 	/// @dev The controller calls only after an actual healthy mutation at a fresh
@@ -254,10 +259,11 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @dev Remove unbacked nominal K, down to `target`, under exactly the ordinary
 	/// collateral floor. Custody remains with the controller. The cut uses only
 	/// unhealthy K, so it never consumes the healthy spare that retirements wait
-	/// for. Any reduction left between the result and a nonzero `target` must
-	/// still be a valid retirement request: a rest below the economic minimum
-	/// is cut at once when spare allows, and otherwise grows to that minimum.
-	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target) external onlyCapitalLedger operational returns (Cure memory result) {
+	/// for. Any reduction left between the result and `target` must be at least
+	/// the economic minimum: a smaller rest is cut at once when spare allows, and
+	/// otherwise grows to that minimum. `ownerExit` waives this for an owner
+	/// leaving entirely, whose rest is queued for retirement whatever its size.
+	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target, bool ownerExit) external onlyCapitalLedger operational returns (Cure memory result) {
 		Account memory account = accountOf(id);
 		require(account.owner != address(0) && account.commitment > target, 'Position is not live');
 		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, price);
@@ -273,11 +279,13 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 reduction = account.commitment - supported;
 		uint256 removed = Math.min(account.commitment - target, Math.min(Math.max(reduction, minimumCommitment), spare));
 		if (removed < minimumCommitment && removed != account.commitment) removed = 0;
-		// A full exit (zero target) may queue any rest; a partial one needs the
-		// minimum. Prefer finishing the reduction now, which still uses no
-		// healthy spare; otherwise cut less so the queued rest is the minimum.
+		// A rest above the target must be at least the minimum: it is either queued
+		// as a partial retirement request or, on a takeover with a zero target, left
+		// as the owner's live commitment. An owner's full exit may queue any rest.
+		// Prefer finishing the reduction now, which still uses no healthy spare;
+		// otherwise cut less so the rest is the minimum.
 		uint256 rest = account.commitment - target - removed;
-		if (target != 0 && rest != 0 && rest < minimumCommitment) {
+		if (!ownerExit && rest != 0 && rest < minimumCommitment) {
 			if (removed >= minimumCommitment && account.commitment - target <= spare) {
 				removed = account.commitment - target;
 			} else {
@@ -285,6 +293,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				removed = removed >= minimumCommitment + shortfall ? removed - shortfall : 0;
 			}
 		}
+		// A minimum-size cut must not turn removal of unsupported commitment
+		// into an immediate withdrawal of REP that still backs a live position.
+		if (supported != 0 && removed == account.commitment) removed = 0;
 		uint256 remaining = account.commitment - removed;
 		result.removed = removed;
 		if (removed != 0) {

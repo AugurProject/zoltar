@@ -13,7 +13,7 @@ import {
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { deployContract } from '../testSupport/deployContract'
 import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
-import { type AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { type WriteClient, createWriteClient } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
@@ -301,8 +301,6 @@ describe('Shared portfolio oracle security regressions', () => {
 	test('failed OpenOracle settlement callbacks do not leave the coordinator permanently pending', async () => {
 		await fixture.refreshPrice()
 		const acceptedPrice = await getLastPrice(client, priceOracle)
-		const acceptedTimestamp = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'lastSettlementTimestamp' })
-		const acceptedExpiry = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'priceValidUntil' })
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		await requestPriceWithValue(client, priceOracle, costAttoEth, acceptedPrice * 2n)
 
@@ -335,9 +333,13 @@ describe('Shared portfolio oracle security regressions', () => {
 			address: priceOracle,
 			args: [],
 		})
-		assert.strictEqual(lastPriceAfterRecovery, acceptedPrice, 'recovering funding must not publish the failed candidate price')
-		assert.strictEqual(lastSettlementTimestampAfterRecovery, acceptedTimestamp, 'recovery must not refresh the accepted observation')
-		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'priceValidUntil' }), acceptedExpiry, 'recovery must not extend the accepted expiry')
+		assert.strictEqual(lastPriceAfterRecovery, acceptedPrice * 2n, 'recovery should publish the still-fresh authenticated candidate')
+		assert.strictEqual(lastSettlementTimestampAfterRecovery, pendingState.game.reportTimestamp + pendingState.game.settlementTime, 'recovery keeps the original observation timestamp')
+		assert.strictEqual(
+			await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'priceValidUntil' }),
+			lastSettlementTimestampAfterRecovery + (await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'priceValidityWindowSeconds' })),
+			'recovery uses the original observation expiry',
+		)
 		const recoveryLog = findPendingReportRecoveredLog(recoveryReceipt.logs)
 		if (recoveryLog === undefined) throw new Error('missing PendingReportRecovered log')
 
@@ -346,8 +348,8 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(recoveryLog.args.reportId, pendingReportId, 'PendingReportRecovered should identify the recovered report')
 		assert.strictEqual(recoveryLog.args.pendingReportId, pendingReportIdAfterRecovery, 'PendingReportRecovered should expose the cleared pending report id')
 		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFeeAttoEthPerGas, pendingMaxSettlementBaseFeeAfterRecovery, 'PendingReportRecovered should expose the cleared basefee guard')
-		assert.strictEqual(recoveryLog.args.lastPrice, lastPriceAfterRecovery, 'PendingReportRecovered should expose the unchanged last price')
-		assert.strictEqual(recoveryLog.args.lastSettlementTimestamp, lastSettlementTimestampAfterRecovery, 'PendingReportRecovered should expose the unchanged settlement timestamp')
+		assert.strictEqual(recoveryLog.args.lastPrice, lastPriceAfterRecovery, 'PendingReportRecovered should expose the accepted last price')
+		assert.strictEqual(recoveryLog.args.lastSettlementTimestamp, lastSettlementTimestampAfterRecovery, 'PendingReportRecovered should expose the accepted settlement timestamp')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest + pendingState.game.currentAmount2, 'recovery should return the settled REP amount to the sponsor')
 		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAttoEthAfterRequest + pendingState.game.currentAmount1, 'recovery should return the settled WETH amount to the sponsor')
 		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(pendingReportId), addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'recovery should drain the coordinator REP credit to its sentinel')

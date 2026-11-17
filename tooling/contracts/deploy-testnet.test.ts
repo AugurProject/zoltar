@@ -17,17 +17,11 @@ import {
 	createDeploymentReceiptWaiter,
 	DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS,
 	deployTestnet,
-	getDeploymentHelp,
-	parseDeploymentCommandLine,
-	parseChainId,
-	parseMaxFeePerGas,
-	parseMaxTotalCost,
-	parsePrivateKey,
-	parseRpcUrl,
 	preflightDeploymentPlan,
 	resolveCanonicalProxyDeployerForPreflight,
 	runDeploymentPlan,
 } from './deploy-testnet.mts'
+import { getDeploymentHelp, parseChainId, parseDeploymentCommandLine, parseMaxFeePerGas, parseMaxTotalCost, parsePrivateKey, parseRpcUrl } from './deployment-command-line.mts'
 import { createCompleteDeploymentPlan, createDualGenesisDeploymentPlan } from './deployment-plan.mts'
 import { getUniswapDeployment } from './uniswap-deployment.mts'
 import { getTradingDeploymentPlan } from '../../ui/trading/ts/protocol/deployment.ts'

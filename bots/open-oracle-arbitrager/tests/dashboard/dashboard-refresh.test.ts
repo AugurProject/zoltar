@@ -362,9 +362,9 @@ function stubIntervals(window: BrowserWindow) {
 	}
 }
 
-function element<T extends Element>(window: BrowserWindow, id: string, constructor: { new (): T }): T {
+function element<T extends Element>(window: BrowserWindow, id: string, elementConstructor: { new (): T }): T {
 	const found = window.document.getElementById(id)
-	if (!(found instanceof constructor)) throw new Error(`Missing dashboard element ${id}`)
+	if (!(found instanceof elementConstructor)) throw new Error(`Missing dashboard element ${id}`)
 	return found
 }
 
@@ -1025,8 +1025,8 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	rowInput('sourceExchangeId').value = 'kraken'
 	rowInput('sourceExchangeId').dispatchEvent(new window.Event('input', { bubbles: true }))
 	expect(marketRows()[0]?.querySelector('button')?.getAttribute('aria-label')).toBe('Remove kraken')
-	rowInput('sourceRepMarket').value = 'REP/USDT'
-	rowInput('sourceEthMarket').value = 'ETH/USDT'
+	rowInput('sourceRepMarket').value = 'REP/USDC'
+	rowInput('sourceEthMarket').value = 'ETH/USDC'
 	marketInput('minimumSourceCount').value = '1'
 	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
 	let sourceReview = window.document.querySelector('.operator-confirm-dialog')
@@ -1035,19 +1035,19 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 		sourceReview = window.document.querySelector('.operator-confirm-dialog')
 	}
 	expect(sourceReview?.textContent).toContain('Source 1 · Exchange ID—→kraken')
-	expect(sourceReview?.textContent).toContain('Source 1 · REP market—→REP/USDT')
+	expect(sourceReview?.textContent).toContain('Source 1 · REP market—→REP/USDC')
 	await acceptOperatorDialog(window)
 	await page.waitUntilComplete()
 	for (let attempt = 0; attempt < 100 && element(window, 'market-status', window.HTMLElement).textContent === 'Validating market sources…'; attempt++) await Bun.sleep(10)
 	expect(element(window, 'market-status', window.HTMLElement).textContent).toBe('Market sources saved.')
-	expect(settings.centralizedMarkets.sources).toEqual([{ ethMarket: 'ETH/USDT', exchangeId: 'kraken', repMarket: 'REP/USDT' }])
+	expect(settings.centralizedMarkets.sources).toEqual([{ ethMarket: 'ETH/USDC', exchangeId: 'kraken', repMarket: 'REP/USDC' }])
 	expect(settings.centralizedMarkets.minimumSourceCount).toBe(1)
 	expect(settings.centralizedMarkets.assetAddress).toBe(settings.deployment.rep)
 	expect(marketRows()).toHaveLength(1)
 	expect(saveButton('market-form').disabled).toBe(true)
 	rowInput('sourceEthMarket').value = ''
-	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toBe('centralizedMarkets.sources[0].ethMarket must be ETH/USDT')
-	expect(settings.centralizedMarkets.sources[0]?.ethMarket).toBe('ETH/USDT')
+	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toBe('centralizedMarkets.sources[0].ethMarket must be ETH/USDC')
+	expect(settings.centralizedMarkets.sources[0]?.ethMarket).toBe('ETH/USDC')
 	element(window, 'venue-consensus-enabled', window.HTMLInputElement).checked = true
 	element(window, 'venue-consensus-enabled', window.HTMLInputElement).dispatchEvent(new window.Event('change', { bubbles: true }))
 	expect(await submit('market-form', 'market-status', 'Validating market sources…')).not.toBe('Market sources saved.')

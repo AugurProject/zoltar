@@ -28,7 +28,6 @@ describe('Escalation game: bounded carry readiness', () => {
 			expect(await funded()).toBe(false)
 			await expect(client.simulateContract({ abi: poolArtifact.abi, address: child.testSecurityPoolAddress, functionName: 'resumeEscalationGameFromFork' })).rejects.toThrow('Fork snapshot incomplete')
 			await expect(client.simulateContract({ abi: poolArtifact.abi, address: child.testSecurityPoolAddress, functionName: 'recordDeposit', args: [client.account.address, QuestionOutcome.Yes, reportBond, reportBond] })).rejects.toThrow('Fork snapshot incomplete')
-			await expect(client.simulateContract({ abi: poolArtifact.abi, address: child.testSecurityPoolAddress, functionName: 'recordForkedEscrowForOutcome', args: [client.account.address, QuestionOutcome.Yes, reportBond, reportBond] })).rejects.toThrow('Fork snapshot incomplete')
 			if (stage > 0)
 				await expect(client.simulateContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: child.testSecurityPoolAddress, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, zeros, zeros, [reportBond, 0n, 0n], roots] })).rejects.toThrow('Snapshot changed')
 			const hash = await advance()

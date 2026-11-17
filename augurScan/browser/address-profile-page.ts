@@ -1,8 +1,11 @@
+import { collateralUnit } from '../src/collateral.ts'
 import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
 import { semanticSummary } from './semantic-evidence.ts'
 import type { AccountTransaction, ArgumentDefinition, LiveChangeOptions, LoadOptions, ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
 import { operationRecords } from './api-validation.ts'
+import { capitalPositionCard, capitalPositionPath } from './capital-presentation.ts'
 import { exactUnit } from './format.ts'
+import { forkParticipationUniverse } from './operations-presentation.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioPage } from './portfolio-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
@@ -58,7 +61,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		['Sent transactions', number(item.transaction_count)],
 		['Observed interactions', number(item.interaction_count)],
 		['Pools', number(item.pool_count)],
-		['Vault positions', number(item.vault_count)],
+		['Capital positions', number(item.capital_positions?.length ?? 0)],
 	]) {
 		const card = element('div', 'state-stat')
 		card.append(element('span', '', label), element('strong', '', value))
@@ -68,7 +71,6 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		transactions: item.transaction_count,
 		interactions: item.interaction_count,
 		pools: item.pool_count,
-		vaults: item.vault_count,
 	})
 	const balances = element('section', 'address-profile-panel')
 	balances.append(element('p', 'eyebrow', 'Balances'), element('h3', '', 'Assets observed by augurScan'))
@@ -97,26 +99,25 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		rep: item.rep_balances,
 	})
 	const involvement = element('section', 'address-profile-panel')
-	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Pools and vaults'))
+	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Security pools and capital positions'))
 	const involvementGrid = element('div', 'rich-position-grid')
 	for (const pool of item.pool_associations ?? []) {
 		const card = element('div', 'rich-position')
-		card.append(element('span', 'rich-position-kind', 'Pool'), element('strong', '', pool.questionTitle ?? pool.label ?? 'Security pool'), protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }))
+		card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Security pool'), protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }))
 		involvementGrid.append(card)
 	}
-	for (const position of item.vault_positions ?? []) {
+	// One capital position per universe ledger: the owner's principal, commitment and health at the latest tagged read.
+	for (const position of item.capital_positions ?? []) {
 		const card = element('div', 'rich-position')
-		card.append(
-			element('span', 'rich-position-kind', 'Vault'),
-			element('strong', '', position.questionTitle ?? 'Vault position'),
-			element('span', '', `${exactUnit(position.underwritingLimitAttoEth, 18, itemNativeSymbol)} underwriting commitment · ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} claimable`),
-			protocolAddressLink(position.poolAddress, { chainId, className: 'rich-token-address address-link' }),
-		)
+		const link = element('a', 'rich-token-address address-link', 'Position detail')
+		link.href = operationsHref(capitalPositionPath(position.ledgerAddress, item.address))
+		const presentation = capitalPositionCard(position)
+		card.append(element('strong', '', presentation.title), element('span', '', presentation.summary), link)
 		involvementGrid.append(card)
 	}
-	if (involvementGrid.childElementCount === 0) involvementGrid.append(element('p', 'data-note', 'No pool or vault involvement matches this view.'))
+	if (involvementGrid.childElementCount === 0) involvementGrid.append(element('p', 'data-note', 'No pool or capital involvement matches this view.'))
 	involvement.append(involvementGrid)
-	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations, vaults: item.vault_positions })
+	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations, capital: item.capital_positions })
 	const escalationClaims = operationsPanel(
 		'Escalation interactions',
 		(item.escalation_claims ?? []).map(claim =>
@@ -155,7 +156,11 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	)
 	const refundPanel = operationsPanel(
 		'Pending auction refunds',
-		(item.pending_refunds ?? []).slice(0, 250).map(refund => operationRow('Pending refund', exactUnit(String(refund['pending_atto_eth']), 18, itemNativeSymbol), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))),
+		(item.pending_refunds ?? []).slice(0, 250).map(refund => {
+			// Refunds are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
+			const collateral = collateralUnit(refund)
+			return operationRow('Pending refund', exactUnit(String(refund['pending_atto_eth']), collateral.decimals, collateral.symbol), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))
+		}),
 		'No indexed refund credits remain.',
 		{ label: `Balances cover indexed history.${item.pending_refunds_truncated === true ? ' First 250 auctions shown.' : ''}` },
 	)
@@ -175,7 +180,8 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	)
 	const auctionClaims = operationsPanel(
 		'Auction interactions',
-		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), `${semanticSummary({ event_data: claim['data'] }, itemNativeSymbol)}`, String(claim['entity'] ?? ''), claim['blockNumber'])),
+		// Auction amounts are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
+		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), semanticSummary({ event_data: claim['data'] }, itemNativeSymbol, collateralUnit(claim)), String(claim['entity'] ?? ''), claim['blockNumber'])),
 		'No collateral-repair-auction interactions are associated with this address.',
 	)
 	const lpPositions = operationsPanel(
@@ -195,7 +201,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const forkParticipation = operationsPanel(
 		'Fork and migration participation',
 		operationRecords(item['fork_participation']).map(event =>
-			operationRow(String(event['event_name'] ?? 'Fork migration'), 'Canonical event evidence naming this address as migrator, vault, or recipient', String(event['universe_identity'] ?? ''), event['block_number'], operationsHref(`/operations/fork/${encodeURIComponent(String(event['universe_identity'] ?? ''))}`)),
+			operationRow(String(event['event_name'] ?? 'Fork migration'), 'Canonical event evidence naming this address as migrator, branch owner, or recipient', String(event['universe_identity'] ?? ''), event['block_number'], operationsHref(`/operations/fork/${encodeURIComponent(forkParticipationUniverse(event))}`)),
 		),
 		'No fork or migration participation matches this view.',
 	)

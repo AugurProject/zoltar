@@ -3,6 +3,7 @@ import type { PortfolioObservation, PortfolioPosition } from '#monitoring/portfo
 import { portfolioTarget, samePortfolioTarget, type PortfolioTarget } from '#monitoring/portfolio-auction'
 import { portfolioTakeoverPlan, type PortfolioTakeover } from './portfolio-strategy.ts'
 import { portfolioCureOutcome } from './portfolio-cure-state.ts'
+import { MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS, PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 
 export type PortfolioReportTakeover = { target: PortfolioTarget; plan: PortfolioTakeover }
 
@@ -11,8 +12,11 @@ export type PortfolioReportTakeover = { target: PortfolioTarget; plan: Portfolio
 export function portfolioReportTakeoverPlan(observation: PortfolioObservation, position: PortfolioPosition, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean): { reason: string; plan?: PortfolioTakeover; plans?: PortfolioReportTakeover[] } {
 	if (settings.portfolioPolicy.maximumReportFundingAttoEth === 0n || observation.snapshot.acceptedPrice === 0n || observation.pendingOperationReport !== undefined) return { reason: 'Report sponsorship is disabled or already pending' }
 	if (observation.snapshot.priceValid && observation.snapshot.timestamp < observation.snapshot.priceValidUntil) return { reason: 'Use the existing fresh price' }
+	if (observation.snapshot.timestamp >= observation.snapshot.priceValidUntil) return { reason: 'Fresh report restarts takeover award clock' }
 	const projected = { ...observation, snapshot: { ...observation.snapshot, ownerAccount: { ...observation.snapshot.ownerAccount }, priceValid: true, priceValidUntil: observation.snapshot.timestamp + 1n } }
 	const targets = [position, ...observation.positions.filter(candidate => !samePortfolioTarget(portfolioTarget(candidate), portfolioTarget(position)))]
+	// The feed caps a report's callback gas, so the configured budget only applies below that cap.
+	const operationsGasLimit = Math.min(settings.portfolioPolicy.reportOperationsGasLimit, Number(MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS - PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS))
 	const plans: PortfolioReportTakeover[] = []
 	let funding = 0n
 	let gas = 0
@@ -21,13 +25,21 @@ export function portfolioReportTakeoverPlan(observation: PortfolioObservation, p
 	let first: PortfolioTakeover | undefined
 	for (const target of targets) {
 		if (plans.some(item => samePortfolioTarget(item.target, portfolioTarget(target)))) continue
-		if (gas + settings.portfolioPolicy.reportOperationGasLimit + 100_000 > settings.portfolioPolicy.reportOperationsGasLimit) break
+		if (gas + settings.portfolioPolicy.reportOperationGasLimit + 100_000 > operationsGasLimit) break
 		const result = portfolioTakeoverPlan(projected, target, settings, exposure, marketAllowed)
 		if (result.plan === undefined) {
 			if (plans.length === 0) return result
 			continue
 		}
 		const plan = result.plan
+		if (plan.unpaidCure) {
+			// The cure spends shared spare and nothing of the sponsor's: later targets are quoted without that spare.
+			plans.push({ target: portfolioTarget(target), plan })
+			gas += settings.portfolioPolicy.reportOperationGasLimit + 100_000
+			projected.snapshot.totalCommitmentAttoEth -= portfolioCureOutcome(projected, target).removed
+			projected.positions = projected.positions.filter(candidate => candidate !== target)
+			continue
+		}
 		// Pending retirement cohorts can change through automatic servicing. Keep
 		// them eligible alone; forecast multi-target batches only in active capital.
 		if (plan.expectedSourceBatch !== 0n && plans.length !== 0) continue

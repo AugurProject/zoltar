@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, type Hex } from '../../src/ethereum.ts'
-import { projectionsFrom } from '../../src/projections.ts'
+import { type Projection, projectionsFrom } from '../../src/projections.ts'
 import type { StoredLog } from '../../src/types.ts'
+import { encodedAmmPairTransfer } from '../support/amm-pair-transfer.ts'
 
 const hash = `0x${'12'.repeat(32)}` as Hex
 const pool = getAddress('0x1111111111111111111111111111111111111111')
@@ -38,9 +39,17 @@ const questionCreatedLog = log('QuestionCreated', {
 })
 
 describe('state projections', () => {
-	test('projects portfolio question accounting without standalone vault fields', () => {
+	test('projects each question accounting checkpoint as pool state and as an accounting snapshot', () => {
 		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' }))
 		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' } })
+		const snapshot: Projection = { type: 'poolSnapshot', poolAddress: pool.toLowerCase(), reason: 2, settlementCollateralAttoEth: atomic(100n), shareTokenSupplyAttoShares: atomic(200n), lastSettlementPortfolioTime: new Date(300_000) }
+		expect(projections).toContainEqual(snapshot)
+		// A uint8 enum decodes to a number; a replayed JSON record may carry it as a string.
+		expect(projectionsFrom(log('QuestionAccountingCheckpoint', { reason: '2', settlementCollateralAttoEth: atomic(100n), shareTokenSupplyAttoShares: atomic(200n), lastSettlementPortfolioTime: '300' }))).toContainEqual(snapshot)
+	})
+
+	test('ignores accounting and approval events that no current contract emits', () => {
+		for (const name of ['PoolAccountingCheckpoint', 'VaultAccountingCheckpoint', 'PoolForkModeActivated', 'TotalRepBackingUnitsSet', 'LiquidationApprovalSet', 'VaultLiquidated']) expect(projectionsFrom(log(name, { vault, reason: '5' }))).toEqual([])
 	})
 
 	test('captures immutable question metadata', () => {
@@ -52,64 +61,21 @@ describe('state projections', () => {
 		expect(projection.endTime).toBe('2100')
 	})
 
-	test('captures complete pool and vault accounting snapshots', () => {
+	test('captures a pool deployment', () => {
 		const [deployment] = projectionsFrom(
 			log('DeploySecurityPool', {
 				securityPool: pool,
 				parent: '0x0000000000000000000000000000000000000000',
 				universeId: '0',
 				questionId: '42',
-				collateralRepairAuction: '0x0000000000000000000000000000000000000000',
 				openOraclePriceCoordinator: vault,
 				shareToken: vault,
 				statoblastSecurityMultiplierBps: '15000',
 				initialReportPriorityFeeAttoEthPerGas: atomic(10_000_000_000n),
-				currentRetentionRate: '999999000000000000',
-				settlementCollateralAttoEth: atomic(12_000_000_000_000_000_000n),
 			}),
 		)
 		expect(deployment).toMatchObject({ type: 'pool', poolAddress: pool.toLowerCase(), questionId: '42', universeId: '0' })
-
-		const [poolProjection] = projectionsFrom(
-			log('PoolAccountingCheckpoint', {
-				reason: '5',
-				vault,
-				settlementCollateralAttoEth: atomic(12_000_000_000_000_000_000n),
-				totalUnderwritingLimitAttoEth: atomic(9_000_000_000_000_000_000n),
-				feeEligibleUnderwritingLimitAttoEth: atomic(8_000_000_000_000_000_000n),
-				totalClaimableVaultFeesAttoEth: atomic(40n),
-				unallocatedAccruedFeesAttoEth: atomic(3n),
-				feeIndex: '10',
-				feeIndexRemainder: '1',
-				totalFeesOwedRemainder: '2',
-				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: atomic(4n),
-				lastSettlementPortfolioTime: '2000',
-				currentRetentionRate: '999999000000000000',
-			}),
-		)
-		expect(poolProjection?.type).toBe('poolSnapshot')
-		if (poolProjection?.type !== 'poolSnapshot') throw new Error('pool projection missing')
-		expect(poolProjection.settlementCollateralAttoEth).toBe('12000000000000000000')
-		expect(poolProjection.totalUnderwritingLimitAttoEth).toBe('9000000000000000000')
-		expect(poolProjection.feeEligibleUnderwritingLimitAttoEth).toBe('8000000000000000000')
-
-		const [vaultProjection, resultingPoolState] = projectionsFrom(
-			log('VaultAccountingCheckpoint', {
-				vault,
-				repBackingUnits: '50',
-				underwritingLimitAttoEth: atomic(60n),
-				claimableFeesAttoEth: atomic(70n),
-				feeIndex: '80',
-				vaultFeeRemainder: '90',
-				resultingTotalRepBackingUnits: '100',
-				resultingFeeEligibleUnderwritingLimitAttoEth: atomic(110n),
-			}),
-		)
-		expect(vaultProjection?.type).toBe('vaultSnapshot')
-		if (vaultProjection?.type !== 'vaultSnapshot') throw new Error('vault projection missing')
-		expect(vaultProjection.vaultAddress).toBe(vault.toLowerCase())
-		expect(vaultProjection.underwritingLimitAttoEth).toBe('60')
-		expect(resultingPoolState).toMatchObject({ type: 'poolState', state: { totalRepBackingUnits: '100' } })
+		for (const field of ['collateralRepairAuctionAddress', 'initialRetentionRate', 'initialSettlementCollateralAttoEth']) expect(deployment).not.toHaveProperty(field)
 	})
 
 	test('records universe lineage and changing theoretical supply', () => {
@@ -232,8 +198,8 @@ describe('state projections', () => {
 	})
 
 	test('retains LP share transfers and approvals only when the emitter is an Augur AMM pair', () => {
-		const transfer = { ...log('Transfer', { from: pool, to: vault, amount: '50' }), contractKind: 'ammPair' }
-		const approval = { ...log('Approval', { owner: pool, spender: vault, amount: '50' }), contractKind: 'ammPair' }
+		const transfer = { ...log('Transfer', { from: pool, to: vault, value: '50' }), contractKind: 'ammPair' }
+		const approval = { ...log('Approval', { owner: pool, spender: vault, value: '50' }), contractKind: 'ammPair' }
 		expect(projectionsFrom(transfer).at(-1)).toMatchObject({
 			type: 'domainEvent',
 			domain: 'trading',
@@ -248,6 +214,17 @@ describe('state projections', () => {
 			semanticEventKind: 'Approval',
 		})
 		expect(projectionsFrom(log('Approval', { owner: pool, spender: vault, value: '50' })).some(item => item.type === 'domainEvent')).toBe(false)
+	})
+
+	test('stores an AMM pair LP transfer under the compiled ERC-20 argument names', () => {
+		const { topics, data, decoded } = encodedAmmPairTransfer(pool, vault, 50n, vault)
+		const transfer: StoredLog = { ...log('Transfer', {}, vault, 'ammPair'), topics, data, decoded }
+		const projection = projectionsFrom(transfer).at(-1)
+		if (projection?.type !== 'domainEvent') throw new Error('LP transfer did not project a domain event')
+		// The trading, catalog, portfolio, and detail LP queries read these exact keys from amm_trade_events.event_data.
+		expect(projection).toMatchObject({ domain: 'trading', entityIdentity: vault.toLowerCase(), semanticEventKind: 'Transfer' })
+		expect(Object.keys(projection.data).sort()).toEqual(['from', 'to', 'value'])
+		expect(projection.data['value']).toBe('50')
 	})
 
 	test('adds stable timeline identities for registries, markets, and universes', () => {
@@ -289,7 +266,7 @@ describe('state projections', () => {
 			repPerEth1e18: '19500000000000000000',
 		})
 		if (reported?.type !== 'repEthPrice') throw new Error('REP/ETH price projection missing')
-		expect(reported.settlementTimestamp?.toISOString()).toBe('1970-01-01T00:33:20.000Z')
+		expect(reported.settlementTimestamp.toISOString()).toBe('1970-01-01T00:33:20.000Z')
 	})
 
 	test('retains auditable Uniswap market identity and raw price evidence', () => {
@@ -355,8 +332,78 @@ describe('state projections', () => {
 			entityIdentity: `${pool.toLowerCase()}:42`,
 			semanticEventKind: 'ReportSubmitted',
 		})
-		const auction = projectionsFrom(log('BidSubmitted', { bidder: vault, tick: '-3', bidIndex: '0', bidAmountAttoEth: atomic(10n) })).at(-1)
+		const auction = projectionsFrom(log('BidSubmitted', { bidId: '1', bidder: vault, vault, lots: '2', minimumAttoRepPerLot: atomic(10n), targetHealthBps: '12000' })).at(-1)
 		expect(auction).toMatchObject({ type: 'domainEvent', domain: 'auction', semanticEventKind: 'BidSubmitted' })
+		// Refund accounting reads these auction events, so each must reach the auction projection.
+		for (const [name, data] of [
+			['RefundWithdrawn', { bidder: vault, recipient: vault, amountAttoEth: atomic(1n) }],
+			['FeesRemoved', { bidId: '1', attoEth: atomic(1n), attoRep: atomic(2n) }],
+			['RaisedWithdrawn', { recipient: vault, amountAttoEth: atomic(3n) }],
+		] as const)
+			expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain: 'auction', entityType: 'auction', semanticEventKind: name })
+	})
+
+	test('classifies the remaining events of indexed contracts and ignores the unemitted ERC-1155 URI', () => {
+		const cases = [
+			['ClaimCheckpointProgress', { claimId: `0x${'1'.repeat(64)}`, nextSourceGame: vault, pendingSteps: '2', complete: false }, 'escalation', 'escalation', pool.toLowerCase()],
+			['ReportOperationAttempted', { reportId: '7', sponsor: vault, operationIndex: '0', success: true }, 'oracle', 'price-feed', pool.toLowerCase()],
+			['PortfolioDeployed', { portfolio: vault, creator: pool }, 'risk', 'portfolio', vault.toLowerCase()],
+			['PortfolioRegistered', { portfolio: vault, originUniverseId: '0' }, 'risk', 'portfolio', vault.toLowerCase()],
+			['EthReceived', { sender: vault, amountAttoEth: atomic(1n) }, 'risk', 'pool', pool.toLowerCase()],
+			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
+			['WinningVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'portfolio-auction', pool.toLowerCase()],
+			['AuctionClosed', { filledLots: '1', raisedAttoEth: atomic(1n), soldAttoRep: atomic(2n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
+			['PortfolioRecoveryRightsTransferred', { universeId: '1', from: vault, to: vault, amountsAttoShares: ['1', '2', '3'] }, 'system', 'share-token', pool.toLowerCase()],
+			['PortfolioRecoveryRightsConsumed', { universeId: '1', holder: vault, amountAttoShares: atomic(1n), cumulativeAttoShares: atomic(1n) }, 'system', 'share-token', pool.toLowerCase()],
+		] as const
+		for (const [name, data, domain, entityType, entityIdentity] of cases) expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain, entityType, entityIdentity, semanticEventKind: name })
+		expect(projectionsFrom({ ...log('URI', { value: 'ipfs://share', id: '1' }), contractKind: 'shareToken' })).toEqual([])
+	})
+
+	test('a materialized auction bid belongs to the vault that owns the new position', () => {
+		expect(projectionsFrom(log('AuctionBidMaterialized', { bidId: '4', vault, positionId: '3', principal: '70', commitment: '10' })).at(-1)).toMatchObject({ domain: 'risk', entityType: 'vault', entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}` })
+		// The cohort is the auction adapter's aggregate position, identified by its position id.
+		expect(projectionsFrom(log('AuctionCohortInstalled', { adapter: vault, positionId: '3', lots: '1', repPerLot: '2', commitmentPerLot: '3' })).at(-1)).toMatchObject({ entityType: 'capital-position', entityIdentity: `${pool.toLowerCase()}:3` })
+	})
+
+	test('classifies the events of contracts registered through portfolio discovery', () => {
+		const emitter = pool.toLowerCase()
+		const game = vault.toLowerCase()
+		const cases = [
+			['BookCreated', { bookId: '2', sourceBookId: '1', cashAttoEth: atomic(5n), units: '5' }, 'risk', 'settlement-book', `${emitter}:2`],
+			['SettlementMinted', { bookId: '1', questionId: '42', cashAttoEth: atomic(5n), outcomeShares: '5' }, 'risk', 'settlement-book', `${emitter}:1`],
+			['SettlementRedeemed', { bookId: '1', questionId: '42', outcomeShares: '5', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
+			['FinalityScheduled', { bookId: '1', questionId: '42', finalAfter: '100' }, 'risk', 'settlement-book', `${emitter}:1`],
+			['FinalClaimsFrozen', { bookId: '1', frozenBookId: '1', portfolioTimestamp: '100', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
+			['FeeStreamReplaced', { bookId: '1', questionId: '42', rateAttoEthPerSecond: atomic(3n), end: '200' }, 'risk', 'settlement-book', `${emitter}:1`],
+			['AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '150', cashAttoEth: atomic(9n) }, 'risk', 'settlement-book', `${emitter}:1`],
+			['PremiumFunded', { universeId: '3', questionId: '42', amountAttoEth: atomic(1n), units: '1' }, 'risk', 'portfolio-services', `${emitter}:3`],
+			['PremiumRecovered', { universeId: '3', questionId: '42', recipient: vault, amountAttoEth: atomic(1n) }, 'risk', 'portfolio-services', `${emitter}:3`],
+			['UnusedServiceCashBurned', { universeId: '3', amountAttoEth: atomic(1n) }, 'risk', 'portfolio-services', `${emitter}:3`],
+			['RecoveryRepPaid', { universeId: '3', questionId: '42', recipient: vault, amountAttoRep: atomic(2n) }, 'risk', 'portfolio-settlement', `${emitter}:3`],
+			['ReporterBalanceChanged', { universeId: '3', questionId: '42', balanceAttoRep: atomic(7n) }, 'risk', 'reporter-ledger', `${emitter}:3`],
+			// The reporter ledger names the game, so both events belong to that game rather than to the ledger.
+			['GameRegistered', { universeId: '3', questionId: '42', game: vault }, 'escalation', 'escalation', game],
+			['ReporterFinalityScheduled', { game: vault, finalAfter: '100' }, 'escalation', 'escalation', game],
+			['ReporterForkFrozen', { universeId: '3', migrationAttoRep: atomic(4n), protectedParentAttoRep: atomic(1n) }, 'fork', 'portfolio-branch', `${emitter}:3`],
+			// The child's reporter escrow is created under the source universe that forked.
+			['ReporterChildCreated', { sourceUniverseId: '3', childUniverseId: '4', escrowAttoRep: atomic(4n) }, 'fork', 'portfolio-branch', `${emitter}:3`],
+			// The escrow completes a report for the feed that created it, so the entity is that feed.
+			['ReportCompleted', { reportId: '7', priceFeed: vault, accepted: true }, 'oracle', 'price-feed', game],
+		] as const
+		for (const [name, data, domain, entityType, entityIdentity] of cases) expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain, entityType, entityIdentity, semanticEventKind: name })
+	})
+
+	test('repair and recovery funding evidence keeps custody universes separate from settlement book IDs', () => {
+		const emitter = pool.toLowerCase()
+		const cashAttoEth = atomic(5n)
+		const amountAttoRep = atomic(2n)
+		const bookRepair = { ...log('SettlementRepaired', { bookId: '7', cashAttoEth }), contractKind: 'securityPoolSettlementBook' as const }
+		const custodyRepair = { ...log('SettlementRepaired', { universeId: '3', sponsor: vault, cashAttoEth }), contractKind: 'securityPoolPortfolioSettlement' as const }
+		const funded = { ...log('RecoveryRepFunded', { universeId: '3', questionId: '42', payer: vault, amountAttoRep }), contractKind: 'securityPoolPortfolioSettlement' as const }
+		expect(projectionsFrom(bookRepair).at(-1)).toMatchObject({ domain: 'risk', entityType: 'settlement-book', entityIdentity: `${emitter}:7`, data: { bookId: '7', cashAttoEth } })
+		expect(projectionsFrom(custodyRepair).at(-1)).toMatchObject({ domain: 'risk', entityType: 'portfolio-settlement', entityIdentity: `${emitter}:3`, data: { universeId: '3', sponsor: vault, cashAttoEth } })
+		expect(projectionsFrom(funded).at(-1)).toMatchObject({ domain: 'risk', entityType: 'portfolio-settlement', entityIdentity: `${emitter}:3`, data: { questionId: '42', payer: vault, amountAttoRep } })
 	})
 
 	test('covers coordinator, escalation, risk, trading, and fork lifecycle taxonomy with stable keys', () => {

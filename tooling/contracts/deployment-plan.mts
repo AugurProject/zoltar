@@ -1,4 +1,4 @@
-import { type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
 import { CANONICAL_TRADING_FEE_BPS, tradingDeploymentData } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { deployViaProxy, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps as getZoltarDeploymentSteps } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import { EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.ts'
@@ -31,32 +31,32 @@ const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<GenesisOutcome, Readonly<Record<string, Hash>>>>>> = {
 	sepolia: {
 		yes: {
-			tradingFactory: '0x6d2285efe52e32249e9b6dbeee300ad8678ae2cd6632632e8052511bab2a17fc',
-			tradingRouter: '0xfb2e2ea3908348eabe39b17ed4961de37544091f17809128889c8c1c2905b114',
+			tradingFactory: '0xcf18d627aa6676e6d35ae42f27e19a449322aff9962164b0b9291a9dd5f96de3',
+			tradingRouter: '0x5a04e95e9a374e129c879383e92f80c5b2b167a67bef1467ac23c63bab7667e0',
 		},
 		no: {
-			tradingFactory: '0xf3a68a477f8e355bfa6af9bbddcb4483755457eccecc9332cebceaedc33815fe',
-			tradingRouter: '0x7005876a4e09fb1b1ff7fd2cfe89d0208259dead5f7257fa0e6d0734b9930d2c',
+			tradingFactory: '0x442e516c94791189cdb54aa31bffb0758c18c4239b739e1f6d3fda98b0430fa3',
+			tradingRouter: '0x286fe6181daae1160752585c90d0a3e53acee9d3025593d0c0bacabc0f1f3e12',
 		},
 	},
 	deterministic: {
 		yes: {
-			tradingFactory: '0x5c57a8cb4b9f2c4f5a846f14e852ea8e0a4d233921814f454c60d377e3306f78',
-			tradingRouter: '0x211834141068cafff1a4aefabee0fc44f51c451dcc55ad05680cf0f3afe52624',
+			tradingFactory: '0x0d2a875c230d94ca26255c0fc3f7c64bf705c30a5b4a78ef7a08ae0bd612f422',
+			tradingRouter: '0x25913b3f96d2d984159055bde09894a76f27195fa487b6bb7b2b522ae3a74e31',
 		},
 		no: {
-			tradingFactory: '0x6a4a5ed7673bf758ad94aa889d04a6f24ca41bf324425d4fb30ca9e84a72d70b',
-			tradingRouter: '0x19b158f267437378bde17263178f763189dc4ae935bffead8ebda649a6a16dd3',
+			tradingFactory: '0xab1b0ee5694d27f2a207f08ba08b9f49b399dd79bde3ca7b2b39edd636def42d',
+			tradingRouter: '0x5676bc7713949b2e29150e8f9a8fc0dd8004e89f1ab6064e6d65f873649b6092',
 		},
 	},
 	mainnet: {
 		yes: {
-			tradingFactory: '0xccc95f4df0a3df1ab752c98d7b27ba3a3cbe0ac148738d2286972a2b32164d25',
-			tradingRouter: '0xbefe76adc520db134fd1a76bb4d50877a0e171df26fbaf6896c885432ff0abe9',
+			tradingFactory: '0x7fbb1a5030943a076430c9fdd31d45be87436efc0b931e44ea535dc27afb6dbe',
+			tradingRouter: '0xb56a209ff9d1cf662bd9e7184332989d264829f4115b74d7cf9dac547b248d25',
 		},
 		no: {
-			tradingFactory: '0xdab4907584fd2a7e60e0e9702481f6305b5d5237c487236999289f7a661841e0',
-			tradingRouter: '0x1a37b26c01b023c89a4eb3f5e6d415cd8b590d05daf187fcfe0c457646e7f8e9',
+			tradingFactory: '0x68d02f1e3b86eae919d8775ac1d5d3526507756295c8786f93f0dc6eb4092d41',
+			tradingRouter: '0x9c42ec324ce93b47a41fee398649e71c591e1485c4beeaed74c07ee2cca06148',
 		},
 	},
 }
@@ -64,12 +64,12 @@ const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantH
 // WETH-dependent immutables differ on chains with deterministic WETH9.
 const DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES: Readonly<Record<GenesisOutcome, Readonly<Record<string, Hash>>>> = {
 	yes: {
-		openOraclePriceCoordinatorFactory: '0x835431e6dcef2c54adc9e6a19ff03e3667f3edbf1a9bd2afcdc4af83f3df1ef1',
-		securityPoolFactory: '0xaf198ec082a6ae89ecd6e0d387110913d7653f7711f297a2585523daa9fc0eea',
+		openOraclePriceCoordinatorFactory: '0x156a06a5062450e3257f7ccd7dbfa89714dc946c091844b4a59e16d3d1099e45',
+		securityPoolFactory: '0x58c28ad7344afcdf9e0f94563854be5a320c20636b90effaa65db56683bd20f3',
 	},
 	no: {
-		openOraclePriceCoordinatorFactory: '0x835431e6dcef2c54adc9e6a19ff03e3667f3edbf1a9bd2afcdc4af83f3df1ef1',
-		securityPoolFactory: '0xb2e5fb6a9288848856f20e65eeb7c5d357660586a48f37e2427bacacc4ed3b6c',
+		openOraclePriceCoordinatorFactory: '0x156a06a5062450e3257f7ccd7dbfa89714dc946c091844b4a59e16d3d1099e45',
+		securityPoolFactory: '0xc547b300234d58bd8962ac265f75549112041dc91c7bb2b3825f1aa3d567c236',
 	},
 }
 

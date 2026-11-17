@@ -28,7 +28,7 @@ export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
 	['solidity/ts/tests/escalationGame/continuationTies.test.ts', 14],
 	['solidity/ts/tests/escalationGame/entryPointGuards.test.ts', 13],
 	['solidity/ts/tests/escalationGame/forkCarryProofs.test.ts', 12],
-	['solidity/ts/tests/escalationGame/forkedEscrow.test.ts', 19],
+	['solidity/ts/tests/escalationGame/carriedProofPayouts.test.ts', 19],
 	['solidity/ts/tests/escalationGame/lifecycleGuards.test.ts', 15],
 	['solidity/ts/tests/escalationGame/localAccounting.test.ts', 12],
 	['solidity/ts/tests/escalationGame/recursiveCarry.test.ts', 23],

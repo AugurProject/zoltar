@@ -1,4 +1,4 @@
-import { type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import type { Address, Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getProxyDeployerCreate2Address } from '@zoltar/core-shared/deployment/deploymentAddresses'
 
 type ZoltarAddressConfig = {

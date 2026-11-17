@@ -2,6 +2,7 @@ import { tokenFunded, loadTradingCollateralAsset } from './collateral.js'
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { loadBudgetMint, loadMintFees } from './minting.js'
 import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
+import { requireCanonicalPoolPortfolio } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
@@ -35,7 +36,7 @@ const zoltarAbi = Zoltar_Zoltar.abi
 const questionDataAbi = ZoltarQuestionData_ZoltarQuestionData.abi
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
+async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address, securityPoolFactory: Address) {
 	const block = await client.getBlock()
 	const blockNumber = block.number
 	if (block.hash === null || block.hash === undefined || blockNumber === undefined) throw new Error('Latest block identity is unavailable')
@@ -50,6 +51,8 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'portfolioCustody' }),
 	])
 	const central = await loadCentralPortfolioQuestion(client, pool, capital, blockNumber)
+	// A pool's own custody link is not proof: the market is offered only when the factory deployed the portfolio it reports.
+	if ((await requireCanonicalPoolPortfolio(client, securityPoolFactory, pool, blockNumber)) !== getAddress(central.portfolioAddress)) throw new Error('Market custody belongs to another portfolio.')
 	const token = await client.readContract({ address: central.portfolioAddress, abi: portfolioArtifact.abi, functionName: 'collateralToken', blockNumber })
 	const collateral = await loadTradingCollateralAsset(client, token, blockNumber)
 	const mintFees = await loadMintFees(client, central, blockNumber)
@@ -70,7 +73,6 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		settlementCollateralAttoEth: current.settlementCollateralAfterFeesAttoEth,
 		settlementRecoveryAttoRep: central?.settlementRecoveryAttoRep ?? 0n,
 		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth, feeAccounting },
-		currentRetentionRate: central.currentRetentionRate,
 		totalUnderwritingLimitAttoEth: central.totalUnderwritingLimitAttoEth,
 		feeEligibleUnderwritingLimitAttoEth: central.feeEligibleUnderwritingLimitAttoEth,
 		mintingCapacityCeilingAttoEth,
@@ -174,7 +176,6 @@ export function unavailableMarket(deployment: SecurityPoolDeployment, error: unk
 		universeForkTime: 0n,
 		shareTokenSupplyAttoShares: 0n,
 		settlementCollateralAttoEth: 0n,
-		currentRetentionRate: 0n,
 		totalUnderwritingLimitAttoEth: 0n,
 		feeEligibleUnderwritingLimitAttoEth: 0n,
 		mintingCapacityCeilingAttoEth: 0n,
@@ -193,23 +194,8 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 	const pool = getAddress(poolAddress)
 	const shareToken = getAddress(shareTokenAddress)
 	const factoryArtifact = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
-	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
-	const {
-		questionData,
-		zoltar,
-		parent,
-		shareTokenSupplyAttoShares,
-		settlementCollateralAttoEth,
-		settlementRecoveryAttoRep,
-		currentRetentionRate,
-		totalUnderwritingLimitAttoEth,
-		feeEligibleUnderwritingLimitAttoEth,
-		mintingCapacityCeilingAttoEth,
-		availableMintingCapacityAttoEth,
-		systemState,
-		awaitingForkContinuation,
-		forker,
-	} = poolSettings
+	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool, configuration.securityPoolFactory), client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
+	const { questionData, zoltar, parent, shareTokenSupplyAttoShares, settlementCollateralAttoEth, settlementRecoveryAttoRep, totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, forker } = poolSettings
 	const [question, questionOutcome, universeForkTime, originUniverseId] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
 		client.readContract({ abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
@@ -257,7 +243,6 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		collateral: poolSettings.collateral,
 		valuation: poolSettings.valuation,
 		mintFees: poolSettings.mintFees,
-		currentRetentionRate,
 		totalUnderwritingLimitAttoEth,
 		feeEligibleUnderwritingLimitAttoEth,
 		mintingCapacityCeilingAttoEth,

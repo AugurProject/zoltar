@@ -117,15 +117,12 @@ export type ListedSecurityPool = {
 	settlementRecoveryAttoRep?: bigint
 	mintingCapacityAttoEth?: bigint
 	settlementCollateralAttoEth: bigint
-	currentRetentionRate: bigint
 	feeAccrualState?: {
 		centralCheckpointTimestamp?: bigint
 		centralSettlement?: boolean
 		linearFee?: LinearFeeState
 		feeEndTimestamp: bigint
-		feeIndexRemainder: bigint
 		lastFeeCheckpointNativeTime: bigint
-		totalFeesOwedRemainder: bigint
 	}
 	feeEligibleUnderwritingLimitAttoEth: bigint
 	hasForkActivity: boolean
@@ -162,9 +159,22 @@ export type TradingShareBalances = {
 	yesAttoShares: bigint
 }
 
+/** A fork's child universe as the share token sees it: the canonical security pool a migration lands in, and what the wallet already migrated into it from each source outcome. */
+export type ShareMigrationTarget = {
+	canonicalPool: Address | undefined
+	migratedAttoShares: TradingShareBalances
+	outcomeIndex: bigint
+}
+
+/** The fork's child universes as the share token sees them, or why reading them failed; refreshing the pool retries the read. */
+export type ShareMigrationTargetsState = readonly ShareMigrationTarget[] | { unavailableReason: string }
+
 export type TradingDetails = {
 	maxRedeemableCompleteSetsAttoShares: bigint | undefined
 	shareBalances: TradingShareBalances | undefined
+	/** Loaded once the pool's universe has forked; absent until then. A failed read leaves the rest of the details usable. */
+	shareMigrationTargets?: ShareMigrationTargetsState | undefined
+	shareTokenAddress: Address
 	universeId: bigint
 }
 
@@ -259,6 +269,8 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	status: 'active'
 	bindingCapital: bigint
 	currentRequiredBond: bigint
+	/** Zoltar refuses this universe's fork before this time while its parent fork response period is active. */
+	earliestForkTime: bigint
 	escalationEndTime: bigint
 	escalationGameAddress: Address
 	hasReachedNonDecision: boolean
@@ -268,6 +280,8 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	forkContinuation?: boolean | undefined
 	forkResumedAt?: bigint | undefined
 	forkElapsedAtStart?: bigint | undefined
+	/** End of the response period restarted by the last change of leader; zero or absent before any. */
+	responseRestartedUntil?: bigint | undefined
 }
 
 export type ReportingDetails =

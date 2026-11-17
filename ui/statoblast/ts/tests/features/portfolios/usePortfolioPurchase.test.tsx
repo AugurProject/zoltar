@@ -3,16 +3,17 @@ import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { usePortfolioPurchase } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioPurchase.js'
 import type { PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { auctionCapitalSnapshot, capitalSnapshot, owner, capital, token, unit } from './capitalFixture.js'
-import { capitalClient } from './capitalClient.js'
+import { modules, capitalClient } from './capitalClient.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee) returns(uint256)'])
-async function setup(snapshot = capitalSnapshot()) {
+async function setup(snapshot = capitalSnapshot(), recoveryAttoRep = 0n, recoveryToken = token) {
 	const source = capitalClient(snapshot)
 	const values = {
 		questionOriginIds: `0x${'11'.repeat(32)}`,
@@ -22,6 +23,8 @@ async function setup(snapshot = capitalSnapshot()) {
 		getQuestionEndDate: 10_000n,
 		escalationGame: zeroAddress,
 		systemState: 0n,
+		quoteMintRecoveryRep: recoveryAttoRep,
+		recoveryTokens: recoveryToken,
 		purchaseQuote: [unit / 100n, unit / 200n],
 		quoteQuestionMint: unit,
 		availableMintCapacity: 10n * unit,
@@ -43,7 +46,7 @@ async function setup(snapshot = capitalSnapshot()) {
 		hook.state().setMaximumFee('0.02')
 		hook.state().setMinimumShares('0.9')
 	})
-	await waitFor(() => expect(hook.state().quote).toBeDefined())
+	await waitFor(() => (recoveryToken === zeroAddress ? expect(hook.state().reason).toContain('Recovery REP funding is unavailable.') : expect(hook.state().quote).toBeDefined()))
 	return { hook, source, requests }
 }
 test('purchases made while managing an auction vault receive shares in the controlling wallet', async () => {
@@ -107,30 +110,83 @@ test('USDC purchases parse six decimals and require a separate token approval', 
 	expect(decodeFunctionData({ abi, data: purchase.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, 2_000_000n, owner, 900_000n, 20_000n] })
 })
 
-/** A `USDT`-symbol collateral at `collateralToken` with a 5 USDT allowance, and the requested increase to 10 USDT. */
-async function requestUsdtSymbolApprovalIncrease(collateralToken: typeof token) {
-	const snapshot = capitalSnapshot({ collateralToken, collateral: { address: collateralToken, symbol: 'USDT', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 5_000_000n })
-	const state = await setup(snapshot)
-	state.source.setRead('allowance', 5_000_000n)
-	await act(() => state.hook.state().approve(10_000_000n))
-	const increase = state.requests[0]
+test('raising an existing collateral allowance is one approval that needs no reset', async () => {
+	const snapshot = capitalSnapshot({ collateral: { address: token, symbol: 'USDC', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 5_000_000n })
+	const { hook, requests } = await setup(snapshot)
+	await act(() => hook.state().approve(10_000_000n))
+	expect(requests).toHaveLength(1)
+	const increase = requests[0]
 	if (increase === undefined) throw new Error('Missing approval')
-	return { ...state, snapshot, increase }
-}
-
-test('USDT approvals require a separate reset even when the existing allowance covers the purchase', async () => {
-	const { hook, source, requests, snapshot, increase } = await requestUsdtSymbolApprovalIncrease('0xdAC17F958D2ee523a2206206994597C13D831ec7')
-	await expect(increase.validateBeforeSubmit?.()).rejects.toThrow('Reset USDT approval first.')
-	await act(() => hook.state().approve(0n))
-	const reset = requests[1]
-	if (reset === undefined) throw new Error('Missing reset')
-	await reset.validateBeforeSubmit?.()
-	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: reset.data }).args).toEqual([snapshot.services, 0n])
-	source.setRead('allowance', 0n)
-	await increase.validateBeforeSubmit?.()
-	expect(requests).toHaveLength(2)
+	expect(increase.validateBeforeSubmit).toBeUndefined()
+	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: increase.data }).args).toEqual([snapshot.services, 10_000_000n])
 })
-test('a token that only reports the USDT symbol does not require an allowance reset', async () => {
-	const { increase } = await requestUsdtSymbolApprovalIncrease(token)
-	await increase.validateBeforeSubmit?.()
+
+test('recovery-bearing purchases separately approve REP and bind the reviewed contribution budget', async () => {
+	const { hook, source, requests } = await setup(capitalSnapshot(), 2n * unit)
+	expect(hook.state().maximumRecoveryRep).toBe('2.020000000000000001')
+	await act(() => hook.state().setMaximumRecoveryRep('2'))
+	source.setRead('allowance', 0n, token)
+	await act(() => hook.state().setMintAmount('1.1'))
+	await waitFor(() => expect(hook.state().reason).toBe('Recovery REP approval required.'))
+	await act(() => hook.state().approveRecoveryRep(2n * unit))
+	expect(requests).toHaveLength(1)
+	const approval = requests[0]
+	if (approval === undefined) throw new Error('Missing recovery approval')
+	expect(approval.to).toBe(token)
+	expect(decodeFunctionData({ abi: parseAbi(['function approve(address,uint256) returns(bool)']), data: approval.data }).args).toEqual([modules.engine, 2n * unit])
+	source.setRead('allowance', 2n * unit, token)
+	await act(() => hook.state().setMintAmount('1.2'))
+	await waitFor(() => expect(hook.state().reason).toBeUndefined())
+	await act(() => hook.state().buy())
+	const purchase = requests[1]
+	if (purchase === undefined) throw new Error('Missing funded purchase')
+	expect(decodeFunctionData({ abi: parseAbi(['function createCompleteSetWithRecoveryRep(uint248,uint256,uint256,address,uint256,uint256,uint256)']), data: purchase.data }).args?.[6]).toBe(2n * unit)
+	source.setRead('quoteMintRecoveryRep', 3n * unit)
+	await expect(purchase.validateBeforeSubmit?.()).rejects.toThrow('Purchase prerequisites changed')
+})
+
+test('a buyer without enough recovery REP sees the contribution and cannot submit', async () => {
+	const { hook, source, requests } = await setup(capitalSnapshot(), 2n * unit)
+	source.setRead('balanceOf', 0n, token)
+	await act(() => {
+		hook.state().setMaximumRecoveryRep('2')
+		hook.state().setMintAmount('1.1')
+	})
+	await waitFor(() => expect(hook.state().reason).toBe('Insufficient REP for the proportional recovery contribution.'))
+	expect(hook.state().quote?.recoveryAttoRep).toBe(2n * unit)
+	await expect(hook.state().buy()).rejects.toThrow('Insufficient REP')
+	expect(requests).toHaveLength(0)
+})
+
+test('known recovery controls remain applicable through a block refresh and quote error without allowing a stale purchase', async () => {
+	const snapshot = capitalSnapshot()
+	const { hook, source, requests } = await setup(snapshot, 2n * unit)
+	expect(hook.state().recoveryApplicable).toBe(true)
+	const pending = createDeferred<bigint>()
+	source.setRead('quoteMintRecoveryRep', pending.promise)
+	const next = { ...snapshot, blockNumber: 11n, blockHash: `0x${'01'.repeat(32)}` as const }
+	source.setSnapshot(next)
+	await hook.setProps({ snapshot: next })
+	await waitFor(() => expect(hook.state().quoteLoading).toBe(true))
+	expect(hook.state().recoveryApplicable).toBe(true)
+	expect(hook.state().quote).toBeUndefined()
+	await act(() => pending.reject(new Error('Recovery quote temporarily unavailable.')))
+	await waitFor(() => expect(hook.state().recoveryError).toContain('Recovery quote temporarily unavailable.'))
+	expect(hook.state().recoveryApplicable).toBe(true)
+	await expect(hook.state().buy()).rejects.toThrow('Recovery quote temporarily unavailable.')
+	expect(requests).toHaveLength(0)
+	source.setRead('quoteMintRecoveryRep', 0n)
+	source.setRead('questionId', 2n)
+	await act(() => hook.state().setQuestionInput('2'))
+	expect(hook.state().recoveryApplicable).toBe(false)
+	await waitFor(() => expect(hook.state().quote?.recoveryAttoRep).toBe(0n))
+	expect(hook.state().recoveryApplicable).toBe(false)
+})
+
+test('a positive quote makes recovery controls applicable even when its first funding read fails', async () => {
+	const { hook } = await setup(capitalSnapshot(), 2n * unit, zeroAddress)
+	expect(hook.state().recoveryApplicable).toBe(true)
+	expect(hook.state().quote).toBeUndefined()
+	expect(hook.state().recovery).toBeUndefined()
+	expect(hook.state().recoveryError).toContain('Recovery REP funding is unavailable.')
 })

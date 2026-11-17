@@ -55,11 +55,11 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 	const stateListeners = new Set<() => void>()
 	const impersonatedAccounts = new Set<string>()
 	let baselineTransactionCount = 0n
-	let bootstrapError: string | undefined = undefined
-	let bootstrapLabel: string | undefined = undefined
-	let bootstrapProgress: number | undefined = undefined
+	let bootstrapError: string | undefined
+	let bootstrapLabel: string | undefined
+	let bootstrapProgress: number | undefined
 	let blockCountSinceReset = 0n
-	let bootstrapPromise: Promise<void> | undefined = undefined
+	let bootstrapPromise: Promise<void> | undefined
 	let bootstrapped = false
 	let bootstrapping = false
 	let currentTimestamp = 0n
@@ -67,7 +67,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 	let repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
 	let repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 	/** The prepared state a scenario bootstrap restored, so a reset restores it again instead of seeding. */
-	let scenarioSnapshot: SavedSimulationStateEnvelopeV1 | undefined = undefined
+	let scenarioSnapshot: SavedSimulationStateEnvelopeV1 | undefined
 	let selectedAccount = primaryAccount
 	const simulationSource = getSimulationSource(initialization)
 	let transactionCountSinceReset = 0n
@@ -229,7 +229,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		),
 	})
 	// Seeding writes to the chain directly; work that arrives from outside the engine waits until it has finished.
-	let seeding: Promise<void> | undefined = undefined
+	let seeding: Promise<void> | undefined
 	const awaitSeeding = async () => {
 		if (seeding !== undefined) await seeding.catch(() => undefined)
 	}

@@ -11,7 +11,7 @@ import { createPublicClient, createWalletClient, getAddress, parseTransaction, p
 import type { OperatorSettings } from '../../src/config/settings.ts'
 import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
 import { TransactionAwaitingRecovery, executeOperationPlan } from '../../src/execution/transaction-executor.ts'
-import { type ExecutionEnvironment } from '../../src/execution/execution-context.ts'
+import type { ExecutionEnvironment } from '../../src/execution/execution-context.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { chaosChain, createChaosReadPool, performCanonicalScan, planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { executionProfileId } from '../../src/runtime/operator.ts'
@@ -70,7 +70,6 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 		discovery: {
 			maxPools: 100,
 			maxQuestions: 100,
-			maxStagedOperationsPerPool: 100,
 			maxUniverses: 100,
 			maxVaultsPerPool: 100,
 		},

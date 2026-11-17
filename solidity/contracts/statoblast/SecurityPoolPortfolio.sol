@@ -125,7 +125,9 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	event UniversePrepared(uint248 indexed universeId, address capitalLedger);
 	event SetupAdvanced(uint8 stage);
 
-	constructor(ISecurityPoolFactory _factory, OriginConfig memory origin, uint256 horizon, Deployers memory deployment, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
+	/// @dev The canonical factory supplies itself and its pinned module deployers as
+	/// the leading arguments; the creator chooses only the configuration that follows.
+	constructor(ISecurityPoolFactory _factory, Deployers memory deployment, OriginConfig memory origin, uint256 horizon, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0, 'Invalid portfolio economics');
 		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');
@@ -326,9 +328,20 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256 fee, uint256 premium) {
 		return quoteHelper.purchaseQuote(universeId, questionId, mintAttoEth);
 	}
-	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee) external nonReentrant returns (uint256 minted) {
+	function quoteMintRecoveryRep(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256) {
+		return quoteHelper.quoteMintRecoveryRep(universeId, questionId, mintAttoEth);
+	}
+	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee) external nonReentrant returns (uint256) {
+		return _purchase(universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, 0);
+	}
+	/// @notice Buy into inherited recovery claims with an explicit REP spending limit.
+	function createCompleteSetWithRecoveryRep(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) external nonReentrant returns (uint256) {
+		return
+			_purchase(universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, maximumRecoveryAttoRep);
+	}
+	function _purchase(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) private returns (uint256 minted) {
 		uint256 fee;
-		(minted, fee) = services.purchase(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee);
+		(minted, fee) = services.purchase(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, maximumRecoveryAttoRep);
 		purchasingPool = address(0);
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}

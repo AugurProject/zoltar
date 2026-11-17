@@ -1,7 +1,7 @@
 import { wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { beforeAll, expect } from 'bun:test'
 import { encodeDeployData, parseAbi, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, type PortfolioEconomicsConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, portfolioAddressFromDeploymentLogs, type PortfolioEconomicsConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
@@ -14,7 +14,6 @@ import { deployContract } from '../../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { applyLibraries, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -60,12 +59,11 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 			maximumQuestionHorizonSeconds,
 			questionAdmissionPolicy: policy,
 			economics: configuration,
-			deployers: getTestPortfolioDeployers(),
-			artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
+			creationCode: applyLibraries(portfolioArtifact.evm.bytecode.object),
 		})
 		const receipt = await owner().waitForTransactionReceipt({ hash: await owner().sendTransaction({ ...request, gas: 16_777_216n }) })
-		if (receipt.status !== 'success' || receipt.contractAddress === undefined) throw new Error('Portfolio deployment must succeed within the transaction gas limit')
-		const created = receipt.contractAddress
+		if (receipt.status !== 'success') throw new Error('Portfolio deployment must succeed within the transaction gas limit')
+		const created = portfolioAddressFromDeploymentLogs(receipt.logs, infrastructure.securityPoolFactory)
 		const setupAbi = parseAbi(['function setupStage() view returns(uint8)'])
 		const setupGas = [receipt.gasUsed]
 		for (let stage = 1; stage <= 4; stage++) {

@@ -7,7 +7,7 @@ const BPS = 10_000n
 /** Mirrors TwoWayConstantProductPair.MINIMUM_LIQUIDITY, the LP locked forever by the first deposit. */
 export const MINIMUM_LIQUIDITY = 1_000n
 
-type PoolState = Pick<LiveMarket, 'mintFees' | 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
+type PoolState = Pick<LiveMarket, 'mintFees' | 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>
 
 /**
  * What a liquidity operation moves, in one shape for both the wallet simulation and the public-state estimate.
@@ -43,7 +43,8 @@ export function estimateLiquidity(market: PoolState, operation: LiquidityOperati
 		if (market.lpTotalSupply === 0n || amount > market.lpTotalSupply) return undefined
 		const yesOut = (market.yesReserve * amount) / market.lpTotalSupply
 		const noOut = (market.noReserve * amount) / market.lpTotalSupply
-		return yesOut === 0n || noOut === 0n ? undefined : { operation, amount, yesOut, noOut }
+		// The pair lets a dust position exit when only one side rounds to zero, and rejects a removal that returns nothing.
+		return yesOut === 0n && noOut === 0n ? undefined : { operation, amount, yesOut, noOut }
 	}
 	const mintAmount = estimateBudgetMint(market, amount)
 	const completeSets = mintAmount === undefined ? undefined : collateralAttoEthToAttoShares(mintAmount, market)

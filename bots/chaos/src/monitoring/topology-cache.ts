@@ -4,18 +4,18 @@ import { mkdir, opendir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { isExistingTargetError, ownerDirectory, ownerFilesystem, parseJsonDocument, readOwnerFile, syncOwnerDirectory, writeOwnerFile } from '@zoltar/bot-shared/config/durable-file'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
-import { type Hex } from '@zoltar/bot-shared/ethereum'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 
 import { collectionDigest, manifestWithDigest, sha256 } from '../state/content-digest.ts'
 import { requiredRecord } from '../state/validators.ts'
 import {
-	ImmutableTopologyResidentLimits,
+	type ImmutableTopologyResidentLimits,
 	IMMUTABLE_TOPOLOGY_MANIFEST_BYTES,
 	IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
 	IMMUTABLE_TOPOLOGY_SEGMENT_BYTES,
 	parseTopologyCache,
 	assertTopologyResidentBounds,
-	CanonicalImmutableTopologyCache,
+	type CanonicalImmutableTopologyCache,
 	IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES,
 	validateImmutableTopologyCache,
 	isConfiguredResidentLimitError,
@@ -32,16 +32,16 @@ import {
 	appendLoadedRecord,
 	collectionStatistics,
 	parsePointer,
-	CollectionKind,
-	TopologyCollectionRecord,
-	CollectionCommitment,
+	type CollectionKind,
+	type TopologyCollectionRecord,
+	type CollectionCommitment,
 	TOPOLOGY_CHUNK_SCHEMA_VERSION,
 	chunkFilename,
 	TOPOLOGY_CHUNK_RECORDS,
 	topologyCollectionRecords,
 	manifestPayload,
 	TOPOLOGY_POINTER_SCHEMA_VERSION,
-	TopologyPointer,
+	type TopologyPointer,
 } from './topology-format.ts'
 
 const TOPOLOGY_STORE_MAXIMUM_ENTRIES = 256

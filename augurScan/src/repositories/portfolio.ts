@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { latestAuctionCollateralSql } from './auction-collateral.ts'
 
 export type RichListSort = 'eth' | 'weth' | 'rep' | 'transactions'
 
@@ -91,15 +92,6 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 			LEFT JOIN latest_token_metadata metadata ON metadata.chain_id = rep.chain_id AND metadata.address = rep.asset_address
 			WHERE rep.asset_kind = 'rep'
 			ORDER BY rep.chain_id, rep.address, rep.balance / power(10::numeric, COALESCE(metadata.decimals, 18)) DESC, rep.asset_address
-		), latest_vaults AS (
-			SELECT DISTINCT ON (chain_id, pool_address, vault_address) chain_id, pool_address, vault_address,
-				rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, block_number
-			FROM vault_snapshots WHERE canonical ${throughSnapshot('block_number')}
-			ORDER BY chain_id, pool_address, vault_address, block_number DESC, log_index DESC
-		), vault_summary AS (
-			SELECT chain_id, vault_address AS address, count(*) AS vault_count,
-				count(*) FILTER (WHERE rep_backing_units > 0 OR capacity_ownership_atto_rep > 0 OR claimable_fees_atto_eth > 0) AS active_vault_count
-			FROM latest_vaults GROUP BY chain_id, vault_address
 		), ranked AS (
 			SELECT activity.*, n.id AS network_id, n.explorer_base_url, c.label, c.kind,
 				COALESCE(balance.weth_balance, 0) AS weth_balance,
@@ -118,14 +110,12 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 				COALESCE(balance.sampled_weth_token_count, 0) > 100 AS weth_balances_truncated,
 				COALESCE(assets.rep_token_count, 0) AS rep_token_count,
 				COALESCE(assets.weth_token_count, 0) AS weth_token_count,
-				balance.oldest_balance_block, balance.last_balance_refresh,
-				COALESCE(vault.vault_count, 0) AS vault_count, COALESCE(vault.active_vault_count, 0) AS active_vault_count
+				balance.oldest_balance_block, balance.last_balance_refresh
 			FROM activity_summary activity
 			JOIN networks n USING (chain_id)
 			LEFT JOIN asset_summary assets USING (chain_id)
 			LEFT JOIN balance_summary balance USING (chain_id, address)
 			LEFT JOIN largest_rep USING (chain_id, address)
-			LEFT JOIN vault_summary vault USING (chain_id, address)
 			LEFT JOIN ${contractTable} c ON c.chain_id = activity.chain_id AND c.address = activity.address AND c.canonical
 		), page AS (
 			SELECT *, row_number() OVER (ORDER BY ${orderBy}, chain_id, address) AS page_order FROM ranked
@@ -149,21 +139,6 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 					ORDER BY pool.block_number DESC LIMIT 1) pool ON true
 				LEFT JOIN questions question ON question.chain_id = page.chain_id AND question.question_id = pool.question_id AND question.canonical ${throughSnapshot('question.block_number')}
 			), '[]'::jsonb) AS pool_associations,
-				COALESCE((SELECT jsonb_agg(jsonb_build_object(
-					'poolAddress', position.pool_address, 'questionTitle', question.title,
-					'repBackingUnits', position.rep_backing_units::text,
-					'underwritingLimitAttoEth', position.capacity_ownership_atto_rep::text,
-					'claimableFeesAttoEth', position.claimable_fees_atto_eth::text,
-					'blockNumber', position.block_number::text
-				) ORDER BY position.pool_address)
-				FROM (SELECT * FROM latest_vaults latest_position
-					WHERE latest_position.chain_id = page.chain_id AND latest_position.vault_address = page.address
-					ORDER BY latest_position.pool_address LIMIT 100) position
-				LEFT JOIN LATERAL (SELECT pool.question_id FROM pools pool
-					WHERE pool.chain_id = page.chain_id AND pool.pool_address = position.pool_address AND pool.canonical ${throughSnapshot('pool.block_number')}
-					ORDER BY pool.block_number DESC LIMIT 1) pool ON true
-				LEFT JOIN questions question ON question.chain_id = page.chain_id AND question.question_id = pool.question_id AND question.canonical ${throughSnapshot('question.block_number')}
-			), '[]'::jsonb) AS vault_positions,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
 					'address', token.asset_address, 'balance', token.balance::text, 'blockNumber', token.block_number::text,
 					'name', metadata.name, 'symbol', metadata.symbol, 'decimals', metadata.decimals,
@@ -200,12 +175,33 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 			), '[]'::jsonb) AS escalation_claims,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
 					'type', event.event_name, 'entity', event.auction_address, 'data', event.event_data,
-					'blockNumber', event.block_number::text, 'provenance', 'historical interaction'
+					'blockNumber', event.block_number::text, 'provenance', 'historical interaction',
+					-- Auction amounts are in the auction's immutable collateral token, from its latest successful tagged read.
+					'collateral', ${latestAuctionCollateralSql('page.chain_id', 'event.auction_address', throughSnapshot('auction_snapshot.block_number'))}
 				) ORDER BY event.block_number DESC, event.log_index DESC)
 				FROM (SELECT * FROM collateral_repair_auction_events evidence WHERE evidence.chain_id = page.chain_id
 					AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'bidder') = page.address
 					ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 100) event
-			), '[]'::jsonb) AS auction_claims
+			), '[]'::jsonb) AS auction_claims,
+				-- The latest tagged read of each capital position the address owns: one per universe ledger.
+				COALESCE((SELECT jsonb_agg(jsonb_build_object(
+					'ledgerAddress', position.ledger_address, 'portfolio', position.read_result->>'portfolio', 'universeId', position.read_result->>'universeId',
+					'readStatus', position.read_status, 'principalAttoRep', position.read_result->>'principalAttoRep',
+					'commitmentAttoEth', position.read_result->>'commitmentAttoEth', 'healthFactorBps', position.read_result->>'healthFactorBps',
+					'unclaimedFeesAttoEth', position.read_result->>'unclaimedFeesAttoEth', 'unclaimedFeesAttoRep', position.read_result->>'unclaimedFeesAttoRep',
+					'collateral', position.read_result->'collateral', 'blockNumber', position.block_number::text
+				) ORDER BY position.ledger_address)
+				FROM (SELECT ledger.address AS ledger_address, latest.read_status, latest.read_result, latest.block_number
+					FROM contracts ledger
+					-- One index seek per ledger: the exact identity of this address's position in it.
+					JOIN LATERAL (SELECT state.read_status, state.read_result, state.block_number FROM entity_state_snapshots state
+						JOIN blocks state_block ON state_block.chain_id = state.chain_id AND state_block.hash = state.block_hash AND state_block.canonical
+						WHERE state.chain_id = page.chain_id AND state.entity_type = 'capital-owner' AND state.canonical ${throughSnapshot('state.block_number')}
+							AND state.entity_identity = ledger.address || ':' || page.address
+						ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) latest ON true
+					WHERE ledger.chain_id = page.chain_id AND ledger.canonical AND ledger.kind = 'securityPoolCapitalLedger'
+					ORDER BY ledger.address LIMIT 100) position
+			), '[]'::jsonb) AS capital_positions
 			FROM page
 		)
 		SELECT enriched.*, totals.total FROM totals LEFT JOIN enriched ON true ORDER BY enriched.page_order`,
@@ -234,11 +230,11 @@ export const addressPortfolioRows = async (
 		sql`
 			WITH transfers AS (
 				SELECT event.market_address, lower(event.event_data->>'from') AS from_address,
-					lower(event.event_data->>'to') AS to_address, (event.event_data->>'amount')::numeric AS amount
+					lower(event.event_data->>'to') AS to_address, (event.event_data->>'value')::numeric AS amount
 				FROM amm_trade_events event
 				WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock}
 					AND event.event_name = 'Transfer' AND event.event_data ? 'from'
-					AND event.event_data ? 'to' AND event.event_data ? 'amount'
+					AND event.event_data ? 'to' AND event.event_data ? 'value'
 			), deltas AS (
 				SELECT transfer.market_address, transfer.amount AS balance_delta FROM transfers transfer WHERE transfer.to_address = ${address}
 				UNION ALL SELECT transfer.market_address, -transfer.amount FROM transfers transfer WHERE transfer.from_address = ${address}
@@ -259,7 +255,7 @@ export const addressPortfolioRows = async (
 		sql`
 			WITH participation AS (SELECT universe_identity, event_name, event_data, block_number, block_hash, tx_hash, log_index
 				FROM fork_migration_events event WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock} AND (
-					lower(event.event_data->>'migrator') = ${address} OR lower(event.event_data->>'vault') = ${address}
+					lower(event.event_data->>'migrator') = ${address} OR lower(event.event_data->>'owner') = ${address}
 					OR lower(event.event_data->>'recipient') = ${address})), totals AS (SELECT count(*)::integer AS total FROM participation)
 			SELECT page.universe_identity, page.event_name, page.event_data, page.block_number::text,
 				page.block_hash, page.tx_hash, page.log_index, totals.total FROM totals LEFT JOIN LATERAL (

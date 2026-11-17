@@ -315,6 +315,10 @@ describe('public liquidity estimate', () => {
 		const initialization = estimateLiquidity({ ...skewed, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n }, 'initialize', 10n ** 18n, 7_500n)
 		expect(initialization).toMatchObject({ operation: 'initialize', yesUsed: 10n ** 18n / 3n, noUsed: 10n ** 18n, liquidity: 10n ** 18n / 3n - 1_000n })
 		expect(estimateLiquidity(skewed, 'remove', 41n * 10n ** 18n, undefined)).toBeUndefined()
+		// A dust position still exits when only its scarce side rounds to zero; a removal that returns nothing does not.
+		const dust = etherScaleMarketFixture({ yesReserve: 5_000n, noReserve: 500n, lpTotalSupply: 1_001n })
+		expect(estimateLiquidity(dust, 'remove', 1n, undefined)).toEqual({ operation: 'remove', amount: 1n, yesOut: 4n, noOut: 0n })
+		expect(estimateLiquidity({ ...dust, yesReserve: 500n }, 'remove', 1n, undefined)).toBeUndefined()
 		expect(estimateLiquidity(skewed, 'add', 0n, undefined)).toBeUndefined()
 		expect(estimateLiquidity(skewed, 'initialize', 10n ** 18n, undefined)).toBeUndefined()
 	})
@@ -324,4 +328,11 @@ describe('public liquidity estimate', () => {
 		const skewed = etherScaleMarketFixture({ yesReserve: 20n * 10n ** 18n, noReserve: 80n * 10n ** 18n })
 		expect(outcomeSharesValueAttoEth(skewed, 2n * 10n ** 18n, 8n * 10n ** 18n)).toBe(32n * 10n ** 17n)
 	})
+})
+
+test('recovery REP blocks cash-only liquidity funding but preserves LP removal', () => {
+	const recovered = { ...openMarket, settlementRecoveryAttoRep: 10n ** 18n }
+	expect(estimateLiquidity(recovered, 'add', 10n ** 18n, undefined)).toBeUndefined()
+	expect(estimateLiquidity({ ...recovered, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n }, 'initialize', 10n ** 18n, 5000n)).toBeUndefined()
+	expect(estimateLiquidity(recovered, 'remove', 10n ** 18n, undefined)).toBeDefined()
 })

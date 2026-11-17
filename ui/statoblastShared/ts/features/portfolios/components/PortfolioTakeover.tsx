@@ -1,7 +1,7 @@
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
-import { buildPortfolioCapitalTakeOverWithBoundsRequest, portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { useEffect, useId, useRef } from 'preact/hooks'
+import { buildPortfolioCapitalCureRequest, buildPortfolioCapitalTakeOverWithBoundsRequest, portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -13,6 +13,7 @@ import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capit
 import type { usePortfolio } from '../hooks/usePortfolio.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import * as copy from '../../../copy/portfolioTakeover.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
@@ -33,6 +34,7 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	const ownInput = useSignal('')
 	const principalInput = useSignal('')
 	const totalCommitmentInput = useSignal('')
+	const sharedReasonId = useId()
 	const snapshot = model.snapshot
 	const id = portfolioUnsignedId(positionInput.value, 96)
 	const key = `${snapshot?.chainId}:${snapshot?.capitalLedger}:${snapshot?.owner}:${snapshot?.blockHash}:${id}`
@@ -74,8 +76,28 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	if (reason === undefined && preview === undefined) reason = loaded?.error ?? copy.loading
 	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
 	if (reason === undefined && snapshot !== undefined && !snapshot.priceValid) reason = copy.priceRequired
-	if (reason === undefined && preview !== undefined && snapshot !== undefined && (preview.position.owner === snapshot.owner || preview.position.commitment === 0n || preview.position.maxHealthyPrice >= snapshot.liquidationPrice || preview.started === 0n || source?.healthy === true)) reason = copy.notEligible
+	const distressed = preview !== undefined && snapshot !== undefined && preview.position.owner !== snapshot.owner && preview.position.commitment !== 0n && preview.position.maxHealthyPrice < snapshot.liquidationPrice && preview.started !== 0n
+	// The ledger cures before it quotes. A cure that restores the position stands unpaid, and a call asking for an award reverts.
+	const curable = distressed && source?.healthy === true && source.removed !== 0n
+	let cureReason = reason
+	if (reason === undefined && (!distressed || (source?.healthy === true && !curable))) reason = cureReason = copy.notEligible
+	if (reason === undefined && curable) reason = copy.cureInstead
+	if (cureReason === undefined && !curable) cureReason = copy.takeOverInstead
 	if (reason === undefined && (commitment === undefined || commitment === 0n || minimumAward === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
+	const validateTarget = (current: NonNullable<typeof preview>, capitalLedger: NonNullable<typeof snapshot>['capitalLedger'], commitmentIndex: NonNullable<typeof snapshot>['commitmentIndex'], positionId: bigint) => async () => {
+		const client = createConnectedReadClient()
+		const epoch = await client.readContract({ address: capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch' })
+		const position = await client.readContract({ address: commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [positionId] })
+		if (epoch !== current.epoch || position.rep !== current.position.rep || position.commitment !== current.position.commitment || position.owner !== current.position.owner || position.batch !== current.position.batch) throw new Error(copy.changed)
+	}
+	const cure = async () => {
+		if (cureReason !== undefined || snapshot === undefined || preview === undefined || source === undefined || id === undefined) throw new Error(cureReason ?? copy.notEligible)
+		await actions.runPortfolioAction('curePortfolioPosition', copy.cure, () => ({
+			...buildPortfolioCapitalCureRequest({ owner: snapshot.owner, capitalLedger: snapshot.capitalLedger, positionId: id, commitment: preview.position.commitment, expectedAcceptedPriceEpoch: preview.epoch, expectedSourceBatch: source.batch }),
+			reviewDescription: copy.cureReview,
+			validateBeforeSubmit: validateTarget(preview, snapshot.capitalLedger, snapshot.commitmentIndex, id),
+		}))
+	}
 	const takeOver = async () => {
 		if (reason !== undefined || snapshot === undefined || preview === undefined || source === undefined || id === undefined || commitment === undefined || minimumAward === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)
 			throw new Error(reason ?? copy.enterBounds)
@@ -90,14 +112,12 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: preview.epoch, expectedSourceBatch: source.batch },
 			}),
 			reviewDescription: copy.review,
-			validateBeforeSubmit: async () => {
-				const client = createConnectedReadClient()
-				const epoch = await client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch' })
-				const position = await client.readContract({ address: snapshot.commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [id] })
-				if (epoch !== preview.epoch || position.rep !== preview.position.rep || position.commitment !== preview.position.commitment || position.owner !== preview.position.owner || position.batch !== preview.position.batch) throw new Error(copy.changed)
-			},
+			validateBeforeSubmit: validateTarget(preview, snapshot.capitalLedger, snapshot.commitmentIndex, id),
 		}))
 	}
+	// Both actions often rest disabled for one shared cause, such as a missing position ID; that reason renders once for the pair.
+	const sharedReason = actions.busy === undefined && reason !== undefined && reason === cureReason ? reason : undefined
+	const reasonId = sharedReason === undefined ? undefined : sharedReasonId
 	return (
 		<SectionBlock title={copy.title} description={copy.description}>
 			<PortfolioInput
@@ -143,7 +163,15 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 					/>
 				))}
 			</div>
-			<PortfolioButton model={actions} action='takeOverPortfolioPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} onClick={takeOver} />
+			<div className='actions'>
+				<PortfolioButton model={actions} action='takeOverPortfolioPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} sharedReasonId={reasonId} onClick={takeOver} />
+				<PortfolioButton model={actions} action='curePortfolioPosition' label={copy.cure} pendingLabel={copy.curing} reason={cureReason} sharedReasonId={reasonId} onClick={cure} />
+			</div>
+			{sharedReason === undefined ? undefined : (
+				<div className='tx-action-feedback shared-action-reason'>
+					<InlineHint id={sharedReasonId} message={sharedReason} />
+				</div>
+			)}
 		</SectionBlock>
 	)
 }

@@ -11,14 +11,14 @@ export interface AmmPriceHistoryRecord {
 
 export interface RepEthPriceHistoryRecord {
 	timestamp: string
-	settlement_timestamp: string | null
+	settlement_timestamp: string
 	block_number: string
 	event_name: string
-	report_id: string | null
+	report_id: string
 	rep_per_eth_1e18: string
 }
 
-import { type EntityHistoryCoverageValue, type JsonRecord, type JsonValue } from './api-validation.ts'
+import type { EntityHistoryCoverageValue, JsonRecord, JsonValue } from './api-validation.ts'
 
 import type { ActivityDetailFocusSnapshot } from './activity-detail-dom.ts'
 import type { HistoryInvalidationReason } from './history-evidence.ts'
@@ -34,7 +34,7 @@ declare global {
 	}
 }
 
-export type StateTab = 'pools' | 'vaults' | 'questions' | 'universes'
+export type StateTab = 'pools' | 'questions' | 'universes'
 
 export interface NetworkRecord {
 	chain_id: string
@@ -138,8 +138,6 @@ export interface RichListRecord {
 	transaction_count: string | number
 	interaction_count: string | number
 	pool_count: string | number
-	vault_count: string | number
-	active_vault_count?: string
 	rep_balances: TokenBalanceRecord[]
 	weth_balances: TokenBalanceRecord[]
 	native_balance_detail: { balance: string; blockNumber: string } | null
@@ -153,12 +151,18 @@ export interface RichListRecord {
 	rep_balances_truncated?: boolean
 	weth_balances_truncated?: boolean
 	pool_associations: Array<{ address: string; label: string | null; questionTitle: string | null }>
-	vault_positions: Array<{
-		poolAddress: string
-		questionTitle: string | null
-		repBackingUnits: string
-		underwritingLimitAttoEth: SerializedAtomicInteger
-		claimableFeesAttoEth: SerializedAtomicInteger
+	// The latest tagged read of each capital position the address owns, one per universe ledger.
+	capital_positions?: Array<{
+		ledgerAddress: string
+		portfolio: string | null
+		universeId: string | null
+		readStatus: string
+		principalAttoRep: string | null
+		commitmentAttoEth: string | null
+		healthFactorBps: string | null
+		unclaimedFeesAttoEth: string | null
+		unclaimedFeesAttoRep: string | null
+		collateral: { address?: string; symbol: string; decimals: number } | null
 		blockNumber: string
 	}>
 	share_positions?: JsonRecord
@@ -184,39 +188,15 @@ export type PoolRecord = {
 	universe_id: string
 	question_id: string
 	question_title: string
-	collateral_repair_auction_address: string
 	coordinator_address: string
 	share_token_address: string
 	security_multiplier_bps: string
 	initial_priority_fee_atto_eth_per_gas: string
-	initial_retention_rate: string
-	initial_settlement_collateral_atto_eth: string
 	settlement_collateral_atto_eth: string
-	total_capacity_ownership_atto_rep: string
-	fee_eligible_capacity_ownership_atto_rep: string
-	total_claimable_vault_fees_atto_eth: string
-	unallocated_accrued_fees_atto_eth: string
-	current_retention_rate: string
-	vault_count: string
+	share_token_supply_atto_shares: string
 	child_count: string
 	snapshot_block: string
 } & { current_state?: Record<string, JsonValue> | undefined }
-
-export type VaultRecord = {
-	chain_id: string
-	network_id: string
-	pool_address: string
-	vault_address: string
-	question_title: string
-	rep_backing_units: string
-	capacity_ownership_atto_rep: string
-	claimable_fees_atto_eth: string
-	fee_index: string
-	vault_fee_remainder: string
-	resulting_total_rep_backing_units: string
-	resulting_fee_eligible_capacity_ownership_atto_rep: string
-	block_number: string
-}
 
 export type QuestionRecord = {
 	chain_id: string
@@ -272,13 +252,10 @@ export type UniverseRecord =
 			migration_rep_balance_atto_rep?: undefined
 	  }
 
-export type StateEntity = PoolRecord | VaultRecord | QuestionRecord | UniverseRecord
-
-type SerializedAtomicInteger = string | number
+export type StateEntity = PoolRecord | QuestionRecord | UniverseRecord
 
 export interface StateCatalog {
 	pools: PoolRecord[]
-	vaults: VaultRecord[]
 	questions: QuestionRecord[]
 	universes: UniverseRecord[]
 	poolStates?: Array<{
@@ -293,7 +270,7 @@ export interface StateCatalog {
 	limit?: number
 	offset?: number
 	catalogVersion: string
-	totals?: Record<'pools' | 'questions' | 'vaults' | 'universes', number>
+	totals?: Record<'pools' | 'questions' | 'universes', number>
 }
 
 export interface AccountReference {
@@ -388,7 +365,6 @@ export interface ChartDefinition<T extends { timestamp: string }> {
 	decimals?: number | undefined
 	unit?: string
 	className?: string
-	pointShape?: (row: T) => 'circle' | 'diamond'
 	pointLabel?: (row: T) => string
 }
 
@@ -508,14 +484,14 @@ export type OperationsRenderContext = {
 	readonly focusHref?: string
 	readonly focusLoadMore: boolean
 	readonly focusDetailCollection?: 'decisions' | 'evidence'
-	readonly focusRiskKind?: 'pool' | 'vault'
+	readonly focusRiskKind?: 'pool'
 	readonly focusHistoryMore: boolean
 	readonly focusViewportTop?: number
 	readonly scrollY: number
 }
 
 export type OperationsDetailRoute = {
-	readonly kind: 'auction' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading' | 'vault'
+	readonly kind: 'auction' | 'capital' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading'
 	readonly identity: readonly string[]
 }
 

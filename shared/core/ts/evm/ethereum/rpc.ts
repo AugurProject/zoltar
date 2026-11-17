@@ -1,4 +1,4 @@
-import { type Address, type Block, type BlockTransaction, type Hex, type LogTopicFilter, type TransactionLog, type TransactionReceipt } from './types.js'
+import type { Address, Block, BlockTransaction, Hex, LogTopicFilter, TransactionLog, TransactionReceipt } from './types.js'
 
 import { getAddress, normalizeAddress, normalizeHash, normalizeNullableAddress, normalizeOptionalLogRemoved, normalizeReceiptStatus, normalizeRequiredReceiptQuantity, normalizeRpcBigInt, normalizeRpcHex, normalizeTransactionType } from './encoding.js'
 

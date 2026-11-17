@@ -1,9 +1,9 @@
 import { statoblast_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { SystemState } from '../../types/statoblastTypes'
-import { QuestionOutcome } from '../../types/types'
+import type { QuestionOutcome } from '../../types/types'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
-import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
+import { type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
 import { requireAddress, requireBigInt, requireBoolean } from '../utilities'
 
 const getAwaitingForkContinuationAbi = [
@@ -25,8 +25,6 @@ function requireSystemState(value: unknown): SystemState {
 			return SystemState.PoolForked
 		case 2n:
 			return SystemState.ForkMigration
-		case 3n:
-			return SystemState.ForkCollateralRepairAuction
 		default:
 			throw new Error(`Unexpected system state: ${state.toString()}`)
 	}

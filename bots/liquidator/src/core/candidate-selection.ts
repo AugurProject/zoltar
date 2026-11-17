@@ -1,7 +1,7 @@
 import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { discardDexMarketObservations, marketConsensusAllowsExecution, requireCanonicalDexEvidence, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { OperatorSettings } from '#config/settings'
-import { initialRuntimeState, type PoolObservation } from '#state/operator-state'
+import type { initialRuntimeState, PoolObservation } from '#state/operator-state'
 
 export function marketConfigurations(settings: OperatorSettings) {
 	return [settings.centralizedMarkets, ...settings.childMarketConfigurations]

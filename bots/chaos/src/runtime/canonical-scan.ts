@@ -19,7 +19,7 @@ import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, ty
 import { updateProtocolIndexWithQuorum } from '../monitoring/protocol-index-quorum.ts'
 import { snapshotProtocolIndex } from '../state/protocol-index-store.ts'
 import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache } from '../monitoring/topology-cache.ts'
-import { type CanonicalImmutableTopologyCache } from '../monitoring/topology-schema.ts'
+import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-schema.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
 import { walletInventory, type WalletBalanceState } from '../state/runtime-state.ts'
@@ -60,7 +60,7 @@ export type CanonicalScanOptions = {
 	clock?: (() => number) | undefined
 }
 
-function requiredConnectivity(settings: OperatorSettings) {
+export function requiredConnectivity(settings: OperatorSettings) {
 	if (settings.connectivity === undefined) throw new Error('Canonical scanning requires configured RPC connectivity')
 	return settings.connectivity
 }

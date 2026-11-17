@@ -1,5 +1,6 @@
 import { areaY, dot, line, lineY, plot, rect, ruleX, text } from '@observablehq/plot'
-import { computeCanonicalEscalationBindingCapital, computeCanonicalEscalationDeadlineDays, projectDocumentationEscalationDeposit, calculateForkThresholdSeries, ESCALATION_ACTIVATION_DELAY_DAYS, ESCALATION_TIME_LENGTH_DAYS, quantitativeChartAxisLabels, quantitativeChartIds } from './chartModels'
+import { computeCanonicalEscalationBindingCapital, computeCanonicalEscalationDeadlineAfterDepositDays, computeCanonicalEscalationDeadlineDays, projectDocumentationEscalationDeposit, calculateForkThresholdSeries } from './chartModels'
+import { ESCALATION_ACTIVATION_DELAY_DAYS, ESCALATION_TIME_LENGTH_DAYS, quantitativeChartAxisLabels, quantitativeChartIds } from './chartModels'
 import { centeredDiagramScrollLeft, type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
 import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
 import chartSpecsSource from 'virtual:diagram-layouts'
@@ -397,9 +398,9 @@ function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 	const rectangleElements = Array.from(chart.querySelectorAll<SVGRectElement>('g[aria-label="rect"] > rect'))
 	const lineElements = Array.from(chart.querySelectorAll<SVGPathElement>('g[aria-label="line"] > path'))
 	const textElements = Array.from(chart.querySelectorAll<SVGTextElement>('g[aria-label="text"] > text'))
-	orderedRectangles.forEach((item, index) => copyDataAttributes(rectangleElements[index], item.attributes))
-	data.lines.forEach((item, index) => copyDataAttributes(lineElements[index], item.attributes))
-	data.texts.forEach((item, index) => copyDataAttributes(textElements[index], item.attributes))
+	for (const [index, item] of orderedRectangles.entries()) copyDataAttributes(rectangleElements[index], item.attributes)
+	for (const [index, item] of data.lines.entries()) copyDataAttributes(lineElements[index], item.attributes)
+	for (const [index, item] of data.texts.entries()) copyDataAttributes(textElements[index], item.attributes)
 	return chart
 }
 
@@ -799,10 +800,10 @@ function updateEscalationSimulator(): void {
 	const depositOutcome = simulator.querySelector<HTMLSelectElement>('[data-example-input="depositOutcome"]')?.value ?? 'yes'
 	const depositAmount = Math.max(read('depositAmount', startBond), 0)
 	const beforeBalances: [bigint, bigint, bigint] = [BigInt(Math.round(balances.Invalid * 1e18)), BigInt(Math.round(balances.Yes * 1e18)), BigInt(Math.round(balances.No * 1e18))]
-	const projection = projectDocumentationEscalationDeposit({ amountRep: depositAmount, balances: beforeBalances, nonDecisionThresholdRep: nonDecisionThreshold, outcome: depositOutcome as 'invalid' | 'yes' | 'no', startBondRep: startBond })
+	const { belowRequiredSupport, projection } = projectDocumentationEscalationDeposit({ amountRep: depositAmount, balances: beforeBalances, elapsedDays: daysSinceStart, nonDecisionThresholdRep: nonDecisionThreshold, outcome: depositOutcome as 'invalid' | 'yes' | 'no', startBondRep: startBond })
 	const afterBalances = projection === undefined ? balances : { Invalid: attoRepToNumber(projection.projectedBalancesAttoRep[0]), Yes: attoRepToNumber(projection.projectedBalancesAttoRep[1]), No: attoRepToNumber(projection.projectedBalancesAttoRep[2]) }
 	const projectedMedian = [afterBalances.Yes, afterBalances.No, afterBalances.Invalid].sort((left, right) => left - right)[1] ?? 0
-	const afterDeadlineDays = computeCanonicalEscalationDeadlineDays(startBond, nonDecisionThreshold, projectedMedian)
+	const afterDeadlineDays = computeCanonicalEscalationDeadlineAfterDepositDays({ bindingCapitalRep: projectedMedian, depositDay: daysSinceStart, nonDecisionThresholdRep: nonDecisionThreshold, startBondRep: startBond, takesLead: projection?.takesLead === true })
 	const afterOrdered = (
 		[
 			['Yes', afterBalances.Yes],
@@ -835,12 +836,10 @@ function updateEscalationSimulator(): void {
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="median"]')?.replaceChildren(`${projectedMedian} REP`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="balances"]')?.replaceChildren(`Yes ${balances.Yes} → ${afterBalances.Yes} REP; No ${balances.No} → ${afterBalances.No} REP; Invalid ${balances.Invalid} → ${afterBalances.Invalid} REP`)
 	const accepted = projection === undefined ? 0 : attoRepToNumber(projection.acceptedAmountAttoRep)
-	let depositState = 'rejected'
-	if (projection !== undefined) {
-		if (projection.tieAdjusted) depositState = `accepted with tie adjustment: ${accepted} REP`
-		else if (accepted < depositAmount) depositState = `accepted and clipped: ${accepted} REP`
-		else depositState = `accepted: ${accepted} REP`
-	}
+	let depositState = belowRequiredSupport ? 'rejected: below required support' : 'rejected'
+	if (projection?.tieAdjusted === true) depositState = `accepted with tie adjustment: ${accepted} REP`
+	else if (projection !== undefined && accepted < depositAmount) depositState = `accepted and clipped: ${accepted} REP`
+	else if (projection !== undefined) depositState = `accepted: ${accepted} REP`
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deposit"]')?.replaceChildren(`${depositState}${projection?.reachesNonDecision === true ? ' (non-decision reached)' : ''}`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="activation"]')?.replaceChildren(daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS ? `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (${ESCALATION_ACTIVATION_DELAY_DAYS - daysSinceStart} days remaining)` : `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (active)`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deadline"]')?.replaceChildren(`day ${deadlineDays.toFixed(1)} → day ${afterDeadlineDays.toFixed(1)}`)

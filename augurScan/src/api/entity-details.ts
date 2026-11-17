@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportLifecycleEventName, reportRoundChanges } from '../operations.ts'
+import { auctionCollateral } from '../repositories/auction-collateral.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
 import { ApiConflictError, ApiRequestError, hasCursorSnapshot, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
@@ -16,22 +17,37 @@ export const snapshotBoundary = (asOf: Record<string, unknown>): readonly [strin
 
 export type ProtocolCursor = readonly [number, string, string, string, string, string, string, string, string, string, string, number]
 
-export type RiskCursor = readonly [number, 'pool' | 'vault', string, string, string, string, string, string, string]
-export const parseRiskCursor = (value: string | null, chainId: number, kind: 'pool' | 'vault'): RiskCursor | undefined => {
+export type RiskCursor = readonly [number, 'pool', string, string, string, string, string, string, string]
+export const parseRiskCursor = (value: string | null, chainId: number): RiskCursor | undefined => {
 	if (value === null) return undefined
 	const parts = parseCursor(
 		value,
-		parts => {
-			if (parts.length !== 9 || !isNonNegativeSafeInteger(parts[0]) || (parts[1] !== 'pool' && parts[1] !== 'vault') || !hasCursorSnapshot(parts, 2) || typeof parts[8] !== 'string' || (kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[8]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[8]))) throw new Error('shape')
-			return parts
+		(parts): RiskCursor => {
+			const [cursorChainId, kind, snapshotBlock, snapshotHash, invalidationId, abiSourceHash, applicationSourceHash, projectionSourceHash, poolAddress] = parts
+			if (
+				parts.length !== 9 ||
+				!isNonNegativeSafeInteger(cursorChainId) ||
+				kind !== 'pool' ||
+				!isPostgresBigint(snapshotBlock) ||
+				typeof snapshotHash !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(snapshotHash) ||
+				!isPostgresBigint(invalidationId) ||
+				typeof abiSourceHash !== 'string' ||
+				typeof applicationSourceHash !== 'string' ||
+				typeof projectionSourceHash !== 'string' ||
+				typeof poolAddress !== 'string' ||
+				!/^0x[0-9a-f]{40}$/.test(poolAddress)
+			)
+				throw new Error('shape')
+			return [cursorChainId, kind, String(snapshotBlock), snapshotHash, String(invalidationId), abiSourceHash, applicationSourceHash, projectionSourceHash, poolAddress]
 		},
-		error => new ApiRequestError(`${kind}Cursor is invalid`, { cause: error }),
+		error => new ApiRequestError('poolCursor is invalid', { cause: error }),
 	)
-	if (parts[0] !== chainId || parts[1] !== kind) throw new ApiRequestError(`${kind}Cursor does not match the requested collection`)
-	return parts as [number, 'pool' | 'vault', string, string, string, string, string, string, string]
+	if (parts[0] !== chainId) throw new ApiRequestError('poolCursor does not match the requested collection')
+	return parts
 }
 
-export const riskCursorFor = (chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>, key: string): string => encodeOpaqueCursor([chainId, kind, ...snapshotBoundary(asOf), key] satisfies RiskCursor)
+export const riskCursorFor = (chainId: number, asOf: Record<string, unknown>, key: string): string => encodeOpaqueCursor([chainId, 'pool', ...snapshotBoundary(asOf), key] satisfies RiskCursor)
 
 const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
 	if (value === null) return undefined
@@ -204,10 +220,15 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 		events: paged(rows, page.limit, row => protocolCursorFor(chainId, domain, address, asOf, row)),
 	}
 	if (domain === 'auction') {
-		const { bids, finalization } = await auctionDetailData(sql, chainId, address, snapshotBlock)
-		result['demandCurve'] = auctionDemandCurve(bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ tick: String(row['tick']), amountAttoEth: String(row['amount_atto_eth']) })))
+		// The latest snapshot can be a failed read; the immutable collateral token comes from the latest successful one.
+		const [{ bids, lotAttoEth, finalization }, collateral] = await Promise.all([auctionDetailData(sql, chainId, address, snapshotBlock), auctionCollateral(sql, chainId, snapshotBlock, address)])
+		result['demandCurve'] = auctionDemandCurve(
+			bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ minimumAttoRepPerLot: row['minimum_atto_rep_per_lot'], lots: row['lots'] })),
+			lotAttoEth,
+		)
 		result['demandCurveTruncated'] = bids.length > 1000
 		result['finalization'] = finalization
+		result['collateral'] = collateral ?? null
 	} else {
 		result['deposits'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'DepositOnOutcome' || row['event_name'] === 'LocalDepositAppended')
 		result['claims'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => String(row['event_name']).includes('Claim'))

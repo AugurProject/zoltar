@@ -28,12 +28,10 @@ function setFormValue(form: HTMLFormElement, name: string, value: string | numbe
 	else if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.value = String(value)
 }
 
-/** Fills the strategy form, including the runtime log-recovery fields it edits, from a loaded configuration. */
+/** Fills the strategy form from a loaded configuration. */
 export function loadStrategyForm(elements: DashboardElements, configuration: Configuration) {
 	const form = elements.strategyForm
 	for (const [name, value] of Object.entries({ ...configuration.strategy, ...configuration.portfolioPolicy })) setFormValue(form, name, value)
-	setFormValue(form, 'logLookbackBlocks', configuration.runtime.logLookbackBlocks)
-	setFormValue(form, 'historicalLogRecovery', configuration.runtime.historicalLogRecovery)
 }
 
 /** Names the automatic actions the saved strategy enables: what the running bot does, not what the form currently shows. */
@@ -58,16 +56,16 @@ export function updateHealthPolicyPreview(elements: DashboardElements) {
 	elements.healthPolicyPreview.textContent = `Receiver health target ${target}; the on-chain target must match before a takeover.`
 }
 
-function readStrategyForm(form: HTMLFormElement): StrategyUpdate {
+/** Reads the edited policy over the saved one, so settings without a form field keep their saved values instead of defaults. */
+function readStrategyForm(form: HTMLFormElement, saved: Configuration): StrategyUpdate {
 	const data = new FormData(form)
 	const fields = Object.fromEntries(data.entries())
 	return {
 		maximumGasCostEth: String(data.get('maximumGasCostEth') ?? ''),
 		walletReserveRep: String(data.get('walletReserveRep') ?? ''),
-		logLookbackBlocks: Number(data.get('logLookbackBlocks')),
-		historicalLogRecovery: checkboxChecked(form, 'historicalLogRecovery'),
 		portfolioPolicy: serializePortfolioPolicy(
 			parsePortfolioPolicy({
+				...saved.portfolioPolicy,
 				...fields,
 				allowFundedTakeovers: checkboxChecked(form, 'allowFundedTakeovers'),
 				targetHealthFactorBps: Number(data.get('targetHealthFactorBps')),
@@ -92,7 +90,7 @@ export function registerStrategyForm({ state, elements, populateConfiguration, s
 		const savedConfiguration = state.configuration
 		let next: StrategyUpdate
 		try {
-			next = readStrategyForm(strategyForm)
+			next = readStrategyForm(strategyForm, savedConfiguration)
 			validateStrategyReview(next)
 		} catch (error) {
 			actionStatus(strategyStatus, error instanceof Error ? error.message : 'Review the strategy values and retry.', true)

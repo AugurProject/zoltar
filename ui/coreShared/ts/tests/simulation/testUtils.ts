@@ -45,7 +45,7 @@ async function loadPreparedScenarioSnapshot(appId: SimulationTestAppId, scenario
 
 export async function createBootstrappedSimulationBackendWithRetry(scenario: SimulationScenario, maxAttempts = 2, appId: SimulationTestAppId = 'zoltar') {
 	const scenarioSnapshot = await loadPreparedScenarioSnapshot(appId, scenario)
-	let lastError: unknown = undefined
+	let lastError: unknown
 	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 		const backend = await createSimulationBackend({ appId, scenario, ...(scenarioSnapshot === undefined ? {} : { scenarioSnapshot }) })
 		activateSimulationBackendProfile(backend)

@@ -26,6 +26,38 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		return (await fixture.owner().readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, fixture.base.questionId] }))[0]
 	}
 
+	test('#1246 purchase premium quotes use the same fractional backing as minting', async () => {
+		await fixture.prepare()
+		await fixture.mint(300_000_000n)
+		await fixture.base.mockWindow.advanceTime(300n)
+		await checkpoint()
+		const client = fixture.owner()
+		const settlement = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const book = await client.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
+		const bookId = await client.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [fixture.base.genesisUniverse] })
+		const [state] = await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'scaledQuestion', args: [bookId, fixture.base.questionId] })
+		const cash = 10n ** 24n
+		const shares = (cash * 1_000_000_000n * state.outcomeSupplyAttoShares) / state.units
+		const principalUnits = (state.feePrincipalAttoEth * shares + state.outcomeSupplyAttoShares - 1n) / state.outcomeSupplyAttoShares
+		const principal = (principalUnits + 1_000_000_000n - 1n) / 1_000_000_000n
+		const denominator = 10_000n * 365n * 86_400n
+		const expected = (principal * 1_000n * 52n * 86_400n + denominator - 1n) / denominator
+		const [, premium] = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, cash] })
+		expect(premium).toBe(expected)
+	})
+
+	test('#1246 low-decimal-sized principal pays holding fees over elapsed time', async () => {
+		await fixture.prepare()
+		await fixture.mint(300_000_000n)
+		const before = await question()
+		await fixture.base.mockWindow.advanceTime(300n)
+		await checkpoint()
+		const after = await question()
+		const paid = before.units - after.units
+		expect(paid).toBeGreaterThanOrEqual(280n)
+		expect(paid).toBeLessThanOrEqual(300n)
+	})
+
 	test('purchase fees use the same backing-based rule on every buy and reject insufficient budgets atomically', async () => {
 		await fixture.prepare()
 		const target = { abi: portfolioArtifact.abi, address: fixture.portfolio }
@@ -50,7 +82,7 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect((await question()).feeRateAttoEthPerSecond).toBe(initial.feeRateAttoEthPerSecond)
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'setCommitment', args: [0n] }))
 		expect((await question()).feeRateAttoEthPerSecond).toBe(initial.feeRateAttoEthPerSecond)
-		expect(initial.feeRateAttoEthPerSecond).toBe((initial.feePrincipalAttoEth * 1_000n) / (10_000n * 365n * 86_400n))
+		expect(initial.feeRateAttoEthPerSecond).toBe((initial.feePrincipalAttoEth * 1_000n * 1_000_000_000n) / (10_000n * 365n * 86_400n))
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'withdrawPrincipal', args: [500n * unit, fixture.other().account.address] }))
 	})
 
@@ -149,5 +181,29 @@ describe('Statoblast: portfolio holding fee backing floor', () => {
 		const ownShares = await balanceOfShares(fixture.owner(), pool.shareToken, fixture.base.genesisUniverse, fixture.owner().account.address)
 		await redeemCompleteSet(fixture.owner(), pool.securityPool, ownShares[0])
 		expect(await demand()).toBeGreaterThanOrEqual(100n * minimumOutcomeRate)
+	})
+})
+
+describe('Statoblast: low-rate residual exits', () => {
+	// A full backing floor leaves no holding-fee budget, including for the final share.
+	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1n, minimumOutcomeRate: unit })
+	test('an exhausted residual can be redeemed even when its new fee rate rounds to zero', async () => {
+		await fixture.prepare()
+		await fixture.mint(unit)
+		const buyer = fixture.other()
+		const pool = fixture.poolFor(fixture.base.questionId)
+		const [shares] = await balanceOfShares(buyer, pool.shareToken, fixture.base.genesisUniverse, buyer.account.address)
+		await redeemCompleteSet(buyer, pool.securityPool, shares - 1n)
+		const settlement = await buyer.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const book = await buyer.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
+		const bookId = await buyer.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [fixture.base.genesisUniverse] })
+		const [residual] = await buyer.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, fixture.base.questionId] })
+		expect(residual.outcomeSupplyAttoShares).toBe(1n)
+		expect(residual.feeRateAttoEthPerSecond).toBe(0n)
+		expect(await buyer.readContract({ abi: bookArtifact.abi, address: book, functionName: 'scaledAvailableFeeBudget', args: [bookId, fixture.base.questionId] })).toBe(0n)
+		await redeemCompleteSet(buyer, pool.securityPool, 1n)
+		const [closed] = await buyer.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, fixture.base.questionId] })
+		expect(closed.outcomeSupplyAttoShares).toBe(0n)
+		expect((await buyer.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [bookId] })).slice(0, 2)).toEqual([0n, 0n])
 	})
 })

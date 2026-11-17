@@ -116,9 +116,11 @@ export function centralPortfolioRead(name: string, mode: CentralPortfolioMode) {
 		case 'feeTimestamp':
 			return 1000n
 		case 'question':
-			return [{ units: 60n, outcomeSupplyAttoShares: 100n, finalAfter: 0n, feeRateAttoEthPerSecond: 2n, feeStart: 1000n, feeEnd: 2000n, feePrincipalAttoEth: 100n }, mode === 'frozen' ? 1n : 0n]
+			return [{ units: 60n, outcomeSupplyAttoShares: 100n, finalAfter: 0n, feeRateAttoEthPerSecond: 2_000_000_000n, feeStart: 1000n, feeEnd: 2000n, feePrincipalAttoEth: 100n }, mode === 'frozen' ? 1n : 0n]
+		case 'isCashFunded':
+			return mode !== 'runoff'
 		case 'books':
-			return [mode === 'runoff' ? 50n : 100n, 100n, 0n, 1n, 0n, 0n, 123n, mode === 'sealed', 1n, 1n, 1n, mode !== 'disabled', 0n, 877n, 40n, mode === 'basket' ? 150n : 0n]
+			return [mode === 'runoff' ? 50n : 100n, 100_000_000_000n, 0n, 1n, 0n, 0n, 123n, mode === 'sealed', 1n, 1n, 1n, mode !== 'disabled', 0n, 877n, 40n, mode === 'basket' ? 150n : 0n]
 		case 'settlement':
 			return token
 		case 'availableMintCapacity':

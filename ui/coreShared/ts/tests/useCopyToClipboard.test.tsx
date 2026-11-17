@@ -75,7 +75,7 @@ describe('useCopyToClipboard', () => {
 			timeoutCallbacks.push(() => {
 				if (typeof callback === 'function') callback()
 			})
-			return nextTimerId++ as unknown as number
+			return nextTimerId++
 		}) as typeof window.setTimeout
 		window.clearTimeout = ((id: number) => {
 			clearTimeoutIds.push(id)

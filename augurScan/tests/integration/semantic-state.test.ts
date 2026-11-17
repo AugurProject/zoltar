@@ -3,17 +3,18 @@ import { SQL } from 'bun'
 import { initializeSchema } from '../../src/schema.ts'
 import { sharePositions, pendingAuctionRefunds, escalationPositions, escalationPayouts } from '../../src/repositories/share-positions.ts'
 import { escalationCatalogData } from '../../src/repositories/operations.ts'
-import { protocolFeeEconomics } from '../../src/repositories/fee-economics.ts'
+import { auctionCollateral } from '../../src/repositories/auction-collateral.ts'
+import { timelineCatalogRows } from '../../src/repositories/timeline.ts'
 import { chainDecodeCoverage } from '../../src/abi-coverage-report.ts'
 
 const url = process.env['POSTGRES_TEST_URL']
-test.skipIf(url === undefined)('canonical semantic state respects snapshots, migrations, claims and fee accounting boundaries', async () => {
+test.skipIf(url === undefined)('canonical semantic state respects snapshots, migrations, claims and refund boundaries', async () => {
 	if (url === undefined) throw new Error('POSTGRES_TEST_URL is required')
 	const sql = new SQL(url)
 	await initializeSchema(sql)
 	const connection = await sql.reserve()
 	try {
-		for (const table of ['logs', 'blocks', 'contracts', 'amm_markets', 'escalation_game_events', 'collateral_repair_auction_events', 'entity_state_snapshots', 'pool_snapshots', 'transactions', 'actions']) {
+		for (const table of ['logs', 'blocks', 'contracts', 'amm_markets', 'escalation_game_events', 'collateral_repair_auction_events', 'entity_state_snapshots', 'protocol_timeline_entries', 'transactions', 'actions']) {
 			await connection.unsafe(`CREATE TEMP TABLE ${table} AS SELECT * FROM public.${table} WITH NO DATA`)
 		}
 		const token = `0x${'1'.repeat(40)}`
@@ -36,12 +37,48 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		expect(positions.items[0]).toMatchObject({ universe_id: '0', invalid_atto_shares: '10', yes_atto_shares: '15', no_atto_shares: '30', complete_sets_atto_shares: '10', migration_locked: true })
 		expect(positions.items[1]).toMatchObject({ universe_id: '1', yes_atto_shares: '15', complete_sets_atto_shares: '0', migration_locked: false })
 		expect((await sharePositions(connection, 1, '0', { address: owner })).items).toEqual([])
-		for (const [index, [name, amount]] of [
-			['EthRefundCredited', '12'],
-			['PendingEthRefundWithdrawn', '5'],
+		const otherBidder = `0x${'4'.repeat(40)}`
+		// BidSettled credits a refund and RefundWithdrawn pays the bidder's whole credit, as the auction contract does.
+		const auctionEvents = [
+			['BidSettled', { bidId: '1', bidder: owner, filledLots: '2', refundAttoEth: '12' }, 1],
+			['BidSettled', { bidId: '2', bidder: owner, filledLots: '0', refundAttoEth: '5' }, 1],
+			['RefundWithdrawn', { bidder: owner, recipient: otherBidder, amountAttoEth: '12' }, 1],
+			['BidSettled', { bidId: '3', bidder: otherBidder, filledLots: '0', refundAttoEth: '99' }, 1],
+			['RefundWithdrawn', { bidder: owner, recipient: owner, amountAttoEth: '5' }, 2],
+		] as const
+		for (const [index, [name, data, blockNumber]] of auctionEvents.entries())
+			await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical) VALUES (1, ${blockNumber}, ${hash}, ${hash}, ${index}, ${token}, ${name}, ${JSON.stringify(data)}::text::jsonb, true)`
+		// Without a sampled auction snapshot the refund carries no collateral metadata and the browser keeps raw collateral units.
+		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5', collateral: null })])
+		expect(await pendingAuctionRefunds(connection, 1, '2', owner)).toEqual([])
+		const usdc = { address: `0x${'5'.repeat(40)}`, symbol: 'USDC', decimals: 6 }
+		expect(await auctionCollateral(connection, 1, '1', token)).toBeUndefined()
+		// Temporary copies drop the observed_at default, so each read states when it was observed: the failed read is the later one.
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'auction', ${token}, 1, ${hash}, 'success', ${JSON.stringify({ lotAttoEth: '1000000', collateral: usdc })}::text::jsonb, true, '2026-01-01T00:00:00Z')`
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'auction', ${token}, 1, ${hash}, 'failed', NULL, true, '2026-01-01T00:01:00Z')`
+		// A later failed read does not hide the immutable collateral token sampled earlier.
+		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5', collateral: usdc })])
+		expect(await auctionCollateral(connection, 1, '1', token)).toEqual(usdc)
+		// Timeline auction entries carry the same collateral token; other entities carry none.
+		for (const [index, [entityType, eventName]] of [
+			['auction', 'BidSettled'],
+			['pool', 'EthReceived'],
 		].entries())
-			await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical) VALUES (1, 1, ${hash}, ${hash}, ${index}, ${token}, ${name}, ${JSON.stringify({ bidder: owner, amountAttoEth: amount })}::text::jsonb, true)`
-		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ pending_atto_eth: '7' })])
+			await connection`INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, source_contract, source_event, canonical) VALUES (1, ${hash}, ${hash}, ${index}, 1, ${entityType}, ${token}, ${eventName}, '{}'::jsonb, ${token}, ${eventName}, true)`
+		const timeline = await timelineCatalogRows(connection, {
+			chainId: 1,
+			fromBlock: '0',
+			toBlock: '1',
+			canonical: 'canonical',
+			asOfBlock: '1',
+			cursor: { block: '2', log: 0, tx: hash, blockHash: hash, entityType: '', identity: '' },
+			limit: 10,
+		})
+		expect(timeline.rows.map((row: Record<string, unknown>) => [row['entity_type'], row['collateral']])).toEqual([
+			['pool', null],
+			['auction', usdc],
+		])
+		await connection`DELETE FROM entity_state_snapshots WHERE entity_type = 'auction'`
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 1, ${hash}, ${hash}, 1, 'LocalDepositAppended', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', amountAttoRep: '200' })}::text::jsonb, true)`
 		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical) VALUES (1, 'escalation', ${token}, 1, ${hash}, 'success', ${JSON.stringify({ outcomeBalancesAttoRep: ['2', '3', '4'], finalQuestionResolution: '1' })}::text::jsonb, true)`
 		expect(await escalationCatalogData(connection, 1, '1')).toEqual([expect.objectContaining({ invalid_stake_atto_rep: '2', yes_stake_atto_rep: '3', no_stake_atto_rep: '4' })])
@@ -58,15 +95,6 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		expect((await escalationPayouts(connection, 1, '2', owner)).unavailable_games).toBe('1')
 		expect((await escalationPayouts(connection, 1, '1', owner)).items).toHaveLength(1)
 
-		for (const [index, [reason, fees]] of [
-			[5, 0],
-			[0, 10],
-			[1, 4],
-			[2, 4],
-			[0, 7],
-		].entries())
-			await connection`INSERT INTO pool_snapshots (chain_id, pool_address, block_number, log_index, reason, unallocated_accrued_fees_atto_eth, canonical) VALUES (1, ${token}, 1, ${index}, ${reason}, ${fees}, true)`
-		expect(await protocolFeeEconomics(connection, 1, '1')).toMatchObject({ accrued_atto_eth: '13', missing_baselines: '0' })
 		await connection`INSERT INTO transactions (chain_id, hash, block_hash, block_number, to_address, input, status, receipt, canonical) VALUES (1, ${hash}, ${hash}, 1, ${token}, '0x12345678', 'reverted', '{"callTraceStatus":"unavailable"}'::jsonb, true)`
 		await connection`INSERT INTO actions (chain_id, tx_hash, block_hash, decode_status) VALUES (1, ${hash}, ${hash}, 'unknown')`
 		expect(await chainDecodeCoverage(connection, 1, '1')).toMatchObject({ observed_calls: '1', undecoded_calls: '1', traced_transactions: '0' })

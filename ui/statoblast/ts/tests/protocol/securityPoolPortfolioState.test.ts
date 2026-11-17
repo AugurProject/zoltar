@@ -16,9 +16,6 @@ test.each<CentralPortfolioMode>(['active', 'stale', 'runoff', 'sealed', 'disable
 		centralCheckpointTimestamp: 5_000n,
 		portfolioAddress: portfolio,
 		feePrincipalAttoEth: 100n,
-		currentRetentionRate: 10n ** 18n,
-		feeIndexRemainder: 0n,
-		totalFeesOwedRemainder: 0n,
 		settlementCollateralAttoEth: 60n,
 		settlementRecoveryAttoRep: mode === 'basket' ? 90n : 0n,
 		shareTokenSupplyAttoShares: 100n,
@@ -27,8 +24,24 @@ test.each<CentralPortfolioMode>(['active', 'stale', 'runoff', 'sealed', 'disable
 		totalUnderwritingLimitAttoEth: 200n,
 		feeEligibleUnderwritingLimitAttoEth: 120n,
 		lastFeeCheckpointNativeTime: 1000n,
-		linearFee: { rateAttoEthPerSecond: mode === 'active' ? 2n : 0n, endTime: 2000n },
+		linearFee: { rateAttoEthPerSecond: mode === 'active' || mode === 'basket' ? 2_000_000_000n : 0n, rateScale: 1_000_000_000n, endTime: 2000n },
 		feeEndTimestamp: 2000n,
 	})
 	expect(blocks).toEqual([99n, 99n, 99n, 99n])
+})
+
+test('cash funding is read from the ledger predicate independently of its internal unit index', async () => {
+	const client = createMockLoaderClient({
+		multicall: async request =>
+			request.contracts.map(call => {
+				if (call.functionName !== 'books') return centralPortfolioRead(call.functionName, 'active')
+				const state = centralPortfolioRead('books', 'active')
+				if (!Array.isArray(state)) throw new Error('Missing book fixture')
+				const indexed = [...state]
+				indexed[0] = 1n
+				indexed[1] = 10n ** 30n
+				return indexed
+			}),
+	})
+	expect((await loadCentralPortfolioQuestion(client, owner, capital, 99n)).linearFee.rateAttoEthPerSecond).toBe(2_000_000_000n)
 })

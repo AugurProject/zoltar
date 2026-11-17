@@ -29,6 +29,8 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	address public immutable portfolio;
 	SecurityPoolResolutionPremiumBook public immutable premiumLedger;
 	bool private entered;
+	address private purchasePayer;
+	uint256 private purchaseMaximumRecoveryAttoRep;
 	mapping(uint248 => bool) public premiumChildCreated;
 	mapping(uint248 => bool) private syncingFees;
 	mapping(uint248 => bool) public feesEnabled;
@@ -58,7 +60,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	receive() external payable {
 		require(msg.sender == address(IPortfolioServiceRoot(portfolio).settlement()), 'Unexpected service ETH');
 	}
-	function purchase(address trader, uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares, uint256 maximumFee) external onlyPortfolio nonReentrant returns (uint256 minted, uint256 fee) {
+	function purchase(address trader, uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) external onlyPortfolio nonReentrant returns (uint256 minted, uint256 fee) {
 		require(cash != 0, 'Purchase amount zero');
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		ISecurityPool pool = root.prepareServicePurchase(universeId, questionId);
@@ -69,7 +71,11 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		Collateral.pull(collateral, trader, address(root.settlement()), cash);
 		Collateral.pull(collateral, trader, address(this), fee);
 		require(cash <= root.quoteHelper().availableMintCapacity(universeId), 'Purchase exceeds healthy capacity');
+		purchasePayer = trader;
+		purchaseMaximumRecoveryAttoRep = maximumRecoveryAttoRep;
 		minted = _mintCompleteSets(pool, recipient, minimumShares, cash);
+		purchasePayer = address(0);
+		purchaseMaximumRecoveryAttoRep = 0;
 		if (premium != 0) _fundPremium(universeId, questionId, premium);
 		uint256 earnings = fee - premium;
 		if (earnings != 0) {
@@ -79,11 +85,12 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		_deliverCompleteSets(pool, recipient, minted);
 	}
 	function mintQuestionSettlement(ISecurityPool pool, uint256 cash) external onlyPortfolio returns (uint256, uint256, uint256) {
+		require(purchasePayer != address(0), 'No authorized purchase payer');
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		capital.setDemand(capital.demandAttoEth() + cash);
-		(uint256 minted, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().mint(address(pool), cash, 0, root.portfolioTime(universeId));
+		(uint256 minted, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().mintWithRecoveryRep(address(pool), purchasePayer, cash, 0, purchaseMaximumRecoveryAttoRep, root.portfolioTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		return (minted, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
@@ -193,7 +200,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		premiumLedger.choose(source, child, branchChosenK, totalSourceK);
 	}
 	function createPremiumChild(uint248 source, uint248 child) external onlyForkController {
-		premiumLedger.createChild(source, child);
+		_burn(child, premiumLedger.createChild(source, child));
 		premiumChildCreated[child] = true;
 		(, uint256 questionId, , , ) = IPortfolioServiceRoot(portfolio).capitalLedger(source).zoltar().universes(source);
 		premiumLedger.schedule(child, questionId, premiumLedger.minimumFinalAfter(child));

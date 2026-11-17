@@ -169,7 +169,8 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				call: '`recoverSettledPendingReport()`',
 				caller: 'Anyone',
-				effect: 'Recovers the feed’s latest settled candidate without accepting its price. Use feed.recoverReport(reportId) for another unprocessed settled candidate. Recovery marks only that candidate rejected and returns its isolated escrow credits to its original sponsor.',
+				effect:
+					'Retries acceptance of the feed’s latest settled candidate from OpenOracle’s stored amounts and original observation timestamp. Use feed.recoverReport(reportId) for another unprocessed settled candidate. A still-valid candidate accepts its price and attempts sponsor operations; an invalid candidate is rejected. Both outcomes return isolated escrow credits to the original sponsor.',
 				declarations: [
 					{
 						name: 'recoverSettledPendingReport',
@@ -387,14 +388,14 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				call: '`migrate(fromId, targetOutcomeIndexes)`',
 				caller: 'Holder of the source token ID',
 				effect:
-					"If needed, first freezes the operational source pool and records its fork snapshot. A single-target call may lazily create that child while the branch-creation window is open. It keeps and locks the holder's source entitlement, then mints each selected child-universe token ID up to the current source balance. Later source additions materialize only the unminted delta. A contract holder receives the ERC-1155 single-receiver callback for each mint; rejection rolls back the mint and preceding fork or child setup.",
+					"If needed, first puts the source pool into fork mode and records its fork snapshot; this applies to an operational source and to a ledger that was prepared in its universe but never activated before that universe forked. A single-target call may lazily create that child while the branch-creation window is open. It keeps and locks the holder's source entitlement, then mints each selected child-universe token ID up to the current source balance. Later source additions materialize only the unminted delta. A contract holder receives the ERC-1155 single-receiver callback for each mint; rejection rolls back the mint and preceding fork or child setup.",
 				declarations: [
 					{
 						name: 'migrate',
 					},
 				],
 				preconditions:
-					'Source universe forked; canonical source pool is `Operational` or `PoolForked`, and an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; each target is an immediate native child, including when its bound question contract skips intermediate reporter ancestors; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
+					'Source universe forked; for a portfolio question, `isPortfolioRecoveryEligible(sourceUniverse)` is true (`ShareToken question finalized before fork`): shares of a question whose claims were final before the fork redeem in the source universe; a canonical source pool that is not yet `PoolForked` has no final outcome and no inherited fixed outcome, because fork-mode activation rejects both; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; each target is an immediate native child, including when its bound question contract skips intermediate reporter ancestors; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
 				signals: 'Canonical child preparation may emit `SecurityPoolRegistered`, `DeploySecurityPool`, and share-token `AuthorizationUpdated`. Successful materialization emits ERC-1155 `TransferSingle` and `Migrate` for each target.',
 			},
 			{

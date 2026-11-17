@@ -23,7 +23,7 @@ export function unusedPortfolioFunding(state: Pick<RuntimeState, 'portfolioFundi
 
 /** Return only journaled bot funding that is still free and has no viable takeover in this scan. */
 export async function executeUnusedPortfolioFunding(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, target: PortfolioObservation, priceAllowed: (observation: PortfolioObservation) => Promise<boolean>, execution = { refresh: refreshPortfolioExecution, submit: submitCall }) {
-	if (!settings.runtime.execute || state.pendingTransactions.length !== 0 || state.pendingStagedOperations.length !== 0) throw new Error('Pending recovery blocks unused funding withdrawal')
+	if (!settings.runtime.execute || state.pendingTransactions.length !== 0) throw new Error('Pending recovery blocks unused funding withdrawal')
 	const original = unusedPortfolioFunding(state, target)
 	if (original.amount === 0n || original.target === undefined) return false
 	const refresh = async () => {

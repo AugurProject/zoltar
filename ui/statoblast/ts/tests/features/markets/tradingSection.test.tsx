@@ -44,7 +44,6 @@ function TradingSection(props: Parameters<typeof ProductionTradingSection>[0]) {
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
-		currentRetentionRate: 10n,
 		feeEligibleUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
@@ -95,6 +94,7 @@ function createTradingDetails(overrides: Partial<TradingDetails> = {}): TradingD
 	return {
 		maxRedeemableCompleteSetsAttoShares: 2n * 10n ** 18n,
 		shareBalances,
+		shareTokenAddress: zeroAddress,
 		universeId: 1n,
 		...overrides,
 	}
@@ -133,7 +133,11 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 			loading: false,
 			error: undefined,
 			pending: false,
-			resetting: false,
+			pendingRecovery: false,
+			approvalActive: false,
+			recoveryApplicable: false,
+			recovery: { required: 0n, maximum: 0n, balance: 0n, allowance: 0n, token: undefined, spender: undefined },
+			approveRecovery: async () => undefined,
 			approve: async () => undefined,
 		},
 
@@ -249,13 +253,24 @@ function TradingSectionHarness({ tradingForkUniverse }: { tradingForkUniverse: Z
 	)
 }
 
-function TradingSectionWithMutableForm({ initialTradingForm = {}, tradingForkUniverse, selectedPool = createSelectedPool({ universeHasForked: true }) }: { initialTradingForm?: Partial<TradingFormState>; tradingForkUniverse: ZoltarUniverseSummary; selectedPool?: ListedSecurityPool }) {
+function TradingSectionWithMutableForm({
+	initialTradingForm = {},
+	tradingDetails = createTradingDetails(),
+	tradingForkUniverse,
+	selectedPool = createSelectedPool({ universeHasForked: true }),
+}: {
+	initialTradingForm?: Partial<TradingFormState>
+	tradingDetails?: TradingDetails
+	tradingForkUniverse: ZoltarUniverseSummary
+	selectedPool?: ListedSecurityPool
+}) {
 	const [tradingForm, setTradingForm] = useState<TradingFormState>({ ...createTradingForm(), ...initialTradingForm })
 
 	return (
 		<TradingSection
 			{...createTradingSectionProps({
 				selectedPool,
+				tradingDetails,
 				tradingForkUniverse,
 				tradingForm,
 			})}
@@ -291,6 +306,35 @@ void describe('TradingSection', () => {
 		},
 	})
 
+	test.each([false, true])('recovery purchases show their REP contribution and separate approval (pending: %s)', async pending => {
+		const props = createTradingSectionProps()
+		const funding = props.collateralFunding
+		if (funding === undefined) throw new Error('Missing collateral funding fixture')
+		const rendered = await renderIntoDocument(
+			<TradingSection
+				{...props}
+				tradingForm={createTradingForm({ completeSetAmount: '1' })}
+				collateralFunding={{
+					...funding,
+					recoveryApplicable: true,
+					recovery: { required: 2n * 10n ** 18n, maximum: (2n * 10n ** 18n * 101n) / 100n + 1n, balance: 0n, allowance: 0n, token: zeroAddress, spender: zeroAddress },
+					pendingRecovery: pending,
+					approvalActive: pending,
+					reason: pending ? 'Wait for the current approval to finish.' : 'Insufficient REP for the proportional recovery contribution.',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		const dialog = within(document.body).getByRole('dialog')
+		expect(dialog.textContent).toContain('Recovery REP contribution')
+		expect(dialog.textContent).toContain('Your proportional contribution preserves existing holders')
+		expect(getExactValueTitles(dialog, '2 REP').length).toBeGreaterThan(0)
+		const approval = within(dialog).getByRole('button', { name: /REP/ })
+		expect(approval.textContent).toContain(pending ? 'Approving REP' : 'Approve')
+		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(true)
+	})
+
 	test('the mint form labels stablecoin collateral and keeps its token precision', async () => {
 		const props = createTradingSectionProps()
 		const funding = props.collateralFunding
@@ -304,6 +348,8 @@ void describe('TradingSection', () => {
 		if (!(input instanceof HTMLInputElement)) throw new Error('Missing collateral input')
 		expect(input.value).toBe('1.234567')
 		expect(dialog.textContent).toContain('USDC')
+		expect(dialog.textContent).not.toContain('Recovery REP contribution')
+		expect(dialog.textContent).not.toContain('REP approval amount')
 		expect(dialog.textContent).not.toContain('ETH to mint with')
 	})
 
@@ -313,7 +359,7 @@ void describe('TradingSection', () => {
 			settlementCollateralAttoEth: 10n ** 18n,
 			shareTokenSupplyAttoShares: 10n ** 18n,
 			totalUnderwritingLimitAttoEth: 10n ** 18n,
-			feeAccrualState: { linearFee: { rateAttoEthPerSecond: 0n, endTime: 100n }, lastFeeCheckpointNativeTime: 0n, feeEndTimestamp: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n },
+			feeAccrualState: { linearFee: { rateAttoEthPerSecond: 0n, endTime: 100n }, lastFeeCheckpointNativeTime: 0n, feeEndTimestamp: 100n },
 		})
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool, onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
@@ -755,9 +801,8 @@ void describe('TradingSection', () => {
 				<TradingSection
 					{...createTradingSectionProps({
 						selectedPool: createSelectedPool({
-							currentRetentionRate: 900_000_000_000_000_000n,
 							marketDetails: { ...createMarketDetails(), endTime: 1n },
-							feeAccrualState: { feeEndTimestamp: 200n, feeIndexRemainder: 0n, lastFeeCheckpointNativeTime: 1n, totalFeesOwedRemainder: 0n },
+							feeAccrualState: { linearFee: { rateAttoEthPerSecond: 10n ** 17n, endTime: 200n }, feeEndTimestamp: 200n, lastFeeCheckpointNativeTime: 1n },
 							settlementCollateralAttoEth: 10n * 10n ** 18n,
 							shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 							totalUnderwritingLimitAttoEth: 50n * 10n ** 18n,
@@ -1244,5 +1289,29 @@ void describe('TradingSection', () => {
 			fireEvent.click(yesTarget)
 		})
 		expect(yesTarget.getAttribute('aria-pressed')).toBe('false')
+	})
+
+	void test('selects only child universes a single migration can reach when a child has no security pool', async () => {
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const tradingDetails = createTradingDetails({
+			shareMigrationTargets: [
+				{ canonicalPool: undefined, migratedAttoShares: noMigratedShares, outcomeIndex: 0n },
+				{ canonicalPool: '0x00000000000000000000000000000000000000b1', migratedAttoShares: noMigratedShares, outcomeIndex: 1n },
+			],
+		})
+		const renderedComponent = await renderIntoDocument(<TradingSectionWithMutableForm tradingDetails={tradingDetails} tradingForkUniverse={createBinaryForkUniverse()} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+		})
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		await act(() => {
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Select all' }))
+		})
+
+		expect(modalQueries.getByRole('button', { name: /^Yes/ }).getAttribute('aria-pressed')).toBe('false')
+		expect(modalQueries.getByRole('button', { name: /^No/ }).getAttribute('aria-pressed')).toBe('true')
 	})
 })

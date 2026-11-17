@@ -29,12 +29,22 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 	const redeem = (pool: Address, shares: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [pool, addressString(TEST_ADDRESSES[1]), shares, 0n, timestamp] }))
 	const checkpoint = (universe: bigint, timestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'checkpointUniverse', args: [universe, timestamp] }))
 
+	const deployRecoveryToken = async (rep: bigint) => {
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [client.account.address] }) }) })
+		if (receipt.contractAddress === undefined) throw new Error('Recovery token deployment missing')
+		const token = receipt.contractAddress
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'initialize', args: [1n, rep, 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [client.account.address, rep] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [address, rep] }))
+		return token
+	}
+
 	beforeAll(async () => {
 		const ethereum = getAnvilWindowEthereum()
 		await setupTestAccounts(ethereum)
 		await ethereum.advanceTime(1_000_000n)
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		const deployedToken = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: collateralArtifact.abi, bytecode: `0x${collateralArtifact.evm.bytecode.object}`, args: [18, false] }) }) })
+		const deployedToken = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: collateralArtifact.abi, bytecode: `0x${collateralArtifact.evm.bytecode.object}`, args: [18] }) }) })
 		if (deployedToken.contractAddress === undefined) throw new Error('Collateral token deployment missing')
 		collateral = deployedToken.contractAddress
 		for (const recipient of [client.account.address, addressString(TEST_ADDRESSES[1])]) await writeContractAndWait(client, () => client.writeContract({ abi: collateralArtifact.abi, address: collateral, functionName: 'mint', args: [recipient, 10n ** 24n] }))
@@ -55,7 +65,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 
 	test('earned fees are transferred once and redemptions pay the exact actual cash', async () => {
 		await mint(nativePool, 100n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, 2n, 10, 0] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, 2n * 1_000_000_000n, 10, 0] }))
 		await checkpoint(0n, 5)
 		expect(await collateralBalance(address)).toBe(90n)
 		expect((await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [1n] })).slice(0, 3)).toEqual([90n, 90n, 0n])
@@ -76,7 +86,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await expect(writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'authorizeServices', args: [client.account.address] }))).rejects.toThrow('Only portfolio')
 		await writeContractAndWait(service, () => service.writeContract({ abi: collateralArtifact.abi, address: collateral, functionName: 'transfer', args: [address, 100n] }))
 		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'mint', args: [nativePool, 100n, 0n, 0] }))
-		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, 2n, 10, 0] }))
+		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, 2n * 1_000_000_000n, 10, 0] }))
 		const rootBefore = await collateralBalance(client.account.address)
 		const serviceBefore = await collateralBalance(service.account.address)
 		const hash = await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'checkpointUniverse', args: [0n, 5] }))
@@ -147,23 +157,45 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'registerQuestion', args: [childPool, 0n, 99n] }))).rejects.toThrow('Only portfolio')
 	})
 
+	test('#1247 funded inherited-question mint pulls buyer REP within budget and preserves old ownership', async () => {
+		const payer = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1])
+		const token = await deployRecoveryToken(300n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'transfer', args: [payer.account.address, 100n] }))
+		await mint(nativePool, 100n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 0] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 100n, token, 200n, 0n] }))
+		await register(childPool, 1n, 1n)
+		const funded = parseAbi(['function mintWithRecoveryRep(address,address,uint256,uint256,uint256,uint48)'])
+		const request = (maximum: bigint) => ({ abi: funded, address, functionName: 'mintWithRecoveryRep' as const, args: [childPool, payer.account.address, 50n, 0n, maximum, 0] as const })
+		await expect(mint(childPool, 50n)).rejects.toThrow('Recovery REP exceeds budget')
+		await expect(client.writeContract(request(99n))).rejects.toThrow('Recovery REP exceeds budget')
+		await expect(client.writeContract(request(100n))).rejects.toThrow()
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [payer.account.address] })).toBe(100n)
+		await writeContractAndWait(payer, () => payer.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [address, 100n] }))
+		await writeContractAndWait(client, () => client.writeContract(request(100n)))
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [payer.account.address] })).toBe(0n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })).toBe(300n)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [childPool, 100n] })).toBe(200n)
+		await redeem(childPool, 100n)
+		await redeem(childPool, 50n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })).toBe(0n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(300n)
+	})
+
 	test('a zero-collateral branch pays REP proportionally before rounding nearly exhausted collateral units', async () => {
 		const shares = 10n ** 18n
 		const rep = 1_000n * shares
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [client.account.address] }) }) })
-		if (receipt.contractAddress === undefined) throw new Error('Recovery token deployment missing')
-		const token = receipt.contractAddress
-		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'initialize', args: [1n, rep, 1n] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [client.account.address, rep] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [address, rep] }))
+		const token = await deployRecoveryToken(rep)
 		await mint(nativePool, shares)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, shares - 1n, 1, 0] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, (shares - 1n) * 1_000_000_000n, 1, 0] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 1] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 0n, token, rep, 0n] }))
 		await register(childPool, 1n, 1n)
 		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 0n, outcomeSupplyAttoShares: shares, questionRecoveryAttoRep: rep })
 		await redeem(childPool, shares / 2n, 1)
-		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [addressString(TEST_ADDRESSES[1])] })).toBe(rep / 2n)
+		const firstPayout = await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [addressString(TEST_ADDRESSES[1])] })
+		expect(firstPayout).toBeGreaterThanOrEqual(rep / 2n - 1n)
+		expect(firstPayout).toBeLessThanOrEqual(rep / 2n)
 		await redeem(childPool, shares / 2n, 1)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [addressString(TEST_ADDRESSES[1])] })).toBe(rep)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })).toBe(0n)

@@ -870,10 +870,12 @@ test('minting complete sets sends the transaction directly and tracks its receip
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'securityPoolFactory') return account
 			if (request.functionName === 'getSecurityPoolPortfolio' || request.functionName === 'getPool') return account
+			if (request.functionName === 'isPortfolio') return true
 			if (request.functionName === 'collateralToken') return MAINNET_NETWORK_PROFILE.wethAddress
 			if (request.functionName === 'services') return account
 			if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 20n
 			if (request.functionName === 'purchaseQuote') return [0n, 0n]
+			if (request.functionName === 'quoteMintRecoveryRep') return 0n
 			if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 			if (request.functionName === 'questionData') return account
 			if (request.functionName === 'questionId') return 1n

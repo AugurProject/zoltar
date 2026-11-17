@@ -17,7 +17,7 @@ import { recoverPendingTransactions } from '#execution/recovery'
 import { canonicalBlockHash } from '#monitoring/operator-chain'
 import { saveDurableState } from '#state/operator-state'
 import { requireCurrentDexEvidence } from './dex-pairs.ts'
-import { type LiquidatorDeps, type LiquidatorRuntime } from './liquidator-runtime.ts'
+import type { LiquidatorDeps, LiquidatorRuntime } from './liquidator-runtime.ts'
 
 /** Recovers pending transactions, then performs at most one funded portfolio action. */
 export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) {

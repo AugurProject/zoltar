@@ -120,9 +120,13 @@ export function ForkZoltarSection({
 	// The acknowledgment covers one universe and one question; changing either asks again.
 	const forkConfirmationKey = rootUniverse === undefined || normalizedSelectedQuestionId === undefined ? undefined : `${rootUniverse.universeId.toString()}:${normalizedSelectedQuestionId}`
 	const forkConfirmed = forkConfirmationKey !== undefined && confirmedForkKey === forkConfirmationKey
-	const canFork = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics && forkConfirmed
-	// An unended question blocks the fork itself, so it also blocks approving REP for that fork.
+	// Zoltar rejects a child-universe fork until the parent's fork response period ends.
+	const earliestForkTime = rootUniverse?.earliestForkTime
+	const parentForkResponseActive = earliestForkTime !== undefined && effectiveCurrentTimestamp !== undefined && effectiveCurrentTimestamp < earliestForkTime
+	const canFork = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && !parentForkResponseActive && hasEnoughRep && hasEnoughApproval && hasForkEconomics && forkConfirmed
+	// An unended question or parent response period blocks the fork itself, so it also blocks approving REP for that fork.
 	const questionTimingReason = (() => {
+		if (parentForkResponseActive && earliestForkTime !== undefined && effectiveCurrentTimestamp !== undefined) return zoltarCopy.formatParentForkResponseActiveReason(formatTimestamp(earliestForkTime), formatRelativeTimestamp(earliestForkTime, effectiveCurrentTimestamp))
 		if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
 		if (effectiveCurrentTimestamp === undefined) return zoltarCopy.forkQuestionTimeLoadingReason
 		if (!selectedQuestionHasEnded) return zoltarCopy.formatForkQuestionActiveReason(formatTimestamp(selectedQuestion.endTime), formatRelativeTimestamp(selectedQuestion.endTime, effectiveCurrentTimestamp))
@@ -162,10 +166,10 @@ export function ForkZoltarSection({
 		</WarningSurface>
 	)
 
-	// An approval problem (such as an invalid amount) is reported, but never instead of the question-timing blocker that also stops the fork.
+	// An approval problem (such as an invalid amount) is reported, but never instead of the timing blocker that also stops the fork.
 	const forkActionsMessage = (approvalNotice: string | undefined) => {
 		if (approvalNotice === undefined) return forkGuardMessage
-		if (selectedQuestionHasEnded !== false || forkGuardMessage === undefined || approvalNotice === forkGuardMessage) return approvalNotice
+		if ((selectedQuestionHasEnded !== false && !parentForkResponseActive) || forkGuardMessage === undefined || approvalNotice === forkGuardMessage) return approvalNotice
 		return `${forkGuardMessage} ${approvalNotice}`
 	}
 

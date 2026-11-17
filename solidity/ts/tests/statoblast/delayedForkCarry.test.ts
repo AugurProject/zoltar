@@ -1,5 +1,5 @@
 import { describe, test } from 'bun:test'
-import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import {
 	statoblast_EscalationGame_EscalationGame,

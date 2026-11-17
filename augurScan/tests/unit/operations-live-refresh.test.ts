@@ -99,7 +99,6 @@ const renderOverview = (response: OperationsResponse, live: boolean) => {
 			operationNumber: routeView.operationNumber,
 			operationCounted: routeView.operationCounted,
 			operationsHref: routeView.operationsHref,
-			approvalTransitionSummary: routeView.approvalTransitionSummary,
 			operationsCatalogSection: routeView.operationsCatalogSection,
 			operationsSectionFilters: routeView.operationsSectionFilters,
 			connection: element('div'),
@@ -151,6 +150,20 @@ test('raw evidence stays open on the same record when newer evidence arrives abo
 		content.replaceChildren(...routeView.detailEvidenceRows([record(3), record(2), record(1)]))
 		restoreViewState(content, snapshot)
 		expect([...content.querySelectorAll<HTMLDetailsElement>('details.operations-raw-evidence')].map(details => details.open)).toEqual([false, false, true])
+	})
+})
+
+test('AMM LP transfer and approval evidence shows the ERC-20 value argument', async () => {
+	await withOperationsPage('http://localhost/trading/0x01?chainId=1', () => {
+		const { routeView } = createRouteView()
+		const owner = `0x${'1'.repeat(40)}`
+		const spender = `0x${'2'.repeat(40)}`
+		const rows = routeView.detailEvidenceRowsFor('trading', [
+			{ event_name: 'Transfer', event_data: { from: owner, to: spender, value: '2500000000000000000' }, block_number: '100', tx_hash: `0x${'a'.repeat(64)}` },
+			{ event_name: 'Approval', event_data: { owner, spender, value: '1000000000000000000' }, block_number: '100', tx_hash: `0x${'b'.repeat(64)}` },
+		])
+		// Anchor the whole summary so a wrong value such as 11 or 0.1 LP shares cannot satisfy the assertion.
+		expect(rows.map(row => row.textContent)).toEqual([expect.stringMatching(/^Transfer2\.5 LP shares · 0x111111…111111 → 0x222222…222222/), expect.stringMatching(/^Approval1 LP shares · 0x111111…111111 approved 0x222222…222222/)])
 	})
 })
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, encodeFunctionData, parseAbi, keccak256, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, parseAbi, keccak256, hexToBytes, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -71,6 +71,34 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		return attempts
 	}
 
+	test.each([false, true])('#1248 recovery retries fresh callbacks and retires stale ones (stale: %s)', async stale => {
+		const { sponsor, feed } = await prepare()
+		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const timestamp = (await sponsor.getBlock()).timestamp
+		await writeContractAndWait(sponsor, () =>
+			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [withdraw(unit, sponsor.account.address)] }], value: bounty }),
+		)
+		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
+		await fixture.base.mockWindow.advanceTime(481n)
+		const state = (await loadOpenOracleEventState(sponsor, report)).latest
+		// Under-gassed settlements now revert atomically. Inject a temporary receiver failure instead,
+		// leaving the real escrow, oracle settlement and report storage in place for recovery.
+		const code = await sponsor.getCode({ address: feed.address })
+		if (code === undefined || code === '0x') throw new Error('Shared feed runtime code missing')
+		await fixture.base.mockWindow.addStateOverrides({ [feed.address]: { code: hexToBytes('0x5f5ffd') } })
+		try {
+			await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: oracleArtifact.abi, address: getInfraContractAddresses().openOracle, functionName: 'settle', args: [report, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper)], gas: 8_000_000n }))
+		} finally {
+			await fixture.base.mockWindow.addStateOverrides({ [feed.address]: { code: hexToBytes(code) } })
+		}
+		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(0n)
+		if (stale) await fixture.base.mockWindow.advanceTime(1300n)
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...feed, functionName: 'recoverReport', args: [report], gas: 8_000_000n }))
+		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(stale ? 2n : 1n)
+		expect((await sponsor.readContract({ ...capital(), functionName: 'ownerAccount', args: [sponsor.account.address] })).freeAttoRep).toBe((stale ? 3000n : 2999n) * unit)
+		await expect(sponsor.writeContract({ ...feed, functionName: 'recoverReport', args: [report] })).rejects.toThrow('No report to recover')
+	})
+
 	test('ordered sponsor withdrawals survive a failed operation and run when someone else settles', async () => {
 		const { sponsor, feed } = await prepare()
 		const operations = [withdraw(unit, sponsor.account.address), withdraw(10_000n * unit, sponsor.account.address), withdraw(2n * unit, sponsor.account.address)]
@@ -87,12 +115,13 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const context = await prepare(2)
 		const third = createWriteClient(fixture.base.mockWindow, TEST_ADDRESSES[2])
 		const targets = await Promise.all([fixture.owner(), third].map(client => client.readContract({ ...capital(), functionName: 'ownerAccount', args: [client.account.address] })))
+		// Two calls with their per-call overhead fill the feed's operation allowance exactly: 2 x (2,900,000 + 100,000) = 6,000,000.
 		const operations = targets.map((account, index) => ({
-			gasLimit: 3_000_000n,
+			gasLimit: 2_900_000n,
 			data: encodeFunctionData({
 				abi: capitalArtifact.abi,
 				functionName: 'takeOverWithBounds',
-				args: [account.positionId, 100n * unit, 1n, index === 0 ? 3000n * unit : 0n, { maximumOwnerPrincipal: 5000n * unit, maximumOwnerCommitment: 200n * unit, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 0n, expectedSourceBatch: 0n }],
+				args: [account.positionId, 100n * unit, 0n, index === 0 ? 3000n * unit : 0n, { maximumOwnerPrincipal: 5000n * unit, maximumOwnerCommitment: 200n * unit, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 0n, expectedSourceBatch: 0n }],
 			}),
 		}))
 		expect((await run(context, operations, 4n * unit)).map(event => event.success)).toEqual([true, true])
@@ -119,13 +148,19 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		expect((await context.sponsor.readContract({ ...capital(), functionName: 'ownerAccount', args: [context.sponsor.account.address] })).freeAttoRep).toBe(2999n * unit)
 	})
 
-	test('operation count has no fixed cap: thirty-two calls fit their declared gas budget', async () => {
+	test('operation count has no fixed cap: twenty calls fill the feed operation gas allowance', async () => {
 		const context = await prepare()
-		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 200_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) }))
+		// Only gas bounds the count: 20 x (200,000 + 100,000) is the whole 6,000,000 the feed allows a batch.
+		const operations = Array.from({ length: 20 }, () => ({ gasLimit: 200_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) }))
 		const attempts = await run(context, operations)
-		expect(attempts).toHaveLength(32)
+		expect(attempts).toHaveLength(20)
 		expect(attempts.every(event => event.success)).toBe(true)
-		expect(attempts.map(event => event.operationIndex)).toEqual(Array.from({ length: 32 }, (_, index) => BigInt(index)))
+		expect(attempts.map(event => event.operationIndex)).toEqual(Array.from({ length: 20 }, (_, index) => BigInt(index)))
+		// One more call does not fit, whatever its own limit.
+		const bounty = await context.sponsor.readContract({ ...context.feed, functionName: 'getRequestPriceCostAttoEth' })
+		const timestamp = (await context.sponsor.getBlock()).timestamp
+		const oversized = { gasLimit: 6_100_001n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [...operations, { gasLimit: 1n, data: operations[0]?.data ?? '0x' }] }
+		await expect(context.sponsor.writeContract({ abi: batchAbi, address: context.feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, oversized], value: bounty })).rejects.toThrow('Callback gas exceeds limit')
 	})
 
 	test.each(['withdraw', 'price'] as const)('collateral earnings do not invoke a native %s reentry hook and later operations still execute', async mode => {
@@ -166,7 +201,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'setReceiveReentry', args: [fixture.capitalLedger, withdraw(unit, receiver).data] }))
 		const operations = [
-			{ gasLimit: 5_000_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) },
+			{ gasLimit: 3_500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) },
 			{ ...withdraw(unit, receiver), gasLimit: 2_000_000n },
 		]
 		expect((await run({ sponsor: owner, feed }, operations, unit, (data, value) => execute(feed.address, data, value), beforeSettlement)).map(event => event.success)).toEqual([true, true])

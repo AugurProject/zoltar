@@ -27,7 +27,6 @@ export type PoolStateReplay = {
 	escalationGame?: Address
 	forkModeActive?: boolean
 	repTransferredAtFork?: bigint
-	currentRetentionRate?: bigint
 }
 
 export type AuctionBidReplay = {
@@ -46,13 +45,10 @@ export type PoolDeploymentReplay = {
 	parent: Address
 	universeId: bigint
 	questionId: bigint
-	collateralRepairAuction: Address
 	coordinator: Address
 	shareToken: Address
 	statoblastSecurityMultiplierBps: bigint
 	initialReportPriorityFeeAttoEthPerGas: bigint
-	currentRetentionRate: bigint
-	settlementCollateralAttoEth: bigint
 }
 
 export type AuctionLifecycleReplay = {
@@ -148,28 +144,6 @@ export type EscalationClaimReplay = {
 	transferredRep: boolean
 }
 
-export type ForkedEscrowReplay = {
-	sourcePrincipalAttoRep: bigint
-	sourcePrincipalClaimedAttoRep: bigint
-	childAttoRep: bigint
-	childRepClaimedAttoRep: bigint
-}
-
-export type VaultUnresolvedExportReplay = {
-	repReceiver: Address
-	principalByOutcomeAttoRep: BigIntTriple
-	principalToTransferAttoRep: bigint
-	transferredRep: boolean
-}
-
-export type ForkedEscrowExportReplay = {
-	repReceiver: Address
-	sourcePrincipalByOutcomeAttoRep: BigIntTriple
-	childRepByOutcomeAttoRep: BigIntTriple
-	totalChildRepToTransferAttoRep: bigint
-	transferredRep: boolean
-}
-
 export type CoordinatorReportReplay = {
 	status: 'Requested' | 'Reported' | 'Rejected' | 'Recovered'
 	price?: bigint
@@ -235,9 +209,6 @@ export type ReplayState = {
 	escalationClaimBundles: Map<Address, Map<Address, EscalationClaimBundleReplay>>
 	escalationVaultEscrowedRep: Map<Address, Map<Address, bigint>>
 	escalationLocalUnresolvedByVault: Map<Address, Map<Address, BigIntTriple>>
-	escalationForkedEscrow: Map<Address, Map<string, ForkedEscrowReplay>>
-	escalationVaultExports: Map<Address, Map<Address, VaultUnresolvedExportReplay>>
-	escalationForkedExports: Map<Address, Map<Address, ForkedEscrowExportReplay>>
 	escalationSurplusAccrued: Map<Address, bigint>
 	escalationResidualRepBurned: Map<Address, bigint>
 	escalationTotalEscrowedRep: Map<Address, bigint>
@@ -282,9 +253,6 @@ export function createReplayState(): ReplayState {
 		escalationClaimBundles: new Map(),
 		escalationVaultEscrowedRep: new Map(),
 		escalationLocalUnresolvedByVault: new Map(),
-		escalationForkedEscrow: new Map(),
-		escalationVaultExports: new Map(),
-		escalationForkedExports: new Map(),
 		escalationSurplusAccrued: new Map(),
 		escalationResidualRepBurned: new Map(),
 		escalationTotalEscrowedRep: new Map(),
@@ -678,23 +646,18 @@ export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName !== 'DeploySecurityPool') return
 	const securityPool = requireAddress(log.args, 'securityPool')
 	const parent = requireAddress(log.args, 'parent')
-	const currentRetentionRate = requireBigInt(log.args, 'currentRetentionRate')
 	state.poolDeployments.set(securityPool, {
 		factory: log.emitter,
 		parent,
 		universeId: requireBigInt(log.args, 'universeId'),
 		questionId: requireBigInt(log.args, 'questionId'),
-		collateralRepairAuction: requireAddress(log.args, 'collateralRepairAuction'),
 		coordinator: requireAddress(log.args, 'openOraclePriceCoordinator'),
 		shareToken: requireAddress(log.args, 'shareToken'),
 		statoblastSecurityMultiplierBps: requireBigInt(log.args, 'statoblastSecurityMultiplierBps'),
 		initialReportPriorityFeeAttoEthPerGas: requireBigInt(log.args, 'initialReportPriorityFeeAttoEthPerGas'),
-		currentRetentionRate,
-		settlementCollateralAttoEth: requireBigInt(log.args, 'settlementCollateralAttoEth'),
 	})
 	const poolState = state.poolStates.get(securityPool) ?? {}
 	poolState.systemState = parent === ZERO_ADDRESS ? 0n : 2n
-	poolState.currentRetentionRate = currentRetentionRate
 	state.poolStates.set(securityPool, poolState)
 }
 
@@ -806,7 +769,6 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'PoolForkModeActivated') {
 		poolState.forkModeActive = true
 		poolState.repTransferredAtFork = requireBigInt(log.args, 'repTransferredAttoRep')
-		poolState.currentRetentionRate = requireBigInt(log.args, 'currentRetentionRate')
 		poolState.systemState = requireBigInt(log.args, 'systemState')
 		state.poolStates.set(log.emitter, poolState)
 		return
@@ -1075,54 +1037,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedAttoRep'))
 		return
 	}
-	if (log.eventName === 'VaultUnresolvedTotalsExported') {
-		const vault = requireAddress(log.args, 'vault')
-		const principalByOutcomeAttoRep = requireBigIntTriple(log.args, 'principalByOutcomeAttoRep')
-		getOrCreateNestedMap(state.escalationVaultExports, log.emitter).set(vault, {
-			repReceiver: requireAddress(log.args, 'repReceiver'),
-			principalByOutcomeAttoRep,
-			principalToTransferAttoRep: requireBigInt(log.args, 'principalToTransferAttoRep'),
-			transferredRep: requireBoolean(log.args, 'transferredRep'),
-		})
-		getOrCreateNestedMap(state.escalationLocalUnresolvedByVault, log.emitter).set(vault, [0n, 0n, 0n])
-		return
-	}
-	if (log.eventName === 'ForkedEscrowRecorded') {
-		const depositor = requireAddress(log.args, 'depositor')
-		const outcome = requireBigInt(log.args, 'outcome')
-		getOrCreateNestedMap(state.escalationForkedEscrow, log.emitter).set(`${depositor}:${outcome.toString()}`, {
-			sourcePrincipalAttoRep: requireBigInt(log.args, 'sourcePrincipalTotalAttoRep'),
-			sourcePrincipalClaimedAttoRep: 0n,
-			childAttoRep: requireBigInt(log.args, 'childRepTotalAttoRep'),
-			childRepClaimedAttoRep: 0n,
-		})
-		getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter).set(depositor, requireBigInt(log.args, 'disputeStakedRepByVaultAttoRep'))
-		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedAttoRep'))
-		const resolutionBalancesAttoRep = state.escalationResolutionBalances.get(log.emitter) ?? [0n, 0n, 0n]
-		resolutionBalancesAttoRep[Number.parseInt(outcome.toString(), 10)] = requireBigInt(log.args, 'outcomeBalanceAttoRep')
-		state.escalationResolutionBalances.set(log.emitter, resolutionBalancesAttoRep)
-		return
-	}
-	if (log.eventName === 'ForkedEscrowExported') {
-		const vault = requireAddress(log.args, 'vault')
-		const sourcePrincipalByOutcomeAttoRep = requireBigIntTriple(log.args, 'sourcePrincipalByOutcomeAttoRep')
-		const childRepByOutcomeAttoRep = requireBigIntTriple(log.args, 'childRepByOutcomeAttoRep')
-		getOrCreateNestedMap(state.escalationForkedExports, log.emitter).set(vault, {
-			repReceiver: requireAddress(log.args, 'repReceiver'),
-			sourcePrincipalByOutcomeAttoRep,
-			childRepByOutcomeAttoRep,
-			totalChildRepToTransferAttoRep: requireBigInt(log.args, 'totalChildRepToTransferAttoRep'),
-			transferredRep: requireBoolean(log.args, 'transferredRep'),
-		})
-		for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) {
-			if (sourcePrincipalByOutcomeAttoRep[outcomeIndex] === 0n && childRepByOutcomeAttoRep[outcomeIndex] === 0n) continue
-			const escrow = state.escalationForkedEscrow.get(log.emitter)?.get(`${vault}:${outcomeIndex.toString()}`)
-			if (escrow === undefined) throw new Error('forked escrow export references unknown escrow')
-			escrow.sourcePrincipalClaimedAttoRep = escrow.sourcePrincipalAttoRep
-			escrow.childRepClaimedAttoRep = escrow.childAttoRep
-		}
-		return
-	}
 	if (log.eventName === 'EscalationSurplusAccrued') {
 		state.escalationSurplusAccrued.set(log.emitter, requireBigInt(log.args, 'cumulativeSurplusAttoRep'))
 	}
@@ -1238,7 +1152,6 @@ type PoolRelationshipDiscovery = {
 	factories: ReadonlySet<Address>
 	pools: ReadonlySet<Address>
 	shareTokens: ReadonlySet<Address>
-	auctions: ReadonlySet<Address>
 	coordinators: ReadonlySet<Address>
 	escalationGames: ReadonlySet<Address>
 }
@@ -1251,7 +1164,8 @@ export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRe
 	if (poolRelationships === undefined || poolRelationships.shareTokens.has(emitter)) reduceShareTokenEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.pools.has(emitter)) reduceSecurityPoolEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.escalationGames.has(emitter)) reduceEscalationEvent(state, log)
-	if (poolRelationships === undefined || poolRelationships.auctions.has(emitter)) reduceAuctionEvent(state, log)
+	// Portfolio auctions are not announced by pool deployments, so relationship-scoped replays skip them.
+	if (poolRelationships === undefined) reduceAuctionEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.coordinators.has(emitter)) reduceCoordinatorEvent(state, log)
 }
 
@@ -1307,7 +1221,6 @@ export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHash
 		const factories = new Set([...knownPoolFactories].map(factory => getAddress(factory)))
 		const pools = new Set<Address>()
 		const shareTokens = new Set<Address>()
-		const auctions = new Set<Address>()
 		const coordinators = new Set<Address>()
 		const escalationGames = new Set<Address>()
 		for (const log of orderedLogs) {
@@ -1315,15 +1228,13 @@ export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHash
 			reducePoolFactoryEvent(state, log)
 			pools.add(requireAddress(log.args, 'securityPool'))
 			shareTokens.add(requireAddress(log.args, 'shareToken'))
-			const collateralRepairAuction = requireAddress(log.args, 'collateralRepairAuction')
-			if (collateralRepairAuction !== ZERO_ADDRESS) auctions.add(collateralRepairAuction)
 			coordinators.add(requireAddress(log.args, 'openOraclePriceCoordinator'))
 		}
 		for (const log of orderedLogs) {
 			if (log.eventName !== 'EscalationGameSet' || !pools.has(getAddress(log.emitter))) continue
 			escalationGames.add(requireAddress(log.args, 'escalationGame'))
 		}
-		poolRelationships = { factories, pools, shareTokens, auctions, coordinators, escalationGames }
+		poolRelationships = { factories, pools, shareTokens, coordinators, escalationGames }
 	}
 	for (const log of orderedLogs) {
 		const identity = getCanonicalEventIdentity(log)

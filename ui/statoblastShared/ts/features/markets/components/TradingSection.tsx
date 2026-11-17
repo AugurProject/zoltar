@@ -1,6 +1,5 @@
 import * as collateralCopy from '../../../copy/collateral.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
@@ -22,7 +21,6 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ShareMigrationTargetsSection } from '../../universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -49,6 +47,7 @@ import {
 	getPoolMintingCapacityAttoEth,
 	hasShares,
 	MINTING_PAUSED_DURING_DISPUTE_MESSAGE,
+	parseCompleteSetAmountInput,
 } from '../lib/trading.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { formatAmountDisplay, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -121,15 +120,10 @@ export function TradingSection({
 		centralSettlement: selectedPool?.feeAccrualState?.centralSettlement,
 		centralCheckpointTimestamp: selectedPool?.feeAccrualState?.centralCheckpointTimestamp,
 		linearFee: selectedPool?.feeAccrualState?.linearFee,
-		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
-		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
-		feeEligibleUnderwritingLimitAttoEth: selectedPool?.feeEligibleUnderwritingLimitAttoEth,
 		feeEndTimestamp: selectedPool?.feeAccrualState?.feeEndTimestamp,
-		feeIndexRemainder: selectedPool?.feeAccrualState?.feeIndexRemainder,
 		lastFeeCheckpointNativeTime: selectedPool?.feeAccrualState?.lastFeeCheckpointNativeTime,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
-		totalFeesOwedRemainder: selectedPool?.feeAccrualState?.totalFeesOwedRemainder,
 	})
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
 	const usesSharedBacking = selectedPool?.feeAccrualState?.linearFee !== undefined
@@ -168,6 +162,7 @@ export function TradingSection({
 		loadingTradingDetails,
 		selectedShareOutcome: tradingForm.selectedShareOutcome,
 		shareBalances,
+		shareMigrationTargets: tradingDetails?.shareMigrationTargets,
 		targetOutcomeIndexesInput: tradingForm.targetOutcomeIndexes,
 		tradingForkUniverse,
 	})
@@ -251,7 +246,7 @@ export function TradingSection({
 	const closeActiveModal = () => setActiveModal(undefined)
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
-		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
+		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes({ selectedShareOutcome: tradingForm.selectedShareOutcome, shareBalances, shareMigrationTargets: tradingDetails?.shareMigrationTargets, tradingForkUniverse }) })
 	}
 	const clearTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: '' })
@@ -414,41 +409,61 @@ export function TradingSection({
 					value={tradingForm.completeSetAmount}
 				/>
 				{usesSharedBacking && <UserMessage className='detail' detail={tradingCopy.sharedPoolPurchaseDetail} />}
-				{collateralFunding?.collateral !== undefined && tokenRequiresAllowanceReset(collateralFunding.collateral.token) ? (
-					<TransactionActionButton
-						idleLabel={commonCopy.formatResetTokenApproval(collateralFunding.collateral.symbol)}
-						pendingLabel={commonCopy.formatResettingTokenApproval(collateralFunding.collateral.symbol)}
-						pending={collateralFunding.resetting}
-						availability={collateralFunding.collateral.allowance === 0n ? { disabled: true, reason: commonCopy.notNeeded } : { disabled: false, reason: undefined }}
-						onClick={() => collateralFunding.approve(0n)}
-					/>
-				) : undefined}
-
 				<TokenApprovalControl
 					actionLabel={tradingCopy.mintCompleteSets}
 					allowanceError={collateralFunding?.error}
 					allowanceLoading={collateralFunding?.loading ?? true}
 					approvedAmount={collateralFunding?.collateral?.allowance}
 					guardMessage={mintGuardMessage}
-					requiresAllowanceReset={tokenRequiresAllowanceReset(collateralFunding?.collateral?.token)}
-					disabled={tradingActiveAction !== undefined}
+					disabled={tradingActiveAction !== undefined || collateralFunding?.approvalActive === true}
 					onApprove={amount => {
 						if (amount !== undefined) void collateralFunding?.approve(amount)
 					}}
-					pending={(collateralFunding?.pending ?? false) && collateralFunding?.resetting !== true}
+					pending={collateralFunding?.pending ?? false}
 					pendingLabel={commonCopy.formatApprovingToken(collateralSymbol)}
 					requiredAmount={collateralFunding?.requiredCollateral}
 					resetKey={`${selectedPool?.securityPoolAddress}:${collateralFunding?.requiredCollateral}`}
 					tokenSymbol={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback}
 					tokenUnits={collateralFunding?.collateral?.decimals ?? 18}
 				/>
+				{collateralFunding?.recoveryApplicable && (
+					<>
+						<UserMessage detail={collateralCopy.recoveryContributionHint} />
+						<MetricGrid>
+							<MetricField label={collateralCopy.recoveryContribution}>
+								<CurrencyValue exactWhenRoundedToZero value={collateralFunding?.recovery?.required} suffix={commonCopy.rep} />
+							</MetricField>
+							<MetricField label={collateralCopy.maximumRecoveryContribution}>
+								<CurrencyValue precision='exact' value={collateralFunding?.recovery?.maximum} suffix={commonCopy.rep} />
+							</MetricField>
+						</MetricGrid>
+						<TokenApprovalControl
+							amountPrecision='exact'
+							actionLabel={tradingCopy.mintCompleteSets}
+							tokenSymbol={commonCopy.rep}
+							tokenUnits={18}
+							approvedAmount={collateralFunding?.recovery?.allowance}
+							requiredAmount={collateralFunding?.recovery?.maximum}
+							allowanceError={collateralFunding?.error}
+							allowanceLoading={collateralFunding?.loading ?? true}
+							guardMessage={mintGuardMessage}
+							disabled={tradingActiveAction !== undefined || collateralFunding?.approvalActive === true || collateralFunding?.recovery === undefined || collateralFunding.error !== undefined}
+							pending={collateralFunding?.pendingRecovery ?? false}
+							pendingLabel={commonCopy.formatApprovingToken(commonCopy.rep)}
+							resetKey={`${selectedPool?.securityPoolAddress}:${collateralFunding?.recovery?.required}`}
+							onApprove={amount => {
+								if (amount !== undefined) void collateralFunding?.approveRecovery(amount)
+							}}
+						/>
+					</>
+				)}
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.mintCompleteSets}
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={getModalActionAvailability(mintEnabled, mintGuardMessage ?? collateralFunding?.reason, (tryParseDecimalInput(tradingForm.completeSetAmount, collateralDecimals) ?? 0n) > 0n)}
+						availability={getModalActionAvailability(mintEnabled, mintGuardMessage ?? collateralFunding?.reason, (parseCompleteSetAmountInput(tradingForm.completeSetAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</OperationModal>
@@ -470,7 +485,7 @@ export function TradingSection({
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
-						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage, (tryParseDecimalInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
+						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage, (parseCompleteSetAmountInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</OperationModal>

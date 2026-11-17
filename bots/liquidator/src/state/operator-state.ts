@@ -9,9 +9,9 @@ import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState } from './runtime-state.ts'
 import { readOwnerFileIfPresent, writeDurableStateFile } from '@zoltar/bot-shared/config/durable-file'
 import { stringifyWithBigInts } from '@zoltar/core-shared/serialization/bigInt'
-import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
-import { formatDecimalAmount, isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
 import { serializeCentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -29,7 +29,6 @@ export type PoolObservation = {
 	botVault: VaultPosition
 	candidates: LiquidationCandidate[]
 	settlementCollateralAttoEth: bigint
-	currentRetentionRate: bigint
 	forkActivationTime: bigint
 	forkOutcomeIndex: bigint | undefined
 	initialReportPriorityFeeAttoEthPerGas: bigint
@@ -98,28 +97,6 @@ export type Activity = {
 	status: 'confirmed' | 'dry-run' | 'failed' | 'info' | 'pending'
 }
 
-export type PendingStagedOperation = {
-	candidateOutcome?: {
-		blockHash: Hex
-		blockNumber: bigint
-		errorMessage: string
-		operation: bigint
-		operationId: bigint
-		success: boolean
-		transactionHash: Hex
-	}
-	coordinator: Address
-	historicalRecoveryComplete?: boolean | undefined
-	latestRecoveryBlock?: bigint | undefined
-	nextHistoricalBlock?: bigint | undefined
-	operation?: 0 | 1
-	operationId: bigint
-	queuedBlock: bigint
-	recoveryAnchorBlock?: bigint | undefined
-	recoveryAnchorHash?: Hex | undefined
-	target: Address
-}
-
 export type PendingTransactionIntent = {
 	reportSponsorship?: ReportSponsorship | undefined
 	reportOperations?: { feed: Address; reportId: bigint } | undefined
@@ -142,11 +119,6 @@ export type PendingTransactionIntent = {
 	submissionBlock: bigint
 }
 
-function parseStagedOperation(value: unknown): 0 | 1 {
-	if (value === 0 || value === 1) return value
-	throw new Error('Pending transaction intent has invalid staged operation')
-}
-
 export function initialRuntimeState(paused: boolean, wallet: Address | undefined, chainId: number): RuntimeState {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Runtime chain ID must be a positive integer')
 	return {
@@ -167,7 +139,6 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		lastScannedTimestamp: undefined,
 		paused,
 		rpcEndpointHealth: [],
-		pendingStagedOperations: [],
 		pendingTransactions: [],
 		portfolios: [],
 		portfolioScopes: [],
@@ -262,7 +233,6 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	const alerts: { message: string; severity: 'error' | 'warning' }[] = []
 	if (state.status === 'connectivity-degraded') alerts.push({ message: state.error ?? 'RPC connectivity is degraded; automatic execution is blocked until connectivity recovers', severity: 'warning' })
 	if (state.pendingTransactions.length > 0) alerts.push({ message: `${state.pendingTransactions.length.toString()} transaction intent(s) require recovery before execution can continue`, severity: 'error' })
-	if (state.pendingStagedOperations.length > 0) alerts.push({ message: `${state.pendingStagedOperations.length.toString()} staged operation(s) require outcome recovery before execution can continue`, severity: 'error' })
 	for (const configuration of configurations) {
 		if (configuration !== rootConfiguration && !discoveredRepAssets.has(configuration.assetAddress.toLowerCase())) continue
 		const consensus = state.marketConsensusByAsset.get(configuration.assetAddress.toLowerCase()) ?? (configuration === rootConfiguration ? state.marketConsensus : undefined)
@@ -340,16 +310,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		marketConsensus: serializeMarketConsensusEstimate(state.marketConsensus, formatDecimalAmount),
 		error: state.error,
 		execute,
-		operatorCapable:
-			state.lastScanAt !== undefined &&
-			state.lastScannedBlock !== undefined &&
-			!state.scanning &&
-			!state.paused &&
-			state.error === undefined &&
-			state.pendingTransactions.length === 0 &&
-			state.pendingStagedOperations.length === 0 &&
-			state.status === (execute ? 'running' : 'dry-run') &&
-			(!execute || state.wallet !== undefined),
+		operatorCapable: state.lastScanAt !== undefined && state.lastScannedBlock !== undefined && !state.scanning && !state.paused && state.error === undefined && state.pendingTransactions.length === 0 && state.status === (execute ? 'running' : 'dry-run') && (!execute || state.wallet !== undefined),
 		deploymentMissingName: state.deploymentMissingName,
 		deploymentCheckedBlock: state.deploymentCheckedBlock?.toString(),
 		deploymentCheckedTimestamp: state.deploymentCheckedTimestamp?.toString(),
@@ -369,16 +330,6 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		},
 		paused: state.paused,
 		rpcEndpointHealth: state.rpcEndpointHealth,
-		pendingStagedOperations: state.pendingStagedOperations.map(operation => ({
-			candidateBlock: operation.candidateOutcome?.blockNumber.toString(),
-			coordinator: operation.coordinator,
-			historicalRecoveryComplete: operation.historicalRecoveryComplete === true,
-			latestRecoveryBlock: operation.latestRecoveryBlock?.toString(),
-			nextHistoricalBlock: operation.nextHistoricalBlock?.toString(),
-			operationId: operation.operationId.toString(),
-			queuedBlock: operation.queuedBlock.toString(),
-			target: operation.target,
-		})),
 		pendingTransactions: state.pendingTransactions.map(intent => ({
 			hash: intent.hash,
 			kind: intent.kind,
@@ -401,7 +352,6 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				candidates: pool.candidates.map(candidateView),
 				settlementCollateralEth: formatDecimalAmount(pool.settlementCollateralAttoEth),
 				centralizedPriceAllowed: poolCentralizedPriceAllowed(pool, configurations.length === 0, centralizedMarkets, centralizedMarket, marketConsensus),
-				currentRetentionRate: pool.currentRetentionRate.toString(),
 				forkActivationTime: pool.forkActivationTime.toString(),
 				forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
 				initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
@@ -487,10 +437,17 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	}
 }
 
+/** Staged-operation recovery was removed; a journal still holding such entries needs manual resolution rather than silently blocking execution forever. */
+function assertNoLegacyStagedOperations(value: unknown, path: string) {
+	if (value === undefined || (Array.isArray(value) && value.length === 0)) return
+	const entries = Array.isArray(value) ? `${value.length.toString()} legacy pending staged operation(s)` : 'a legacy pendingStagedOperations field'
+	throw new Error(`Liquidator state contains ${entries}, which are no longer supported; resolve them on-chain, then remove pendingStagedOperations from ${path}`)
+}
+
 export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
 	const contents = await readOwnerFileIfPresent(path, 'Liquidator state', MAXIMUM_STATE_BYTES)
-	if (contents === undefined) return { portfolioFunding: {}, completedPortfolioInstructions: {}, portfolioScopes: [], activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingStagedOperations: [], pendingTransactions: [], version: 2 }
+	if (contents === undefined) return { portfolioFunding: {}, completedPortfolioInstructions: {}, portfolioScopes: [], activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')
 	const version = Reflect.get(value, 'version')
@@ -501,7 +458,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 	const pendingTransactions = Reflect.get(value, 'pendingTransactions')
 	if (version !== 2 || !Array.isArray(activities)) throw new Error('Liquidator state version is unsupported')
 	if (chainId !== expectedChainId) throw new Error(`Liquidator state belongs to chain ${String(chainId)}, expected chain ${expectedChainId.toString()}`)
-	if (!Array.isArray(pendingStagedOperations)) throw new Error('pendingStagedOperations must be an array')
+	assertNoLegacyStagedOperations(pendingStagedOperations, path)
 	if (!Array.isArray(pendingTransactions)) throw new Error('pendingTransactions must be an array')
 	return {
 		activities: activities.flatMap(activity => {
@@ -528,53 +485,6 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 		}),
 		chainId,
 		lastScannedBlock: typeof lastScannedBlock === 'string' ? lastScannedBlock : undefined,
-		pendingStagedOperations: pendingStagedOperations.map((operation: unknown) => {
-			if (typeof operation !== 'object' || operation === null || Array.isArray(operation)) throw new Error('Pending staged operation must be an object')
-			const operationId = Reflect.get(operation, 'operationId')
-			const queuedBlock = Reflect.get(operation, 'queuedBlock')
-			const latestRecoveryBlock = Reflect.get(operation, 'latestRecoveryBlock')
-			const nextHistoricalBlock = Reflect.get(operation, 'nextHistoricalBlock')
-			const historicalRecoveryComplete = Reflect.get(operation, 'historicalRecoveryComplete')
-			const recoveryAnchorBlock = Reflect.get(operation, 'recoveryAnchorBlock')
-			const recoveryAnchorHash = Reflect.get(operation, 'recoveryAnchorHash')
-			const rawCandidateOutcome = Reflect.get(operation, 'candidateOutcome')
-			let candidateOutcome: PendingStagedOperation['candidateOutcome']
-			if (rawCandidateOutcome !== undefined) {
-				if (typeof rawCandidateOutcome !== 'object' || rawCandidateOutcome === null || Array.isArray(rawCandidateOutcome)) throw new Error('Pending staged operation candidate outcome must be an object')
-				const blockHash = Reflect.get(rawCandidateOutcome, 'blockHash')
-				const blockNumber = Reflect.get(rawCandidateOutcome, 'blockNumber')
-				const errorMessage = Reflect.get(rawCandidateOutcome, 'errorMessage')
-				const candidateOperation = Reflect.get(rawCandidateOutcome, 'operation')
-				const candidateOperationId = Reflect.get(rawCandidateOutcome, 'operationId')
-				const success = Reflect.get(rawCandidateOutcome, 'success')
-				const transactionHash = Reflect.get(rawCandidateOutcome, 'transactionHash')
-				if (!isHash32(blockHash) || typeof blockNumber !== 'string' || typeof errorMessage !== 'string' || typeof candidateOperation !== 'string' || typeof candidateOperationId !== 'string' || typeof success !== 'boolean' || !isHash32(transactionHash))
-					throw new Error('Pending staged operation candidate outcome is invalid')
-				candidateOutcome = {
-					blockHash,
-					blockNumber: BigInt(blockNumber),
-					errorMessage,
-					operation: BigInt(candidateOperation),
-					operationId: BigInt(candidateOperationId),
-					success,
-					transactionHash,
-				}
-			}
-			if (typeof operationId !== 'string' || typeof queuedBlock !== 'string') throw new Error('Pending staged operation has invalid numeric metadata')
-			if ((recoveryAnchorBlock === undefined) !== (recoveryAnchorHash === undefined) || (recoveryAnchorBlock !== undefined && (typeof recoveryAnchorBlock !== 'string' || !isHash32(recoveryAnchorHash)))) throw new Error('Pending staged operation recovery anchor is invalid')
-			return {
-				...(candidateOutcome === undefined ? {} : { candidateOutcome }),
-				coordinator: getAddress(String(Reflect.get(operation, 'coordinator'))),
-				...(typeof historicalRecoveryComplete === 'boolean' ? { historicalRecoveryComplete } : {}),
-				...(typeof latestRecoveryBlock === 'string' ? { latestRecoveryBlock: BigInt(latestRecoveryBlock) } : {}),
-				...(typeof nextHistoricalBlock === 'string' ? { nextHistoricalBlock: BigInt(nextHistoricalBlock) } : {}),
-				...(Reflect.get(operation, 'operation') === undefined ? {} : { operation: parseStagedOperation(Reflect.get(operation, 'operation')) }),
-				operationId: BigInt(operationId),
-				queuedBlock: BigInt(queuedBlock),
-				...(typeof recoveryAnchorBlock === 'string' && isHash32(recoveryAnchorHash) ? { recoveryAnchorBlock: BigInt(recoveryAnchorBlock), recoveryAnchorHash } : {}),
-				target: getAddress(String(Reflect.get(operation, 'target'))),
-			}
-		}),
 		pendingTransactions: await Promise.all(pendingTransactions.map((intent: unknown) => parsePendingTransactionIntent(intent, expectedChainId))),
 		sponsoredReports: parseSponsoredReports(Reflect.get(value, 'sponsoredReports')),
 		portfolioFunding: parsePortfolioFunding(Reflect.get(value, 'portfolioFunding')),

@@ -8,14 +8,12 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { rpow, previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import { previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { TradingShareBalances } from '../../../types/contracts.js'
+import type { ShareMigrationTarget, ShareMigrationTargetsState, TradingShareBalances } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
-
-const PRICE_PRECISION = 10n ** 18n
 
 export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No vault has an active commitment.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'You need matching Yes, No, and Invalid shares to redeem complete sets.'
@@ -50,72 +48,38 @@ export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined
 	return spendableEthAttoEth < remainingMintCapacityAttoEth ? spendableEthAttoEth : remainingMintCapacityAttoEth
 }
 
+/** Projects the question's cash after its linear fee stream accrues up to `currentTimestamp`. */
 export function estimateMintCheckpoint({
 	centralSettlement,
 	centralCheckpointTimestamp,
 	linearFee,
-	currentRetentionRate,
 	currentTimestamp,
-	feeEligibleUnderwritingLimitAttoEth,
-	totalUnderwritingLimitAttoEth,
 	feeEndTimestamp,
-	feeIndexRemainder,
 	lastFeeCheckpointNativeTime,
 	settlementCollateralAttoEth,
-	totalFeesOwedRemainder,
 }: {
 	centralCheckpointTimestamp?: bigint | undefined
 	centralSettlement?: boolean | undefined
 	linearFee?: LinearFeeState | undefined
-	currentRetentionRate: bigint | undefined
 	currentTimestamp: bigint | undefined
-	feeEligibleUnderwritingLimitAttoEth: bigint | undefined
-	totalUnderwritingLimitAttoEth: bigint | undefined
 	feeEndTimestamp: bigint | undefined
-	feeIndexRemainder: bigint | undefined
 	lastFeeCheckpointNativeTime: bigint | undefined
 	settlementCollateralAttoEth: bigint | undefined
-	totalFeesOwedRemainder: bigint | undefined
 }) {
-	if (
-		currentRetentionRate === undefined ||
-		currentTimestamp === undefined ||
-		feeEligibleUnderwritingLimitAttoEth === undefined ||
-		totalUnderwritingLimitAttoEth === undefined ||
-		feeEndTimestamp === undefined ||
-		feeIndexRemainder === undefined ||
-		lastFeeCheckpointNativeTime === undefined ||
-		settlementCollateralAttoEth === undefined ||
-		totalFeesOwedRemainder === undefined
-	)
-		return undefined
+	if (linearFee === undefined || currentTimestamp === undefined || feeEndTimestamp === undefined || lastFeeCheckpointNativeTime === undefined || settlementCollateralAttoEth === undefined) return undefined
 	if (centralSettlement === true) {
-		if (centralCheckpointTimestamp === undefined || linearFee === undefined) return undefined
+		if (centralCheckpointTimestamp === undefined) return undefined
 		// The simulated checkpoint includes historical pauses. Only future elapsed time
 		// can accrue again, bounded by the stream's remaining duration in native time.
 		const elapsed = currentTimestamp > centralCheckpointTimestamp ? currentTimestamp - centralCheckpointTimestamp : 0n
 		const remaining = linearFee.endTime > lastFeeCheckpointNativeTime ? linearFee.endTime - lastFeeCheckpointNativeTime : 0n
-		const fees = (elapsed < remaining ? elapsed : remaining) * linearFee.rateAttoEthPerSecond
+		const scale = linearFee.rateScale ?? 1n
+		if (scale <= 0n) return undefined
+		const fees = ((elapsed < remaining ? elapsed : remaining) * linearFee.rateAttoEthPerSecond) / scale
 		const estimatedRetentionFeeAttoEth = fees < settlementCollateralAttoEth ? fees : settlementCollateralAttoEth
 		return { estimatedRetentionFeeAttoEth, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth }
 	}
-	if (linearFee !== undefined) return previewLinearFeeCheckpoint({ linearFee, currentTimestamp, feeEndTimestamp, lastFeeCheckpointNativeTime, settlementCollateralAttoEth })
-	const checkpointTimestamp = currentTimestamp < feeEndTimestamp ? currentTimestamp : feeEndTimestamp
-	if (lastFeeCheckpointNativeTime >= checkpointTimestamp || feeEligibleUnderwritingLimitAttoEth === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
-	const timeDelta = checkpointTimestamp - lastFeeCheckpointNativeTime
-	if (totalUnderwritingLimitAttoEth === 0n || feeEligibleUnderwritingLimitAttoEth > totalUnderwritingLimitAttoEth) return undefined
-	const feeBearingCollateral = (settlementCollateralAttoEth * feeEligibleUnderwritingLimitAttoEth) / totalUnderwritingLimitAttoEth
-	const pendingDecay = (feeIndexRemainder + totalFeesOwedRemainder) / PRICE_PRECISION
-	const decayingCollateral = feeBearingCollateral > pendingDecay ? feeBearingCollateral - pendingDecay : 0n
-	const retainedCollateralAttoEth = (decayingCollateral * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION
-	const scaledFeeDelta = (decayingCollateral - retainedCollateralAttoEth) * PRICE_PRECISION + feeIndexRemainder
-	const feeIndexDelta = scaledFeeDelta / feeEligibleUnderwritingLimitAttoEth
-	const feesOwedDelta = feeIndexDelta * feeEligibleUnderwritingLimitAttoEth + totalFeesOwedRemainder
-	const estimatedRetentionFeeAttoEth = feesOwedDelta / PRICE_PRECISION
-	return {
-		estimatedRetentionFeeAttoEth,
-		settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth,
-	}
+	return previewLinearFeeCheckpoint({ linearFee, currentTimestamp, feeEndTimestamp, lastFeeCheckpointNativeTime, settlementCollateralAttoEth })
 }
 
 export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleUnderwritingLimitAttoEth: bigint | undefined) {
@@ -180,14 +144,80 @@ function areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse: ZoltarU
 	return targetOutcomeIndexes.every(outcomeIndex => availableOutcomeIndexSet.has(outcomeIndex.toString()))
 }
 
-export function getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse: ZoltarUniverseSummary | undefined) {
+/**
+ * Why `ShareToken.migrate` would revert for these targets, or undefined when it would not. It creates a missing
+ * child pool only for a single target, and it reverts when every target already holds the whole source balance.
+ * A target absent from `shareMigrationTargets` (an undeployed scalar child) has no pool yet.
+ */
+function getShareMigrationTargetBlocker(shareMigrationTargets: readonly ShareMigrationTarget[], targetOutcomeIndexes: readonly bigint[], selectedShareOutcome: ReportingOutcomeKey, selectedOutcomeBalance: bigint) {
+	const targets = targetOutcomeIndexes.map(outcomeIndex => shareMigrationTargets.find(target => target.outcomeIndex === outcomeIndex))
+	if (targets.length > 1 && targets.some(target => target?.canonicalPool === undefined)) return tradingCopy.missingChildPoolBlocker
+	const alreadyMigrated = targets.every(target => target !== undefined && isShareMigrationTargetComplete(target, selectedShareOutcome, selectedOutcomeBalance))
+	return alreadyMigrated ? tradingCopy.formatSharesAlreadyMigratedReason(getReportingOutcomeLabel(selectedShareOutcome)) : undefined
+}
+
+function isShareMigrationTargetComplete(target: ShareMigrationTarget, selectedShareOutcome: ReportingOutcomeKey, selectedOutcomeBalance: bigint) {
+	const migratedAttoShares = getSelectedOutcomeShareBalance(target.migratedAttoShares, selectedShareOutcome)
+	return migratedAttoShares !== undefined && migratedAttoShares >= selectedOutcomeBalance
+}
+
+type ShareMigrationDefaultsInput = {
+	selectedShareOutcome: ReportingOutcomeKey
+	shareBalances: TradingShareBalances | undefined
+	shareMigrationTargets: ShareMigrationTargetsState | undefined
+	tradingForkUniverse: ZoltarUniverseSummary | undefined
+}
+
+/**
+ * The categorical child universes a migration of the selected balance can still reach, leaving out children that already
+ * hold the whole balance. Undefined before a categorical fork or while the share token's view of the children is not loaded.
+ */
+function getShareMigrationCandidates({ selectedShareOutcome, shareBalances, shareMigrationTargets, tradingForkUniverse }: ShareMigrationDefaultsInput) {
+	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return undefined
+	if (tradingForkUniverse.forkQuestionDetails?.marketType === 'scalar') return undefined
+	if (shareMigrationTargets === undefined || 'unavailableReason' in shareMigrationTargets) return undefined
+	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedShareOutcome)
+	return tradingForkUniverse.childUniverses.flatMap(child => {
+		const target = shareMigrationTargets.find(candidate => candidate.outcomeIndex === child.outcomeIndex)
+		if (target !== undefined && selectedOutcomeBalance !== undefined && selectedOutcomeBalance > 0n && isShareMigrationTargetComplete(target, selectedShareOutcome, selectedOutcomeBalance)) return []
+		return [{ hasPool: target?.canonicalPool !== undefined, outcomeIndex: child.outcomeIndex }]
+	})
+}
+
+/**
+ * The child universes a categorical migration starts with, and what "Select all" restores. Once the share token's view of
+ * the children is loaded, it leaves out children that already hold the whole selected balance and, because a batch with a
+ * missing child pool reverts, keeps only children with pools whenever more than one candidate remains; with no pooled
+ * candidate it selects nothing, so the user picks a single child, whose pool the migration creates.
+ */
+export function getDefaultShareMigrationTargetOutcomeIndexes(input: ShareMigrationDefaultsInput) {
+	const { tradingForkUniverse } = input
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return ''
 	if (tradingForkUniverse.forkQuestionDetails?.marketType === 'scalar') return ''
-	return tradingForkUniverse.childUniverses.map(child => child.outcomeIndex.toString()).join(', ')
+	const candidates = getShareMigrationCandidates(input)
+	if (candidates === undefined) return tradingForkUniverse.childUniverses.map(child => child.outcomeIndex).join(', ')
+	const selectable = candidates.length > 1 ? candidates.filter(candidate => candidate.hasPool) : candidates
+	return selectable.map(candidate => candidate.outcomeIndex.toString()).join(', ')
+}
+
+/** Why the default selection is empty for a held balance: every child already holds it, or several children remain and none has a pool. */
+function getEmptyShareMigrationDefaultReason(input: ShareMigrationDefaultsInput) {
+	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(input.shareBalances, input.selectedShareOutcome)
+	if (selectedOutcomeBalance === undefined || selectedOutcomeBalance === 0n || input.tradingForkUniverse?.childUniverses.length === 0) return undefined
+	const candidates = getShareMigrationCandidates(input)
+	if (candidates === undefined) return undefined
+	if (candidates.length === 0) return tradingCopy.formatSharesMigratedIntoEveryChildReason(getReportingOutcomeLabel(input.selectedShareOutcome))
+	if (candidates.length > 1 && candidates.every(candidate => !candidate.hasPool)) return tradingCopy.noChildPoolForBatchMigration
+	return undefined
 }
 
 export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) {
 	return deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
+}
+
+/** The one parser for complete-set mint and redeem amounts, shared by the guards, the collateral quote and submission so they never disagree. */
+export function parseCompleteSetAmountInput(input: string, decimals: number) {
+	return tryParseDecimalInput(input, decimals)
 }
 
 export function getTradingMintGuardMessage({
@@ -237,7 +267,7 @@ export function getTradingMintGuardMessage({
 
 	const trimmedAmount = mintAmountInput.trim()
 	if (trimmedAmount === '') return tradingCopy.mintAmountRequired
-	const mintAmount = tryParseDecimalInput(trimmedAmount, collateral?.decimals ?? 18)
+	const mintAmount = parseCompleteSetAmountInput(trimmedAmount, collateral?.decimals ?? 18)
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
 	if (mintAmount <= 0n) return tradingCopy.mintAmountRequired
@@ -279,7 +309,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 
 	const trimmedAmount = redeemAmountInput.trim()
 	if (trimmedAmount === '') return tradingCopy.redeemAmountRequired
-	const redeemAmount = tryParseDecimalInput(trimmedAmount, shareDecimals)
+	const redeemAmount = parseCompleteSetAmountInput(trimmedAmount, shareDecimals)
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
 	if (redeemAmount <= 0n) return tradingCopy.redeemAmountRequired
@@ -295,6 +325,7 @@ export function getTradingMigrateSharesGuardMessage({
 	loadingTradingDetails,
 	selectedShareOutcome,
 	shareBalances,
+	shareMigrationTargets,
 	targetOutcomeIndexesInput,
 	tradingForkUniverse,
 }: {
@@ -305,6 +336,7 @@ export function getTradingMigrateSharesGuardMessage({
 	loadingTradingDetails: boolean
 	selectedShareOutcome: ReportingOutcomeKey
 	shareBalances: TradingShareBalances | undefined
+	shareMigrationTargets: ShareMigrationTargetsState | undefined
 	targetOutcomeIndexesInput: string
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
@@ -316,7 +348,11 @@ export function getTradingMigrateSharesGuardMessage({
 	if (!tradingForkUniverse.hasForked) return tradingCopy.shareMigrationRequiresFork
 
 	const targetOutcomeIndexes = tryParseBigIntListInput(targetOutcomeIndexesInput)
-	if (targetOutcomeIndexes === undefined) return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'
+	if (targetOutcomeIndexes === undefined) {
+		if (targetOutcomeIndexesInput.trim() !== '') return 'Select valid target child universes.'
+		if (loadingTradingDetails) return 'Select at least one target child universe.'
+		return getEmptyShareMigrationDefaultReason({ selectedShareOutcome, shareBalances, shareMigrationTargets, tradingForkUniverse }) ?? 'Select at least one target child universe.'
+	}
 	if (new Set(targetOutcomeIndexes.map(outcomeIndex => outcomeIndex.toString())).size !== targetOutcomeIndexes.length) return 'Select each target child universe only once.'
 
 	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return 'Select valid target child universes.'
@@ -325,7 +361,9 @@ export function getTradingMigrateSharesGuardMessage({
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedShareOutcome)
 	if (selectedOutcomeBalance === undefined) return 'Loading wallet share balances…'
 	if (selectedOutcomeBalance === 0n) return `No ${getReportingOutcomeLabel(selectedShareOutcome)} shares available to migrate.`
-	return undefined
+	if (shareMigrationTargets === undefined) return tradingCopy.loadingShareMigrationTargetPools
+	if ('unavailableReason' in shareMigrationTargets) return shareMigrationTargets.unavailableReason
+	return getShareMigrationTargetBlocker(shareMigrationTargets, targetOutcomeIndexes, selectedShareOutcome, selectedOutcomeBalance)
 }
 
 /** Without `questionOutcome` only the pool and wallet are checked; with it, the pool must be resolved and the wallet must hold winning shares. */

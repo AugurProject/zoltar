@@ -1,17 +1,24 @@
 import { readCollateralMetadata } from './collateral-metadata.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { abiForKind } from './abi-catalog.ts'
+import { capitalLedgerSnapshot, capitalOwnerSnapshot, capitalPositionSnapshot } from './capital-snapshots.ts'
 import { sampleClaimPositions } from './claim-snapshots.ts'
 import { type Abi, type AbiValue, type Address, getAddress } from './ethereum.ts'
 import type { SystemContractKind } from './system-interfaces.ts'
 
+const snapshotEntityTypes = ['auction', 'capital-ledger', 'capital-owner', 'capital-position', 'escalation', 'pool'] as const
+
 export type StateSnapshotTarget = {
-	readonly entityType: 'auction' | 'escalation' | 'pool'
+	readonly entityType: (typeof snapshotEntityTypes)[number]
 	readonly entityIdentity: string
 	readonly address: Address
 	readonly poolAddress?: Address | undefined
 	readonly coordinatorAddress?: Address | undefined
 	readonly escalationAddress?: Address | undefined
+	// A capital owner's identity is its ledger and its address; `address` is the ledger.
+	readonly ownerAddress?: Address | undefined
+	// A capital position's identity is its ledger and its id; `address` is the ledger.
+	readonly positionId?: bigint | undefined
 }
 
 export type EntityStateSnapshot = {
@@ -145,6 +152,20 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 	const values = await Promise.all(quantities.map(name => read(target.address, auctionAbi, name)))
 	const [initialized, finalized, rawClearing] = await Promise.all([read(target.address, auctionAbi, 'initialized'), read(target.address, auctionAbi, 'finalized'), read(target.address, auctionAbi, 'clearing')])
 	const clearing = tuple(rawClearing, 10, 'clearing')
+	// Bids, clearing proceeds and refunds are amounts of the auction's collateral token, not native ETH.
+	// Token metadata is optional: a failed read keeps the accounting snapshot and leaves explicit raw collateral units.
+	const collateral: Record<string, unknown> = {}
+	try {
+		const token = getAddress(String(await read(target.address, auctionAbi, 'collateralToken')))
+		try {
+			collateral['collateral'] = await readCollateralMetadata(token, read)
+		} catch (error) {
+			collateral['collateralMetadataError'] = errorMessage(error)
+			collateral['collateral'] = { address: token.toLowerCase(), symbol: 'collateral units', decimals: 0 }
+		}
+	} catch (error) {
+		collateral['collateralMetadataError'] = errorMessage(error)
+	}
 	return {
 		...Object.fromEntries(quantities.map((name, index) => [name, exact(values[index], name)])),
 		initialized: flag(initialized, 'initialized'),
@@ -161,11 +182,21 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 			fullBeforeLots: exact(clearing[8], 'clearing.fullBeforeLots'),
 			raiseLimitReached: flag(clearing[9], 'clearing.raiseLimitReached'),
 		},
+		...collateral,
 	}
 }
 
 const ENTITY_SNAPSHOTS: Record<StateSnapshotTarget['entityType'], (target: StateSnapshotTarget, read: StateRead) => Promise<Readonly<Record<string, unknown>>>> = {
 	auction: auctionSnapshot,
+	'capital-ledger': (target, read) => capitalLedgerSnapshot(target.address, read),
+	'capital-owner': (target, read) => {
+		if (target.ownerAddress === undefined) throw new Error('Capital owner snapshot is missing its owner')
+		return capitalOwnerSnapshot(target.address, target.ownerAddress, read)
+	},
+	'capital-position': (target, read) => {
+		if (target.positionId === undefined) throw new Error('Capital position snapshot is missing its id')
+		return capitalPositionSnapshot(target.address, target.positionId, read)
+	},
 	escalation: escalationSnapshot,
 	pool: poolSnapshot,
 }
@@ -214,8 +245,10 @@ export const sampleEntityStateWithRead = async (target: StateSnapshotTarget, rea
 }
 
 export const normalizeSnapshotTarget = (row: Record<string, unknown>): StateSnapshotTarget => {
-	const entityType = String(row['entity_type'])
-	if (entityType !== 'auction' && entityType !== 'escalation' && entityType !== 'pool') throw new Error(`Unsupported snapshot entity type ${entityType}`)
+	const entityType = snapshotEntityTypes.find(type => type === row['entity_type'])
+	if (entityType === undefined) throw new Error(`Unsupported snapshot entity type ${String(row['entity_type'])}`)
+	const positionId = row['position_id']
+	if (positionId !== null && positionId !== undefined && (typeof positionId !== 'string' || !/^\d+$/.test(positionId))) throw new Error('Snapshot target position id is invalid')
 	const optionalAddress = (key: string): Address | undefined => {
 		const value = row[key]
 		return value === null || value === undefined ? undefined : getAddress(String(value))
@@ -227,5 +260,7 @@ export const normalizeSnapshotTarget = (row: Record<string, unknown>): StateSnap
 		...(optionalAddress('pool_address') === undefined ? {} : { poolAddress: optionalAddress('pool_address') }),
 		...(optionalAddress('coordinator_address') === undefined ? {} : { coordinatorAddress: optionalAddress('coordinator_address') }),
 		...(optionalAddress('escalation_address') === undefined ? {} : { escalationAddress: optionalAddress('escalation_address') }),
+		...(optionalAddress('owner_address') === undefined ? {} : { ownerAddress: optionalAddress('owner_address') }),
+		...(typeof positionId === 'string' ? { positionId: BigInt(positionId) } : {}),
 	}
 }

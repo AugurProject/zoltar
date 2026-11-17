@@ -1,6 +1,8 @@
+import type { CollateralUnit } from '../src/collateral.ts'
 import { semanticSummary } from './semantic-evidence.ts'
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
-import { approvalTransitionFields, operationsDetailRecordKey } from './operations-presentation.ts'
+import { capitalEventPresentation, liquidationSummary, liquidationTitle } from './capital-presentation.ts'
+import { operationsDetailRecordKey } from './operations-presentation.ts'
 import { operationRecords, type JsonRecord } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
@@ -31,15 +33,6 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		return section === 'reports' || section === 'escalations' || section === 'auctions' || section === 'forks' || section === 'trading' || section === 'timeline' || section === 'integrity' || section === 'risk' ? section : undefined
 	}
 
-	const approvalTransitionSummary = (item: Readonly<Record<string, unknown>>): string => {
-		const eventData = isPlainRecord(item['event_data']) ? item['event_data'] : {}
-		const receiver = String(item['receiver_vault'] ?? eventData['receiverVault'] ?? '')
-		const operation = typeof eventData['operationId'] === 'string' ? `operation ${shortIdentifier(eventData['operationId'])}` : undefined
-		const fields = approvalTransitionFields(eventData, nativeSymbolFor(requiredChainId())).map(field => `${field.label} ${field.value}`)
-		const details = [operation, ...fields, receiver === '' ? undefined : `receiver ${shortIdentifier(receiver, 10, 6)}`].filter((value): value is string => value !== undefined)
-		return details.length === 0 ? 'Authorization lifecycle transition' : details.join(' · ')
-	}
-
 	const captureOperationsRenderContext = (): OperationsRenderContext => {
 		const content = $('#operations-content')
 		const active = document.activeElement
@@ -47,7 +40,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			...(active instanceof HTMLAnchorElement && content.contains(active) ? { focusHref: active.href } : {}),
 			focusLoadMore: active instanceof HTMLElement && (active.classList.contains('operations-catalog-more') || active.classList.contains('operations-detail-more') || active.classList.contains('operations-pagination-complete')),
 			...(active instanceof HTMLElement && (active.dataset['detailCollection'] === 'decisions' || active.dataset['detailCollection'] === 'evidence') ? { focusDetailCollection: active.dataset['detailCollection'] } : {}),
-			...(active instanceof HTMLElement && (active.dataset['riskKind'] === 'pool' || active.dataset['riskKind'] === 'vault') ? { focusRiskKind: active.dataset['riskKind'] } : {}),
+			...(active instanceof HTMLElement && active.dataset['riskKind'] === 'pool' ? { focusRiskKind: active.dataset['riskKind'] } : {}),
 			focusHistoryMore: active instanceof HTMLElement && (active.classList.contains('operations-history-more') || active.classList.contains('operations-history-complete')),
 			...(active instanceof HTMLElement && content.contains(active) ? { focusViewportTop: active.getBoundingClientRect().top } : {}),
 			scrollY: window.scrollY,
@@ -95,7 +88,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		if (chainId !== '') destination.searchParams.set('chainId', chainId)
 		if (isDemo) destination.searchParams.set('demo', '1')
 		const atBlock = pageUrl().searchParams.get('atBlock')
-		if (atBlock !== null && (destination.pathname.startsWith('/operations/risk') || destination.pathname.startsWith('/pool/') || destination.pathname.startsWith('/vault/'))) destination.searchParams.set('atBlock', atBlock)
+		if (atBlock !== null && (destination.pathname.startsWith('/operations/risk') || destination.pathname.startsWith('/pool/') || destination.pathname.startsWith('/capital/'))) destination.searchParams.set('atBlock', atBlock)
 		return `${destination.pathname}${destination.search}`
 	}
 
@@ -134,11 +127,12 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		return disclosure
 	}
 
-	const detailEvidenceRows = (items: readonly JsonRecord[]) =>
+	/** `collateral` denominates attoEth amounts for collateral-denominated entities such as auctions. */
+	const detailEvidenceRows = (items: readonly JsonRecord[], collateral?: CollateralUnit) =>
 		items.map(item => {
 			const eventName = String(item['event_name'] ?? item['semantic_event_kind'] ?? 'Protocol evidence')
 			const block = item['block_number']
-			const row = operationRow(eventName, semanticSummary(item, nativeSymbolFor(requiredChainId())), String(item['tx_hash'] ?? ''), block)
+			const row = operationRow(eventName, semanticSummary(item, nativeSymbolFor(requiredChainId()), collateral), String(item['tx_hash'] ?? ''), block)
 			row.append(rawEvidence(item))
 			return row
 		})
@@ -152,8 +146,8 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			if (eventName === 'Swap')
 				summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), 18, String(analytics['baseAsset'] ?? 'shares'))} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), 18, String(analytics['quoteAsset'] ?? 'shares'))} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), 18, 'shares')} fee${isPlainRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%')} impact` : ''}`
 			else if (eventName === 'Sync') summary = `${exactUnit(String(data['yesReserve'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noReserve'] ?? '0'), 18, 'NO')} reserves`
-			else if (eventName === 'Transfer') summary = `${exactUnit(String(data['amount'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['from'] ?? ''))} → ${shortIdentifier(String(data['to'] ?? ''))}`
-			else if (eventName === 'Approval') summary = `${exactUnit(String(data['amount'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['owner'] ?? ''))} approved ${shortIdentifier(String(data['spender'] ?? ''))}`
+			else if (eventName === 'Transfer') summary = `${exactUnit(String(data['value'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['from'] ?? ''))} → ${shortIdentifier(String(data['to'] ?? ''))}`
+			else if (eventName === 'Approval') summary = `${exactUnit(String(data['value'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['owner'] ?? ''))} approved ${shortIdentifier(String(data['spender'] ?? ''))}`
 			else if (eventName.startsWith('Liquidity')) summary = `${exactUnit(String(data['yesAmount'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noAmount'] ?? '0'), 18, 'NO')} · ${exactUnit(String(data['liquidity'] ?? '0'), 18, 'LP shares')}`
 			const row = operationRow(eventName, summary, String(data['provider'] ?? data['sender'] ?? item['tx_hash'] ?? ''), item['block_number'])
 			row.append(rawEvidence(item))
@@ -187,14 +181,24 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			return row
 		})
 
-	const detailEvidenceRowsFor = (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[]) => {
+	// Take-overs, cures and report operations carry the owners the API resolved; other capital events are shown as decoded.
+	const capitalEvidenceRows = (items: readonly JsonRecord[]) =>
+		items.map(item => {
+			const owned = capitalEventPresentation(item)
+			if (owned === undefined && !['CommitmentTakenOver', 'CommitmentCured', 'ReportOperationAttempted'].includes(String(item['event_name']))) return detailEvidenceRows([item])[0] ?? operationRow('Capital event', 'Evidence unavailable', undefined, item['block_number'])
+			const row = operationRow(owned?.title ?? liquidationTitle(item), owned?.summary ?? liquidationSummary(item, { universe: false }), String(item['tx_hash'] ?? ''), item['block_number'])
+			row.append(rawEvidence(item))
+			return row
+		})
+
+	const detailEvidenceRowsFor = (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[], collateral?: CollateralUnit) => {
 		if (kind === 'trading') return tradingEvidenceRows(items)
-		return kind === 'report' ? reportEvidenceRows(items) : detailEvidenceRows(items)
+		if (kind === 'capital') return capitalEvidenceRows(items)
+		return kind === 'report' ? reportEvidenceRows(items) : detailEvidenceRows(items, collateral)
 	}
 
 	return {
 		operationsCatalogSection,
-		approvalTransitionSummary,
 		captureOperationsRenderContext,
 		restoreOperationsRenderContext,
 		operationNumber,

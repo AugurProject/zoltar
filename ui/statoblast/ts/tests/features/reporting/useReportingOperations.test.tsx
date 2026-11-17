@@ -48,6 +48,7 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: 2n,
 		currentTime: 150n,
+		earliestForkTime: 0n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
 		forkThresholdAttoRep: 40n,
@@ -311,7 +312,7 @@ describe('useReportingOperations', () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d0')
 		const loadReportingDetails = mock(async () =>
 			createReportingDetails(securityPoolAddress, {
-				systemState: 'forkCollateralRepairAuction',
+				systemState: 'forkMigration',
 			}),
 		)
 		const reportOutcomeInSecurityPool = mock(async () => {

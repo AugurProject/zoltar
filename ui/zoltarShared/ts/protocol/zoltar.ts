@@ -232,7 +232,7 @@ export async function loadZoltarUniverseSummary(
 	zoltarAddress: Address = getDeploymentStepAddress('zoltar'),
 	{ includeRelatedUniverses = true, scalarOutcomeIndexes = [] }: { includeRelatedUniverses?: boolean; scalarOutcomeIndexes?: readonly bigint[] } = {},
 ): Promise<ZoltarUniverseSummary | undefined> {
-	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
+	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor, earliestForkTime] = await readRequiredMulticall(client, [
 		{
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getRepToken',
@@ -263,6 +263,12 @@ export async function loadZoltarUniverseSummary(
 			address: zoltarAddress,
 			args: [],
 		},
+		{
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getEarliestForkTime',
+			address: zoltarAddress,
+			args: [universeId],
+		},
 	])
 	if (repToken === zeroAddress) return undefined
 	const universeData: UniverseTuple = universe
@@ -278,7 +284,7 @@ export async function loadZoltarUniverseSummary(
 	if (!includeRelatedUniverses && universeId !== 0n) outcomeLabel = await loadUniverseOutcomeName(client, zoltarAddress, parentUniverseId, forkingOutcomeIndex)
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
-	let forkQuestionDetails: MarketDetails | undefined = undefined
+	let forkQuestionDetails: MarketDetails | undefined
 	if (includeRelatedUniverses && hasForked && forkQuestionId > 0n) {
 		const marketDetails = await loadMarketDetails(client, forkQuestionId)
 		forkQuestionDetails = marketDetails
@@ -348,6 +354,7 @@ export async function loadZoltarUniverseSummary(
 		childUniverses,
 		outcomeLabel,
 		relatedUniversesLoaded: includeRelatedUniverses,
+		earliestForkTime,
 		forkBurnDivisor,
 		forkQuestionDetails,
 		forkThresholdAttoRep,

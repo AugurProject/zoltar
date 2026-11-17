@@ -8,6 +8,8 @@ Use archival-capable JSON-RPC providers that can return runtime bytecode, block 
 
 At startup, augurScan probes historical state. When the provider reports pruned state, augurScan locates its earliest retrievable state block and skips token metadata, balance, snapshot, and deployment-code reads below that boundary. Repeated state-discovery failures produce one console warning per provider, while every failed RPC exchange remains in the rotating JSONL log.
 
+Tagged state reads cover security pools, escalation games, collateral repair auctions, capital ledgers, owner capital positions, and, once each, the owner of every capital position id. After each indexed head the indexer reads the 25 entities whose latest read is oldest, so the age of a capital position's health grows with the number of sampled entities; every read records the block it was taken at. A capital ledger read also carries its universe's fee state; a failed fee read is recorded as `feeReadError` beside the ledger's price and totals instead of failing the read.
+
 Log availability is discovered separately. If an `eth_getLogs` request reports pruned history, augurScan warns that it is locating the log boundary, finds the earliest retrievable log block on demand, and advances log coverage to that block. The state and log boundaries can differ. An archival provider remains necessary for evidence before either reported boundary.
 
 `config/networks.json` selects each network's manifest. Manifest entries are `[address, label, kind]` or `[address, label, kind, deploymentBlock]`. A verified deployment block avoids historical bytecode discovery and gives later replay a deterministic boundary. Keep an old address in the manifest while it remains a valid activity source.
@@ -30,6 +32,7 @@ Every setting is an environment variable. The Compose column names the service t
 | `RPC_LOG_PATH` | `augurScan/logs/rpc.jsonl` | `indexer`, fixed to `/var/log/augurscan/rpc.jsonl` in the `augurscan-logs` volume | Rotating JSONL log of RPC exchanges. |
 | `POSTGRES_URL` | `postgres://augurscan:augurscan@localhost:5432/augurscan`; in Compose, the bundled `postgres` service | `app`, `indexer` | Connects directly to PostgreSQL or through a session-mode pooler. |
 | `POSTGRES_PASSWORD` | `augurscan-local` | `postgres`, and the default `POSTGRES_URL` | Password of the bundled database. Compose only. |
+| `POSTGRES_MAX_WAL_SIZE` | `8GB` | `postgres` | Soft `max_wal_size` budget of the bundled database during backfill; leave disk headroom above it. Apply a change with `docker compose up -d postgres`. Compose only. |
 | `PORT` | `3000` | `app`, fixed to `3000` | Port the web app listens on. |
 | `AUGURSCAN_PORT` | `3000` | host port of `app` | Host port that Compose publishes. Compose only. |
 | `API_RATE_LIMIT_PER_MINUTE` | `600` | `app` | Per-client API limit. `0` disables the limit when a trusted upstream enforces it. |

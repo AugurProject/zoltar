@@ -10,8 +10,25 @@ test('renders exact lifecycle amounts, counterparties and outcomes without round
 	expect(semanticFields({ outcomeBalancesAttoRep: ['1000000000000000000', '2', '3'] }, 'ETH').map(field => field[0])).toEqual(['INVALID balance', 'YES balance', 'NO balance'])
 })
 
-test('timeline targets compound vault identities without losing the pool', () => {
-	expect(timelineEntityPath({ entity_type: 'vault', entity_identity: 'pool:vault' })).toBe('/operations/risk/vault/pool/vault')
+test('formats auction collateral amounts, including nested clearing, with the collateral token units', () => {
+	const usdc = { symbol: 'USDC', decimals: 6 }
+	const auction = { collateral: usdc, depositedAttoEth: String(2500000n), clearing: { raisedAttoEth: String(1500000n), soldAttoRep: String(10n ** 18n) } }
+	expect(semanticFields(auction, 'ETH')).toEqual([
+		['Collateral', 'Symbol: USDC · Decimals: 6'],
+		['Deposited', '2.5 USDC'],
+		['Clearing', 'Raised: 1.5 USDC · Sold: 1 REP'],
+	])
+	// Auctions without sampled token metadata stay in explicit raw collateral units instead of native ETH.
+	expect(semanticFields({ lotAttoEth: String(2500000n), clearing: { raisedAttoEth: String(7n) } }, 'ETH', { symbol: 'collateral units', decimals: 0 })).toEqual([
+		['Lot', '2,500,000 collateral units'],
+		['Clearing', 'Raised: 7 collateral units'],
+	])
+})
+
+test('timeline targets link only entities that have a detail page', () => {
+	// A vault is a capital-ledger owner; it has timeline evidence but no detail page of its own.
+	expect(timelineEntityPath({ entity_type: 'vault', entity_identity: 'ledger:owner' })).toBeUndefined()
+	expect(timelineEntityPath({ entity_type: 'pool', entity_identity: 'pool' })).toBe('/operations/risk/pool/pool')
 	expect(timelineEntityPath({ entity_type: 'auction', entity_identity: 'auction' })).toBe('/operations/auction/auction')
 })
 
@@ -33,6 +50,5 @@ test('reverted ancestors make child ETH movements attempted rather than transfer
 
 test('presents retention evidence as the annual open-interest fee', () => {
 	expect(semanticFields({ currentRetentionRate: '1000000000000000000' }, 'ETH')).toEqual([['Annual open-interest fee', '0%']])
-	expect(semanticFields({ initial_retention_rate: '0' }, 'ETH')).toEqual([['Initial annual open-interest fee', '100%']])
 	expect(semanticFields({ current_retention_rate: null }, 'ETH')).toEqual([['Annual open-interest fee', 'Unavailable']])
 })

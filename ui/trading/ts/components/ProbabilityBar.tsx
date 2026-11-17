@@ -1,8 +1,9 @@
 import { shareOutcome } from '../lib/shareValue.js'
 import { probabilityCopy } from '../copy/probability.js'
+import { probabilityTenths } from '../lib/marketListing.js'
 
 function roundedProbabilityLabels(yesPercent: number) {
-	const roundedYes = Math.round((yesPercent + Number.EPSILON * Math.abs(yesPercent)) * 10) / 10
+	const roundedYes = probabilityTenths(yesPercent) / 10
 	return { yes: roundedYes.toFixed(1), no: (100 - roundedYes).toFixed(1) }
 }
 
@@ -27,7 +28,7 @@ export function ProbabilityBar({ yesPercent, beforePercent, last = false, varian
 			</div>
 			<div className='probability__track'>
 				<div className='probability__yes' style={{ width: `${yesPercent}%` }} />
-				{moved && beforePercent !== undefined ? <span className='probability__marker' style={{ left: `${beforePercent}%` }} title={probabilityCopy.beforePriceLabel(before.yes)} /> : null}
+				{moved && beforePercent !== undefined ? <span className='probability__marker' style={{ left: `${beforePercent}%` }} title={probabilityCopy.beforePriceLabel(before.yes)} /> : undefined}
 			</div>
 		</figure>
 	)

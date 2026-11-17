@@ -12,7 +12,7 @@ import { MarketResolution } from '../components/MarketResolution.js'
 import * as appCopy from '../copy/app.js'
 import { liveCopy } from '../copy/live.js'
 import { marketsCopy } from '../copy/markets.js'
-import { coarseDuration, marketLiquidityAttoEth, marketOddsPercent, marketPriceState } from '../lib/marketListing.js'
+import { coarseDuration, marketLiquidityCollateralUnits, marketOddsPercent, marketPriceState } from '../lib/marketListing.js'
 import { getTradingRouteHref, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import { marketTicketHref } from '../lib/routeState.js'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
@@ -29,7 +29,7 @@ function marketRowActions(listKind: TradingListKind, lookupRoute: TradingLookupR
 }
 
 export function formatMarketLiquidity(market: LiveMarket) {
-	const liquidity = marketLiquidityAttoEth(market)
+	const liquidity = marketLiquidityCollateralUnits(market)
 	return liquidity === undefined ? undefined : formatCollateralAmount(liquidity, market)
 }
 

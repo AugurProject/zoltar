@@ -22,25 +22,19 @@ export async function demoRiskCatalogRoute(env: DemoEnvironment, path: string): 
 	const baseRisk = operations.data.risk
 	const more = context.pageUrl.searchParams.get('catalogMore') === '1'
 	const poolCursor = request.searchParams.get('poolCursor')
-	const vaultCursor = request.searchParams.get('vaultCursor')
-	if ((poolCursor !== null || vaultCursor !== null) && context.pageUrl.searchParams.get('catalogAppendDelay') === '1') await new Promise(resolve => setTimeout(resolve, 2_500))
-	if ((poolCursor !== null || vaultCursor !== null) && context.pageUrl.searchParams.get('catalogAppendError') === '1') throw new Error('Additional risk records could not be loaded')
+	if (poolCursor !== null && context.pageUrl.searchParams.get('catalogAppendDelay') === '1') await new Promise(resolve => setTimeout(resolve, 2_500))
+	if (poolCursor !== null && context.pageUrl.searchParams.get('catalogAppendError') === '1') throw new Error('Additional risk records could not be loaded')
 	const pools = poolCursor === null ? baseRisk.pools : baseRisk.pools.map(pool => ({ ...pool, pool_address: demoAddress('98'), block_number: String(BigInt(operations.asOf.blockNumber) - 100n) }))
-	const vaults = vaultCursor === null ? baseRisk.vaults : baseRisk.vaults.map(vault => ({ ...vault, vault_address: demoAddress('c8'), block_number: String(BigInt(operations.asOf.blockNumber) - 100n) }))
 	return {
 		chainId,
 		asOf: operations.asOf,
 		data: {
 			...baseRisk,
 			pools,
-			vaults,
 			pagination: {
 				poolTotal: more ? 2 : pools.length,
-				vaultTotal: more ? 2 : vaults.length,
 				poolHasMore: more && poolCursor === null,
-				vaultHasMore: more && vaultCursor === null,
 				...(more && poolCursor === null ? { poolNextCursor: 'demo-pool-older' } : {}),
-				...(more && vaultCursor === null ? { vaultNextCursor: 'demo-vault-older' } : {}),
 			},
 		},
 	}
@@ -94,6 +88,26 @@ export async function demoOperationsCatalogRoute(env: DemoEnvironment, path: str
 			evidence_status: demoTimelineEvidenceStatus(false, 'chain-reorg'),
 			invalidation_reason: 'chain-reorg',
 		},
+		// `auctionTimeline=1` adds settled auction bids: one in a sampled 6-decimal USDC collateral, one before any sampled read.
+		...(context.pageUrl.searchParams.get('auctionTimeline') === '1'
+			? [
+					{ auction: demoAddress('8'), refund: '1500000', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 }, logIndex: 6 },
+					{ auction: demoAddress('9'), refund: '2500000', collateral: null, logIndex: 5 },
+				].map(({ auction, refund, collateral, logIndex }) => ({
+					entity_type: 'auction',
+					entity_identity: auction,
+					semantic_event_kind: 'BidSettled',
+					source_contract: auction,
+					summary_data: { bidId: '1', bidder: demoAddress('1'), filledLots: '0', refundAttoEth: refund },
+					collateral,
+					block_number: operations.asOf.blockNumber,
+					block_hash: operations.asOf.blockHash,
+					tx_hash: demoHash,
+					log_index: logIndex,
+					canonical: true,
+					evidence_status: demoTimelineEvidenceStatus(true),
+				}))
+			: []),
 	]
 	const demoTradingFixture = [
 		{

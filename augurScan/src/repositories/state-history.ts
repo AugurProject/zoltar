@@ -116,18 +116,14 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 			WHERE pool.chain_id = ${chainId} AND pool.pool_address = ${address} AND pool.canonical AND log.canonical
 				AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
 				AND log.event_name IN (
-					'PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'CoordinatorStateCheckpoint',
-					'LiquidationRouteStaged', 'StagedOperationQueued', 'ExecutedStagedOperation', 'SecurityPoolSet',
-					'SharedPriceFeedSet', 'ReportFundingAssigned', 'ExposureCheckpoint'
+					'PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'SecurityPoolSet',
+					'SharedPriceFeedSet', 'ReportFundingAssigned', 'ReportOperationAttempted', 'ExposureCheckpoint'
 				)
 			ORDER BY log.block_number DESC, log.transaction_index DESC, log.log_index DESC, log.tx_hash DESC, log.block_hash DESC
 			LIMIT ${queryLimit} OFFSET ${offset}`,
 	])
 	return { snapshots, events, markets, ammPrices, repEthPrices, uniswapRepEthPrices, openOracleHistory }
 }
-
-export const vaultStateHistory = async (sql: SQL, pool: string, vault: string, query: StateHistoryQuery) =>
-	await sql`SELECT v.*, b.timestamp FROM vault_snapshots v JOIN blocks b ON b.chain_id = v.chain_id AND b.hash = v.block_hash WHERE v.chain_id = ${query.chainId} AND v.pool_address = ${pool} AND v.vault_address = ${vault} AND v.canonical AND v.block_number BETWEEN ${query.fromBlock} AND ${query.toBlock} ORDER BY v.block_number DESC, v.log_index DESC, v.tx_hash DESC, v.block_hash DESC LIMIT ${query.queryLimit} OFFSET ${query.offset}`
 
 export const universeStateHistory = async (sql: SQL, universeId: string, query: StateHistoryQuery) =>
 	await sql`SELECT u.*, b.timestamp FROM universe_events u JOIN blocks b ON b.chain_id = u.chain_id AND b.hash = u.block_hash WHERE u.chain_id = ${query.chainId} AND u.universe_id = ${universeId} AND u.canonical AND u.block_number BETWEEN ${query.fromBlock} AND ${query.toBlock} ORDER BY u.block_number DESC, u.log_index DESC, u.tx_hash DESC, u.block_hash DESC LIMIT ${query.queryLimit} OFFSET ${query.offset}`

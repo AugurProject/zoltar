@@ -1,6 +1,6 @@
-import { type DeploymentSettings } from '#config/deployment-settings'
+import type { DeploymentSettings } from '#config/deployment-settings'
 import { positionConsumesRisk } from '#core/safety-controls'
-import { type PositionRecord } from '#state/position-store'
+import type { PositionRecord } from '#state/position-store'
 
 function deploymentIdentityChanged(current: DeploymentSettings, next: DeploymentSettings) {
 	return current.openOracle.toLowerCase() !== next.openOracle.toLowerCase() || current.executor?.toLowerCase() !== next.executor?.toLowerCase() || current.rep.toLowerCase() !== next.rep.toLowerCase() || current.weth.toLowerCase() !== next.weth.toLowerCase()

@@ -1,6 +1,6 @@
 import { capitalAction, capitalPolicy, depositCapital } from './capital.ts'
 import { initializeChildHistory } from './child-preparation.ts'
-import { OperationDefinition } from '../types.ts'
+import type { OperationDefinition } from '../types.ts'
 
 import { checkpointDefinition, deployPool } from './vaults.ts'
 
@@ -23,7 +23,7 @@ export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
 	initializeChildHistory,
 	deployPool,
 	checkpointDefinition('collateral'),
-	checkpointDefinition('retention'),
+	checkpointDefinition('fees'),
 	depositCapital,
 	capitalPolicy('commitment'),
 	capitalPolicy('health'),

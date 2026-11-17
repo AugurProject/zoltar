@@ -65,7 +65,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		for (const timestamp of [await fixture.base.mockWindow.getTime(), forkTime + 56n * DAY - 1n, forkTime + 63n * DAY]) {
 			await fixture.base.mockWindow.setTime(timestamp)
 			for (const outcome of [0n, 1n, 2n]) {
-				await expect(fixture.other().writeContract({ ...target, functionName: 'migrate', args: [fixture.base.genesisUniverse * 256n + outcome, [1n]] })).rejects.toThrow('Question finalized before fork')
+				await expect(fixture.other().writeContract({ ...target, functionName: 'migrate', args: [fixture.base.genesisUniverse * 256n + outcome, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')
 			}
 			expect(await shares()).toEqual(protectedBalances)
 		}
@@ -84,6 +84,12 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const beforeShares = await shares()
 		const expectedCash = await fixture.other().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [pool().address, beforeShares[1]] })
 		const otherCash = await secondCash()
+		const before = await settlementState()
+		const custodyBefore = await collateralBalance(fixture.other(), fixture.portfolio, before.engine)
+		const unquotedCash = custodyBefore - expectedCash - otherCash
+		// Two floor-rounded net-cash quotes and the pending sub-unit cash fee can leave up to two raw units.
+		expect(unquotedCash).toBeGreaterThanOrEqual(0n)
+		expect(unquotedCash).toBeLessThanOrEqual(2n)
 		const balance = await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)
 		const hash = await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))
 		const receipt = await fixture.other().waitForTransactionReceipt({ hash })
@@ -94,13 +100,25 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect(state.frozenBookId).not.toBe(0n)
 		expect(state.question.outcomeSupplyAttoShares).toBe(0n)
 		expect(state.question.feeRateAttoEthPerSecond).toBe(0n)
-		expect(await secondCash()).toBe(otherCash)
+		// The final live question receives the exact unquoted custody residual, including the fractional fee carry.
+		const settledOtherCash = await secondCash()
+		expect(settledOtherCash - otherCash).toBe(unquotedCash)
+		expect(await collateralBalance(fixture.other(), fixture.portfolio, state.engine)).toBe(custodyBefore - expectedCash)
 		expect(await collateralBalance(fixture.owner(), fixture.portfolio, state.engine)).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
 		await refresh()
 		await refresh()
-		expect(await secondCash()).toBe(otherCash)
+		expect(await secondCash()).toBe(settledOtherCash)
 		expect((await settlementState()).question.outcomeSupplyAttoShares).toBe(0n)
 		expect(await collateralBalance(fixture.owner(), fixture.portfolio, state.engine)).toBe(await questionCash(fixture.secondQuestionId))
+		const secondPool = fixture.poolFor(fixture.secondQuestionId)
+		const remainingShares = await balanceOfShares(fixture.other(), secondPool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
+		const beforeFinalPayout = await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: secondPool.securityPool, functionName: 'redeemCompleteSet', args: [remainingShares[0]] }))
+		expect(await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)).toBe(beforeFinalPayout + settledOtherCash)
+		expect(await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)).toBe(balance + custodyBefore)
+		expect(await collateralBalance(fixture.owner(), fixture.portfolio, state.engine)).toBe(0n)
+		expect(await questionCash(fixture.base.questionId)).toBe(0n)
+		expect(await questionCash(fixture.secondQuestionId)).toBe(0n)
 	})
 
 	test('partial complete-set return and the remaining winner preserve the frozen cash rate and other questions', async () => {

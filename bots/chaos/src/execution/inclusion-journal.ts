@@ -7,7 +7,7 @@ import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { recordActivity, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
 import type { IncludedTransaction } from '../state/included-transactions.ts'
 import { agreedLatestBlock, executionReadClients, requiredConnectivity } from './execution-quorum.ts'
-import { type ExecutionEnvironment } from './execution-context.ts'
+import type { ExecutionEnvironment } from './execution-context.ts'
 import { persist } from './recovery-journal.ts'
 import { TransactionAwaitingRecovery } from './receipt-validation.ts'
 

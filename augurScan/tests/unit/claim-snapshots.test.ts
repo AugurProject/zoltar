@@ -64,7 +64,7 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; ordinarySettled?: boolean } = {}): StateRead =>
+	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; ordinarySettled?: boolean; frozenForkThreshold?: bigint } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
 		const kind = ['getInheritedClaimAllocation', 'getClaimCheckpointProgress'].includes(name) ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
@@ -97,6 +97,8 @@ const fixtureRead =
 				return options.ordinarySettled ?? false
 			case 'ordinarySettlementForkThresholdAttoRep':
 				return 7n
+			case 'continuationSettlementForkThresholdAttoRep':
+				return options.frozenForkThreshold ?? 0n
 			case 'getOutcomeState':
 				return {
 					balanceAttoRep: 150n,
@@ -137,6 +139,13 @@ test('ordinary claim evidence uses the frozen threshold and telescoping interval
 	expect(result.positions.map(position => position['payout_atto_rep'])).toEqual(['0', '0', '1'])
 	expect(result.positions.map(position => position['burn_atto_rep'])).toEqual(['13', '13', '14'])
 	expect(result.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '7' })
+})
+
+test('unsettled claim evidence uses the threshold frozen at the first winning claim instead of the live one', async () => {
+	const live = await sampleClaimPositions(root, fixtureRead(), state)
+	expect(live.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '500' })
+	const frozen = await sampleClaimPositions(root, fixtureRead({ frozenForkThreshold: 900n }), state)
+	expect(frozen.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '900' })
 })
 
 test('claim snapshots continue past empty consumed-node pages', async () => {
@@ -215,6 +224,8 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 				return 0n
 			case 'getForkThresholdAttoRep':
 				return 1000n
+			case 'continuationSettlementForkThresholdAttoRep':
+				return 0n
 			case 'getOutcomeState':
 				return { balanceAttoRep: 0n, snapshotLeafCount: 0n, snapshotPeaks: Array.from({ length: 64 }, () => zero), currentNullifierRoot: createSparseNullifier([]).getRoot(), localHeadNodeId: 0n }
 			case 'getCarryLeafPageByOutcome':

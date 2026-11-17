@@ -1,7 +1,6 @@
 import { getEscalationGameDeposits } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import assert from '../../testSupport/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -135,7 +134,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	test('factory initialization and portfolio custody binding reject attackers without changing capital', async () => {
 		await portfolio.prepare()
 		const attacker = portfolio.other()
-		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setStartingParams', args: [1n, 0n] }), /Only factory/)
+		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setStartingParams' }), /Only factory/)
 		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setPortfolioCustody', args: [attacker.account.address] }), /Only portfolio/)
 	})
 
@@ -231,22 +230,6 @@ describe('Statoblast: privileged authorization matrix', () => {
 				}),
 			},
 			{
-				name: 'recordForkedEscrowForOutcome',
-				data: encodeFunctionData({
-					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
-					functionName: 'recordForkedEscrowForOutcome',
-					args: [attacker.account.address, QuestionOutcome.Yes, 1n, 1n],
-				}),
-			},
-			{
-				name: 'consumeEscrowedRepForOwner',
-				data: encodeFunctionData({
-					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
-					functionName: 'consumeEscrowedRepForOwner',
-					args: [client.account.address, 1n],
-				}),
-			},
-			{
 				name: 'consumeCarriedDeposit',
 				data: encodeFunctionData({
 					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
@@ -290,18 +273,6 @@ describe('Statoblast: privileged authorization matrix', () => {
 						address: escalationGame,
 						functionName: 'withdrawDeposit',
 						args: [0n, QuestionOutcome.Yes],
-					}),
-				),
-			/Only pool/,
-		)
-		await assertUnauthorizedUnchanged(
-			() =>
-				writeContractAndWait(attacker, () =>
-					attacker.writeContract({
-						abi: statoblast_EscalationGame_EscalationGame.abi,
-						address: escalationGame,
-						functionName: 'drainAllRep',
-						args: [addressString(TEST_ADDRESSES[2])],
 					}),
 				),
 			/Only pool/,
