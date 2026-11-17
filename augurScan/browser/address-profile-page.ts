@@ -180,7 +180,8 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	)
 	const auctionClaims = operationsPanel(
 		'Auction interactions',
-		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), `${semanticSummary({ event_data: claim['data'] }, itemNativeSymbol)}`, String(claim['entity'] ?? ''), claim['blockNumber'])),
+		// Auction amounts are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
+		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), semanticSummary({ event_data: claim['data'] }, itemNativeSymbol, collateralUnit(claim)), String(claim['entity'] ?? ''), claim['blockNumber'])),
 		'No collateral-repair-auction interactions are associated with this address.',
 	)
 	const lpPositions = operationsPanel(

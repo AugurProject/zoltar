@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { latestAuctionCollateralSql } from './auction-collateral.ts'
 
 export type RichListSort = 'eth' | 'weth' | 'rep' | 'transactions'
 
@@ -174,7 +175,9 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 			), '[]'::jsonb) AS escalation_claims,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
 					'type', event.event_name, 'entity', event.auction_address, 'data', event.event_data,
-					'blockNumber', event.block_number::text, 'provenance', 'historical interaction'
+					'blockNumber', event.block_number::text, 'provenance', 'historical interaction',
+					-- Auction amounts are in the auction's immutable collateral token, from its latest successful tagged read.
+					'collateral', ${latestAuctionCollateralSql('page.chain_id', 'event.auction_address', throughSnapshot('auction_snapshot.block_number'))}
 				) ORDER BY event.block_number DESC, event.log_index DESC)
 				FROM (SELECT * FROM collateral_repair_auction_events evidence WHERE evidence.chain_id = page.chain_id
 					AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'bidder') = page.address
