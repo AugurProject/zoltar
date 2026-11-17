@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { Zoltar } from '../Zoltar.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
@@ -26,6 +27,7 @@ interface IReporterGameIdentity {
 contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	using SafeERC20Ops for IERC20;
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
 	struct Book {
@@ -58,6 +60,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	address public immutable portfolio;
 	Zoltar public immutable zoltar;
 	SecurityPoolPersistentMap.Store private tree;
+	SecurityPoolQuestionMap.Store private questionMap;
 	SecurityPoolFrozenHistory.Store private frozenHistory;
 	uint64 private lastQuestionStateId;
 	mapping(uint248 => Book) public books;
@@ -261,7 +264,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	}
 
 	function _question(uint248 universeId, uint256 questionId) private view returns (Question memory state, bool finalClaim) {
-		state = questions[uint64(tree.get(books[universeId].questionRoot, questionId))];
+		state = questions[uint64(questionMap.get(books[universeId].questionRoot, questionId))];
 		uint256 finalizingUniversePlusOne =
 			state.finalAfter == 0 ? 0 : frozenHistory.ceiling(books[universeId].frozenRoot, state.finalAfter);
 		finalClaim = finalizingUniversePlusOne != 0;
@@ -300,7 +303,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	function _writeQuestion(Book storage book, uint256 questionId, Question memory state) private {
 		uint64 id = ++lastQuestionStateId;
 		questions[id] = state;
-		book.questionRoot = tree.set(book.questionRoot, questionId, id, 0);
+		book.questionRoot = questionMap.set(book.questionRoot, questionId, id);
 	}
 
 	function _authorizedGame(address game) private view returns (Game memory identity) {
