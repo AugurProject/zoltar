@@ -1,3 +1,4 @@
+import type { CollateralUnit } from '../src/collateral.ts'
 import { semanticSummary } from './semantic-evidence.ts'
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import { capitalEventPresentation, liquidationSummary, liquidationTitle } from './capital-presentation.ts'
@@ -126,11 +127,12 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		return disclosure
 	}
 
-	const detailEvidenceRows = (items: readonly JsonRecord[]) =>
+	/** `collateral` denominates attoEth amounts for collateral-denominated entities such as auctions. */
+	const detailEvidenceRows = (items: readonly JsonRecord[], collateral?: CollateralUnit) =>
 		items.map(item => {
 			const eventName = String(item['event_name'] ?? item['semantic_event_kind'] ?? 'Protocol evidence')
 			const block = item['block_number']
-			const row = operationRow(eventName, semanticSummary(item, nativeSymbolFor(requiredChainId())), String(item['tx_hash'] ?? ''), block)
+			const row = operationRow(eventName, semanticSummary(item, nativeSymbolFor(requiredChainId()), collateral), String(item['tx_hash'] ?? ''), block)
 			row.append(rawEvidence(item))
 			return row
 		})
@@ -189,10 +191,10 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			return row
 		})
 
-	const detailEvidenceRowsFor = (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[]) => {
+	const detailEvidenceRowsFor = (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[], collateral?: CollateralUnit) => {
 		if (kind === 'trading') return tradingEvidenceRows(items)
 		if (kind === 'capital') return capitalEvidenceRows(items)
-		return kind === 'report' ? reportEvidenceRows(items) : detailEvidenceRows(items)
+		return kind === 'report' ? reportEvidenceRows(items) : detailEvidenceRows(items, collateral)
 	}
 
 	return {

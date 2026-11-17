@@ -20,7 +20,7 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No'
 	if (Array.isArray(value)) return value.map(item => valueText(key, item, nativeSymbol, collateral)).join(', ')
 	if (isPlainRecord(value))
-		return semanticFields(value, nativeSymbol)
+		return semanticFields(value, nativeSymbol, collateral)
 			.map(([name, text]) => `${name}: ${text}`)
 			.join(' · ')
 	const text = String(value)
@@ -46,18 +46,24 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 	return text
 }
 
-/** Labels and formats decoded fields; attoETH amounts are in the chain's native currency, `nativeSymbol`. */
-export const semanticFields = (data: Readonly<Record<string, unknown>>, nativeSymbol: string): ReadonlyArray<readonly [string, string]> =>
-	Object.entries(data).flatMap(([key, value]) => {
+/**
+ * Labels and formats decoded fields. attoETH amounts are in the record's `collateral` token when it names one, otherwise in
+ * the inherited `collateral` (nested records and collateral-denominated entities such as auctions), otherwise in the
+ * chain's native currency, `nativeSymbol`.
+ */
+export const semanticFields = (data: Readonly<Record<string, unknown>>, nativeSymbol: string, inheritedCollateral?: CollateralUnit): ReadonlyArray<readonly [string, string]> => {
+	const collateral = data['collateral'] === undefined ? inheritedCollateral : collateralUnit(data)
+	return Object.entries(data).flatMap(([key, value]) => {
 		if (/^(current)?retentionrate$/i.test(key.replaceAll('_', ''))) return [['Annual open-interest fee', annualFeeText(value)] as const]
 		if (key === 'outcomeBalancesAttoRep' && Array.isArray(value)) return value.map((balance, index): readonly [string, string] => [`${outcomes[index] ?? index} balance`, valueText('amountAttoRep', balance, nativeSymbol)])
-		return [[label(key), valueText(key, value, nativeSymbol, data['collateral'] === undefined ? undefined : collateralUnit(data))] as const]
+		return [[label(key), valueText(key, value, nativeSymbol, collateral)] as const]
 	})
+}
 
-export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string): string => {
+export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string, collateral?: CollateralUnit): string => {
 	const data = record['event_data'] ?? record['summary_data'] ?? record['arguments'] ?? record['read_result']
 	return isPlainRecord(data)
-		? semanticFields(data, nativeSymbol)
+		? semanticFields(data, nativeSymbol, collateral)
 				.map(([name, value]) => `${name}: ${value}`)
 				.join(' · ') || 'No payload fields'
 		: 'Payload unavailable'

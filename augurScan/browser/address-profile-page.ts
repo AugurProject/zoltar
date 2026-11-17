@@ -1,3 +1,4 @@
+import { collateralUnit } from '../src/collateral.ts'
 import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
 import { semanticSummary } from './semantic-evidence.ts'
 import type { AccountTransaction, ArgumentDefinition, LiveChangeOptions, LoadOptions, ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
@@ -155,7 +156,11 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	)
 	const refundPanel = operationsPanel(
 		'Pending auction refunds',
-		(item.pending_refunds ?? []).slice(0, 250).map(refund => operationRow('Pending refund', exactUnit(String(refund['pending_atto_eth']), 18, itemNativeSymbol), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))),
+		(item.pending_refunds ?? []).slice(0, 250).map(refund => {
+			// Refunds are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
+			const collateral = collateralUnit(refund)
+			return operationRow('Pending refund', exactUnit(String(refund['pending_atto_eth']), collateral.decimals, collateral.symbol), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))
+		}),
 		'No indexed refund credits remain.',
 		{ label: `Balances cover indexed history.${item.pending_refunds_truncated === true ? ' First 250 auctions shown.' : ''}` },
 	)
