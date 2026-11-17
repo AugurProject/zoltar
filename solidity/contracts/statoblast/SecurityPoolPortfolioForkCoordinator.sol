@@ -29,7 +29,6 @@ interface IPortfolioForkRoot {
 	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
 	function prepareForkChild(uint248 parent, uint256 outcome) external returns (SecurityPoolCapitalLedger);
 	function activateForkChild(uint248 child) external;
-	function creditForkFees(uint248 universeId, uint256 amount) external;
 	function getPool(uint256 questionId, uint248 universeId) external view returns (ISecurityPool);
 	function minimumCommitmentAttoEth() external view returns (uint256);
 	function auctionDeployer() external view returns (IPortfolioCollateralRepairAuctionDeployer);
