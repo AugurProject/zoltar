@@ -9,6 +9,8 @@ import {
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
+	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -22,7 +24,7 @@ import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 import { collateralBalance } from './burnEvidence'
 
-const repairAbi = parseAbi(['function topUp(uint248 universeId,uint256 cashAttoEth)'])
+const repairAbi = parseAbi(['function topUp(uint248 universeId,uint256 maximumCashAttoEth) returns (uint256)'])
 describe('Statoblast: permissionless settlement repair', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 
@@ -59,8 +61,12 @@ describe('Statoblast: permissionless settlement repair', () => {
 		const donor = await collateralBalance(owner, fixture.portfolio, other.account.address)
 		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
 		await approveToken(other, collateral, settlement)
-		for (const amount of [deficit - 1n, deficit + 1n]) await expect(other.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, amount] })).rejects.toThrow('Supply the entire settlement deficit')
-		await writeContractAndWait(other, () => other.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, deficit] }))
+		await expect(other.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, deficit - 1n] })).rejects.toThrow('Settlement deficit exceeds maximum')
+		// A larger maximum still pulls exactly the live deficit.
+		const { result: pulled } = await other.simulateContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, deficit + unit] })
+		expect(pulled).toBe(deficit)
+		await writeContractAndWait(other, () => other.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, deficit + unit] }))
+		await expect(other.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, unit] })).rejects.toThrow('No settlement deficit')
 		expect(await collateralBalance(owner, fixture.portfolio, settlement)).toBe(custody + deficit)
 		expect(await collateralBalance(owner, fixture.portfolio, other.account.address)).toBe(donor - deficit)
 		expect(await owner.readContract({ ...rep, functionName: 'totalSupply' })).toBe(supply)
@@ -116,5 +122,49 @@ describe('Statoblast: permissionless settlement repair', () => {
 		expect(await ownerRep()).toBe(beforeRep - requiredRep)
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, freshQuestionId, unit] })).toBe(0n)
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.secondQuestionId, 10n * unit] })).toBe(oldClaim)
+	})
+
+	test('#1321 a redemption that moves the deficit before inclusion does not revert a bounded repair', async () => {
+		const owner = fixture.owner()
+		const other = fixture.other()
+		const genesis = fixture.base.genesisUniverse
+		await fixture.prepare()
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(genesis), functionName: 'transfer', args: [other.account.address, 5n * unit] }))
+		await fixture.deposit(5n * unit, other)
+		const minimum = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'minimumCommitmentAttoEth' })
+		await fixture.authorize(minimum, other)
+		await fixture.mint(10n * unit, fixture.secondQuestionId)
+		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
+		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
+		const settlement = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const ledger = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
+		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [child] })
+		const book = { abi: bookArtifact.abi, address: ledger }
+		const deficit = async () => {
+			const [cash] = await owner.readContract({ ...book, functionName: 'totals', args: [bookId] })
+			return (await owner.readContract({ ...book, functionName: 'requiredCash', args: [bookId] })) - cash
+		}
+		const quoted = await deficit()
+		expect(quoted).toBeGreaterThan(0n)
+		// A share holder materializes the question in the child, migrates and redeems dust before the donor's transaction.
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
+		const source = fixture.poolFor(fixture.secondQuestionId)
+		await writeContractAndWait(other, () => other.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [source.securityPool, child] }))
+		const childPool = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getPool', args: [fixture.secondQuestionId, child] })
+		for (const outcome of [0n, 1n, 2n]) await writeContractAndWait(other, () => other.writeContract({ abi: shareArtifact.abi, address: source.shareToken, functionName: 'migrate', args: [genesis * 256n + outcome, [1n]] }))
+		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		await approveToken(owner, collateral, settlement)
+		await writeContractAndWait(other, () => other.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [1_000n] }))
+		const live = await deficit()
+		expect(live).toBeLessThan(quoted)
+		// The donor signed the stale quote as its maximum; the settlement pulls the live deficit.
+		const donor = await collateralBalance(owner, fixture.portfolio, owner.account.address)
+		const custody = await collateralBalance(owner, fixture.portfolio, settlement)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, quoted] }))
+		expect(await collateralBalance(owner, fixture.portfolio, owner.account.address)).toBe(donor - live)
+		expect(await collateralBalance(owner, fixture.portfolio, settlement)).toBe(custody + live)
+		expect(await owner.readContract({ ...book, functionName: 'isCashFunded', args: [bookId] })).toBe(true)
+		expect(await deficit()).toBe(0n)
 	})
 })

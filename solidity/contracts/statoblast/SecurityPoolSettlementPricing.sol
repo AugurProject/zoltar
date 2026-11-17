@@ -92,8 +92,16 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 	}
 	function _mintRecoveryRep(uint64 bookId, Book storage book, uint256 questionId, Question memory state, uint256 addedShares) internal view returns (uint256) {
 		if (state.outcomeSupplyAttoShares == 0) return 0;
-		uint256 scaled = Math.mulDiv(_mintEntitlement(bookId, book, questionId, state), addedShares, state.outcomeSupplyAttoShares, Math.Rounding.Ceil);
-		return Math.ceilDiv(scaled, RECOVERY_SCALE);
+		uint256 entitlement = _mintEntitlement(bookId, book, questionId, state);
+		// A quotient of at least 2^256 would require at least 2^128 attoREP.
+		(uint256 high, ) = Math.mul512(entitlement, addedShares);
+		require(high < state.outcomeSupplyAttoShares, 'Recovery REP exceeds precision bound');
+		uint256 scaled = Math.mulDiv(entitlement, addedShares, state.outcomeSupplyAttoShares);
+		uint256 recoveryAttoRep = scaled / RECOVERY_SCALE;
+		if (scaled % RECOVERY_SCALE != 0 || mulmod(entitlement, addedShares, state.outcomeSupplyAttoShares) != 0)
+			recoveryAttoRep++;
+		require(recoveryAttoRep < RECOVERY_SCALE - book.recoveryAttoRep, 'Recovery REP exceeds precision bound');
+		return recoveryAttoRep;
 	}
 	function _mintEntitlement(uint64 bookId, Book storage book, uint256 questionId, Question memory state) internal view returns (uint256) {
 		return

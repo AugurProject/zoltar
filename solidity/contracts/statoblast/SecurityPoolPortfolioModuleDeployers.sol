@@ -32,9 +32,10 @@ contract SecurityPoolCapitalFeeStreamsDeployer {
 		return new SecurityPoolCapitalFeeStreams(authority, timestamp, vestingDuration);
 	}
 }
-contract SecurityPoolSettlementBookDeployer {
+contract SecurityPoolSettlementBookDeployer is SecurityPoolCreationCodeDeployer {
+	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolSettlementBook).creationCode) {}
 	function create(address authority, uint256 minimumOutcomeRate) external returns (SecurityPoolSettlementBook) {
-		return new SecurityPoolSettlementBook(authority, minimumOutcomeRate);
+		return SecurityPoolSettlementBook(_deploy(abi.encode(authority, minimumOutcomeRate)));
 	}
 }
 contract SecurityPoolPortfolioSettlementDeployer {

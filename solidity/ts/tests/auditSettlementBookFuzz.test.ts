@@ -16,6 +16,8 @@ import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 
 const SEEDS = Number(process.env['AUDIT_FUZZ_SEEDS'] ?? '6')
 const FIRST_SEED = Number(process.env['AUDIT_FUZZ_FIRST_SEED'] ?? '1')
+// Seeds 7016 and 7027 reach a recovery REP requirement above the 2^128 bound (#1320).
+const REGRESSION_SEEDS = process.env['AUDIT_FUZZ_SEEDS'] === undefined ? [7016, 7027] : []
 const STEPS = Number(process.env['AUDIT_FUZZ_STEPS'] ?? '150')
 const SHRINK_MS = Number(process.env['AUDIT_FUZZ_SHRINK_MS'] ?? '60000')
 const QUESTIONS = [1, 2, 3, 4, 5, 6] as const
@@ -648,9 +650,14 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 			try {
 				outcome = apply(next, op, blockTime)
 				// REP ownership is outside this ETH model; cash-only minting must still respect its separate funding quote.
+				// A requirement of 2^128 attoREP or more is unrepresentable and rejected with a reason, never a panic.
 				if (outcome.ok && op.k === 'mint' && book !== undefined && book.rec !== 0n) {
-					const required = await client.readContract({ ...target, functionName: 'quoteMintRecoveryRep', args: [BigInt(op.b), BigInt(op.q), op.cash] })
-					if (required !== 0n) outcome = reject('recovery funding needed')
+					const required = await client.readContract({ ...target, functionName: 'quoteMintRecoveryRep', args: [BigInt(op.b), BigInt(op.q), op.cash] }).catch((error: unknown) => {
+						if (error instanceof Error && error.message.includes('Recovery REP exceeds precision bound')) return undefined
+						throw error
+					})
+					if (required === undefined) outcome = reject('recovery precision bound')
+					else if (required !== 0n) outcome = reject('recovery funding needed')
 				}
 			} catch (error) {
 				return `${String(error instanceof Error ? error.message : error)} at ${show(op)}${context()}`
@@ -745,7 +752,8 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		blockStart = Number((await client.getBlock()).timestamp)
 		baseline = await ethereum.anvilSnapshot()
 		const failures: string[] = []
-		for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
+		const seeds = [...Array.from({ length: SEEDS }, (_, offset) => FIRST_SEED + offset), ...REGRESSION_SEEDS]
+		for (const seed of seeds) {
 			const failure = await runSeed(seed)
 			if (failure !== undefined) {
 				failures.push(failure)

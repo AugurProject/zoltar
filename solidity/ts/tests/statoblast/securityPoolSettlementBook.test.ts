@@ -363,8 +363,18 @@ describe('Statoblast: central internal settlement units', () => {
 		await mint(3n, 1n, 1000n)
 		await seal(3n)
 		await child(3n, 1000n, scale - 1n)
-		const required = await recoveryMintQuote(4n, 1n, 1n)
-		await expect(client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [4n, 1n, 1n, 0n, required, 0] })).rejects.toThrow('Recovery REP exceeds precision bound')
+		await expect(recoveryMintQuote(4n, 1n, 1n)).rejects.toThrow('Recovery REP exceeds precision bound')
+		await expect(client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [4n, 1n, 1n, 0n, 1n << 120n, 0] })).rejects.toThrow('Recovery REP exceeds precision bound')
+	})
+
+	test('#1320 a recovery REP quote beyond 2^256 scaled REP reverts with the precision bound instead of panicking', async () => {
+		// One remaining outcome share carries nearly 2^127 REP; adding 3e29 shares would need about 1e52 attoREP.
+		await mint(1n, 1n, 1n)
+		await seal(1n, 0)
+		await child(1n, 1n, (1n << 127n) - 1n)
+		const cash = 300_000_000_000n * 10n ** 18n
+		await expect(recoveryMintQuote(2n, 1n, cash)).rejects.toThrow('Recovery REP exceeds precision bound')
+		await expect(client.writeContract({ ...target(), functionName: 'mint', args: [2n, 1n, cash, 0n, 0] })).rejects.toThrow('Recovery REP exceeds precision bound')
 	})
 
 	test('partial basket redemptions conserve every REP unit and the final holder receives the remainder', async () => {

@@ -85,11 +85,19 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		recoveryStates[bookId] = recoveryStates[sourceBookId];
 		// Only newly surrendered backing changes the index. Inherited claim REP
 		// retains its old question ownership, including previous partial burns.
+		// Each question owns the increment on its units at the fork; recording the
+		// fork fee time keeps later child fees from shrinking that share.
 		if (recoveryAttoRep > source.recoveryAttoRep) {
 			uint256 increment = Math.mulDiv(recoveryAttoRep - source.recoveryAttoRep, RECOVERY_SCALE, source.units);
+			RecoveryState storage recovery = recoveryStates[bookId];
+			uint48 forkTime = _feeTimestamp(source);
+			uint256 weight;
 			unchecked {
-				recoveryStates[bookId].index += increment;
+				recovery.index += increment;
+				weight = increment * _fundedSeconds(source, forkTime);
 			}
+			recovery.forkIncrementRoot = _addForkWeight(recovery.forkIncrementRoot, forkTime, increment);
+			recovery.forkWeightRoot = _addForkWeight(recovery.forkWeightRoot, forkTime, weight);
 		}
 		_setFeeMode(child, isCashFunded(bookId) && source.feesEnabled);
 		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, source.units);
@@ -176,8 +184,8 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		require(outcomeShares > 0 && outcomeShares >= minimumShares, 'Insufficient outcome shares');
 		require(recoveryAttoRep == _mintRecoveryRep(bookId, book, questionId, state, outcomeShares), 'Recovery REP funding mismatch');
 		uint256 entitlement = _mintEntitlement(bookId, book, questionId, state);
+		// The quote keeps the funded custody below the REP precision bound.
 		book.recoveryAttoRep += recoveryAttoRep;
-		require(book.recoveryAttoRep < RECOVERY_SCALE, 'Recovery REP exceeds precision bound');
 		uint256 addedUnits = _mintUnits(bookId, book, cashAttoEth);
 		state.feePrincipalAttoEth += SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, outcomeShares, addedUnits);
 		require(state.feePrincipalAttoEth < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
@@ -352,16 +360,56 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	function _scaledRecovery(uint64 bookId, Book storage book, uint256 questionId, Question memory state) internal view override returns (uint256 scaledRecoveryEntitlement) {
-		uint64 stateId = uint64(tree.get(book.questionRoot, questionId));
-		StoredQuestionState storage snapshot = questionStates[stateId];
+		StoredQuestionState storage snapshot = questionStates[uint64(tree.get(book.questionRoot, questionId))];
+		RecoveryState storage recovery = recoveryStates[bookId];
+		Question storage stored = snapshot.question;
+		// Allocate current units at the branch's index, then carry the snapshot's
+		// correction and the fees that remained lazy since the snapshot. A fee unit
+		// charged after a fork was part of the question at that fork, so it keeps
+		// that fork's increment; child fees never shrink an inherited REP share.
+		// These are residues modulo 2^256; wrapping is intentional.
+		uint256 lazyFeeUnits;
+		uint256 lazyFeeIndex = snapshot.recoveryIndex;
+		uint256 earlierFeeCredit;
 		unchecked {
-			// Allocate current units at the branch's index, then carry the snapshot's
-			// correction and fees that remained lazy at the snapshot's older index.
-			// These are residues modulo 2^256; wrapping is intentional.
-			uint256 currentUnitsEntitlement = state.units * recoveryStates[bookId].index;
-			uint256 lazyFeeEntitlement = (snapshot.question.units - state.units) * snapshot.recoveryIndex;
-			scaledRecoveryEntitlement = currentUnitsEntitlement + snapshot.recoveryCorrection + lazyFeeEntitlement;
+			lazyFeeUnits = stored.units - state.units;
 		}
+		if (lazyFeeUnits != 0 && recovery.forkIncrementRoot != 0) {
+			uint48 start = stored.feeStart;
+			uint48 cut = uint48(Math.min(_feeTimestamp(book), stored.feeEnd));
+			(uint256 increments, uint256 incrementsThroughCut) = _forkRange(recovery.forkIncrementRoot, start, cut);
+			(uint256 weights, ) = _forkRange(recovery.forkWeightRoot, start, cut);
+			lazyFeeIndex = incrementsThroughCut;
+			// Forks after the snapshot and before the cut: fee units charged before each
+			// such fork did not hold its increment. They were charged at the unchanged
+			// funded-second rate, so rate * sum(increment * (forkSeconds - startSeconds)).
+			uint256 startSeconds = _fundedSeconds(book, start);
+			unchecked {
+				earlierFeeCredit = stored.feeRateAttoEthPerSecond * (weights - startSeconds * increments);
+			}
+		}
+		unchecked {
+			scaledRecoveryEntitlement =
+				state.units * recovery.index +
+				snapshot.recoveryCorrection +
+				lazyFeeUnits * lazyFeeIndex -
+				earlierFeeCredit;
+		}
+	}
+
+	function _forkRange(uint64 root, uint48 start, uint48 cut) private view returns (uint256 range, uint256 throughCut) {
+		throughCut = tree.prefixTotalModular(root, cut);
+		unchecked {
+			range = throughCut - tree.prefixTotalModular(root, start);
+		}
+	}
+
+	/// @dev Each leaf value is its own weight; a zero residue deletes a leaf that adds nothing.
+	function _addForkWeight(uint64 root, uint48 key, uint256 weight) private returns (uint64) {
+		unchecked {
+			weight += tree.get(root, key);
+		}
+		return tree.setModular(root, key, weight, weight);
 	}
 
 	function recoveryRep(uint64 bookId) external view returns (uint256) {
