@@ -71,7 +71,7 @@ export async function demoAddressPortfolioRoute(env: DemoEnvironment, path: stri
 			},
 			pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100001', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } }],
 			auction_claims: [
-				{ type: 'BidSettled', entity: demoAddress('8'), data: { bidId: '1', bidder: address ?? demoAddress('1'), filledLots: '0', refundAttoEth: '100001' }, blockNumber: operations.asOf.blockNumber, provenance: 'historical interaction', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } },
+				{ type: 'BidSettled', entity: demoAddress('8'), data: { bidId: '1', bidder: address ?? demoAddress('1'), filledLots: '0', refundAttoEth: String(100001n) }, blockNumber: operations.asOf.blockNumber, provenance: 'historical interaction', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } },
 			],
 			escalation_payouts: {
 				items: claimState === 'unavailable' ? [] : [{ game_address: demoAddress('7'), snapshot_block: operations.asOf.blockNumber, snapshot_block_hash: demoHash, position: claimPosition }],
