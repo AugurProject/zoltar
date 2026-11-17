@@ -87,7 +87,7 @@
 					<dt id="escalation-game">Escalation Game</dt>
 					<dd>The local Statoblast dispute mechanism in which REP-backed balances accumulate behind Invalid, Yes, and No.</dd>
 					<dt id="start-bond">Start bond</dt>
-					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the pool was deployed ÷ 10<sup>7</sup>. Origin-pool deployment requires it to be below the non-decision threshold; a game started with a bond at or above that threshold is clamped to one atto-REP below that threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold. A child pool continuing a forked game keeps its parent's start bond.</dd>
+					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the pool was deployed ÷ 10<sup>7</sup>. Origin-pool deployment requires it to be below the non-decision threshold; a game started with a bond at or above that threshold is clamped to one atto-REP below that threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold, or when an offered start bond that would tie the leading outcome is trimmed by one atto-REP. A child pool continuing a forked game keeps its parent's start bond.</dd>
 					<dt id="binding-capital">Binding capital</dt>
 					<dd>The median of the three outcome balances. See <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game deadlines</a> for its role in finality.</dd>
 					<dt id="required-support">Required support</dt>
