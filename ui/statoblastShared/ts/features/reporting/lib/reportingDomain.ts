@@ -262,6 +262,8 @@ type EscalationContributionPreview =
 	| {
 			actualDepositAmount: bigint
 			reason: undefined
+			/** The game trimmed the offer by 1 attoREP because it would otherwise tie the leading outcome. */
+			tieAdjusted: boolean
 	  }
 	| {
 			actualDepositAmount: undefined
@@ -310,6 +312,7 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	return {
 		actualDepositAmount: projectedDeposit.acceptedAmountAttoRep,
 		reason: undefined,
+		tieAdjusted: projectedDeposit.tieAdjusted,
 	}
 }
 export function previewReportingContribution(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ReportingContributionPreview {
@@ -322,6 +325,7 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 		return {
 			actualDepositAmount: amount,
 			reason: undefined,
+			tieAdjusted: false,
 		}
 	}
 	return previewEscalationContribution(details, outcome, amount)
