@@ -146,7 +146,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect(await collateralBalance(fixture.owner(), fixture.portfolio, before.engine)).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
 	})
 
-	test('a later fork leaves final cash at its source and child refresh cannot duplicate the claim', async () => {
+	test('a later fork leaves final cash at its source and rejects a duplicate child claim', async () => {
 		await prepareReportedQuestion()
 		const owner = fixture.owner()
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
@@ -158,11 +158,8 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		const child = getChildUniverseId(fixture.base.genesisUniverse, 1)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [pool().address, child] }))
-		const childPool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'refreshPortfolioFees' }))
-		expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
-		expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'settlementCollateralAttoEth' })).toBe(0n)
+		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [pool().address, child] }))).rejects.toThrow('Question finalized in source universe')
+		await expect(owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		await refresh()
 		const state = await settlementState()
 		const beforeShares = await shares()
