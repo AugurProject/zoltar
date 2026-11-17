@@ -163,7 +163,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'Nonzero proposed raw REP-per-collateral price scaled by 1e18, a bounty of at least 101 attoETH covered by msg.value, and sufficient collateral/REP funding and approvals for the shared feed’s live exposure and inventory bounds. Zero requested collateral uses the computed minimum. The creator-configured collateral stake floor plus the exposure minimum replaces gas-cost-based report sizing; it does not guarantee dispute gas costs are covered. Funding is isolated in a new report escrow; the caller must accept any excess-ETH refund.',
+					'Nonzero proposed raw REP-per-collateral price scaled by 1e18, a bounty of at least 101 attoETH covered by msg.value, and sufficient collateral/REP funding and approvals for the shared feed’s `minimumToken1ReportAttoEthForPrice` minimum, which also covers `acceptedExposureLimitAttoEth` while the accepted price is fresh. Zero requested collateral uses the computed minimum. The creator-configured collateral stake floor plus the exposure minimum replaces gas-cost-based report sizing; it does not guarantee dispute gas costs are covered. Funding is isolated in a new report escrow; the caller must accept any excess-ETH refund.',
 				signals: '`PriceRequested` and `ReportFundingAssigned` from the shared feed.',
 			},
 			{
