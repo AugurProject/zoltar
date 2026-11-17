@@ -58,34 +58,25 @@ describe('audit: the unpaid cure never leaves a commitment below the minimum', (
 	// The same position with spare of exactly one minimum: the cut can neither finish the
 	// commitment nor leave a whole minimum, so the cure removes nothing and the position
 	// stays open to a paid takeover of all of it.
-	test('a cut that can neither finish the commitment nor leave the minimum is not applied', async () => {
+	test('a subminimum receiver cannot acquire the source remainder or its REP', async () => {
 		const commitment = (3n * MINIMUM) / 2n
-		const { id } = await underwater(commitment, 100n * E + MINIMUM / 2n, (12n * E) / 10n)
+		const { id, required } = await underwater(commitment, 100n * E + MINIMUM / 2n, (12n * E) / 10n)
 		await fixture.deposit(keeper, 1_000n * E)
-
-		await takeOver(id, commitment)
-		const receiver = (await fixture.owner(keeper)).positionId
-		expect(receiver).toBeGreaterThan(0n)
-		expect((await fixture.position(receiver)).commitment).toBe(commitment)
-		expect((await fixture.position(id)).commitment).toBe(0n)
+		await expect(takeOver(id, commitment)).rejects.toThrow('Receiver commitment below minimum')
+		expect(await fixture.position(id)).toMatchObject({ rep: required, commitment })
+		expect((await fixture.owner(keeper)).positionId).toBe(0n)
 	})
 
 	// Three minimums backed for only 0.6 of one, with spare of two and a half: the uncovered 2.4
 	// would leave 0.6. The cut shrinks to two minimums, so exactly the minimum is left, and that
 	// remainder, still under water, is what the keeper takes over.
-	test('a deep cut shrinks so that exactly the minimum is left for the takeover', async () => {
+	test('a minimum residual requires additional capacity and cannot be seized', async () => {
 		const commitment = 3n * MINIMUM
-		const { id, supported } = await underwater(commitment, 100n * E + MINIMUM / 2n, 5n * E)
-		expect(supported).toBe((3n * MINIMUM) / 5n)
+		const { id, required } = await underwater(commitment, 100n * E + MINIMUM / 2n, 5n * E)
 		await fixture.deposit(keeper, 1_000n * E)
-
-		// Asking for more than the cure leaves fails: only the minimum is still there to take.
-		await expect(takeOver(id, commitment)).rejects.toThrow('Invalid takeover commitment')
-		await takeOver(id, MINIMUM)
-		const receiver = (await fixture.owner(keeper)).positionId
-		expect((await fixture.position(receiver)).commitment).toBe(MINIMUM)
-		expect((await fixture.position(id)).commitment).toBe(0n)
-		expect((await totals())[1]).toBe(100n * E + MINIMUM)
+		await expect(takeOver(id, commitment)).rejects.toThrow('Position requires additional backing')
+		expect(await fixture.position(id)).toMatchObject({ rep: required, commitment })
+		expect((await fixture.owner(keeper)).positionId).toBe(0n)
 	})
 
 	// The minimum-rest rule protects a takeover, whose rest stays live. An owner's full exit

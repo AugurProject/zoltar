@@ -9,6 +9,7 @@ test('portfolio execution starts disabled with zero exposure caps, no selections
 	expect(settings.selectedPortfolios).toEqual([])
 	expect(settings.approvedUniverses).toEqual([])
 	expect(settings.portfolioPolicy.allowFundedTakeovers).toBe(false)
+	expect(settings.portfolioPolicy.takeoverIncomeHorizonSeconds).toBe(0)
 	expect(settings.portfolioPolicy.maximumPrincipalAttoRep).toBe(0n)
 	expect(settings.runtime.execute).toBe(false)
 	expect(settings.paused).toBe(true)
@@ -32,4 +33,11 @@ test('automatic report sponsorship is opt-in and its loss budget survives settin
 	expect(configured.portfolioPolicy.maximumReportFundingAttoEth).toBe(250_000_000_000_000_000n)
 	expect(parseSettings(serializedSettings(configured))).toEqual(configured)
 	expect(() => parsePortfolioPolicy({ maximumReportFundingEth: '-1' })).toThrow()
+})
+
+test('repair income horizons are bounded and survive settings round trips', () => {
+	const settings = parseSettings({ ...example, portfolioPolicy: { ...example.portfolioPolicy, takeoverIncomeHorizonSeconds: 86400 } })
+	expect(parseSettings(serializedSettings(settings)).portfolioPolicy.takeoverIncomeHorizonSeconds).toBe(86400)
+	expect(() => parsePortfolioPolicy({ takeoverIncomeHorizonSeconds: -1 })).toThrow()
+	expect(() => parsePortfolioPolicy({ takeoverIncomeHorizonSeconds: 31_536_001 })).toThrow()
 })

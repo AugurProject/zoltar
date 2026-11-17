@@ -78,25 +78,30 @@ function paidTakeoverPlan(observation: PortfolioObservation, position: Portfolio
 	const source = portfolioCureOutcome(observation, position)
 	if (source.healthy) return source.removed === 0n ? reject('Cure restores target health without a takeover') : { reason: 'Cure restores target health without a takeover', healingCure: source.removed }
 	if (receiver !== undefined && receiver.batch !== source.batch) return reject('Receiver and target retirement cohorts differ')
-	const commitment = source.commitment
+	const commitment = source.maximumTakeoverCommitment
+	if (commitment === 0n) return reject('Minimum position needs additional backing or healthy capacity')
+	if (snapshot.ownerCommitmentAttoEth + commitment < snapshot.economics.minimumCommitmentAttoEth) return reject('Receiver commitment would be below the economic minimum')
 	const maximumOwnerCommitment = policy.maximumCommitmentAttoEth - (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + snapshot.ownerCommitmentAttoEth
 	if (snapshot.ownerCommitmentAttoEth + commitment > maximumOwnerCommitment) return reject('Owner commitment limit would be exceeded')
-	const elapsed = snapshot.timestamp - position.liquidationStarted
-	if (elapsed < 0n) return reject('Adverse observation is in the future')
-	const award = (source.rep * (elapsed < 3600n ? elapsed : 3600n)) / 3600n
+	if (policy.takeoverIncomeHorizonSeconds === 0) return reject('Repair earns future income; configure an income horizon before automation')
+	const award = 0n
 	const required = ceilDiv(ceilDiv(ceilDiv((snapshot.ownerCommitmentAttoEth + commitment) * snapshot.ownerConservativePrice, UNIT) * snapshot.securityMultiplierBps, BPS) * policy.targetHealthFactorBps, BPS)
 	const ownFunding = required > snapshot.ownerPrincipalAttoRep + award ? required - snapshot.ownerPrincipalAttoRep - award : 0n
 	const maximumOwnerPrincipal = policy.maximumPrincipalAttoRep < policy.maximumTotalPrincipalAttoRep - totalPrincipal + snapshot.ownerPrincipalAttoRep ? policy.maximumPrincipalAttoRep : policy.maximumTotalPrincipalAttoRep - totalPrincipal + snapshot.ownerPrincipalAttoRep
-	// Full auction award can grow before inclusion; reserve its full REP amount in exposure limits.
-	if (maximumOwnerPrincipal < snapshot.ownerPrincipalAttoRep + ownFunding + source.rep) return reject('Managed principal exposure limit would be exceeded')
+	// Source principal never transfers; reserve only receiver-funded principal.
+	if (maximumOwnerPrincipal < snapshot.ownerPrincipalAttoRep + ownFunding) return reject('Managed principal exposure limit would be exceeded')
 	if (ownFunding > policy.maximumOwnFundingAttoRep) return reject('Own REP funding limit would be exceeded')
 	if (observation.walletRep < ownFunding + settings.strategy.walletAttoRepReserve) return reject('Wallet REP reserve would be consumed')
-	// The award remains pledged. Count it only as an investment gain, never as
-	// spendable gas funding. Budget approval, principal deposit and takeover.
+	// Repair income arrives in the future. Budget approval, deposit and repair
+	// from the wallet without treating that income as spendable gas funding.
 	const gasBudget = settings.strategy.maximumGasCostAttoEth * 3n
 	if (observation.walletAttoEth < gasBudget + policy.walletReserveAttoEth) return reject('Wallet ETH gas reserve would be consumed')
-	const netRewardAttoEth = ((award - ownFunding) * UNIT) / snapshot.ownerConservativePrice - gasBudget
-	if (award === 0n || netRewardAttoEth < policy.minimumNetRewardAttoEth) return reject('Conservative net award is below the profitability floor')
+	// This is a projection at the current fee rate and demand, not guaranteed income.
+	// Principal is an investment, not an execution expense or a liquidation reward.
+	const annualFees = (snapshot.demandAttoEth * snapshot.economics.annualFeeBps) / BPS
+	const projectedIncome = (annualFees * commitment * BigInt(policy.takeoverIncomeHorizonSeconds)) / (snapshot.totalCommitmentAttoEth - source.removed) / 31_536_000n
+	const netRewardAttoEth = projectedIncome - gasBudget
+	if (netRewardAttoEth < policy.minimumNetRewardAttoEth) return reject('Projected future income is below the profitability floor')
 	return {
 		reason: policy.allowFundedTakeovers ? 'Funded takeover ready' : 'Funded takeover ready; automation is disabled',
 		plan: {

@@ -82,8 +82,11 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		await openOracleSettle(fixture.owner(), report)
 		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(1n)
 		const receiver = await sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [sponsor.account.address] })
-		expect(receiver[1]).toBe(100n * unit)
-		expect((await sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [fixture.owner().account.address] }))[1]).toBe(0n)
+		expect(receiver[1]).toBeGreaterThan(0n)
+		expect(receiver[1]).toBeLessThan(100n * unit)
+		const source = await sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [fixture.owner().account.address] })
+		expect(source[0]).toBe(400n * unit)
+		expect(source[1] + receiver[1]).toBe(100n * unit)
 	})
 	for (const failure of ['expiry', 'price', 'award', 'funding', 'cohort', 'health target'] as const) {
 		test(`a failed ${failure} bound preserves accepted price and both owners' funds`, async () => {
@@ -155,7 +158,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		await context.mock.advanceTime(481n)
 		await openOracleSettle(context.other, id)
 		expect((await context.owner.readContract({ ...ledger, functionName: 'auctionPosition', args: [winner.id] })).materialized).toBe(!failure)
-		expect((await context.owner.readContract({ ...ledger, functionName: 'ownerCollateral', args: [sponsor.account.address] }))[1]).toBe(failure ? 0n : 3n * unit)
+		expect((await context.owner.readContract({ ...ledger, functionName: 'ownerCollateral', args: [sponsor.account.address] }))[1]).toBe(failure ? 0n : 2n * unit)
 	})
 	test('a starved takeover callback remains recoverable with sponsor priority', async () => {
 		const { sponsor, feed, intent } = await prepare()
@@ -178,6 +181,9 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		await openOracleSettle(attacker, report)
 		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(1n)
 		expect(await sponsor.readContract({ ...feed, functionName: 'acceptedEpoch' })).toBe(epoch + 1n)
-		expect((await sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [sponsor.account.address] }))[1]).toBe(100n * unit)
+		const repaired = await sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [sponsor.account.address] })
+		expect(repaired[1]).toBeGreaterThan(0n)
+		expect(repaired[1]).toBeLessThan(100n * unit)
+		expect(repaired[0]).toBe(3000n * unit)
 	})
 })

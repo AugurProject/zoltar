@@ -145,9 +145,12 @@ describe('portfolio operator production gas execution', () => {
 			expect(transaction.gas).toBe(paddedTransactionGas(estimate.gas + PORTFOLIO_CHECKPOINT_GAS_RESERVE))
 			expect(receipt.status).toBe('success')
 			expect(estimate.gas).toBeGreaterThan(receipt.gasUsed)
-			expect(await fixture.position(sourceId)).toMatchObject({ rep: 0n, commitment: 0n })
+			expect((await fixture.position(sourceId)).rep).toBe(source.rep)
+			expect((await fixture.position(sourceId)).commitment).toBeGreaterThan(0n)
 			const receiver = await sender.readContract({ ...fixture.capital, functionName: 'ownerAccount', args: [account.address] })
-			expect(await fixture.position(receiver.positionId)).toMatchObject({ owner: account.address, rep: 100n * E + source.rep, commitment: source.commitment, batch: source.batch, remainingCommitment: source.remainingCommitment })
+			const repaired = await fixture.position(receiver.positionId)
+			expect(repaired).toMatchObject({ owner: account.address, rep: 100n * E, batch: source.batch })
+			expect(repaired.commitment + (await fixture.position(sourceId)).commitment).toBe(source.commitment)
 			expect(state.pendingTransactions).toHaveLength(0)
 			expect(state.paused).toBe(false)
 			const durable: unknown = JSON.parse(await readFile(settings.runtime.stateFile, 'utf8'))
@@ -219,7 +222,7 @@ describe('atomic unpaid cure and portfolio takeover', () => {
 			const target = current.observation.positions[0]
 			if (target === undefined) throw new Error('Missing test target')
 			expect(target).toMatchObject({ rep: 105n * E, commitment: 100n * E, batch: retainedCommitment === 0n ? 0n : 1n, remainingCommitment: retainedCommitment })
-			expect(portfolioTakeoverPlan(current.observation, target, settings, current.totalPrincipal, true).plan).toMatchObject({ commitment: 90n * E, minimumAward: 105n * E, ownFunding: 0n, expectedSourceBatch: 0n })
+			expect(portfolioTakeoverPlan(current.observation, target, settings, current.totalPrincipal, true).plan).toMatchObject({ commitment: 40n * E, minimumAward: 0n, ownFunding: 0n, expectedSourceBatch: 0n })
 			let submitted = 0
 			const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
 				await call.preSubmit?.()
@@ -231,9 +234,9 @@ describe('atomic unpaid cure and portfolio takeover', () => {
 			}
 			await executePortfolioTakeover(wallet, settings, state, pool, current.observation, 1n, async () => true, { refresh, submit })
 			expect(submitted).toBe(1)
-			expect(await fixture.position(1n)).toMatchObject({ rep: 0n, commitment: 0n })
+			expect(await fixture.position(1n)).toMatchObject({ rep: 105n * E, commitment: 50n * E })
 			const receiver = await buyer.readContract({ ...fixture.capital, functionName: 'ownerAccount', args: [account.address] })
 			expect(receiver.feesAttoRep).toBe(0n)
-			expect(await fixture.position(receiver.positionId)).toMatchObject({ rep: 305n * E, commitment: 90n * E, batch: 0n, remainingCommitment: 0n })
+			expect(await fixture.position(receiver.positionId)).toMatchObject({ rep: 200n * E, commitment: 40n * E, batch: 0n, remainingCommitment: 0n })
 		})
 })

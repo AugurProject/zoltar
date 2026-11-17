@@ -11,7 +11,7 @@ import { distressedSecondWinner, repairAuctionKeeper } from '../support/collater
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
 describe('portfolio operator funded auction capital integration', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1000n })
 	test('a keeper authenticates lazy winners and acquires a distressed winner with bounded gas', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
@@ -58,7 +58,8 @@ describe('portfolio operator funded auction capital integration', () => {
 				expect(after.materialized).toBe(step === 2)
 			}
 			const taken = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'ownerCollateral', args: [account.address] })
-			expect(taken[1]).toBe(3n * unit)
+			expect(taken[1]).toBeGreaterThan(unit)
+			expect(taken[1]).toBeLessThan(3n * unit)
 			const acquisition = state.activities.find(activity => activity.status === 'confirmed')
 			if (acquisition?.hash === undefined) throw new Error('Takeover was not confirmed')
 			const acquiredTransaction = await reader.getTransaction({ hash: acquisition.hash })

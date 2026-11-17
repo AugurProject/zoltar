@@ -12,7 +12,7 @@ function evaluate(observation = portfolioObservation(), settings = portfolioSett
 
 test('funded takeover bounds the entire transferred obligation, owner collateral without upfront ETH funding', () => {
 	const plan = evaluate().plan
-	expect(plan).toMatchObject({ commitment: 100n * unit, minimumAward: 99n * unit, ownFunding: (585n * unit) / 10n, maximumOwnRep: (585n * unit) / 10n, maximumOwnerPrincipal: 1000n * unit, expectedSourceBatch: 0n })
+	expect(plan).toMatchObject({ commitment: 5_714_285_714_285_714_286n, minimumAward: 0n, ownFunding: 9_000_000_000_000_000_002n, maximumOwnRep: 9_000_000_000_000_000_002n, maximumOwnerPrincipal: 1000n * unit, expectedSourceBatch: 0n })
 	expect(plan?.netRewardAttoEth).toBeGreaterThan(0n)
 })
 
@@ -64,13 +64,13 @@ test('receiver cohort and exact health consent are required; dust spare capacity
 	expect(evaluate(observation).plan).toBeDefined()
 })
 
-test('managed scopes, future award growth, principal and commitment caps, wallet gas are enforced', () => {
+test('managed scopes, projected income, principal and commitment caps, wallet gas are enforced', () => {
 	const settings = portfolioSettings()
-	settings.portfolioPolicy.maximumPrincipalAttoRep = 150n * unit
+	settings.portfolioPolicy.maximumPrincipalAttoRep = 8n * unit
 	expect(evaluate(portfolioObservation(), settings).reason).toContain('principal exposure')
 	settings.portfolioPolicy.maximumPrincipalAttoRep = 1000n * unit
-	expect(evaluate(portfolioObservation(), settings, 1900n * unit).reason).toContain('principal exposure')
-	settings.portfolioPolicy.maximumCommitmentAttoEth = 99n * unit
+	expect(evaluate(portfolioObservation(), settings, 1995n * unit).reason).toContain('principal exposure')
+	settings.portfolioPolicy.maximumCommitmentAttoEth = 5n * unit
 	expect(evaluate(portfolioObservation(), settings).reason).toContain('commitment limit')
 	settings.portfolioPolicy.maximumCommitmentAttoEth = 1000n * unit
 	settings.portfolioPolicy.maximumOwnFundingAttoRep = unit
@@ -108,7 +108,7 @@ test('atomic takeover can remove unpaid spare commitment and acquire the still u
 	observation.snapshot.ownerPrincipalAttoRep = 200n * unit
 	observation.snapshot.ownerAccount.freeAttoRep = 200n * unit
 	const result = evaluate(observation)
-	expect(result.plan).toMatchObject({ commitment: 90n * unit, minimumAward: 105n * unit, ownFunding: 0n })
+	expect(result.plan).toMatchObject({ commitment: 40n * unit, minimumAward: 0n, ownFunding: 0n })
 	expect(result.plan?.netRewardAttoEth).toBeGreaterThan(0n)
 })
 
@@ -144,7 +144,8 @@ test('a healing cure is submitted without an award only when it opens another po
 	observation.snapshot.totalCommitmentAttoEth -= cured.removed
 	const paid = portfolioTakeoverPlan(observation, second, portfolioSettings(), observation.snapshot.ownerPrincipalAttoRep, true)
 	expect(paid.plan).toMatchObject({ positionId: 2n, unpaidCure: false })
-	expect(paid.plan?.minimumAward).toBeGreaterThan(0n)
+	expect(paid.plan?.minimumAward).toBe(0n)
+	expect(paid.plan?.netRewardAttoEth).toBeGreaterThan(0n)
 })
 
 test('no cure is submitted when it opens nothing, when the opened takeover is unprofitable, or without gas for both', () => {
@@ -228,18 +229,18 @@ test('atomic cure crossing the retained commitment joins the active receiver coh
 	Object.assign(observation.snapshot, { demandAttoEth: 90n * unit, liquidationPrice: 2n * unit, ownerConservativePrice: 2n * unit, conservativePrice: 2n * unit, ownerPrincipalAttoRep: 200n * unit })
 	observation.snapshot.ownerAccount.freeAttoRep = 200n * unit
 	const result = evaluate(observation)
-	expect(result.plan).toMatchObject({ commitment: 90n * unit, expectedSourceBatch: 0n })
+	expect(result.plan).toMatchObject({ commitment: 40n * unit, expectedSourceBatch: 0n })
 	const receiver = { id: 2n, owner: observation.snapshot.owner, batch: 0n, rep: 200n * unit, commitment: unit, maxHealthyPrice: 100n * unit, releasedRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, liquidationStarted: 0n, remainingCommitment: 0n, retirementPreview: undefined }
 	observation.snapshot.positions = [receiver]
 	observation.snapshot.ownerAccount.freeAttoRep = 0n
 	observation.snapshot.ownerCommitmentAttoEth = unit
 	observation.snapshot.totalCommitmentAttoEth += unit
 	observation.snapshot.demandAttoEth += unit
-	expect(evaluate(observation).plan).toMatchObject({ commitment: 90n * unit, expectedSourceBatch: 0n })
+	expect(evaluate(observation).plan).toMatchObject({ commitment: 40n * unit, expectedSourceBatch: 0n })
 	receiver.batch = 2n
 	expect(evaluate(observation).reason).toContain('cohorts differ')
 	position.remainingCommitment = 80n * unit
-	expect(evaluate(observation).plan).toMatchObject({ commitment: 90n * unit, expectedSourceBatch: 2n })
+	expect(evaluate(observation).plan).toMatchObject({ commitment: 40n * unit, expectedSourceBatch: 2n })
 })
 
 test('inherited dust does not reset retirement intent when the cure cannot remove it', () => {
@@ -251,13 +252,23 @@ test('inherited dust does not reset retirement intent when the cure cannot remov
 	observation.snapshot.demandAttoEth = 1n
 	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 9n, batch: 2n, remainingCommitment: 8n })
 	observation.snapshot.demandAttoEth = 0n
-	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 9n, commitment: 0n, batch: 0n, remainingCommitment: 0n, healthy: true })
+	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 9n, batch: 2n, remainingCommitment: 8n, healthy: false })
 })
 
 test('auction vault commitments consume the same managed commitment budget as direct takeovers', () => {
 	const observation = portfolioObservation()
-	observation.managedCommitmentAttoEth = 950n * unit
+	observation.managedCommitmentAttoEth = 999n * unit
 	expect(evaluate(observation).plan).toBeUndefined()
 	observation.managedCommitmentAttoEth = 800n * unit
 	expect(evaluate(observation).plan).toMatchObject({ maximumOwnerCommitment: 200n * unit + observation.snapshot.ownerCommitmentAttoEth })
+})
+
+test('repair automation requires an explicit income horizon and never counts source REP as profit', () => {
+	const observation = portfolioObservation()
+	const settings = portfolioSettings()
+	settings.portfolioPolicy.takeoverIncomeHorizonSeconds = 0
+	expect(evaluate(observation, settings).reason).toContain('income horizon')
+	settings.portfolioPolicy.takeoverIncomeHorizonSeconds = 31_536_000
+	observation.snapshot.economics.annualFeeBps = 0n
+	expect(evaluate(observation, settings).plan).toBeUndefined()
 })

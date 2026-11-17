@@ -47,8 +47,8 @@ describe('audit: a curable target no longer blocks every takeover', () => {
 		// No spare remains for Bob, so his position is now open to a real takeover.
 		await takeOver(b, 100n * E)
 		const receiver = (await fixture.owner(keeper)).positionId
-		expect(await fixture.position(receiver)).toMatchObject({ rep: 1_105n * E, commitment: 100n * E })
-		expect((await fixture.position(b)).commitment).toBe(0n)
+		expect(await fixture.position(receiver)).toMatchObject({ rep: 1_000n * E, commitment: 50n * E })
+		expect(await fixture.position(b)).toMatchObject({ rep: 105n * E, commitment: 50n * E })
 		// Demand is fully backed by healthy commitment again.
 		expect((await totals())[2]).toBe(150n * E)
 	})

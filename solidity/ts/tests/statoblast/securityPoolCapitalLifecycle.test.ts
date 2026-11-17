@@ -86,7 +86,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				{ principal: 126n * U, commitment: 100n * U, remaining: 0n, queued: false },
 				{ principal: 420n * U, commitment: 100n * U, remaining: 0n, queued: false },
 				{ principal: 500n * U, commitment: 0n, remaining: 0n, queued: false },
-				{ principal: 300n * U, commitment: 100n * U, remaining: 0n, queued: false },
+				{ principal: 315n * U, commitment: 100n * U, remaining: 0n, queued: false },
 			]
 			const alice = expected[0]
 			const bob = expected[1]
@@ -110,7 +110,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			let fundedRep = 0n
 			let paidEth = 0n
 			let paidRep = 0n
-			const principal = 1346n * U
+			const principal = 1361n * U
 			const initialSupply = await sender.readContract({ ...fixture.token, functionName: 'totalSupply' })
 			const initialBurnedEth = await burnedCollateralBalance(sender, fixture.harness.address)
 			const streams = { abi: streamsArtifact.abi, address: await sender.readContract({ ...fixture.capital, functionName: 'feeStreams' }) }
@@ -229,9 +229,9 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			await ethereum.advanceTime(600n)
 			await action(
 				'adverse price',
-				() => fixture.price(2n * E),
+				() => fixture.price((24n * E) / 10n),
 				() => {
-					price = 2n * E
+					price = (24n * E) / 10n
 				},
 			)
 			await action('repeating her request cannot cure without nominal headroom', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [60n * U] })))
@@ -239,13 +239,13 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			await ethereum.advanceTime(3601n)
 			await action(
 				'takeover transfers queued reduction and inherited residual intent',
-				() => writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'takeOver', args: [aliceId, 50n * U, 63n * U, 500n * U] })),
+				() => writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'takeOver', args: [aliceId, 50n * U, 0n, 500n * U] })),
 				() => {
-					alice.principal = 63n * U
+					alice.principal = 126n * U
 					alice.commitment = 50n * U
 					alice.remaining = 0n
 					alice.queued = false
-					keeper.principal = 563n * U
+					keeper.principal = 500n * U
 					keeper.commitment = 50n * U
 					keeper.remaining = 10n * U
 					keeper.queued = true
@@ -322,7 +322,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [2n] })).toMatchObject({ commitment: 0n, releasedRep: 420n * U })
 			expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [4n] })).toMatchObject({ commitment: 100n * U, remainingCommitment: 50n * U, batch: 2n })
 			await writeContractAndWait(sender, () => sender.writeContract({ ...childHarness, functionName: 'setDemand', args: [110n * U] }))
-			expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [4n] })).toMatchObject({ commitment: 50n * U, rep: 300n * U, remainingCommitment: 0n, batch: 0n })
+			expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [4n] })).toMatchObject({ commitment: 50n * U, rep: 315n * U, remainingCommitment: 0n, batch: 0n })
 			expect(await sender.readContract({ abi: tokenArtifact.abi, address: child.token, functionName: 'balanceOf', args: [child.ledger] })).toBe(principal)
 			await writeContractAndWait(fixture.client(1), () => fixture.client(1).writeContract({ abi: capitalArtifact.abi, address: child.ledger, functionName: 'withdrawPrincipal', args: [420n * U, fixture.client(1).account.address] }))
 			expect(await sender.readContract({ abi: tokenArtifact.abi, address: child.token, functionName: 'balanceOf', args: [fixture.client(1).account.address] })).toBe(420n * U)
