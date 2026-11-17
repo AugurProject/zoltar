@@ -57,8 +57,8 @@ describe('ERC20 portfolio collateral', () => {
 		expect(await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'lastPrice' })).toBe(price)
 		await fixture.authorize(100_000_000n, owner, portfolio)
 		expect(await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'aggregateExposureAttoEth' })).toBe(100_000_000n)
-		// While the accepted price is fresh, a renewal also covers the 200,000,000 raw-unit accepted limit that growth may still reach.
-		expect(await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEth' })).toBe(floor + 2_000_000n)
+		// Unused accepted capacity does not raise renewal funding in this collateral.
+		expect(await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEth' })).toBe(floor + 1_000_000n)
 		const cash = 10_000_000n
 		const quote = await buyer.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, cash] })
 		const balance = () => buyer.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [buyer.account.address] })

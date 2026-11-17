@@ -9,7 +9,7 @@ import type { CanonicalCoordinatorReportRoute } from './protocol-index.ts'
 export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator: Address, blockNumber: bigint, settlementCollateralAttoEth: bigint, funding: OracleRequestFundingSnapshot, minimumReport: bigint, requestCost: bigint, baseFee: bigint, pendingReportId: bigint, retainedReportIds: readonly bigint[] = []) {
 	const priceFeed = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'priceFeed' })
 	const shared = !sameAddress(priceFeed, coordinator)
-	const oracleExposureAttoEth = shared ? await reportSizingExposure(client, priceFeed, blockNumber) : settlementCollateralAttoEth
+	const oracleExposureAttoEth = shared ? await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'aggregateExposureAttoEth' }) : settlementCollateralAttoEth
 	const oracleRequestFunding = shared
 		? {
 				...funding,
@@ -30,25 +30,6 @@ export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator
 		}
 	}
 	return { priceFeed: getAddress(priceFeed), oracleExposureAttoEth: oracleExposureAttoEth.toString(), oracleRequestFunding, ...(reportEscrows === undefined ? {} : { reportEscrows }) }
-}
-
-/**
- * A shared feed sizes a new report for the exposure that ordinary growth can
- * reach before it settles: while the accepted price is fresh, that is at least
- * the accepted report's exposure limit.
- */
-async function reportSizingExposure(client: ChaosReadClient, priceFeed: Address, blockNumber: bigint) {
-	const [exposure, acceptedLimit, priceValid] = await Promise.all([
-		client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'aggregateExposureAttoEth' }),
-		client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'acceptedExposureLimitAttoEth' }),
-		client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'isPriceValid' }),
-	])
-	return sharedReportSizingExposure(exposure, acceptedLimit, priceValid)
-}
-
-/** @internal Tests verify this mirrors `SharedPoolPriceFeed.minimumToken1ReportAttoEth`'s exposure basis. */
-export function sharedReportSizingExposure(aggregateExposureAttoEth: bigint, acceptedExposureLimitAttoEth: bigint, priceValid: boolean) {
-	return priceValid && acceptedExposureLimitAttoEth > aggregateExposureAttoEth ? acceptedExposureLimitAttoEth : aggregateExposureAttoEth
 }
 
 /** Collapse identical question aliases before authenticating canonical report routes. */

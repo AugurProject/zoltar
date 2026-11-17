@@ -62,10 +62,10 @@ test('monitors inventory for a known execution address without requiring a signe
 	expect(fake.contractReads.filter(read => read.functionName === 'balanceOf').every(read => read.args?.[0] === wallet)).toBe(true)
 })
 
-test('discovers a shared feed with aggregate exposure instead of empty question collateral', async () => {
-	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n ** 18n })
+test('discovers live shared exposure despite oversized fresh accepted capacity', async () => {
+	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
-	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: (10n ** 18n).toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { fixedRequestPriceCostAttoEth: 101n.toString() } })
+	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: 10n.toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { fixedRequestPriceCostAttoEth: 101n.toString() } })
 })
 
 test('authenticates latest and retained candidate escrows at the same discovery block', async () => {
@@ -571,6 +571,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'lotAttoEth':
 				case 'minimumCollateralAttoRepPerLot':
 					return 1n
+				case 'acceptedExposureLimitAttoEth':
 				case 'maximumBidAttoRepPerLot':
 					return 1000n
 				case 'refundCreditAttoEth':
@@ -587,7 +588,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'currentBatch':
 				case 'nextBatch':
 				case 'minimumOutcomeExchangeRate':
-				case 'acceptedExposureLimitAttoEth':
 				case 'settlementCollateralAttoEth':
 				case 'lastSettlementPortfolioTime':
 					return 0n
