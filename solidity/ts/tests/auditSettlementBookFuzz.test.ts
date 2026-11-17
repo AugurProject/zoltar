@@ -11,7 +11,7 @@ import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 // reference model (no trees, no lazy fees, no prefix sums). The model predicts for EVERY
 // operation whether it must succeed and the exact resulting state; any difference fails.
 // Recovery REP amounts are not modelled (auditSettlementRecoveryFuzz.test.ts does that); they
-// are read back and only checked for conservation.
+// are read back and checked for conservation; their quote gates the separate mint-funding requirement.
 // Long run: AUDIT_FUZZ_SEEDS=40 AUDIT_FUZZ_FIRST_SEED=1 AUDIT_FUZZ_STEPS=150 AUDIT_FUZZ_SHRINK_MS=60000 bun ./tooling/testing/bun-test.mts --timeout 3000000 solidity/ts/tests/auditSettlementBookFuzz.test.ts
 
 const SEEDS = Number(process.env['AUDIT_FUZZ_SEEDS'] ?? '6')
@@ -20,6 +20,8 @@ const STEPS = Number(process.env['AUDIT_FUZZ_STEPS'] ?? '150')
 const SHRINK_MS = Number(process.env['AUDIT_FUZZ_SHRINK_MS'] ?? '60000')
 const QUESTIONS = [1, 2, 3, 4, 5, 6] as const
 const SCALE = 10n ** 18n
+const UNIT_SCALE = 10n ** 9n
+const ceilDiv = (n: bigint, d: bigint) => (n + d - 1n) / d
 const UNIT_BOUND = 1n << 128n
 const RESPONSE = 259_200
 const START = 1_000
@@ -60,6 +62,9 @@ const show = (value: unknown) => JSON.stringify(value, (_key, item) => (typeof i
 
 type ModelQuestion = { units: bigint; supply: bigint; finalAfter: number; rate: bigint; feeEnd: number; frozen: number }
 type ModelBook = {
+	remainder: bigint
+	targetNumerator: bigint
+	targetDenominator: bigint
 	cash: bigint
 	units: bigint
 	feeCash: bigint
@@ -91,12 +96,30 @@ const questionOf = (book: ModelBook, id: number) => {
 	}
 	return state
 }
-const cashFor = (cash: bigint, units: bigint, redeemed: bigint) => {
+const cashFor = (cash: bigint, units: bigint, redeemed: bigint, remainder = 0n) => {
 	if (redeemed === 0n) return 0n
-	return redeemed === units ? cash : (cash * redeemed) / units
+	return redeemed === units ? cash : ((cash * UNIT_SCALE - remainder) * redeemed) / (units * UNIT_SCALE)
 }
 const reserved = (model: Model, supply: bigint) => (supply * model.minimum + SCALE - 1n) / SCALE
-const isFunded = (book: ModelBook) => book.cash === book.units && book.rec === 0n && book.enabled
+const netCash = (book: ModelBook) => book.cash * UNIT_SCALE - book.remainder
+const requiredCash = (book: ModelBook) => ceilDiv(ceilDiv(book.units * book.targetNumerator, book.targetDenominator) + book.remainder, UNIT_SCALE)
+const isCashFunded = (book: ModelBook) => book.cash >= requiredCash(book)
+const isFunded = (book: ModelBook) => isCashFunded(book) && book.enabled
+const feeBudget = (model: Model, book: ModelBook, state: ModelQuestion) => {
+	const net = netCash(book)
+	if (net === 0n || book.units === 0n) return 0n
+	const floor = reserved(model, state.supply)
+	if (floor > (state.units * net) / (book.units * UNIT_SCALE)) return 0n
+	const floorUnits = ceilDiv(floor * book.units * UNIT_SCALE, net)
+	return state.units > floorUnits ? state.units - floorUnits : 0n
+}
+const clearEmpty = (book: ModelBook) => {
+	if (book.units === 0n) {
+		book.remainder = 0n
+		book.targetNumerator = 1n
+		book.targetDenominator = 1n
+	}
+}
 const cloneModel = (model: Model): Model => ({
 	minimum: model.minimum,
 	frozen: new Map([...model.frozen].map(([id, value]) => [id, { ...value }])),
@@ -119,22 +142,26 @@ const advance = (model: Model, bookId: number, book: ModelBook, ts: number, froz
 			if (seconds <= 0) continue
 			const fee = state.rate * BigInt(seconds)
 			state.units -= fee
-			if (state.units < reserved(model, state.supply)) throw new Error(`MODEL: fee pushed question below the backing floor (units ${state.units}, supply ${state.supply})`)
+			if (state.units < 0n) throw new Error('MODEL: fee exhausted question weights')
 			fees += fee
 		}
-		book.cash -= fees
+		const earned = (fees * netCash(book)) / (book.units === 0n ? 1n : book.units) + book.remainder
+		const paid = earned / UNIT_SCALE
+		book.remainder = earned % UNIT_SCALE
+		book.cash -= paid
 		book.units -= fees
-		book.feeCash += fees
-		book.feesAccrued += fees
+		book.feeCash += paid
+		book.feesAccrued += paid
 	}
 	book.ts = ts
 	if (ts <= book.minimumFinalAfter) return undefined
 	let matured = 0n
 	for (const state of book.questions.values()) if (state.frozen === 0 && state.finalAfter !== 0 && state.finalAfter <= ts - 1) matured += state.units
 	if (matured === 0n) return undefined
-	const cash = cashFor(book.cash, book.units, matured)
+	const cash = cashFor(book.cash, book.units, matured, book.remainder)
 	book.cash -= cash
 	book.units -= matured
+	clearEmpty(book)
 	const frozenId = model.frozen.size + 1
 	model.frozen.set(frozenId, { cash, units: matured, source: bookId, rec: 0n })
 	for (const state of book.questions.values()) if (state.frozen === 0 && state.finalAfter !== 0 && state.finalAfter <= ts - 1) state.frozen = frozenId
@@ -152,25 +179,27 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 		case 'mint': {
 			const problem = active() ?? advance(model, op.b, book, op.ts, frozenTouched)
 			if (problem !== undefined) return reject(problem)
-			if (book.cash !== book.units || book.rec !== 0n) return reject('runoff')
+			if (!isCashFunded(book)) return reject('runoff')
 			if (op.cash === 0n) return reject('zero funding')
 			const state = questionOf(book, op.q)
 			if (state.frozen !== 0 || state.finalAfter !== 0) return reject('mint closed')
+			const added = book.units === 0n ? op.cash * UNIT_SCALE : (op.cash * UNIT_SCALE * book.units) / netCash(book)
+			if (added === 0n || (book.units !== 0n && (added * netCash(book)) / book.units < (op.cash - 1n) * UNIT_SCALE)) return reject('unit precision')
 			let shares: bigint
 			if (state.supply === 0n) {
 				if (state.units !== 0n) throw new Error('MODEL: units without supply')
 				shares = op.cash
 			} else {
 				if (state.units === 0n) return reject('exhausted')
-				if ((state.units * SCALE) / state.supply < model.minimum) return reject('below minimum')
-				shares = (op.cash * state.supply) / state.units
+				if ((((state.units * netCash(book)) / book.units) * (SCALE / UNIT_SCALE)) / state.supply < model.minimum) return reject('below minimum')
+				shares = (added * state.supply) / state.units
 			}
 			if (shares === 0n) return reject('no shares')
-			if (book.units + op.cash >= UNIT_BOUND) return reject('precision bound')
-			state.units += op.cash
+			if (book.units + added >= UNIT_BOUND || book.cash + op.cash >= UNIT_BOUND) return reject('precision bound')
+			state.units += added
 			state.supply += shares
 			book.cash += op.cash
-			book.units += op.cash
+			book.units += added
 			book.cashIn += op.cash
 			return { ok: true, touched, frozenTouched }
 		}
@@ -183,22 +212,26 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			if (op.shares === 0n || op.shares > state.supply) return reject('invalid burn')
 			const burned = op.shares === state.supply ? state.units : (state.units * op.shares) / state.supply
 			let cash: bigint
+			let availableCash: bigint
 			if (state.frozen === 0) {
 				if (book.isSealed) return reject('use child')
-				cash = cashFor(book.cash, book.units, burned)
+				availableCash = book.cash
+				cash = cashFor(book.cash, book.units, burned, book.remainder)
 				book.cash -= cash
 				book.units -= burned
+				clearEmpty(book)
 			} else {
 				const frozen = model.frozen.get(state.frozen)
 				if (frozen === undefined) throw new Error('MODEL: missing frozen book')
 				if (frozen.source !== op.b) return reject('use source final claim')
+				availableCash = frozen.cash
 				cash = cashFor(frozen.cash, frozen.units, burned)
 				frozen.cash -= cash
 				frozen.units -= burned
 				frozenTouched.push(state.frozen)
 			}
-			// Property (not a mirror): a redemption never pays more than the units it burns.
-			if (cash > burned) throw new Error(`MODEL: redemption pays ${cash} for ${burned} units`)
+			// A payout is bounded by its own active or frozen book's cash custody.
+			if (cash > availableCash) throw new Error(`MODEL: redemption pays ${cash} beyond its book's ${availableCash} cash`)
 			state.units -= burned
 			state.rate = (state.rate * (state.supply - op.shares)) / state.supply
 			state.supply -= op.shares
@@ -215,8 +248,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			let end = op.end
 			if (rate !== 0n) {
 				if (state.finalAfter !== 0 || end <= clock) return reject('invalid interval')
-				const floor = reserved(model, state.supply)
-				const budget = state.units > floor ? state.units - floor : 0n
+				const budget = feeBudget(model, book, state)
 				const affordable = budget / rate
 				const requested = BigInt(end - clock)
 				const duration = requested < affordable ? requested : affordable
@@ -269,12 +301,17 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 		}
 		case 'child': {
 			if (!book.isSealed) return reject('source not sealed')
-			if (op.cash > book.units) return reject('child cash exceeds liabilities')
+			const targetNumerator = book.units !== 0n && isCashFunded(book) ? book.cash * UNIT_SCALE : book.targetNumerator
+			const targetDenominator = book.units !== 0n && isCashFunded(book) ? book.units : book.targetDenominator
+			if (op.cash > ceilDiv(ceilDiv(book.units * targetNumerator, targetDenominator), UNIT_SCALE)) return reject('child cash exceeds liabilities')
 			if (op.rec !== 0n && book.units === 0n) return reject('no claimants')
 			if (op.rec < book.rec || op.rec >= UNIT_BOUND) return reject('invalid child recovery')
 			const childId = model.books.size + 1
 			model.books.set(childId, {
 				cash: op.cash,
+				remainder: 0n,
+				targetNumerator,
+				targetDenominator,
 				units: book.units,
 				feeCash: 0n,
 				ts: book.ts,
@@ -312,7 +349,8 @@ const generate = (model: Model, random: Random, blockStart: number, index: numbe
 		const b = random.pick(needChild)
 		const source = model.books.get(b)
 		if (source === undefined) throw new Error('unreachable')
-		const cash = random.pick([0n, source.units, source.units, source.units, source.units, source.units, source.units === 0n ? 0n : source.units - 1n, random.big(source.units), source.units / 2n, 1n, source.units + 1n])
+		const limit = source.units !== 0n && isCashFunded(source) ? source.cash : ceilDiv(ceilDiv(source.units * source.targetNumerator, source.targetDenominator), UNIT_SCALE)
+		const cash = random.pick([0n, limit, limit, limit, source.units, source.units, source.units === 0n ? 0n : source.units - 1n, random.big(limit), limit / 2n, 1n, limit + 1n])
 		const extra = source.units === 0n || random.int(4) !== 0 ? 0n : random.pick([1n, 3n, 10n ** 6n, 10n ** 18n + random.big(10n ** 18n), (1n << 127n) - source.rec - 1n])
 		return [{ k: 'child', b, cash, rec: source.rec + extra }]
 	}
@@ -355,8 +393,7 @@ const generate = (model: Model, random: Random, blockStart: number, index: numbe
 	}
 	if (choice < 36) return [{ k: 'redeem', b, q, shares: shares(), ts }]
 	if (choice < 56) {
-		const floor = reserved(model, state.supply)
-		const budget = state.units > floor ? state.units - floor : 0n
+		const budget = feeBudget(model, book, state)
 		const seconds = random.pick([1, 2, 5, 60, 5_000, 300_000, 20_000_000])
 		const divisor = BigInt(random.pick([1, 2, 3, 7, 50, 1_000, 100_000, 5_000_000]))
 		let rate = random.pick([0n, 1n, budget / divisor, budget / divisor, budget / divisor + 1n, budget / divisor + 1n, budget / divisor + random.big(3n), budget + 1n, random.big(budget)])
@@ -455,7 +492,9 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		let model: Model = {
 			minimum,
 			frozen: new Map(),
-			books: new Map([[1, { cash: 0n, units: 0n, feeCash: 0n, ts: START, offset: 0, isSealed: false, enabled: true, minimumFinalAfter: 0, rec: 0n, depth: 0, children: 0, questions: new Map(), cashIn: 0n, cashPaid: 0n, feesAccrued: 0n, recIn: 0n, recPaid: 0n }]]),
+			books: new Map([
+				[1, { cash: 0n, units: 0n, remainder: 0n, targetNumerator: 1n, targetDenominator: 1n, feeCash: 0n, ts: START, offset: 0, isSealed: false, enabled: true, minimumFinalAfter: 0, rec: 0n, depth: 0, children: 0, questions: new Map(), cashIn: 0n, cashPaid: 0n, feesAccrued: 0n, recIn: 0n, recPaid: 0n }],
+			]),
 		}
 		const history: string[] = []
 
@@ -504,8 +543,8 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		}
 
 		const readBook = async (bookId: number) => {
-			const value = await client.readContract({ ...target, functionName: 'books', args: [BigInt(bookId)] })
-			return { cash: value[0], units: value[1], feeCash: value[2], ts: Number(value[6]), isSealed: value[7], enabled: value[11], minimumFinalAfter: Number(value[12]), offset: Number(value[13]), rec: value[15] }
+			const [value, required] = await Promise.all([client.readContract({ ...target, functionName: 'books', args: [BigInt(bookId)] }), client.readContract({ ...target, functionName: 'requiredCash', args: [BigInt(bookId)] })])
+			return { required, cash: value[0], units: value[1], feeCash: value[2], ts: Number(value[6]), isSealed: value[7], enabled: value[11], minimumFinalAfter: Number(value[12]), offset: Number(value[13]), rec: value[15] }
 		}
 		const readFrozen = async (frozenId: number) => {
 			const value = await client.readContract({ ...target, functionName: 'frozenBooks', args: [BigInt(frozenId)] })
@@ -516,16 +555,16 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		const checkBook = async (bookId: number, quotes: boolean): Promise<string | undefined> => {
 			const expected = model.books.get(bookId)
 			if (expected === undefined) return undefined
-			const [chain, ...questions] = await Promise.all([readBook(bookId), ...QUESTIONS.map(id => client.readContract({ ...target, functionName: 'question', args: [BigInt(bookId), BigInt(id)] }))])
+			const [chain, ...questions] = await Promise.all([readBook(bookId), ...QUESTIONS.map(id => client.readContract({ ...target, functionName: 'scaledQuestion', args: [BigInt(bookId), BigInt(id)] }))])
 			expected.rec = chain.rec
 			const where = `book ${bookId}`
+			if (chain.required !== requiredCash(expected)) return `${where}: required cash ${chain.required} != model ${requiredCash(expected)}`
 			if (chain.cash !== expected.cash) return `${where}: cash ${chain.cash} != model ${expected.cash}`
 			if (chain.units !== expected.units) return `${where}: units ${chain.units} != model ${expected.units}`
 			if (chain.feeCash !== expected.feeCash) return `${where}: feeCash ${chain.feeCash} != model ${expected.feeCash}`
 			if (chain.ts !== expected.ts) return `${where}: portfolio clock ${chain.ts} != model ${expected.ts}`
 			if (chain.offset !== expected.offset) return `${where}: fee offset ${chain.offset} != model ${expected.offset}`
 			if (chain.isSealed !== expected.isSealed || chain.enabled !== expected.enabled || chain.minimumFinalAfter !== expected.minimumFinalAfter) return `${where}: flags differ ${show(chain)}`
-			if (chain.cash > chain.units) return `${where}: INVARIANT cash ${chain.cash} > units ${chain.units}`
 			let liveUnits = 0n
 			for (const [index, id] of QUESTIONS.entries()) {
 				const read = questions[index]
@@ -539,16 +578,15 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 				if (state.feeRateAttoEthPerSecond !== want.rate) return `${label}: rate ${state.feeRateAttoEthPerSecond} != model ${want.rate}`
 				if (want.rate !== 0n && Number(state.feeEnd) !== want.feeEnd) return `${label}: feeEnd ${state.feeEnd} != model ${want.feeEnd}`
 				if (Number(frozenBookId) !== want.frozen) return `${label}: frozen book ${frozenBookId} != model ${want.frozen}`
-				const floor = reserved(model, state.outcomeSupplyAttoShares)
-				if (state.units < floor) return `${label}: INVARIANT units ${state.units} below backing floor ${floor}`
+				// Claim weights are compared exactly above; their cash value changes with redemption dust.
 				if (frozenBookId === 0n) liveUnits += state.units
 				if (quotes && want.supply !== 0n) {
 					const [quoteCash, quoteUnits] = await client.readContract({ ...target, functionName: 'quoteRedemption', args: [BigInt(bookId), BigInt(id), want.supply] })
 					const frozen = want.frozen === 0 ? undefined : model.frozen.get(want.frozen)
 					const frozenCash = (book: ModelFrozen) => (book.source === bookId ? cashFor(book.cash, book.units, want.units) : 0n)
-					const wantCash = frozen === undefined ? cashFor(expected.cash, expected.units, want.units) : frozenCash(frozen)
+					const wantCash = frozen === undefined ? cashFor(expected.cash, expected.units, want.units, expected.remainder) : frozenCash(frozen)
 					const wantUnits = frozen !== undefined && frozen.source !== bookId ? 0n : want.units
-					if (quoteCash !== wantCash || quoteUnits !== wantUnits) return `${label}: quoteRedemption (${quoteCash}, ${quoteUnits}) != model (${wantCash}, ${wantUnits})`
+					if (quoteCash !== wantCash || quoteUnits !== ceilDiv(wantUnits, UNIT_SCALE)) return `${label}: quoteRedemption (${quoteCash}, ${quoteUnits}) != model (${wantCash}, ${wantUnits})`
 				}
 				if (quotes) {
 					// Would sealing at `cutoff` copy this question to children as a live liability?
@@ -570,7 +608,6 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 				const frozen = await readFrozen(frozenId)
 				frozenModel.rec = frozen.rec
 				if (frozen.cash !== frozenModel.cash || frozen.units !== frozenModel.units || frozen.source !== frozenModel.source) return `frozen book ${frozenId}: ${show(frozen)} != model ${show(frozenModel)}`
-				if (frozen.cash > frozen.units) return `frozen book ${frozenId}: INVARIANT cash > units`
 				frozenCash += frozen.cash
 				frozenRec += frozen.rec
 				frozenUnits += frozen.units
@@ -610,6 +647,11 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 			let outcome: Outcome
 			try {
 				outcome = apply(next, op, blockTime)
+				// REP ownership is outside this ETH model; cash-only minting must still respect its separate funding quote.
+				if (outcome.ok && op.k === 'mint' && book !== undefined && book.rec !== 0n) {
+					const required = await client.readContract({ ...target, functionName: 'quoteMintRecoveryRep', args: [BigInt(op.b), BigInt(op.q), op.cash] })
+					if (required !== 0n) outcome = reject('recovery funding needed')
+				}
 			} catch (error) {
 				return `${String(error instanceof Error ? error.message : error)} at ${show(op)}${context()}`
 			}

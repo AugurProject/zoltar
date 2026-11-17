@@ -79,6 +79,7 @@ contract SharedPoolPriceFeed {
 	uint256 public acceptedExposureLimitAttoEth;
 	uint256 public acceptedRepExposureLimitAttoRep;
 	uint256 public acceptedEpoch;
+	bool private processingReport;
 	uint8 private constant REPORT_PENDING = 0;
 	uint8 private constant REPORT_ACCEPTED = 1;
 	uint8 private constant REPORT_REJECTED = 2;
@@ -354,7 +355,14 @@ contract SharedPoolPriceFeed {
 	function settleReport(uint256 reportId, uint256 amount1, uint256 amount2) external {
 		ReportCandidate memory candidate = reports[reportId];
 		require(address(candidate.escrow) == msg.sender && msg.sender != address(0), 'Wrong report escrow');
+		_completeReport(reportId, amount1, amount2, candidate);
+	}
+
+	/// @dev Callback and recovery use identical freshness, funding and operation checks.
+	function _completeReport(uint256 reportId, uint256 amount1, uint256 amount2, ReportCandidate memory candidate) private {
+		require(!processingReport, 'Report processing active');
 		require(reports[reportId].outcome == REPORT_PENDING, 'Report already completed');
+		processingReport = true;
 		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2, candidate.maxSettlementBaseFee);
 		bool accepted = bytes(reason).length == 0;
 		reports[reportId].outcome = accepted ? REPORT_ACCEPTED : REPORT_REJECTED;
@@ -375,6 +383,7 @@ contract SharedPoolPriceFeed {
 			_executeReportOperations(reportId, candidate.sponsor);
 		} else
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
+		processingReport = false;
 	}
 
 	function _isReportOperation(bytes4 selector) private pure returns (bool) {
@@ -424,14 +433,15 @@ contract SharedPoolPriceFeed {
 		recoverReport(pendingReportId);
 	}
 
-	/// @notice Retire one failed callback without accepting its price late.
+	/// @notice Retry a failed callback using authenticated settled amounts.
+	/// Expired or superseded observations retire normally; fresh candidates retain
+	/// their original sponsor operations and cannot be killed by callback starvation.
 	function recoverReport(uint256 reportId) public {
 		ReportCandidate memory candidate = reports[reportId];
 		require(address(candidate.escrow) != address(0) && reports[reportId].outcome == REPORT_PENDING, 'No report to recover');
-		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
+		(uint128 amount1, uint128 amount2, , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
 		require(settlementTimestamp != 0, 'Report not settled');
-		reports[reportId].outcome = REPORT_REJECTED;
-		_clearLatestReport(reportId);
+		_completeReport(reportId, amount1, amount2, candidate);
 		candidate.escrow.withdrawFunding();
 		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 	}

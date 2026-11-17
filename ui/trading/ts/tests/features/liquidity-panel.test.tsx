@@ -329,3 +329,10 @@ describe('public liquidity estimate', () => {
 		expect(outcomeSharesValueAttoEth(skewed, 2n * 10n ** 18n, 8n * 10n ** 18n)).toBe(32n * 10n ** 17n)
 	})
 })
+
+test('recovery REP blocks cash-only liquidity funding but preserves LP removal', () => {
+	const recovered = { ...openMarket, settlementRecoveryAttoRep: 10n ** 18n }
+	expect(estimateLiquidity(recovered, 'add', 10n ** 18n, undefined)).toBeUndefined()
+	expect(estimateLiquidity({ ...recovered, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n }, 'initialize', 10n ** 18n, 5000n)).toBeUndefined()
+	expect(estimateLiquidity(recovered, 'remove', 10n ** 18n, undefined)).toBeDefined()
+})

@@ -88,16 +88,16 @@ describe('audit: an unfunded or dust-funded child premium book stays usable', ()
 		expect(await question(1n, 2n)).toEqual({ units: 10n ** 18n, cash: 10n ** 18n })
 	})
 
-	test('a thinly funded child can still schedule reporting when its premium rate exceeds the question domain', async () => {
+	test('a thinly funded child can still schedule reporting when its scaled premium rate exceeds the former uint96 domain', async () => {
 		// The child keeps one billionth of the cash, so new premium buys a billion units per token unit.
 		await fund(0n, 1n, 10n ** 18n)
 		await freeze(0n)
 		await choose(0n, 1n, 1n, 10n ** 9n)
 		await createChild(0n, 1n)
 		expect(await totals(1n)).toEqual({ cash: 10n ** 9n, units: 10n ** 18n })
-		const funded = 4n * 10n ** 26n
+		const funded = 10n ** 20n
 		await fund(1n, 2n, funded)
-		// 4e35 units over the 52-day window is above the uint96 rate domain.
+		// 1e38 scaled units fit the uint128 book; their 52-day rate exceeds the former uint96 domain.
 		await schedule(1n, 2n, 0)
 		expect(await question(1n, 2n)).toEqual({ units: funded * 10n ** 9n, cash: funded })
 	})

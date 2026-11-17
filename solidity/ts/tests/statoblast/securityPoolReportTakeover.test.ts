@@ -61,7 +61,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 				positionId: owner.positionId,
 				bidId: 0n,
 				commitment: 100n * unit,
-				minimumAward: 1n,
+				minimumAward: 0n,
 				maximumOwnRep: 3_000n * unit,
 				maximumOwnerPrincipal: 4_000n * unit,
 				maximumOwnerCommitment: 100n * unit,
@@ -157,7 +157,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		expect((await context.owner.readContract({ ...ledger, functionName: 'auctionPosition', args: [winner.id] })).materialized).toBe(!failure)
 		expect((await context.owner.readContract({ ...ledger, functionName: 'ownerCollateral', args: [sponsor.account.address] }))[1]).toBe(failure ? 0n : 3n * unit)
 	})
-	test('a settler cannot publish the price by starving the protected takeover callback', async () => {
+	test('a starved takeover callback remains recoverable with sponsor priority', async () => {
 		const { sponsor, feed, intent } = await prepare()
 		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
 		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))

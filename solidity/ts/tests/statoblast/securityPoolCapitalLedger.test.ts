@@ -344,7 +344,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(await position(receiver)).toMatchObject({ rep: 210n * E, commitment: 100n * E })
 	})
 
-	test('still-unhealthy and stale-price deposits preserve a running liquidation interval', async () => {
+	test('unhealthy deposits preserve distress while fresh observations after stale gaps restart its award', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
@@ -357,8 +357,8 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'isPriceValid' })).toBe(false)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 		await price(3n * E)
-		// Apparent recovery at an expired price did not erase the adverse interval.
-		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(previousStart)
+		// The new adverse observation restarts the award after a stale gap.
+		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe((await alice.getBlock()).timestamp)
 		await deposit(alice, 105n * E)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 	})

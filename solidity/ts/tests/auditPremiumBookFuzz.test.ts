@@ -21,9 +21,10 @@ const QUESTIONS = [1, 2, 3, 4, 5] as const
 const SUPPLIES: Record<number, bigint> = { 1: 1n, 2: 3n, 3: 10n ** 18n, 4: (1n << 100n) + 12_345n, 5: 1_000_003n }
 const WINDOW = 259_200 + 7 * 604_800
 const RESPONSE = 259_200
-const MAX_RATE = (1n << 96n) - 1n
+const UNIT_SCALE = 10n ** 9n
+const visibleUnits = (units: bigint) => (units + UNIT_SCALE - 1n) / UNIT_SCALE
 const MAX_UNITS = (1n << 128n) - 1n
-const MAX_INHERITED = 10n ** 12n
+const MAX_INHERITED = 10n ** 12n * UNIT_SCALE
 const MAX_TIME = (1 << 24) * (1 << 24) - 1
 const START = 1_000
 const MAX_BOOKS = 9
@@ -59,7 +60,7 @@ type Op =
 	| { k: 'recover'; u: number; q: number; shares: bigint; supply: bigint }
 const show = (value: unknown) => JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? `${item}n` : item))
 
-type ModelQuestion = { units: bigint; rate: bigint; end: number }
+type ModelQuestion = { units: bigint; rate: bigint; end: number; fundedEnd: number }
 type ModelBook = {
 	cash: bigint
 	units: bigint
@@ -103,9 +104,9 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 		case 'fund': {
 			if (book === undefined || book.isSealed || op.cash === 0n) return reject('funding unavailable')
 			if (book.units !== 0n && book.cash === 0n) return reject('book unfunded')
-			const state = book.questions.get(op.q) ?? { units: 0n, rate: 0n, end: 0 }
+			const state = book.questions.get(op.q) ?? { units: 0n, rate: 0n, end: 0, fundedEnd: 0 }
 			if (state.end !== 0) return reject('already active')
-			const units = book.units === 0n ? op.cash : (op.cash * book.units + book.cash - 1n) / book.cash
+			const units = book.units === 0n ? op.cash * UNIT_SCALE : (op.cash * book.units + book.cash - 1n) / book.cash
 			if (book.units + units > MAX_UNITS) return reject('unit domain')
 			state.units += units
 			book.units += units
@@ -113,21 +114,19 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			model.totalCash += op.cash
 			model.stats.funded += op.cash
 			book.questions.set(op.q, state)
-			return { ok: true, touched: [op.u], returns: [units] }
+			return { ok: true, touched: [op.u], returns: [visibleUnits(units)] }
 		}
 		case 'sched': {
 			if (book?.isSealed) return reject('sealed')
 			const state = book?.questions.get(op.q)
 			if (book === undefined || state === undefined || state.units === 0n) return { ok: true, touched: [op.u] }
 			if (state.end === 0) {
-				const rate = state.units / BigInt(WINDOW)
-				state.rate = rate > MAX_RATE ? MAX_RATE : rate
+				if (book.ts + WINDOW > MAX_TIME) return reject('premium clock exhausted')
+				state.rate = state.units / BigInt(WINDOW)
+				state.fundedEnd = book.ts + WINDOW
 			}
-			// A floored or capped rate never stretches the stream past the prepaid window.
-			const uncapped = state.rate === 0n ? BigInt(WINDOW) : state.units / state.rate
-			const duration = uncapped > BigInt(WINDOW) ? BigInt(WINDOW) : uncapped
-			const latest = BigInt(book.ts) + duration
-			const maximumEnd = latest > BigInt(MAX_TIME) ? MAX_TIME : Number(latest)
+			// Disputes may extend finality only within the original prepaid window.
+			const maximumEnd = state.fundedEnd
 			const end = op.finalAfter === 0 ? maximumEnd : Math.min(op.finalAfter, maximumEnd)
 			if (end < book.ts) return reject('finality elapsed')
 			state.end = end
@@ -147,10 +146,11 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			if (book === undefined || op.ts < book.ts || op.ts > blockTime) return reject('invalid clock')
 			let earned = 0n
 			for (const state of book.questions.values()) {
-				if (state.end === 0 || state.rate === 0n) continue
+				if (state.end === 0) continue
 				const seconds = Math.min(op.ts, state.end) - Math.min(book.ts, state.end)
 				if (seconds <= 0) continue
-				const amount = state.rate * BigInt(seconds)
+				// At the full prepaid deadline, all fractional tail units earn too.
+				const amount = state.end === state.fundedEnd && op.ts >= state.fundedEnd ? state.units : state.rate * BigInt(seconds)
 				if (amount > state.units) throw new Error(`MODEL: question earns ${amount} beyond its ${state.units} funded units`)
 				state.units -= amount
 				earned += amount
@@ -437,7 +437,7 @@ describe('audit fuzz: resolution premium book against an eager reference model',
 			])
 			const where = `universe ${universe}`
 			if (chain[0] !== expected.cash) return `${where}: cash ${chain[0]} != model ${expected.cash}`
-			if (chain[1] !== expected.units) return `${where}: units ${chain[1]} != model ${expected.units}`
+			if (chain[1] !== visibleUnits(expected.units)) return `${where}: units ${chain[1]} != model ${expected.units}`
 			if (Number(chain[2]) !== expected.ts) return `${where}: clock ${chain[2]} != model ${expected.ts}`
 			if (chain[3] !== expected.isSealed) return `${where}: sealed ${chain[3]} != model ${expected.isSealed}`
 			if (Number(minimumFinalAfter) !== expected.minimumFinalAfter) return `${where}: minimumFinalAfter ${minimumFinalAfter} != model ${expected.minimumFinalAfter}`
@@ -447,13 +447,13 @@ describe('audit fuzz: resolution premium book against an eager reference model',
 				const read = questions[index]
 				if (read === undefined) throw new Error('missing read')
 				const want = expected.questions.get(id)?.units ?? 0n
-				if (read[0] !== want) return `${where} q${id}: units ${read[0]} != model ${want} (book units ${chain[1]})`
+				if (read[0] !== visibleUnits(want)) return `${where} q${id}: units ${read[0]} != model ${want} (book units ${chain[1]})`
 				const wantCash = want === 0n ? 0n : (expected.cash * want) / expected.units
 				if (read[1] !== wantCash) return `${where} q${id}: cash ${read[1]} != model ${wantCash}`
 				questionUnits += read[0]
 				questionCash += read[1]
 			}
-			if (questionUnits !== chain[1]) return `${where}: INVARIANT sum of question units ${questionUnits} != book units ${chain[1]}`
+			if (questionUnits < chain[1] || questionUnits > chain[1] + BigInt(QUESTIONS.length - 1)) return `${where}: INVARIANT sum of question units ${questionUnits} != book units ${chain[1]}`
 			if (questionCash > chain[0]) return `${where}: INVARIANT question cash ${questionCash} exceeds book cash ${chain[0]}`
 			if (chain[1] === 0n && chain[0] !== 0n && !chain[3]) return `${where}: INVARIANT cash ${chain[0]} stranded in a book without units`
 			if (chain[0] === 0n && chain[1] !== 0n && !chain[3]) return `${where}: INVARIANT units ${chain[1]} without cash (funding would revert)`

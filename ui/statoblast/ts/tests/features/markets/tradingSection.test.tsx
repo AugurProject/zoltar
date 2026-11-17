@@ -133,6 +133,11 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 			loading: false,
 			error: undefined,
 			pending: false,
+			pendingRecovery: false,
+			approvalActive: false,
+			recoveryApplicable: false,
+			recovery: { required: 0n, maximum: 0n, balance: 0n, allowance: 0n, token: undefined, spender: undefined },
+			approveRecovery: async () => undefined,
 			approve: async () => undefined,
 		},
 
@@ -301,6 +306,35 @@ void describe('TradingSection', () => {
 		},
 	})
 
+	test.each([false, true])('recovery purchases show their REP contribution and separate approval (pending: %s)', async pending => {
+		const props = createTradingSectionProps()
+		const funding = props.collateralFunding
+		if (funding === undefined) throw new Error('Missing collateral funding fixture')
+		const rendered = await renderIntoDocument(
+			<TradingSection
+				{...props}
+				tradingForm={createTradingForm({ completeSetAmount: '1' })}
+				collateralFunding={{
+					...funding,
+					recoveryApplicable: true,
+					recovery: { required: 2n * 10n ** 18n, maximum: (2n * 10n ** 18n * 101n) / 100n + 1n, balance: 0n, allowance: 0n, token: zeroAddress, spender: zeroAddress },
+					pendingRecovery: pending,
+					approvalActive: pending,
+					reason: pending ? 'Wait for the current approval to finish.' : 'Insufficient REP for the proportional recovery contribution.',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		const dialog = within(document.body).getByRole('dialog')
+		expect(dialog.textContent).toContain('Recovery REP contribution')
+		expect(dialog.textContent).toContain('Your proportional contribution preserves existing holders')
+		expect(getExactValueTitles(dialog, '2 REP').length).toBeGreaterThan(0)
+		const approval = within(dialog).getByRole('button', { name: /REP/ })
+		expect(approval.textContent).toContain(pending ? 'Approving REP' : 'Approve')
+		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(true)
+	})
+
 	test('the mint form labels stablecoin collateral and keeps its token precision', async () => {
 		const props = createTradingSectionProps()
 		const funding = props.collateralFunding
@@ -314,6 +348,8 @@ void describe('TradingSection', () => {
 		if (!(input instanceof HTMLInputElement)) throw new Error('Missing collateral input')
 		expect(input.value).toBe('1.234567')
 		expect(dialog.textContent).toContain('USDC')
+		expect(dialog.textContent).not.toContain('Recovery REP contribution')
+		expect(dialog.textContent).not.toContain('REP approval amount')
 		expect(dialog.textContent).not.toContain('ETH to mint with')
 	})
 

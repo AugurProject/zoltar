@@ -13,7 +13,7 @@ import { capitalClient } from '../portfolios/capitalClient.js'
 import { capitalSnapshot, owner, portfolio, token } from '../portfolios/capitalFixture.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
-async function setup(balance = 0n, allowance = 0n) {
+async function setup(balance = 0n, allowance = 0n, recoveryAttoRep = 0n, recoveryToken = token) {
 	const collateralToken = MAINNET_NETWORK_PROFILE.usdcAddress
 	if (collateralToken === undefined) throw new Error('Missing USDC fixture')
 	const source = capitalClient(capitalSnapshot({ collateralToken, walletCollateral: balance, collateralAllowance: allowance }))
@@ -21,6 +21,8 @@ async function setup(balance = 0n, allowance = 0n) {
 	source.setRead('getSecurityPoolPortfolio', portfolio)
 	source.setRead('questionId', zeroHash)
 	source.setRead('purchaseQuote', [0n])
+	source.setRead('quoteMintRecoveryRep', recoveryAttoRep)
+	source.setRead('recoveryTokens', recoveryToken)
 	source.install()
 	const transactions: string[] = []
 	const hook = await renderHookWithProps(useTradingCollateral, {
@@ -171,4 +173,44 @@ test('quotes every amount the mint guard accepts, including a leading decimal po
 	await hook.setProps({ amountInput: '1 0' })
 	await waitFor(() => expect(hook.state().requiredCollateral).toBe(10_000_000n))
 	expect(hook.state().reason).toBeUndefined()
+})
+
+test('a recovery REP quote refreshes balance and approval independently from collateral', async () => {
+	const { source, hook, transactions } = await setup(3_000_000n, 3_000_000n)
+	source.setRead('quoteMintRecoveryRep', 2n * 10n ** 18n)
+	source.setRead('recoveryTokens', token)
+	source.setRead('balanceOf', 0n, token)
+	source.setRead('allowance', 0n, token)
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(hook.state().reason).toBe('Insufficient REP for the proportional recovery contribution.'))
+	expect(hook.state().recovery?.required).toBe(2n * 10n ** 18n)
+	expect(hook.state().recoveryApplicable).toBe(true)
+	source.setRead('balanceOf', 3n * 10n ** 18n, token)
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(hook.state().reason).toBe('Recovery REP approval required.'))
+	source.setRead('allowance', (2n * 10n ** 18n * 101n) / 100n + 1n, token)
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(hook.state().reason).toBeUndefined())
+	expect(transactions).toEqual([])
+})
+
+test('a changed recovery quote stays blocked while loading and an invalid funding read blocks approval', async () => {
+	const { source, hook, transactions } = await setup(3_000_000n, 3_000_000n)
+	const pending = createDeferred<bigint>()
+	source.setRead('quoteMintRecoveryRep', pending.promise)
+	await hook.setProps({ amountInput: '2.1' })
+	await waitFor(() => expect(hook.state().reason).toBe('Updating collateral quote.'))
+	source.setRead('recoveryTokens', '0x0000000000000000000000000000000000000000')
+	pending.resolve(2n * 10n ** 18n)
+	await waitFor(() => expect(hook.state().reason).toContain('Recovery REP funding is unavailable.'))
+	expect(hook.state().recoveryApplicable).toBe(true)
+	await act(() => hook.state().approveRecovery(2n * 10n ** 18n))
+	expect(transactions).toEqual([])
+})
+
+test('an initial positive market quote retains recovery context when its funding read fails', async () => {
+	const { hook } = await setup(3_000_000n, 3_000_000n, 2n * 10n ** 18n, '0x0000000000000000000000000000000000000000')
+	expect(hook.state().reason).toContain('Recovery REP funding is unavailable.')
+	expect(hook.state().recoveryApplicable).toBe(true)
+	expect(hook.state().recovery).toBeUndefined()
 })

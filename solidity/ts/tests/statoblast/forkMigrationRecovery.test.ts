@@ -65,8 +65,19 @@ describe('Statoblast: lazy child outcome supply', () => {
 			expect(await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'quoteQuestionSettlement', args: [childPool, 10n * unit] })).toBe(0n)
 			const rep = getRepTokenAddress(child)
 			const balance = await other().readContract({ abi: tokenArtifact.abi, address: rep, functionName: 'balanceOf', args: [other().account.address] })
+			const recovery = await owner().readContract({ abi: tokenArtifact.abi, address: rep, functionName: 'balanceOf', args: [settlement] })
+			expect(recovery).toBe(1_000n * unit)
 			await writeContractAndWait(other(), () => other().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [10n * unit] }))
-			expect(await other().readContract({ abi: tokenArtifact.abi, address: rep, functionName: 'balanceOf', args: [other().account.address] })).toBe(balance + 500n * unit)
+			const firstPaid = (await other().readContract({ abi: tokenArtifact.abi, address: rep, functionName: 'balanceOf', args: [other().account.address] })) - balance
+			// Each index allocation may leave one attoREP for the final claim.
+			expect(firstPaid).toBeGreaterThanOrEqual(500n * unit - 1n)
+			expect(firstPaid).toBeLessThanOrEqual(500n * unit)
+			for (const outcome of [0, 1, 2]) await writeContractAndWait(owner(), () => owner().writeContract({ abi: shareArtifact.abi, address: parent.shareToken, functionName: 'migrate', args: [base.genesisUniverse * 256n + BigInt(outcome), [1n]] }))
+			const ownerBefore = await owner().readContract({ abi: tokenArtifact.abi, address: rep, functionName: 'balanceOf', args: [owner().account.address] })
+			await writeContractAndWait(owner(), () => owner().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [10n * unit] }))
+			expect((await owner().readContract({ abi: tokenArtifact.abi, address: rep, functionName: 'balanceOf', args: [owner().account.address] })) - ownerBefore).toBe(recovery - firstPaid)
+			expect(await owner().readContract({ abi: tokenArtifact.abi, address: rep, functionName: 'balanceOf', args: [settlement] })).toBe(0n)
+			expect(await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
 			return
 		}
 		const oracle = await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'openOraclePriceCoordinator' })

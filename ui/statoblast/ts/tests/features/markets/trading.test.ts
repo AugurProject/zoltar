@@ -874,3 +874,10 @@ test('a stablecoin mint above the wallet balance names the collateral token, as 
 		}),
 	).toBe('Insufficient USDC balance.')
 })
+
+test('central mint previews divide fixed-point fee rates before applying cash limits', () => {
+	expect(estimateMintCheckpoint({ centralSettlement: true, centralCheckpointTimestamp: 10n, linearFee: { rateAttoEthPerSecond: 950_000_000n, rateScale: 1_000_000_000n, endTime: 100n }, currentTimestamp: 30n, feeEndTimestamp: 100n, lastFeeCheckpointNativeTime: 10n, settlementCollateralAttoEth: 100n })).toEqual({
+		estimatedRetentionFeeAttoEth: 19n,
+		settlementCollateralAfterFeesAttoEth: 81n,
+	})
+})

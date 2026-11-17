@@ -11,3 +11,5 @@ export const questionResolved = 'Question resolved'
 export function resolvedOutcome(outcome: 'INVALID' | 'YES' | 'NO') {
 	return `Resolved ${outcomeLabel(outcome)}`
 }
+
+export const recoveryRepPurchase = 'New complete sets require recovery REP. Use portfolio purchases.'

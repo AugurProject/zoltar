@@ -158,7 +158,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [engine] })).toBe(0n)
 	})
 
-	test('mint capacity stays zero when partial redemption rounds basket ETH back to one cash unit per unit', async () => {
+	test('cash-rounded baskets reopen with an explicit recovery REP contribution', async () => {
 		await choose(alice, 1n)
 		await choose(bob, 2n)
 		const child = await childId(1n)
@@ -171,9 +171,13 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		expect((await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'totals', args: [bookId] })).slice(0, 2)).toEqual([1n, 1n])
 		expect(await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'recoveryRep', args: [bookId] })).toBeGreaterThan(0n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(forkTime + 10n * week)] }))
-		await expect(owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'quoteMint', args: [bookId, 1n, E] })).rejects.toThrow('Settlement in runoff')
+		expect(await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'isCashFunded', args: [bookId] })).toBe(true)
+		expect(await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'quoteMint', args: [bookId, 1n, E] })).toBe(E)
+		const recovery = await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'recoveryRep', args: [bookId] })
+		expect(await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'quoteMintRecoveryRep', args: [bookId, 1n, E] })).toBe(recovery * E)
 		const purchase = await deploy(encodeDeployData({ abi: purchaseArtifact.abi, bytecode: `0x${purchaseArtifact.evm.bytecode.object}`, args: [root] }))
-		expect(await owner.readContract({ abi: purchaseArtifact.abi, address: purchase, functionName: 'availableMintCapacity', args: [child] })).toBe(0n)
+		expect(await owner.readContract({ abi: purchaseArtifact.abi, address: purchase, functionName: 'availableMintCapacity', args: [child] })).toBeGreaterThan(0n)
+		expect(await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'quoteRecoveryRep', args: [bookId, 1n, 1n] })).toBe(recovery)
 	})
 
 	test('a later fork migrates live recovery REP once and preserves each descendant basket', async () => {
@@ -200,13 +204,13 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 
 	test('floor-backed settlement units preserve neutral premium recovery and consume the right once', async () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'fundRecoveryPremium', args: [1n], value: 20n * E }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, 200n * E - 200n * 10n ** 12n, Number(forkTime + 1n)] }))
-		await moveTo(forkTime + 1n)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, ((200n * E - 200n * 10n ** 12n) * 1_000_000_000n) / 10n, Number(forkTime + 10n)] }))
+		await moveTo(forkTime + 10n)
 		const floorForkTime = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setForkTimestamp', args: [0n, floorForkTime] }))
 		await moveTo(floorForkTime + 8n * week)
 		for (const amount of [80n * E, 120n * E]) await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, amount] }))
-		expect((await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })).units).toBe(200n * 10n ** 12n)
+		expect((await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })).units).toBe(200n * 10n ** 12n * 1_000_000_000n)
 		expect(await owner.readContract({ ...rootTarget(), functionName: 'recoveredPremiumAttoEth', args: [buyer.account.address] })).toBe(20n * E)
 		expect(await owner.readContract({ ...forkTarget(), functionName: 'recoveredQuestionShares', args: [0n, 1n] })).toBe(200n * E)
 		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 1n] }))).rejects.toThrow('Recovery requires unclaimed complete sets')
@@ -215,8 +219,8 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 
 	test('already final floor-backed questions cannot redirect source premium through fork recovery', async () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'fundRecoveryPremium', args: [1n], value: 20n * E }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, 200n * E - 200n * 10n ** 12n, Number(forkTime + 1n)] }))
-		await moveTo(forkTime + 1n)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, ((200n * E - 200n * 10n ** 12n) * 1_000_000_000n) / 10n, Number(forkTime + 10n)] }))
+		await moveTo(forkTime + 10n)
 		const finalAfter = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setForkTimestamp', args: [0n, finalAfter] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'scheduleQuestionFinality', args: [0n, 1n, Number(finalAfter)] }))

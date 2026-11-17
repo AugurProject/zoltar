@@ -104,6 +104,35 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 					tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}
 					tokenUnits={snapshot?.collateral.decimals ?? 18}
 				/>
+				{purchase.recoveryApplicable && (
+					<>
+						<UserMessage detail={collateralCopy.recoveryContributionHint} />
+						<MetricGrid>
+							<MetricField label={collateralCopy.recoveryContribution} loading={purchase.quoteLoading}>
+								<CurrencyValue exactWhenRoundedToZero value={purchase.quote?.recoveryAttoRep} suffix={common.rep} />
+							</MetricField>
+						</MetricGrid>
+						<PortfolioInput label={collateralCopy.maximumRecoveryContribution} hint={collateralCopy.recoveryBudgetHint} value={purchase.maximumRecoveryRep} onChange={purchase.setMaximumRecoveryRep} disabled={actions.busy !== undefined || purchase.quote === undefined || purchase.recovery === undefined} numeric />
+						<TokenApprovalControl
+							amountPrecision='exact'
+							actionLabel={copy.mint}
+							tokenSymbol={common.rep}
+							tokenUnits={18}
+							approvedAmount={purchase.recovery?.allowance}
+							requiredAmount={purchase.requiredRecoveryRep}
+							allowanceLoading={purchase.quoteLoading}
+							allowanceError={purchase.recoveryError ?? model.error}
+							guardMessage={actions.ownerReason}
+							disabled={actions.busy !== undefined || purchase.quote === undefined || purchase.recovery === undefined}
+							pending={actions.busy === 'approvePurchaseRecoveryRep'}
+							pendingLabel={common.formatApprovingToken(common.rep)}
+							resetKey={`${snapshot?.portfolio}:${snapshot?.owner}:${purchase.requiredRecoveryRep}`}
+							onApprove={amount => {
+								if (amount !== undefined) void purchase.approveRecoveryRep(amount)
+							}}
+						/>
+					</>
+				)}
 				<PortfolioButton model={actions} action='mintPortfolioCompleteSets' label={copy.mint} pendingLabel={copy.minting} reason={purchase.reason ?? (details.selected?.question === undefined ? copy.reviewQuestionDetails : undefined)} onClick={purchase.buy} />
 			</SectionBlock>
 		</>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeFunctionData, hexToBytes, parseAbi } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, encodeFunctionData, hexToBytes, parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamsArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -13,16 +13,20 @@ import { collateralBalance, burnedCollateralBalance } from './burnEvidence'
 
 describe('Statoblast: composed capital economics and fork intent', () => {
 	const fixture = useCapitalTestFixture()
-	test('lifecycle delegate rejects direct price updates, authorization/import and an authenticated foreign host', async () => {
+	test('lifecycle delegate rejects direct updates and authenticated foreign hosts', async () => {
 		const sender = fixture.client()
 		const delegate = await sender.readContract({ ...fixture.capital, functionName: 'lifecycleDelegate' })
 		const delegateAbi = parseAbi([
 			'function acceptPrice(address feed,uint256 price,uint48 validUntil)',
+			'function setHealthTarget(uint256 targetHealthFactorBps)',
+			'function recordSettlementRepair(uint256 demand)',
 			'function beginForkImport()',
 			'function authorize(uint256 commitment,uint256 reportId,bool useReport,uint256 minimumCommitment)',
 			'function importChoice(address owner,(uint256 rep,uint256 commitment,uint96 batch,uint256 remainingCommitment) position,uint256 target)',
 		])
+		const ownerUpdates = [encodeFunctionData({ abi: delegateAbi, functionName: 'setHealthTarget', args: [10_000n] }), encodeFunctionData({ abi: delegateAbi, functionName: 'recordSettlementRepair', args: [0n] })]
 		for (const data of [
+			...ownerUpdates,
 			encodeFunctionData({ abi: delegateAbi, functionName: 'acceptPrice', args: [fixture.harness.address, E, 1_000_000] }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'beginForkImport' }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'authorize', args: [E, 0n, false, E / 1_000n] }),
@@ -34,6 +38,11 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 		const foreign = '0x000000000000000000000000000000000000f00d' as const
 		await fixture.getAnvilWindowEthereum().addStateOverrides({ [foreign]: { code: hexToBytes(runtime) } })
 		await expect(sender.call({ account: fixture.harness.address, to: foreign, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'beginForkImport' }) })).rejects.toThrow('Only capital ledger context')
+		// A transparent delegatecall host reaches the new methods without unrelated
+		// ledger checkpoint state. An authenticated caller still cannot change context.
+		const forwardingRuntime = concatHex(['0x363d3d373d3d3d363d73', delegate, '0x5af43d82803e903d91602b57fd5bf3'])
+		await fixture.getAnvilWindowEthereum().addStateOverrides({ [foreign]: { code: hexToBytes(forwardingRuntime) } })
+		for (const data of ownerUpdates) await expect(sender.call({ account: fixture.harness.address, to: foreign, data })).rejects.toThrow('Only capital ledger context')
 	})
 	test('fork backing release leaves free principal and already retired cash separately withdrawable', async () => {
 		const sender = fixture.client()

@@ -1,6 +1,6 @@
 import { collateralAsset, tokenFunded, formatCollateralAmount } from '../../protocol/collateral.js'
 import * as collateralCopy from '../../copy/collateral.js'
-import { estimateBudgetMint } from '../../protocol/minting.js'
+import { estimateBudgetMint, recoveryMintBlocker } from '../../protocol/minting.js'
 import { capSubmissionDeadline, submissionWindowBlocker } from '../../protocol/submissionWindow.js'
 import { largestExitForLongShares, quoteEnterPosition, quoteExitPosition, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading-shared/trading/positions'
 import { getAmountInputErrorMessage, validateAmountInput } from '@zoltar/ui-core-shared/forms/amountInput.js'
@@ -89,6 +89,8 @@ type EstimateResult = Readonly<{ estimate: TradeEstimate | undefined; problem: s
 
 function estimateBuy(market: LiveMarket, side: Side, payAttoEth: bigint, slippageBps: bigint): EstimateResult {
 	if (payAttoEth === 0n) return { estimate: undefined, problem: undefined }
+	const recoveryBlocker = recoveryMintBlocker(market)
+	if (recoveryBlocker !== undefined) return { estimate: undefined, problem: recoveryBlocker }
 	const mintAmount = estimateBudgetMint(market, payAttoEth)
 	const completeSets = mintAmount === undefined ? undefined : collateralAttoEthToAttoShares(mintAmount, market)
 	if (completeSets === undefined || completeSets === 0n) return { estimate: undefined, problem: ticketCopy.amountTooSmall }
@@ -224,7 +226,7 @@ function largestTradableBuy(market: LiveMarket, side: Side, ceiling: bigint, sli
  * price impact would pass the refused tier, so no shortcut fills an amount the ticket would then refuse.
  */
 function buyShortcuts(market: LiveMarket, side: Side, walletEthAttoEth: bigint | undefined, slippageBps: bigint) {
-	if (walletEthAttoEth === undefined) return []
+	if (walletEthAttoEth === undefined || recoveryMintBlocker(market) !== undefined) return []
 	const buyable = largestTradableBuy(market, side, minimum(tokenFunded(market) ? walletEthAttoEth : getSpendableEthBalance(walletEthAttoEth), market.availableMintingCapacityAttoEth), slippageBps)
 	return [
 		{ label: ticketCopy.quarter, value: roundDownShortcut(buyable / 4n, collateralAsset(market).decimals) },

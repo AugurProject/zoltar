@@ -208,17 +208,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireOpen();
 		require(targetHealthFactorBps >= BPS, 'Health below protocol floor');
 		_checkpoint();
-		_settleOwner(_capitalOwner());
-		Owner storage owner = owners[_capitalOwner()].account;
-		if (owner.positionId != 0 && targetHealthFactorBps > _target(owner)) {
-			_requireFresh();
-			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
-			_requireTarget(position.rep, position.commitment, targetHealthFactorBps);
-		}
-		owner.targetHealthFactorBps = targetHealthFactorBps;
-	}
-	function _requireTarget(uint256 rep, uint256 commitment, uint256 health) private view {
-		require(rep >= _requiredRep(commitment, health, ownerConservativePrice(_capitalOwner())), 'Chosen health target unmet');
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.setHealthTarget, (targetHealthFactorBps)));
 	}
 
 	/// @notice Set the owner's single commitment, which all deposited principal backs.
@@ -292,6 +282,13 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function synchronizeDemand(uint256 demand) external onlyDemandAccounting {
 		require(demand <= demandAttoEth, 'Sync cannot add demand');
 		demandAttoEth = demand;
+	}
+
+	/// @notice Account for collateral donated to restore existing claims.
+	/// The canonical settlement checkpoints old fees before receiving cash,
+	/// then supplies its actual active cash balance. No new shares are minted.
+	function recordSettlementRepair(uint256 demand) external {
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.recordSettlementRepair, (demand)));
 	}
 
 	/// @dev The callback checkpoints the ledger's cached old price before reading
@@ -414,18 +411,16 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
-		// The cure runs only against a position already under an adverse observation.
-		// When spare capacity alone restores it, the cure stands and nothing is
-		// awarded: reverting here would leave every position whose own deficit fits
-		// the shared spare both unhealthy and impossible to take over.
-		require(liquidationStarted(id) != 0, 'Adverse observation missing');
-		if (_cure(id, 0, false) != 0) {
-			SecurityPoolCommitmentIndex.Account memory cured = commitmentIndex.accountOf(id);
-			if (cured.commitment == 0 || cured.maxHealthyPrice >= liquidationPrice) {
-				// A caller that expects an award must not pay gas for a silent cure.
-				require(minimumAward == 0, 'Takeover award below minimum');
-				return 0;
-			}
+		require(commitmentIndex.liquidationStarted(id) != 0, 'Adverse observation missing');
+		SecurityPoolCommitmentIndex.Account memory beforeCure = commitmentIndex.accountOf(id);
+		require(beforeCure.owner != receiverOwner && beforeCure.maxHealthyPrice < liquidationPrice, 'Position does not need takeover');
+		require(commitment > 0 && commitment <= beforeCure.commitment, 'Invalid takeover commitment');
+		uint256 cured = _cure(id, 0, false);
+		// A keeper must be able to leave a successful cure in place. No assets
+		// transfer and no award is paid when nominal excess alone restores health.
+		if (cured != 0 && commitmentIndex.liquidationStarted(id) == 0) {
+			require(minimumAward == 0, 'Takeover award below minimum');
+			return 0;
 		}
 		(
 			SecurityPoolCommitmentIndex.Account memory source,

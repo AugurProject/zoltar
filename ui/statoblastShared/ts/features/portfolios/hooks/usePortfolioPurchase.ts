@@ -1,3 +1,4 @@
+import { loadRecoveryMintFunding } from '../../../protocol/recoveryMintFunding.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
@@ -16,14 +17,21 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 	const questionInput = useSignal('')
 	const mintAmount = useSignal('')
 	const maximumFee = useSignal('')
+	const maximumRecoveryRep = useSignal('')
 	const minimumShares = useSignal('0')
-	const loaded = useSignal<{ key: string; quote?: PortfolioMintQuote; question?: Awaited<ReturnType<typeof loadPortfolioMintQuestion>>; error?: string } | undefined>(undefined)
+	const recoveryKnowledge = useSignal<{ selection: string; applicable: boolean }>()
+	const loaded = useSignal<{ key: string; quote?: PortfolioMintQuote; recovery?: Awaited<ReturnType<typeof loadRecoveryMintFunding>>; question?: Awaited<ReturnType<typeof loadPortfolioMintQuestion>>; error?: string } | undefined>(undefined)
 	const snapshot = model.snapshot
 	const questionId = portfolioUnsignedId(questionInput.value)
 	const decimals = snapshot?.collateral.decimals ?? 18
 	const amount = portfolioAmountOrUndefined(mintAmount.value, decimals)
 	const fee = portfolioAmountOrUndefined(maximumFee.value, decimals)
+	const parsedRecoveryBudget = maximumRecoveryRep.value.trim() === '' ? 0n : portfolioAmountOrUndefined(maximumRecoveryRep.value, 18)
 	const minimum = portfolioAmountOrUndefined(minimumShares.value, decimals)
+	const selection = `${snapshot?.portfolio}:${snapshot?.universeId}:${snapshot?.owner}:${questionId}:${amount}`
+	useEffect(() => {
+		recoveryKnowledge.value = undefined
+	}, [selection])
 	const key = `${snapshot?.portfolio}:${snapshot?.universeId}:${snapshot?.owner}:${snapshot?.blockHash}:${questionId}:${amount}`
 	useEffect(() => {
 		let current = true
@@ -34,7 +42,14 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 				const question = await loadPortfolioMintQuestion(client, snapshot, questionId)
 				if (question === undefined) throw new Error('Register this question before purchasing.')
 				const quote = await loadPortfolioMintQuote({ client: portfolioReadClient(client), portfolio: snapshot.portfolio, universeId: snapshot.universeId, questionId, mintAttoEth: amount, blockNumber: snapshot.blockNumber })
-				if (current) loaded.value = { key, quote, question }
+				if (current) {
+					recoveryKnowledge.value = { selection, applicable: quote.recoveryAttoRep > 0n }
+					if (maximumRecoveryRep.value.trim() === '' && quote.maximumRecoveryAttoRep > 0n) maximumRecoveryRep.value = formatUnits(quote.maximumRecoveryAttoRep, 18)
+				}
+				const recovery = await loadRecoveryMintFunding(client, snapshot.portfolio, snapshot.universeId, snapshot.auctionVault?.bidder ?? snapshot.owner, quote.recoveryAttoRep, snapshot.blockNumber)
+				if (current) {
+					loaded.value = { key, quote, question, recovery }
+				}
 			})().catch(failure => {
 				if (current) loaded.value = { key, error: getErrorMessage(failure, 'Unable to quote this purchase.') }
 			})
@@ -46,10 +61,12 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 	useEffect(() => {
 		loaded.value = undefined
 		maximumFee.value = ''
+		maximumRecoveryRep.value = ''
 		minimumShares.value = '0'
 	}, [snapshot?.portfolio, snapshot?.universeId, snapshot?.owner])
 	const current = loaded.value?.key === key ? loaded.value : undefined
 	const quote = current?.quote
+	const recoveryBudget = quote?.recoveryAttoRep === 0n ? 0n : parsedRecoveryBudget
 	let reason = actions.ownerReason ?? (model.loading ? 'Refreshing portfolio balances.' : undefined)
 	if (reason === undefined) {
 		if (snapshot === undefined) reason = 'Load a portfolio first.'
@@ -65,6 +82,10 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 		else if (minimum > quote.shares) reason = 'Minimum shares exceed the current quote.'
 		else if (amount + fee > snapshot.walletCollateral) reason = collateralCopy.formatInsufficientBalance(snapshot.collateral.symbol)
 		else if (snapshot.collateralAllowance < amount + fee) reason = collateralCopy.approvalRequired
+		else if (recoveryBudget === undefined || recoveryBudget < quote.recoveryAttoRep) reason = collateralCopy.recoveryBudgetRequired
+		else if (current.recovery === undefined) reason = collateralCopy.recoveryFundingLoading
+		else if (current.recovery.balance < recoveryBudget) reason = collateralCopy.insufficientRecoveryRep
+		else if (current.recovery.allowance < recoveryBudget) reason = collateralCopy.recoveryApprovalRequired
 	}
 	return {
 		requiredCollateral: amount === undefined || fee === undefined ? undefined : amount + fee,
@@ -78,6 +99,19 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 					value: 0n,
 					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [snapshot.services, approvalAmount] }),
 				}
+			}),
+		recoveryApplicable: recoveryKnowledge.value?.selection === selection && recoveryKnowledge.value.applicable,
+		recoveryError: current?.error,
+		recovery: current?.recovery,
+		requiredRecoveryRep: recoveryBudget,
+		maximumRecoveryRep: quote?.recoveryAttoRep === 0n ? '0' : maximumRecoveryRep.value,
+		setMaximumRecoveryRep: (value: string) => {
+			maximumRecoveryRep.value = value
+		},
+		approveRecoveryRep: (approvalAmount: bigint) =>
+			actions.runPortfolioAction('approvePurchaseRecoveryRep', 'Approve recovery REP', () => {
+				if (snapshot === undefined || current?.recovery?.token === undefined || current.recovery.spender === undefined) throw new Error('Recovery REP funding is unavailable.')
+				return { account: snapshot.auctionVault?.bidder ?? snapshot.owner, to: current.recovery.token, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [current.recovery.spender, approvalAmount] }) }
 			}),
 		questionInput: questionInput.value,
 		setQuestionInput: (value: string) => {
@@ -101,13 +135,13 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 		reason,
 		buy: () =>
 			actions.runPortfolioAction('mintPortfolioCompleteSets', 'Buy complete sets', () => {
-				if (reason !== undefined || snapshot === undefined || questionId === undefined || amount === undefined || fee === undefined || minimum === undefined || quote === undefined) throw new Error(reason ?? 'Purchase quote unavailable.')
+				if (reason !== undefined || snapshot === undefined || questionId === undefined || amount === undefined || fee === undefined || minimum === undefined || quote === undefined || recoveryBudget === undefined) throw new Error(reason ?? 'Purchase quote unavailable.')
 				const selected = snapshot
 				const buyer = selected.auctionVault?.bidder ?? selected.owner
-				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum }
+				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum, maximumRecoveryAttoRep: recoveryBudget }
 				return {
 					...buildPortfolioMintRequest({ trader: buyer, portfolio: selected.portfolio, universeId: selected.universeId, recipient: buyer, ...captured }),
-					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatUnits(amount, decimals)} ${selected.collateral.symbol}. The total charge for backing and the resolution premium is ${formatUnits(quote.purchaseFeeAttoEth, decimals)} ${selected.collateral.symbol}, capped at ${formatUnits(fee, decimals)} ${selected.collateral.symbol}. Receive at least ${formatUnits(minimum, decimals)} of each outcome. Available backing is checked after retirement in the same transaction.`,
+					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatUnits(amount, decimals)} ${selected.collateral.symbol}. The total charge for backing and the resolution premium is ${formatUnits(quote.purchaseFeeAttoEth, decimals)} ${selected.collateral.symbol}, capped at ${formatUnits(fee, decimals)} ${selected.collateral.symbol}. Receive at least ${formatUnits(minimum, decimals)} of each outcome. The proportional recovery contribution is ${formatUnits(quote.recoveryAttoRep, 18)} REP, capped at ${formatUnits(recoveryBudget, 18)} REP. Available backing is checked after retirement in the same transaction.`,
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()
 						const latest = await loadPortfolioAccount(client, selected.portfolio, selected.owner, selected.universeId)
@@ -115,7 +149,11 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 						const question = await loadPortfolioMintQuestion(client, latest, captured.questionId)
 						if (question === undefined || question.escalationGame !== zeroAddress || question.systemState !== 0n || latest.timestamp >= question.questionEndTime) throw new Error('Question minting has closed.')
 						const fresh = await loadPortfolioMintQuote({ client: portfolioReadClient(client), portfolio: selected.portfolio, universeId: selected.universeId, questionId: captured.questionId, mintAttoEth: captured.mintAttoEth, blockNumber: latest.blockNumber })
+						const funding = await loadRecoveryMintFunding(client, selected.portfolio, selected.universeId, buyer, fresh.recoveryAttoRep, latest.blockNumber)
 						if (
+							fresh.recoveryAttoRep > captured.maximumRecoveryAttoRep ||
+							funding.balance < fresh.recoveryAttoRep ||
+							funding.allowance < fresh.recoveryAttoRep ||
 							!fresh.priceValid ||
 							fresh.availableCommitmentAttoEth < captured.mintAttoEth ||
 							fresh.purchaseFeeAttoEth > captured.maximumPurchaseFeeAttoEth ||

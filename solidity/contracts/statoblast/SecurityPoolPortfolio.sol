@@ -328,9 +328,20 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256 fee, uint256 premium) {
 		return quoteHelper.purchaseQuote(universeId, questionId, mintAttoEth);
 	}
-	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee) external nonReentrant returns (uint256 minted) {
+	function quoteMintRecoveryRep(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256) {
+		return quoteHelper.quoteMintRecoveryRep(universeId, questionId, mintAttoEth);
+	}
+	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee) external nonReentrant returns (uint256) {
+		return _purchase(universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, 0);
+	}
+	/// @notice Buy into inherited recovery claims with an explicit REP spending limit.
+	function createCompleteSetWithRecoveryRep(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) external nonReentrant returns (uint256) {
+		return
+			_purchase(universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, maximumRecoveryAttoRep);
+	}
+	function _purchase(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) private returns (uint256 minted) {
 		uint256 fee;
-		(minted, fee) = services.purchase(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee);
+		(minted, fee) = services.purchase(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, maximumRecoveryAttoRep);
 		purchasingPool = address(0);
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}

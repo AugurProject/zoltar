@@ -97,7 +97,7 @@ describe('audit: settlement book recovery REP property test', () => {
 			return { cash: value[0], units: value[1], recovery: value[15] }
 		}
 		const questionState = async (bookId: bigint, questionId: bigint) => {
-			const [state, frozenBookId] = await client.readContract({ ...target(), functionName: 'question', args: [bookId, questionId] })
+			const [state, frozenBookId] = await client.readContract({ ...target(), functionName: 'scaledQuestion', args: [bookId, questionId] })
 			return { units: state.units, supply: state.outcomeSupplyAttoShares, finalAfter: Number(state.finalAfter), frozenBookId }
 		}
 		const frozenSource = async (frozenBookId: bigint) => (await client.readContract({ ...target(), functionName: 'frozenBooks', args: [frozenBookId] }))[2]
@@ -106,7 +106,7 @@ describe('audit: settlement book recovery REP property test', () => {
 		const replaceFeeStream = (bookId: bigint, questionId: bigint, rate: bigint, endsAt: number, timestamp: number) => send(() => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [bookId, questionId, rate, endsAt, timestamp] }))
 		const tryMint = async (bookId: bigint) => {
 			const book = await bookState(bookId)
-			if (book.cash !== book.units || book.recovery !== 0n) return
+			if (!(await client.readContract({ ...target(), functionName: 'isCashFunded', args: [bookId] })) || book.recovery !== 0n) return
 			const questionId = random.pick(QUESTIONS)
 			const state = await questionState(bookId, questionId)
 			if (state.finalAfter !== 0 || state.frozenBookId !== 0n) return
@@ -175,9 +175,10 @@ describe('audit: settlement book recovery REP property test', () => {
 			sealedBooks.add(sourceBookId)
 			const source = await bookState(sourceBookId)
 			const sourceEntitlements = bookOf(entitlement, sourceBookId)
+			const capacity = await client.readContract({ ...target(), functionName: 'requiredForkCash', args: [sourceBookId] })
 			const created: bigint[] = []
 			for (let index = 0; index < children; index++) {
-				const cash = random.pick([0n, source.units, random.big(source.units), source.units / 2n])
+				const cash = random.pick([0n, capacity, random.big(capacity), capacity / 2n])
 				const extra = source.units === 0n ? 0n : random.pick([0n, 0n, 1n, 3n, 10n ** 6n, 10n ** 18n + random.big(10n ** 18n), 7n * 10n ** 24n + random.big(10n ** 20n), (1n << 127n) - source.recovery - 1n])
 				const recovery = source.recovery + extra
 				note(`child of b${sourceBookId}: cash ${cash}/${source.units} recovery ${recovery} (source ${source.recovery})`)

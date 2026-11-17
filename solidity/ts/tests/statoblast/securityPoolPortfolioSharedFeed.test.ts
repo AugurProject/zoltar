@@ -341,7 +341,7 @@ describe('Statoblast: central capital shared price feed', () => {
 			if (i % 3 === 0) {
 				await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'scheduleFinality', args: [pool, now + 500n + (1n << BigInt(i % 47)), now] }))
 			} else {
-				await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'replaceFeeStream', args: [pool, 1_000n + BigInt(i), now + 500n + (1n << BigInt(i % 47)), now] }))
+				await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'replaceFeeStream', args: [pool, (1_000n + BigInt(i)) * 1_000_000_000n, now + 500n + (1n << BigInt(i % 47)), now] }))
 			}
 		}
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'finishForkImport', args: [128n * unit] }))

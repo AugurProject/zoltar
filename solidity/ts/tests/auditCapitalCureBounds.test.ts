@@ -40,19 +40,18 @@ describe('audit: the unpaid cure never leaves a commitment below the minimum', (
 	}
 
 	// One and a half minimums with a quarter-minimum deficit: the cut rounds up to one minimum,
-	// which would leave half a minimum. Spare covers the whole commitment, so all of it goes.
-	test('a cut that would leave less than the minimum removes the whole commitment when spare allows', async () => {
+	// which would leave half a minimum. A full cure would release still-backed principal, so it is refused.
+	test('a cure that would release still-backed principal leaves the full position for takeover or retirement', async () => {
 		const commitment = (3n * MINIMUM) / 2n
 		const { id, required, supported } = await underwater(commitment, 0n, (12n * E) / 10n)
 		expect(commitment - supported).toBe(MINIMUM / 4n)
 
-		// A caller with no principal at all applies the cure and receives nothing.
-		await takeOver(id, commitment)
-		expect(await fixture.position(id)).toMatchObject({ rep: 0n, commitment: 0n })
-		expect(await started(id)).toBe(0n)
+		// A caller with no principal cannot turn a minimum-sized cure into a free exit.
+		await expect(takeOver(id, commitment)).rejects.toThrow('Receiver collateral insufficient')
+		expect(await fixture.position(id)).toMatchObject({ rep: required, commitment })
+		expect(await started(id)).toBeGreaterThan(0n)
 		expect((await fixture.owner(keeper)).positionId).toBe(0n)
-		// The owner keeps every unit of principal and may commit again.
-		expect((await fixture.owner(bob)).freeAttoRep).toBe(required)
+		expect((await fixture.owner(bob)).freeAttoRep).toBe(0n)
 		expect((await totals())[2]).toBe(100n * E)
 	})
 

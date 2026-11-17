@@ -22,7 +22,7 @@ describe('Statoblast: bound complete-set delivery', () => {
 		const ids = await Promise.all([0, 1, 2].map(outcome => owner().readContract({ abi: shareArtifact.abi, address: pool.shareToken, functionName: 'getTokenId', args: [base.genesisUniverse, outcome] })))
 		await writeContractAndWait(other(), () => other().writeContract({ abi: shareArtifact.abi, address: pool.shareToken, functionName: 'safeBatchTransferFrom', args: [other().account.address, helper, ids, [unit, unit, unit], '0x'] }))
 		await base.mockWindow.setBalance(helper, (await owner().getBalance({ address: helper })) + 7n)
-		await expect(other().writeContract({ abi: servicesArtifact.abi, address: helper, functionName: 'purchase', args: [other().account.address, base.genesisUniverse, base.questionId, unit, other().account.address, 0n, unit] })).rejects.toThrow('Only service portfolio')
+		await expect(other().writeContract({ abi: servicesArtifact.abi, address: helper, functionName: 'purchase', args: [other().account.address, base.genesisUniverse, base.questionId, unit, other().account.address, 0n, unit, 0n] })).rejects.toThrow('Only service portfolio')
 		const supply = await getShareTokenSupplyAttoShares(owner(), pool.securityPool)
 		await expect(fixture.mint(20n * unit, base.questionId, { minimumShares: 21n * unit })).rejects.toThrow('Minimum shares not met')
 		expect(await getShareTokenSupplyAttoShares(owner(), pool.securityPool)).toBe(supply)
