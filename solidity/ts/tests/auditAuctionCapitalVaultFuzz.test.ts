@@ -233,10 +233,10 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 				for (const bid of bids) {
 					const position = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [bid.id] })
 					if (getAddress(position.vault) !== bid.vault || position.materialized !== bid.materialized) throw new Error(`${label}: bid ${bid.id} vault or materialized flag wrong: ${context()}`)
-					if (!bid.takenOver && (position.principal !== bid.lots * repPerLot || position.commitment !== bid.lots * LOT || position.targetHealthFactorBps !== bid.health))
+					if (position.principal !== bid.lots * repPerLot || (!bid.takenOver && position.commitment !== bid.lots * LOT) || position.targetHealthFactorBps !== bid.health)
 						throw new Error(`${label}: bid ${bid.id} principal ${position.principal} commitment ${position.commitment} target ${position.targetHealthFactorBps}, expected ${bid.lots} lots: ${context()}`)
 					const collateral = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [bid.vault] })
-					if (!bid.takenOver && (collateral[0] !== bid.lots * repPerLot || collateral[1] !== bid.lots * LOT)) throw new Error(`${label}: ownerCollateral of bid ${bid.id} is ${collateral[0]}/${collateral[1]}: ${context()}`)
+					if (collateral[0] !== bid.lots * repPerLot || (!bid.takenOver && collateral[1] !== bid.lots * LOT)) throw new Error(`${label}: ownerCollateral of bid ${bid.id} is ${collateral[0]}/${collateral[1]}: ${context()}`)
 					earned += position.earnedAttoEth
 					if (exactFees) {
 						// Exact share is expectedAttoEthScaled / totalLots. Integer splits move less than an attoETH per
@@ -297,8 +297,12 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [keeper.account.address, deposit] }))
 					keeperDeposit += deposit
 					const bounds = { maximumOwnerPrincipal: 100n * principal, maximumOwnerCommitment: bid.lots * LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }
-					const outcome = await reasonOf(() => writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [bid.id, bid.lots * LOT, 0n, deposit, bounds] })))
-					if (outcome !== 'no revert') throw new Error(`takeOverAuctionBid failed (${outcome.slice(0, 160)}): ${context()}`)
+					const outcome = await reasonOf(() => writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [bid.id, bid.lots * LOT, 0n, keeperDeposit, bounds] })))
+					if (outcome !== 'no revert') {
+						expect(outcome.includes('Position requires additional backing') || outcome.includes('Receiver commitment below minimum')).toBe(true)
+						await check('minimum repair remains atomic')
+						continue
+					}
 					bid.materialized = true
 					bid.takenOver = true
 					// The vault of the taken-over winner stays usable.

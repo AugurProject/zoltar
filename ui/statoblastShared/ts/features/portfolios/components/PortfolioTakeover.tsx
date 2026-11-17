@@ -30,7 +30,6 @@ async function loadTarget(snapshot: NonNullable<ReturnType<typeof usePortfolio>[
 export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<typeof usePortfolio>, 'snapshot'>; actions: Pick<PortfolioActions, 'ownerReason' | 'scope' | 'busy' | 'runPortfolioAction'> }) {
 	const positionInput = useSignal('')
 	const commitmentInput = useSignal('')
-	const awardInput = useSignal('')
 	const ownInput = useSignal('')
 	const principalInput = useSignal('')
 	const totalCommitmentInput = useSignal('')
@@ -46,7 +45,7 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 		if (boundsTarget === undefined || boundsTarget === lastBoundsTarget.current) return
 		const replacedTarget = lastBoundsTarget.current !== undefined
 		lastBoundsTarget.current = boundsTarget
-		if (replacedTarget) for (const bound of [commitmentInput, awardInput, ownInput, principalInput, totalCommitmentInput]) bound.value = ''
+		if (replacedTarget) for (const bound of [commitmentInput, ownInput, principalInput, totalCommitmentInput]) bound.value = ''
 	}, [boundsTarget])
 	useEffect(() => {
 		let current = true
@@ -67,7 +66,6 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	const preview = loaded?.value
 	const source = snapshot !== undefined && preview !== undefined && snapshot.liquidationPrice > 0n ? portfolioTakeoverSource(snapshot, preview.position) : undefined
 	const commitment = portfolioAmountOrUndefined(commitmentInput.value, snapshot?.collateral.decimals ?? 18)
-	const minimumAward = portfolioAmountOrUndefined(awardInput.value)
 	const maximumOwnRep = portfolioAmountOrUndefined(ownInput.value)
 	const maximumOwnerPrincipal = portfolioAmountOrUndefined(principalInput.value)
 	const maximumOwnerCommitment = portfolioAmountOrUndefined(totalCommitmentInput.value, snapshot?.collateral.decimals ?? 18)
@@ -77,13 +75,18 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
 	if (reason === undefined && snapshot !== undefined && !snapshot.priceValid) reason = copy.priceRequired
 	const distressed = preview !== undefined && snapshot !== undefined && preview.position.owner !== snapshot.owner && preview.position.commitment !== 0n && preview.position.maxHealthyPrice < snapshot.liquidationPrice && preview.started !== 0n
-	// The ledger cures before it quotes. A cure that restores the position stands unpaid, and a call asking for an award reverts.
+	// Repairs retain source principal. A preliminary cure that restores health stands without a transfer.
 	const curable = distressed && source?.healthy === true && source.removed !== 0n
 	let cureReason = reason
 	if (reason === undefined && (!distressed || (source?.healthy === true && !curable))) reason = cureReason = copy.notEligible
 	if (reason === undefined && curable) reason = copy.cureInstead
+	if (reason === undefined && source?.maximumTakeoverCommitment === 0n) reason = copy.additionalBacking
 	if (cureReason === undefined && !curable) cureReason = copy.takeOverInstead
-	if (reason === undefined && (commitment === undefined || commitment === 0n || minimumAward === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
+	if (reason === undefined && (commitment === undefined || commitment === 0n || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
+	if (reason === undefined && snapshot !== undefined && source !== undefined && commitment !== undefined) {
+		const transferred = commitment < source.maximumTakeoverCommitment ? commitment : source.maximumTakeoverCommitment
+		if (snapshot.ownerCommitmentAttoEth + transferred < snapshot.economics.minimumCommitmentAttoEth) reason = copy.receiverMinimum
+	}
 	const validateTarget = (current: NonNullable<typeof preview>, capitalLedger: NonNullable<typeof snapshot>['capitalLedger'], commitmentIndex: NonNullable<typeof snapshot>['commitmentIndex'], positionId: bigint) => async () => {
 		const client = createConnectedReadClient()
 		const epoch = await client.readContract({ address: capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch' })
@@ -99,15 +102,14 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 		}))
 	}
 	const takeOver = async () => {
-		if (reason !== undefined || snapshot === undefined || preview === undefined || source === undefined || id === undefined || commitment === undefined || minimumAward === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)
-			throw new Error(reason ?? copy.enterBounds)
+		if (reason !== undefined || snapshot === undefined || preview === undefined || source === undefined || id === undefined || commitment === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined) throw new Error(reason ?? copy.enterBounds)
 		await actions.runPortfolioAction('takeOverPortfolioPosition', copy.takeOver, () => ({
 			...buildPortfolioCapitalTakeOverWithBoundsRequest({
 				owner: snapshot.owner,
 				capitalLedger: snapshot.capitalLedger,
 				positionId: id,
 				commitment,
-				minimumAward,
+				minimumAward: 0n,
 				maximumOwnRep,
 				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: preview.epoch, expectedSourceBatch: source.batch },
 			}),
@@ -136,8 +138,8 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 				<MetricField label={copy.targetCommitment}>
 					<CurrencyValue value={preview?.position.commitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
-				<MetricField label={copy.afterCure}>
-					<CurrencyValue value={source?.commitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
+				<MetricField label={copy.repairLimit}>
+					<CurrencyValue value={source?.maximumTakeoverCommitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 				<MetricField label={copy.started}>
 					<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />
@@ -146,7 +148,6 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 			<div className='form-grid'>
 				{[
 					{ label: copy.commitment, input: commitmentInput },
-					{ label: copy.minimumAward, input: awardInput },
 					{ label: copy.maximumOwnRep, input: ownInput },
 					{ label: copy.maximumPrincipal, input: principalInput },
 					{ label: copy.maximumCommitment, input: totalCommitmentInput },

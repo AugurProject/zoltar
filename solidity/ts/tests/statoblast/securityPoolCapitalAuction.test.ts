@@ -191,23 +191,24 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
 	})
 
-	test('a bounded takeover materializes one distressed winner and isolates its principal loss and earned fees', async () => {
+	test('a funded repair materializes one winner without taking principal or another winner’s fees', async () => {
 		await activate()
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'creditFees', value: 30n }))
-		await setPrice(3n * ATTO_ETH_PER_ETH)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [caller.account.address, REP] }))
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, REP] }))
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [caller.account.address, REP] }))
-		await getAnvilWindowEthereum().advanceTime(3601n)
-		const bounds = { maximumOwnerPrincipal: 2n * REP, maximumOwnerCommitment: LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }
-		await expect(caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [2n, LOT, REP, REP, { ...bounds, maximumOwnerPrincipal: 2n * REP - 1n }] })).rejects.toThrow('Takeover owner principal exceeds limit')
+		await setPrice(6n * ATTO_ETH_PER_ETH)
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [caller.account.address, 3n * REP] }))
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, 3n * REP] }))
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [caller.account.address, 3n * REP] }))
+		const bounds = { maximumOwnerPrincipal: 3n * REP, maximumOwnerCommitment: LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }
+		await expect(caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [1n, LOT, 0n, 3n * REP, { ...bounds, maximumOwnerPrincipal: 3n * REP - 1n }] })).rejects.toThrow('Takeover owner principal exceeds limit')
+		expect((await owner(first.account.address)).positionId).toBe(0n)
+		expect(await caller.readContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'removed', args: [1n] })).toBe(false)
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [1n, LOT, 0n, 3n * REP, bounds] }))
+		expect(await position((await owner(caller.account.address)).positionId)).toMatchObject({ rep: 3n * REP, commitment: LOT })
+		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [1n] })).toMatchObject({ principal: 2n * REP, commitment: LOT, earnedAttoEth: 20n, materialized: true })
+		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [2n] })).toMatchObject({ principal: REP, commitment: LOT, earnedAttoEth: 10n, materialized: false })
+		expect(await position(1n)).toMatchObject({ rep: REP, commitment: LOT })
+		await expect(caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [2n, LOT, 0n, 0n, bounds] })).rejects.toThrow('Position requires additional backing')
 		expect((await owner(second.account.address)).positionId).toBe(0n)
-		expect(await caller.readContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'removed', args: [2n] })).toBe(false)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [2n, LOT, REP, REP, bounds] }))
-		expect(await position((await owner(caller.account.address)).positionId)).toMatchObject({ rep: 2n * REP, commitment: LOT })
-		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [1n] })).toMatchObject({ principal: 2n * REP, commitment: 2n * LOT, earnedAttoEth: 20n, materialized: false })
-		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [2n] })).toMatchObject({ principal: 0n, commitment: 0n, earnedAttoEth: 10n, materialized: true })
-		expect(await position(1n)).toMatchObject({ rep: 2n * REP, commitment: 2n * LOT })
 	})
 
 	test('new income keeps its original ownership when another bidder materializes first', async () => {

@@ -446,6 +446,10 @@ type Snapshot = Awaited<ReturnType<ReturnType<typeof createDriver>['read']>>
 const stringify = (value: unknown) => JSON.stringify(value, (_key, item: unknown) => (typeof item === 'bigint' ? `${item}n` : item))
 
 const KNOWN_REVERTS = [
+	'Repairs pay future income only',
+	'Position requires additional backing',
+	'Receiver commitment below minimum',
+	'Portfolio backing insufficient',
 	'Capital universe inactive',
 	'Capital price stale',
 	'Invalid capital deposit',
@@ -1060,8 +1064,8 @@ const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: nu
 			if (op.o === o) expected = paid.award
 			if (paid.sourceOwner === o) expected = -paid.award
 		}
-		// (a)(d) principal moves only by the owner's own deposit or withdrawal, or by a takeover award
-		// that the source alone funds; a withdrawal pays exactly once.
+		// (a)(d) repair never transfers principal ownership; deposits and withdrawals
+		// change principal exactly once.
 		if (delta !== expected) issues.push(`PRINCIPAL[${o}]: ${op.c} moved principal by ${delta}, expected ${expected}`)
 		// (b) an owner's own action that removes backing or adds exposure leaves it at or above its target.
 		const stored = after.stored[o]

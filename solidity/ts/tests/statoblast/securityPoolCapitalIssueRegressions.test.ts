@@ -35,7 +35,7 @@ describe('capital issue regressions', () => {
 		expect((await f.owner(0)).freeAttoRep).toBe(0n)
 		expect((await f.position(id)).rep).toBe(105n * 10n ** 13n)
 	})
-	test('#1253 a fresh adverse observation after a stale gap restarts the award ramp', async () => {
+	test('#1253 a stale gap resets eligibility history without creating a principal award', async () => {
 		const id = await setup()
 		await writeContractAndWait(f.client(), () => f.client().writeContract({ ...f.harness, functionName: 'setDemand', args: [200n * E] }))
 		await writeContractAndWait(f.client(), async () => f.client().writeContract({ ...f.harness, functionName: 'setPrice', args: [2n * E, Number((await f.client().getBlock()).timestamp + 60n)] }))
@@ -44,8 +44,9 @@ describe('capital issue regressions', () => {
 		const started = await f.client().readContract({ ...f.capital, functionName: 'liquidationStarted', args: [id] })
 		expect((await f.client().getBlock()).timestamp - started).toBeLessThan(60n)
 		await f.deposit(2, 210n * E)
-		await expect(writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [id, 100n * E, 105n * E, 210n * E] }))).rejects.toThrow('Takeover award below minimum')
+		await expect(writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [id, 100n * E, 105n * E, 210n * E] }))).rejects.toThrow('Repairs pay future income only')
 		await f.getAnvilWindowEthereum().advanceTime(3601n)
-		await writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [id, 100n * E, 105n * E, 210n * E] }))
+		await writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [id, 100n * E, 0n, 210n * E] }))
+		expect((await f.position(id)).rep).toBe(105n * E)
 	})
 })

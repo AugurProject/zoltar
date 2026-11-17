@@ -428,7 +428,7 @@ export const cure = (m: Model, id: bigint, target: bigint, ownerExit: boolean) =
 		}
 	}
 	// A cure may not release principal while any commitment remains supported.
-	if (supported !== 0n && removed === p.k) removed = 0n
+	if (p.rep !== 0n && removed === p.k) removed = 0n
 	const remaining = p.k - removed
 	if (removed !== 0n) {
 		if (remaining === 0n) {
@@ -459,7 +459,7 @@ export const collateral = (m: Model, o: number) => {
 	const principal = withdrawable + pledged
 	const commitment = (p !== undefined && inTree(p) ? p.k : 0n) + (bid === undefined ? 0n : bid.lots * MINC)
 	if (commitment === 0n) return { principal, commitment, withdrawable: principal }
-	if (m.importing || m.frozen || owner.exported || m.forkTime !== 0n || !priceValid(m)) return { principal, commitment, withdrawable }
+	if (m.importing || m.frozen || owner.exported || m.forkTime !== 0n || !priceValid(m) || eligible(m, m.cons) < m.demand) return { principal, commitment, withdrawable }
 	const required = requiredRep(commitment, m.cons, bid === undefined ? targetOf(owner) : bid.health)
 	if (pledged > required) withdrawable += pledged - required
 	return { principal, commitment, withdrawable }
@@ -500,6 +500,7 @@ export type Operation =
 
 export type TakeoverResult = { cured: boolean; full: boolean; merged: boolean; award: bigint; debit: bigint; sourceOwner: number; sourceBatch: bigint; receiverPrincipal: bigint; receiverCommitment: bigint }
 const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, maxOwn: bigint, bounds: Bounds | undefined, sponsored = false): TakeoverResult => {
+	requireModel(minAward === 0n, 'Repairs pay future income only')
 	if (started(m, id) === 0n) fail('Adverse observation missing')
 	const source = positionOf(m, id)
 	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')
@@ -511,13 +512,13 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')
 	const start = started(m, id)
 	requireModel(start !== 0n, 'Adverse observation missing')
-	requireModel(k > 0n && k <= source.k, 'Invalid takeover commitment')
-	requireModel(k === source.k || source.k - k >= MINC, 'Take entire residual commitment')
-	requireModel(k >= MINC || k === source.k, 'Takeover below economic minimum')
-	const proportional = k === source.k ? source.rep : (source.rep * k) / source.k
-	const award = (proportional * min(m.now - start, HOUR)) / HOUR
-	requireModel(award >= minAward, 'Takeover award below minimum')
-	const debit = k === source.k ? proportional : award
+	requireModel(k > 0n, 'Invalid takeover commitment')
+	const supported = (((source.rep * BPS) / MULTIPLIER) * WAD) / m.cons
+	const retained = max(supported, MINC)
+	requireModel(source.k > retained, 'Position requires additional backing')
+	k = min(k, source.k - retained)
+	const award = 0n
+	const debit = 0n
 	settle(m, o)
 	const receiver = ownerOf(m, o)
 	const sourceBatch = source.batch
@@ -534,6 +535,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	const free = receiver.free
 	requireModel(free <= maxOwn, 'Receiver consent exceeded')
 	requireModel(existingRep + award + free >= requiredRep(existingK + k, m.cons, targetOf(receiver)), 'Receiver collateral insufficient')
+	requireModel(existingK + k >= MINC, 'Receiver commitment below minimum')
 	const remainingK = source.k - k
 	const remainingRep = source.rep - debit
 	const received = award + free
@@ -699,6 +701,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 				requireModel(owner.positionId !== 0n, 'Insufficient owner principal')
 				requireOpen(m)
 				requireFresh(m)
+				requireModel(eligible(m, m.cons) >= m.demand, 'Portfolio backing insufficient')
 				const p = positionOf(m, owner.positionId)
 				requireModel(pledged <= p.rep && p.rep - pledged >= requiredRep(p.k, m.cons, targetOf(owner)), 'Owner collateral too low')
 				const price = maxHealthyPrice(p.rep - pledged, p.k)
@@ -758,6 +761,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 		case 'takeover':
 			requireOpen(m)
 			requireFresh(m)
+			requireModel(op.minAward === 0n, 'Repairs pay future income only')
 			checkpoint(m)
 			serve(m, 0n)
 			return takeover(m, op.o, op.id, op.k, op.minAward, op.maxOwn, op.bounds, op.sponsored === true)

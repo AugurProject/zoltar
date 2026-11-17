@@ -4,6 +4,7 @@ import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, none
 export type PortfolioSelection = { address: Address; universeId: bigint }
 export type PortfolioPolicy = {
 	allowFundedTakeovers: boolean
+	takeoverIncomeHorizonSeconds: number
 	maximumReportFundingAttoEth: bigint
 	reportOperationsGasLimit: number
 	reportOperationGasLimit: number
@@ -37,6 +38,7 @@ export function parsePortfolioPolicy(value: unknown): PortfolioPolicy {
 	const policy = value === undefined ? {} : record(value, 'portfolioPolicy')
 	const amount = (key: string, fallback: string) => parseDecimalAmount(policy[key] ?? fallback, `portfolioPolicy.${key}`)
 	const parsed = {
+		takeoverIncomeHorizonSeconds: integer(policy['takeoverIncomeHorizonSeconds'] ?? 0, 'portfolioPolicy.takeoverIncomeHorizonSeconds', 0, 31_536_000),
 		maximumReportFundingAttoEth: amount('maximumReportFundingEth', '0'),
 		reportOperationsGasLimit: integer(policy['reportOperationsGasLimit'] ?? 3_100_000, 'portfolioPolicy.reportOperationsGasLimit', 1, 4_290_967_295),
 		reportOperationGasLimit: integer(policy['reportOperationGasLimit'] ?? 3_000_000, 'portfolioPolicy.reportOperationGasLimit', 1, 4_290_867_295),
@@ -60,6 +62,7 @@ export function parsePortfolioPolicy(value: unknown): PortfolioPolicy {
 export function serializePortfolioPolicy(policy: PortfolioPolicy) {
 	return {
 		allowFundedTakeovers: policy.allowFundedTakeovers,
+		takeoverIncomeHorizonSeconds: policy.takeoverIncomeHorizonSeconds,
 		maximumReportFundingEth: formatDecimalAmount(policy.maximumReportFundingAttoEth),
 		reportOperationsGasLimit: policy.reportOperationsGasLimit,
 		reportOperationGasLimit: policy.reportOperationGasLimit,

@@ -12,29 +12,29 @@
 		<main>
 			<header>
 				<h1>Vault liquidation</h1>
-				<p>Liquidation transfers an underbacked owner's commitment and a quoted REP award to a funded receiver. Only the target's principal pays the award; other owners do not absorb its loss.</p>
+				<p>A funded repair transfers unsupported underwriting commitment to a consenting receiver. The original provider keeps all principal REP; the receiver pledges their own REP and earns future fees on the transferred commitment.</p>
 			</header>
 			<section id="position-model">
 				<h2>Target, receiver, and keeper</h2>
-				<p>The target owns an underbacked position. The receiver accepts its commitment and must back the resulting position at the receiver's chosen health target. A keeper can be the receiver and earn the REP award. There is no separate ETH execution reserve or protocol-funded gas reimbursement.</p>
+				<p>The target owns an underbacked position. The receiver funds the transferred commitment at its chosen health target. Neither principal nor past earnings change owner. There is no immediate liquidation award or protocol-funded gas reimbursement.</p>
 			</section>
 			<section id="capacity-and-health">
 				<h2>When a position is liquidatable</h2>
 				<p>All free and committed REP deposited for the owner in this portfolio universe counts toward its backing. Earned REP income is separate. The owner's voluntary health target controls new exposure and surplus withdrawals; merely falling below that buffer does not trigger liquidation.</p>
-				<p>The protocol compares backing with the commitment's required REP at the shared oracle's liquidation price, using the protective edge of its error band. Admission uses the opposite, conservative edge. An accepted adverse observation starts the takeover clock automatically. The award grows according to the indexed takeover rules. An observation following an expired price restarts the award clock, so a stale interval cannot mature the reward.</p>
+				<p>The protocol detects distress at the shared oracle’s protective liquidation price. Admission and receiver backing use the conservative price. An adverse observation establishes eligibility, but elapsed time never increases compensation or transfers REP ownership.</p>
 			</section>
 			<section id="rule">
 				<h2>Cure before takeover</h2>
-				<p>The owner can deposit REP or reduce commitment. Removing unbacked commitment uses spare capacity above demand, so a cure cannot erase outstanding trader claims. A cure, the owner’s or one applied through a takeover call, never leaves a remaining commitment below the portfolio’s minimum: it finishes the reduction when spare allows, or cuts less. The one exception is an owner leaving entirely, whose rest waits in the retirement queue whatever its size. A takeover call first performs the available cure. If spare capacity absorbs the whole deficit, the cure stands and the call ends there: no award is paid, and the caller must have set a zero minimum award. Otherwise the call quotes the remaining obligation and award. A minimum-size cure cannot release REP that still backs commitment; that release waits for retirement. The receiver supplies any missing backing. Minimum commitment and award bounds prevent involuntary dust execution, and caller limits constrain the REP the receiver contributes.</p>
+				<p>The owner can add REP or reduce commitment. A takeover first removes available unused commitment without releasing principal. If that cure restores health, the call ends without a transfer. Otherwise the requested transfer is capped at the commitment needed to restore the source at the conservative price, while retaining its economic minimum. The receiver supplies all backing for the transferred obligation. A minimum-size source needs an owner top-up or additional healthy capacity followed by ordinary retirement. Repeated repairs cannot take principal or keep reducing an already healthy position.</p>
 				<p>Existing earned fees remain with their owner. Underbacked commitment stops earning new fees. Principal, fees, and reporter claims use separate accounting. See <a href="./statoblast.html#question-portfolios">portfolio capital and retirement</a> for exits and <a href="../reference/contract-inventory.html#portfolio-liquidation">the liquidation reference</a> for exact contract bounds.</p>
 			</section>
 			<section id="receiver-approvals">
 				<h2>Receiver consent</h2>
-				<p>The receiver calls the capital ledger directly. Bounded takeover calls pin the accepted price epoch, target health, source cohort, maximum resulting principal and commitment, minimum REP award, and maximum own REP contribution.</p>
+				<p>The receiver calls the capital ledger directly. Bounded repairs pin the accepted price epoch, receiver health target and source cohort, and cap resulting principal, commitment and own REP contribution. The minimum-award argument must be zero; positive principal-award requests revert.</p>
 			</section>
 			<section id="queue-semantics">
 				<h2>Execution and incentives</h2>
-				<p>Quotes are checked against live state in the transaction. A stale quote or insufficient backing reverts atomically. Keepers maintain their own indexes and choose profitable targets; no onchain scan of all owners is required. A small or illiquid REP award may not attract a keeper, so liquidation liveness depends on economically viable participation.</p>
+				<p>Quotes are checked against live state. Insufficient backing or changed consent bounds revert atomically. Receivers invest new capital for future fee income, which depends on demand, fees and continued health; participation is not guaranteed. Pledged principal cannot be withdrawn while healthy commitment is below demand. Previously free principal and separately earned income remain withdrawable. A wrong accepted oracle price can still misclassify health; these rules do not establish the fair REP price.</p>
 			</section>
 			<section id="fork-behavior">
 				<h2>Fork isolation</h2>

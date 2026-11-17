@@ -35,26 +35,24 @@ export async function distressedSecondWinner(context: RepairAuction, keeperOpera
 	// Retire chosen capital down to claim demand so cure cannot change K.
 	await context.report(unit)
 	await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setCommitment', args: [5n * unit] }))
-	await context.report(2n * unit)
+	await context.report(4n * unit)
 	const distressed = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 	const initialWinner = distressed.positions.find(position => position.auctionTarget?.bidId === secondBidId)
 	if (initialWinner === undefined) throw new Error('Second auction target disappeared')
 	expect(initialWinner.liquidationStarted).toBeGreaterThan(0n)
-	// Mature the award while continuously renewing the adverse quote. A stale
-	// gap followed by a fresh report correctly restarts the liquidation clock.
-	for (let renewal = 0; renewal < 8; renewal++) await context.report(2n * unit)
+	// Receiver-funded repair does not wait for a principal award.
 	await context.mock.impersonateAccount(account.address)
 	const keeper = createWriteClient(context.mock, BigInt(account.address))
 	await writeContractAndWait(keeper, () => keeper.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setHealthTarget', args: [15_000n] }))
-	await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.token, abi: erc20Abi, functionName: 'transfer', args: [account.address, 20n * unit] }))
+	await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.token, abi: erc20Abi, functionName: 'transfer', args: [account.address, 40n * unit] }))
 	settings.strategy.maximumGasCostAttoEth = unit / 50n
 	const next = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 	const winner = next.positions.find(position => position.auctionTarget?.bidId === secondBidId)
 	if (winner === undefined) throw new Error('Second auction target disappeared')
-	expect(next.snapshot.totalCommitmentAttoEth).toBe(next.snapshot.demandAttoEth)
+	expect(next.snapshot.totalCommitmentAttoEth).toBeGreaterThanOrEqual(next.snapshot.demandAttoEth)
+	expect(next.snapshot.totalCommitmentAttoEth - next.snapshot.demandAttoEth).toBeLessThan(unit)
 	expect(next.snapshot.priceValid).toBe(true)
 	expect(next.snapshot.timestamp).toBeLessThan(next.snapshot.priceValidUntil)
 	expect(winner.liquidationStarted).toBe(initialWinner.liquidationStarted)
-	expect(next.snapshot.timestamp - winner.liquidationStarted).toBeGreaterThanOrEqual(3600n)
 	return { keeper, next, winner }
 }
