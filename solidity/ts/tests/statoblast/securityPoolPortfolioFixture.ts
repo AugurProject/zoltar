@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { beforeAll, expect } from 'bun:test'
 import { encodeDeployData, parseAbi, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -122,9 +123,11 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 		await approveToken(owner(), getRepTokenAddress(source), getZoltarAddress())
 		await forkUniverse(owner(), source, base.questionId)
 		const forkTime = (await getUniverseData(owner(), source)).forkTime
+		await stagePortfolioForkCapital(owner(), forks, source, 1n)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'choose', args: [source, 1n] }))
 		const child = getChildUniverseId(source, 1)
 		await base.mockWindow.setTime(forkTime + 56n * DAY)
+		await stagePortfolioForkCapital(owner(), forks, source, 1n)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'startBranch', args: [source, 1n] }))
 		return { forks, forkTime, child }
 	}

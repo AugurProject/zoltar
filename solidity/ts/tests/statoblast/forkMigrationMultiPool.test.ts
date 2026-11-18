@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -47,6 +48,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 	const activateBranch = async (outcome: bigint, materialize = true, source = securityPoolAddresses.securityPool) => {
 		const target = await controller()
 		const child = getChildUniverseId(genesisUniverse, outcome)
+		await stagePortfolioForkCapital(client, target.address, genesisUniverse, outcome)
 		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'startBranch', args: [genesisUniverse, outcome] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'finalizeBranch', args: [child] }))
 		if (materialize) await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [source, child] }))
@@ -206,6 +208,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 			[client, 1n],
 			[fixture.other(), 2n],
 		] as const) {
+			await stagePortfolioForkCapital(sender, target.address, genesisUniverse, outcome)
 			await writeContractAndWait(sender, () => sender.writeContract({ ...target, functionName: 'choose', args: [genesisUniverse, outcome] }))
 		}
 		await finishChoiceWindow()

@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
@@ -40,6 +41,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		const controller = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'forkController' })
 		const forkTime = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] })
 		await mockWindow.setTime(forkTime + 63n * DAY)
+		await stagePortfolioForkCapital(client, controller, universe, 1n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, 1n] }))
 		const child = getChildUniverseId(universe, QuestionOutcome.Yes)
 		await writeContractAndWait(client, () => client.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))

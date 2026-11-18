@@ -112,7 +112,12 @@ describe('explicit portfolio instruction lifecycle', () => {
 			const descendant = await context.owner.readContract({ address: getZoltarAddress(), abi: zoltarAbi, functionName: 'getChildUniverseId', args: [context.child, 1n] })
 			settings.approvedUniverses.push(descendant)
 			settings.selectedPortfolios.push({ ...scope, universeId: descendant })
-			expect(await executePortfolioInstruction(wallet, settings, state, pool, { ...base, id: 'choose', action: 'vault-fork-choice', vault: winner.vault, outcome: 1n }, async () => true)).toBe(true)
+			const choose = { ...base, id: 'choose', action: 'vault-fork-choice', vault: winner.vault, outcome: 1n } as const
+			for (let stage = 0; stage < 2; stage++) {
+				expect(await executePortfolioInstruction(wallet, settings, state, pool, choose, async () => true)).toBe(true)
+				expect(state.completedPortfolioInstructions?.['choose']).toBeUndefined()
+			}
+			expect(await executePortfolioInstruction(wallet, settings, state, pool, choose, async () => true)).toBe(true)
 			expect([...(await client.readContract({ address: context.forks, abi: forkAbi, functionName: 'choices', args: [context.child, winner.vault] }))]).toEqual([1n, true])
 			state.portfolioScopes.push({ ...scope, universeId: descendant, managedVaults: [winner.vault] })
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, { ...base, id: 'direct-choice', action: 'fork-choice', outcome: 1n }, async () => true)).toBe(true)

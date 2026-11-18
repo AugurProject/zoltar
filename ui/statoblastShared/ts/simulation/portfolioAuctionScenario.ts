@@ -6,6 +6,8 @@ import {
 	buildPortfolioCapitalDepositRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioForkChoiceRequest,
+	buildPortfolioForkLedgerRequest,
+	buildPortfolioNativeChildRequest,
 	buildPortfolioForkPreparationRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioPriceApprovalRequest,
@@ -118,6 +120,8 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	const controller = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController' })
 	// Directly forking Zoltar bypasses the normal pool fork transaction's freeze step.
 	await sendPortfolioTransaction(ownerClient, { account: owner, to: controller, value: 0n, data: encodeFunctionData({ abi: forkArtifact.abi, functionName: 'freeze', args: [0n] }) }, 'Freeze the source portfolio')
+	await sendPortfolioTransaction(ownerClient, buildPortfolioNativeChildRequest({ owner, zoltar, universeId: 0n, outcomeIndex: FORK_OUTCOME }), 'Deploy Yes REP')
+	await sendPortfolioTransaction(ownerClient, buildPortfolioForkLedgerRequest({ owner, portfolio, universeId: 0n, outcomeIndex: FORK_OUTCOME }), 'Deploy Yes capital ledger')
 	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkPreparationRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Prepare the Yes branch capital')
 	await reportStep('Prepared the Yes branch capital')
 	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkChoiceRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Choose the Yes branch')

@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { decodeEventLog, encodeFunctionData, parseAbi, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -146,8 +147,10 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		const forkTime = context.deadline + 8n * DAY
 		await context.mock.setTime(forkTime)
 		await forkUniverse(context.owner, context.child, fixture.base.questionId)
+		await stagePortfolioForkCapital(context.owner, context.forks, context.child, 1n)
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'execute', args: [context.forks, 0n, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'choose', args: [context.child, 1n] })] }))
 		await context.mock.setTime(forkTime + 56n * DAY)
+		await stagePortfolioForkCapital(context.owner, context.forks, context.child, 1n)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: forkArtifact.abi, address: context.forks, functionName: 'startBranch', args: [context.child, 1n] }))
 		const before = await context.balance(context.other.account.address)
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'executeAndSweep', args: [context.capital, 0n, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }), context.token, context.other.account.address] }))

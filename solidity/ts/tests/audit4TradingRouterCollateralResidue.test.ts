@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Abi, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
@@ -148,6 +149,7 @@ describe('audit4: LP claims survive a universe fork', () => {
 		await fixture.mockWindow.setTime(activationDeadline + 1n)
 		// Prepare branch custody separately, as the production fork workflow does.
 		const forks = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'forkController' })
+		await stagePortfolioForkCapital(client, forks, universeId, 1n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'prepareBranch', args: [universeId, 1n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'migrate', args: [yesId, [1n]] }))
 		const childUniverse = await client.readContract({ abi: zoltarForkAbi, address: getZoltarAddress(), functionName: 'getChildUniverseId', args: [universeId, 1n] })

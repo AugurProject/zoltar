@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -88,10 +89,12 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		const firstFork = (await getUniverseData(owner, base.genesisUniverse)).forkTime
 		expect(firstFork).toBe(activation + forkOffset)
 		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...p, functionName: 'forkController' }) }
+		await stagePortfolioForkCapital(owner, coordinator.address, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
 		const child = getChildUniverseId(base.genesisUniverse, 1),
 			W = firstFork + 63n * DAY
 		await base.mockWindow.setTime(W)
+		await stagePortfolioForkCapital(owner, coordinator.address, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [child] }))
 		const remaining = sourceEnd - firstFork
@@ -138,6 +141,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		await base.mockWindow.advanceTime(3600n)
 		await approveToken(owner, getRepTokenAddress(child), getZoltarAddress())
 		await forkUniverse(owner, child, getQuestionId(second, base.outcomes))
+		await stagePortfolioForkCapital(owner, coordinator.address, child, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [child, 1n] }))
 		const secondFork = (await getUniverseData(owner, child)).forkTime
 		if ((materializationOffset ?? 0n) > 0n) {
@@ -154,6 +158,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'initiateSecurityPoolFork', args: [childPool] }))
 		const grandchild = getChildUniverseId(child, 1)
 		await base.mockWindow.setTime(secondFork + 63n * DAY)
+		await stagePortfolioForkCapital(owner, coordinator.address, child, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [child, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [grandchild] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'preparePortfolioQuestion', args: [childPool, grandchild] }))

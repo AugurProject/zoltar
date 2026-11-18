@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -53,6 +54,7 @@ describe('Statoblast: portfolio reporting carry and atomic claims', () => {
 		const branch = { abi: forkArtifact.abi, address: controller }
 		const child = getChildUniverseId(universe, outcome)
 		await fixture.base.mockWindow.setTime((await getUniverseData(owner, universe)).forkTime + 63n * DAY)
+		await stagePortfolioForkCapital(owner, branch.address, universe, BigInt(outcome))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [universe, BigInt(outcome)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [source, child] }))

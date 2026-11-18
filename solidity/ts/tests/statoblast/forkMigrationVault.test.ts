@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
@@ -49,6 +50,7 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 	test.each([false, true])('owner choices close exactly at the native cutoff (own: %s)', async own => {
 		const owner = fixture.owner()
 		const { choice, branch } = await trigger(own)
+		await stagePortfolioForkCapital(owner, branch.address, fixture.base.genesisUniverse, 1n)
 		await fixture.base.mockWindow.setTime(choice - 2n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'choose', args: [fixture.base.genesisUniverse, 1n] }))
 		expect((await owner.getBlock()).timestamp).toBe(choice - 1n)
@@ -66,12 +68,14 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 	test.each([false, true])('shared branch activation uses fixed phase boundaries (own: %s)', async own => {
 		const owner = fixture.owner()
 		const { choice, recap, branch } = await trigger(own)
+		await stagePortfolioForkCapital(owner, branch.address, fixture.base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'choose', args: [fixture.base.genesisUniverse, 1n] }))
 		const child = getChildUniverseId(fixture.base.genesisUniverse, 1)
 		await fixture.base.mockWindow.setTime(choice - 1n)
 		await expect(owner.simulateContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, 1n] })).rejects.toThrow('Fork choices still open')
 		await fixture.base.mockWindow.setTime(choice)
 		await owner.simulateContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, 1n] })
+		await stagePortfolioForkCapital(owner, branch.address, fixture.base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, 1n] }))
 		await fixture.base.mockWindow.setTime(recap - 1n)
 		await expect(owner.simulateContract({ ...branch, functionName: 'finalizeBranch', args: [child] })).rejects.toThrow('Fork activation window still open')
@@ -84,9 +88,11 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 	test.each([false, true])('question materialization stays available long after shared migration (own: %s)', async own => {
 		const owner = fixture.owner()
 		const { recap, branch } = await trigger(own)
+		await stagePortfolioForkCapital(owner, branch.address, fixture.base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'choose', args: [fixture.base.genesisUniverse, 1n] }))
 		const child = getChildUniverseId(fixture.base.genesisUniverse, 1)
 		await fixture.base.mockWindow.setTime(recap)
+		await stagePortfolioForkCapital(owner, branch.address, fixture.base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		await fixture.base.mockWindow.advanceTime(365n * DAY)
@@ -115,10 +121,12 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 		await addRepToMigrationBalance(owner, fixture.base.genesisUniverse, 1_000_000n * unit)
 		await splitMigrationRep(owner, fixture.base.genesisUniverse, 1_000_000n * unit, [1n])
 		const branch = await controller()
+		await stagePortfolioForkCapital(owner, branch.address, fixture.base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'choose', args: [fixture.base.genesisUniverse, 1n] }))
 		const child = getChildUniverseId(fixture.base.genesisUniverse, 1)
 		const firstForkTime = (await getUniverseData(owner, fixture.base.genesisUniverse)).forkTime
 		await fixture.base.mockWindow.setTime(firstForkTime + 63n * DAY)
+		await stagePortfolioForkCapital(owner, branch.address, fixture.base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [pool(), child] }))
@@ -129,6 +137,7 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 		await expect(owner.writeContract({ ...forker(), functionName: 'forkZoltarWithOwnEscalationGame', args: [childPool] })).rejects.toThrow()
 		await approveToken(owner, getRepTokenAddress(child), getZoltarAddress())
 		await forkUniverse(owner, child, fixture.base.questionId)
+		await stagePortfolioForkCapital(owner, branch.address, child, 2n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'prepareBranch', args: [child, 2n] }))
 		const grandchild = getChildUniverseId(child, 2)
 		expect([...(await owner.readContract({ ...portfolio(), functionName: 'inheritedFixedOutcome', args: [grandchild, fixture.base.questionId] }))]).toEqual([true, 1n])

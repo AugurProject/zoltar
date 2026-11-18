@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { describe, expect, test } from 'bun:test'
@@ -260,6 +261,7 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			const forkTime = context.deadline + 8n * DAY
 			await mock.setTime(forkTime)
 			await forkUniverse(owner, context.child, fixture.base.questionId)
+			await stagePortfolioForkCapital(owner, context.forks, context.child, 1n)
 			const choose = encodeFunctionData({ abi: forkArtifact.abi, functionName: 'choose', args: [context.child, 1n] })
 			await vaultCall('fork: unmaterialized winner chooses a branch', other, winner.vault, context.forks, choose)
 			await vaultCall('fork: another winner chooses a branch', filler, partial.vault, context.forks, choose)

@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -80,11 +81,13 @@ describe('audit: multi-question portfolio across two universe forks', () => {
 		await splitMigrationRep(owner, U0, 1_000_000n * unit, [1n])
 		const fork1 = (await getUniverseData(owner, U0)).forkTime
 		expect(fork1).toBeLessThan(end0)
+		await stagePortfolioForkCapital(owner, coordinator.address, U0, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [U0, 1n] }))
 		const sealed0 = await totals(U0)
 		const A = getChildUniverseId(U0, 1)
 		const W = fork1 + 63n * DAY
 		await base.mockWindow.setTime(W)
+		await stagePortfolioForkCapital(owner, coordinator.address, U0, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [U0, 1n], gas: 16_777_216n }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [A] }))
 
@@ -93,12 +96,14 @@ describe('audit: multi-question portfolio across two universe forks', () => {
 		await approveToken(owner, getRepTokenAddress(A), getZoltarAddress())
 		await forkUniverse(owner, A, await unrelatedQuestion('Audit second unrelated fork'))
 		const fork2 = (await getUniverseData(owner, A)).forkTime
+		await stagePortfolioForkCapital(owner, coordinator.address, A, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [A, 1n] }))
 		// Q1 became final in A without ever being materialized there.
 		const [, q1FrozenA] = await question(A, q1)
 		expect(q1FrozenA).not.toBe(0n)
 		const A1 = getChildUniverseId(A, 1)
 		await base.mockWindow.setTime(fork2 + 63n * DAY)
+		await stagePortfolioForkCapital(owner, coordinator.address, A, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [A, 1n], gas: 16_777_216n }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [A1] }))
 
@@ -170,9 +175,11 @@ describe('audit: multi-question portfolio across two universe forks', () => {
 		await addRepToMigrationBalance(owner, U0, 1_000_000n * unit)
 		await splitMigrationRep(owner, U0, 1_000_000n * unit, [1n])
 		const fork1 = (await getUniverseData(owner, U0)).forkTime
+		await stagePortfolioForkCapital(owner, coordinator.address, U0, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [U0, 1n] }))
 		const A = getChildUniverseId(U0, 1)
 		await base.mockWindow.setTime(fork1 + 63n * DAY)
+		await stagePortfolioForkCapital(owner, coordinator.address, U0, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [U0, 1n], gas: 16_777_216n }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [A] }))
 		// Optional first-use preparation only: the pool stays in ForkMigration.
@@ -192,7 +199,9 @@ describe('audit: multi-question portfolio across two universe forks', () => {
 		// into fork mode. Each branch step fits one transaction and none is per question.
 		const A1 = getChildUniverseId(A, 1)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'freeze', args: [A], gas: 16_777_216n }))
+		await stagePortfolioForkCapital(trader, coordinator.address, A, 1n)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'prepareBranch', args: [A, 1n], gas: 16_777_216n }))
+		await stagePortfolioForkCapital(trader, coordinator.address, A, 1n)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'startBranch', args: [A, 1n], gas: 16_777_216n }))
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [A1], gas: 16_777_216n }))
 		await writeContractAndWait(trader, () => trader.writeContract({ ...shares2, functionName: 'migrate', args: [A * 256n + 1n, [1n]], gas: 16_777_216n }))

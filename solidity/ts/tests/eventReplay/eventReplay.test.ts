@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { getZoltarAddress, getRepTokenAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
@@ -992,6 +993,7 @@ describe('event-only replay', () => {
 		const forkTime = (await getUniverseData(client, fixture.genesisUniverse)).forkTime
 		await mockWindow.setTime(forkTime + 63n * DAY)
 		const childUniverseId = getChildUniverseId(fixture.genesisUniverse, 1n)
+		await stagePortfolioForkCapital(client, controller, fixture.genesisUniverse, 1n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [fixture.genesisUniverse, 1n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [childUniverseId] }))
 		const target = { abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker }

@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioAddQuestionRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -87,6 +88,7 @@ describe('Statoblast: pluggable question admission', () => {
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		const coordinator = await owner.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
 		const child = getChildUniverseId(universe, QuestionOutcome.No)
+		await stagePortfolioForkCapital(owner, coordinator, universe, BigInt(QuestionOutcome.No))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'startBranch', args: [universe, BigInt(QuestionOutcome.No)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: nativeForkArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [parent, child] }))

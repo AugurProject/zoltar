@@ -1,3 +1,4 @@
+import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { parseAbi } from '@zoltar/core-shared/evm/ethereum'
@@ -6,6 +7,7 @@ import {
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
+	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
@@ -15,7 +17,7 @@ import {
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { DAY } from '../../testSupport/simulator/utils/constants'
@@ -170,8 +172,8 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		}
 		const reported = []
 		const streams = []
-		for (let index = 0n; index < 24n; index++) {
-			const end = forkAt - DAY + index * 3_600n
+		for (let index = 0n; index < 25n; index++) {
+			const end = forkAt - DAY + index * 3_300n
 			reported.push({ id: await register(`Combined gas report ${index}`, end), end })
 			const streamEnd = index === 0n ? forkAt + 3n * DAY : forkAt + 100n * DAY + index * DAY
 			streams.push(await register(`Combined gas fee stream ${index}`, streamEnd))
@@ -224,6 +226,69 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect((await owner.getTransactionReceipt({ hash: purchaseHash })).gasUsed).toBeLessThan(8_000_000n)
 		const feePool = fixture.poolFor(purchaseTarget).securityPool
 		const refreshHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: feePool, functionName: 'refreshPortfolioFees', gas: 6_000_000n }))
+		// Use the canonical book authorities to seed distant keys that the fixture's
+		// question and reporting windows cannot produce. Measurements use ordinary entry points.
+		const stressSnapshot = await mockWindow.anvilSnapshot()
+		const settlementAuthority = createWriteClient(mockWindow, BigInt(engine))
+		const reporterAuthority = createWriteClient(mockWindow, BigInt(fixture.portfolio))
+		await mockWindow.setBalance(engine, unit)
+		await mockWindow.setBalance(fixture.portfolio, unit)
+		await mockWindow.impersonateAccount(engine)
+		await mockWindow.impersonateAccount(fixture.portfolio)
+		const stressTime = await owner.readContract({ ...portfolio(), functionName: 'portfolioTime', args: [genesisUniverse] })
+		const cutoff = 0x75555555
+		const feeBucket = BigInt(cutoff) / DAY
+		for (let level = 0; level <= 17; level++) {
+			const id = streams[level]
+			if (id === undefined) throw new Error('Missing fee seed question')
+			const bucket = level === 17 ? feeBucket : feeBucket ^ (1n << BigInt(level))
+			const end = Number(bucket * DAY)
+			await writeContractAndWait(settlementAuthority, () => settlementAuthority.writeContract({ ...ledger, functionName: 'replaceFeeStream', args: [parentBook, id, 10n ** 9n, end, stressTime] }))
+			const [state] = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [parentBook, id] })
+			expect(state.feeEnd).toBe(BigInt(end))
+		}
+		for (const [level, { id }] of reported.entries()) {
+			const key = level === 24 ? cutoff : Number(BigInt(cutoff) ^ (1n << BigInt(2 * level + 1)))
+			const game = await owner.readContract({ abi: poolArtifact.abi, address: fixture.poolFor(id).securityPool, functionName: 'escalationGame' })
+			await writeContractAndWait(settlementAuthority, () => settlementAuthority.writeContract({ ...ledger, functionName: 'scheduleFinality', args: [parentBook, id, key, stressTime] }))
+			await writeContractAndWait(reporterAuthority, () => reporterAuthority.writeContract({ ...reporters, functionName: 'scheduleFinality', args: [game, key] }))
+			expect((await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [parentBook, id] }))[0].finalAfter).toBe(BigInt(key))
+			expect((await owner.readContract({ ...reporters, functionName: 'question', args: [genesisUniverse, id] }))[0].finalAfter).toBe(BigInt(key))
+		}
+		const victim = streams[17]
+		if (victim === undefined) throw new Error('Missing full-depth fee redemption question')
+		const fullDepth = await mockWindow.anvilSnapshot()
+		const victimPool = fixture.poolFor(victim).securityPool
+		const fullDepthRedemption = await writeContractAndWait(donor, () => donor.writeContract({ abi: poolArtifact.abi, address: victimPool, functionName: 'redeemCompleteSet', args: [unit / 10n], gas: 16_777_216n }))
+		const fullDepthRedemptionGas = (await owner.getTransactionReceipt({ hash: fullDepthRedemption })).gasUsed
+		expect(fullDepthRedemptionGas).toBeLessThan(16_777_216n)
+		await mockWindow.anvilRevert(fullDepth)
+		await mockWindow.setTime(BigInt(cutoff) - 650n)
+		await fixture.refreshPrice()
+		const serviceAddress = await owner.readContract({ ...portfolio(), functionName: 'services' })
+		const premiumAuthority = createWriteClient(mockWindow, BigInt(serviceAddress))
+		const premium = { abi: premiumArtifact.abi, address: await owner.readContract({ abi: servicesArtifact.abi, address: serviceAddress, functionName: 'premiumLedger' }) }
+		const stressCollateral = await owner.readContract({ ...portfolio(), functionName: 'collateralToken' })
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: stressCollateral, functionName: 'transfer', args: [serviceAddress, 12n] }))
+		await mockWindow.setBalance(serviceAddress, unit)
+		await mockWindow.impersonateAccount(serviceAddress)
+		// Active premium ends must fit the reporting window. Populate every
+		// alternating radix level in the available forward part of that window.
+		for (let level = 0; level <= 11; level++) {
+			const id = BigInt(level + 1)
+			const end = level === 11 ? cutoff : cutoff + 2 ** (2 * level + 1)
+			await writeContractAndWait(premiumAuthority, () => premiumAuthority.writeContract({ ...premium, functionName: 'fund', args: [genesisUniverse, id, 1n] }))
+			await writeContractAndWait(premiumAuthority, () => premiumAuthority.writeContract({ ...premium, functionName: 'schedule', args: [genesisUniverse, id, end] }))
+		}
+		await mockWindow.setTime(BigInt(cutoff))
+		await forkUniverse(owner, genesisUniverse, forkQuestion)
+		expect((await getUniverseData(owner, genesisUniverse)).forkTime).toBe(BigInt(cutoff) + 1n)
+		await stagePortfolioForkCapital(owner, forks.address, genesisUniverse, 1n)
+		const combinedCustody = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'prepareBranch', args: [genesisUniverse, 1n], gas: 16_777_216n }))
+		const combinedCustodyGas = (await owner.getTransactionReceipt({ hash: combinedCustody })).gasUsed
+		expect(combinedCustodyGas).toBeLessThan(8_000_000n)
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ fullDepthRedemptionGas, combinedCustodyGas })
+		await mockWindow.anvilRevert(stressSnapshot)
 		await mockWindow.setTime(forkAt)
 		const capitalAbi = parseAbi(['function isPriceValid() view returns (bool)'])
 		expect(await owner.readContract({ address: fixture.capitalLedger, abi: capitalAbi, functionName: 'isPriceValid' })).toBe(true)
@@ -231,9 +296,11 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const { forkTime } = await getUniverseData(owner, genesisUniverse)
 		const freezeHash = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'freeze', args: [genesisUniverse], gas: 1_500_000n }))
 		expect((await settlementState()).frozenBookId).not.toBe(0n)
+		await stagePortfolioForkCapital(owner, forks.address, genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'choose', args: [genesisUniverse, 1n] }))
 		const child = getChildUniverseId(genesisUniverse, 1)
 		await mockWindow.setTime(forkTime + 56n * DAY)
+		await stagePortfolioForkCapital(owner, forks.address, genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'startBranch', args: [genesisUniverse, 1n] }))
 		const priceFeedHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [pool().address, child], gas: 9_000_000n }))
 		await mockWindow.setTime(forkTime + 63n * DAY)
@@ -368,6 +435,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await fixture.base.mockWindow.setTime(fixture.secondEndTime + 1n)
 		await forkUniverse(owner, fixture.base.genesisUniverse, fixture.secondQuestionId)
 		const controller = await owner.readContract({ ...portfolio(), functionName: 'forkController' })
+		await stagePortfolioForkCapital(owner, controller, fixture.base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'choose', args: [fixture.base.genesisUniverse, 1n] }))
 		const forkTime = (await getUniverseData(owner, fixture.base.genesisUniverse)).forkTime
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)

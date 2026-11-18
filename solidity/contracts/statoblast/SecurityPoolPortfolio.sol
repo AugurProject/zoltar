@@ -286,7 +286,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function prepareForkChild(uint248 parent, uint256 outcome) external onlyForkController returns (SecurityPoolCapitalLedger capital) {
 		uint248 child = zoltar.getChildUniverseId(parent, outcome);
 		require(address(capitalLedger[child]) == address(0), 'Child already prepared');
-		if (address(zoltar.getRepToken(child)) == address(0)) zoltar.deployChild(parent, outcome);
+		require(address(pendingForkCapital[child]) != address(0), 'Stage fork capital first');
 		capital = _createCapital(child);
 		capital.beginForkImport();
 	}
