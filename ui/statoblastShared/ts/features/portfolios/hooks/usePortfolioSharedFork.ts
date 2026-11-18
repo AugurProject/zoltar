@@ -4,6 +4,8 @@ import { formatUnits, getAddress, isAddress, zeroAddress, type Address } from '@
 import {
 	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkPreparationRequest,
+	buildPortfolioForkLedgerRequest,
+	buildPortfolioNativeChildRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioForkFinalizeRequest,
 	buildPortfolioForkRecoveryRequest,
@@ -111,7 +113,22 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		(state !== undefined && state.timestamp >= state.choiceDeadline ? 'The fork choice window has closed.' : undefined) ??
 		(!state?.branch?.prepared ? 'Prepare the branch capital first.' : undefined) ??
 		(portfolio !== undefined && universeId === portfolio.universeId && !portfolio.positions.some(position => position.rep > 0n && position.commitment > 0n) ? 'No pledged REP to move.' : undefined)
-	const prepareBranchReason = branchReason ?? (state?.branch?.prepared ? 'This branch capital is already prepared.' : undefined)
+	const childDeploymentReason = (selected: PortfolioForkSnapshot) => (selected.branch?.repToken !== zeroAddress ? 'Child REP is already deployed.' : undefined)
+	const ledgerDeploymentReason = (selected: PortfolioForkSnapshot) => {
+		if (selected.branch?.prepared || selected.branch?.pendingCapital !== zeroAddress) return 'The capital ledger is already deployed.'
+		return selected.branch.repToken === zeroAddress ? 'Deploy child REP first.' : undefined
+	}
+	const custodyPreparationReason = (selected: PortfolioForkSnapshot) => {
+		if (selected.branch?.prepared) return 'This branch capital is already prepared.'
+		return selected.branch?.pendingCapital === zeroAddress ? 'Deploy the capital ledger first.' : undefined
+	}
+	const deployChildReason = branchReason ?? (state && childDeploymentReason(state))
+	const deployLedgerReason = branchReason ?? (state && ledgerDeploymentReason(state))
+	const prepareBranchReason = branchReason ?? (state && custodyPreparationReason(state))
+	const recheckStage = (reasonFor: (latest: PortfolioForkSnapshot) => string | undefined) => async (latest: PortfolioForkSnapshot) => {
+		const reason = latest.forkTime === 0n || latest.branch === undefined ? 'Fork context changed. Review again.' : reasonFor(latest)
+		if (reason !== undefined) throw new Error(reason)
+	}
 	const startReason = branchReason ?? (!state?.branch?.prepared ? 'Prepare the branch capital first.' : undefined) ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined) ?? (state?.branch?.started ? 'This branch migration is already started.' : undefined)
 	const finalizeReason = branchReason ?? (!state?.branch?.started ? 'Start branch migration first.' : undefined) ?? (state !== undefined && state.timestamp < state.activationDeadline ? 'Wait until the activation deadline.' : undefined) ?? (state?.branch?.ready ? 'This branch is already active.' : undefined)
 	const sourceReason =
@@ -190,6 +207,8 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		},
 		transferReason,
 		chooseReason,
+		deployChildReason,
+		deployLedgerReason,
 		prepareBranchReason,
 		startReason,
 		finalizeReason,
@@ -216,11 +235,39 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 					if (!latest.branch?.prepared) throw new Error('Prepare the branch capital first.')
 				},
 			),
+		deployChild: () =>
+			run(
+				'deployPortfolioForkChild',
+				'Deploy child REP',
+				deployChildReason,
+				selected => {
+					if (selected.branch === undefined) throw new Error('Select a branch.')
+					return { ...buildPortfolioNativeChildRequest({ ...base(selected), zoltar: selected.zoltar, outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Deploy the REP token for this outcome.' }
+				},
+				recheckStage(childDeploymentReason),
+			),
+		deployLedger: () =>
+			run(
+				'deployPortfolioForkLedger',
+				'Deploy capital ledger',
+				deployLedgerReason,
+				selected => {
+					if (selected.branch === undefined) throw new Error('Select a branch.')
+					return { ...buildPortfolioForkLedgerRequest({ ...base(selected), portfolio: selected.portfolio, outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Deploy the capital ledger for this branch. Prepare branch capital afterward to bind it to the portfolio.' }
+				},
+				recheckStage(ledgerDeploymentReason),
+			),
 		prepareBranch: () =>
-			run('preparePortfolioFork', 'Prepare branch capital', prepareBranchReason, selected => {
-				if (selected.branch === undefined) throw new Error('Select a branch.')
-				return { ...buildPortfolioForkPreparationRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch’s capital contracts for all participants. This does not choose a branch for anyone or migrate REP.' }
-			}),
+			run(
+				'preparePortfolioFork',
+				'Prepare branch capital',
+				prepareBranchReason,
+				selected => {
+					if (selected.branch === undefined) throw new Error('Select a branch.')
+					return { ...buildPortfolioForkPreparationRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch’s capital contracts for all participants. This does not choose a branch for anyone or migrate REP.' }
+				},
+				recheckStage(custodyPreparationReason),
+			),
 		start: () =>
 			run('startPortfolioFork', 'Start branch migration', startReason, selected => {
 				if (selected.branch === undefined) throw new Error('Select a branch.')

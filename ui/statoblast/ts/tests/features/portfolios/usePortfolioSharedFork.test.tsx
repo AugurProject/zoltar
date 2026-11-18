@@ -18,6 +18,8 @@ async function setup() {
 	const source = capitalClient(snapshot)
 	let chosen = false
 	let prepared = true
+	let childRepDeployed = true
+	let ledgerDeployed = true
 	let started = false
 	let ready = false
 	const client = source.client.extend(() =>
@@ -28,7 +30,8 @@ async function setup() {
 				forks: [100n * unit, 20n * unit, 10n * unit, 10n * unit, 2n * unit, 0n, 0n, 0n, true, false, true],
 				choices: [1n, chosen],
 				getChildUniverseId: 42n,
-				getRepToken: token,
+				getRepToken: childRepDeployed ? token : zeroAddress,
+				pendingForkCapital: ledgerDeployed ? capital : zeroAddress,
 				branches: [0n, 1n, 0n, 0n, 0n, 100n * unit, prepared || chosen, started, ready],
 				universes: [900n, 7n, 0n, false, 0n],
 				zoltarQuestionData: token,
@@ -72,6 +75,12 @@ async function setup() {
 		},
 		setPrepared: (value: boolean) => {
 			prepared = value
+		},
+		setChildRepDeployed: (v: boolean) => {
+			childRepDeployed = v
+		},
+		setLedgerDeployed: (v: boolean) => {
+			ledgerDeployed = v
 		},
 		setStarted: (v: boolean) => {
 			started = v
@@ -143,26 +152,45 @@ test('fork drafts survive a transient snapshot reload so a prepared branch can b
 	if (request === undefined) throw new Error('Activation request missing')
 	expect(decodeFunctionData({ abi: parseAbi(['function finalizeBranch(uint248 child)']), data: request.data })).toEqual({ functionName: 'finalizeBranch', args: [42n] })
 })
-test('a branch without chosen owners prepares capital in a separate transaction before migration', async () => {
-	const { hook, source, snapshot, requests, setPrepared, setStarted } = await setup()
+test('fresh branches deploy child REP and a ledger before binding custody', async () => {
+	const { hook, source, snapshot, requests, setPrepared, setStarted, setChildRepDeployed, setLedgerDeployed } = await setup()
+	const refresh = async (id: string) => hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${id.repeat(32)}` } })
 	setPrepared(false)
+	setChildRepDeployed(false)
+	setLedgerDeployed(false)
 	source.setSnapshot({ ...snapshot, timestamp: 2_500n })
-	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'66'.repeat(32)}` } })
-	await waitFor(() => expect(hook.state().state?.branch?.prepared).toBe(false))
-	expect(hook.state().startReason).toContain('Prepare the branch capital')
-	expect(hook.state().prepareBranchReason).toBeUndefined()
+	await refresh('66')
+	await waitFor(() => expect(hook.state().state?.branch?.repToken).toBe(zeroAddress))
+	expect(hook.state().deployLedgerReason).toBe('Deploy child REP first.')
+	expect(hook.state().prepareBranchReason).toBe('Deploy the capital ledger first.')
+	await act(() => hook.state().deployChild())
+	setChildRepDeployed(true)
+	await expect(requests[0]?.validateBeforeSubmit?.()).rejects.toThrow('already deployed')
+	await refresh('77')
+	await waitFor(() => expect(hook.state().deployLedgerReason).toBeUndefined())
+	await act(() => hook.state().deployLedger())
+	setLedgerDeployed(true)
+	await refresh('88')
+	await waitFor(() => expect(hook.state().prepareBranchReason).toBeUndefined())
 	await act(() => hook.state().prepareBranch())
-	expect(requests).toHaveLength(1)
-	const prepare = requests[0]
-	if (prepare === undefined) throw new Error('Missing branch preparation request')
-	expect(decodeFunctionData({ abi: parseAbi(['function prepareBranch(uint248 source,uint256 outcome) returns (uint248)']), data: prepare.data })).toEqual({ functionName: 'prepareBranch', args: [0n, 1n] })
+	const expected = [
+		['deployChild', 'function deployChild(uint248 source,uint256 outcome)'],
+		['prepareForkCapital', 'function prepareForkCapital(uint248 source,uint256 outcome) returns (address)'],
+		['prepareBranch', 'function prepareBranch(uint248 source,uint256 outcome) returns (uint248)'],
+	]
+	expect(requests).toHaveLength(expected.length)
+	for (const [index, [functionName, declaration]] of expected.entries()) {
+		const request = requests[index]
+		if (request === undefined || declaration === undefined) throw new Error('Missing preparation transaction')
+		expect(decodeFunctionData({ abi: parseAbi([declaration]), data: request.data })).toEqual({ functionName, args: [0n, 1n] })
+	}
 	setPrepared(true)
-	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'77'.repeat(32)}` } })
+	await refresh('99')
 	await waitFor(() => expect(hook.state().startReason).toBeUndefined())
 	await act(() => hook.state().start())
-	expect(requests).toHaveLength(2)
+	expect(requests).toHaveLength(4)
 	setStarted(true)
-	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'88'.repeat(32)}` } })
+	await refresh('aa')
 	await waitFor(() => expect(hook.state().finalizeReason).toContain('activation deadline'))
 })
 test.each([

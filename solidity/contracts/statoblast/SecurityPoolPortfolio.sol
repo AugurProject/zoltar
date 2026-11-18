@@ -114,7 +114,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	Deployers private deployers;
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
 	mapping(address => bool) private capitalAddresses;
-	mapping(uint248 => SecurityPoolCapitalLedger) private pendingForkCapital;
+	mapping(uint248 => SecurityPoolCapitalLedger) public pendingForkCapital;
 	mapping(uint256 => bytes32) public questionOriginIds;
 	mapping(address => bool) public registeredPools;
 	uint256[] private questions;

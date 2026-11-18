@@ -128,6 +128,8 @@ export { buildPortfolioAddQuestionRequest } from './securityPoolPortfolioMint.js
 export {
 	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkPreparationRequest,
+	buildPortfolioForkLedgerRequest,
+	buildPortfolioNativeChildRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioForkFinalizeRequest,
 	buildPortfolioForkRecoveryRequest,
