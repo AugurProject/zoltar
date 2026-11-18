@@ -2,21 +2,21 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
-import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolTimestampMap } from './SecurityPoolTimestampMap.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice Question-owned reporting premiums earn only until their funded finality.
 /// @dev Custody stays with Services. Prefix integrals settle all expired streams
 /// without visiting questions. Forks copy roots and preserve exact funded units.
 contract SecurityPoolResolutionPremiumBook {
-	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolTimestampMap for SecurityPoolTimestampMap.Store;
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	uint256 public constant UNIT_SCALE = 1e9;
 	uint48 public constant MAXIMUM_REPORTING_WINDOW = 3 days + 7 weeks;
 	uint256 private constant MAXIMUM_INHERITED_UNITS_PER_CASH = 1e12;
 	address public immutable services;
 	uint256 public totalCash;
-	SecurityPoolPersistentMap.Store private tree;
+	SecurityPoolTimestampMap.Store private tree;
 	SecurityPoolQuestionMap.Store private questionMap;
 	uint64 private lastQuestionId;
 	// Cash is held by Services; units allocate it. Every timestamp in this book uses portfolio time.
@@ -95,7 +95,7 @@ contract SecurityPoolResolutionPremiumBook {
 		require(!book.isSealed, 'Premium universe sealed');
 		Question memory state = _question(book, id);
 		if (state.units == 0) return;
-		_removeSchedule(book, state);
+		_removeSchedule(universe, book, state);
 		if (state.portfolioEndTime == 0) {
 			// Scaled units preserve fractional premium rates within the uint128 domain.
 			// The original funded deadline stays fixed when reporting is extended;
@@ -110,11 +110,11 @@ contract SecurityPoolResolutionPremiumBook {
 		uint256 maximumEnd = state.portfolioFundedEndTime;
 		state.portfolioEndTime = uint48(finalAfterPortfolioTime == 0 ? maximumEnd : Math.min(finalAfterPortfolioTime, maximumEnd));
 		require(state.portfolioEndTime >= state.portfolioStartTime, 'Premium finality already elapsed');
-		_changeRate(book, state.portfolioEndTime, state.rate, true);
+		_changeRate(universe, book, state.portfolioEndTime, state.rate, true);
 		uint256 tail = state.units - uint256(state.rate) * (state.portfolioEndTime - state.portfolioStartTime);
 		if (state.portfolioEndTime == state.portfolioFundedEndTime)
-			_changeTail(book, state.portfolioEndTime, tail, true);
-		else _changeRefund(book, state.portfolioEndTime, tail, true);
+			_changeTail(universe, book, state.portfolioEndTime, tail, true);
+		else _changeRefund(universe, book, state.portfolioEndTime, tail, true);
 		_write(book, id, state);
 	}
 	function cancel(uint248 universe, uint256 id) external onlyServices returns (uint256 unusedCash) {
@@ -122,7 +122,7 @@ contract SecurityPoolResolutionPremiumBook {
 		if (book.isSealed) return 0;
 		Question memory state = _question(book, id);
 		if (state.units == 0) return 0;
-		_removeSchedule(book, state);
+		_removeSchedule(universe, book, state);
 		unusedCash = _takeUnits(book, state.units);
 		_write(book, id, Question(0, 0, 0, 0, 0));
 	}
@@ -154,6 +154,7 @@ contract SecurityPoolResolutionPremiumBook {
 	function freeze(uint248 universe) external onlyServices {
 		require(books[universe].exists, 'Unknown premium source');
 		books[universe].isSealed = true;
+		tree.seal(universe);
 	}
 	function choose(uint248 source, uint248 child, uint256 chosen, uint256 total) external onlyServices {
 		Book storage parent = books[source];
@@ -217,41 +218,41 @@ contract SecurityPoolResolutionPremiumBook {
 		book.cash -= cash;
 		totalCash -= cash;
 	}
-	function _removeSchedule(Book storage book, Question memory state) private {
+	function _removeSchedule(uint248 universe, Book storage book, Question memory state) private {
 		if (state.portfolioEndTime == 0) return;
-		_changeRate(book, state.portfolioEndTime, state.rate, false);
+		_changeRate(universe, book, state.portfolioEndTime, state.rate, false);
 		uint256 duration =
 			state.portfolioEndTime > state.portfolioStartTime ? state.portfolioEndTime - state.portfolioStartTime : 0;
 		uint256 tail = state.units - uint256(state.rate) * duration;
 		if (state.portfolioEndTime == state.portfolioFundedEndTime)
-			_changeTail(book, state.portfolioEndTime, tail, false);
-		else _changeRefund(book, state.portfolioEndTime, tail, false);
+			_changeTail(universe, book, state.portfolioEndTime, tail, false);
+		else _changeRefund(universe, book, state.portfolioEndTime, tail, false);
 	}
 	function _integral(Book storage book, uint48 portfolioTimestamp) private view returns (uint256) {
 		return
 			(tree.total(book.rateRoot) - tree.prefixTotal(book.rateRoot, portfolioTimestamp)) * portfolioTimestamp +
 			tree.prefixTotal(book.endRoot, portfolioTimestamp);
 	}
-	function _changeRate(Book storage book, uint48 end, uint128 rate, bool increase) private {
+	function _changeRate(uint248 universe, Book storage book, uint48 end, uint128 rate, bool increase) private {
 		if (rate == 0) return;
 		uint256 previous = tree.get(book.rateRoot, end);
 		uint256 next = increase ? previous + rate : previous - rate;
-		book.rateRoot = tree.set(book.rateRoot, end, next, next);
+		book.rateRoot = tree.set(universe, book.rateRoot, end, next, next);
 		require(tree.total(book.rateRoot) <= type(uint208).max, 'Premium rate domain exceeded');
-		book.endRoot = tree.set(book.endRoot, end, next, next * end);
+		book.endRoot = tree.set(universe, book.endRoot, end, next, next * end);
 	}
-	function _changeTail(Book storage book, uint48 end, uint256 units, bool increase) private {
+	function _changeTail(uint248 universe, Book storage book, uint48 end, uint256 units, bool increase) private {
 		if (units == 0) return;
 		uint256 previous = tree.get(book.tailRoot, end);
 		uint256 next = increase ? previous + units : previous - units;
-		book.tailRoot = tree.setModular(book.tailRoot, end, next, next);
+		book.tailRoot = tree.setModular(universe, book.tailRoot, end, next, next);
 	}
 
-	function _changeRefund(Book storage book, uint48 end, uint256 units, bool increase) private {
+	function _changeRefund(uint248 universe, Book storage book, uint48 end, uint256 units, bool increase) private {
 		if (units == 0) return;
 		uint256 previous = tree.get(book.refundRoot, end);
 		uint256 next = increase ? previous + units : previous - units;
-		book.refundRoot = tree.setModular(book.refundRoot, end, next, next);
+		book.refundRoot = tree.setModular(universe, book.refundRoot, end, next, next);
 	}
 	function _write(Book storage book, uint256 id, Question memory state) private {
 		uint64 stateId = ++lastQuestionId;

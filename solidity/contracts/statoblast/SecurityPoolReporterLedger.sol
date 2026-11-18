@@ -5,7 +5,7 @@ import { Zoltar } from '../Zoltar.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
-import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolTimestampMap } from './SecurityPoolTimestampMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolReporterLedger } from './interfaces/ISecurityPoolReporterLedger.sol';
@@ -26,7 +26,7 @@ interface IReporterGameIdentity {
 /// Games finalized strictly before a fork retain parent REP; only live escrow migrates.
 contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	using SafeERC20Ops for IERC20;
-	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolTimestampMap for SecurityPoolTimestampMap.Store;
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
@@ -59,7 +59,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	address public immutable portfolio;
 	Zoltar public immutable zoltar;
-	SecurityPoolPersistentMap.Store private tree;
+	SecurityPoolTimestampMap.Store private tree;
 	SecurityPoolQuestionMap.Store private questionMap;
 	SecurityPoolFrozenHistory.Store private frozenHistory;
 	uint64 private lastQuestionStateId;
@@ -141,7 +141,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
 		require(!finalClaim, 'Reporter claim is final');
 		require(IERC20(address(zoltar.getRepToken(identity.universeId))).balanceOf(address(this)) >= book.liveAttoRep + book.finalAttoRep + amountAttoRep, 'Reporter deposit is not funded');
-		_changeFinality(book, state.finalAfter, amountAttoRep, true);
+		_changeFinality(identity.universeId, book, state.finalAfter, amountAttoRep, true);
 		state.balanceAttoRep += amountAttoRep;
 		book.liveAttoRep += amountAttoRep;
 		_writeQuestion(book, identity.questionId, state);
@@ -164,7 +164,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		if (finalClaim) book.finalAttoRep -= amountAttoRep;
 		else {
 			book.liveAttoRep -= amountAttoRep;
-			_changeFinality(book, state.finalAfter, amountAttoRep, false);
+			_changeFinality(identity.universeId, book, state.finalAfter, amountAttoRep, false);
 		}
 		_writeQuestion(book, identity.questionId, state);
 		emit ReporterBalanceChanged(identity.universeId, identity.questionId, state.balanceAttoRep);
@@ -183,10 +183,12 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		require(!finalClaim, 'Reporter finality is immutable');
 		// Deadlines are expressed in the portfolio clock, which pauses across forks.
 		require(finalAfter == 0 || finalAfter >= _portfolioTime(identity.universeId), 'Reporter finality already elapsed');
-		_changeFinality(book, state.finalAfter, state.balanceAttoRep, false);
-		state.finalAfter = finalAfter;
+		if (state.finalAfter != finalAfter) {
+			_changeFinality(identity.universeId, book, state.finalAfter, state.balanceAttoRep, false);
+			state.finalAfter = finalAfter;
+			_changeFinality(identity.universeId, book, finalAfter, state.balanceAttoRep, true);
+		}
 		state.scheduledUniverseId = identity.universeId;
-		_changeFinality(book, finalAfter, state.balanceAttoRep, true);
 		_writeQuestion(book, identity.questionId, state);
 		emit ReporterFinalityScheduled(game, finalAfter);
 	}
@@ -215,7 +217,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		state.balanceAttoRep -= haircut;
 		state.winnerHaircutPaidByFork = true;
 		book.liveAttoRep -= haircut;
-		_changeFinality(book, state.finalAfter, haircut, false);
+		_changeFinality(universeId, book, state.finalAfter, haircut, false);
 		_writeQuestion(book, questionId, state);
 		IERC20(address(zoltar.getRepToken(universeId))).safeApprove(address(zoltar), threshold);
 		zoltar.forkUniverse(universeId, questionId);
@@ -239,10 +241,10 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		(Question memory fixedQuestion, bool alreadyFinal) = _question(childUniverseId, forkQuestionId);
 		if (!alreadyFinal && fixedQuestion.balanceAttoRep != 0) {
 			Book storage child = books[childUniverseId];
-			_changeFinality(child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, false);
+			_changeFinality(childUniverseId, child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, false);
 			fixedQuestion.finalAfter = child.minimumFinalAfter;
 			fixedQuestion.scheduledUniverseId = childUniverseId;
-			_changeFinality(child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, true);
+			_changeFinality(childUniverseId, child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, true);
 			_writeQuestion(child, forkQuestionId, fixedQuestion);
 		}
 		emit ReporterChildCreated(sourceUniverseId, childUniverseId, source.liveAttoRep);
@@ -253,6 +255,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		uint48 forkPortfolioTime = IReporterPortfolioClock(portfolio).forkPortfolioTime(universeId);
 		_freezeMatured(universeId, book, forkPortfolioTime);
 		book.isSealed = true;
+		tree.seal(universeId);
 		uint256 prepared = zoltar.getMigrationRepBalanceAttoRep(address(this), universeId);
 		require(prepared <= book.liveAttoRep, 'Reporter migration exceeds live inventory');
 		uint256 remaining = book.liveAttoRep - prepared;
@@ -293,11 +296,11 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		book.frozenRoot = frozenHistory.append(book.frozenRoot, timestamp - 1, uint256(universeId) + 1);
 	}
 
-	function _changeFinality(Book storage book, uint48 finalAfter, uint256 amountAttoRep, bool increase) private {
+	function _changeFinality(uint248 universeId, Book storage book, uint48 finalAfter, uint256 amountAttoRep, bool increase) private {
 		if (finalAfter == 0 || amountAttoRep == 0) return;
 		uint256 prior = tree.get(book.finalityRoot, finalAfter);
 		uint256 next = increase ? prior + amountAttoRep : prior - amountAttoRep;
-		book.finalityRoot = tree.setModular(book.finalityRoot, finalAfter, next, next);
+		book.finalityRoot = tree.setModular(universeId, book.finalityRoot, finalAfter, next, next);
 	}
 
 	function _writeQuestion(Book storage book, uint256 questionId, Question memory state) private {

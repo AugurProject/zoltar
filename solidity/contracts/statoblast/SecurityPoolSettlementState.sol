@@ -2,7 +2,6 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
-import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
 /// @dev Shared settlement types and storage; accounting behavior remains in the book.
@@ -11,7 +10,6 @@ abstract contract SecurityPoolSettlementState {
 	uint64 public lastFrozenBookId;
 	uint64 internal lastQuestionStateId;
 	uint64 internal lastFeeModeId;
-	SecurityPoolPersistentMap.Store internal tree;
 	SecurityPoolQuestionMap.Store internal questionMap;
 	SecurityPoolFrozenHistory.Store internal frozenHistory;
 
@@ -72,6 +70,18 @@ abstract contract SecurityPoolSettlementState {
 		uint64 finalityRoot;
 		uint256 finalizedPrefix;
 	}
+
+	// A sealed source can still service final claims. Its fork roots never follow
+	// any later writes made under the source continuation's new writer.
+	struct ForkSchedules {
+		uint64 finalityRoot;
+		uint64 feeRateRoot;
+		uint64 feeEndRoot;
+		uint64 feeModeRoot;
+		uint64 recoveryFinalityRoot;
+	}
+
+	mapping(uint64 => ForkSchedules) internal forkSchedules;
 
 	struct FeeMode {
 		uint256 fundedSeconds;

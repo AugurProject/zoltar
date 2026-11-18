@@ -5,7 +5,7 @@ import { SecurityPoolSettlementPricing } from './SecurityPoolSettlementPricing.s
 import { SecurityPoolSettlementMath as SettlementMath } from './SecurityPoolSettlementMath.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
-import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolTimestampStore } from './SecurityPoolTimestampStore.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
 /// @notice Central ETH settlement accounting with distinct internal units and outcome supply.
@@ -15,12 +15,12 @@ import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 /// Finality uses a portfolio clock paused during forks; fee deadlines retain native calendar time.
 /// A fork copies immutable roots, including ALL inherited outcome liabilities, in constant work.
 contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
-	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
 	uint48 public constant MINIMUM_FORK_RESPONSE = 3 days;
 	address public immutable portfolio;
+	SecurityPoolTimestampStore private immutable tree;
 
 	event SettlementRepaired(uint64 indexed bookId, uint256 cashAttoEth);
 	event BookCreated(uint64 indexed bookId, uint64 indexed sourceBookId, uint256 cashAttoEth, uint256 units);
@@ -34,6 +34,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	constructor(address authority, uint256 minimumExchangeRate) SecurityPoolSettlementPricing(minimumExchangeRate) {
 		require(authority != address(0), 'Invalid settlement authority');
 		portfolio = authority;
+		tree = new SecurityPoolTimestampStore();
 	}
 
 	modifier onlyPortfolio() {
@@ -47,7 +48,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		fundingTargets[bookId] = FundingTarget(1, 1);
 		books[bookId].portfolioTimestamp = portfolioTimestamp;
 		books[bookId].feesEnabled = true;
-		_setFeeMode(books[bookId], true);
+		_setFeeMode(bookId, books[bookId], true);
 		emit BookCreated(bookId, 0, 0, 0);
 	}
 
@@ -57,6 +58,8 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		Book storage book = _activeBook(bookId);
 		_freezeMatured(bookId, book, portfolioTimestamp);
 		book.isSealed = true;
+		forkSchedules[bookId] = ForkSchedules(book.finalityRoot, book.feeRateRoot, book.feeEndRoot, book.feeModeRoot, recoveryStates[bookId].finalityRoot);
+		tree.seal(bookId);
 	}
 
 	/// @notice Create a child with independently supplied ETH and every source outcome liability.
@@ -69,22 +72,24 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		require(recoveryAttoRep >= source.recoveryAttoRep && recoveryAttoRep < RECOVERY_SCALE, 'Invalid child recovery REP');
 		bookId = ++lastBookId;
 		Book storage child = books[bookId];
+		ForkSchedules storage snapshot = forkSchedules[sourceBookId];
 		fundingTargets[bookId] = _childTarget(sourceBookId, source);
 		child.cashAttoEth = fundedCashAttoEth;
 		child.recoveryAttoRep = recoveryAttoRep;
 		child.units = source.units;
 		child.questionRoot = source.questionRoot;
-		child.finalityRoot = source.finalityRoot;
+		child.finalityRoot = snapshot.finalityRoot;
 		child.frozenRoot = source.frozenRoot;
 		child.portfolioTimestamp = source.portfolioTimestamp;
-		child.feeRateRoot = source.feeRateRoot;
-		child.feeEndRoot = source.feeEndRoot;
-		child.feeModeRoot = source.feeModeRoot;
+		child.feeRateRoot = snapshot.feeRateRoot;
+		child.feeEndRoot = snapshot.feeEndRoot;
+		child.feeModeRoot = snapshot.feeModeRoot;
 		child.feesEnabled = source.feesEnabled;
 		child.minimumFinalAfter = source.portfolioTimestamp + MINIMUM_FORK_RESPONSE;
 		child.feeTimeOffset = source.feeTimeOffset;
 		child.finalizedUnitsPrefix = source.finalizedUnitsPrefix;
 		recoveryStates[bookId] = recoveryStates[sourceBookId];
+		recoveryStates[bookId].finalityRoot = snapshot.recoveryFinalityRoot;
 		// Only newly surrendered backing changes the index. Inherited claim REP
 		// retains its old question ownership, including previous partial burns.
 		if (recoveryAttoRep > source.recoveryAttoRep) {
@@ -93,7 +98,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 				recoveryStates[bookId].index += increment;
 			}
 		}
-		_setFeeMode(child, isCashFunded(bookId) && source.feesEnabled);
+		_setFeeMode(bookId, child, isCashFunded(bookId) && source.feesEnabled);
 		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, source.units);
 	}
 
@@ -134,7 +139,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		require(!book.feesEnabled, 'Pause fees before clock change');
 		require(nativeTimestamp >= _feeTimestamp(book), 'Fee clock cannot go backwards');
 		book.feeTimeOffset = nativeTimestamp - book.portfolioTimestamp;
-		_setFeeMode(book, false);
+		_setFeeMode(bookId, book, false);
 	}
 
 	function totals(uint64 bookId)
@@ -216,7 +221,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 			book.recoveryAttoRep -= recoveryAttoRep;
 			book.units -= unitsBurned;
 			_clearEmptyBook(bookId, book);
-			_changeFinalityUnits(book, state.finalAfter, unitsBurned, DECREASE_BALANCE);
+			_changeFinalityUnits(bookId, book, state.finalAfter, unitsBurned, DECREASE_BALANCE);
 		} else {
 			FrozenBook storage frozen = frozenBooks[frozenBookId];
 			require(frozen.sourceBookId == bookId, 'Use source final claim');
@@ -229,9 +234,9 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		state.units -= unitsBurned;
 		state.feePrincipalAttoEth = Math.mulDiv(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
 		if (state.feeRateAttoEthPerSecond != 0) {
-			_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, DECREASE_BALANCE);
-			state.feeRateAttoEthPerSecond = Math.mulDiv(state.feeRateAttoEthPerSecond, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
-			_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, INCREASE_BALANCE);
+			uint256 remainingRate = Math.mulDiv(state.feeRateAttoEthPerSecond, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
+			_changeFeeRate(bookId, book, state.feeEnd, state.feeRateAttoEthPerSecond - remainingRate, DECREASE_BALANCE);
+			state.feeRateAttoEthPerSecond = remainingRate;
 		}
 		state.outcomeSupplyAttoShares -= outcomeShares;
 		uint256 correction;
@@ -264,11 +269,11 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 			if (duration == 0) rateAttoEthPerSecond = 0;
 			else end = feeClockTimestamp + uint48(duration);
 		}
-		_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, DECREASE_BALANCE);
+		_changeFeeRate(bookId, book, state.feeEnd, state.feeRateAttoEthPerSecond, DECREASE_BALANCE);
 		state.feeRateAttoEthPerSecond = rateAttoEthPerSecond;
 		state.feeStart = feeClockTimestamp;
 		state.feeEnd = rateAttoEthPerSecond == 0 ? 0 : end;
-		_changeFeeRate(book, state.feeEnd, rateAttoEthPerSecond, INCREASE_BALANCE);
+		_changeFeeRate(bookId, book, state.feeEnd, rateAttoEthPerSecond, INCREASE_BALANCE);
 		_writeQuestion(bookId, book, questionId, state);
 		emit FeeStreamReplaced(bookId, questionId, rateAttoEthPerSecond, state.feeEnd);
 	}
@@ -297,9 +302,11 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		require(frozenBookId == 0, 'Final claim immutable');
 		require(finalAfter == 0 || finalAfter >= portfolioTimestamp, 'Finality already elapsed');
 		require(finalAfter == 0 || state.feeRateAttoEthPerSecond == 0 || state.feeEnd <= _feeTimestamp(book), 'Stop fees before finality');
-		_changeFinalityUnits(book, state.finalAfter, state.units, DECREASE_BALANCE);
-		state.finalAfter = finalAfter;
-		_changeFinalityUnits(book, state.finalAfter, state.units, INCREASE_BALANCE);
+		if (state.finalAfter != finalAfter) {
+			_changeFinalityUnits(bookId, book, state.finalAfter, state.units, DECREASE_BALANCE);
+			state.finalAfter = finalAfter;
+			_changeFinalityUnits(bookId, book, finalAfter, state.units, INCREASE_BALANCE);
+		}
 		_writeQuestion(bookId, book, questionId, state);
 		emit FinalityScheduled(bookId, questionId, state.finalAfter);
 	}
@@ -385,7 +392,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		}
 		book.portfolioTimestamp = portfolioTimestamp;
 		if (portfolioTimestamp <= book.minimumFinalAfter) return 0;
-		uint256 prefix = tree.prefixTotalModular(book.finalityRoot, portfolioTimestamp - 1);
+		uint256 prefix = tree.prefix(book.finalityRoot, portfolioTimestamp - 1, true);
 		uint256 units;
 		// Only pending deadlines can change. All newly matured scheduled units
 		// fit the live book, so a modular prefix difference is their exact amount.
@@ -396,7 +403,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		if (units == 0) return 0;
 		uint256 cashAttoEth = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], units);
 		RecoveryState storage recovery = recoveryStates[bookId];
-		uint256 correctionPrefix = tree.prefixTotalModular(recovery.finalityRoot, portfolioTimestamp - 1);
+		uint256 correctionPrefix = tree.prefix(recovery.finalityRoot, portfolioTimestamp - 1, true);
 		uint256 scaledRecovery;
 		unchecked {
 			scaledRecovery = units * recovery.index + correctionPrefix - recovery.finalizedPrefix;
@@ -434,17 +441,17 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	function _feeIntegral(Book storage book, uint48 nativeTimestamp) private view returns (uint256) {
-		uint256 remainingRate = tree.total(book.feeRateRoot) - tree.prefixTotal(book.feeRateRoot, nativeTimestamp);
-		return remainingRate * nativeTimestamp + tree.prefixTotal(book.feeEndRoot, nativeTimestamp);
+		uint256 remainingRate = tree.total(book.feeRateRoot) - tree.prefix(book.feeRateRoot, nativeTimestamp, false);
+		return remainingRate * nativeTimestamp + tree.prefix(book.feeEndRoot, nativeTimestamp, false);
 	}
 
-	function _changeFeeRate(Book storage book, uint48 end, uint256 rate, bool increase) private {
+	function _changeFeeRate(uint64 bookId, Book storage book, uint48 end, uint256 rate, bool increase) private {
 		if (rate == 0) return;
 		uint256 previous = tree.get(book.feeRateRoot, end);
 		uint256 next = increase ? previous + rate : previous - rate;
-		book.feeRateRoot = tree.set(book.feeRateRoot, end, next, next);
+		book.feeRateRoot = tree.set(bookId, book.feeRateRoot, end, next, next, false);
 		require(tree.total(book.feeRateRoot) <= type(uint208).max, 'Aggregate fee rate overflow');
-		book.feeEndRoot = tree.set(book.feeEndRoot, end, next, next * end);
+		book.feeEndRoot = tree.set(bookId, book.feeEndRoot, end, next, next * end, false);
 	}
 
 	function _fundedSeconds(Book storage book, uint48 nativeTimestamp) private view returns (uint256) {
@@ -463,25 +470,25 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	function _syncFeeMode(uint64 bookId, Book storage book) private {
 		FeeMode storage mode = feeModes[uint64(tree.floor(book.feeModeRoot, _feeTimestamp(book)))];
 		bool funded = isCashFunded(bookId) && book.feesEnabled;
-		if (mode.funded != funded) _setFeeMode(book, funded);
+		if (mode.funded != funded) _setFeeMode(bookId, book, funded);
 	}
 
-	function _setFeeMode(Book storage book, bool funded) private {
+	function _setFeeMode(uint64 bookId, Book storage book, bool funded) private {
 		uint48 feeClockTimestamp = _feeTimestamp(book);
 		uint256 elapsed = book.feeModeRoot == 0 ? 0 : _fundedSeconds(book, feeClockTimestamp);
 		feeModes[++lastFeeModeId] = FeeMode(elapsed, feeClockTimestamp, funded);
-		book.feeModeRoot = tree.set(book.feeModeRoot, feeClockTimestamp, lastFeeModeId, 0);
+		book.feeModeRoot = tree.set(bookId, book.feeModeRoot, feeClockTimestamp, lastFeeModeId, 0, false);
 	}
 
 	function _feeTimestamp(Book storage book) private view returns (uint48) {
 		return book.portfolioTimestamp + book.feeTimeOffset;
 	}
 
-	function _changeFinalityUnits(Book storage book, uint48 finalAfter, uint256 units, bool increase) private {
+	function _changeFinalityUnits(uint64 bookId, Book storage book, uint48 finalAfter, uint256 units, bool increase) private {
 		if (finalAfter == 0 || units == 0) return;
 		uint256 previous = tree.get(book.finalityRoot, finalAfter);
 		uint256 next = increase ? previous + units : previous - units;
-		book.finalityRoot = tree.setModular(book.finalityRoot, finalAfter, next, next);
+		book.finalityRoot = tree.set(bookId, book.finalityRoot, finalAfter, next, next, true);
 	}
 
 	function _writeQuestion(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private {
@@ -524,6 +531,6 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		unchecked {
 			next = increase ? previous + correction : previous - correction;
 		}
-		recovery.finalityRoot = tree.setModular(recovery.finalityRoot, finalAfter, next, next);
+		recovery.finalityRoot = tree.set(bookId, recovery.finalityRoot, finalAfter, next, next, true);
 	}
 }
