@@ -121,7 +121,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 			// completes the prepared ledger whatever ancestor source it names.
 			source = child.parent();
 		} else {
-			_requireDescendant(source.universeId(), targetUniverse);
+			require(zoltar.isUniverseAncestor(source.universeId(), targetUniverse), 'Target universe does not descend from source');
 		}
 		SecurityPoolReporterLedger reporters = SecurityPoolReporterLedger(portfolio.reporterLedger(targetUniverse));
 		reporters.checkpoint(targetUniverse);
@@ -137,16 +137,6 @@ contract SecurityPoolForkerPortfolioDelegate {
 		portfolio.registerChildPool(child);
 		if (zoltar.getForkTime(targetUniverse) != 0) child.setSystemState(SystemState.PoolForked);
 		return (child, portfolio, sourceGame, source);
-	}
-
-	/// @dev A sibling or unrelated branch must never become a ledger's immutable parent.
-	/// The walk ends at genesis; each step is a real fork, so depth stays small.
-	function _requireDescendant(uint248 ancestor, uint248 universe) private view {
-		while (universe != 0) {
-			(, , , , universe) = zoltar.universes(universe);
-			if (universe == ancestor) return;
-		}
-		revert('Target universe does not descend from source');
 	}
 
 	/// @dev `source` and everything derived from it are caller-supplied. A pool's factory is

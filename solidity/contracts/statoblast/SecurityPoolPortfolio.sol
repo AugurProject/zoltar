@@ -114,6 +114,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	Deployers private deployers;
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
 	mapping(address => bool) private capitalAddresses;
+	mapping(uint248 => SecurityPoolCapitalLedger) private pendingForkCapital;
 	mapping(uint256 => bytes32) public questionOriginIds;
 	mapping(address => bool) public registeredPools;
 	uint256[] private questions;
@@ -269,6 +270,20 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool fixedOutcome, uint256 outcome) {
 		return IPortfolioForkCoordinator(forkController).inheritedFixedOutcome(universeId, questionId);
 	}
+	/// @notice Stage only the capital ledger for an existing native child. Custody is bound during branch preparation.
+	function prepareForkCapital(uint248 parent, uint256 outcome) external nonReentrant returns (SecurityPoolCapitalLedger capital) {
+		require(address(capitalLedger[parent]) != address(0) && zoltar.getForkTime(parent) != 0, 'Portfolio parent is not forked');
+		uint248 child = zoltar.getChildUniverseId(parent, outcome);
+		require(address(zoltar.getRepToken(child)) != address(0), 'Deploy native child first');
+		capital = capitalLedger[child];
+		if (address(capital) != address(0)) return capital;
+		capital = pendingForkCapital[child];
+		if (address(capital) == address(0)) {
+			capital = _deployCapital(child);
+			pendingForkCapital[child] = capital;
+		}
+	}
+
 	function prepareForkChild(uint248 parent, uint256 outcome) external onlyForkController returns (SecurityPoolCapitalLedger capital) {
 		uint248 child = zoltar.getChildUniverseId(parent, outcome);
 		require(address(capitalLedger[child]) == address(0), 'Child already prepared');
@@ -355,8 +370,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		require(entered && purchasingPool == msg.sender, 'No authorized portfolio purchase');
 		return services.mintQuestionSettlement(pool, cash);
 	}
-	function redeemQuestionSettlement(address recipient, uint256 burnedShares) external returns (uint256, uint256, uint256) {
-		return services.redeemQuestionSettlement(_pool(msg.sender), recipient, burnedShares);
+	function redeemQuestionSettlement(address recipient, uint256 burnedShares, uint256 minimumCashAttoEth) external returns (uint256, uint256, uint256) {
+		return services.redeemQuestionSettlement(_pool(msg.sender), recipient, burnedShares, minimumCashAttoEth);
 	}
 	function checkpointQuestionSettlement() external returns (uint256, uint256, uint48) {
 		return services.checkpointQuestionSettlement(_pool(msg.sender), false);
@@ -365,8 +380,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		return services.checkpointQuestionSettlement(_pool(msg.sender), true);
 	}
 	function quoteQuestionSettlement(address pool, uint256 shares) external view returns (uint256) {
-		_pool(pool);
-		return settlement.quoteRedemption(pool, shares);
+		uint248 universeId = _pool(pool).universeId();
+		return settlement.quoteRedemptionAt(pool, shares, portfolioTime(universeId));
 	}
 	function quoteQuestionRecoveryRep(address pool, uint256 shares) external view returns (uint256) {
 		_pool(pool);
@@ -424,8 +439,14 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		reporters.triggerFork(pool.universeId(), pool.questionId());
 		IPortfolioForkCoordinator(forkController).freeze(pool.universeId());
 	}
+	function _deployCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger) {
+		return
+			deployers.capital.create(address(this), zoltar, universeId, statoblastSecurityMultiplierBps, minimumCommitmentAttoEth, rewardVestingSeconds);
+	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {
-		capital = deployers.capital.create(address(this), zoltar, universeId, statoblastSecurityMultiplierBps, minimumCommitmentAttoEth, rewardVestingSeconds);
+		capital = pendingForkCapital[universeId];
+		if (address(capital) == address(0)) capital = _deployCapital(universeId);
+		else delete pendingForkCapital[universeId];
 		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
 		capitalLedger[universeId] = capital;
 		capitalAddresses[address(capital)] = true;

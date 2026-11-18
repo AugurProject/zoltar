@@ -646,6 +646,60 @@ describe('Statoblast: central internal settlement units', () => {
 		expect((await question(1n, 2n))[1]).toBe(0n)
 	})
 
+	test('quotes the first partial final redemption after reservation rounding and conserves the residual', async () => {
+		await mint(1n, 1n, 3n)
+		await mint(1n, 2n, 1n)
+		await seal(1n, 0)
+		await child(1n, 2n)
+		const cutoff = 3 * 86_400 + 2
+		await schedule(2n, 1n, cutoff - 1)
+		const preview = (timestamp: number) => client.readContract({ ...target(), functionName: 'quoteRedemptionAt', args: [2n, 1n, 2n, timestamp] })
+		expect((await preview(cutoff - 1))[0]).toBe(1n)
+		expect((await preview(cutoff))[0]).toBe(0n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'checkpointFees', args: [2n, cutoff] }))
+		const [cash] = await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [2n, 1n, 2n] })
+		const close = await client.simulateContract({ ...target(), functionName: 'redeem', args: [2n, 1n, 2n, 0n, cutoff] })
+		expect(cash).toBe(close.result[0])
+		await redeem(2n, 1n, 2n, cutoff)
+		const [residual] = await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [2n, 1n, 1n] })
+		const [remainingCash] = await book(2n)
+		expect(cash + residual + remainingCash).toBe(2n)
+	})
+
+	test('named and fork-bulk finality preserve custody with bounded rounding dust', async () => {
+		for (const id of [1n, 2n, 3n, 4n]) await mint(1n, id, 1_000n)
+		await seal(1n, 0)
+		await child(1n, 2_002n, 2_003n)
+		const cutoff = 3 * 86_400 + 2
+		for (const id of [1n, 2n]) await schedule(2n, id, cutoff - 1)
+		await schedule(2n, 3n, cutoff)
+		const ethereum = getAnvilWindowEthereum()
+		const prior = await ethereum.anvilSnapshot()
+		const settle = async (named: boolean) => {
+			if (named) {
+				for (const id of [1n, 2n]) {
+					await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [2n, id, cutoff] }))
+				}
+			}
+			await seal(2n, cutoff)
+			const frozenIds = await Promise.all([1n, 2n, 3n, 4n].map(async id => (await question(2n, id))[1]))
+			expect(frozenIds.slice(0, 2).every(id => id !== 0n)).toBe(true)
+			expect(frozenIds.slice(2)).toEqual([0n, 0n])
+			const frozen = await Promise.all([...new Set(frozenIds.slice(0, 2))].map(id => client.readContract({ ...target(), functionName: 'frozenBooks', args: [id] })))
+			const [liveCash] = await book(2n)
+			const liveRep = await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })
+			expect(frozen.reduce((sum, [cash]) => sum + cash, liveCash)).toBe(2_002n)
+			expect(frozen.reduce((sum, [, , , rep]) => sum + rep, liveRep)).toBe(2_003n)
+			return { liveCash, liveRep }
+		}
+		const named = await settle(true)
+		await ethereum.anvilRevert(prior)
+		const bulk = await settle(false)
+		// With two individually rounded reservations, the live basket can retain one extra raw unit of each asset.
+		expect(named.liveCash - bulk.liveCash).toBe(1n)
+		expect(named.liveRep - bulk.liveRep).toBe(1n)
+	})
+
 	test('the first child finalization stays within budget on a full-depth shared deadline path', async () => {
 		for (let bit = 0; bit < 48; bit++) {
 			const id = BigInt(bit + 1)
@@ -663,7 +717,7 @@ describe('Statoblast: central internal settlement units', () => {
 		const hash = await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [2n, 2n, 3 * 86_400 + 1] }))
 		const gas = (await client.getTransactionReceipt({ hash })).gasUsed
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ fullDepthChildFinalizationGas: gas })
-		expect(gas).toBeLessThan(5_000_000n)
+		expect(gas).toBeLessThan(3_000_000n)
 		expect((await question(2n, 2n))[1]).not.toBe(0n)
 		expect((await question(2n, 50n))[1]).toBe(0n)
 		expect((await question(1n, 2n))[1]).toBe(0n)

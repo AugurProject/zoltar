@@ -26,6 +26,35 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		return (await fixture.owner().readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, fixture.base.questionId] }))[0]
 	}
 
+	test('a complete-set minimum protects a stale quote and rolls back the share burn', async () => {
+		await fixture.prepare()
+		await fixture.mint(10n * unit)
+		const buyer = fixture.other()
+		const { genesisUniverse, questionId, mockWindow } = fixture.base
+		const { securityPool, shareToken } = fixture.poolFor(questionId)
+		const pool = { abi: poolArtifact.abi, address: securityPool }
+		const collateral = await buyer.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		const shares = () => balanceOfShares(buyer, shareToken, genesisUniverse, buyer.account.address)
+		const balance = () => getERC20Balance(buyer, collateral, buyer.account.address)
+		const beforeShares = await shares()
+		const beforeCash = await balance()
+		const demand = () => buyer.readContract({ ...capital(), functionName: 'demandAttoEth' })
+		const beforeDemand = await demand()
+		const quote = await buyer.readContract({ ...pool, functionName: 'attoSharesToAttoEth', args: [beforeShares[0]] })
+		await mockWindow.advanceTime(300n)
+		const redeem = { ...pool, functionName: 'redeemCompleteSetWithMinimum' as const }
+		await expect(buyer.writeContract({ ...redeem, args: [beforeShares[0], quote] })).rejects.toThrow('Insufficient settlement cash')
+		expect(await shares()).toEqual(beforeShares)
+		expect(await balance()).toBe(beforeCash)
+		expect(await demand()).toBe(beforeDemand)
+		const minimum = (quote * 99n) / 100n
+		await writeContractAndWait(buyer, () => buyer.writeContract({ ...redeem, args: [beforeShares[0], minimum] }))
+		expect((await shares())[0]).toBe(0n)
+		const paid = (await balance()) - beforeCash
+		expect(paid).toBeGreaterThanOrEqual(minimum)
+		expect(paid).toBeLessThan(quote)
+	})
+
 	test('#1246 purchase premium quotes use the same fractional backing as minting', async () => {
 		await fixture.prepare()
 		await fixture.mint(300_000_000n)

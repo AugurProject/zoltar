@@ -188,7 +188,7 @@ contract SecurityPool is SecurityPoolStorage {
 		revert('Portfolio settlement missing');
 	}
 
-	/// @notice Converts shares to settlement collateral at the current rate, rounding down.
+	/// @notice Quotes settlement collateral using the latest checkpointed balances, rounding down.
 	function attoSharesToAttoEth(uint256 amountAttoShares) public view returns (uint256) {
 		return
 			IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionSettlement(address(this), amountAttoShares);
@@ -218,9 +218,18 @@ contract SecurityPool is SecurityPoolStorage {
 	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in the configured token.
 	/// @dev Complete-set exits use the current collateral-per-share rate after fee
 	/// accrual, preserving the exchange rate for remaining complete sets.
-	function redeemCompleteSet(uint256 amountAttoShares) external isOperational {
+	function redeemCompleteSet(uint256 amountAttoShares) external {
+		_redeemCompleteSet(amountAttoShares, 0);
+	}
+
+	/// @notice Redeem complete sets only if the collateral payout meets the caller's minimum.
+	function redeemCompleteSetWithMinimum(uint256 amountAttoShares, uint256 minimumCashAttoEth) external {
+		_redeemCompleteSet(amountAttoShares, minimumCashAttoEth);
+	}
+
+	function _redeemCompleteSet(uint256 amountAttoShares, uint256 minimumCashAttoEth) private isOperational {
 		updateSettlementCollateral();
-		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
+		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares, minimumCashAttoEth)));
 		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
 		refreshPortfolioFees();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
@@ -229,9 +238,18 @@ contract SecurityPool is SecurityPoolStorage {
 
 	/// @notice Burns the caller's winning-outcome shares after finalization and sends their settlement collateral in the configured token.
 	function redeemShares() external {
+		_redeemShares(0);
+	}
+
+	/// @notice Redeem winning shares only if the collateral payout meets the caller's minimum.
+	function redeemSharesWithMinimum(uint256 minimumCashAttoEth) external {
+		_redeemShares(minimumCashAttoEth);
+	}
+
+	function _redeemShares(uint256 minimumCashAttoEth) private {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		updateSettlementCollateral();
-		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemShares, (shareToken, ISecurityPoolForker(securityPoolForker), universeId, msg.sender)));
+		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemShares, (shareToken, ISecurityPoolForker(securityPoolForker), universeId, msg.sender, minimumCashAttoEth)));
 		(uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) = abi.decode(result, (uint256, uint256));
 		refreshPortfolioFees();
 		emit SharesRedeemed(msg.sender, winningSharesBurnedAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);

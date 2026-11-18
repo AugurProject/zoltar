@@ -62,12 +62,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '9fce09c68c109d4ffabc5f85f0813ec2d92515318b265554fa40270759a1a006',
+		compiledAbiFingerprint: 'dcfc79e039a2a7439f085ca6260a7e7db97ec7a5c8b39b0a8c94b6565b50b56e',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the [fork haircut](./glossary.html#fork-haircut), and mints branch-specific [child REP](./glossary.html#child-rep).',
-		readAbiFingerprint: 'af953dbf8c9829c81943e2873905308a3a57839625fa5f1ee8e7812f3438883d',
+		readAbiFingerprint: 'a16c372901d88d30fc15ca3d01f1687c7bed2463344a5d19d0637b67ca7fe570',
 		readSurface:
-			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `getForkChoiceDeadline`, `getForkRecapitalizationDeadline`, `getEarliestForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The choice and recap deadlines are the native fork time plus eight and nine weeks. A child may next fork at its parent fork time plus ten weeks; origin universes have no parent cooldown. Late preparation never moves these timestamps. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, `forkThresholdDivisor > 1`, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. The constructor emits `UniverseInitialized` once, for genesis universe `0`; `deployChild` does not emit it, so child universes are discovered through `DeployChild` and `ChildReputationTokenInitialized`. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
+			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `getForkChoiceDeadline`, `getForkRecapitalizationDeadline`, `getEarliestForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `isUniverseAncestor`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The choice and recap deadlines are the native fork time plus eight and nine weeks. A child may next fork at its parent fork time plus ten weeks; origin universes have no parent cooldown. Late preparation never moves these timestamps. `isUniverseAncestor(ancestor, descendant)` checks strict ancestry for deployed universes using indexed jumps. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, `forkThresholdDivisor > 1`, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. The constructor emits `UniverseInitialized` once, for genesis universe `0`; `deployChild` does not emit it, so child universes are discovered through `DeployChild` and `ChildReputationTokenInitialized`. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
 		securityBoundary: 'These calls depend on [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{
@@ -99,6 +99,9 @@ export const coreContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'getChildUniverseId',
+			},
+			{
+				name: 'isUniverseAncestor',
 			},
 			{
 				name: 'getDeployedChildUniverses',

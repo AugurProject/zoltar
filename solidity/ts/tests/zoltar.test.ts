@@ -129,6 +129,37 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(await getTotalTheoreticalSupply(client, getRepTokenAddress(childUniverseId)), expectedMaximumSupply, 'child REP token maximum should match the child universe theoretical supply')
 	})
 
+	test('indexes strict ancestors across several forks and excludes siblings and unknown universes', async () => {
+		const zoltar = { address: getZoltarAddress(), abi: Zoltar_Zoltar.abi }
+		const isAncestor = (ancestor: bigint, descendant: bigint) => client.readContract({ ...zoltar, functionName: 'isUniverseAncestor', args: [ancestor, descendant] })
+		const data = makeQuestion('Ancestry index')
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, data, outcomes)
+		const questionId = getQuestionId(data, outcomes)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar.address)
+		let current = GENESIS_UNIVERSE
+		const lineage = [current]
+		for (let index = 0; index < 4; index++) {
+			const earliest = await client.readContract({ ...zoltar, functionName: 'getEarliestForkTime', args: [current] })
+			if (earliest !== 0n) await mockWindow.setTime(earliest)
+			await forkUniverse(client, current, questionId)
+			const remaining = await getERC20Balance(client, getRepTokenAddress(current), client.account.address)
+			await addRepToMigrationBalance(client, current, remaining)
+			if (index === 0) await deployChild(client, current, 2n)
+			await deployChild(client, current, 1n)
+			const available = await getMigrationRepBalanceAttoRep(client, current, client.account.address)
+			await splitMigrationRep(client, current, available, [1n])
+			current = getChildUniverseId(current, 1n)
+			lineage.push(current)
+		}
+		for (const ancestor of lineage.slice(0, -1)) assert.strictEqual(await isAncestor(ancestor, current), true)
+		assert.strictEqual(await isAncestor(current, current), false)
+		assert.strictEqual(await isAncestor(current, GENESIS_UNIVERSE), false)
+		assert.strictEqual(await isAncestor(getChildUniverseId(GENESIS_UNIVERSE, 2n), current), false)
+		assert.strictEqual(await isAncestor(1n, current), false)
+		assert.strictEqual(await isAncestor(GENESIS_UNIVERSE, 1n), false)
+	})
+
 	test('constructor rejects an invalid fork threshold divisor', async () => {
 		const zoltarQuestionDataAddress = await client.readContract({
 			abi: Zoltar_Zoltar.abi,

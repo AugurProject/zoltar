@@ -12,6 +12,7 @@ interface IPortfolioForkAuthority {
 	function forkController() external view returns (address);
 	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
 	function zoltar() external view returns (Zoltar);
+	function portfolioTime(uint248 universeId) external view returns (uint48);
 }
 
 /// @notice Actual ERC20 custody for the portfolio's virtual question and branch settlement books.
@@ -158,6 +159,18 @@ contract SecurityPoolPortfolioSettlement {
 		_sendEth(recipient, cashAttoEth);
 	}
 
+	/// @notice Reserve a mature ledger claim even if its native child pool has not been deployed.
+	function finalizeQuestion(uint248 universeId, uint256 questionId) external {
+		require(!entered, 'Settlement reentry');
+		IPortfolioForkAuthority root = IPortfolioForkAuthority(portfolio);
+		require(root.zoltar().getForkTime(universeId) == 0, 'Settlement universe forked');
+		uint64 bookId = _bookId(universeId);
+		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
+		capital.checkpoint();
+		ledger.finalizeQuestion(bookId, questionId, root.portfolioTime(universeId));
+		capital.checkpoint();
+	}
+
 	function checkpointQuestion(address pool, uint48 timestamp) external onlyPortfolio nonReentrant returns (Snapshot memory snapshot) {
 		QuestionSource memory source = _question(pool);
 		uint64 bookId = _bookId(source.universeId);
@@ -270,6 +283,11 @@ contract SecurityPoolPortfolioSettlement {
 	function quoteRedemption(address pool, uint256 shares) external view returns (uint256 cashAttoEth) {
 		QuestionSource memory source = _question(pool);
 		(cashAttoEth, ) = ledger.quoteRedemption(_bookId(source.universeId), source.questionId, shares);
+	}
+
+	function quoteRedemptionAt(address pool, uint256 shares, uint48 portfolioTimestamp) external view returns (uint256 cashAttoEth) {
+		QuestionSource memory source = _question(pool);
+		(cashAttoEth, ) = ledger.quoteRedemptionAt(_bookId(source.universeId), source.questionId, shares, portfolioTimestamp);
 	}
 
 	function quoteRecoveryRep(address pool, uint256 shares) external view returns (uint256) {

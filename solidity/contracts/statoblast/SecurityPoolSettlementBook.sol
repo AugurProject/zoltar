@@ -6,7 +6,8 @@ import { SecurityPoolSettlementMath as SettlementMath } from './SecurityPoolSett
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolSettlementWriter } from './SecurityPoolSettlementState.sol';
-import { SecurityPoolPersistentMap, SecurityPoolMaturityMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
@@ -326,7 +327,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		Book storage book = _activeBook(bookId);
 		_accrueFees(bookId, book, portfolioTimestamp);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
-		require(frozenBookId == 0 && !_isMature(book, state.finalAfter), 'Final claim immutable');
+		require(frozenBookId == 0 && !_isMature(book, state.finalAfter, book.portfolioTimestamp), 'Final claim immutable');
 		require(finalAfter == 0 || finalAfter >= portfolioTimestamp, 'Finality already elapsed');
 		require(finalAfter == 0 || state.feeRateAttoEthPerSecond == 0 || state.feeEnd <= _feeTimestamp(book), 'Stop fees before finality');
 		state.finalAfter = finalAfter;
@@ -353,6 +354,15 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	function quoteRedemption(uint64 bookId, uint256 questionId, uint256 outcomeShares) public view returns (uint256 cashAttoEth, uint256 unitsBurned) {
+		return _quoteRedemption(bookId, questionId, outcomeShares, _book(bookId).portfolioTimestamp);
+	}
+
+	/// @notice Quotes checkpointed balances using the supplied clock to determine whether a named reservation comes first.
+	function quoteRedemptionAt(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 portfolioTimestamp) external view returns (uint256, uint256) {
+		return _quoteRedemption(bookId, questionId, outcomeShares, portfolioTimestamp);
+	}
+
+	function _quoteRedemption(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 portfolioTimestamp) private view returns (uint256 cashAttoEth, uint256 unitsBurned) {
 		Book storage book = _book(bookId);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		// Losing outcome tokens may remain after every payable claim is burned.
@@ -363,11 +373,14 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 			outcomeShares == state.outcomeSupplyAttoShares
 				? state.units
 				: Math.mulDiv(state.units, outcomeShares, state.outcomeSupplyAttoShares);
-		if (frozenBookId == 0)
-			return (
-				SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned),
-				Math.ceilDiv(unitsBurned, UNIT_SCALE)
-			);
+		if (frozenBookId == 0) {
+			if (!book.isSealed && _isMature(book, state.finalAfter, portfolioTimestamp)) {
+				uint256 reserved = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], state.units);
+				cashAttoEth = SettlementMath.cashForUnits(reserved, state.units, 0, unitsBurned);
+			} else
+				cashAttoEth = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned);
+			return (cashAttoEth, Math.ceilDiv(unitsBurned, UNIT_SCALE));
+		}
 		FrozenBook storage frozen = frozenBooks[frozenBookId];
 		if (frozen.sourceBookId != bookId) return (0, 0);
 		return (
@@ -475,12 +488,12 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		book.portfolioTimestamp = portfolioTimestamp;
 	}
 
-	function _isMature(Book storage book, uint48 deadline) private view returns (bool) {
-		return deadline != 0 && deadline < book.portfolioTimestamp && book.minimumFinalAfter < book.portfolioTimestamp;
+	function _isMature(Book storage book, uint48 deadline, uint48 portfolioTimestamp) private view returns (bool) {
+		return deadline != 0 && deadline < portfolioTimestamp && book.minimumFinalAfter < portfolioTimestamp;
 	}
 
 	function _finalizeQuestion(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private returns (uint64 frozenBookId) {
-		if (!_isMature(book, state.finalAfter) || state.units == 0) return 0;
+		if (!_isMature(book, state.finalAfter, book.portfolioTimestamp) || state.units == 0) return 0;
 		uint256 entitlement = _scaledRecovery(bookId, book, questionId, state);
 		frozenBookId = _reserveClaim(bookId, book, state.units, entitlement);
 		uint256 correction;

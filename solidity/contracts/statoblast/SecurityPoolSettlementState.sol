@@ -2,7 +2,8 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
-import { SecurityPoolPersistentMap, SecurityPoolMaturityMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
 /// @dev Shared settlement types and storage; accounting behavior remains in the book.
