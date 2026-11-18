@@ -646,6 +646,29 @@ describe('Statoblast: central internal settlement units', () => {
 		expect((await question(1n, 2n))[1]).toBe(0n)
 	})
 
+	test('the first child finalization stays within budget on a full-depth shared deadline path', async () => {
+		for (let bit = 0; bit < 48; bit++) {
+			const id = BigInt(bit + 1)
+			await mint(1n, id, 1n)
+			await schedule(1n, id, Number(1n << BigInt(bit)))
+		}
+		// Keep the deepest leaf populated when one claim is finalized. That
+		// forces the write to copy the path instead of pruning its last node.
+		await mint(1n, 49n, 1n)
+		await schedule(1n, 49n, 3)
+		await mint(1n, 50n, 1n)
+		await schedule(1n, 50n, 2)
+		await seal(1n, 0)
+		await child(1n, 50n)
+		const hash = await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [2n, 2n, 3 * 86_400 + 1] }))
+		const gas = (await client.getTransactionReceipt({ hash })).gasUsed
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ fullDepthChildFinalizationGas: gas })
+		expect(gas).toBeLessThan(5_000_000n)
+		expect((await question(2n, 2n))[1]).not.toBe(0n)
+		expect((await question(2n, 50n))[1]).toBe(0n)
+		expect((await question(1n, 2n))[1]).toBe(0n)
+	})
+
 	test('lifetime finality prefixes can exceed live precision bounds while inherited claims remain exact', async () => {
 		const maximum = ((1n << 128n) - 1n) / 1_000_000_000n
 		await mint(1n, 1n, maximum)

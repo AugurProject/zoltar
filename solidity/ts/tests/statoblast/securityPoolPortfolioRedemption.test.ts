@@ -107,7 +107,11 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...second, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
 		const secondGame = await owner.readContract({ ...second, functionName: 'escalationGame' })
 		const secondDeadline = await owner.readContract({ abi: gameArtifact.abi, address: secondGame, functionName: 'getEscalationGameEndDate' })
-		await fixture.base.mockWindow.setTime((firstDeadline > secondDeadline ? firstDeadline : secondDeadline) + 1n)
+		// Leave the second claim pending in the dense fixture so the fork
+		// actually splits the schedule instead of taking the entire prefix.
+		const cutoff = additionalCount === 0 ? secondDeadline + 1n : secondDeadline - 60n
+		expect(cutoff).toBeGreaterThan(firstDeadline)
+		await fixture.base.mockWindow.setTime(cutoff)
 
 		const state = await settlementState()
 		const secondFrozenId = async () => (await owner.readContract({ abi: bookArtifact.abi, address: state.book, functionName: 'question', args: [state.bookId, fixture.secondQuestionId] }))[1]
@@ -117,7 +121,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const hash = await writeContractAndWait(keeper, () => keeper.writeContract({ ...pool(), functionName: 'updateSettlementCollateral' }))
 		const gas = (await keeper.getTransactionReceipt({ hash })).gasUsed
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ additionalCount, finalizeOneQuestionGas: gas })
-		expect(gas).toBeLessThan(16_777_216n)
+		expect(gas).toBeLessThan(1_500_000n)
 		const firstFrozenId = (await settlementState()).frozenBookId
 		expect(firstFrozenId).not.toBe(0n)
 		expect(await secondFrozenId()).toBe(0n)
@@ -129,8 +133,10 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await forkUniverse(owner, genesis, fixture.secondQuestionId)
 		const controller = await owner.readContract({ ...portfolio(), functionName: 'forkController' })
 		const freezeHash = await writeContractAndWait(keeper, () => keeper.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'freeze', args: [genesis] }))
-		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ additionalCount, forkFreezeGas: (await keeper.getTransactionReceipt({ hash: freezeHash })).gasUsed })
-		expect(await secondFrozenId()).not.toBe(0n)
+		const forkFreezeGas = (await keeper.getTransactionReceipt({ hash: freezeHash })).gasUsed
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ additionalCount, forkFreezeGas })
+		expect(forkFreezeGas).toBeLessThan(1_200_000n)
+		expect((await secondFrozenId()) === 0n).toBe(additionalCount !== 0)
 		for (const { id } of additional) {
 			const [, frozenBookId] = await owner.readContract({ abi: bookArtifact.abi, address: state.book, functionName: 'question', args: [state.bookId, id] })
 			expect(frozenBookId).not.toBe(0n)
