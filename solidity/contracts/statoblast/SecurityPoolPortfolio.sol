@@ -365,7 +365,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		return services.checkpointQuestionSettlement(_pool(msg.sender), true);
 	}
 	function quoteQuestionSettlement(address pool, uint256 shares) external view returns (uint256) {
-		_pool(pool);
 		uint248 universeId = _pool(pool).universeId();
 		return settlement.quoteRedemptionAt(pool, shares, portfolioTime(universeId));
 	}
