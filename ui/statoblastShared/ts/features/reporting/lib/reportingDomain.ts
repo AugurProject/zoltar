@@ -262,6 +262,8 @@ type EscalationContributionPreview =
 	| {
 			actualDepositAmount: bigint
 			reason: undefined
+			/** The game trimmed the offer by 1 attoREP because it would otherwise tie the leading outcome. */
+			tieAdjusted: boolean
 	  }
 	| {
 			actualDepositAmount: undefined
@@ -303,13 +305,14 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (projectedDeposit === undefined)
 		return {
 			actualDepositAmount: undefined,
-			reason: 'Increase the report amount slightly to avoid a tie at the minimum report.',
+			reason: 'The escalation game would not accept this report amount.',
 		}
 	const belowRequiredSupportReason = getReportingBelowRequiredSupportReason(details, selectedSide.balance, selectedSide.balance + projectedDeposit.acceptedAmountAttoRep)
 	if (belowRequiredSupportReason !== undefined) return { actualDepositAmount: undefined, reason: belowRequiredSupportReason }
 	return {
 		actualDepositAmount: projectedDeposit.acceptedAmountAttoRep,
 		reason: undefined,
+		tieAdjusted: projectedDeposit.tieAdjusted,
 	}
 }
 export function previewReportingContribution(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ReportingContributionPreview {
@@ -322,6 +325,7 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 		return {
 			actualDepositAmount: amount,
 			reason: undefined,
+			tieAdjusted: false,
 		}
 	}
 	return previewEscalationContribution(details, outcome, amount)

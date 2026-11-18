@@ -204,11 +204,9 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
-	const ordinarySettlementInitialized = !forkContinuationSnapshot && (await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementInitialized' }))
-	const frozenOrdinaryForkThreshold = ordinarySettlementInitialized ? await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementForkThresholdAttoRep' }) : undefined
-	// A game without ordinary settlement freezes its threshold at the first winning claim; zero means no claim yet.
-	const continuationForkThreshold = ordinarySettlementInitialized ? 0n : await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'continuationSettlementForkThresholdAttoRep' })
-	const frozenContinuationForkThreshold = continuationForkThreshold === 0n ? undefined : continuationForkThreshold
+	// Every accepted deposit and a continuation's resume record the threshold settlement scales by; zero means the game never changed.
+	const recordedForkThreshold = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'settlementForkThresholdAttoRep' })
+	const settlementForkThreshold = recordedForkThreshold === 0n ? undefined : recordedForkThreshold
 	const continuationTiming = forkContinuationSnapshot
 		? await Promise.all([
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt', args: [] }),
@@ -340,7 +338,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		earliestForkTime,
 		escalationEndTime,
 		escalationGameAddress,
-		forkThresholdAttoRep: frozenOrdinaryForkThreshold ?? frozenContinuationForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),
+		forkThresholdAttoRep: settlementForkThreshold ?? forkThresholdAttoRep,
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThresholdAttoRep,

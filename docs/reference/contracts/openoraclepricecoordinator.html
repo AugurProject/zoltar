@@ -45,7 +45,7 @@
 							<td><code>recoverSettledPendingReport()</code></td>
 							<td>Anyone</td>
 							<td>A pending report ID exists and its stored OpenOracle <code>storedGame(reportId).settlementTimestamp</code> is nonzero.</td>
-							<td>Retries acceptance of the feed’s latest settled candidate from OpenOracle’s stored amounts and original observation timestamp. Use feed.recoverReport(reportId) for another unprocessed settled candidate. A still-valid candidate accepts its price and attempts sponsor operations; an invalid candidate is rejected. Both outcomes return isolated escrow credits to the original sponsor.</td>
+							<td>Retries acceptance of the feed’s latest settled candidate from OpenOracle’s stored amounts and original settlement-eligibility timestamp, after a failed callback or a settlement block above the report’s base-fee cap. Use feed.recoverReport(reportId) for another unprocessed settled candidate. A still-valid candidate accepts its price and attempts sponsor operations; an invalid candidate is rejected. Both outcomes return isolated escrow credits to the original sponsor. A still-valid candidate reverts with <code>Base fee too high</code> while the current base fee exceeds its cap.</td>
 							<td><code>PendingReportRecovered</code> from the shared feed.</td>
 						</tr>
 						<tr>

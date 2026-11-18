@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeDeployData, type Abi } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, type Abi, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deployContract } from '../testSupport/deployContract'
 import { applyLibraries, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -77,7 +77,7 @@ describe('audit4: router keeps no wrapped collateral or services allowance', () 
 			await fixture.refreshPrice()
 		}
 
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 6_300n, 1n, account, deadline], value: 2n * unit }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 6_300n, maxUint256, maxUint256, 1n, account, deadline], value: 2n * unit }))
 		await expectEmptyRouter()
 		const pair = await owner.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native.securityPool] })
 
@@ -120,7 +120,7 @@ describe('audit4: LP claims survive a universe fork', () => {
 		const router = await deployContract(client, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
 		const deadline = fixture.questionData.endTime - 1n
 		const amount = 1_000_000n
-		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, amount, 5_000n, 1n, account, deadline], value: amount }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, amount, 5_000n, maxUint256, maxUint256, 1n, account, deadline], value: amount }))
 		const pair = await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native.securityPool] })
 		const universeId = fixture.genesisUniverse
 		const yesId = (universeId << 8n) | 1n

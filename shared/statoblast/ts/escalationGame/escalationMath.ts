@@ -172,6 +172,8 @@ export function projectEscalationDeposit({
 	const roomAttoRep = nonDecisionThresholdAttoRep - currentBalanceAttoRep
 	let acceptedAmountAttoRep = amountAttoRep > roomAttoRep ? roomAttoRep : amountAttoRep
 	let newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
+	// The start bond applies to the amount offered, before the tie trim.
+	if (acceptedAmountAttoRep < startBondAttoRep && newBalanceAttoRep !== nonDecisionThresholdAttoRep) return undefined
 	let tieAdjusted = false
 	const maxBalanceAttoRep = getMaxEscalationBalanceAttoRep(balancesAttoRep)
 	const otherHasMax = (() => {
@@ -184,7 +186,6 @@ export function projectEscalationDeposit({
 		acceptedAmountAttoRep -= 1n
 		newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
 	}
-	if (acceptedAmountAttoRep < startBondAttoRep && newBalanceAttoRep !== nonDecisionThresholdAttoRep) return undefined
 	if (newBalanceAttoRep < getEscalationRequiredSupportAttoRep(balancesAttoRep, curveAttoRep)) return undefined
 	const projectedBalancesAttoRep = setBalanceAtIndex(balancesAttoRep, outcomeIndex, newBalanceAttoRep)
 	return {

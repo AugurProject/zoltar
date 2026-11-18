@@ -101,11 +101,14 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			await context.report()
 			await context.open()
 			// The measured winner leads the book; the early loser is admissible until
-			// strictly better tied demand covers the five saleable lots.
+			// demand ranked before it covers the five saleable lots. Equal limits fill in
+			// submission order, so a deep book needs each filler to outrank the earlier
+			// ones: fillers descend one REP grid step at a time down to the tied price.
 			const winner = await bid('bid: first bid in an empty book', other, 2n, bestPrice)
 			const loser = await bid('bid: later losing bid', other, 1n, losingPrice)
+			const grid = await owner.readContract({ ...auction, functionName: 'repGrid' })
 			let lastFiller: Bid | undefined
-			for (let count = 1; count <= bookSize; count++) lastFiller = await bid(count === bookSize ? 'bid: last tied bid in the book' : undefined, filler, 1n, tiedPrice)
+			for (let count = 1; count <= bookSize; count++) lastFiller = await bid(count === bookSize ? 'bid: last tied bid in the book' : undefined, filler, 3n, tiedPrice + BigInt(bookSize - count) * grid)
 			if (lastFiller === undefined) throw new Error('Missing tied bids')
 			await revertedGasOf('refund failure: credit a bid that may still win', owner, context.auction, encodeFunctionData({ abi: auctionArtifact.abi, functionName: 'settleRefund', args: [winner.id] }))
 			const earlySnapshot = await snapshot()
@@ -129,7 +132,7 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			for (let id = lastFiller.id; id > loser.id && (partial === undefined || empty === undefined); id--) {
 				const result = await fill(id)
 				if (result.filledLots === 0n && empty === undefined) empty = { id, vault: result.vault }
-				if (result.filledLots !== 0n && partial === undefined) partial = { id, vault: result.vault }
+				if (result.filledLots !== 0n && result.refundAttoEth !== 0n && partial === undefined) partial = { id, vault: result.vault }
 			}
 			if (partial === undefined || empty === undefined) throw new Error('Expected both partial and unfilled tied bids')
 			const cohort = await owner.readContract({ ...capital, functionName: 'auctionCohort' })

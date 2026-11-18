@@ -62,9 +62,9 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		// The expensive bid arrives first; the three better bids then exclude it.
 		const losing = await context.bid(loser, 2n, 100n * unit)
 		const best = await context.bid(b3, 4n, 4n * unit)
-		const tieA = await context.bid(b4, 5n, 6n * unit)
+		const tieA = await context.bid(b4, 3n, 6n * unit)
 		const tieB = await context.bid(b5, 5n, 6n * unit)
-		expect(await e2e.cash(context.engine)).toBe(16n * unit)
+		expect(await e2e.cash(context.engine)).toBe(14n * unit)
 		// The excluded bid is refundable before the close; no better bid can be displaced by a worse one.
 		expect(await owner.readContract({ ...engine, functionName: 'earlyRefundAttoEth', args: [losing.id] })).toBe(2n * unit)
 		await writeContractAndWait(loser, () => loser.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [losing.id, loser.account.address] }))
@@ -88,18 +88,15 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(repPerLot - required).toBeLessThan(grid)
 		expect(sold).toBe(10n * repPerLot)
 		const fills = await Promise.all([losing, best, tieA, tieB].map(bid => owner.readContract({ ...engine, functionName: 'previewBid', args: [bid.id] })))
-		// Four lots at the best price, the remaining six split between the two tied bids.
+		// Four lots at the best price; equal limits fill in submission order, so the earlier tied bid fills first.
 		expect(fills.map(fill => fill.filledLots)).toEqual([0n, 4n, 3n, 3n])
-		expect(fills.map(fill => fill.refundAttoEth)).toEqual([2n * unit, 0n, 2n * unit, 2n * unit])
+		expect(fills.map(fill => fill.refundAttoEth)).toEqual([2n * unit, 0n, 0n, 2n * unit])
 		// The early refund was final: the excluded bid cannot be credited a second time after the close.
 		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [losing.id, loser.account.address] })).rejects.toThrow('Auction has no refund credit for this bidder')
 		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [losing.id] })).rejects.toThrow('Auction bid has already been settled')
 		for (const fill of fills) expect(fill.principalAttoRep).toBe(fill.filledLots * repPerLot)
-		for (const [bidder, bid] of [
-			[b4, tieA],
-			[b5, tieB],
-		] as const)
-			await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [bid.id, bidder.account.address] }))
+		await expect(b4.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tieA.id, b4.account.address] })).rejects.toThrow('Auction has no refund credit for this bidder')
+		await writeContractAndWait(b5, () => b5.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tieB.id, b5.account.address] }))
 		const cashAfterAuction = await cashOf(wallets)
 		expect([cashAfterAuction['loser'], cashAfterAuction['b3'], cashAfterAuction['b4'], cashAfterAuction['b5']]).toEqual([cashBeforeBids['loser'], (cashBeforeBids['b3'] ?? 0n) - 4n * unit, (cashBeforeBids['b4'] ?? 0n) - 3n * unit, (cashBeforeBids['b5'] ?? 0n) - 3n * unit])
 		// Custody after the close: the engine and auction are empty, sold REP is in capital, the rest backs old claims.

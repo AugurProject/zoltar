@@ -60,7 +60,8 @@
 										<li>Liquidation candidates and net reward: liquidator bot dashboard</li>
 										<li>Dispute opportunities and net reward: OpenOracle arbitrager dashboard</li>
 										<li>Active reporters, correctors, escalation depositors, and Collateral Repair Auction bidders: augurScan <code>/operations/reports</code>, <code>/operations/escalations</code>, <code>/operations/auctions</code></li>
-										<li>Callback-recovery candidates: coordinator <code>pendingReportId</code>, then the settlement timestamp in OpenOracle <code>storedGame(reportId)</code>; anyone can clear one with <code>recoverSettledPendingReport()</code></li>
+										<li>Callback-recovery candidates: coordinator <code>pendingReportId</code> and the report IDs in <code>PriceReportDeferred</code> events, then the settlement timestamp in OpenOracle <code>storedGame(reportId)</code></li>
+										<li>Callback recovery: anyone can clear the latest candidate with the coordinator’s <code>recoverSettledPendingReport()</code>, or any candidate with the shared feed’s <code>recoverReport(reportId)</code> (coordinator <code>priceFeed()</code>); a deferred report follows the <a href="../reference/open-oracle.html#settlement-base-fee-cap">settlement base-fee cap</a> rules</li>
 									</ul>
 								</td>
 								<td>Continuously for deadline-bearing flows; before launch and after parameter or gas-regime changes</td>
@@ -142,7 +143,7 @@
 								<td>
 									<ul>
 										<li>Pending report: coordinator <code>pendingReportId</code>, then OpenOracle <code>storedGame(reportId)</code></li>
-										<li>Report outcomes: <code>PriceRequested</code>, <code>PriceReported</code>, and <code>PriceReportRejected</code> events from the shared feed at coordinator <code>priceFeed()</code>, or augurScan <code>/operations/reports</code></li>
+										<li>Report outcomes: <code>PriceRequested</code>, <code>PriceReported</code>, <code>PriceReportDeferred</code>, and <code>PriceReportRejected</code> events from the shared feed at coordinator <code>priceFeed()</code>, or augurScan <code>/operations/reports</code></li>
 										<li>Independent correctors: whether any, such as an operator running the <a href="https://github.com/AugurProject/zoltar/blob/main/bots/open-oracle-arbitrager/README.md">OpenOracle arbitrager</a>, reports disputes profitable after fees, gas, and price impact</li>
 										<li>Creation-time floor: portfolio <code>minimumReportCollateral</code> and the selected collateral token’s units and current ETH value</li>
 										<li>Correction economics: compare obtainable correction gains with OpenOracle fees, current ETH gas costs including approvals and recovery, price impact, and capital lockup under <a href="../reference/security-model.html#assumption-a18">A18</a>; do not compare the whole stake with gas alone</li>

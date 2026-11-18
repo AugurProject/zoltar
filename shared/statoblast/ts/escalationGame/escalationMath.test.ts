@@ -68,6 +68,11 @@ describe('escalation math', () => {
 		expect(projectEscalationDeposit({ amountAttoRep: 1n, balancesAttoRep: [0n, 1n, 1n], nonDecisionThresholdAttoRep: 3n, outcome: 'yes', startBondAttoRep: 1n })).toMatchObject({ acceptedAmountAttoRep: 1n, projectedBalancesAttoRep: [0n, 2n, 1n], tieAdjusted: false })
 	})
 
+	test('applies the start bond to the offered amount, before the tie adjustment', () => {
+		expect(projectEscalationDeposit({ amountAttoRep: 10n, balancesAttoRep: [0n, 0n, 10n], nonDecisionThresholdAttoRep: 100n, outcome: 'yes', startBondAttoRep: 10n })).toMatchObject({ acceptedAmountAttoRep: 9n, projectedBalancesAttoRep: [0n, 9n, 10n], takesLead: false, tieAdjusted: true })
+		expect(projectEscalationDeposit({ amountAttoRep: 9n, balancesAttoRep: [0n, 0n, 10n], nonDecisionThresholdAttoRep: 100n, outcome: 'yes', startBondAttoRep: 10n })).toBeUndefined()
+	})
+
 	test('requires support to meet the curve only once the curve has passed the median and one outcome leads', () => {
 		expect(computeEscalationCurveAttoRep(1n, 8n, 0n)).toBe(0n)
 		expect(computeEscalationCurveAttoRep(1n, 8n, ESCALATION_TIME_LENGTH / 3n)).toBe(2n)

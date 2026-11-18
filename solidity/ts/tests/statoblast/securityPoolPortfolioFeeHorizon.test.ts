@@ -16,7 +16,10 @@ describe('Statoblast: funded portfolio time-fee horizon', () => {
 		const reserve = (question.outcomeSupplyAttoShares * portfolioEconomics.minimumOutcomeRate + unit - 1n) / unit
 		const budget = question.units - reserve
 		expect(question.feeRateAttoEthPerSecond).toBeGreaterThan(0n)
-		expect(BigInt(question.feeEnd) - BigInt(timestamp)).toBe((budget * 1_000_000_000n) / question.feeRateAttoEthPerSecond)
+		// The budget-limited end rounds down to the book's fee-end granularity.
+		const granularity = await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'feeEndGranularity' })
+		const unroundedEnd = BigInt(timestamp) + (budget * 1_000_000_000n) / question.feeRateAttoEthPerSecond
+		expect(BigInt(question.feeEnd)).toBe(unroundedEnd - (unroundedEnd % granularity))
 		expect(BigInt(question.feeEnd)).toBeLessThan(fixture.secondEndTime)
 		expect(question.feeRateAttoEthPerSecond * (BigInt(question.feeEnd) - BigInt(timestamp))).toBeLessThanOrEqual(budget * 1_000_000_000n)
 	})

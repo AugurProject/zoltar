@@ -393,6 +393,38 @@ describe('useReportingOperations', () => {
 		expect(state().reportingForm.selectedOutcome).toBe('yes')
 	})
 
+	test('reportOutcome submits the offered start bond when a tie trims the accepted wallet amount below it', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const bond = 1n * ATTO_REP
+		const tiedDetails = createReportingDetails(securityPoolAddress, {
+			contributionFunding: 'wallet',
+			nonDecisionThresholdAttoRep: 275_000n * ATTO_REP,
+			sides: [side('invalid', 0n), side('yes', bond), side('no', 0n)],
+			// Before activation the curve does not raise the required support above the start bond.
+			activationTime: 10_000n,
+			startBondAttoRep: bond,
+			viewerPoolHeldVaultRepBackingAttoRep: 0n,
+			viewerVaultExists: false,
+		})
+		let submittedMaximumAttoRep: bigint | undefined
+		let submittedReviewAttoRep: bigint | undefined
+		const loadReportingDetails = mock(async () => tiedDetails)
+		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
+			submittedMaximumAttoRep = args[4]
+			submittedReviewAttoRep = args[5]
+			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a4' as const, outcome: 'no' as const, securityPoolAddress, universeId: 1n }
+		})
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }))
+		await setForm({ contributionFunding: 'wallet', reportAmount: '1', securityPoolAddress, selectedOutcome: 'no' })
+		await act(async () => {
+			await state().onReportOutcome()
+		})
+		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
+		// The tie leaves the report one attoREP behind the leader, but the game's preview only accepts offers of at least the start bond.
+		expect(submittedReviewAttoRep).toBe(bond - 1n)
+		expect(submittedMaximumAttoRep).toBe(bond)
+	})
+
 	test.each([true, false])('reportOutcome marks fork-triggering reports for review only when the displayed report already triggered the fork (displayed: %s)', async displayedTriggersFork => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
 		// Invalid already sits at the 20 attoREP threshold, so filling Yes with 18 attoREP ends escalation and triggers the fork.

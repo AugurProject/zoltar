@@ -64,7 +64,8 @@ function routerEthCall(snapshot: EcosystemSnapshot, kind: RouterEthKind, options
 	if (kind === 'create-and-initialize' || kind === 'initialize') {
 		const liquidity = minted - MINIMUM_INITIAL_LIQUIDITY
 		return {
-			args: [target, mint, 5_000n, inputInteger(options, 'minimumLiquidity', minimumAfterSlippage(liquidity), 1n, liquidity), snapshot.wallet.address, deadline],
+			// Even odds deposit every minted YES and NO; the same bounds cover a pair someone initialized first.
+			args: [target, mint, 5_000n, maximumAfterSlippage(minted), maximumAfterSlippage(minted), inputInteger(options, 'minimumLiquidity', minimumAfterSlippage(liquidity), 1n, liquidity), snapshot.wallet.address, deadline],
 			evidence: kind === 'create-and-initialize' ? [eventEvidence(snapshot.deployments.tradingFactory, 'PairCreated(address,address,uint248,address,uint256)')] : [eventEvidence(target, 'LiquidityInitialized(address,address,uint256,uint256,uint256)')],
 		}
 	}

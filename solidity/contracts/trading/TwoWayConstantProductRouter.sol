@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
-import { ISecurityPool } from '../statoblast/interfaces/ISecurityPool.sol';
+import { ISecurityPool, ISecurityPoolFactory } from '../statoblast/interfaces/ISecurityPool.sol';
 import { IERC165 } from '../statoblast/interfaces/IERC165.sol';
 import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProductFactory.sol';
@@ -105,11 +105,11 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	function enterPositionWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, BinaryOutcomes.BinaryOutcome outcome, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (EnterResult memory) {
 		return enterPosition(pair, cash, outcome, minimum, recipient, deadline);
 	}
-	function createPairAndInitializeWithCollateral(ISecurityPool pool, uint256 cash, uint256 probability, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
-		return createPairAndInitializeWithEth(pool, cash, probability, minimum, recipient, deadline);
+	function createPairAndInitializeWithCollateral(ISecurityPool pool, uint256 cash, uint256 probability, uint256 maxYes, uint256 maxNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
+		return createPairAndInitializeWithEth(pool, cash, probability, maxYes, maxNo, minimum, recipient, deadline);
 	}
-	function initializeWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, uint256 probability, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
-		return initializeWithEth(pair, cash, probability, minimum, recipient, deadline);
+	function initializeWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, uint256 probability, uint256 maxYes, uint256 maxNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
+		return initializeWithEth(pair, cash, probability, maxYes, maxNo, minimum, recipient, deadline);
 	}
 	function addLiquidityWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, uint256 maxYes, uint256 maxNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
 		return addLiquidityWithEth(pair, cash, maxYes, maxNo, minimum, recipient, deadline);
@@ -136,37 +136,20 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		result = EnterResult(spent, mintedInvalid, mintedInvalid, additionalLong, totalLong, mintedInvalid, feeAmount, TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter));
 	}
 
-	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
-		ITwoWayConstantProductPair pair = factory.createPair(pool);
-		require(pair.totalSupply() == 0, 'Pair already initialized');
-		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient, deadline);
+	/// @notice Seeds the pair at `conditionalYesBpsValue`. If anyone already initialized it, the same call adds
+	/// liquidity at the pair's price instead, so it reverts only on the caller's own deposit and LP bounds.
+	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
+		result = _provideLiquidity(factory.createPair(pool), mintAttoEth, conditionalYesBpsValue, maxYesUsed, maxNoUsed, minLiquidity, recipient, deadline);
 	}
 
-	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
+	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
 		_validatePair(pair);
-		require(pair.totalSupply() == 0, 'Pair already initialized');
-		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient, deadline);
+		result = _provideLiquidity(pair, mintAttoEth, conditionalYesBpsValue, maxYesUsed, maxNoUsed, minLiquidity, recipient, deadline);
 	}
 
 	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
 		_validatePair(pair);
-		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
-		ISecurityPool pool = pair.securityPool();
-		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
-		uint256 spent = _mintCompleteSets(pool, mintAttoEth);
-		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
-		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
-		_approvePair(pair);
-		(uint256 yesUsed, uint256 noUsed, uint256 liquidity) = pair.addLiquidity(mintedYes, mintedNo, minLiquidity, recipient, deadline);
-		// Complete sets supply equal YES and NO, so the reserve ratio alone sets the deposit mix. A swap toward even
-		// odds raises the minority-side deposit and the minted LP together, which minLiquidity cannot detect.
-		require(yesUsed <= maxYesUsed && noUsed <= maxNoUsed, 'Liquidity price slippage');
-		uint256 yesReturned = mintedYes - yesUsed;
-		uint256 noReturned = mintedNo - noUsed;
-		_transferShares(pool, recipient, mintedInvalid, yesReturned, noReturned);
-		_endShareOperation(startInvalid, startYes, startNo);
-		_refundBudget(spent);
-		result = LiquidityResult(pair, mintedInvalid, yesUsed, noUsed, yesReturned, noReturned, mintedInvalid, liquidity);
+		result = _provideLiquidity(pair, mintAttoEth, 0, maxYesUsed, maxNoUsed, minLiquidity, recipient, deadline);
 	}
 
 	function removeLiquidityWithPermit(ITwoWayConstantProductPair pair, uint256 liquidity, uint256 minYesOut, uint256 minNoOut, address recipient, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external nonReentrant returns (uint256 yesOut, uint256 noOut) {
@@ -257,14 +240,13 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function _redeemReceivedShares(ReceiveRequest memory request) private {
-		IERC20 collateral = ICollateralConfig(request.securityPool.securityPoolFactory().getSecurityPoolPortfolio(request.securityPool)).collateralToken();
+		address portfolio = request.securityPool.securityPoolFactory().getSecurityPoolPortfolio(request.securityPool);
+		IERC20 collateral = ICollateralConfig(portfolio).collateralToken();
 		uint256 ethBefore = collateral.balanceOf(address(this));
 		IERC20 rep = IERC20(address(request.securityPool.repToken()));
 		uint256 repBefore = rep.balanceOf(address(this));
-		if (request.securityPool.portfolioCustody() != address(0)) {
-			address portfolio = request.securityPool.securityPoolFactory().getSecurityPoolPortfolio(request.securityPool);
+		if (request.securityPool.portfolioCustody() != address(0))
 			callbackSettlement = ITradingPortfolioSettlement(portfolio).settlement();
-		}
 		ethCallbackActive = true;
 		request.securityPool.redeemCompleteSet(request.completeSetShares);
 		ethCallbackActive = false;
@@ -295,9 +277,9 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 			_validatePair(request.pair);
 			require(address(request.securityPool) == address(request.pair.securityPool()), 'Wrong security pool');
 		}
-		require(address(request.securityPool.securityPoolFactory()) == address(factory.securityPoolFactory()), 'Wrong security pool factory');
-		bytes32 origin = factory.securityPoolFactory().getSecurityPoolOriginId(request.securityPool);
-		require(address(factory.securityPoolFactory().getSecurityPool(origin, request.universeId)) == address(request.securityPool), 'Noncanonical security pool');
+		ISecurityPoolFactory poolFactory = factory.securityPoolFactory();
+		require(address(request.securityPool.securityPoolFactory()) == address(poolFactory), 'Wrong security pool factory');
+		require(address(poolFactory.getSecurityPool(poolFactory.getSecurityPoolOriginId(request.securityPool), request.universeId)) == address(request.securityPool), 'Noncanonical security pool');
 		require(request.shareToken == address(request.securityPool.shareToken()), 'Wrong request share token');
 		require(request.universeId == request.securityPool.universeId(), 'Wrong universe');
 		require(request.questionId == request.securityPool.questionId(), 'Wrong question');
@@ -327,21 +309,32 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function _requireReceiveBalances(uint256[3] memory expected) private view {
-		require(callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.Invalid)) == expected[0], 'Router INVALID residue');
-		require(callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.Yes)) == expected[1], 'Router YES residue');
-		require(callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.No)) == expected[2], 'Router NO residue');
+		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _balances();
+		require(invalidBalance == expected[0], 'Router INVALID residue');
+		require(yesBalance == expected[1], 'Router YES residue');
+		require(noBalance == expected[2], 'Router NO residue');
 	}
 
-	function _initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) private returns (LiquidityResult memory result) {
+	/// @dev A nonzero `conditionalYesBpsValue` initializes an empty pair at that price; otherwise, and whenever
+	/// the pair already has liquidity, complete sets are added proportionally at the pair's own price.
+	function _provideLiquidity(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) private returns (LiquidityResult memory result) {
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
 		uint256 spent = _mintCompleteSets(pool, mintAttoEth);
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
-		(uint256 yesUsed, uint256 noUsed) = TwoWayConstantProductMath.initialLiquidityAmounts(mintedInvalid, conditionalYesBpsValue);
 		_approvePair(pair);
-		uint256 liquidity = pair.initialize(yesUsed, noUsed, minLiquidity, recipient, deadline);
+		uint256 yesUsed;
+		uint256 noUsed;
+		uint256 liquidity;
+		if (conditionalYesBpsValue != 0 && pair.totalSupply() == 0) {
+			(yesUsed, noUsed) = TwoWayConstantProductMath.initialLiquidityAmounts(mintedInvalid, conditionalYesBpsValue);
+			liquidity = pair.initialize(yesUsed, noUsed, minLiquidity, recipient, deadline);
+		} else (yesUsed, noUsed, liquidity) = pair.addLiquidity(mintedYes, mintedNo, minLiquidity, recipient, deadline);
+		// Complete sets supply equal YES and NO, so the reserve ratio alone sets the deposit mix. A swap toward even
+		// odds raises the minority-side deposit and the minted LP together, which minLiquidity cannot detect.
+		require(yesUsed <= maxYesUsed && noUsed <= maxNoUsed, 'Liquidity price slippage');
 		uint256 yesReturned = mintedYes - yesUsed;
 		uint256 noReturned = mintedNo - noUsed;
 		_transferShares(pool, recipient, mintedInvalid, yesReturned, noReturned);

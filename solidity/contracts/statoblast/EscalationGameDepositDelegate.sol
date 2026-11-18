@@ -46,14 +46,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (!ordinarySettlementInitialized) {
 			BinaryOutcomes.BinaryOutcome outcome = game.getFinalQuestionResolution();
 			require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
-			IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
-			Zoltar zoltar = Zoltar(pool.zoltar());
-			uint256 threshold = zoltar.getForkThresholdAttoRep(pool.universeId());
-			if (zoltar.getForkTime(pool.universeId()) > game.getEscalationGameEndDate())
-				threshold = nonDecisionThresholdAttoRep;
-			ordinarySettlementForkThresholdAttoRep = threshold;
 			uint256 winningPrincipal = outcomeState[uint8(outcome)].balanceAttoRep;
-			(uint256 payout, uint256 burn) = verifier.computeOrdinaryWinningWithdrawal(winningPrincipal, winningPrincipal, game.getBindingCapitalAttoRep(), winningPrincipal, threshold, nonDecisionThresholdAttoRep);
+			(uint256 payout, uint256 burn) = verifier.computeOrdinaryWinningWithdrawal(winningPrincipal, winningPrincipal, game.getBindingCapitalAttoRep(), winningPrincipal, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 			ordinaryWinningReserveAttoRep = payout + burn;
 			require(EscalationGameRepCustody.balance(game.securityPool(), game.repToken()) >= ordinaryWinningReserveAttoRep, 'Winner reserve underfunded');
 			ordinarySettlementOutcome = outcome;
@@ -286,8 +280,11 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	}
 
 	function _afterDeposit() private {
+		address poolAddress = IEscalationGameDepositContext(address(this)).securityPool();
+		// Every accepted deposit, single or batch, records the threshold settlement scales by.
+		_recordSettlementForkThreshold(poolAddress);
 		_scheduleReporterFinality();
-		IEscalationGameSecurityPoolContext(IEscalationGameDepositContext(address(this)).securityPool()).refreshPortfolioFees();
+		IEscalationGameSecurityPoolContext(poolAddress).refreshPortfolioFees();
 	}
 
 	function _accrueOrdinarySurplus(address depositor, uint256 depositedAttoRep) private {
@@ -317,11 +314,11 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		require(amountAttoRep > 0, 'Deposit zero');
 		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + amountAttoRep, 'Preview mismatch');
 		require(expectedCumulativeRepAmountAttoRep <= nonDecisionThresholdAttoRep, 'Deposit exceeds room');
-		require(amountAttoRep >= startBondAttoRep || expectedCumulativeRepAmountAttoRep == nonDecisionThresholdAttoRep, 'Below start bond');
-
 		uint256 maxBalance = outcomeState[0].balanceAttoRep;
 		if (outcomeState[1].balanceAttoRep > maxBalance) maxBalance = outcomeState[1].balanceAttoRep;
 		if (outcomeState[2].balanceAttoRep > maxBalance) maxBalance = outcomeState[2].balanceAttoRep;
+		// A start-bond report that would tie the leader is trimmed by one attoREP.
+		require(amountAttoRep >= startBondAttoRep || expectedCumulativeRepAmountAttoRep == nonDecisionThresholdAttoRep || (amountAttoRep + 1 == startBondAttoRep && expectedCumulativeRepAmountAttoRep + 1 == maxBalance && maxBalance < nonDecisionThresholdAttoRep), 'Below start bond');
 		takesLead = currentBalanceAttoRep < maxBalance && expectedCumulativeRepAmountAttoRep > maxBalance;
 		if (expectedCumulativeRepAmountAttoRep != maxBalance || maxBalance >= nonDecisionThresholdAttoRep)
 			return takesLead;
@@ -330,6 +327,12 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 				revert('Preview mismatch');
 			}
 		}
+	}
+
+	/// @dev Deposits require an unforked universe, so this is the live threshold while the game can still change.
+	function _recordSettlementForkThreshold(address poolAddress) private {
+		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(poolAddress);
+		settlementForkThresholdAttoRep = Zoltar(pool.zoltar()).getForkThresholdAttoRep(pool.universeId());
 	}
 
 	function _appendCarryLeaf(OutcomeState storage state, uint256 nodeId) private {
@@ -382,6 +385,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			forkResumedAt = portfolio.nativeTimeForPortfolioTime(universeId, portfolioTimeAnchor);
 			require(block.timestamp >= forkResumedAt, 'Portfolio response period has not started');
 		}
+		_recordSettlementForkThreshold(game.securityPool());
 		if (game.getEscalationGameEndDate() >= block.timestamp) _scheduleReporterFinality();
 		IEscalationGameSecurityPoolContext(game.securityPool()).refreshPortfolioFees();
 		emit ForkContinuationResumed(forkResumedAt);

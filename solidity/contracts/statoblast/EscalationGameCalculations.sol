@@ -137,7 +137,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function _computeWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		if (ordinarySettlementInitialized)
 			return
-				proofVerifier.computeOrdinaryWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, getBindingCapitalAttoRep(), outcomeState[outcomeIndex].balanceAttoRep, ordinarySettlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
+				proofVerifier.computeOrdinaryWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, getBindingCapitalAttoRep(), outcomeState[outcomeIndex].balanceAttoRep, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 		return
 			_computeAllocatedWinningWithdrawal(outcomeIndex, depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}
@@ -145,15 +145,8 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function _computeAllocatedWinningWithdrawal(uint8 outcomeIndex, uint256 principalAttoRep, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) private view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 bindingCapitalAttoRep = getBindingCapitalAttoRep();
 		uint256 winningOutcomeBalanceAttoRep = outcomeState[outcomeIndex].balanceAttoRep;
-		uint256 actualForkThresholdAttoRep = continuationSettlementForkThresholdAttoRep;
-		if (actualForkThresholdAttoRep == 0) actualForkThresholdAttoRep = _liveSettlementForkThresholdAttoRep();
 		return
-			proofVerifier.computeAllocatedWinningWithdrawal(principalAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
-	}
-
-	function _liveSettlementForkThresholdAttoRep() internal view returns (uint256 thresholdAttoRep) {
-		thresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
-		if (_getUniverseForkTime() > getEscalationGameEndDate()) thresholdAttoRep = nonDecisionThresholdAttoRep;
+			proofVerifier.computeAllocatedWinningWithdrawal(principalAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 	}
 
 	function _computeCarriedWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {

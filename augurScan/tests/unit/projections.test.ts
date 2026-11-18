@@ -389,7 +389,7 @@ describe('state projections', () => {
 			// The child's reporter escrow is created under the source universe that forked.
 			['ReporterChildCreated', { sourceUniverseId: '3', childUniverseId: '4', escrowAttoRep: atomic(4n) }, 'fork', 'portfolio-branch', `${emitter}:3`],
 			// The escrow completes a report for the feed that created it, so the entity is that feed.
-			['ReportCompleted', { reportId: '7', priceFeed: vault, accepted: true }, 'oracle', 'price-feed', game],
+			['ReportCompleted', { reportId: '7', priceFeed: vault, outcome: 1 }, 'oracle', 'price-feed', game],
 		] as const
 		for (const [name, data, domain, entityType, entityIdentity] of cases) expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain, entityType, entityIdentity, semanticEventKind: name })
 	})

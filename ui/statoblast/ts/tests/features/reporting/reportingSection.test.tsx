@@ -1207,7 +1207,7 @@ describe('ReportingSection', () => {
 				createProps({
 					reportingActiveAction: 'reportOutcome',
 					reportingForm: createReportingForm({
-						reportAmount: '3',
+						reportAmount: '4',
 						selectedOutcome: 'yes',
 					}),
 				}),
@@ -1215,7 +1215,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Reporting Yes · 3 REP…')).toBe(true)
+		expect(document.body.textContent?.includes('Reporting Yes · 4 REP…')).toBe(true)
 		expect(document.body.textContent?.includes('Loading…')).toBe(false)
 	})
 
@@ -1781,30 +1781,22 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Estimated profit if Yes wins')).toBe(false)
 	})
 
-	test('shows the accepted-deposit note when the typed contribution exceeds the remaining room on the selected side', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					reportingDetails: createDynamicReportingDetails({
-						sides: [
-							{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(19n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
-							{ balance: rep(3n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-						],
-					}),
-					reportingForm: createReportingForm({
-						reportAmount: '5',
-						selectedOutcome: 'yes',
-					}),
-				}),
-			),
-		)
+	test.each([
+		['exceeds the remaining room on the selected side', [1n, 19n, 3n], '5', 'from wallet REP into dispute-staked REP instead of the full entered amount.'],
+		['would tie the leading outcome', [1n, 0n, 0n], '1', ', 1 attoREP less than entered, because a report cannot tie the leading outcome.'],
+	] as const)('shows the accepted-deposit note when the typed contribution %s', async (_case, [invalid, yes, no], reportAmount, note) => {
+		const sides = [
+			{ balance: rep(invalid), key: 'invalid', label: 'Invalid' },
+			{ balance: rep(yes), key: 'yes', label: 'Yes' },
+			{ balance: rep(no), key: 'no', label: 'No' },
+		] as const
+		// Before activation the curve does not raise the required support above the start bond.
+		const reportingDetails = createDynamicReportingDetails({ activationTime: 10_000n, sides: sides.map(side => ({ ...side, deposits: [], importedUserDeposits: [], userDeposits: side.key === 'yes' && yes > 0n ? [createDeposit()] : [] })) })
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails, reportingForm: createReportingForm({ reportAmount, selectedOutcome: 'yes' }) })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(findProjectionPreviewText()).toBe('')
-		expect(document.body.textContent?.includes('from wallet REP into dispute-staked REP')).toBe(true)
-		expect(document.body.textContent?.includes('instead of the full entered amount.')).toBe(true)
+		expect(document.body.textContent?.includes(note)).toBe(true)
 	})
 
 	test('autofills the active minimum-outcome-change preset', async () => {

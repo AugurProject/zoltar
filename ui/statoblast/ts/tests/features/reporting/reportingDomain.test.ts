@@ -299,6 +299,7 @@ describe('reportingDomain', () => {
 		expect(previewReportingContribution(details, 'invalid', rep(1n))).toEqual({
 			actualDepositAmount: rep(1n),
 			reason: undefined,
+			tieAdjusted: false,
 		})
 	})
 
@@ -342,6 +343,7 @@ describe('reportingDomain', () => {
 		expect(previewReportingContribution(createNotStartedReportingDetails(), 'yes', rep(3n))).toEqual({
 			actualDepositAmount: rep(3n),
 			reason: undefined,
+			tieAdjusted: false,
 		})
 	})
 
@@ -440,9 +442,11 @@ test('only a unique positive balance leads, including auction and threshold ties
 
 test('larger tying reports lose one atto-REP below the threshold but can tie at the fork threshold', () => {
 	const details = createReportingDetails()
-	expect(previewReportingContribution(details, 'invalid', rep(7n))).toEqual({ actualDepositAmount: rep(7n) - 1n, reason: undefined })
+	expect(previewReportingContribution(details, 'invalid', rep(7n))).toEqual({ actualDepositAmount: rep(7n) - 1n, reason: undefined, tieAdjusted: true })
 	const fullSide = { ...details, sides: details.sides.map(side => ({ ...side, balance: side.key === 'no' ? details.nonDecisionThresholdAttoRep : side.balance })) }
-	expect(previewReportingContribution(fullSide, 'yes', rep(95n))).toEqual({ actualDepositAmount: rep(95n), reason: undefined })
+	expect(previewReportingContribution(fullSide, 'yes', rep(95n))).toEqual({ actualDepositAmount: rep(95n), reason: undefined, tieAdjusted: false })
+	// A threshold cap one attoREP below the offer is not a tie trim.
+	expect(previewReportingContribution(fullSide, 'yes', rep(95n) + 1n)).toEqual({ actualDepositAmount: rep(95n), reason: undefined, tieAdjusted: false })
 })
 
 test('pending stage guidance does not name a tied side as the winner', () => {
@@ -537,15 +541,15 @@ describe('support required after the curve passes the median', () => {
 		const rejected = previewReportingContribution(details, 'yes', required - rep(5n) - 1n)
 		expect(rejected.actualDepositAmount).toBeUndefined()
 		expect(rejected.reason).toContain('must reach the current required support')
-		expect(previewReportingContribution(details, 'yes', required - rep(5n))).toEqual({ actualDepositAmount: required - rep(5n), reason: undefined })
+		expect(previewReportingContribution(details, 'yes', required - rep(5n))).toEqual({ actualDepositAmount: required - rep(5n), reason: undefined, tieAdjusted: false })
 		// The rule binds the leader too.
 		expect(previewReportingContribution(details, 'no', rep(3n)).reason).toContain('must reach the current required support')
 		expect(previewReportingDeadline(details, 'yes', rep(10n))).toBeUndefined()
 	})
 	test('accepts any amount while the curve is at or below the median or the leaders tie', () => {
-		expect(previewReportingContribution(createReportingDetails(), 'yes', rep(4n))).toEqual({ actualDepositAmount: rep(4n), reason: undefined })
+		expect(previewReportingContribution(createReportingDetails(), 'yes', rep(4n))).toEqual({ actualDepositAmount: rep(4n), reason: undefined, tieAdjusted: false })
 		const tied = createResponsePeriodDetails({ sides: [side('invalid', rep(1n)), side('yes', rep(8n)), side('no', rep(8n))] })
-		expect(previewReportingContribution(tied, 'invalid', rep(3n))).toEqual({ actualDepositAmount: rep(3n), reason: undefined })
+		expect(previewReportingContribution(tied, 'invalid', rep(3n))).toEqual({ actualDepositAmount: rep(3n), reason: undefined, tieAdjusted: false })
 	})
 	test('raises the lead preset to the required support', () => {
 		const details = createResponsePeriodDetails()

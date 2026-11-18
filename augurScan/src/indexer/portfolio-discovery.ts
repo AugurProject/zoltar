@@ -53,9 +53,9 @@ export async function discoverPortfolioEventDependencies(emitter: ContractMetada
 		return [component('services', services), component('settlement', settlement), component('settlementBook', book), component('reporterLedger', reporters)]
 	}
 	if (emitter.kind === 'securityPoolPortfolio' && decoded.name === 'UniversePrepared') return await discoverCapital(emitterAddress)
-	// The escrow settles its report on the feed and then emits `ReportCompleted`, so the feed's decision and the
-	// escrow's event share one transaction. Registering the escrow at that decision lets the receipt supply its only event.
-	if (emitter.kind === 'sharedPoolPriceFeed' && (decoded.name === 'PriceReported' || decoded.name === 'PriceReportRejected')) {
+	// The escrow settles its report on the feed and then emits `ReportCompleted`, so the feed's decision (or its
+	// base-fee deferral) and the escrow's event share one transaction. Registering the escrow there lets the receipt supply its only event.
+	if (emitter.kind === 'sharedPoolPriceFeed' && (decoded.name === 'PriceReported' || decoded.name === 'PriceReportRejected' || decoded.name === 'PriceReportDeferred')) {
 		const report = decoded.arguments?.['reportId']
 		if ((typeof report !== 'string' && typeof report !== 'bigint') || !/^\d+$/.test(String(report))) throw new Error('Report decision is missing its report')
 		const candidate = await call(emitterAddress, 'sharedPoolPriceFeed', 'reportCandidates', [BigInt(report)])

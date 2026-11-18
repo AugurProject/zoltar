@@ -118,6 +118,37 @@ for (const results of [[true, true], [false, true], [false, false], []]) {
 	})
 }
 
+test('a settlement above the report base-fee ceiling is recorded as deferred and keeps the report tracked for recovery', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'report-deferred-'))
+	try {
+		const path = join(directory, 'state.json')
+		const { intent, receipt } = await portfolioReceiptIntent()
+		const feed = getAddress('0x0000000000000000000000000000000000000040')
+		intent.reportOperations = { feed, reportId: 7n }
+		intent.label = 'Settle sponsored takeover report'
+		receipt.logs = [
+			{
+				address: feed,
+				blockHash: receipt.blockHash,
+				blockNumber: receipt.blockNumber,
+				topics: encodeEventTopics({ abi: sharedPoolPriceFeedAbi, eventName: 'PriceReportDeferred', args: { reportId: 7n } }).filter(topic => topic !== null),
+				data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [34n * 10n ** 9n, 33n * 10n ** 9n]),
+			},
+		]
+		const report = { feed, reportId: 7n, sponsor: intent.sender, fundingKey: `${feed.toLowerCase()}:${intent.sender.toLowerCase()}`, createdBlock: 1n, nextBlock: 1n }
+		const state = { ...initialRuntimeState(false, intent.sender, 1), sponsoredReports: [report] }
+		state.pendingTransactions.push(intent)
+		await saveDurableState(path, state)
+		await resolveFinalizedReceipt(path, state, intent, receipt)
+		const saved = await loadDurableState(path, 1)
+		expect(saved.activities[0]?.status).toBe('info')
+		expect(saved.activities[0]?.message).toContain('settled above the report base-fee ceiling')
+		expect(saved.sponsoredReports).toEqual([report])
+	} finally {
+		await rm(directory, { recursive: true, force: true })
+	}
+})
+
 test('consumed report funding and its tracking record resolve atomically across write failures and restart', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'report-funding-transition-'))
 	try {

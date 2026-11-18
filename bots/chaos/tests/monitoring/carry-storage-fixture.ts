@@ -144,7 +144,7 @@ export function storageFixture() {
 			case 'nonDecisionThresholdAttoRep':
 			case 'getForkThresholdAttoRep':
 				return [10n]
-			case 'continuationSettlementForkThresholdAttoRep':
+			case 'settlementForkThresholdAttoRep':
 				return [frozenForkThreshold]
 			case 'getEscalationGameEndDate':
 				return [100n]

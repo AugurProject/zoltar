@@ -23,13 +23,13 @@ contract SecurityPoolForkerPortfolioDelegate {
 
 	/// @notice Optional first-use preparation keeps deployment and maximum-size carry installation in separate transactions.
 	function preparePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) external returns (ISecurityPool child) {
-		(child, , ) = _preparePortfolioQuestion(source, targetUniverse);
+		(child, , , ) = _preparePortfolioQuestion(source, targetUniverse);
 	}
 
 	function materializePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) public returns (ISecurityPool child) {
 		ISecurityPoolPortfolioNative portfolio;
 		address sourceGame;
-		(child, portfolio, sourceGame) = _preparePortfolioQuestion(source, targetUniverse);
+		(child, portfolio, sourceGame, source) = _preparePortfolioQuestion(source, targetUniverse);
 		if (child.systemState() == SystemState.Operational) return child;
 		if (zoltar.getForkTime(targetUniverse) != 0)
 			require(_canActivateInForkedUniverse(portfolio, targetUniverse, source.questionId()), 'Only finalized questions can activate in a forked universe');
@@ -84,7 +84,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 		// activate a live question. Its prepared, forked ledger is all that shares
 		// need in order to migrate on through that universe.
 		if (zoltar.getForkTime(targetUniverse) != 0) {
-			(ISecurityPool child, ISecurityPoolPortfolioNative authority, ) = _preparePortfolioQuestion(source, targetUniverse);
+			(ISecurityPool child, ISecurityPoolPortfolioNative authority, , ) = _preparePortfolioQuestion(source, targetUniverse);
 			if (
 				child.systemState() == SystemState.Operational ||
 				!_canActivateInForkedUniverse(authority, targetUniverse, source.questionId())
@@ -100,7 +100,9 @@ contract SecurityPoolForkerPortfolioDelegate {
 			_hasProtectedQuestionCash(portfolio, targetUniverse, questionId);
 	}
 
-	function _preparePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) private returns (ISecurityPool child, ISecurityPoolPortfolioNative portfolio, address sourceGame) {
+	/// @dev Returns the effective source: an existing ledger's immutable parent, otherwise
+	/// the caller's canonical source after proving the target descends from its universe.
+	function _preparePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) private returns (ISecurityPool child, ISecurityPoolPortfolioNative portfolio, address sourceGame, ISecurityPool) {
 		ISecurityPoolFactory factory = source.securityPoolFactory();
 		bytes32 origin = factory.getSecurityPoolOriginId(source);
 		require(address(factory.getSecurityPool(origin, source.universeId())) == address(source), 'Source pool is not canonical');
@@ -113,25 +115,38 @@ contract SecurityPoolForkerPortfolioDelegate {
 		// An already operational child returns before its parent is checked, so prove its factory first.
 		if (address(child) != address(0))
 			require(address(child.securityPoolFactory()) == address(factory), 'Child pool is not from the source factory');
-		if (address(child) != address(0) && child.systemState() == SystemState.Operational)
-			return (child, portfolio, address(0));
+		if (address(child) != address(0)) {
+			if (child.systemState() == SystemState.Operational) return (child, portfolio, address(0), source);
+			// The forker deployed this child from a proven canonical parent, so any caller
+			// completes the prepared ledger whatever ancestor source it names.
+			source = child.parent();
+		} else {
+			_requireDescendant(source.universeId(), targetUniverse);
+		}
 		SecurityPoolReporterLedger reporters = SecurityPoolReporterLedger(portfolio.reporterLedger(targetUniverse));
 		reporters.checkpoint(targetUniverse);
 		(SecurityPoolReporterLedger.Question memory reporterState, bool finalClaim) = reporters.question(targetUniverse, source.questionId());
 		require(!finalClaim || reporterState.balanceAttoRep != 0, 'Question finalized in source universe');
 		sourceGame = reporterState.sourceGame;
 		require(sourceGame == address(0) || sourceGame == address(source.escalationGame()), 'Use last live reporter source');
-		if (address(child) != address(0)) {
-			// A pool's parent is immutable, so this also proves `source` and its factory.
-			require(address(child.parent()) == address(source), 'Use prepared question source');
-			return (child, portfolio, sourceGame);
-		}
+		if (address(child) != address(0)) return (child, portfolio, sourceGame, source);
 		factory.preparePortfolioPriceFeed(source, targetUniverse);
 		child = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps());
 		_requireChildProvenance(factory, source, child, targetUniverse);
 		source.authorizeChildPool(child);
 		portfolio.registerChildPool(child);
 		if (zoltar.getForkTime(targetUniverse) != 0) child.setSystemState(SystemState.PoolForked);
+		return (child, portfolio, sourceGame, source);
+	}
+
+	/// @dev A sibling or unrelated branch must never become a ledger's immutable parent.
+	/// The walk ends at genesis; each step is a real fork, so depth stays small.
+	function _requireDescendant(uint248 ancestor, uint248 universe) private view {
+		while (universe != 0) {
+			(, , , , universe) = zoltar.universes(universe);
+			if (universe == ancestor) return;
+		}
+		revert('Target universe does not descend from source');
 	}
 
 	/// @dev `source` and everything derived from it are caller-supplied. A pool's factory is

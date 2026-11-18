@@ -94,7 +94,7 @@ export async function scanCarryStorage(context: {
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'getEscalationGameEndDate' }),
 			client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber, functionName: 'universeId' }),
 			client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber, functionName: 'zoltar' }),
-			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'continuationSettlementForkThresholdAttoRep' }),
+			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'settlementForkThresholdAttoRep' }),
 		])
 		const [forkThreshold, forkTime] = await drainConcurrent([client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }), client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber, functionName: 'getForkTime' })])
 		return { bindingCapital, nonDecisionThreshold, gameEnd, forkThreshold, forkTime, frozenForkThreshold }
@@ -128,7 +128,7 @@ export async function scanCarryStorage(context: {
 		])
 		const liveForkThreshold = forkTime > gameEnd ? nonDecisionThreshold : forkThreshold
 		const economics = computeWinningEconomics({
-			// The first winning claim of a carried game freezes the threshold; zero means no claim yet.
+			// A resumed carried game records the threshold at resume and on every deposit; zero means it never changed.
 			actualForkThresholdAttoRep: frozenForkThreshold === 0n ? liveForkThreshold : frozenForkThreshold,
 			bindingCapitalAttoRep: bindingCapital,
 			cumulativeAmountAttoRep: allocation.retainedCumulativeAttoRep,

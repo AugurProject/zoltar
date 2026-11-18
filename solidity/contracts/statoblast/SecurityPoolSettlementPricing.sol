@@ -63,11 +63,7 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		return Math.mulDiv(addedUnits, state.outcomeSupplyAttoShares, state.units);
 	}
 	function quoteMintPrincipal(uint64 bookId, uint256 questionId, uint256 cashAttoEth) external view returns (uint256) {
-		uint256 shares = quoteMint(bookId, questionId, cashAttoEth);
-		Book storage book = _book(bookId);
-		(Question memory state, ) = scaledQuestion(bookId, questionId);
-		uint256 principal = SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, _mintUnits(bookId, book, cashAttoEth));
-		require(state.feePrincipalAttoEth + principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
+		(Book storage book, uint256 principal, , ) = _quoteMintPrincipal(bookId, questionId, cashAttoEth);
 		return
 			book.units == 0
 				? cashAttoEth
@@ -75,15 +71,18 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 	}
 	function validateMintFeePrecision(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 annualBps) external view {
 		if (annualBps == 0 || cashAttoEth == 0) return;
-		uint256 shares = quoteMint(bookId, questionId, cashAttoEth);
-		Book storage book = _book(bookId);
-		(Question memory state, ) = scaledQuestion(bookId, questionId);
-		uint256 addedUnits = _mintUnits(bookId, book, cashAttoEth);
-		uint256 principal =
-			state.feePrincipalAttoEth +
-				SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, addedUnits);
-		require(principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
+		(Book storage book, , uint256 principal, uint256 addedUnits) = _quoteMintPrincipal(bookId, questionId, cashAttoEth);
 		SettlementMath.validateFeePrecision(principal, _netCash(bookId, book) + cashAttoEth * UNIT_SCALE, book.units + addedUnits, annualBps);
+	}
+	/// @dev The minted principal increment and the question's resulting principal, which must stay below the REP precision bound.
+	function _quoteMintPrincipal(uint64 bookId, uint256 questionId, uint256 cashAttoEth) private view returns (Book storage book, uint256 increment, uint256 principal, uint256 addedUnits) {
+		uint256 shares = quoteMint(bookId, questionId, cashAttoEth);
+		book = _book(bookId);
+		(Question memory state, ) = scaledQuestion(bookId, questionId);
+		addedUnits = _mintUnits(bookId, book, cashAttoEth);
+		increment = SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, addedUnits);
+		principal = state.feePrincipalAttoEth + increment;
+		require(principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
 	}
 	function quoteMintRecoveryRep(uint64 bookId, uint256 questionId, uint256 cashAttoEth) public view returns (uint256) {
 		uint256 addedShares = quoteMint(bookId, questionId, cashAttoEth);
@@ -92,8 +91,16 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 	}
 	function _mintRecoveryRep(uint64 bookId, Book storage book, uint256 questionId, Question memory state, uint256 addedShares) internal view returns (uint256) {
 		if (state.outcomeSupplyAttoShares == 0) return 0;
-		uint256 scaled = Math.mulDiv(_mintEntitlement(bookId, book, questionId, state), addedShares, state.outcomeSupplyAttoShares, Math.Rounding.Ceil);
-		return Math.ceilDiv(scaled, RECOVERY_SCALE);
+		uint256 entitlement = _mintEntitlement(bookId, book, questionId, state);
+		// A quotient of at least 2^256 would require at least 2^128 attoREP.
+		(uint256 high, ) = Math.mul512(entitlement, addedShares);
+		require(high < state.outcomeSupplyAttoShares, 'Recovery REP exceeds precision bound');
+		uint256 scaled = Math.mulDiv(entitlement, addedShares, state.outcomeSupplyAttoShares);
+		uint256 recoveryAttoRep = scaled / RECOVERY_SCALE;
+		if (scaled % RECOVERY_SCALE != 0 || mulmod(entitlement, addedShares, state.outcomeSupplyAttoShares) != 0)
+			recoveryAttoRep++;
+		require(recoveryAttoRep < RECOVERY_SCALE - book.recoveryAttoRep, 'Recovery REP exceeds precision bound');
+		return recoveryAttoRep;
 	}
 	function _mintEntitlement(uint64 bookId, Book storage book, uint256 questionId, Question memory state) internal view returns (uint256) {
 		return

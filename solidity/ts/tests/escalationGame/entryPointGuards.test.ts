@@ -5,7 +5,7 @@ import { writeContractAndWait, type WriteClient } from '../../testSupport/simula
 import { DAY, MAX_UINT256 } from '../../testSupport/simulator/utils/constants'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution, readHasReachedNonDecision, readNonDecisionState, readCanTriggerOwnFork, readEscalationGameEndDate, readFinalQuestionResolution, readNonDecisionTimestamp } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { statoblast_EscalationGame_EscalationGame } from '../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
 import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL, zeroHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
@@ -127,13 +127,21 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, 255 as QuestionOutcome, reportBond))
 	})
 
-	test('depositOnOutcome rejects tie adjustments that would drop the accepted deposit below the minimum bond', async () => {
+	test('depositOnOutcome accepts a start-bond deposit that the tie adjustment leaves one attoREP below the bond', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
-		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /below start bond/i)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const balances = await getBalances(client, escalationGameAddress)
 		assert.strictEqual(balances.invalid, reportBond, 'original leading balance should stay untouched')
-		assert.strictEqual(balances.yes, 0n, 'tying minimum deposit should not be partially accepted')
+		assert.strictEqual(balances.yes, reportBond - 1n, 'the start bond applies to the offered amount, before the tie adjustment')
+		// The pool previews the offered amount first, so an offer below the start bond never reaches the recorder.
+		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, reportBond - 1n), /Invalid deposit preview/, 'an offered amount below the start bond must still revert')
+		// The recorder admits a sub-bond amount only as a trimmed tie: one attoREP under the bond, ending one attoREP under the leader.
+		await assert.rejects(
+			writeContractAndWait(client, async () => await client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: testSecurityPoolAddress, functionName: 'recordDeposit', args: [client.account.address, QuestionOutcome.No, reportBond - 2n, reportBond - 2n] })),
+			/Below start bond/,
+			'a recorded amount below the start bond that is not a trimmed tie must revert',
+		)
 	})
 
 	test('getEscalationGameDeposits paginates deposits without adding synthetic entries', async () => {

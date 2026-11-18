@@ -186,6 +186,8 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		securityPoolCapitalCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }),
 		securityPoolServicesCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 1n }),
 		securityPoolServicesCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 2n }),
+		securityPoolSettlementBookCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 1n }),
+		securityPoolSettlementBookCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 2n }),
 		securityPoolForkCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 1n }),
 		securityPoolAuctionCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 1n }),
 		securityPoolForkCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }),

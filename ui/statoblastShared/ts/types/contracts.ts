@@ -39,7 +39,7 @@ type StagedOracleQueuedResult = {
 	operationId: bigint
 }
 
-export type OpenOraclePriceSettlement = { status: 'accepted' } | { status: 'unconfirmed' } | { status: 'rejected'; reason: string }
+export type OpenOraclePriceSettlement = { status: 'accepted' } | { status: 'unconfirmed' } | { status: 'deferred'; maxSettlementBaseFee: bigint } | { status: 'rejected'; reason: string }
 
 export type OpenOracleActionResult = ActionResult & {
 	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'

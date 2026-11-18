@@ -61,7 +61,8 @@ library SecurityPoolPersistentMap {
 	/// @dev Finality histories retain old weights after their custody has been
 	/// released. Their prefixes are residues modulo 2^256. The authority subtracts
 	/// its previous residue; the result is exact because unprocessed live custody
-	/// is at most uint256.max. Ordinary maps keep checked aggregate arithmetic.
+	/// is at most uint256.max. Ordinary maps keep checked aggregate arithmetic unless their
+	/// owner proves the aggregate cannot wrap, as the settlement fee maps do.
 	function prefixTotalModular(Store storage self, uint64 root, uint256 cutoff) internal view returns (uint256 amount) {
 		while (root != 0) {
 			Node storage node = self.nodes[root];

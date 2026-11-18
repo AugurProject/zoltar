@@ -280,25 +280,33 @@ contract SecurityPoolPortfolioSettlement {
 	/// @notice Restore an impaired branch by replacing its entire active cash
 	/// deficit while preserving every inherited recovery REP entitlement.
 	/// This is a donation: no shares, commitments or REP are paid to the sponsor.
-	function topUp(uint248 universeId, uint256 cashAttoEth) external {
+	/// The deficit is read after the checkpoint, so redemptions and finality that
+	/// move it before inclusion do not invalidate a donor's bounded transaction.
+	/// @param maximumCashAttoEth Largest deficit the sponsor agrees to supply.
+	/// @return cashAttoEth The live deficit pulled from the sponsor.
+	function topUp(uint248 universeId, uint256 maximumCashAttoEth) external returns (uint256 cashAttoEth) {
 		require(!entered, 'Settlement reentry');
 		IPortfolioForkAuthority root = IPortfolioForkAuthority(portfolio);
 		require(root.zoltar().getForkTime(universeId) == 0, 'Settlement universe forked');
 		// Checkpoint before taking the custody lock: capital's normal callback
 		// enters this settlement to pause stale time and protect finalized claims.
 		root.capitalLedger(universeId).checkpoint();
-		_repair(universeId, cashAttoEth);
+		cashAttoEth = _repair(universeId, maximumCashAttoEth);
 		// The custody lock is released before capital synchronizes the repaired
 		// cash demand through its ordinary settlement callback.
 		root.capitalLedger(universeId).checkpoint();
 	}
 
-	function _repair(uint248 universeId, uint256 cashAttoEth) private nonReentrant {
-		Collateral.pull(collateralToken, msg.sender, address(this), cashAttoEth);
+	function _repair(uint248 universeId, uint256 maximumCashAttoEth) private nonReentrant returns (uint256 cashAttoEth) {
 		uint64 bookId = _bookId(universeId);
-		ledger.topUp(bookId, cashAttoEth);
 		(uint256 demand, , , , ) = ledger.totals(bookId);
-		IPortfolioForkAuthority(portfolio).capitalLedger(universeId).recordSettlementRepair(demand);
+		uint256 required = ledger.requiredCash(bookId);
+		require(required > demand, 'No settlement deficit');
+		cashAttoEth = required - demand;
+		require(cashAttoEth <= maximumCashAttoEth, 'Settlement deficit exceeds maximum');
+		Collateral.pull(collateralToken, msg.sender, address(this), cashAttoEth);
+		ledger.topUp(bookId, cashAttoEth);
+		IPortfolioForkAuthority(portfolio).capitalLedger(universeId).recordSettlementRepair(required);
 		emit SettlementRepaired(universeId, msg.sender, cashAttoEth);
 	}
 

@@ -45,19 +45,22 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 	const bounds = liquiditySlippageBounds(quote, quote.slippageBps)
 	if (quote.operation === 'initialize') {
 		const minimumLiquidity = retainApprovedMinimum(bounds.minimumLiquidity, refreshed.expectedLiquidity, 'LP tokens')
+		// If someone initializes the pair first, the router adds liquidity at its price within these bounds.
+		const maximumYes = retainApprovedMaximum(bounds.maximumYesDeposit, refreshed.expectedYesDeposit, 'YES deposit')
+		const maximumNo = retainApprovedMaximum(bounds.maximumNoDeposit, refreshed.expectedNoDeposit, 'NO deposit')
 		const initializedPairAddress = quote.market.pair
 		return initializedPairAddress === undefined
 			? await guardedWrite(async () => {
 					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
 					return tokenFunded(quote.market)
-						? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithCollateral', account, args: [quote.market.pool, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline, quote.amount] })
-						: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
+						? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithCollateral', account, args: [quote.market.pool, refreshed.mintAttoEth, quote.conditionalYesBps, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline, quote.amount] })
+						: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, refreshed.mintAttoEth, quote.conditionalYesBps, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 				})
 			: await guardedWrite(async () => {
 					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
 					return tokenFunded(quote.market)
-						? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithCollateral', account, args: [initializedPairAddress, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline, quote.amount] })
-						: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
+						? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithCollateral', account, args: [initializedPairAddress, refreshed.mintAttoEth, quote.conditionalYesBps, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline, quote.amount] })
+						: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, refreshed.mintAttoEth, quote.conditionalYesBps, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 				})
 	}
 	const pairAddress = quote.market.pair

@@ -29,6 +29,7 @@ const random = () => {
 }
 const below = (limit: number) => Math.floor(random() * limit)
 const maxOf = (a: bigint, b: bigint) => (a > b ? a : b)
+const minOf = (a: bigint, b: bigint) => (a < b ? a : b)
 
 type ModelBid = { id: bigint; lots: bigint; min: bigint; health: bigint; bidder: WriteClient; vault: Address }
 
@@ -50,19 +51,15 @@ function modelClearing(inventory: bigint, grid: bigint, bids: readonly ModelBid[
 	if (filled === 0n) return { filled, attoRepPerLot: 0n, sold: 0n, rounding: 0n, fills }
 	const marginal = lotPrice[Number(filled) - 1]
 	if (marginal === undefined) throw new Error('Model marginal missing')
-	const fullBefore = BigInt(lotPrice.filter(price => price < marginal).length)
-	const demand = BigInt(lotPrice.filter(price => price === marginal).length)
 	const reached = filled === maximum
 	const unrounded = reached ? maxOf(marginal, floor) : inventory / filled
 	const attoRepPerLot = unrounded - (unrounded % grid)
 	const sold = reached ? filled * attoRepPerLot : inventory
+	// Price-time priority: equal limits fill in submission (id) order.
 	let cumulative = 0n
 	for (const bid of order) {
-		if (bid.min < marginal) fills.set(bid.id, bid.lots)
-		else if (bid.min === marginal) {
-			fills.set(bid.id, ((cumulative + bid.lots) * (filled - fullBefore)) / demand - (cumulative * (filled - fullBefore)) / demand)
-			cumulative += bid.lots
-		}
+		fills.set(bid.id, minOf(bid.lots, maxOf(filled - cumulative, 0n)))
+		cumulative += bid.lots
 	}
 	return { filled, attoRepPerLot, sold, rounding: sold - filled * attoRepPerLot, fills }
 }
@@ -97,9 +94,10 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 				const min = levels[below(levels.length)] ?? openingMinimum
 				const lots = BigInt(1 + below(3))
 				const health = min >= (levels[1] ?? 0n) && below(2) === 0 ? 15_000n : 12_000n
-				const strictlyBetter = bids.filter(bid => bid.min < min).reduce((sum, bid) => sum + bid.lots, 0n)
+				// A new bid ranks after every existing bid at its limit.
+				const rankedBefore = bids.filter(bid => bid.min <= min).reduce((sum, bid) => sum + bid.lots, 0n)
 				const capacity = targetLots < inventory / min ? targetLots : inventory / min
-				if (strictlyBetter >= capacity) {
+				if (rankedBefore >= capacity) {
 					await expect(context.bid(bidder, lots, min, health)).rejects.toThrow('Better bids already exclude this bid')
 					continue
 				}

@@ -53,7 +53,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		if (engineReceipt.contractAddress === undefined) throw new Error('Settlement engine deployment address missing')
 		address = engineReceipt.contractAddress
 		await writeContractAndWait(client, () => client.writeContract({ abi: collateralArtifact.abi, address: collateral, functionName: 'approve', args: [address, 2n ** 256n - 1n] }))
-		const bookReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [address, 1n] }) }) })
+		const bookReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [address, 1n, 1n] }) }) })
 		if (bookReceipt.contractAddress === undefined) throw new Error('Settlement book deployment address missing')
 		book = bookReceipt.contractAddress
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'initialize', args: [book] }))

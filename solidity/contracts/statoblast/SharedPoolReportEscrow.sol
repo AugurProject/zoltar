@@ -28,7 +28,11 @@ contract SharedPoolReportEscrow {
 	/// fail, and far below the callback budget an accepted report needs.
 	uint256 private constant CALLBACK_ENTRY_GAS_MARGIN = 100_000;
 	uint256 public reportId;
-	event ReportCompleted(uint256 indexed reportId, address indexed priceFeed, bool accepted);
+	/// @notice Emitted on every settlement callback, after the feed has processed the report.
+	/// @param outcome The feed's `reportOutcome` after the callback: 0 = deferred and still
+	/// pending (the settlement block's base fee exceeded the report's ceiling, so a later
+	/// `recoverReport` can still complete it), 1 = accepted, 2 = rejected.
+	event ReportCompleted(uint256 indexed reportId, address indexed priceFeed, uint8 outcome);
 
 	constructor(address _sponsor, OpenOracle _openOracle, IERC20 _weth, ReputationToken _reputationToken, uint32 _callbackGasLimit) {
 		callbackGasLimit = _callbackGasLimit;
@@ -60,7 +64,7 @@ contract SharedPoolReportEscrow {
 			}
 		}
 		ISharedReportReceiver(feed).settleReport(id, amount1, amount2);
-		emit ReportCompleted(id, feed, ISharedReportReceiver(feed).reportOutcome(id) == 1);
+		emit ReportCompleted(id, feed, ISharedReportReceiver(feed).reportOutcome(id));
 		withdrawFunding();
 	}
 

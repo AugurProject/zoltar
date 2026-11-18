@@ -56,7 +56,7 @@ describe('audit: settlement book recovery REP property test', () => {
 	const send = (request: () => Promise<Hex>) => writeContractAndWait(client, request)
 
 	const deployBook = async () => {
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 1n] }) }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 1n, 1n] }) }) })
 		if (receipt.contractAddress === undefined) throw new Error('deployment address missing')
 		address = receipt.contractAddress
 		await send(() => client.writeContract({ ...target(), functionName: 'createBook', args: [0] }))

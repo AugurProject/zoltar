@@ -101,9 +101,6 @@ contract SharedPoolPriceFeed {
 	mapping(uint256 => IReportOperations.Batch) private operationBatches;
 	mapping(address => uint256) public sponsorOperationReport;
 	event ReportOperationAttempted(uint256 indexed reportId, address indexed sponsor, uint256 indexed operationIndex, bool success);
-	function reportOperationBatch(uint256 reportId) external view returns (IReportOperations.Batch memory) {
-		return operationBatches[reportId];
-	}
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
 	uint256 private checkpointedExposureAttoEth;
@@ -127,6 +124,9 @@ contract SharedPoolPriceFeed {
 	event ReportFundingAssigned(uint256 indexed reportId, address indexed coordinator, address indexed sponsor);
 	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
 	event PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
+	/// @notice The report settled in a block above its base-fee ceiling. It stays pending
+	/// so `recoverReport` can complete it at or below the ceiling while it is fresh.
+	event PriceReportDeferred(uint256 indexed reportId, uint256 baseFee, uint256 maxSettlementBaseFee);
 	event PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
 
 	constructor(address _configCoordinator, address _securityPoolFactory, address _portfolio, uint248 _universeId, ReputationToken _reputationToken) {
@@ -357,12 +357,20 @@ contract SharedPoolPriceFeed {
 	}
 
 	/// @dev Callback and recovery use identical freshness, funding and operation checks.
-	function _completeReport(uint256 reportId, uint256 amount1, uint256 amount2, ReportCandidate memory candidate) private {
+	/// Anyone may choose the settlement block, so a base fee above the report's ceiling
+	/// is never final: when it is the only failed check the report stays pending and
+	/// returns false. A later recovery at or below the ceiling completes it, and the
+	/// freshness check retires it once its validity window closes.
+	function _completeReport(uint256 reportId, uint256 amount1, uint256 amount2, ReportCandidate memory candidate) private returns (bool completed) {
 		require(!processingReport, 'Report processing active');
 		require(reports[reportId].outcome == REPORT_PENDING, 'Report already completed');
-		processingReport = true;
-		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2, candidate.maxSettlementBaseFee);
+		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2);
 		bool accepted = bytes(reason).length == 0;
+		if (accepted && block.basefee > candidate.maxSettlementBaseFee) {
+			emit PriceReportDeferred(reportId, block.basefee, candidate.maxSettlementBaseFee);
+			return false;
+		}
+		processingReport = true;
 		reports[reportId].outcome = accepted ? REPORT_ACCEPTED : REPORT_REJECTED;
 		_clearLatestReport(reportId);
 		if (accepted) {
@@ -382,6 +390,7 @@ contract SharedPoolPriceFeed {
 		} else
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 		processingReport = false;
+		return true;
 	}
 
 	function _isReportOperation(bytes4 selector) private pure returns (bool) {
@@ -431,15 +440,17 @@ contract SharedPoolPriceFeed {
 		recoverReport(pendingReportId);
 	}
 
-	/// @notice Retry a failed callback using authenticated settled amounts.
+	/// @notice Complete a settled report whose callback failed or whose settlement block
+	/// exceeded its base-fee ceiling, using the amounts and observation timestamp OpenOracle stored.
 	/// Expired or superseded observations retire normally; fresh candidates retain
-	/// their original sponsor operations and cannot be killed by callback starvation.
+	/// their original sponsor operations and cannot be killed by callback starvation
+	/// or by a third party settling them in a high-base-fee block.
 	function recoverReport(uint256 reportId) public {
 		ReportCandidate memory candidate = reports[reportId];
 		require(address(candidate.escrow) != address(0) && reports[reportId].outcome == REPORT_PENDING, 'No report to recover');
 		(uint128 amount1, uint128 amount2, , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
 		require(settlementTimestamp != 0, 'Report not settled');
-		_completeReport(reportId, amount1, amount2, candidate);
+		require(_completeReport(reportId, amount1, amount2, candidate), 'Base fee too high');
 		candidate.escrow.withdrawFunding();
 		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 	}
@@ -453,12 +464,11 @@ contract SharedPoolPriceFeed {
 		pendingExposureLimitAttoEth = 0;
 	}
 
-	function _validateSettledReport(uint256 reportId, uint256 amount1, uint256 amount2, uint256 maxSettlementBaseFeeAttoEthPerGas) private view returns (string memory reason, uint256 priceTimestamp) {
+	function _validateSettledReport(uint256 reportId, uint256 amount1, uint256 amount2) private view returns (string memory reason, uint256 priceTimestamp) {
 		// Before activation, closing is anchored to the native recap deadline.
 		// A later callback must refund normally without replacing its frozen quote.
 		if (!ISharedPoolPortfolioPriceCheckpoint(portfolio).isPriceReportingOpen(universeId))
 			return ('Portfolio reporting window closed', 0);
-		if (block.basefee > maxSettlementBaseFeeAttoEthPerGas) return ('Base fee too high', 0);
 		(, , , uint48 finalReportTimestamp, , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
 		if (numReports == type(uint24).max) return ('Counter saturated', 0);
 		if (numReports == 0 || !_isFinalReportProfitable(amount1)) return ('Report uneconomic', 0);

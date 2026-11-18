@@ -17,7 +17,7 @@ test('a settled report registers its escrow and stores the completion from the s
 	const report = toHex(7n, { size: 32 })
 	const logs: Log[] = [
 		{ ...position, address: feed, logIndex: 0n, topics: [topic('PriceReported(uint256,uint256,uint256)'), report], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [5n, 6n]) },
-		{ ...position, address: escrow, logIndex: 1n, topics: [topic('ReportCompleted(uint256,address,bool)'), report, toHex(BigInt(feed), { size: 32 })], data: encodeAbiParameters([{ type: 'bool' }], [true]) },
+		{ ...position, address: escrow, logIndex: 1n, topics: [topic('ReportCompleted(uint256,address,uint8)'), report, toHex(BigInt(feed), { size: 32 })], data: encodeAbiParameters([{ type: 'uint8' }], [1]) },
 	]
 	const mocks = [
 		spyOn(indexer.providers.client, 'getTransaction').mockResolvedValue({ hash: tx, blockHash: hash, blockNumber: 10n, transactionIndex: 0n, from: sponsor, to: feed, gas: 1_000_000n, nonce: 0n, value: 0n, input: '0x' }),

@@ -8,7 +8,7 @@ import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../../testSupport/simu
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { encodeDeployData, type Abi, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, type Abi, type Address, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { useSecurityPoolPortfolioFixture } from '../statoblast/securityPoolPortfolioFixture'
 import { statoblast_EscalationGame_EscalationGame as gameArtifact } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -69,7 +69,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	test('uses the real dynamic complete-set scale and leaves no INVALID or router residue', async () => {
 		const deadline = fixture.questionData.endTime - 1n
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 7_000n, 1n, account, deadline], value: unit }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 7_000n, maxUint256, maxUint256, 1n, account, deadline], value: unit }))
 		const poolSettings = await loadPoolAccounting()
 		expect(poolSettings.shareTokenSupplyAttoShares).toBeGreaterThan(0n)
 		expect(poolSettings.accounting.settlementCollateralAttoEth).toBe(unit)
@@ -90,7 +90,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	test('keeps LP removal open after the real question end time', async () => {
 		const deadline = fixture.questionData.endTime - 1n
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 5_000n, 1n, account, deadline], value: unit }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 5_000n, maxUint256, maxUint256, 1n, account, deadline], value: unit }))
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await expect(fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Question ended')
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
@@ -101,7 +101,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	test('reports the real finalized outcome and keeps raw LP removal available', async () => {
 		const deadline = fixture.questionData.endTime - 1n
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 5_000n, 1n, account, deadline], value: unit }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 5_000n, maxUint256, maxUint256, 1n, account, deadline], value: unit }))
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await approveToken(fixture.client, addressString(GENESIS_REPUTATION_TOKEN), native().securityPool)
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: native().securityPool, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * 10n ** 18n] }))
@@ -115,7 +115,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	test('stops parent trading after a real universe fork while preserving LP removal', async () => {
 		const deadline = fixture.questionData.endTime - 1n
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 5_000n, 1n, account, deadline], value: unit }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, unit, 5_000n, maxUint256, maxUint256, 1n, account, deadline], value: unit }))
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await approveToken(fixture.client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(fixture.client, fixture.genesisUniverse, fixture.questionId)
@@ -130,7 +130,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const deadline = fixture.questionData.endTime - 1n
 		const shareTokenAddress = native().shareToken
 		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 10n * unit, 5_000n, 1n, account, deadline], value: 10n * unit }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 10n * unit, 5_000n, maxUint256, maxUint256, 1n, account, deadline], value: 10n * unit }))
 
 		const entry = await fixture.client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 2n * unit, 1, 1n, account, deadline], value: 2n * unit })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 2n * unit, 1, 1n, account, deadline], value: 2n * unit }))
