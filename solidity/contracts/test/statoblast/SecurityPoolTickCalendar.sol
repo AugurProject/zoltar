@@ -8,6 +8,7 @@ import { SecurityPoolCreationCode } from '../../statoblast/SecurityPoolCreationC
 contract SecurityPoolTickCalendar {
 	uint256 private constant SCHEDULING_WINDOW = 64 days;
 	uint256 private constant SNAPSHOT_TICK_BYTES = 64;
+	uint256 private constant TICKS_PER_SNAPSHOT_CHUNK = 192;
 
 	struct Tick {
 		uint128 settlement;
@@ -28,9 +29,9 @@ contract SecurityPoolTickCalendar {
 		uint256 accruedFees;
 		bool initialized;
 		bool frozen;
-		address inheritedSchedule;
+		bool hasInheritedSchedule;
+		uint248 inheritedUniverse;
 		uint64 inheritedCursor;
-		address frozenSchedule;
 	}
 
 	address public immutable controller;
@@ -38,10 +39,11 @@ contract SecurityPoolTickCalendar {
 	uint16 public immutable windowTicks;
 	mapping(uint248 => Book) public books;
 	mapping(uint248 => mapping(uint64 => TickOverride)) private ticks;
+	mapping(uint248 => mapping(uint256 => address)) private snapshotChunks;
 
 	constructor(address authority, uint48 cadence) {
 		require(authority != address(0), 'Missing calendar controller');
-		require(cadence >= 12 hours && cadence <= 2 days, 'Unsupported tick size');
+		require(cadence >= 4 hours && cadence <= 2 days, 'Unsupported tick size');
 		controller = authority;
 		tickSeconds = cadence;
 		windowTicks = uint16((SCHEDULING_WINDOW + cadence - 1) / cadence);
@@ -107,7 +109,7 @@ contract SecurityPoolTickCalendar {
 	function freeze(uint248 universe, uint48 forkTime) external onlyController {
 		Book storage root = _active(universe);
 		_checkpoint(universe, root, completedTick(forkTime));
-		root.frozenSchedule = _snapshot(universe, root);
+		_snapshot(universe, root);
 		root.frozen = true;
 	}
 
@@ -121,7 +123,8 @@ contract SecurityPoolTickCalendar {
 		target.liveSettlement = source.liveSettlement;
 		target.liveReporter = source.liveReporter;
 		target.feeRate = source.feeRate;
-		target.inheritedSchedule = source.frozenSchedule;
+		target.hasInheritedSchedule = true;
+		target.inheritedUniverse = parent;
 		target.inheritedCursor = source.cursor;
 	}
 
@@ -132,12 +135,23 @@ contract SecurityPoolTickCalendar {
 		return (closed.settlement, closed.reporter);
 	}
 
-	/// @dev An inert runtime code store holds the fixed-size future schedule. A child
-	/// can read it directly even if the source inherited every tick from its own parent.
-	function _snapshot(uint248 universe, Book storage book) private returns (address) {
-		bytes memory data = new bytes(1 + uint256(windowTicks) * SNAPSHOT_TICK_BYTES);
-		for (uint256 index = 0; index < windowTicks; ++index) {
-			Tick memory tick = _readTick(universe, book, book.cursor + uint64(index) + 1);
+	/// @dev Inert runtime code stores hold consecutive slices of the future schedule.
+	/// Every chunk is written, including empty ones, so the cost depends on cadence.
+	function _snapshot(uint248 universe, Book storage book) private {
+		uint256 remaining = windowTicks;
+		uint64 firstTick = book.cursor + 1;
+		for (uint256 chunk = 0; remaining != 0; ++chunk) {
+			uint256 count = remaining < TICKS_PER_SNAPSHOT_CHUNK ? remaining : TICKS_PER_SNAPSHOT_CHUNK;
+			snapshotChunks[universe][chunk] = _writeSnapshotChunk(universe, book, firstTick, count);
+			firstTick += uint64(count);
+			remaining -= count;
+		}
+	}
+
+	function _writeSnapshotChunk(uint248 universe, Book storage book, uint64 firstTick, uint256 count) private returns (address) {
+		bytes memory data = new bytes(1 + count * SNAPSHOT_TICK_BYTES);
+		for (uint256 index = 0; index < count; ++index) {
+			Tick memory tick = _readTick(universe, book, firstTick + uint64(index));
 			uint256 amounts = (uint256(tick.reporter) << 128) | tick.settlement;
 			int256 rate = tick.feeRateDelta;
 			uint256 offset = 1 + index * SNAPSHOT_TICK_BYTES;
@@ -151,10 +165,11 @@ contract SecurityPoolTickCalendar {
 	}
 
 	function _inheritedTick(Book storage book, uint64 tick) private view returns (Tick memory result) {
-		address schedule = book.inheritedSchedule;
 		uint64 cursor = book.inheritedCursor;
-		if (schedule == address(0) || tick <= cursor || tick > cursor + windowTicks) return result;
-		uint256 offset = 1 + uint256(tick - cursor - 1) * SNAPSHOT_TICK_BYTES;
+		if (!book.hasInheritedSchedule || tick <= cursor || tick > cursor + windowTicks) return result;
+		uint256 index = tick - cursor - 1;
+		address schedule = snapshotChunks[book.inheritedUniverse][index / TICKS_PER_SNAPSHOT_CHUNK];
+		uint256 offset = 1 + (index % TICKS_PER_SNAPSHOT_CHUNK) * SNAPSHOT_TICK_BYTES;
 		uint256 amounts;
 		int256 rate;
 		assembly ('memory-safe') {

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -65,14 +65,14 @@ describe('Statoblast shared exposure tick calendar', () => {
 		const tickLength = day / 2
 		expect(await client.readContract({ ...calendar.target, functionName: 'maturityTick', args: [tickLength] })).toBe(2n)
 		expect(await client.readContract({ ...calendar.target, functionName: 'windowTicks' })).toBe(128n)
-		await calendar.init(1n)
-		await calendar.replace(1n, 0, 0n, 1n, 0n, 20n)
-		await calendar.replace(1n, 0, 0n, 3n, 0n, 80n)
-		await calendar.fees(1n, 0, 1n, 6n, 5n)
-		await calendar.freeze(1n, tickLength)
-		await calendar.child(1n, 2n)
-		await calendar.child(1n, 3n)
-		expect(await calendar.settled(1n, 1n)).toEqual([20n, 40n])
+		await calendar.init(0n)
+		await calendar.replace(0n, 0, 0n, 1n, 0n, 20n)
+		await calendar.replace(0n, 0, 0n, 3n, 0n, 80n)
+		await calendar.fees(0n, 0, 1n, 6n, 5n)
+		await calendar.freeze(0n, tickLength)
+		await calendar.child(0n, 2n)
+		await calendar.child(0n, 3n)
+		expect(await calendar.settled(0n, 1n)).toEqual([20n, 40n])
 		expect(await calendar.settled(2n, 1n)).toEqual([0n, 0n])
 		await calendar.replace(2n, tickLength, 3n, 4n, 80n, 80n)
 		await calendar.fees(2n, tickLength, 2n, 6n, -5n)
@@ -129,5 +129,63 @@ describe('Statoblast shared exposure tick calendar', () => {
 		expect(denseFork).toBe(sparseFork)
 		expect(denseChild).toBe(sparseChild)
 		expect(denseChildCheckpoint).toBe(sparseChildCheckpoint)
+	})
+
+	test('preserves the last tick of a partially filled snapshot chunk', async () => {
+		const calendar = await deploy(day / 4)
+		await calendar.init(1n)
+		await calendar.replace(1n, 0, 0n, 256n, 0n, 19n)
+		await calendar.freeze(1n, 0)
+		await calendar.child(1n, 2n)
+		await calendar.checkpoint(2n, 64 * day)
+		expect(await calendar.settled(2n, 256n)).toEqual([19n, 38n])
+		expect((await calendar.book(2n)).slice(1, 3)).toEqual([0n, 0n])
+	})
+
+	test('keeps four-hour checkpoints and forks independent of density across snapshot contracts', async () => {
+		const tickLength = day / 6
+		const calendar = await deploy(tickLength)
+		const windowTicks = await client.readContract({ ...calendar.target, functionName: 'windowTicks' })
+		expect(windowTicks).toBe(384n)
+
+		for (const universe of [1n, 2n]) {
+			await calendar.init(universe)
+			await calendar.fees(universe, 0, 192n, 193n, 7n)
+			await calendar.replace(universe, 0, 0n, 192n, 0n, 2n)
+			await calendar.replace(universe, 0, 0n, 193n, 0n, 3n)
+			await calendar.replace(universe, 0, 0n, 384n, 0n, 4n)
+		}
+		for (let tick = 1n; tick <= windowTicks; tick++) {
+			await calendar.replace(2n, 0, 0n, tick, 0n, 1n)
+		}
+
+		const gasUsed = async (operation: Promise<Hash>) => (await client.getTransactionReceipt({ hash: await operation })).gasUsed
+		const sparseFreeze = await gasUsed(calendar.freeze(1n, 0))
+		const denseFreeze = await gasUsed(calendar.freeze(2n, 0))
+		const sparseChild = await gasUsed(calendar.child(1n, 3n))
+		const denseChild = await gasUsed(calendar.child(2n, 4n))
+		await calendar.child(1n, 5n)
+		await calendar.replace(5n, 0, 192n, 193n, 2n, 2n)
+		await calendar.freeze(5n, 0)
+		await calendar.child(5n, 6n)
+
+		const afterWindow = tickLength * Number(windowTicks)
+		const sparseCheckpoint = await gasUsed(calendar.checkpoint(3n, afterWindow))
+		const denseCheckpoint = await gasUsed(calendar.checkpoint(4n, afterWindow))
+		const fullWindowFork = await gasUsed(calendar.freeze(6n, afterWindow))
+
+		expect(await calendar.settled(3n, 192n)).toEqual([2n, 4n])
+		expect(await calendar.settled(3n, 193n)).toEqual([3n, 6n])
+		expect(await calendar.settled(6n, 192n)).toEqual([0n, 0n])
+		expect(await calendar.settled(6n, 193n)).toEqual([5n, 10n])
+		expect(await calendar.settled(6n, 384n)).toEqual([4n, 8n])
+		expect((await calendar.book(4n)).slice(1, 5)).toEqual([0n, 0n, 0n, 7n])
+		expect((await calendar.book(6n)).slice(1, 5)).toEqual([0n, 0n, 0n, 7n])
+
+		console.log({ sparseFreeze, denseFreeze, sparseChild, denseChild, sparseCheckpoint, denseCheckpoint, fullWindowFork })
+		expect(denseFreeze).toBe(sparseFreeze)
+		expect(denseChild).toBe(sparseChild)
+		expect(denseCheckpoint).toBe(sparseCheckpoint)
+		expect(fullWindowFork).toBeLessThan(16_777_216n)
 	})
 })
