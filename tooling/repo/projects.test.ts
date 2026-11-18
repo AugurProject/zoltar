@@ -52,7 +52,7 @@ test('complete validation includes root and non-database AugurScan tests', () =>
 })
 
 test('every dependency audit excludes only the documented unpatched advisories', () => {
-	expect(acceptedAuditAdvisories).toEqual(['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5'])
+	expect(acceptedAuditAdvisories).toEqual(['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5', 'GHSA-fc5q-39xc-vjpf'])
 	expect(dependencyAuditCommand).toEqual(['bun', path.join(repositoryRoot, 'tooling/repo/audit-dependencies.mts')])
 	for (const project of projects) {
 		const audit = project.tasks.audit

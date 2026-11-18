@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { portfolioTakeoverSource } from './securityPoolPortfolioTakeover.js'
 
 const unit = 10n ** 18n
-const snapshot = { liquidationPrice: (12n * unit) / 10n, securityMultiplierBps: 10_500n, totalCommitmentAttoEth: 101n * unit, demandAttoEth: 100n * unit, economics: { minimumCommitmentAttoEth: unit } }
+const snapshot = { conservativePrice: (12n * unit) / 10n, liquidationPrice: (12n * unit) / 10n, securityMultiplierBps: 10_500n, totalCommitmentAttoEth: 101n * unit, demandAttoEth: 100n * unit, economics: { minimumCommitmentAttoEth: unit } }
 const position = { rep: (105n * unit) / 100n, commitment: unit, batch: 0n, remainingCommitment: 0n }
 
 test('#1254 a minimum-size cure cannot remove the commitment that still has REP backing', () => {

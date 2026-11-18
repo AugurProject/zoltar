@@ -134,6 +134,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			require(owner.positionId != 0 && _capitalOwner() != forkAuthority, 'Insufficient owner principal');
 			_requireOpen(host);
 			require(host.isPriceValid(), 'Capital price stale');
+			require(commitmentIndex.eligibleCommitment(conservativePrice) >= demandAttoEth, 'Portfolio backing insufficient');
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
 			require(pledged <= position.rep && position.rep - pledged >= _requiredRep(host, position.commitment, _target(owner)), 'Owner collateral too low');
 			uint256 maxPrice = host.maximumHealthyPrice(position.rep - pledged, position.commitment);

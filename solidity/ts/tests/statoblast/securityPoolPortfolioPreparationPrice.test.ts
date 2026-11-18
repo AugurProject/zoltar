@@ -193,8 +193,8 @@ describe('Statoblast: child portfolio price preparation', () => {
 		await approveToken(owner, weth, feed)
 		await approveToken(owner, rep, feed)
 		const budget = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEth' })
-		// A larger accepted report raises the exposure that growth may reach before the next report settles.
-		await fixture.refreshPrice(fixture.base.questionId, unit, fixture.portfolio, 2n * budget)
+		// Actual commitment growth raises the required funding after the sponsor quotes.
+		await fixture.authorize(300n * unit)
 		expect(await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEth' })).toBeGreaterThan(budget)
 		const balance = (token: Address) => owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [owner.account.address] })
 		const wethBefore = await balance(weth)
@@ -212,8 +212,10 @@ describe('Statoblast: child portfolio price preparation', () => {
 		const owner = fixture.owner()
 		const feed = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		const weth = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'weth' })
-		// While the accepted price is fresh, the renewal must cover the accepted exposure limit.
+		// A fresh renewal covers current exposure.
 		const budget = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [2n * unit] })
+		const floor = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumReportCollateral' })
+		expect(budget).toBe(floor + 2n * unit)
 		await wrapWeth(owner, budget)
 		await approveToken(owner, weth, feed)
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), feed)

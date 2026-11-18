@@ -56,7 +56,7 @@ test('manual takeover requires all consent bounds and rejects a changed price be
 	if (button === null) throw new Error('Missing takeover button')
 	expect(button.disabled).toBe(true)
 	const fields = Array.from(view.container.querySelectorAll('input'))
-	for (const [offset, value] of ['2', '10', '1', '20', '200', '100'].entries()) await fill(fields[offset], value)
+	for (const [offset, value] of ['2', '10', '20', '200', '100'].entries()) await fill(fields[offset], value)
 	await waitFor(() => expect(button.disabled).toBe(false))
 	await act(() => button.click())
 	const request = requests[0]
@@ -64,7 +64,7 @@ test('manual takeover requires all consent bounds and rejects a changed price be
 	const decoded = decodeFunctionData({ abi: capitalArtifact.abi, data: request.data })
 	expect(decoded.functionName).toBe('takeOverWithBounds')
 	if (decoded.functionName !== 'takeOverWithBounds') throw new Error('Wrong takeover entry point')
-	expect(decoded.args).toEqual([2n, 10n * unit, unit, 20n * unit, { maximumOwnerPrincipal: 200n * unit, maximumOwnerCommitment: 100n * unit, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps, expectedAcceptedPriceEpoch: 4n, expectedSourceBatch: 0n }])
+	expect(decoded.args).toEqual([2n, 10n * unit, 0n, 20n * unit, { maximumOwnerPrincipal: 200n * unit, maximumOwnerCommitment: 100n * unit, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps, expectedAcceptedPriceEpoch: 4n, expectedSourceBatch: 0n }])
 	await request.validateBeforeSubmit?.()
 	reader.setRead('acceptedPriceEpoch', 5n, capital)
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('changed')
@@ -97,8 +97,8 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	if (takeOverButton === undefined || cureButton === undefined) throw new Error('Missing takeover or cure button')
 	expect(cureButton.disabled).toBe(true)
 	const fields = view.container.querySelectorAll('input')
-	// Every takeover bound is filled in, including a positive minimum award: the takeover still stays unavailable.
-	for (const [offset, value] of ['2', '10', '1', '20', '200', '100'].entries()) {
+	// Every takeover bound is filled in, the takeover still stays unavailable.
+	for (const [offset, value] of ['2', '10', '20', '200', '100'].entries()) {
 		const field = fields[offset]
 		if (field === undefined) throw new Error('Missing takeover field')
 		await act(() => {
@@ -148,16 +148,16 @@ test('entering another target clears the bounds typed for the previous position 
 	const button = view.container.querySelector('button')
 	if (button === null) throw new Error('Missing takeover button')
 	const fields = Array.from(view.container.querySelectorAll('input'))
-	for (const [offset, value] of ['2', '10', '1', '20', '200', '100'].entries()) await fill(fields[offset], value)
+	for (const [offset, value] of ['2', '10', '20', '200', '100'].entries()) await fill(fields[offset], value)
 	await waitFor(() => expect(button.disabled).toBe(false))
 	await act(() => render(<PortfolioTakeover model={{ snapshot: { ...snapshot, blockHash: `0x${'ab'.repeat(32)}` } }} actions={idleActions} />, view.container))
-	expect(fields.slice(1).map(field => field.value)).toEqual(['10', '1', '20', '200', '100'])
+	expect(fields.slice(1).map(field => field.value)).toEqual(['10', '20', '200', '100'])
 	await fill(fields[0], '3')
-	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '', '']))
+	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '']))
 	await waitFor(() => expect(button.disabled).toBe(true))
-	for (const [offset, value] of ['10', '1', '20', '200', '100'].entries()) await fill(fields[offset + 1], value)
+	for (const [offset, value] of ['10', '20', '200', '100'].entries()) await fill(fields[offset + 1], value)
 	await act(() => render(<PortfolioTakeover model={{ snapshot: { ...snapshot, capitalLedger: getAddress('0x0000000000000000000000000000000000000abc') } }} actions={idleActions} />, view.container))
-	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '', '']))
+	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '']))
 	expect(fields[0]?.value).toBe('3')
 })
 
@@ -167,7 +167,7 @@ test('bounds outlive a snapshot reload and a first target, and clear when an ID 
 	const view = await renderTakeover(snapshot, idleActions)
 	const fields = Array.from(view.container.querySelectorAll('input'))
 	const bounds = () => fields.slice(1).map(field => field.value)
-	const typed = ['10', '1', '20', '200', '100']
+	const typed = ['10', '20', '200', '100']
 	for (const [offset, value] of typed.entries()) await fill(fields[offset + 1], value)
 	await fill(fields[0], '5')
 	expect(bounds()).toEqual(typed)
@@ -177,7 +177,7 @@ test('bounds outlive a snapshot reload and a first target, and clear when an ID 
 	await fill(fields[0], '')
 	expect(bounds()).toEqual(typed)
 	await fill(fields[0], '6')
-	await waitFor(() => expect(bounds()).toEqual(['', '', '', '', '']))
+	await waitFor(() => expect(bounds()).toEqual(['', '', '', '']))
 })
 
 test.each([

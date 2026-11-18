@@ -238,7 +238,7 @@
 		{
 			"path": "explanation/liquidations.html",
 			"title": "Vault liquidation",
-			"summary": "Liquidation eligibility, roles, REP awards, bounded receiver approvals, and reservation lifecycle.",
+			"summary": "Funded commitment repairs, original REP ownership, receiver approvals, and remaining price risks.",
 			"section": "explanation",
 			"topic": "Economics",
 			"keywords": ["liquidation", "underwriting commitment", "backing constraints", "operator", "receiver vault", "approval", "reservation", "bad debt"]

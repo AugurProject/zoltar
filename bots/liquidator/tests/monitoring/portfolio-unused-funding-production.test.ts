@@ -12,7 +12,7 @@ import { distressedSecondWinner, repairAuctionKeeper } from '../support/collater
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
 describe('portfolio abandoned funding integration', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1000n })
 	test('a restarted keeper returns only its journaled funding after the original target becomes healthy', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
