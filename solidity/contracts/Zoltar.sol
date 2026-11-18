@@ -31,9 +31,6 @@ contract Zoltar {
 		mapping(uint248 => uint256) childMigrationRepAmountsAttoRep; // how much attoREP migrated to each child universe
 	}
 	mapping(address => mapping(uint248 => AddressRepMigration)) private migrationRepBalances; // userAddress -> fromUniverse
-	// Level n skips 2**n links. A uint64 depth bounds a lookup independently of fork history.
-	mapping(uint248 => uint64) private universeDepth;
-	mapping(uint248 => mapping(uint8 => uint248)) private ancestorAtLevel;
 
 	event UniverseForked(address indexed forker, uint248 indexed universeId, uint256 indexed questionId, uint256 forkTime, uint256 forkThresholdAttoRep, uint256 migrationRepBalanceAttoRep, uint256 universeTheoreticalSupplyAttoRep);
 	event DeployChild(address deployer, uint248 indexed universeId, uint256 indexed outcomeIndex, uint248 indexed childUniverseId, ReputationToken childReputationToken, uint256 childUniverseTheoreticalSupplyAttoRep);
@@ -182,29 +179,6 @@ contract Zoltar {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
-	/// @notice Whether ancestor is a strict ancestor of a deployed universe.
-	function isUniverseAncestor(uint248 ancestor, uint248 descendant) external view returns (bool) {
-		uint64 depth = universeDepth[descendant];
-		uint64 ancestorDepth = universeDepth[ancestor];
-		if (ancestorDepth >= depth || (ancestor != 0 && ancestorDepth == 0)) return false;
-		uint64 distance = depth - ancestorDepth;
-		for (uint8 level; distance != 0; ++level) {
-			if (distance & 1 != 0) descendant = ancestorAtLevel[descendant][level];
-			distance >>= 1;
-		}
-		return descendant == ancestor;
-	}
-
-	function _indexAncestry(uint248 child, uint248 parent) private {
-		uint64 depth = universeDepth[parent] + 1;
-		universeDepth[child] = depth;
-		ancestorAtLevel[child][0] = parent;
-		for (uint8 level = 1; depth >> level != 0; ++level) {
-			uint248 halfway = ancestorAtLevel[child][level - 1];
-			ancestorAtLevel[child][level] = ancestorAtLevel[halfway][level - 1];
-		}
-	}
-
 	/// @notice Deploys the child universe and REP token for a valid outcome of a forked universe; callable by anyone.
 	function deployChild(uint248 universeId, uint256 outcomeIndex) public {
 		Universe storage universe = universes[universeId];
@@ -219,7 +193,6 @@ contract Zoltar {
 		childReputationTokenCount = repNumber;
 		universeTheoreticalSupplies[childUniverseId] = childUniverseTheoreticalSupplyAttoRep;
 		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
-		_indexAncestry(childUniverseId, universeId);
 		deployedChildOutcomeIndexes[universeId].push(outcomeIndex);
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken, childUniverseTheoreticalSupplyAttoRep);
 		emit ChildReputationTokenInitialized(childUniverseId, childReputationToken, repNumber);

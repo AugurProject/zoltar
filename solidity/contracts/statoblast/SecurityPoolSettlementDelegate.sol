@@ -34,11 +34,8 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 		revert('Portfolio settlement missing');
 	}
 
-	function _redeemPortfolioSettlement(address recipient, uint256 burnedShares, uint256 minimumCashAttoEth) internal returns (uint256 paidCashAttoEth) {
-		if (burnedShares == 0) {
-			require(minimumCashAttoEth == 0, 'Insufficient settlement cash');
-			return 0;
-		}
-		(paidCashAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth) = IPortfolioSettlement(address(portfolioAccounting)).redeemQuestionSettlement(recipient, burnedShares, minimumCashAttoEth);
+	function _redeemPortfolioSettlement(address recipient, uint256 burnedShares) internal returns (uint256 paidCashAttoEth) {
+		if (burnedShares == 0) return 0;
+		(paidCashAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth) = IPortfolioSettlement(address(portfolioAccounting)).redeemQuestionSettlement(recipient, burnedShares);
 	}
 }

@@ -70,20 +70,17 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	/// @notice Pool delegatecall target: burns `redeemer`'s winning shares and returns the settlement collateral owed.
-	function redeemShares(IShareToken shareToken, ISecurityPoolForker forker, uint248 universeId, address redeemer, uint256 minimumCashAttoEth) external returns (uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) {
+	function redeemShares(IShareToken shareToken, ISecurityPoolForker forker, uint248 universeId, address redeemer) external returns (uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) {
 		BinaryOutcomes.BinaryOutcome outcome = forker.getQuestionOutcome(ISecurityPool(payable(address(this))));
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		(winningSharesBurnedAttoShares, ) = shareToken.burnTokenIdAndGetRemainingSupply(tokenId, redeemer);
-		return (
-			winningSharesBurnedAttoShares,
-			_redeemPortfolioSettlement(redeemer, winningSharesBurnedAttoShares, minimumCashAttoEth)
-		);
+		return (winningSharesBurnedAttoShares, _redeemPortfolioSettlement(redeemer, winningSharesBurnedAttoShares));
 	}
 
 	/// @notice Pool delegatecall target: burns `redeemer`'s complete sets and returns the settlement collateral owed.
-	function redeemCompleteSet(IShareToken shareToken, uint248 universeId, address redeemer, uint256 amountAttoShares, uint256 minimumCashAttoEth) external returns (uint256 settlementCollateralRedeemedAttoEth) {
+	function redeemCompleteSet(IShareToken shareToken, uint248 universeId, address redeemer, uint256 amountAttoShares) external returns (uint256 settlementCollateralRedeemedAttoEth) {
 		shareToken.burnCompleteSets(universeId, redeemer, amountAttoShares);
-		return _redeemPortfolioSettlement(redeemer, amountAttoShares, minimumCashAttoEth);
+		return _redeemPortfolioSettlement(redeemer, amountAttoShares);
 	}
 }

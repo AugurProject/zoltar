@@ -33,9 +33,8 @@ contract SecurityPoolCapitalFeeStreamsDeployer {
 	}
 }
 contract SecurityPoolSettlementBookDeployer is SecurityPoolCreationCodeDeployer {
-	/// @dev 2^17 seconds (about 36.4 hours): fee-end keys differ only in bits 17..32, so each key path
-	/// in the fee aggregate maps has at most 16 branch nodes.
-	uint48 public constant FEE_END_GRANULARITY = uint48(1) << 17;
+	/// @dev Daily bucket numbers below the fee-end ceiling fit in 17 bits.
+	uint48 public constant FEE_END_GRANULARITY = 1 days;
 	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolSettlementBook).creationCode) {}
 	function create(address authority, uint256 minimumOutcomeRate) external returns (SecurityPoolSettlementBook) {
 		return SecurityPoolSettlementBook(_deploy(abi.encode(authority, minimumOutcomeRate, FEE_END_GRANULARITY)));

@@ -6,19 +6,17 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 
-// The settlement book keys its fee aggregate maps by stream end. Ends round down to a multiple of
-// 2^17 seconds (the deployed granularity) and stay below 2^33, so two keys differ only in bits
-// 17..32 and a key path has at most 16 branch nodes. This test builds that maximum depth around one question's key and checks
-// the cost of the fee-map writes a complete-set redemption performs.
-const GRANULARITY_BITS = 17n
-const GRANULARITY = 1n << GRANULARITY_BITS
+// Daily bucket numbers fit in 17 bits before the absolute fee-end ceiling.
+const GRANULARITY = 86_400n
 const FEE_END_LIMIT = 1n << 33n
-const LEVELS = Array.from({ length: Number(33n - GRANULARITY_BITS) }, (_unused, index) => GRANULARITY_BITS + BigInt(index))
+const LAST_BUCKET = (FEE_END_LIMIT - 1n) / GRANULARITY
+const LEVELS = Array.from({ length: LAST_BUCKET.toString(2).length }, (_unused, index) => BigInt(index))
 const UNIT_SCALE = 1_000_000_000n
 const CAP = 16_777_216n
 const VICTIM = 1n
-// The deepest possible key: every bit from 17 to 32 is one, so each level's sibling subtree lies below it.
-const VICTIM_KEY = FEE_END_LIMIT - GRANULARITY
+// Every sibling of this bucket is valid, including near the partial final range.
+const VICTIM_BUCKET = (1n << 16n) + 1n
+const VICTIM_KEY = VICTIM_BUCKET * GRANULARITY
 
 describe('Statoblast: fee-stream end keys have a bounded depth', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
@@ -48,8 +46,8 @@ describe('Statoblast: fee-stream end keys have a bounded depth', () => {
 			for (const level of LEVELS) {
 				const questionId = 100n + level
 				await mint(questionId, 10n ** 12n)
-				// Clearing bit `level` of the victim key lands in that level's sibling subtree.
-				await stream(questionId, 1n, VICTIM_KEY ^ (1n << level))
+				// Flipping a bucket bit reaches one sibling without passing the fee-end ceiling.
+				await stream(questionId, 1n, (VICTIM_BUCKET ^ (1n << level)) * GRANULARITY)
 			}
 		}
 		await stream(VICTIM, 2n, VICTIM_KEY)
@@ -73,15 +71,32 @@ describe('Statoblast: fee-stream end keys have a bounded depth', () => {
 		await stream(VICTIM, 1n, 5n * GRANULARITY + 12_345n)
 		expect(await feeEnd(VICTIM)).toBe(5n * GRANULARITY)
 		await stream(VICTIM, 1n, (1n << 48n) - 1n)
-		expect(await feeEnd(VICTIM)).toBe(VICTIM_KEY)
+		expect(await feeEnd(VICTIM)).toBe(LAST_BUCKET * GRANULARITY)
 		// A stream that cannot reach the first granularity boundary charges nothing.
 		await stream(VICTIM, 1n, GRANULARITY - 1n)
 		expect(await feeEnd(VICTIM)).toBe(0n)
 		expect(await client.readContract({ abi: artifact.abi, address, functionName: 'feeEndGranularity' })).toBe(GRANULARITY)
 	})
 
-	test('the constructor rejects a granularity that is not a power of two at most 2^32', async () => {
-		for (const granularity of [0n, 3n, 1n << 33n]) {
+	test('rates sharing a daily bucket accrue by the second and stop at its exact boundary', async () => {
+		await deployBook(GRANULARITY)
+		await mint(1n, 10n ** 18n)
+		await mint(2n, 10n ** 18n)
+		await stream(1n, 2n, GRANULARITY + 1n)
+		await stream(2n, 3n, 2n * GRANULARITY - 1n)
+		await getAnvilWindowEthereum().advanceTime(2n * GRANULARITY)
+		const checkpoint = (timestamp: bigint) => gasOf(() => client.writeContract({ ...target(), functionName: 'checkpointFees', args: [1n, Number(timestamp)] }))
+		const accrued = async () => (await client.readContract({ ...target(), functionName: 'totals', args: [1n] }))[2]
+		await checkpoint(GRANULARITY - 1n)
+		expect(await accrued()).toBe(5n * (GRANULARITY - 1n))
+		await checkpoint(GRANULARITY)
+		expect(await accrued()).toBe(5n * GRANULARITY)
+		await checkpoint(GRANULARITY + 1n)
+		expect(await accrued()).toBe(5n * GRANULARITY)
+	})
+
+	test('the constructor rejects zero granularity or granularity above 2^32', async () => {
+		for (const granularity of [0n, (1n << 32n) + 1n]) {
 			const deployment = client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 1n, granularity] }), gas: CAP })
 			await expect(deployment).rejects.toThrow('Invalid fee end granularity')
 		}
@@ -97,6 +112,6 @@ describe('Statoblast: fee-stream end keys have a bounded depth', () => {
 		expect(deep.sameKeyRefresh).toBeLessThan(deep.movedKeyRefresh)
 		// The whole deep path adds well under the headroom a full complete-set redemption (about
 		// 2M gas on a shallow tree) leaves below the 16,777,216 gas transaction cap.
-		expect(worstDeep - worstShallow).toBeLessThan(8_000_000n)
+		expect(worstDeep).toBeLessThan(11_000_000n)
 	})
 })

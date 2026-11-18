@@ -164,7 +164,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		return commitmentIndex.maximumHealthyPrice(rep, commitment, securityMultiplierBps);
 	}
 	function _requireOpen() private view {
-		require(address(commitmentIndex) != address(0) && !importing && zoltar.getForkTime(universeId) == 0 && !frozen, 'Capital universe inactive');
+		require(!importing && zoltar.getForkTime(universeId) == 0 && !frozen, 'Capital universe inactive');
 	}
 	function _requireFresh() private view {
 		require(isPriceValid(), 'Capital price stale');

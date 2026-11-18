@@ -94,12 +94,12 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		_creditSnapshot(universeId, snapshot);
 		return (minted, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
-	function redeemQuestionSettlement(ISecurityPool pool, address recipient, uint256 shares, uint256 minimumCashAttoEth) external onlyPortfolio nonReentrant returns (uint256, uint256, uint256) {
+	function redeemQuestionSettlement(ISecurityPool pool, address recipient, uint256 shares) external onlyPortfolio nonReentrant returns (uint256, uint256, uint256) {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		capital.checkpoint();
-		(uint256 paid, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().redeem(address(pool), recipient, shares, minimumCashAttoEth, root.portfolioTime(universeId));
+		(uint256 paid, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().redeem(address(pool), recipient, shares, 0, root.portfolioTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		_cancelUnusedPremium(pool);
 		if (capital.zoltar().getForkTime(universeId) == 0) capital.serveRetirement(0);

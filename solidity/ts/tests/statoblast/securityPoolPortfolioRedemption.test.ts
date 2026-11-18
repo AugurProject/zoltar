@@ -12,7 +12,6 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
-	statoblast_factories_EscalationGameFactory_EscalationGameFactory as escalationFactoryArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -218,6 +217,12 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await approveToken(owner, rep, getZoltarAddress())
 		await mockWindow.setTime(forkAt - 650n)
 		await fixture.refreshPrice()
+		const purchaseTarget = streams.at(-1)
+		if (purchaseTarget === undefined) throw new Error('Missing fee stream for the populated purchase')
+		const purchaseHash = await fixture.mint(unit, purchaseTarget)
+		expect((await owner.getTransactionReceipt({ hash: purchaseHash })).gasUsed).toBeLessThan(8_000_000n)
+		const feePool = fixture.poolFor(purchaseTarget).securityPool
+		const refreshHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: feePool, functionName: 'refreshPortfolioFees', gas: 6_000_000n }))
 		await mockWindow.setTime(forkAt)
 		const capitalAbi = parseAbi(['function isPriceValid() view returns (bool)'])
 		expect(await owner.readContract({ address: fixture.capitalLedger, abi: capitalAbi, functionName: 'isPriceValid' })).toBe(true)
@@ -230,7 +235,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await mockWindow.setTime(forkTime + 56n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'startBranch', args: [genesisUniverse, 1n] }))
 		await mockWindow.setTime(forkTime + 63n * DAY)
-		await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'finalizeBranch', args: [child] }))
+		const activateHash = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'finalizeBranch', args: [child], gas: 16_777_216n }))
 		const childBook = await bookId(child)
 		const reportTarget = streams[0]
 		if (reportTarget === undefined) throw new Error('Missing child report target')
@@ -243,8 +248,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const beforeReport = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [childBook, reportTarget] })
 		expect(BigInt(beforeReport[0].finalAfter)).toBe(0n)
 		expect(beforeReport[1]).toBe(0n)
-		const prepareHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: escalationFactoryArtifact.abi, address: getInfraContractAddresses().escalationGameFactory, functionName: 'prepareEscalationGame', args: [childPool], gas: 6_000_000n }))
-		const reportHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit], gas: 7_000_000n }))
+		const reportHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit], gas: 14_000_000n }))
 		const [firstReport] = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [childBook, reportTarget] })
 		const services = await owner.readContract({ ...portfolio(), functionName: 'services' })
 		const [premiumUnits] = await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'questionPremium', args: [child, reportTarget] })
@@ -271,8 +275,8 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const [, frozenChildClaim] = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [childBook, reportTarget] })
 		expect(frozenChildClaim).not.toBe(0n)
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') {
-			const [freeze, prepare, report, dispute, repair] = await Promise.all([freezeHash, prepareHash, reportHash, disputeHash, repairHash].map(hash => owner.getTransactionReceipt({ hash })))
-			console.log({ combinedForkFreezeGas: freeze?.gasUsed, combinedReportPreparationGas: prepare?.gasUsed, combinedChildReportGas: report?.gasUsed, combinedChildDisputeGas: dispute?.gasUsed, combinedCollateralRepairGas: repair?.gasUsed })
+			const [purchase, refresh, freeze, activate, report, dispute, repair] = await Promise.all([purchaseHash, refreshHash, freezeHash, activateHash, reportHash, disputeHash, repairHash].map(hash => owner.getTransactionReceipt({ hash })))
+			console.log({ combinedPurchaseGas: purchase?.gasUsed, combinedFeeRefreshGas: refresh?.gasUsed, combinedForkFreezeGas: freeze?.gasUsed, combinedBranchActivationGas: activate?.gasUsed, combinedChildReportGas: report?.gasUsed, combinedChildDisputeGas: dispute?.gasUsed, combinedCollateralRepairGas: repair?.gasUsed })
 		}
 	})
 
@@ -291,10 +295,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect(unquotedCash).toBeGreaterThanOrEqual(0n)
 		expect(unquotedCash).toBeLessThanOrEqual(2n)
 		const balance = await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)
-		await expect(fixture.other().writeContract({ ...pool(), functionName: 'redeemSharesWithMinimum', args: [expectedCash + unit] })).rejects.toThrow('Insufficient settlement cash')
-		expect(await shares()).toEqual(beforeShares)
-		expect((await settlementState()).frozenBookId).toBe(0n)
-		const hash = await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemSharesWithMinimum', args: [expectedCash] }))
+		const hash = await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))
 		const receipt = await fixture.other().waitForTransactionReceipt({ hash })
 		if (receipt.effectiveGasPrice === undefined) throw new Error('Redemption receipt must include its effective gas price')
 		expect(await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)).toBe(balance + expectedCash)

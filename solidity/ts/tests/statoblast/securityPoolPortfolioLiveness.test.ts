@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
-	statoblast_EscalationGame_EscalationGame as gameArtifact,
-	statoblast_factories_EscalationGameFactory_EscalationGameFactory as escalationFactoryArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
@@ -12,9 +8,6 @@ import {
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
-import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast contract liveness', () => {
@@ -54,31 +47,5 @@ describe('Statoblast contract liveness', () => {
 		await writeContractAndWait(caller, () => caller.writeContract(finalize))
 		expect((await question())[1]).toBe(frozen)
 		expect(await demand()).toBe(before - 10n * unit)
-	})
-
-	test('predeploying reporting code leaves the game dormant until a funded report', async () => {
-		const owner = fixture.owner()
-		const caller = fixture.other()
-		const pool = { abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool }
-		const prepare = { abi: escalationFactoryArtifact.abi, address: getInfraContractAddresses().escalationGameFactory, functionName: 'prepareEscalationGame' as const, args: [pool.address] as const }
-		await fixture.prepare()
-		await fixture.mint(unit)
-		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), pool.address)
-		const game = { abi: gameArtifact.abi, address: (await caller.simulateContract(prepare)).result }
-		await writeContractAndWait(caller, () => caller.writeContract(prepare))
-		expect((await caller.simulateContract(prepare)).result).toBe(game.address)
-		expect(await caller.readContract({ ...pool, functionName: 'escalationGame' })).toBe(zeroAddress)
-		expect(await caller.readContract({ ...game, functionName: 'activationTime' })).toBe(0n)
-		await expect(caller.writeContract({ ...game, functionName: 'start', args: [1n, 2n] })).rejects.toThrow('Only owner')
-		await expect(caller.writeContract({ ...game, functionName: 'depositRepOnOutcome', args: [1, 100n * unit] })).rejects.toThrow('Game inactive')
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		const report = { ...pool, functionName: 'depositWalletRepToEscalationGame' as const, args: [1, 100n * unit] as const }
-		await expect(caller.writeContract(report)).rejects.toThrow()
-		expect(await caller.readContract({ ...game, functionName: 'activationTime' })).toBe(0n)
-		expect(await caller.readContract({ ...pool, functionName: 'escalationGame' })).toBe(zeroAddress)
-		const hash = await writeContractAndWait(owner, () => owner.writeContract({ ...report, gas: 5_000_000n }))
-		expect((await owner.getTransactionReceipt({ hash })).gasUsed).toBeLessThan(5_000_000n)
-		expect(await owner.readContract({ ...pool, functionName: 'escalationGame' })).toBe(game.address)
-		expect(await owner.readContract({ ...game, functionName: 'activationTime' })).toBeGreaterThan(fixture.base.questionData.endTime)
 	})
 })

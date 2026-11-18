@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { EscalationGameRepCustody } from '../EscalationGameRepCustody.sol';
 import { SecurityPoolReporterLedger } from '../SecurityPoolReporterLedger.sol';
 import { ISecurityPoolPortfolioNative } from '../interfaces/ISecurityPoolPortfolioNative.sol';
-import { ISecurityPool, ISecurityPoolFactory, SystemState } from '../interfaces/ISecurityPool.sol';
+import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
@@ -20,7 +20,6 @@ contract EscalationGameFactory {
 	EscalationGameDepositDelegate public immutable depositDelegate;
 	address private immutable escalationGameCreationCodePartOne;
 	address private immutable escalationGameCreationCodePartTwo;
-	mapping(address => EscalationGame) private preparedGames;
 
 	constructor(EscalationGameClaimDelegate _claimDelegate, EscalationGameDepositDelegate _depositDelegate) {
 		require(address(_claimDelegate).code.length > 0, 'Claim delegate');
@@ -52,29 +51,10 @@ contract EscalationGameFactory {
 		require(codePart != address(0x0), 'Creation code chunk deployment failed');
 	}
 
-	/// @notice Deploy game code ahead of a report without starting the clock or binding reporter custody.
-	function prepareEscalationGame(ISecurityPool pool) external returns (EscalationGame game) {
-		uint248 universeId = pool.universeId();
-		if (pool.systemState() == SystemState.Operational) {
-			require(pool.zoltar().getForkTime(universeId) == 0, 'Pool inactive');
-		} else {
-			// Prepared children are already bound to custody, but remain inactive until every carry outcome is installed.
-			ISecurityPoolFactory factory = pool.securityPoolFactory();
-			require(address(pool.parent()) != address(0) && pool.portfolioCustody() != address(0) && factory.getSecurityPoolPortfolio(pool) != address(0), 'Child pool is not bound');
-			require(address(factory.getSecurityPool(factory.getSecurityPoolOriginId(pool), universeId)) == address(pool), 'Child pool is not canonical');
-		}
-		require(address(pool.escalationGame()) == address(0), 'Game already started');
-		game = preparedGames[address(pool)];
-		if (address(game) == address(0)) {
-			game = _deployEscalationGame(pool);
-			preparedGames[address(pool)] = game;
-		}
-	}
-
 	function deployEscalationGame(uint256 startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external returns (EscalationGame) {
 		require(_nonDecisionThresholdAttoRep > 1, 'Escalation threshold too low');
 		if (startBondAttoRep >= _nonDecisionThresholdAttoRep) startBondAttoRep = _nonDecisionThresholdAttoRep - 1;
-		EscalationGame gameImplementation = _takePreparedGame(ISecurityPool(payable(msg.sender)));
+		EscalationGame gameImplementation = _deployEscalationGame();
 		gameImplementation.start(startBondAttoRep, _nonDecisionThresholdAttoRep);
 		return gameImplementation;
 	}
@@ -89,18 +69,13 @@ contract EscalationGameFactory {
 			winnerHaircutPaidByFork = state.winnerHaircutPaidByFork;
 			forkCarryInitialBackingAttoRep = state.balanceAttoRep;
 		}
-		EscalationGame gameImplementation = _takePreparedGame(child);
+		EscalationGame gameImplementation = _deployEscalationGame();
 		gameImplementation.startFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep);
 		return gameImplementation;
 	}
 
-	function _takePreparedGame(ISecurityPool pool) private returns (EscalationGame game) {
-		game = preparedGames[address(pool)];
-		if (address(game) == address(0)) return _deployEscalationGame(pool);
-		delete preparedGames[address(pool)];
-	}
-
-	function _deployEscalationGame(ISecurityPool securityPool) private returns (EscalationGame gameImplementation) {
+	function _deployEscalationGame() private returns (EscalationGame gameImplementation) {
+		ISecurityPool securityPool = ISecurityPool(payable(msg.sender));
 		address partOne = escalationGameCreationCodePartOne;
 		address partTwo = escalationGameCreationCodePartTwo;
 		uint256 partOneLength;

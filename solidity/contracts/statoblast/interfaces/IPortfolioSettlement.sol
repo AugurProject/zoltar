@@ -7,7 +7,7 @@ pragma solidity 0.8.35;
 interface IPortfolioSettlement {
 	function availableMintCapacity(uint248 universeId) external view returns (uint256);
 	function mintQuestionSettlement(uint256 cash) external returns (uint256 mintedShares, uint256 totalEconomicShares, uint256 questionCashAttoEth);
-	function redeemQuestionSettlement(address recipient, uint256 burnedShares, uint256 minimumCashAttoEth) external returns (uint256 paidCashAttoEth, uint256 totalEconomicShares, uint256 questionCashAttoEth);
+	function redeemQuestionSettlement(address recipient, uint256 burnedShares) external returns (uint256 paidCashAttoEth, uint256 totalEconomicShares, uint256 questionCashAttoEth);
 	function checkpointQuestionSettlement()
 		external
 		returns (uint256 totalEconomicShares, uint256 questionCashAttoEth, uint48 portfolioTime);

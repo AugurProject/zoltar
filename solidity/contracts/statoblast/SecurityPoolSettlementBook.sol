@@ -28,10 +28,9 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	uint48 public constant FEE_END_LIMIT = uint48(1) << 33;
 	address public immutable portfolio;
 	SecurityPoolSettlementWriter private immutable writer;
-	/// @notice Fee-stream ends are rounded down to a multiple of this power of two.
-	/// @dev The fee aggregate maps are keyed by end. Keys below 2^33 that share their low
-	/// log2(granularity) bits differ in at most 33 - log2(granularity) bits, so every key path has
-	/// at most that many branch nodes whatever ends other streams choose.
+	/// @notice Fee-stream ends round down to a multiple of this bucket duration in seconds.
+	/// @dev The largest bucket number is (FEE_END_LIMIT - 1) / feeEndGranularity.
+	/// The production daily cadence has at most 17 branch levels.
 	uint48 public immutable feeEndGranularity;
 
 	event SettlementRepaired(uint64 indexed bookId, uint256 cashAttoEth);
@@ -45,7 +44,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	constructor(address authority, uint256 minimumExchangeRate, uint48 endGranularity) SecurityPoolSettlementPricing(minimumExchangeRate) {
 		require(authority != address(0), 'Invalid settlement authority');
-		require(endGranularity != 0 && endGranularity <= FEE_END_LIMIT >> 1 && endGranularity & (endGranularity - 1) == 0, 'Invalid fee end granularity');
+		require(endGranularity != 0 && endGranularity <= FEE_END_LIMIT >> 1, 'Invalid fee end granularity');
 		portfolio = authority;
 		writer = new SecurityPoolSettlementWriter();
 		feeEndGranularity = endGranularity;
@@ -558,8 +557,9 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	function _feeIntegral(Book storage book, uint48 nativeTimestamp) private view returns (uint256) {
-		uint256 remainingRate = tree.total(book.feeRateRoot) - tree.prefixTotal(book.feeRateRoot, nativeTimestamp);
-		return remainingRate * nativeTimestamp + tree.prefixTotal(book.feeEndRoot, nativeTimestamp);
+		uint256 bucket = nativeTimestamp / feeEndGranularity;
+		uint256 remainingRate = tree.total(book.feeRateRoot) - tree.prefixTotal(book.feeRateRoot, bucket);
+		return remainingRate * nativeTimestamp + tree.prefixTotal(book.feeEndRoot, bucket);
 	}
 
 	/// @dev The fee maps share the modular trie update with the finality and fork maps, which keeps
@@ -568,11 +568,13 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	/// end-weighted total stays below 2^241.
 	function _changeFeeRate(Book storage book, uint48 end, uint256 rate, bool increase) private {
 		if (rate == 0) return;
-		uint256 previous = tree.get(book.feeRateRoot, end);
+		// Index by bucket number, but weight the end aggregate in native seconds.
+		uint48 bucket = end / feeEndGranularity;
+		uint256 previous = tree.get(book.feeRateRoot, bucket);
 		uint256 next = increase ? previous + rate : previous - rate;
-		book.feeRateRoot = _setModular(book.feeRateRoot, end, next, next);
+		book.feeRateRoot = _setModular(book.feeRateRoot, bucket, next, next);
 		require(tree.total(book.feeRateRoot) <= type(uint208).max, 'Aggregate fee rate overflow');
-		book.feeEndRoot = _setModular(book.feeEndRoot, end, next, next * end);
+		book.feeEndRoot = _setModular(book.feeEndRoot, bucket, next, next * end);
 	}
 
 	function _fundedSeconds(Book storage book, uint48 nativeTimestamp) private view returns (uint256) {
