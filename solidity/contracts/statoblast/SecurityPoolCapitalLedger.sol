@@ -72,7 +72,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		repToken = IERC20(address(_zoltar.getRepToken(_universeId)));
 		securityMultiplierBps = multiplier;
 		minimumCommitmentAttoEth = minimumCommitment;
-		repToken.safeApprove(address(_zoltar), type(uint256).max);
+		// Genesis REP is burned via transferFrom. Native child REP is burned by Zoltar directly.
+		if (_universeId == 0) repToken.safeApprove(address(_zoltar), type(uint256).max);
 	}
 
 	modifier onlyPortfolio() {
@@ -316,12 +317,10 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		uint48 through = uint48(Math.min(effective, priceValidUntil));
 		// The canonical book pauses cash-funded fees at stale-price boundaries.
 		ICapitalLedgerAccounting(portfolio).checkpointCapitalFees(universeId, through);
-		uint256 forkTimestamp = zoltar.getForkTime(universeId);
 		// Prepaid rewards keep their original vesting dates after a fork. Their
 		// old commitments and eligibility are immutable, and parent earnings stay
 		// separately claimable even after the owner has selected a child.
-		uint48 nowTime = uint48(block.timestamp);
-		if (forkTimestamp != 0 && forkTimestamp < priceValidUntil) through = nowTime;
+		if (effective < block.timestamp && effective < priceValidUntil) through = uint48(block.timestamp);
 		_checkpointStream(feeStreams, through);
 		checkpointing = false;
 	}

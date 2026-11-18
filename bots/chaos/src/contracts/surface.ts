@@ -295,6 +295,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolPortfolio', 'onQuestionFinalityChanged', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolPortfolio', 'onQuestionRepIncome', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolPortfolio', 'onSharedPriceAccepted', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
+	entry('SecurityPoolPortfolio', 'prepareForkCapital', 'excluded-dangerous', undefined, 'Optional deployment step for an existing native fork child. It does not activate the branch.'),
 	entry('SecurityPoolPortfolio', 'prepareForkChild', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolPortfolio', 'prepareNext', 'excluded-dangerous', undefined, 'Portfolio constructor preparation is a deployment UI workflow, not a randomized economic action.'),
 	entry('SecurityPoolPortfolio', 'prepareQuestionUniverse', 'excluded-dangerous', undefined, 'Shared branch preparation must precede question materialization; this callback is not an independent owner workflow.'),

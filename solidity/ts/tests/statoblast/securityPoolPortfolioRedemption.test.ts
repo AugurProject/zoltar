@@ -10,6 +10,7 @@ import {
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
@@ -234,8 +235,9 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const child = getChildUniverseId(genesisUniverse, 1)
 		await mockWindow.setTime(forkTime + 56n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'startBranch', args: [genesisUniverse, 1n] }))
+		const priceFeedHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [pool().address, child], gas: 9_000_000n }))
 		await mockWindow.setTime(forkTime + 63n * DAY)
-		const activateHash = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'finalizeBranch', args: [child], gas: 16_777_216n }))
+		const activateHash = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'finalizeBranch', args: [child], gas: 4_000_000n }))
 		const childBook = await bookId(child)
 		const reportTarget = streams[0]
 		if (reportTarget === undefined) throw new Error('Missing child report target')
@@ -275,8 +277,17 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const [, frozenChildClaim] = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [childBook, reportTarget] })
 		expect(frozenChildClaim).not.toBe(0n)
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') {
-			const [purchase, refresh, freeze, activate, report, dispute, repair] = await Promise.all([purchaseHash, refreshHash, freezeHash, activateHash, reportHash, disputeHash, repairHash].map(hash => owner.getTransactionReceipt({ hash })))
-			console.log({ combinedPurchaseGas: purchase?.gasUsed, combinedFeeRefreshGas: refresh?.gasUsed, combinedForkFreezeGas: freeze?.gasUsed, combinedBranchActivationGas: activate?.gasUsed, combinedChildReportGas: report?.gasUsed, combinedChildDisputeGas: dispute?.gasUsed, combinedCollateralRepairGas: repair?.gasUsed })
+			const [purchase, refresh, freeze, priceFeed, activate, report, dispute, repair] = await Promise.all([purchaseHash, refreshHash, freezeHash, priceFeedHash, activateHash, reportHash, disputeHash, repairHash].map(hash => owner.getTransactionReceipt({ hash })))
+			console.log({
+				combinedPurchaseGas: purchase?.gasUsed,
+				combinedFeeRefreshGas: refresh?.gasUsed,
+				combinedForkFreezeGas: freeze?.gasUsed,
+				combinedPriceFeedGas: priceFeed?.gasUsed,
+				combinedBranchActivationGas: activate?.gasUsed,
+				combinedChildReportGas: report?.gasUsed,
+				combinedChildDisputeGas: dispute?.gasUsed,
+				combinedCollateralRepairGas: repair?.gasUsed,
+			})
 		}
 	})
 
