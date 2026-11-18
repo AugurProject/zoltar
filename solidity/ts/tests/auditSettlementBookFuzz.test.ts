@@ -136,8 +136,10 @@ const cloneModel = (model: Model): Model => ({
 type Outcome = { ok: true; touched: number[]; frozenTouched: number[]; paid?: bigint; created?: number } | { ok: false; why: string }
 const reject = (why: string): Outcome => ({ ok: false, why })
 
+const isMature = (book: ModelBook, state: ModelQuestion) => book.ts > book.minimumFinalAfter && state.finalAfter !== 0 && state.finalAfter < book.ts
+
 // Reference semantics. Mutates `model`; callers clone first and discard on rejection.
-const advance = (model: Model, bookId: number, book: ModelBook, ts: number, frozenTouched: number[]): string | undefined => {
+const advance = (model: Model, bookId: number, book: ModelBook, ts: number, frozenTouched: number[], maturity?: number | 'all'): string | undefined => {
 	if (ts < book.ts) return 'clock backwards'
 	const before = book.ts + book.offset
 	const after = ts + book.offset
@@ -161,9 +163,10 @@ const advance = (model: Model, bookId: number, book: ModelBook, ts: number, froz
 		book.feesAccrued += paid
 	}
 	book.ts = ts
-	if (ts <= book.minimumFinalAfter) return undefined
-	let matured = 0n
-	for (const state of book.questions.values()) if (state.frozen === 0 && state.finalAfter !== 0 && state.finalAfter <= ts - 1) matured += state.units
+	if (maturity === undefined) return undefined
+	const candidates = maturity === 'all' ? [...book.questions.values()] : [questionOf(book, maturity)]
+	const due = candidates.filter(state => state.frozen === 0 && isMature(book, state))
+	const matured = due.reduce((total, state) => total + state.units, 0n)
 	if (matured === 0n) return undefined
 	const cash = cashFor(book.cash, book.units, matured, book.remainder)
 	book.cash -= cash
@@ -171,7 +174,7 @@ const advance = (model: Model, bookId: number, book: ModelBook, ts: number, froz
 	clearEmpty(book)
 	const frozenId = model.frozen.size + 1
 	model.frozen.set(frozenId, { cash, units: matured, source: bookId, rec: 0n })
-	for (const state of book.questions.values()) if (state.frozen === 0 && state.finalAfter !== 0 && state.finalAfter <= ts - 1) state.frozen = frozenId
+	for (const state of due) state.frozen = frozenId
 	frozenTouched.push(frozenId)
 	return undefined
 }
@@ -212,7 +215,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 		}
 		case 'redeem': {
 			if (!book.isSealed) {
-				const problem = advance(model, op.b, book, op.ts, frozenTouched)
+				const problem = advance(model, op.b, book, op.ts, frozenTouched, op.q)
 				if (problem !== undefined) return reject(problem)
 			}
 			const state = questionOf(book, op.q)
@@ -270,14 +273,14 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			const problem = active() ?? advance(model, op.b, book, op.ts, frozenTouched)
 			if (problem !== undefined) return reject(problem)
 			const state = questionOf(book, op.q)
-			if (state.frozen !== 0) return reject('final claim immutable')
+			if (state.frozen !== 0 || isMature(book, state)) return reject('final claim immutable')
 			if (op.finalAfter !== 0 && op.finalAfter < op.ts) return reject('finality elapsed')
 			if (op.finalAfter !== 0 && state.rate !== 0n && state.feeEnd > book.ts + book.offset) return reject('stop fees first')
 			state.finalAfter = op.finalAfter
 			return { ok: true, touched, frozenTouched }
 		}
 		case 'freeze': {
-			const problem = active() ?? advance(model, op.b, book, op.ts, frozenTouched)
+			const problem = active() ?? advance(model, op.b, book, op.ts, frozenTouched, 'all')
 			if (problem !== undefined) return reject(problem)
 			return { ok: true, touched, frozenTouched }
 		}
@@ -301,7 +304,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			return { ok: true, touched, frozenTouched }
 		}
 		case 'seal': {
-			const problem = active() ?? advance(model, op.b, book, op.ts, frozenTouched)
+			const problem = active() ?? advance(model, op.b, book, op.ts, frozenTouched, 'all')
 			if (problem !== undefined) return reject(problem)
 			book.isSealed = true
 			return { ok: true, touched, frozenTouched }

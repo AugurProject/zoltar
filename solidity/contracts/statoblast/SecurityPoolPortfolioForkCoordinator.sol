@@ -239,6 +239,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		SecurityPoolCapitalLedger capital = portfolio.capitalLedger(universeId);
 		capital.freeze();
 		(fork.cash, fork.units, ) = portfolio.settlement().sealUniverse(universeId, portfolio.forkPortfolioTime(universeId));
+		capital.synchronizeDemand(fork.cash);
 		IPortfolioForkServices(portfolio.services()).freezePremiumUniverse(universeId);
 		portfolio.reporters().freezeFork(universeId);
 		fork.backing = capital.frozenBackingAttoRep();

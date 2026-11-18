@@ -124,6 +124,46 @@ describe('Statoblast: permissionless settlement repair', () => {
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.secondQuestionId, 10n * unit] })).toBe(oldClaim)
 	})
 
+	test('a repair reserves matured claims before donating to the live basket', async () => {
+		const owner = fixture.owner()
+		const donor = fixture.other()
+		const genesis = fixture.base.genesisUniverse
+		await fixture.prepare()
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(genesis), functionName: 'transfer', args: [donor.account.address, 5n * unit] }))
+		await fixture.deposit(5n * unit, donor)
+		const minimum = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'minimumCommitmentAttoEth' })
+		await fixture.authorize(minimum, donor)
+		await fixture.mint(10n * unit, fixture.base.questionId)
+		await fixture.mint(10n * unit, fixture.secondQuestionId)
+		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
+		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
+		await fixture.base.mockWindow.setTime(forkTime + 67n * DAY)
+
+		const settlement = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const ledger = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
+		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [child] })
+		const book = { abi: bookArtifact.abi, address: ledger }
+		const finalState = () => owner.readContract({ ...book, functionName: 'question', args: [bookId, fixture.base.questionId] })
+		const quote = (question: bigint) => owner.readContract({ ...book, functionName: 'quoteRedemption', args: [bookId, question, 10n * unit] })
+		const [priorCash] = await owner.readContract({ ...book, functionName: 'totals', args: [bookId] })
+		const priorDeficit = (await owner.readContract({ ...book, functionName: 'requiredCash', args: [bookId] })) - priorCash
+		const [finalPayout] = await quote(fixture.base.questionId)
+		expect((await finalState())[1]).toBe(0n)
+		expect(priorDeficit).toBeGreaterThan(0n)
+
+		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		await approveToken(donor, collateral, settlement)
+		const payerBefore = await collateralBalance(donor, fixture.portfolio, donor.account.address)
+		await writeContractAndWait(donor, () => donor.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, priorDeficit] }))
+		const donated = payerBefore - (await collateralBalance(donor, fixture.portfolio, donor.account.address))
+		expect(donated).toBeGreaterThan(0n)
+		expect(donated).toBeLessThan(priorDeficit)
+		expect((await finalState())[1]).not.toBe(0n)
+		expect((await quote(fixture.base.questionId))[0]).toBe(finalPayout)
+		expect((await quote(fixture.secondQuestionId))[0]).toBe(10n * unit)
+	})
+
 	test('#1321 a redemption that moves the deficit before inclusion does not revert a bounded repair', async () => {
 		const owner = fixture.owner()
 		const other = fixture.other()

@@ -7,6 +7,7 @@ import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
 /// @dev Shared settlement types and storage; accounting behavior remains in the book.
 abstract contract SecurityPoolSettlementState {
+	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 	uint64 public lastBookId;
 	uint64 public lastFrozenBookId;
 	uint64 internal lastQuestionStateId;
@@ -90,10 +91,58 @@ abstract contract SecurityPoolSettlementState {
 		Question question;
 		uint256 recoveryCorrection;
 		uint256 recoveryIndex;
+		uint64 frozenBookId;
 	}
 	mapping(uint64 => StoredQuestionState) internal questionStates;
 	mapping(uint64 => FeeMode) internal feeModes;
 	mapping(uint64 => RecoveryState) internal recoveryStates;
 	mapping(uint64 => uint256) internal feeRemainders;
 	mapping(uint64 => FundingTarget) internal fundingTargets;
+
+	function _frozenBookId(Book storage book, StoredQuestionState storage stored) internal view returns (uint64) {
+		uint64 frozenBookId = stored.frozenBookId;
+		if (frozenBookId != 0 || stored.question.finalAfter == 0) return frozenBookId;
+		return uint64(frozenHistory.ceiling(book.frozenRoot, stored.question.finalAfter));
+	}
+}
+
+/// @dev Writes immutable question snapshots from the settlement book's storage context.
+contract SecurityPoolSettlementWriter is SecurityPoolSettlementState {
+	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
+
+	address private immutable host = msg.sender;
+
+	function writeQuestion(uint64 bookId, uint256 questionId, Question memory state, uint256 correction, uint64 frozenBookId) external {
+		require(address(this) == host, 'Only settlement book context');
+		Book storage book = books[bookId];
+		StoredQuestionState storage stored = questionStates[uint64(questionMap.get(book.questionRoot, questionId))];
+		Question storage previous = stored.question;
+		if (_frozenBookId(book, stored) == 0) {
+			uint256 previousCorrection = stored.recoveryCorrection;
+			// Residues modulo 2^256: subtracting is adding the negation.
+			unchecked {
+				if (frozenBookId != 0) _changeFinalityCorrection(bookId, previous.finalAfter, 0 - previousCorrection);
+				else if (previous.finalAfter == state.finalAfter)
+					_changeFinalityCorrection(bookId, state.finalAfter, correction - previousCorrection);
+				else {
+					_changeFinalityCorrection(bookId, previous.finalAfter, 0 - previousCorrection);
+					_changeFinalityCorrection(bookId, state.finalAfter, correction);
+				}
+			}
+		}
+		uint64 stateId = ++lastQuestionStateId;
+		questionStates[stateId] = StoredQuestionState(state, correction, recoveryStates[bookId].index, frozenBookId == 0 ? stored.frozenBookId : frozenBookId);
+		book.questionRoot = questionMap.set(book.questionRoot, questionId, stateId);
+	}
+
+	function _changeFinalityCorrection(uint64 bookId, uint48 finalAfter, uint256 residue) private {
+		if (finalAfter == 0 || residue == 0) return;
+		RecoveryState storage recovery = recoveryStates[bookId];
+		uint64 root = recovery.finalityRoot;
+		unchecked {
+			residue += tree.get(root, finalAfter);
+		}
+		recovery.finalityRoot = tree.setModular(root, finalAfter, residue, residue);
+	}
 }

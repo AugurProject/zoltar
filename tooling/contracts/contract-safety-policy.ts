@@ -66,6 +66,11 @@ export const contractSafetyPolicy = {
 			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol', contractName: 'SecurityPoolOperationsDelegate' },
 			reason: 'Native trading operations mutate SecurityPool storage through delegatecall.',
 		},
+		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPoolSettlementBook.sol', contractName: 'SecurityPoolSettlementBook' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolSettlementState.sol', contractName: 'SecurityPoolSettlementWriter' },
+			reason: 'Question snapshots and maturity corrections are written to the settlement book through its fixed delegate.',
+		},
 	] satisfies readonly ExactLayoutPair[],
 	anchoredLayouts: [
 		{

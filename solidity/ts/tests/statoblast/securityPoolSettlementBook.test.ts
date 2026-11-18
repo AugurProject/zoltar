@@ -578,6 +578,32 @@ describe('Statoblast: central internal settlement units', () => {
 		await redeem(1n, 1n, state.outcomeSupplyAttoShares, 202)
 	})
 
+	test('individual finalization and fork sealing reserve disjoint claims at a shared deadline', async () => {
+		await mint(1n, 1n, 100n)
+		await mint(1n, 2n, 200n)
+		await mint(1n, 3n, 300n)
+		for (const id of [1n, 2n]) await schedule(1n, id, 100)
+		const finalize = (timestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [1n, 1n, timestamp] }))
+		await finalize(100)
+		expect((await question(1n, 1n))[1]).toBe(0n)
+		await finalize(101)
+		const frozen = (await question(1n, 1n))[1]
+		expect(frozen).not.toBe(0n)
+		expect((await question(1n, 2n))[1]).toBe(0n)
+		expect((await book(1n)).slice(0, 2)).toEqual([500n, 500n])
+		await seal(1n, 101)
+		expect((await book(1n)).slice(0, 2)).toEqual([300n, 300n])
+		expect((await question(1n, 1n))[1]).toBe(frozen)
+		expect((await question(1n, 2n))[1]).not.toBe(0n)
+		await child(1n, 300n)
+		expect(await quote(2n, 1n, 100n)).toEqual([0n, 0n])
+		expect(await quote(2n, 2n, 200n)).toEqual([0n, 0n])
+		expect(await quote(2n, 3n, 300n)).toEqual([300n, 300n])
+		await redeem(1n, 1n, 100n, 101)
+		await redeem(1n, 2n, 200n, 101)
+		expect(await quote(1n, 1n, 100n)).toEqual([0n, 0n])
+	})
+
 	test('strict finality cutoff preserves finalized parent money and interrupts equal-deadline claims', async () => {
 		await mint(1n, 1n, 100n)
 		await mint(1n, 2n, 200n)

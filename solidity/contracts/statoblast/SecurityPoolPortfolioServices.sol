@@ -113,7 +113,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		capital.checkpoint();
 		uint48 timestamp = root.portfolioTime(universeId);
 		SecurityPoolPortfolioSettlement.Snapshot memory snapshot;
-		if (!refresh || capital.zoltar().getForkTime(universeId) != 0 || settlement.isQuestionFrozen(address(pool)))
+		if (!refresh || capital.zoltar().getForkTime(universeId) != 0 || settlement.isQuestionScheduled(address(pool)))
 			snapshot = settlement.checkpointQuestion(address(pool), timestamp);
 		else {
 			(uint96 rate, uint48 end) = root.quoteHelper().feeStream(pool);

@@ -76,6 +76,35 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect(await collateralBalance(fixture.owner(), fixture.portfolio, before.engine)).toBeLessThan(cash)
 	})
 
+	test('a permissionless question checkpoint reserves only that question and leaves other matured claims pending', async () => {
+		const firstDeadline = await prepareReportedQuestion()
+		const owner = fixture.owner()
+		const secondPool = fixture.poolFor(fixture.secondQuestionId).securityPool
+		const second = { abi: poolArtifact.abi, address: secondPool }
+		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), secondPool)
+		await fixture.base.mockWindow.setTime(fixture.secondEndTime + 1n)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...second, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
+		const secondGame = await owner.readContract({ ...second, functionName: 'escalationGame' })
+		const secondDeadline = await owner.readContract({ abi: gameArtifact.abi, address: secondGame, functionName: 'getEscalationGameEndDate' })
+		await fixture.base.mockWindow.setTime((firstDeadline > secondDeadline ? firstDeadline : secondDeadline) + 1n)
+
+		const state = await settlementState()
+		const secondFrozenId = async () => (await owner.readContract({ abi: bookArtifact.abi, address: state.book, functionName: 'question', args: [state.bookId, fixture.secondQuestionId] }))[1]
+		expect(state.frozenBookId).toBe(0n)
+		expect(await secondFrozenId()).toBe(0n)
+		const keeper = fixture.other()
+		const hash = await writeContractAndWait(keeper, () => keeper.writeContract({ ...pool(), functionName: 'updateSettlementCollateral' }))
+		const gas = (await keeper.getTransactionReceipt({ hash })).gasUsed
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ finalizeOneQuestionGas: gas })
+		expect(gas).toBeLessThan(16_777_216n)
+		const firstFrozenId = (await settlementState()).frozenBookId
+		expect(firstFrozenId).not.toBe(0n)
+		expect(await secondFrozenId()).toBe(0n)
+		await writeContractAndWait(keeper, () => keeper.writeContract({ ...pool(), functionName: 'updateSettlementCollateral' }))
+		expect((await settlementState()).frozenBookId).toBe(firstFrozenId)
+		expect(await secondFrozenId()).toBe(0n)
+	})
+
 	test('winning shares redeem after the strict finality boundary without a prior question checkpoint', async () => {
 		const deadline = await prepareReportedQuestion()
 		await fixture.base.mockWindow.setTime(deadline)
