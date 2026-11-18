@@ -122,8 +122,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(firstMinimum).toBeGreaterThan(unit)
 		await fixture.authorize(200n * unit)
 		expect(await exposure()).toBe(200n * unit)
-		expect(await minimum()).toBeGreaterThanOrEqual(firstMinimum)
-		// The accepted headroom remains secured even before providers consume it.
+		expect(await minimum()).toBeGreaterThan(firstMinimum)
+		// Every coordinator quotes the same current portfolio exposure.
 		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
 			const coordinator = fixture.poolFor(question).openOraclePriceCoordinator
 			expect(await fixture.owner().readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'minimumToken1ReportAttoEth' })).toBe(await minimum())
@@ -232,7 +232,26 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'pendingReportId' })).toBe(0n)
 	})
 
-	test('growth within the accepted limit cannot make a minimum-sized pending renewal uneconomic', async () => {
+	test('oversized accepted capacity does not raise renewal funding while the price is fresh', async () => {
+		await fixture.prepare(1_000n * unit, 100n * unit)
+		const owner = fixture.owner()
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const floor = await owner.readContract({ ...target, functionName: 'minimumReportCollateral' })
+		const minimum = floor + unit
+		expect(await owner.readContract({ ...target, functionName: 'isPriceValid' })).toBe(true)
+		expect(await owner.readContract({ ...target, functionName: 'minimumToken1ReportAttoEth' })).toBe(minimum)
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
+		const reportId = await getPendingReportId(owner, coordinator)
+		expect((await loadOpenOracleEventState(owner, reportId)).latest.game.currentAmount1).toBe(minimum)
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, reportId)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
+		expect(await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })).toBe(100n * unit)
+		expect(await owner.readContract({ ...target, functionName: 'isPriceValid' })).toBe(true)
+	})
+
+	test('growth beyond a pending renewal budget rejects it without changing accepted capacity', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		const owner = fixture.owner()
 		const target = { abi: feedArtifact.abi, address: await feed() }
@@ -246,9 +265,9 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.authorize(100n * unit + 100n)
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, reportId)
-		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(2n)
 		expect(await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })).toBe(coverage)
-		// Once the accepted price lapses no ordinary growth is possible, so a renewal again needs only the live exposure.
+		// Expiry does not change sizing: only the live exposure matters.
 		await fixture.base.mockWindow.advanceTime(BigInt(await owner.readContract({ ...target, functionName: 'priceValidityWindowSeconds' })))
 		expect(await owner.readContract({ ...target, functionName: 'isPriceValid' })).toBe(false)
 		const floor = await owner.readContract({ ...target, functionName: 'minimumReportCollateral' })
@@ -261,7 +280,6 @@ describe('Statoblast: central capital shared price feed', () => {
 		const target = { abi: feedArtifact.abi, address: await feed() }
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
 		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		const coverage = await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
 		const reportId = await getPendingReportId(owner, coordinator)
 		await fixture.authorize(200n * unit)
@@ -271,8 +289,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, reportId)
 		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
-		// Requested while the accepted price was fresh, the candidate had to cover the accepted limit.
-		expect(await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })).toBe(coverage)
+		// The candidate covers exposure at request time; pending funding did not freeze growth.
+		expect(await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })).toBe(100n * unit)
 	})
 
 	test('delayed settlement cannot restart the portfolio validity clock', async () => {

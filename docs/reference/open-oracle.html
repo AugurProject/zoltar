@@ -40,7 +40,7 @@
 				<p id="reference-bot-collateral">The reference OpenOracle arbitrager supports WETH collateral only. It skips reports for USDC and other non-WETH portfolios because its funding, hedge and recovery paths require WETH. Those portfolios require an independent corrector and settler; this bot does not provide them.</p>
 
 				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/collateral price. <code>lastSettlementTimestamp</code> records settlement eligibility: the final report timestamp plus <code>settlementTime</code>. The freshness window starts there, so settling late cannot extend it. The shared feed freshness window is <code>settlementTime</code> plus one hour on Sepolia or five minutes on other chains. With the mainnet eight-minute challenge period, a shared price is usable for 780 seconds after eligibility, or at most 21 minutes after the final report. <code>priceValidUntil()</code> returns the canonical expiry; a price is stale at that timestamp. The coordinator does not meter operation volume during the window.</p>
-				<p id="shared-feed-rules">A shared feed's aggregate exposure is the largest of current portfolio commitment, backing demand and the maximum commitment a preparing branch auction can add to chosen backing. The feed reads these aggregates without scanning questions or bidders. Escalation halts use aggregate exposure. <a href="#security-guarantee">Report sizing</a> also accounts for the <a href="#shared-report-coverage">accepted report's capacity</a> while the price is fresh.</p>
+				<p id="shared-feed-rules">A shared feed's aggregate exposure is the largest of current portfolio commitment, backing demand and the maximum commitment a preparing branch auction can add to chosen backing. The feed reads these aggregates without scanning questions or bidders. Escalation halts use aggregate exposure.</p>
 				<p>A shared feed permits concurrent candidates, including renewal before the accepted price expires. Each candidate has its own <code>SharedPoolReportEscrow</code>, which holds its reporter identity and funding credits. <code>pendingReportId</code> and the associated pending getters identify only the latest candidate; they do not enumerate or exclude other pending candidates. A pending, disputed or rejected report never extends accepted-price freshness.</p>
 				<p>Shared acceptance atomically checkpoints portfolio fees under the previous price and updates capital eligibility. A failed mandatory checkpoint rolls back acceptance. Ordinary capital operations execute separately and recheck current safety constraints against the accepted price. An optional batch of sponsor-authorized capital operations is attempted immediately after acceptance.</p>
 				<p id="capacity-race">Accepted report capacity is shared across portfolio owners; sponsoring a larger report does not reserve its added capacity. Another owner can consume it before a separate commitment-growth transaction. Attach growth to <code>requestPortfolioPriceWithOperations</code> to attempt it atomically after acceptance, with an operation gas allowance, deadline and price bounds. Each operation still rechecks safety constraints and can fail independently; inspect <code>ReportOperationAttempted</code> before treating growth as complete.</p>
@@ -100,11 +100,11 @@
 			<section id="security-guarantee">
 				<h2>Report sizing and correction incentives</h2>
 
-				<p>The creator sets a positive <code>minimumReportCollateral</code> in raw collateral units at portfolio creation. It is immutable and inherited by every universe in the portfolio. The minimum report adds that floor to one hundredth of the sizing exposure, rounded up. While the accepted price is fresh, the sizing exposure is the larger of aggregate collateral exposure and <code>acceptedExposureLimitAttoEth</code>; once it is stale, it is aggregate exposure alone. While the price is fresh, the minimum is therefore at least the last accepted final collateral amount, including unused capacity of an oversized or escalated report. For a report requested while the accepted price is fresh, ordinary growth within that accepted limit cannot make a minimum-sized report fail its <code>Report uneconomic</code> check. A later acceptance whose limit exceeds the report's sizing exposure, or growth authorized by a settled report proof, still can. REP inventory coverage can raise the minimum further at the proposed price.</p>
+				<p>The creator sets a positive <code>minimumReportCollateral</code> in raw collateral units at portfolio creation. It is immutable and inherited by every universe in the portfolio. The minimum report adds that floor to one hundredth of aggregate collateral exposure, rounded up, whether or not the accepted price is fresh. Unused capacity from an oversized or escalated report does not raise renewal funding. A pending renewal does not reserve capacity or block independently funded growth. If actual exposure grows beyond its final funding before settlement, the renewal is rejected as <code>Report uneconomic</code> and its queued operations are not attempted. Sponsors may fund headroom to tolerate growth. REP inventory coverage can raise the minimum further at the proposed price.</p>
 				<div class="equation" id="eq-openoracle-initial-report-size">
-					<math display="block" aria-label="minimum collateral report equals configured floor plus rounded up sizing exposure divided by one hundred" data-source="minimumToken1ReportAttoEth = minimumReportCollateral + ⌈sizingExposure / 100⌉"
+					<math display="block" aria-label="minimum collateral report equals configured floor plus rounded up aggregate exposure divided by one hundred" data-source="minimumToken1ReportAttoEth = minimumReportCollateral + ⌈aggregateExposure / 100⌉"
 						><mrow
-							><mi>minimumToken1ReportAttoEth</mi><mo>=</mo><mi>minimumReportCollateral</mi><mo>+</mo><mo>⌈</mo><mfrac><mi>sizingExposure</mi><mn>100</mn></mfrac
+							><mi>minimumToken1ReportAttoEth</mi><mo>=</mo><mi>minimumReportCollateral</mi><mo>+</mo><mo>⌈</mo><mfrac><mi>aggregateExposure</mi><mn>100</mn></mfrac
 							><mo>⌉</mo></mrow
 						></math
 					>
@@ -361,7 +361,7 @@
 						</tr>
 						<tr>
 							<td><code>minimumToken1ReportAttoEth()</code></td>
-							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a>.<br />Configured collateral floor plus one hundredth of the sizing exposure</td>
+							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a>.<br />Configured collateral floor plus one hundredth of the aggregate exposure</td>
 							<td>Minimum initial collateral position for a coordinator report.</td>
 						</tr>
 						<tr>
@@ -382,7 +382,7 @@
 						<tr>
 							<td>Stake sizing: <code>minimumReportCollateral</code>, <code>OPEN_INTEREST_DIVIDER</code>, <code>escalationHaltMultiplierBps</code></td>
 							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a>.</td>
-							<td>The configured collateral floor plus one hundredth of the sizing exposure sets the minimum. REP inventory can raise it. The halt scales selected collateral funding.</td>
+							<td>The configured collateral floor plus one hundredth of the aggregate exposure sets the minimum. REP inventory can raise it. The halt scales selected collateral funding.</td>
 						</tr>
 
 						<tr>
