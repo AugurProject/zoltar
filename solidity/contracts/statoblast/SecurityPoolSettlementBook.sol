@@ -6,7 +6,7 @@ import { SecurityPoolSettlementMath as SettlementMath } from './SecurityPoolSett
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolSettlementWriter } from './SecurityPoolSettlementState.sol';
-import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolPersistentMap, SecurityPoolMaturityMap } from './SecurityPoolPersistentMap.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
@@ -18,6 +18,7 @@ import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 /// A fork copies immutable roots, including ALL inherited outcome liabilities, in constant work.
 contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolMaturityMap for SecurityPoolMaturityMap.Store;
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
@@ -238,7 +239,6 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 			book.recoveryAttoRep -= recoveryAttoRep;
 			book.units -= unitsBurned;
 			_clearEmptyBook(bookId, book);
-			_changeFinalityUnits(book, state.finalAfter, unitsBurned, DECREASE_BALANCE);
 		} else {
 			FrozenBook storage frozen = frozenBooks[frozenBookId];
 			require(frozen.sourceBookId == bookId, 'Use source final claim');
@@ -329,9 +329,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		require(frozenBookId == 0 && !_isMature(book, state.finalAfter), 'Final claim immutable');
 		require(finalAfter == 0 || finalAfter >= portfolioTimestamp, 'Finality already elapsed');
 		require(finalAfter == 0 || state.feeRateAttoEthPerSecond == 0 || state.feeEnd <= _feeTimestamp(book), 'Stop fees before finality');
-		_changeFinalityUnits(book, state.finalAfter, state.units, DECREASE_BALANCE);
 		state.finalAfter = finalAfter;
-		_changeFinalityUnits(book, state.finalAfter, state.units, INCREASE_BALANCE);
 		_writeQuestion(bookId, book, questionId, state);
 		emit FinalityScheduled(bookId, questionId, state.finalAfter);
 	}
@@ -484,7 +482,6 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	function _finalizeQuestion(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private returns (uint64 frozenBookId) {
 		if (!_isMature(book, state.finalAfter) || state.units == 0) return 0;
 		uint256 entitlement = _scaledRecovery(bookId, book, questionId, state);
-		_changeFinalityUnits(book, state.finalAfter, state.units, DECREASE_BALANCE);
 		frozenBookId = _reserveClaim(bookId, book, state.units, entitlement);
 		uint256 correction;
 		unchecked {
@@ -496,7 +493,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	function _freezeMatured(uint64 bookId, Book storage book, uint48 portfolioTimestamp) private returns (uint64 frozenBookId) {
 		_accrueFees(bookId, book, portfolioTimestamp);
 		if (portfolioTimestamp <= book.minimumFinalAfter) return 0;
-		uint256 prefix = tree.prefixTotalModular(book.finalityRoot, portfolioTimestamp - 1);
+		(uint256 prefix, uint256 correctionPrefix) = maturities.prefix(book.finalityRoot, portfolioTimestamp - 1);
 		uint256 units;
 		// Only pending deadlines can change. All newly matured scheduled units
 		// fit the live book, so a modular prefix difference is their exact amount.
@@ -506,7 +503,6 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		book.finalizedUnitsPrefix = prefix;
 		if (units == 0) return 0;
 		RecoveryState storage recovery = recoveryStates[bookId];
-		uint256 correctionPrefix = tree.prefixTotalModular(recovery.finalityRoot, portfolioTimestamp - 1);
 		uint256 scaledRecovery;
 		unchecked {
 			scaledRecovery = units * recovery.index + correctionPrefix - recovery.finalizedPrefix;
@@ -594,13 +590,6 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	function _feeTimestamp(Book storage book) private view returns (uint48) {
 		return book.portfolioTimestamp + book.feeTimeOffset;
-	}
-
-	function _changeFinalityUnits(Book storage book, uint48 finalAfter, uint256 units, bool increase) private {
-		if (finalAfter == 0 || units == 0) return;
-		uint256 previous = tree.get(book.finalityRoot, finalAfter);
-		uint256 next = increase ? previous + units : previous - units;
-		book.finalityRoot = _setModular(book.finalityRoot, finalAfter, next, next);
 	}
 
 	function _writeQuestion(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private {

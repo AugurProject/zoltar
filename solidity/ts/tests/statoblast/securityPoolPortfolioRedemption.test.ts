@@ -11,6 +11,8 @@ import {
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
+import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -32,10 +34,11 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const [question, frozenBookId] = await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, fixture.base.questionId] })
 		return { engine, book, bookId, question, frozenBookId }
 	}
-	const prepareReportedQuestion = async () => {
+	const prepareReportedQuestion = async (additional: readonly bigint[] = []) => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		await fixture.mint(20n * unit, fixture.secondQuestionId)
+		for (const questionId of additional) await fixture.mint(unit, questionId)
 		await approveToken(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), pool().address)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...pool(), functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
@@ -57,6 +60,9 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await approveToken(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
 		await fixture.base.mockWindow.setTime(fixture.secondEndTime + 1n)
 		await forkUniverse(fixture.owner(), fixture.base.genesisUniverse, fixture.secondQuestionId)
+		const controller = await fixture.owner().readContract({ ...portfolio(), functionName: 'forkController' })
+		const hash = await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'freeze', args: [fixture.base.genesisUniverse] }))
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ alreadyFinalized: checkpointed, forkFreezeGas: (await fixture.other().getTransactionReceipt({ hash })).gasUsed })
 		const target = { abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken }
 		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...target, functionName: 'transferPortfolioRecoveryRights', args: [fixture.base.genesisUniverse, fixture.owner().account.address, [0n, 1n, 0n]] }))).rejects.toThrow('No live source recovery right')
 		expect(await fixture.other().readContract({ ...target, functionName: 'balanceOfPortfolioRecoveryRights', args: [fixture.base.genesisUniverse, fixture.other().account.address] })).toEqual([0n, 0n, 0n])
@@ -76,9 +82,24 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect(await collateralBalance(fixture.owner(), fixture.portfolio, before.engine)).toBeLessThan(cash)
 	})
 
-	test('a permissionless question checkpoint reserves only that question and leaves other matured claims pending', async () => {
-		const firstDeadline = await prepareReportedQuestion()
+	test.each([0, 8])('a permissionless question checkpoint reserves only that question with %i other populated deadlines', async additionalCount => {
 		const owner = fixture.owner()
+		const additional = []
+		for (let index = 1; index <= additionalCount; index++) {
+			const end = fixture.base.questionData.endTime + BigInt(index) * DAY
+			const data = makeQuestion(`Additional deadline ${index}`, end)
+			const id = getQuestionId(data, fixture.base.outcomes)
+			await createQuestion(owner, data, fixture.base.outcomes)
+			await fixture.register(id)
+			additional.push({ end, id })
+		}
+		const firstDeadline = await prepareReportedQuestion(additional.map(question => question.id))
+		for (const question of additional) {
+			const address = fixture.poolFor(question.id).securityPool
+			await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), address)
+			await fixture.base.mockWindow.setTime(question.end + 1n)
+			await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
+		}
 		const secondPool = fixture.poolFor(fixture.secondQuestionId).securityPool
 		const second = { abi: poolArtifact.abi, address: secondPool }
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), secondPool)
@@ -95,7 +116,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const keeper = fixture.other()
 		const hash = await writeContractAndWait(keeper, () => keeper.writeContract({ ...pool(), functionName: 'updateSettlementCollateral' }))
 		const gas = (await keeper.getTransactionReceipt({ hash })).gasUsed
-		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ finalizeOneQuestionGas: gas })
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ additionalCount, finalizeOneQuestionGas: gas })
 		expect(gas).toBeLessThan(16_777_216n)
 		const firstFrozenId = (await settlementState()).frozenBookId
 		expect(firstFrozenId).not.toBe(0n)
@@ -103,6 +124,17 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await writeContractAndWait(keeper, () => keeper.writeContract({ ...pool(), functionName: 'updateSettlementCollateral' }))
 		expect((await settlementState()).frozenBookId).toBe(firstFrozenId)
 		expect(await secondFrozenId()).toBe(0n)
+		const genesis = fixture.base.genesisUniverse
+		await approveToken(owner, getRepTokenAddress(genesis), getZoltarAddress())
+		await forkUniverse(owner, genesis, fixture.secondQuestionId)
+		const controller = await owner.readContract({ ...portfolio(), functionName: 'forkController' })
+		const freezeHash = await writeContractAndWait(keeper, () => keeper.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'freeze', args: [genesis] }))
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ additionalCount, forkFreezeGas: (await keeper.getTransactionReceipt({ hash: freezeHash })).gasUsed })
+		expect(await secondFrozenId()).not.toBe(0n)
+		for (const { id } of additional) {
+			const [, frozenBookId] = await owner.readContract({ abi: bookArtifact.abi, address: state.book, functionName: 'question', args: [state.bookId, id] })
+			expect(frozenBookId).not.toBe(0n)
+		}
 	})
 
 	test('winning shares redeem after the strict finality boundary without a prior question checkpoint', async () => {

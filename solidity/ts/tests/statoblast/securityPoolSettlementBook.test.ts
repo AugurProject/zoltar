@@ -340,7 +340,7 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [3n] })).toBe(0n)
 	})
 
-	test('partial REP claims and moved deadlines preserve shared finality correction totals', async () => {
+	test.each([false, true])('partial REP claims and moved deadlines preserve shared finality corrections (named: %s)', async named => {
 		const shares = 10n ** 18n
 		await forkTwoFeeBearingQuestions(shares, 2_000n * shares)
 		const deadline = 3 * 86_400 + 10
@@ -349,6 +349,7 @@ describe('Statoblast: central internal settlement units', () => {
 		await redeem(2n, 1n, shares / 2n)
 		await redeem(2n, 2n, shares / 4n)
 		await schedule(2n, 1n, deadline + 100)
+		if (named) await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [2n, 2n, deadline + 1] }))
 		await freeze(2n, deadline + 1)
 		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(500n * shares)
 		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, shares / 2n] })).toBe(500n * shares)

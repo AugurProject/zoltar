@@ -10,6 +10,7 @@ import {
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
@@ -124,10 +125,18 @@ describe('Statoblast: permissionless settlement repair', () => {
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.secondQuestionId, 10n * unit] })).toBe(oldClaim)
 	})
 
-	test('a repair reserves matured claims before donating to the live basket', async () => {
+	test.each([0, 4])('a repair reserves matured claims before donating to the live basket with %i additional deadlines', async additionalCount => {
 		const owner = fixture.owner()
 		const donor = fixture.other()
 		const genesis = fixture.base.genesisUniverse
+		const additional: bigint[] = []
+		for (let index = 1; index <= additionalCount; index++) {
+			const data = makeQuestion(`Repair deadline ${index}`, fixture.base.questionData.endTime + BigInt(index) * DAY)
+			const id = getQuestionId(data, fixture.base.outcomes)
+			await createQuestion(owner, data, fixture.base.outcomes)
+			await fixture.register(id)
+			additional.push(id)
+		}
 		await fixture.prepare()
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(genesis), functionName: 'transfer', args: [donor.account.address, 5n * unit] }))
 		await fixture.deposit(5n * unit, donor)
@@ -135,10 +144,27 @@ describe('Statoblast: permissionless settlement repair', () => {
 		await fixture.authorize(minimum, donor)
 		await fixture.mint(10n * unit, fixture.base.questionId)
 		await fixture.mint(10n * unit, fixture.secondQuestionId)
+		for (const id of additional) await fixture.mint(unit, id)
 		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
-		await fixture.base.mockWindow.setTime(forkTime + 67n * DAY)
+		let cutoff = forkTime + 67n * DAY
+		if (additional.length !== 0) {
+			await addRepToMigrationBalance(owner, genesis, 1000n * unit)
+			await splitMigrationRep(owner, genesis, 1000n * unit, [1])
+			const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
+			for (const questionId of additional) {
+				await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [fixture.poolFor(questionId).securityPool, child] }))
+				const address = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getPool', args: [questionId, child] })
+				const pool = { abi: poolArtifact.abi, address }
+				await approveToken(owner, getRepTokenAddress(child), address)
+				await writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
+				const game = await owner.readContract({ ...pool, functionName: 'escalationGame' })
+				const deadline = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
+				if (cutoff <= deadline) cutoff = deadline + 1n
+			}
+		}
+		await fixture.base.mockWindow.setTime(cutoff)
 
 		const settlement = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
 		const ledger = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
@@ -155,7 +181,8 @@ describe('Statoblast: permissionless settlement repair', () => {
 		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
 		await approveToken(donor, collateral, settlement)
 		const payerBefore = await collateralBalance(donor, fixture.portfolio, donor.account.address)
-		await writeContractAndWait(donor, () => donor.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, priorDeficit] }))
+		const hash = await writeContractAndWait(donor, () => donor.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, priorDeficit] }))
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ additionalCount, repairGas: (await donor.getTransactionReceipt({ hash })).gasUsed })
 		const donated = payerBefore - (await collateralBalance(donor, fixture.portfolio, donor.account.address))
 		expect(donated).toBeGreaterThan(0n)
 		expect(donated).toBeLessThan(priorDeficit)

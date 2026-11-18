@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
-import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolPersistentMap, SecurityPoolMaturityMap } from './SecurityPoolPersistentMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
 /// @dev Shared settlement types and storage; accounting behavior remains in the book.
@@ -13,6 +13,7 @@ abstract contract SecurityPoolSettlementState {
 	uint64 internal lastQuestionStateId;
 	uint64 internal lastFeeModeId;
 	SecurityPoolPersistentMap.Store internal tree;
+	SecurityPoolMaturityMap.Store internal maturities;
 	SecurityPoolQuestionMap.Store internal questionMap;
 	SecurityPoolFrozenHistory.Store internal frozenHistory;
 
@@ -73,7 +74,6 @@ abstract contract SecurityPoolSettlementState {
 	/// They price lazily materialized fees at the index each fee unit held.
 	struct RecoveryState {
 		uint256 index;
-		uint64 finalityRoot;
 		uint64 forkIncrementRoot;
 		uint64 forkWeightRoot;
 		uint256 finalizedPrefix;
@@ -108,7 +108,7 @@ abstract contract SecurityPoolSettlementState {
 
 /// @dev Writes immutable question snapshots from the settlement book's storage context.
 contract SecurityPoolSettlementWriter is SecurityPoolSettlementState {
-	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolMaturityMap for SecurityPoolMaturityMap.Store;
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 
 	address private immutable host = msg.sender;
@@ -119,30 +119,21 @@ contract SecurityPoolSettlementWriter is SecurityPoolSettlementState {
 		StoredQuestionState storage stored = questionStates[uint64(questionMap.get(book.questionRoot, questionId))];
 		Question storage previous = stored.question;
 		if (_frozenBookId(book, stored) == 0) {
-			uint256 previousCorrection = stored.recoveryCorrection;
-			// Residues modulo 2^256: subtracting is adding the negation.
+			// All scheduled questions have stopped accruing fees. Their stored
+			// units therefore equal the units already in the deadline index.
 			unchecked {
-				if (frozenBookId != 0) _changeFinalityCorrection(bookId, previous.finalAfter, 0 - previousCorrection);
-				else if (previous.finalAfter == state.finalAfter)
-					_changeFinalityCorrection(bookId, state.finalAfter, correction - previousCorrection);
-				else {
-					_changeFinalityCorrection(bookId, previous.finalAfter, 0 - previousCorrection);
-					_changeFinalityCorrection(bookId, state.finalAfter, correction);
+				if (frozenBookId != 0) {
+					book.finalityRoot = maturities.add(book.finalityRoot, previous.finalAfter, 0 - previous.units, 0 - stored.recoveryCorrection);
+				} else if (previous.finalAfter == state.finalAfter) {
+					book.finalityRoot = maturities.add(book.finalityRoot, state.finalAfter, state.units - previous.units, correction - stored.recoveryCorrection);
+				} else {
+					uint64 root = maturities.add(book.finalityRoot, previous.finalAfter, 0 - previous.units, 0 - stored.recoveryCorrection);
+					book.finalityRoot = maturities.add(root, state.finalAfter, state.units, correction);
 				}
 			}
 		}
 		uint64 stateId = ++lastQuestionStateId;
 		questionStates[stateId] = StoredQuestionState(state, correction, recoveryStates[bookId].index, frozenBookId == 0 ? stored.frozenBookId : frozenBookId);
 		book.questionRoot = questionMap.set(book.questionRoot, questionId, stateId);
-	}
-
-	function _changeFinalityCorrection(uint64 bookId, uint48 finalAfter, uint256 residue) private {
-		if (finalAfter == 0 || residue == 0) return;
-		RecoveryState storage recovery = recoveryStates[bookId];
-		uint64 root = recovery.finalityRoot;
-		unchecked {
-			residue += tree.get(root, finalAfter);
-		}
-		recovery.finalityRoot = tree.setModular(root, finalAfter, residue, residue);
 	}
 }
