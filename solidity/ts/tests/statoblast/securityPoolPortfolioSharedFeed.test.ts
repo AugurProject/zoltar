@@ -25,6 +25,25 @@ describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const feed = () => fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 
+	test('additional mint capacity requires a second challenge window after a lower quote', async () => {
+		await fixture.prepare(212n * unit, 100n * unit)
+		const owner = fixture.owner()
+		const capacity = () => owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })
+		const withdrawable = async () => (await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'ownerCollateral', args: [owner.account.address] }))[2]
+		expect(await capacity()).toBe(100n * unit)
+		await fixture.refreshPrice(fixture.base.questionId, (101n * unit) / 100n)
+		expect(await capacity()).toBe(0n)
+		await fixture.refreshPrice()
+		expect(await capacity()).toBe(0n)
+		expect(await withdrawable()).toBe(0n)
+		await expect(fixture.mint(unit)).rejects.toThrow('Purchase exceeds healthy capacity')
+		await fixture.refreshPrice()
+		expect(await capacity()).toBe(100n * unit)
+		expect(await withdrawable()).toBeGreaterThan(0n)
+		await fixture.mint(unit)
+		expect(await capacity()).toBe(99n * unit)
+	})
+
 	test('pledged REP released by a lower price requires a second challenge window', async () => {
 		await fixture.deposit(1_000n * unit)
 		await fixture.refreshPrice(fixture.base.questionId, 2n * unit)

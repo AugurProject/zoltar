@@ -100,7 +100,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		require(targetLots != 0 && inventoryAttoRep != 0, 'Collateral repair auction has no saleable lots');
 		ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
 		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote is not funded and fresh');
-		openingConservativePrice = feed.conservativePrice();
+		openingConservativePrice = Math.min(feed.conservativePrice(), capital.auctionPriceCeiling());
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
 		require(minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
@@ -143,15 +143,18 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 			// disputes of pending reports void the sale. It is never older than the
 			// fresh quote the opening required, and no report is accepted after closing.
 			bool eligible = (forkTime == 0 || forkTime > closesAt) && _fundedQuote(feed, closesAt, ALLOW_EXPIRED_QUOTE);
-			// A higher closing price does not cancel the sale: one marginally higher
-			// report would otherwise void every funded bid and leave the branch
-			// impaired for good. Every winning lot instead receives at least the REP
-			// that backs it at the closing conservative price, and fewer lots fill
-			// when the inventory cannot provide that.
 			uint256 floorAttoRepPerLot;
-			if (eligible)
-				floorAttoRepPerLot =
-					Math.ceilDiv(capital.commitmentIndex().requiredRep(lotAttoEth, feed.conservativePrice(), capital.securityMultiplierBps(), 10_000), repGrid) * repGrid;
+			if (eligible) {
+				uint256 latestPrice = feed.conservativePrice();
+				uint256 confirmedPrice = Math.min(latestPrice, capital.auctionPriceCeiling());
+				floorAttoRepPerLot = _repPerLot(confirmedPrice);
+				// Preserve the normal clearing when its payout still backs each lot.
+				// A uniform sale cannot fill a lot if its capped payout is below backing.
+				if (latestPrice > confirmedPrice)
+					eligible =
+						engine.previewFinalization(targetLots, floorAttoRepPerLot).attoRepPerLot >=
+						_repPerLot(latestPrice);
+			}
 			result = engine.finalize(eligible ? targetLots : 0, floorAttoRepPerLot);
 			engine.withdrawRaised(payable(forkAuthority));
 		} else engine.finalizeUnopened();
@@ -161,6 +164,11 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		uint256 remaining = inventoryAttoRep - result.soldAttoRep;
 		if (remaining != 0) repToken.safeTransfer(forkAuthority, remaining);
 		emit AuctionClosed(result.filledLots, result.raisedAttoEth, result.soldAttoRep);
+	}
+
+	function _repPerLot(uint256 price) private view returns (uint256) {
+		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, price, capital.securityMultiplierBps(), 10_000);
+		return Math.ceilDiv(required, repGrid) * repGrid;
 	}
 
 	/// @notice The clone address a bidder's bid receives, computable before bidding.

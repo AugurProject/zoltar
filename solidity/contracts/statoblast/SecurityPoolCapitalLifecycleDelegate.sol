@@ -70,7 +70,13 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(uncertainty < 10_000_000, 'Invalid oracle uncertainty');
 		acceptedPrice = price;
 		conservativePrice = Math.mulDiv(price, 10_000_000, 10_000_000 - uncertainty, Math.Rounding.Ceil);
-		_updateWithdrawalPrice(feed, validUntil);
+		uint48 challengeDuration = feed.settlementTime();
+		uint256 challengeStartedAt =
+			challengeDuration == 0 ? 0 : Math.saturatingSub(feed.lastSettlementTimestamp(), challengeDuration);
+		PriceObservation memory observation = PriceObservation(conservativePrice, uint48(block.timestamp), validUntil);
+		withdrawalPriceFloor = _confirmPrice(withdrawalPriceFloor, pendingLowerPrice, observation, challengeStartedAt, challengeDuration == 0 || conservativePrice >= withdrawalPriceFloor);
+		if (importing)
+			auctionPriceCeiling = _confirmPrice(auctionPriceCeiling, pendingHigherPrice, observation, challengeStartedAt, challengeDuration == 0 || auctionPriceCeiling == 0 || conservativePrice <= auctionPriceCeiling);
 		liquidationPrice = Math.mulDiv(price, 10_000_000, 10_000_000 + uncertainty);
 		require(liquidationPrice != 0, 'Liquidation price rounds to zero');
 		if (!importing && block.timestamp >= priceValidUntil) commitmentIndex.restartLiquidationClock();
@@ -81,26 +87,24 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		emit CapitalPriceAccepted(price, validUntil);
 	}
 
-	/// @dev Tighten the floor immediately. A lower floor needs a second report
-	/// whose full challenge period began while the first lower quote was accepted and fresh.
-	function _updateWithdrawalPrice(ICapitalPriceExposure feed, uint48 validUntil) private {
-		uint48 challengeDuration = feed.settlementTime();
-		WithdrawalObservation memory pending = pendingWithdrawalObservation;
-		if (conservativePrice >= withdrawalPriceFloor || challengeDuration == 0) {
-			withdrawalPriceFloor = conservativePrice;
-			if (pending.price != 0) delete pendingWithdrawalObservation;
-			return;
+	/// @dev Apply a stricter price immediately. A relaxation needs a full challenge
+	/// period started after the first observation was accepted and while it was fresh.
+	function _confirmPrice(uint256 bound, PriceObservation storage pending, PriceObservation memory observation, uint256 challengeStartedAt, bool stricter) private returns (uint256) {
+		if (stricter) {
+			if (pending.price != 0) pending.price = 0;
+			return observation.price;
 		}
-
-		uint256 challengeStartedAt = feed.lastSettlementTimestamp() - challengeDuration;
 		if (pending.price != 0 && challengeStartedAt < pending.validUntil) {
-			if (challengeStartedAt < pending.acceptedAt) return;
-			withdrawalPriceFloor = Math.max(pending.price, conservativePrice);
+			if (challengeStartedAt < pending.acceptedAt) return bound;
+			bound =
+				observation.price < bound
+					? Math.max(pending.price, observation.price)
+					: Math.min(pending.price, observation.price);
 		}
-
-		if (conservativePrice < withdrawalPriceFloor)
-			pendingWithdrawalObservation = WithdrawalObservation(conservativePrice, uint48(block.timestamp), validUntil);
-		else delete pendingWithdrawalObservation;
+		pending.price = observation.price == bound ? 0 : observation.price;
+		pending.acceptedAt = observation.acceptedAt;
+		pending.validUntil = observation.validUntil;
+		return bound;
 	}
 
 	/// @dev The ledger has already checkpointed fees, served prior retirements,

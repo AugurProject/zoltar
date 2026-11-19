@@ -255,7 +255,7 @@
 					<li id="assumption-a19" value="19">
 						<h3><span class="assumption-id">A19</span> A robust reference market makes harmful REP/collateral errors correctable</h3>
 						<p>Independent participants can observe a manipulation-resistant reference REP/collateral price. Every price error large enough to unlock a security-relevant pool action also leaves a correction opportunity that remains profitable after actual gas, prevailing priority fees, OpenOracle fees, price impact, and required capital lockup.</p>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> A harmful deviation below the profitable correction threshold, or a manipulated/illiquid reference market, can settle without an economically rational challenge.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> OpenOracle fees and gas can leave small errors uneconomic to correct. A harmful deviation below this threshold, or a manipulated or illiquid reference market, can settle without an economically rational challenge. Price confirmation limits what one accepted quote can change in <a href="./contract-inventory.html#portfolio-underwriting">portfolio withdrawals and mint capacity</a> and <a href="./contract-inventory.html#portfolio-collateral-repair-auction">auction payouts</a>. A second challenge window gives correctors more time but can also end with an incorrect price.</p>
 						<p class="assumption-links">Mechanics: <a href="./open-oracle.html#security-guarantee">report sizing</a>, <a href="./open-oracle.html#intentional-economic-tradeoffs">external-payoff model</a>, and <a href="./open-oracle.html#settlement-validation-scope">settlement limits</a>.</p>
 					</li>
 					<li id="assumption-a20" value="20">

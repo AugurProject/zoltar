@@ -65,7 +65,7 @@ contract SecurityPoolPortfolioPurchase {
 		SecurityPoolSettlementBook book = engine.ledger();
 		uint64 bookId = engine.bookIds(universeId);
 		if (!book.isCashFunded(bookId)) return 0;
-		uint256 active = capital.commitmentIndex().eligibleActiveCommitment(capital.conservativePrice());
+		uint256 active = capital.commitmentIndex().eligibleActiveCommitment(capital.mintRiskPrice());
 		uint256 demand = capital.demandAttoEth();
 		return active > demand ? active - demand : 0;
 	}

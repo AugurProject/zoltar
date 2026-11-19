@@ -1,29 +1,22 @@
 import { describe, expect, test } from 'bun:test'
-import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact } from '../../types/contractArtifact'
+import { statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact } from '../../types/contractArtifact'
 import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: auction closing price assumption (#1344)', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 
-	test('an undisputed wrong-high closing price still increases a winning bid’s REP allocation', async () => {
+	test.each([unit, (285n * unit) / 100n])('a single higher quote cannot raise the uniform payout above the submitted bids (opening %s)', async opening => {
+		const closing = opening === unit ? 10n * unit : (101n * opening) / 100n
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
-		await context.report()
+		await context.report(opening)
 		await context.open()
-		const bid = await context.bid(context.other, 5n, 6n * unit)
-		const saved = await context.mock.anvilSnapshot()
-		await context.closingQuote()
+		const bid = await context.bid(context.other, 5n, 6n * unit, 10_000n)
+		await context.closingQuote(closing)
 		await context.finalize()
-		const fair = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })
-		expect(fair.principalAttoRep).toBe(30n * unit)
-		await context.mock.anvilRevert(saved)
-		await context.mock.setTime(context.deadline - 1000n)
-		const reportStake = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [50n * unit] })
-		await context.report(50n * unit, reportStake)
-		await context.finalize()
-		const wrong = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })
-		expect(wrong.usedAttoEth).toBe(fair.usedAttoEth)
-		expect(wrong.filledLots).toBe(fair.filledLots)
-		expect(wrong.principalAttoRep).toBeGreaterThan(fair.principalAttoRep)
+		const fill = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })
+		expect(fill.filledLots).toBe(0n)
+		expect(fill.principalAttoRep).toBe(0n)
+		expect(fill.refundAttoEth).toBe(5n * unit)
 	})
 })

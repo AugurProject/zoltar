@@ -187,9 +187,16 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.report()
 		await context.open()
 		const bid = await context.bid(context.other, 2n)
+		const auction = { abi: auctionArtifact.abi, address: context.auction }
+		const engine = { abi: engineArtifact.abi, address: context.engine }
+		const target = await context.owner.readContract({ ...auction, functionName: 'targetLots' })
+		const floor = await context.owner.readContract({ ...auction, functionName: 'minimumCollateralAttoRepPerLot' })
+		const original = await context.owner.readContract({ ...engine, functionName: 'previewFinalization', args: [target, floor] })
 		await context.closingQuote(price === 1n ? unit + 1n : price)
 		await context.finalize()
-		expect((await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(2n)
+		const fill = await context.owner.readContract({ ...engine, functionName: 'previewBid', args: [bid.id] })
+		expect(fill.filledLots).toBe(2n)
+		expect(fill.principalAttoRep).toBe(2n * original.attoRepPerLot)
 	})
 
 	test('#1241 an accepted quote hours before close remains usable', async () => {
@@ -202,12 +209,13 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.finalize()
 		expect((await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(2n)
 	})
-	test('a higher closing floor backs every filled lot without charging bidders REP', async () => {
+	test('a confirmed higher closing floor backs every filled lot without charging bidders REP', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const bid = await context.bid(context.other, 5n)
 		await context.closingQuote(10n * unit)
+		await context.report(10n * unit)
 		await context.finalize()
 		const fill = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })
 		expect(fill.filledLots).toBe(5n)

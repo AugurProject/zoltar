@@ -122,7 +122,8 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			await gasOf('early refund: combined withdrawal after someone else credited', other, () => other.writeContract({ ...auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, stranger.account.address] }))
 			await revertedGasOf('refund failure: combined withdrawal with nothing left', other, context.auction, encodeFunctionData({ abi: auctionArtifact.abi, functionName: 'settleAndWithdrawRefund', args: [loser.id, stranger.account.address] }))
 			await restore(earlySnapshot)
-			await context.closingQuote()
+			// An unconfirmed increase uses the capped clearing and checks its backing.
+			await context.closingQuote(unit + 1n)
 			await mock.setTime(context.deadline)
 			await gasOf('close: finalize branch and install the auction cohort', owner, () => owner.writeContract({ ...forks, functionName: 'finalizeBranch', args: [context.child] }))
 			expect((await fill(winner.id)).filledLots).toBe(2n)

@@ -170,7 +170,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 	/// @notice Price used to preview and execute withdrawals from active backing.
 	function ownerWithdrawalPrice(address owner) external view returns (uint256) {
-		return Math.max(ownerConservativePrice(owner), withdrawalPriceFloor);
+		return Math.max(ownerConservativePrice(owner), mintRiskPrice());
+	}
+	/// @notice Upper REP requirement for newly authorized settlement demand.
+	function mintRiskPrice() public view returns (uint256) {
+		return Math.max(conservativePrice, withdrawalPriceFloor);
 	}
 	function _requiredRep(uint256 commitment, uint256 health, uint256 price) private view returns (uint256) {
 		return commitmentIndex.requiredRep(commitment, price, securityMultiplierBps, health);
