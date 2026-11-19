@@ -7,6 +7,7 @@ import { invalidateAppData } from '../lib/dataRefresh.js'
 import { createConnectedReadClient } from '../wallet/clients.js'
 import { createRecoveringReceiptWaiter } from './receiptRecovery.js'
 import {
+	MAX_PENDING_TRANSACTION_AGE_MILLISECONDS,
 	mergeStoredTransactionActivity,
 	expireStaleTransactionActivity,
 	getTransactionActivityStorageKey,
@@ -41,6 +42,40 @@ export const unseenTransactionActivityOutcomes = signal<readonly Hash[]>([])
 const watchedHashes = new Map<Hash, ReturnType<typeof createActivityWatch>>()
 // Bumped when an initiating action stops watching a pending hash, so the activity watcher takes it over.
 const releasedWatches = signal(0)
+let expiryTimer: ReturnType<typeof setTimeout> | undefined
+
+function scheduleActivityExpiry() {
+	clearTimeout(expiryTimer)
+	expiryTimer = undefined
+	const pending = transactionActivity.peek().entries.filter(entry => entry.status === 'pending')
+	if (pending.length === 0) return
+	const deadline = Math.min(...pending.map(entry => entry.submittedAt + MAX_PENDING_TRANSACTION_AGE_MILLISECONDS + 1))
+	expiryTimer = setTimeout(
+		() => {
+			expirePendingActivity()
+			scheduleActivityExpiry()
+		},
+		Math.min(2_147_483_647, Math.max(0, deadline - Date.now())),
+	)
+}
+
+function expirePendingActivity() {
+	const now = Date.now()
+	const isExpired = (entry: TransactionActivityEntry) => entry.status === 'pending' && now - entry.submittedAt > MAX_PENDING_TRANSACTION_AGE_MILLISECONDS
+	if (!transactionActivity.peek().entries.some(isExpired)) return
+	const expiredHashes: Hash[] = []
+	update(entries => {
+		// Settlement caps history, so collect watches before expired rows can be evicted.
+		for (const entry of entries) {
+			if (isExpired(entry)) expiredHashes.push(entry.hash)
+		}
+		return expireStaleTransactionActivity(entries, now)
+	})
+	for (const hash of expiredHashes) {
+		watchedHashes.delete(hash)
+		announceTransactionTrackingStopped(hash)
+	}
+}
 
 function createActivityWatch() {
 	const ownerKey = transactionActivity.peek().ownerKey
@@ -71,10 +106,13 @@ function update(change: (entries: readonly TransactionActivityEntry[]) => readon
 	const next = { ...current, entries }
 	transactionActivity.value = next
 	persist(next)
+	scheduleActivityExpiry()
 }
 
 /** Test isolation: the list and its watch bookkeeping are module state shared by every rendered app. */
 export function resetTransactionActivityForTesting() {
+	clearTimeout(expiryTimer)
+	expiryTimer = undefined
 	watchedHashes.clear()
 	resetTransactionTrackingStopsForTesting()
 	unseenTransactionActivityOutcomes.value = []
@@ -94,12 +132,16 @@ export function setTransactionActivityOwner(account: Address | undefined) {
 	const chainId = getActiveNetworkProfile().chain.id
 	const storageKey = account === undefined || backendId === 'simulation' ? undefined : getTransactionActivityStorageKey({ account, backendId, chainId })
 	const ownerKey = `${backendId}:${chainId}:${account?.toLowerCase() ?? ''}`
-	if (transactionActivity.peek().ownerKey === ownerKey) return
+	if (transactionActivity.peek().ownerKey === ownerKey) {
+		expirePendingActivity()
+		return
+	}
 	markTransactionActivityOutcomesSeen()
 	const stored = readStored(storageKey)
 	const entries = expireStaleTransactionActivity(stored, Date.now())
 	transactionActivity.value = { chainId, entries, ownerKey, storageKey }
 	if (entries !== stored) persist(transactionActivity.value)
+	scheduleActivityExpiry()
 }
 
 export function recordTransactionSubmitted({ hash, previousHash, scope, title }: { hash: Hash; previousHash?: Hash | undefined; scope: TransactionScope | undefined; title: string }) {
@@ -141,10 +183,12 @@ function recordWatchedOutcome(hash: Hash, outcome: TransactionActivityOutcome) {
 }
 
 function isPendingInActivity(hash: Hash) {
+	expirePendingActivity()
 	return transactionActivity.peek().entries.some(entry => entry.hash === hash && entry.status === 'pending')
 }
 
 export function hasPendingTransactionActivity(scope: TransactionScope) {
+	expirePendingActivity()
 	return transactionActivity.value.entries.some(entry => entry.status === 'pending' && transactionScopesOverlap(entry.scope, scope))
 }
 
