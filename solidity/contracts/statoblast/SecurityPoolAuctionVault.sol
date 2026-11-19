@@ -59,7 +59,11 @@ contract SecurityPoolAuctionVault {
 	/// choices, migration, child deposits and parent fee claims keep their checks.
 	bool public initialPositionMaterialized;
 
-	receive() external payable {}
+	/// @dev The shared implementation has no owner, so anything sent to it could
+	/// never leave. Only clones accept ETH and ERC-1155 deposits.
+	receive() external payable {
+		_requireClone();
+	}
 
 	function owner() public view returns (address value) {
 		(value, , , ) = _bindings();
@@ -77,12 +81,18 @@ contract SecurityPoolAuctionVault {
 	}
 	/// @dev Under delegatecall `address()` is the clone, whose code ends with the
 	/// bindings. Any other code length is not a vault, including the implementation.
-	function _bindings() private view returns (address owner_, address capital_, address auction_, uint256 bidId_) {
+	function _isClone() private view returns (bool) {
 		uint256 size;
 		assembly ('memory-safe') {
 			size := extcodesize(address())
 		}
-		require(size == SecurityPoolAuctionVaultClones.RUNTIME_LENGTH, 'Auction vault is not a clone');
+		return size == SecurityPoolAuctionVaultClones.RUNTIME_LENGTH;
+	}
+	function _requireClone() private view {
+		require(_isClone(), 'Auction vault is not a clone');
+	}
+	function _bindings() private view returns (address owner_, address capital_, address auction_, uint256 bidId_) {
+		_requireClone();
 		assembly ('memory-safe') {
 			let pointer := mload(0x40)
 			extcodecopy(address(), pointer, 45, 92)
@@ -153,15 +163,19 @@ contract SecurityPoolAuctionVault {
 			}
 		}
 	}
-	function supportsInterface(bytes4 interfaceId) external view returns (bool) {
-		if (interfaceId == 0x01ffc9a7) return true;
-		return interfaceId == 0x4e2312e0 && address(this).code.length == SecurityPoolAuctionVaultClones.RUNTIME_LENGTH;
-	}
-	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external view returns (bytes4) {
+		_requireClone();
 		return this.onERC1155Received.selector;
 	}
-	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
+	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external view returns (bytes4) {
+		_requireClone();
 		return this.onERC1155BatchReceived.selector;
+	}
+	/// @notice ERC-165 discovery. Clones advertise the ERC-1155 receiver
+	/// interface they implement; the implementation, which refuses deposits, does not.
+	function supportsInterface(bytes4 interfaceId) external view returns (bool) {
+		if (interfaceId == 0x01ffc9a7) return true;
+		return interfaceId == 0x4e2312e0 && _isClone();
 	}
 }
 

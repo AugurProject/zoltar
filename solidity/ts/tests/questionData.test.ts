@@ -168,7 +168,7 @@ describe('Question Data', () => {
 	test('#1391 unknown questions consistently classify and name answers as malformed', async () => {
 		const question = await futureQuestion({ title: 'Unregistered scalar getter fixture', numTicks: 2n })
 		const id = getQuestionId(question, [])
-		for (const answer of [0n, 1n << 255n, 1n]) {
+		for (const answer of [1n << 255n, 1n]) {
 			assert.strictEqual(await isMalformedAnswerOption(client, id, answer), true)
 			assert.strictEqual(await getAnswerOptionName(client, id, answer), 'Malformed')
 		}
@@ -364,8 +364,44 @@ describe('Question Data', () => {
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = getQuestionId(testScalarQuestion, [])
 
-		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, maxScalarNumTicks, 0n)), `0 (tick 0/${maxScalarNumTicks})`, 'bottom endpoint should remain encodable at the boundary')
-		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, maxScalarNumTicks)), `0.000000000000000001 (tick ${maxScalarNumTicks}/${maxScalarNumTicks})`, 'top endpoint should remain encodable at the boundary')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, maxScalarNumTicks, 0n)), '0', 'bottom endpoint should remain encodable at the boundary')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, maxScalarNumTicks)), '0.000000000000000001', 'top endpoint should remain encodable at the boundary')
+	})
+
+	test('distinct scalar ticks closer than one display unit receive distinct names (#1390)', async () => {
+		const question = await futureQuestion({ title: 'Sub-unit tick spacing', displayValueMin: 0n, displayValueMax: 1n, numTicks: 2n, answerUnit: '' })
+		await createQuestion(client, question, [])
+		const questionId = getQuestionId(question, [])
+		const labels = await Promise.all([0n, 1n, 2n].map(tick => getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 2n - tick, tick))))
+		assert.deepStrictEqual(labels, ['0', '0 (tick 1 of 2)', '0.000000000000000001'], 'only the inexact interior tick carries its index')
+		assert.strictEqual(new Set(labels).size, 3)
+		const parityQuestion = { name: 'sub-unit', answerUnit: '', displayValueMin: 0n, displayValueMax: 1n, numTicks: 2n }
+		assert.deepStrictEqual(
+			[0n, 1n, 2n].map(tick => formatScalarParityLabel(parityQuestion, tick)),
+			labels,
+			'the shared renderer names the same ticks identically',
+		)
+
+		const withUnit = await futureQuestion({ title: 'Sub-unit tick spacing with unit', displayValueMin: 0n, displayValueMax: 2n, numTicks: 3n, answerUnit: 'km' })
+		await createQuestion(client, withUnit, [])
+		const unitLabels = await Promise.all([0n, 1n, 2n, 3n].map(tick => getAnswerOptionName(client, getQuestionId(withUnit, []), combineUint256FromTwoWithInvalid(false, 3n - tick, tick))))
+		assert.deepStrictEqual(unitLabels, ['0 km', '0 km (tick 1 of 3)', '0.000000000000000001 km (tick 2 of 3)', '0.000000000000000002 km'])
+	})
+
+	test('the validity and name getters agree that an unregistered question has no valid scalar answer (#1391)', async () => {
+		const question = await futureQuestion({ title: 'Unregistered scalar getter fixture', numTicks: 2n, displayValueMax: 10n })
+		const questionId = getQuestionId(question, [])
+		const highBitOnly = 1n << 255n
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, highBitOnly), true)
+		assert.strictEqual(await getAnswerOptionName(client, questionId, highBitOnly), 'Malformed')
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, combineUint256FromTwoWithInvalid(false, 1n, 1n)), true)
+		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 1n, 1n)), 'Malformed')
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, 0n), false, 'the canonical Invalid answer stays well formed')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, 0n), 'Invalid')
+
+		await createQuestion(client, question, [])
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, combineUint256FromTwoWithInvalid(false, 1n, 1n)), false, 'once registered, the midpoint is valid')
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, highBitOnly), true, 'a zero-tick answer is malformed for the registered question')
 	})
 
 	test('rejects scalar questions whose numTicks exceeds the uint120 answer encoding range', async () => {

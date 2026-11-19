@@ -179,6 +179,16 @@ describe('transaction activity list', () => {
 		expect(parseStoredTransactionActivity(null)).toEqual([])
 	})
 
+	test('drops stored rows whose timestamps a Date cannot represent (#1388)', () => {
+		const good = entry(1, 'confirmed')
+		const bad = { ...entry(2, 'confirmed'), submittedAt: 8_640_000_000_000_001 }
+		const badSettledAt = { ...entry(3, 'confirmed'), settledAt: 8_640_000_000_000_001 }
+		expect(parseStoredTransactionActivity(JSON.stringify([bad, good, badSettledAt]))).toEqual([good, { ...entry(3, 'confirmed') }])
+		const boundary = { ...entry(4, 'confirmed'), submittedAt: 8_640_000_000_000_000 }
+		expect(parseStoredTransactionActivity(JSON.stringify([boundary]))).toEqual([boundary])
+		expect(() => new Date(boundary.submittedAt).toISOString()).not.toThrow()
+	})
+
 	test('keys storage by backend, network, and account', () => {
 		expect(getTransactionActivityStorageKey({ account: '0xABC', backendId: 'injected', chainId: 11155111 })).toBe('zoltar.transactionActivity.v1:injected:11155111:0xabc')
 	})

@@ -14,11 +14,14 @@ library ScalarOutcomes {
 		}
 		uint256 scalarValueU = mulDiv(payout, diffU, numTicks);
 		int256 scalarValue = addInt256Uint256(minValue, scalarValueU);
-		string memory decimalString = intToDecimalString(scalarValue, DECIMALS);
-		string memory label = bytes(unit).length == 0 ? decimalString : string.concat(decimalString, ' ', unit);
-		// A sub-atto-unit tick spacing makes distinct payouts share a rounded value.
-		if (diffU < numTicks)
-			return string.concat(label, ' (tick ', uintToString(payout), '/', uintToString(numTicks), ')');
+		string memory label = intToDecimalString(scalarValue, DECIMALS);
+		if (bytes(unit).length != 0) label = string.concat(label, ' ', unit);
+		// Ticks closer together than one 18-decimal unit can floor to the same
+		// displayed value. Name every such inexact tick by its index so distinct
+		// answers never share a label; exact values are already unique.
+		if (diffU < numTicks && mulmod(payout, diffU, numTicks) != 0) {
+			label = string.concat(label, ' (tick ', uintToString(payout), ' of ', uintToString(numTicks), ')');
+		}
 		return label;
 	}
 

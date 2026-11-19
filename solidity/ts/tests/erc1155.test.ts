@@ -149,24 +149,38 @@ describe('ERC1155 Compliance Test Suite', () => {
 					args: [client.account.address, true],
 				}),
 			),
-			/Cannot change implicit approval/,
+			/ERC1155: account cannot set approval status for itself/,
 		)
 	})
 
-	test('#1392 implicit token-operator approval cannot emit a successful revocation', async () => {
-		const token = await deployShareToken()
-		const abi = statoblast_tokens_ShareToken_ShareToken.abi
-		await writeContractAndWait(client, () => client.writeContract({ abi, address: token, functionName: 'setApprovalForAll', args: [token, true] }))
-		await assert.rejects(client.simulateContract({ abi, address: token, functionName: 'setApprovalForAll', args: [token, false] }), /implicit approval/)
-		assert.strictEqual(await client.readContract({ abi, address: token, functionName: 'isApprovedForAll', args: [client.account.address, token] }), true)
-		for (const approved of [true, false]) {
-			const hash = await writeContractAndWait(client, () => client.writeContract({ abi, address: token, functionName: 'setApprovalForAll', args: [operatorClient.account.address, approved] }))
+	test('every successful ApprovalForAll event matches isApprovedForAll at its block (#1392)', async () => {
+		const shareTokenAddress = await deployShareToken()
+		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
+		const holder = client.account.address
+		const setApproval = async (operator: Address, approved: boolean) => {
+			const hash = await client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'setApprovalForAll', args: [operator, approved] })
 			const receipt = await client.waitForTransactionReceipt({ hash })
-			const events = receipt.logs.filter(log => log.address.toLowerCase() === token.toLowerCase()).map(log => decodeEventLog({ abi, data: log.data, topics: log.topics }))
-			const event = events.find(event => event.eventName === 'ApprovalForAll')
-			if (event === undefined) throw new Error('Missing approval event')
-			assert.strictEqual(event.args.approved, approved)
-			assert.strictEqual(await client.readContract({ abi, address: token, functionName: 'isApprovedForAll', args: [client.account.address, operatorClient.account.address] }), approved)
+			assert.strictEqual(receipt.status, 'success')
+			const events = receipt.logs.map(log => decodeEventLog({ abi: shareTokenAbi, data: log.data, topics: log.topics })).filter(event => event.eventName === 'ApprovalForAll')
+			assert.strictEqual(events.length, 1)
+			const event = events[0]
+			if (event?.eventName !== 'ApprovalForAll') throw new Error('missing ApprovalForAll event')
+			const getter = await client.readContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'isApprovedForAll', args: [holder, operator], blockNumber: receipt.blockNumber })
+			assert.strictEqual(getter, event.args.approved, 'the getter must agree with the emitted approval state')
+		}
+
+		const ordinaryOperator = operatorClient.account.address
+		await setApproval(ordinaryOperator, true)
+		await setApproval(ordinaryOperator, false)
+
+		// The token is an implicit operator for every holder, so neither setting
+		// nor revoking its approval may succeed and emit a contradicting event.
+		assert.strictEqual(await client.readContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'isApprovedForAll', args: [holder, shareTokenAddress] }), true)
+		for (const approved of [true, false]) {
+			await assert.rejects(
+				writeContractAndWait(client, () => client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'setApprovalForAll', args: [shareTokenAddress, approved] })),
+				/ERC1155: token contract is always an operator/,
+			)
 		}
 	})
 

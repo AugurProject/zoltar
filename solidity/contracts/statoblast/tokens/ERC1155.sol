@@ -84,7 +84,10 @@ contract ERC1155 is IERC1155 {
 	 * @param approved representing the status of the approval to be set
 	 */
 	function setApprovalForAll(address operator, bool approved) external {
-		require(msg.sender != operator && (operator != address(this) || approved), 'Cannot change implicit approval');
+		require(msg.sender != operator, 'ERC1155: account cannot set approval status for itself');
+		// The token itself is always an operator (see isApprovedForAll), so an
+		// approval event for it would contradict the getter.
+		require(operator != address(this), 'ERC1155: token contract is always an operator');
 		_operatorApprovals[msg.sender][operator] = approved;
 		emit ApprovalForAll(msg.sender, operator, approved);
 	}

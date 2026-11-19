@@ -222,8 +222,7 @@ describe('ZoltarMigrationSection', () => {
 	test('uses the scalar picker for deployed, undeployed and Invalid outcomes without listing ticks', async () => {
 		const question = createMarketDetails({ marketType: 'scalar', outcomeLabels: [], numTicks: 10n ** 25n, displayValueMax: 100n * ATTO_REP, answerUnit: '°C' })
 		const maxIndex = getScalarOutcomeIndex(question, question.numTicks)
-		const maxLabel = `100 °C (tick ${question.numTicks}/${question.numTicks})`
-		const child = { ...yesChild, outcomeIndex: maxIndex, outcomeLabel: maxLabel }
+		const child = { ...yesChild, outcomeIndex: maxIndex, outcomeLabel: '100 °C' }
 		const updates: Partial<ZoltarMigrationFormState>[] = []
 		const deployments: bigint[] = []
 		const rendered = await renderIntoDocument(
@@ -232,13 +231,13 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const q = within(document.body)
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(0)
-		q.getByRole('button', { name: `Deploy 0 °C (tick 0/${question.numTicks}) universe` }).click()
+		q.getByRole('button', { name: 'Deploy 0 °C universe' }).click()
 		expect(deployments).toEqual([getScalarOutcomeIndex(question, 0n)])
 		await act(() => fireEvent.input(q.getByLabelText('Scalar value'), { target: { value: '100' } }))
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(1)
-		q.getByRole('button', { name: maxLabel }).click()
+		q.getByRole('button', { name: '100 °C' }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [maxIndex] }])
-		expect(q.getByRole('link', { name: `Open ${maxLabel} universe` }).getAttribute('href')).toBe(getUniverseLinkHref(child.universeId))
+		expect(q.getByRole('link', { name: 'Open 100 °C universe' }).getAttribute('href')).toBe(getUniverseLinkHref(child.universeId))
 		await act(() => fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '101' } }))
 		expect(q.queryByRole('button', { name: /^Deploy .* universe$/ })).toBeNull()
 		await act(() => q.getByRole('textbox', { name: 'Scalar value' }).dispatchEvent(new Event('blur')))
@@ -256,11 +255,11 @@ describe('ZoltarMigrationSection', () => {
 		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [] }), zoltarMigrationForm: createForm({ outcomeIndexes: [selectedIndex] }), onScalarOutcomesChange })))
 		cleanupRenderedComponent = rendered.cleanup
 		const q = within(document.body)
-		expect(q.getByRole('button', { name: `Deploy 0 °C (tick 0/${question.numTicks}) universe` }).hasAttribute('disabled')).toBe(true)
+		expect(q.getByRole('button', { name: 'Deploy 0 °C universe' }).hasAttribute('disabled')).toBe(true)
 		await waitFor(() => expect(reads.at(-1)).toEqual([selectedIndex, getScalarOutcomeIndex(question, 0n)]))
 		await act(() => fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '101' } }))
 		await waitFor(() => expect(reads.at(-1)).toEqual([selectedIndex]))
-		expect(q.queryByRole('button', { name: `Deploy 0 °C (tick 0/${question.numTicks}) universe` })).toBeNull()
+		expect(q.queryByRole('button', { name: 'Deploy 0 °C universe' })).toBeNull()
 		await act(() => fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' })))
 		await waitFor(() => expect(reads.at(-1)).toEqual([selectedIndex, 0n]))
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(0)

@@ -51,7 +51,10 @@ export function getBrowserTimeZone() {
 	return new Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
-/** Seconds the zone is ahead of UTC at the given instant (negative when behind), read from Intl's `GMT+03:00` offset name. */
+/**
+ * Seconds the zone is ahead of UTC at the given instant (negative when behind), read from Intl's `GMT+03:00` offset
+ * name. Historical local mean times carry a seconds component, such as Monrovia's `GMT-00:44:30`.
+ */
 function getTimeZoneOffsetSeconds(date: Date, timeZone: string) {
 	const offsetName = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' }).formatToParts(date).find(part => part.type === 'timeZoneName')?.value
 	if (offsetName === undefined) throw new Error(`Time zone formatting omitted the offset of ${timeZone}`)
@@ -67,9 +70,10 @@ function formatUtcOffset(offsetSeconds: number) {
 	const sign = offsetSeconds > 0 ? '+' : '-'
 	const absoluteSeconds = Math.abs(offsetSeconds)
 	const hours = Math.floor(absoluteSeconds / 3600)
-	const minutes = Math.floor((absoluteSeconds % 3600) / 60)
+	const minutes = Math.floor(absoluteSeconds / 60) % 60
 	const seconds = absoluteSeconds % 60
-	return `UTC${sign}${hours}${minutes === 0 && seconds === 0 ? '' : `:${pad(minutes)}`}${seconds === 0 ? '' : `:${pad(seconds)}`}`
+	if (seconds !== 0) return `UTC${sign}${hours}:${pad(minutes)}:${pad(seconds)}`
+	return `UTC${sign}${hours}${minutes === 0 ? '' : `:${pad(minutes)}`}`
 }
 
 /**

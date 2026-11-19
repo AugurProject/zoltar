@@ -113,8 +113,12 @@ function isFailureKind(value: unknown): value is TransactionActivityFailureKind 
 	return value === 'rejected' || value === 'reverted' || value === 'replaced' || value === 'error' || value === 'dropped'
 }
 
+// ECMAScript Date represents at most 8.64e15 ms after the epoch; rendering a
+// later timestamp throws, so such a stored row is malformed.
+const MAX_DATE_MILLISECONDS = 8_640_000_000_000_000
+
 function isFiniteTimestamp(value: unknown): value is number {
-	return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 8_640_000_000_000_000
+	return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= MAX_DATE_MILLISECONDS
 }
 
 function parseEntry(value: unknown): TransactionActivityEntry | undefined {

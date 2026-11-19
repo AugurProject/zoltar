@@ -68,13 +68,13 @@ describe('Contract Test Suite', () => {
 		const read = (universeId: bigint) => client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getEarliestForkTime', args: [universeId] })
 		const unknown = 123456n
 		assert.strictEqual(BigInt((await getUniverseData(client, unknown)).reputationToken), 0n)
-		assert.strictEqual(await read(unknown), 0n)
+		await assert.rejects(read(unknown), /Unknown universe/)
 		assert.strictEqual(await read(0n), 0n)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		const question = makeQuestion('Unknown universe schedule')
 		await createQuestion(client, question, ['Yes', 'No'])
 		await forkUniverse(client, 0n, getQuestionId(question, ['Yes', 'No']))
-		assert.strictEqual(await read(unknown), 0n)
+		await assert.rejects(read(unknown), /Unknown universe/)
 		await deployChild(client, 0n, 1n)
 		const deadline = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkRecapitalizationDeadline', args: [0n] })
 		assert.strictEqual(await read(getChildUniverseId(0n, 1n)), deadline + 604800n)
@@ -623,6 +623,29 @@ describe('Contract Test Suite', () => {
 		const childUniverseData = await getUniverseData(deployer, childUniverseId)
 		assert.strictEqual(childUniverseData.forkingOutcomeIndex, outcomeIndex, 'child universe should record the correct outcome index')
 		assert.strictEqual(childUniverseData.parentUniverseId, GENESIS_UNIVERSE, 'child universe should point back to the parent')
+	})
+
+	test('getEarliestForkTime rejects an unknown universe before and after genesis forks (#1395)', async () => {
+		const readEarliest = (universeId: bigint) => client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getEarliestForkTime', args: [universeId] })
+		const unknownUniverseId = 999_999n
+		const unknownUniverse = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getRepToken', args: [unknownUniverseId] })
+		assert.strictEqual(unknownUniverse, addressString(0n), 'the fixture universe must not exist')
+		assert.strictEqual(await readEarliest(GENESIS_UNIVERSE), 0n, 'genesis may fork at any time')
+		await assert.rejects(readEarliest(unknownUniverseId), /Unknown universe/)
+
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		const questionData = makeQuestion('earliest fork time of unknown universe')
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		await forkUniverse(client, GENESIS_UNIVERSE, getQuestionId(questionData, outcomes))
+		await assert.rejects(readEarliest(unknownUniverseId), /Unknown universe/)
+
+		await deployChild(client, GENESIS_UNIVERSE, 1n)
+		const childUniverseId = getChildUniverseId(GENESIS_UNIVERSE, 1n)
+		const recapitalizationDeadline = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkRecapitalizationDeadline', args: [GENESIS_UNIVERSE] })
+		assert.ok(recapitalizationDeadline > 0n)
+		assert.strictEqual(await readEarliest(childUniverseId), recapitalizationDeadline + 604_800n, 'a deployed child keeps its parent-derived schedule')
+		assert.strictEqual(await readEarliest(GENESIS_UNIVERSE), 0n)
 	})
 
 	test('child REP names follow successful global deployment order without affecting predicted addresses', async () => {

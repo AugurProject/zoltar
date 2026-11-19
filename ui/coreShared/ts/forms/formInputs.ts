@@ -15,19 +15,26 @@ export function parseOptionalRepAmountInput(value: string) {
 	return tryParseRepAmountInput(trimmed)
 }
 
+const LOCAL_DATE_TIME_PATTERN = /^(\d{4,})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/
+
+/**
+ * A `datetime-local` value names a wall-clock time in the browser's zone. A time skipped by a daylight saving change
+ * (02:30 on a spring-forward day) does not exist, and `Date` would silently move it an hour, so it is rejected.
+ */
+function isExistingLocalDateTime(value: string, date: Date) {
+	const match = LOCAL_DATE_TIME_PATTERN.exec(value.trim())
+	if (match === null) return true
+	const [, year, month, day, hour, minute, second] = match
+	return date.getFullYear() === Number(year) && date.getMonth() + 1 === Number(month) && date.getDate() === Number(day) && date.getHours() === Number(hour) && date.getMinutes() === Number(minute) && date.getSeconds() === Number(second ?? '0')
+}
+
 export function tryParseTimestampInput(value: string) {
 	const trimmed = normalizeNumericInput(value)
 	if (/^-?\d+$/.test(trimmed)) return BigInt(trimmed)
 	const date = new Date(value)
 	const timestampMs = date.getTime()
 	if (Number.isNaN(timestampMs)) return undefined
-	// datetime-local must preserve the entered wall-clock time across DST gaps.
-	const local = /^(\d{4,})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(value)
-	if (local !== null) {
-		const expected = [Number(local[1]), Number(local[2]) - 1, Number(local[3]), Number(local[4]), Number(local[5]), Number(local[6] ?? 0), Number((local[7] ?? '').padEnd(3, '0'))]
-		const actual = [date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds()]
-		if (actual.some((part, index) => part !== expected[index])) return undefined
-	}
+	if (!isExistingLocalDateTime(value, date)) return undefined
 	return BigInt(Math.floor(timestampMs / 1000))
 }
 
