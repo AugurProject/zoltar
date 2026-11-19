@@ -140,6 +140,7 @@ contract ZoltarQuestionData {
 	}
 
 	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
+		if (questionCreatedTimestamp[questionId] == 0) return true;
 		if (outcomeLabels[questionId].length == 0) {
 			// scalar
 			if (hasNonZeroScalarReservedBits(answer)) return true;
@@ -161,6 +162,7 @@ contract ZoltarQuestionData {
 	}
 
 	function getAnswerOptionName(uint256 questionId, uint256 answer) external view returns (string memory) {
+		if (questionCreatedTimestamp[questionId] == 0) return 'Malformed';
 		if (outcomeLabels[questionId].length == 0) {
 			// scalar
 			if (hasNonZeroScalarReservedBits(answer)) return 'Malformed';

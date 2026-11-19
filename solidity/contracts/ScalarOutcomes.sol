@@ -15,8 +15,11 @@ library ScalarOutcomes {
 		uint256 scalarValueU = mulDiv(payout, diffU, numTicks);
 		int256 scalarValue = addInt256Uint256(minValue, scalarValueU);
 		string memory decimalString = intToDecimalString(scalarValue, DECIMALS);
-		if (bytes(unit).length == 0) return decimalString;
-		return string.concat(decimalString, ' ', unit);
+		string memory label = bytes(unit).length == 0 ? decimalString : string.concat(decimalString, ' ', unit);
+		// A sub-atto-unit tick spacing makes distinct payouts share a rounded value.
+		if (diffU < numTicks)
+			return string.concat(label, ' (tick ', uintToString(payout), '/', uintToString(numTicks), ')');
+		return label;
 	}
 
 	function addInt256Uint256(int256 value, uint256 addend) internal pure returns (int256) {

@@ -18,8 +18,16 @@ export function parseOptionalRepAmountInput(value: string) {
 export function tryParseTimestampInput(value: string) {
 	const trimmed = normalizeNumericInput(value)
 	if (/^-?\d+$/.test(trimmed)) return BigInt(trimmed)
-	const timestampMs = new Date(value).getTime()
+	const date = new Date(value)
+	const timestampMs = date.getTime()
 	if (Number.isNaN(timestampMs)) return undefined
+	// datetime-local must preserve the entered wall-clock time across DST gaps.
+	const local = /^(\d{4,})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(value)
+	if (local !== null) {
+		const expected = [Number(local[1]), Number(local[2]) - 1, Number(local[3]), Number(local[4]), Number(local[5]), Number(local[6] ?? 0), Number((local[7] ?? '').padEnd(3, '0'))]
+		const actual = [date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds()]
+		if (actual.some((part, index) => part !== expected[index])) return undefined
+	}
 	return BigInt(Math.floor(timestampMs / 1000))
 }
 

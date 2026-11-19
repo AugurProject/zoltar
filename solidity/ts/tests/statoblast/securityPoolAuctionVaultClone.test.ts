@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeFunctionData, getAddress, getCreate2Address, toHex, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { ensureZoltarDeployed, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { deployContract } from '../../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
@@ -11,6 +12,7 @@ import {
 	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultBenchmarkAuctionMock as auctionArtifact,
 	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultBenchmarkCapitalMock as capitalArtifact,
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
+	statoblast_tokens_ShareToken_ShareToken as tokenArtifact,
 } from '../../types/contractArtifact'
 
 // Benchmark for the clone decision: the production minimal proxy with the four
@@ -41,11 +43,30 @@ describe('Statoblast: auction vault clones', () => {
 		await setupTestAccounts(ethereum)
 		owner = createWriteClient(ethereum, TEST_ADDRESSES[0])
 		stranger = createWriteClient(ethereum, TEST_ADDRESSES[1])
+		await ensureZoltarDeployed(owner)
 		benchmark = await deployContract(owner, `0x${benchmarkArtifact.evm.bytecode.object}`)
 		auction = await deployContract(owner, `0x${auctionArtifact.evm.bytecode.object}`)
 		capital = await deployContract(owner, `0x${capitalArtifact.evm.bytecode.object}`)
 		implementation = await owner.readContract({ abi: benchmarkArtifact.abi, address: benchmark, functionName: 'implementation' })
 		await setBaselineSnapshot()
+	})
+
+	test('#1394 auction vault clones advertise their receiver interfaces', async () => {
+		const { vault } = await create('createClone', 19n)
+		const abi = [{ type: 'function', name: 'supportsInterface', stateMutability: 'view', inputs: [{ type: 'bytes4' }], outputs: [{ type: 'bool' }] }] as const
+		for (const [id, supported] of [
+			['0x01ffc9a7', true],
+			['0x4e2312e0', true],
+			['0xffffffff', false],
+		] as const) {
+			expect(await owner.readContract({ abi, address: vault, functionName: 'supportsInterface', args: [id] })).toBe(supported)
+		}
+		expect(await owner.readContract({ abi, address: implementation, functionName: 'supportsInterface', args: ['0x4e2312e0'] })).toBe(false)
+		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [owner.account.address, getZoltarAddress(), 1n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mintCompleteSets', args: [0n, owner.account.address, 3n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'safeTransferFrom', args: [owner.account.address, vault, 1n, 1n, '0x'] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'safeBatchTransferFrom', args: [owner.account.address, vault, [0n, 1n, 2n], [1n, 1n, 1n], '0x'] }))
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [vault, 1n] })).toBe(2n)
 	})
 
 	test('a clone binds its owner, ledger, auction and bid immutably at an address the SDK predicts', async () => {

@@ -149,8 +149,25 @@ describe('ERC1155 Compliance Test Suite', () => {
 					args: [client.account.address, true],
 				}),
 			),
-			/ERC1155: account cannot set approval status for itself/,
+			/Cannot change implicit approval/,
 		)
+	})
+
+	test('#1392 implicit token-operator approval cannot emit a successful revocation', async () => {
+		const token = await deployShareToken()
+		const abi = statoblast_tokens_ShareToken_ShareToken.abi
+		await writeContractAndWait(client, () => client.writeContract({ abi, address: token, functionName: 'setApprovalForAll', args: [token, true] }))
+		await assert.rejects(client.simulateContract({ abi, address: token, functionName: 'setApprovalForAll', args: [token, false] }), /implicit approval/)
+		assert.strictEqual(await client.readContract({ abi, address: token, functionName: 'isApprovedForAll', args: [client.account.address, token] }), true)
+		for (const approved of [true, false]) {
+			const hash = await writeContractAndWait(client, () => client.writeContract({ abi, address: token, functionName: 'setApprovalForAll', args: [operatorClient.account.address, approved] }))
+			const receipt = await client.waitForTransactionReceipt({ hash })
+			const events = receipt.logs.filter(log => log.address.toLowerCase() === token.toLowerCase()).map(log => decodeEventLog({ abi, data: log.data, topics: log.topics }))
+			const event = events.find(event => event.eventName === 'ApprovalForAll')
+			if (event === undefined) throw new Error('Missing approval event')
+			assert.strictEqual(event.args.approved, approved)
+			assert.strictEqual(await client.readContract({ abi, address: token, functionName: 'isApprovedForAll', args: [client.account.address, operatorClient.account.address] }), approved)
+		}
 	})
 
 	for (const withData of [false, true]) {

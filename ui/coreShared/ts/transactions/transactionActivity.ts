@@ -114,7 +114,7 @@ function isFailureKind(value: unknown): value is TransactionActivityFailureKind 
 }
 
 function isFiniteTimestamp(value: unknown): value is number {
-	return typeof value === 'number' && Number.isFinite(value) && value >= 0
+	return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 8_640_000_000_000_000
 }
 
 function parseEntry(value: unknown): TransactionActivityEntry | undefined {

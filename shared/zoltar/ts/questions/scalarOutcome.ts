@@ -85,7 +85,8 @@ export function getScalarTickIndexForDisplayValue(question: ScalarQuestionDetail
 export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIndex: bigint) {
 	const scalarValue = getScalarDisplayValue(question, tickIndex)
 	const formattedValue = formatScalarDisplayValue(scalarValue)
-	return question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
+	const label = question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
+	return question.displayValueMax - question.displayValueMin < question.numTicks ? `${label} (tick ${tickIndex}/${question.numTicks})` : label
 }
 
 export function getScalarOutcomeIndexDescriptor(question: ScalarQuestionDetails, outcomeIndex: bigint): ScalarOutcomeIndexDescriptor {

@@ -42,3 +42,13 @@ describe('scalar uint120 question boundary', () => {
 		}
 	})
 })
+
+test('#1390 identifies dense ticks in both raw and encoded outcome labels', () => {
+	const question = { answerUnit: 'units', displayValueMin: 0n, displayValueMax: 1n, numTicks: 2n }
+	const labels = ['0 units (tick 0/2)', '0 units (tick 1/2)', '0.000000000000000001 units (tick 2/2)']
+	for (const [index, label] of labels.entries()) {
+		const tick = BigInt(index)
+		expect(formatScalarOutcomeLabel(question, tick)).toBe(label)
+		expect(formatScalarOutcomeIndexLabel(question, getScalarOutcomeIndex(question, tick))).toBe(label)
+	}
+})

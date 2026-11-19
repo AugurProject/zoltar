@@ -99,8 +99,8 @@ export const SCALAR_PARITY_LABEL_FIXTURES: ScalarParityLabelFixture[] = [
 	{ name: 'repeating negative truncation', questionName: 'repeating-sevenths', tickIndex: 1n, expectedLabel: '-0.571428571428571429' },
 	{ name: 'repeating positive truncation', questionName: 'repeating-sevenths', tickIndex: 6n, expectedLabel: '1.571428571428571428' },
 	{ name: 'repeating upper endpoint', questionName: 'repeating-sevenths', tickIndex: 7n, expectedLabel: '2' },
-	{ name: 'uint120 lower endpoint', questionName: 'uint120-boundary', tickIndex: 0n, expectedLabel: '0' },
-	{ name: 'uint120 upper endpoint', questionName: 'uint120-boundary', tickIndex: SCALAR_PARITY_PART_MASK, expectedLabel: '0.000000000000000001' },
+	{ name: 'uint120 lower endpoint', questionName: 'uint120-boundary', tickIndex: 0n, expectedLabel: `0 (tick 0/${SCALAR_PARITY_PART_MASK})` },
+	{ name: 'uint120 upper endpoint', questionName: 'uint120-boundary', tickIndex: SCALAR_PARITY_PART_MASK, expectedLabel: `0.000000000000000001 (tick ${SCALAR_PARITY_PART_MASK}/${SCALAR_PARITY_PART_MASK})` },
 	{
 		name: 'int256 lower endpoint',
 		questionName: 'int256-extreme',
@@ -174,7 +174,7 @@ export const SCALAR_PARITY_ENCODING_FIXTURES: ScalarParityEncodingFixture[] = [
 		firstPart: 0n,
 		secondPart: SCALAR_PARITY_PART_MASK,
 		expectedDescriptor: { kind: 'tick', tickIndex: SCALAR_PARITY_PART_MASK },
-		expectedLabel: '0.000000000000000001',
+		expectedLabel: `0.000000000000000001 (tick ${SCALAR_PARITY_PART_MASK}/${SCALAR_PARITY_PART_MASK})`,
 	},
 	{
 		name: 'masked overflow payload remains malformed',
@@ -210,7 +210,8 @@ export function formatScalarParityLabel(question: ScalarParityQuestion, tickInde
 	const scalarRange = question.displayValueMax - question.displayValueMin
 	const scalarValue = question.displayValueMin + (tickIndex * scalarRange) / question.numTicks
 	const formattedValue = formatSignedDecimal(scalarValue)
-	return question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
+	const label = question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
+	return scalarRange < question.numTicks ? `${label} (tick ${tickIndex}/${question.numTicks})` : label
 }
 
 export function describeScalarParityOutcomeIndex(question: ScalarParityQuestion, outcomeIndex: bigint): ScalarParityOutcomeIndexDescriptor {

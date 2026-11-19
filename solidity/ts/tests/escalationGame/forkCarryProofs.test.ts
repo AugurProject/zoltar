@@ -46,6 +46,21 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		client = fixture.client
 	})
 
+	test('#1396 carry pagination rejects never-issued Invalid node cursors', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const [empty, next] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 0n, 1n)
+		assert.strictEqual(empty.length, 0)
+		assert.strictEqual(next, 0n)
+		await assert.rejects(readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 1n, 1n), /Invalid carry cursor/)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
+		const [first] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 0n, 1n)
+		const leaf = first[0]
+		if (leaf === undefined) throw new Error('Missing real Invalid deposit')
+		const [resumed] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, leaf.sourceNodeId, 1n)
+		assert.deepStrictEqual(resumed, first)
+		await assert.rejects(readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, leaf.sourceNodeId, 1n), /Outcome mismatch/)
+	})
+
 	test('fork carry maintains an append-only Merkle Mountain Range root for inherited carryover deposits', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 

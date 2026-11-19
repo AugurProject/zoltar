@@ -1,6 +1,6 @@
 /// <reference types='bun-types' />
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, jest, spyOn, test } from 'bun:test'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import {
@@ -22,7 +22,7 @@ import { createTransactionScope, mergeTransactionScopes, securityPoolTransaction
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '../wallet/networkProfile.js'
-import { hasPendingTransactionActivity, stopTrackingTransactionActivity, setTransactionActivityOwner, recordTransactionSettled, recordTransactionSubmitted, transactionActivity } from '../transactions/transactionActivityStore.js'
+import { hasPendingTransactionActivity, resetTransactionActivityForTesting, stopTrackingTransactionActivity, setTransactionActivityOwner, recordTransactionSettled, recordTransactionSubmitted, transactionActivity } from '../transactions/transactionActivityStore.js'
 
 installDomTestLifecycle()
 
@@ -52,6 +52,12 @@ describe('transaction scopes', () => {
 })
 
 describe('transaction activity list', () => {
+	test('#1388 discards timestamps outside the Date range without losing valid history', () => {
+		const good = entry(1)
+		const bad = { ...entry(2), submittedAt: 8_640_000_000_000_001 }
+		expect(parseStoredTransactionActivity(JSON.stringify([bad, good]))).toEqual([good])
+	})
+
 	test('records newest first, ignores duplicates, and settles only pending entries', () => {
 		const recorded = recordSubmittedTransactionActivity(recordSubmittedTransactionActivity([], entry(1, 'pending')), entry(2, 'pending'))
 		const duplicate = recordSubmittedTransactionActivity(recorded, entry(2, 'pending'))
@@ -181,7 +187,44 @@ describe('transaction activity list', () => {
 describe('transaction activity store', () => {
 	afterEach(() => {
 		resetActiveEnvironmentForTesting()
-		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+		resetTransactionActivityForTesting()
+	})
+
+	test('#1389 expires an open-tab entry on its timer without a scope query', () => {
+		const restore = installActiveEnvironmentForTesting(createFakeBackend())
+		jest.useFakeTimers({ now: 100000000 })
+		try {
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			recordTransactionSubmitted({ hash: hashOf(18), scope: ['market:0x1'], title: 'Stuck transaction' })
+			jest.advanceTimersByTime(MAX_PENDING_TRANSACTION_AGE_MILLISECONDS)
+			expect(transactionActivity.peek().entries[0]?.status).toBe('pending')
+			jest.advanceTimersByTime(1)
+			expect(transactionActivity.peek().entries[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
+		} finally {
+			resetTransactionActivityForTesting()
+			jest.useRealTimers()
+			restore()
+		}
+	})
+
+	test('#1389 expires a pending scope without changing account or reloading', () => {
+		const restore = installActiveEnvironmentForTesting(createFakeBackend())
+		let now = 100000000
+		const clock = spyOn(Date, 'now').mockImplementation(() => now)
+		try {
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			recordTransactionSubmitted({ hash: hashOf(19), scope: ['market:0x1'], title: 'Stuck transaction' })
+			now += MAX_PENDING_TRANSACTION_AGE_MILLISECONDS - 1
+			expect(hasPendingTransactionActivity(['market:0x1'])).toBe(true)
+			now += 2
+			expect(hasPendingTransactionActivity(['market:0x1'])).toBe(false)
+			expect(transactionActivity.peek().entries[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			expect(hasPendingTransactionActivity(['market:0x1'])).toBe(false)
+		} finally {
+			clock.mockRestore()
+			restore()
+		}
 	})
 
 	test('restores shared wallet history without locking another genesis deployment universe zero', () => {

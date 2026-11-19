@@ -79,10 +79,11 @@ contract Zoltar {
 		return choiceDeadline == 0 ? 0 : choiceDeadline + Constants.FORK_RECAPITALIZATION_TIME;
 	}
 
-	/// @notice Returns when this universe may fork after its parent's fixed phases and response interval.
+	/// @notice Returns when this universe may fork after its parent's fixed phases and response interval; zero for genesis or an unknown universe.
 	function getEarliestForkTime(uint248 universeId) public view returns (uint256) {
-		if (universeId == 0) return 0;
-		return getForkRecapitalizationDeadline(universes[universeId].parentUniverseId) + Constants.FORK_RESPONSE_TIME;
+		Universe storage universe = universes[universeId];
+		if (universeId == 0 || address(universe.reputationToken) == address(0)) return 0;
+		return getForkRecapitalizationDeadline(universe.parentUniverseId) + Constants.FORK_RESPONSE_TIME;
 	}
 
 	/// @notice Returns whether the universe's recorded fork question id equals `questionId`.

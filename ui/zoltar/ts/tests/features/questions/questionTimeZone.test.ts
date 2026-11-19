@@ -8,6 +8,10 @@ const SUMMER_TIMESTAMP = 1_790_834_400n
 const WINTER_TIMESTAMP = 1_798_752_600n
 
 describe('questionTimeZone', () => {
+	test('#1387 preserves historical offsets with seconds', () => {
+		expect(formatLocalAndUtcTimestamp(86400n, 'Africa/Monrovia')).toEqual({ local: '1970-01-01 23:15', utc: '1970-01-02 00:00 UTC', zoneLabel: 'Africa/Monrovia, UTC-0:44:30' })
+	})
+
 	test('labels a zone with the offset in effect at the instant, including daylight saving and partial hours', () => {
 		const summer = new Date(Number(SUMMER_TIMESTAMP) * 1000)
 		const winter = new Date(Number(WINTER_TIMESTAMP) * 1000)

@@ -153,6 +153,10 @@ contract SecurityPoolAuctionVault {
 			}
 		}
 	}
+	function supportsInterface(bytes4 interfaceId) external view returns (bool) {
+		if (interfaceId == 0x01ffc9a7) return true;
+		return interfaceId == 0x4e2312e0 && address(this).code.length == SecurityPoolAuctionVaultClones.RUNTIME_LENGTH;
+	}
 	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
 		return this.onERC1155Received.selector;
 	}

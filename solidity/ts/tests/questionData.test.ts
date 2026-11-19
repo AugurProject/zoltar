@@ -165,6 +165,23 @@ describe('Question Data', () => {
 		)
 	})
 
+	test('#1391 unknown questions consistently classify and name answers as malformed', async () => {
+		const question = await futureQuestion({ title: 'Unregistered scalar getter fixture', numTicks: 2n })
+		const id = getQuestionId(question, [])
+		for (const answer of [0n, 1n << 255n, 1n]) {
+			assert.strictEqual(await isMalformedAnswerOption(client, id, answer), true)
+			assert.strictEqual(await getAnswerOptionName(client, id, answer), 'Malformed')
+		}
+	})
+
+	test('#1390 scalar ticks remain identifiable when display values collide', async () => {
+		const question = await futureQuestion({ title: 'Sub-unit tick spacing', displayValueMax: 1n, numTicks: 2n })
+		await createQuestion(client, question, [])
+		const id = getQuestionId(question, [])
+		const labels = await Promise.all([0n, 1n, 2n].map(tick => getAnswerOptionName(client, id, combineUint256FromTwoWithInvalid(false, 2n - tick, tick))))
+		assert.strictEqual(new Set(labels).size, 3)
+	})
+
 	test('can make categorical question', async () => {
 		const outcomeLabels = ['Yes', 'No']
 		const testCategoricalQuestion = await futureQuestion({ title: 'test categorical question', description: 'test categorical description' })
@@ -347,8 +364,8 @@ describe('Question Data', () => {
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = getQuestionId(testScalarQuestion, [])
 
-		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, maxScalarNumTicks, 0n)), '0', 'bottom endpoint should remain encodable at the boundary')
-		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, maxScalarNumTicks)), '0.000000000000000001', 'top endpoint should remain encodable at the boundary')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, maxScalarNumTicks, 0n)), `0 (tick 0/${maxScalarNumTicks})`, 'bottom endpoint should remain encodable at the boundary')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, maxScalarNumTicks)), `0.000000000000000001 (tick ${maxScalarNumTicks}/${maxScalarNumTicks})`, 'top endpoint should remain encodable at the boundary')
 	})
 
 	test('rejects scalar questions whose numTicks exceeds the uint120 answer encoding range', async () => {
