@@ -105,7 +105,7 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 				expect(getAddress(submitted.vault)).toBe(getAddress(await context.owner.readContract({ ...read, functionName: 'vaultFor', args: [bidder.account.address, submitted.id] })))
 				bids.push({ id: submitted.id, lots, min, health, bidder, vault: getAddress(submitted.vault) })
 			}
-			// A valid quote shortly before the fixed close, funded with the smallest budget the feed accepts for that price.
+			// Confirm the closing quote before the fixed close using the smallest budget the feed accepts.
 			const closingPrice = (unit * closingPercent) / 100n
 			await context.mock.setTime(context.deadline - 1_000n)
 			if (closingPercent > 1_000n) {
@@ -115,6 +115,7 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 				await approveToken(context.owner, context.token, context.feed)
 			}
 			const budget = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [closingPrice] })
+			await context.report(closingPrice, budget)
 			await context.report(closingPrice, budget)
 			const closing = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'conservativePrice' })
 			const floor = onGrid(await requiredAt(closing, 10_000n))

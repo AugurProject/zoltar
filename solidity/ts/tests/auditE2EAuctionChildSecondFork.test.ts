@@ -71,8 +71,9 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(await e2e.cash(loser.account.address)).toBe(cashBeforeBids['loser'] ?? 0n)
 		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [1n, 100n * unit, 12_000n] })).rejects.toThrow('Better bids already exclude this bid')
 
-		// The closing report is three times the opening price: the REP floor per lot now exceeds every bid.
+		// Confirm a closing price three times the opening price so its REP floor can exceed every bid.
 		await context.closingQuote(3n * unit)
+		await context.report(3n * unit)
 		const closing = await owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'conservativePrice' })
 		expect(closing).toBeGreaterThan(opening)
 		const supplyBeforeClose = await e2e.supply(C)

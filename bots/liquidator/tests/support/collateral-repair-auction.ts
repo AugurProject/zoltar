@@ -34,6 +34,7 @@ export async function distressedSecondWinner(context: RepairAuction, keeperOpera
 	const { account, reader, scope, settings } = keeperOperator
 	// Retire chosen capital down to claim demand so cure cannot change K.
 	await context.report(unit)
+	await context.report(unit)
 	await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setCommitment', args: [5n * unit] }))
 	await context.report(4n * unit)
 	const distressed = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
