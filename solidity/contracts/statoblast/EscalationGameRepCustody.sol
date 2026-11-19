@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { CheckedCast } from '../CheckedCast.sol';
+
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
@@ -62,7 +64,7 @@ library EscalationGameRepCustody {
 		address authority = portfolio(poolAddress);
 		if (authority == address(0)) return;
 		ISecurityPoolReporterPortfolio(authority).registerReporterGame(address(this));
-		if (finalAfter != 0 && finalAfter < block.timestamp) finalAfter = uint48(block.timestamp);
+		if (finalAfter != 0 && finalAfter < block.timestamp) finalAfter = CheckedCast.toUint48(block.timestamp);
 		uint48 finalAfterPortfolioTime =
 			finalAfter == 0
 				? 0

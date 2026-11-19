@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { CheckedCast } from '../CheckedCast.sol';
+
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
@@ -50,7 +52,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 		EscalationGame game = child.escalationGame();
 		if (game.getFinalQuestionResolution() == BinaryOutcomes.BinaryOutcome.None) return;
 		uint248 universe = child.universeId();
-		uint48 finalAfter = portfolio.portfolioTimeForNative(universe, uint48(game.getEscalationGameEndDate()));
+		uint48 finalAfter = portfolio.portfolioTimeForNative(universe, CheckedCast.toUint48(game.getEscalationGameEndDate()));
 		uint48 minimum = portfolio.portfolioTimeForNative(universe, 0) + 3 days;
 		(SecurityPoolReporterLedger.Question memory reporter, ) = SecurityPoolReporterLedger(portfolio.reporterLedger(universe)).question(universe, child.questionId());
 		require(reporter.finalAfter != 0 && (reporter.finalAfter > minimum ? reporter.finalAfter : minimum) == finalAfter, 'Reporter continuation finality mismatch');
@@ -194,7 +196,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 		uint48 portfolioTimeAnchor = portfolio.portfolioTimeForNative(child.universeId(), 0);
 		uint256 sourceStart = game.forkContinuation() ? game.forkResumedAt() : game.activationTime();
 		require(sourceStart != 0 && sourceStart <= type(uint48).max, 'Source reporter clock is invalid');
-		uint256 portfolioStartTime = portfolio.portfolioTimeForNative(source.universeId(), uint48(sourceStart));
+		uint256 portfolioStartTime = portfolio.portfolioTimeForNative(source.universeId(), CheckedCast.toUint48(sourceStart));
 		int256 elapsed = game.forkContinuation() ? game.forkElapsedAtStart() : int256(0);
 		// Preserve pre-activation time too: dropping a negative offset makes the
 		// game finalize before its inherited settlement and reporter schedules.

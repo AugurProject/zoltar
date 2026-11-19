@@ -19,17 +19,17 @@ const TRUSTED_SIMULATION_CODE_PRESENCE: true = true
 export const CANONICAL_DEPLOYER_RAW_GAS_PRICE = 100_000_000_000n
 export const CANONICAL_DEPLOYER_RAW_TRANSACTION_COST = 10_000_000_000_000_000n
 export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
+	deploymentStatusOracle: '0x4d74b03ec334c428ccae8674f7caed0288a1d43b3dcf6614a60a78abd21e41cc',
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	reputationToken: '0x1939fc9070edce2ad78392d5145b884e58d307171bc2e24a95927db370002b86',
-	zoltar: '0x76a0341ae046ebfbfcd16f6ef5665aae40d5068d986427b0c688b33bab4ac5dd',
-	zoltarQuestionData: '0xad7a173816cda5525c4b3f9a6f7d5eaf90b0f7421f633b36249f5d2f7f0aa0b3',
+	zoltar: '0x5992f5aedf87ca85a0d10bfce9579018ff91f72a359af7c3cc278eabe9c427a4',
+	zoltarQuestionData: '0xcca5c7f98c171d7c11c4353de436365e6fba391937fd3e1ec516f475a97056ee',
 }
 
 const EXPECTED_NO_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	zoltar: '0xa22026c513e4c0270bbf0d1191199cdd0e17ef215622b33701782a1eaef1b94b',
+	zoltar: '0x4cb5b088b96febf63bddd6e52932d3733b914a97bcc7830891bba4cd471b4ad1',
 }
 
 const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
@@ -58,16 +58,16 @@ export function assertStaticDeploymentArtifactRuntimeCodeHashes(
 }
 
 const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
+	deploymentStatusOracle: '0x4d74b03ec334c428ccae8674f7caed0288a1d43b3dcf6614a60a78abd21e41cc',
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
-	zoltar: '0xe4f0e411a956e25447649bcc91cc20c3805ccd14359cb9817bf886e416b15cba',
-	zoltarQuestionData: '0xad7a173816cda5525c4b3f9a6f7d5eaf90b0f7421f633b36249f5d2f7f0aa0b3',
+	zoltar: '0x24cc5d4ff9dac2a2c193ce21337aff89e038e499ccdd6f95efa588e875db9b95',
+	zoltarQuestionData: '0xcca5c7f98c171d7c11c4353de436365e6fba391937fd3e1ec516f475a97056ee',
 }
 
 const EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	zoltar: '0xa28f23f1ed4c408faeaaa83dcf6d765c1b720bdc191b9b54abc25b2f12038e0d',
+	zoltar: '0x8fa084190f47d17cc5f3176cd4dd74e86e1666fe454f20a71f917f6efbf32eb2',
 }
 const EXPECTED_PUBLIC_DEPLOYMENT_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES },

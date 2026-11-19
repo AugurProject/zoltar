@@ -168,7 +168,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		snapshot,
 		quote,
 		loading,
-		error: current?.error ?? quoteError,
+		error: current?.error,
 		lotsInput: lotsInput.value,
 		repInput: repInput.value,
 		healthInput: healthInput.value,

@@ -87,7 +87,6 @@ interface ISecurityPool {
 	function questionData() external view returns (ZoltarQuestionData);
 
 	function securityPoolForker() external view returns (address);
-	receive() external payable;
 }
 
 interface ISecurityPoolFactory {

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { CheckedCast } from '../CheckedCast.sol';
+
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 
 /// @notice Exact vesting of independently funded ETH and REP fee budgets.
@@ -97,7 +99,7 @@ contract SecurityPoolCapitalFeeStreams {
 	function checkpoint(uint48 eligibleThrough) external onlyCapitalLedger returns (uint256 ethAmount, uint256 repAmount) {
 		if (eligibleThrough > releasedThrough) (ethAmount, repAmount) = release(eligibleThrough);
 		if (block.timestamp > releasedThrough) {
-			(uint256 staleEth, uint256 staleRep) = release(uint48(block.timestamp));
+			(uint256 staleEth, uint256 staleRep) = release(CheckedCast.toUint48(block.timestamp));
 			deferredEth += staleEth;
 			deferredRep += staleRep;
 		}

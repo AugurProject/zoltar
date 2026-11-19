@@ -70,3 +70,10 @@ test('portfolio sender preserves explicit callback gas for simulation, review an
 	)
 	expect(observed).toEqual([2_000_000n, 2_000_000n, 2_000_000n])
 })
+
+test('#1252 the UI portfolio adapter preserves the base fee for bounty quotes', async () => {
+	const fixture = priceFixture()
+	fixture.setBaseFee(7n)
+	const snapshot = await loadPortfolioBranchPrice(fixture.client, portfolio, owner, 42n)
+	expect(snapshot.observation?.bounty).toBe(4_200_000n * (10_000_000_000n + 7n) + 101n)
+})

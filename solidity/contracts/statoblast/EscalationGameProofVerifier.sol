@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import {
 	EXCESS_REWARD_WINDOW_DIVISOR,
@@ -32,6 +33,7 @@ contract EscalationGameProofVerifier {
 				++k;
 			}
 		}
+		require(exponentPow2 < 235, 'Attrition exponent too high');
 		expScaled <<= exponentPow2;
 		uint256 cost = (startBondAttoRep * expScaled) / SCALE;
 		return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost;
@@ -132,9 +134,10 @@ contract EscalationGameProofVerifier {
 	}
 
 	function computeLnRatioScaled(uint256 lowValue, uint256 highValue) external pure returns (uint256) {
+		require(lowValue != 0 && highValue >= lowValue, 'Invalid logarithm ratio');
 		uint256 normalizedLow = lowValue;
 		uint256 log2Count = 0;
-		while (highValue >= normalizedLow * 2) {
+		while (normalizedLow <= highValue / 2) {
 			unchecked {
 				normalizedLow *= 2;
 				++log2Count;
@@ -142,8 +145,13 @@ contract EscalationGameProofVerifier {
 		}
 
 		uint256 diff = highValue - normalizedLow;
-		uint256 sum = highValue + normalizedLow;
-		uint256 z = (diff * SCALE) / sum;
+		uint256 sum;
+		if (highValue > type(uint256).max - normalizedLow) {
+			// Scale both sides before summing a full-width ratio.
+			diff /= 2;
+			sum = highValue / 2 + normalizedLow / 2;
+		} else sum = highValue + normalizedLow;
+		uint256 z = Math.mulDiv(diff, SCALE, sum);
 		if (z == 0) return log2Count * LN2_SCALED;
 		return log2Count * LN2_SCALED + 2 * _computeAtanhScaled(z);
 	}

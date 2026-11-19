@@ -131,3 +131,25 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	expect(claim.disabled).toBe(true)
 	expect(view.container.textContent).toContain('No refund credit remains to withdraw.')
 })
+
+test('#1371 excluded bids show a quote constraint without an allowance-read failure', async () => {
+	const fixture = await auctionFixture()
+	fixture.values['maximumAcceptableBidAttoRepPerLot'] = 4n * unit
+	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
+	await act(() => {
+		for (const [name, value] of [
+			['Number of lots', '2'],
+			['Minimum REP purchased per lot', '5'],
+		] as const) {
+			const input = field(view.container, name)
+			input.value = value
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+		}
+	})
+	await waitFor(() => expect(view.container.textContent).toContain('Better bids already exclude this limit'))
+	expect(button(view.container, 'Submit funded bid').disabled).toBe(true)
+	expect(view.container.textContent).not.toContain('Unable to verify WETH approval')
+	expect(view.container.textContent).not.toContain('Retry loading the approval status')
+})

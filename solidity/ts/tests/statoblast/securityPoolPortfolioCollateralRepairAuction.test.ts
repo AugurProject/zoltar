@@ -172,16 +172,21 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [loser.id] })).resolves.toMatchObject({ materialized: false, principal: 0n })
 	})
 
-	test('the opening quote, expired by the deadline, still closes the sale', async () => {
+	test('#1363 an opening-week quote cannot close the sale and funded bids are refunded', async () => {
 		const context = await prepare()
 		await context.report()
 		await context.open()
+		const before = await collateralBalance(context.other, fixture.portfolio, context.other.account.address)
 		const bid = await context.bid(context.other, 2n)
 		// No report follows the opening one, so no price is valid at the deadline.
 		await context.mock.setTime(context.deadline)
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'priceValidUntil' })).toBeLessThan(context.deadline)
 		await context.finalize()
-		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(2n)
+		const fill = await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })
+		expect(fill.filledLots).toBe(0n)
+		expect(fill.refundAttoEth).toBe(2n * unit)
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [bid.id, context.other.account.address] }))
+		expect(await collateralBalance(context.other, fixture.portfolio, context.other.account.address)).toBe(before)
 	})
 
 	test('a closing price the inventory cannot back fills nothing and refunds bid ETH', async () => {

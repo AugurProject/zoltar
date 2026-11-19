@@ -65,7 +65,7 @@ test('monitors inventory for a known execution address without requiring a signe
 test('discovers live shared exposure despite oversized fresh accepted capacity', async () => {
 	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
-	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: 10n.toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { fixedRequestPriceCostAttoEth: 101n.toString() } })
+	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: 10n.toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { minimumReportCollateral: '10001' }, requestPriceCostAttoEth: 400_103n.toString() })
 })
 
 test('authenticates latest and retained candidate escrows at the same discovery block', async () => {
@@ -81,9 +81,9 @@ test('authenticates latest and retained candidate escrows at the same discovery 
 		settlementCallbackGasLimit: '1',
 		targetPriceErrorForDispute: '1000',
 	}
-	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 101n, 1n, 7n, [6n, 9n])
+	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 1n, 7n, [6n, 9n])
 	expect(snapshot.reportEscrows).toEqual({ '6': address(86), '7': address(87) })
-	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 101n, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
+	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
 for (const shared of [false, true])
@@ -627,7 +627,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'isPriceValid':
 					return true
 				case 'getRequestPriceCostAttoEth':
-					return overrides.sharedExposure === undefined ? 8n * callBaseFee + 101n : 101n
+					return 200_001n * (callBaseFee + 1n) + 101n
 				case 'vaultOperations':
 					return address(70)
 				case 'settlementTime':
@@ -755,7 +755,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(snapshot.pools).toHaveLength(1)
 		expect(snapshot.pools[0]).toMatchObject({
 			minimumToken1ReportAttoEth: (10_001n * (1n + baseFeePerGas)).toString(),
-			requestPriceCostAttoEth: (8n * baseFeePerGas + 101n).toString(),
+			requestPriceCostAttoEth: (200_001n * (baseFeePerGas + 1n) + 101n).toString(),
 		})
 	})
 

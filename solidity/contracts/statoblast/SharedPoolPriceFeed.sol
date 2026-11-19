@@ -241,11 +241,12 @@ contract SharedPoolPriceFeed {
 		return uint32(FEED_SETTLEMENT_GAS_OVERHEAD);
 	}
 
-	/// @notice The report sponsor funds its own transactions; nothing reimburses
-	/// them. A large mandatory public bounty would let unrelated settlers capture
-	/// the sponsor's funding.
-	function getRequestPriceCostAttoEth() public pure returns (uint256) {
-		return REQUEST_BOUNTY_OFFSET_ATTO_ETH;
+	/// @notice Fund permissionless settlement at the request block's gas price.
+	/// The callback allowance includes report acceptance and ordinary sponsor work.
+	function getRequestPriceCostAttoEth() public view returns (uint256) {
+		return
+			(FEED_SETTLEMENT_GAS_OVERHEAD + 200_000) * (block.basefee + initialReportPriorityFeeAttoEthPerGas) +
+			REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
 
 	/// @notice A registered coordinator authenticates the sponsor and forwards the report's exact token funding.
@@ -369,7 +370,14 @@ contract SharedPoolPriceFeed {
 		require(reports[reportId].outcome == REPORT_PENDING, 'Report already completed');
 		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2);
 		bool accepted = bytes(reason).length == 0;
-		if (accepted && block.basefee > candidate.maxSettlementBaseFee) {
+		bool canonicalOperations =
+			!accepted &&
+				operationBatches[reportId].operations.length != 0 &&
+				lastPrice != 0 &&
+				_isFreshPriceTimestamp(lastSettlementTimestamp) &&
+				(keccak256(bytes(reason)) == keccak256('Report uneconomic') ||
+					keccak256(bytes(reason)) == keccak256('Report timestamp not newer'));
+		if ((accepted || canonicalOperations) && block.basefee > candidate.maxSettlementBaseFee) {
 			emit PriceReportDeferred(reportId, block.basefee, candidate.maxSettlementBaseFee);
 			return false;
 		}
@@ -390,8 +398,12 @@ contract SharedPoolPriceFeed {
 			ISharedPoolPortfolioPriceCheckpoint(portfolio).onSharedPriceAccepted(universeId(), nextPrice, uint48(priceTimestamp + validForSeconds));
 			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 			_executeReportOperations(reportId, candidate.sponsor);
-		} else
+		} else {
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
+			// Rejection grants no price authority. Independently secured canonical
+			// prices can still satisfy the sponsor's signed operation bounds.
+			if (canonicalOperations) _executeReportOperations(reportId, candidate.sponsor);
+		}
 		processingReport = false;
 		return true;
 	}
@@ -445,7 +457,8 @@ contract SharedPoolPriceFeed {
 
 	/// @notice Complete a settled report whose callback failed or whose settlement block
 	/// exceeded its base-fee ceiling, using the amounts and observation timestamp OpenOracle stored.
-	/// Expired or superseded observations retire normally; fresh candidates retain
+	/// Expired observations retire normally; fresh canonical prices may still serve
+	/// superseded candidates’ bounded operations. Fresh candidates retain
 	/// their original sponsor operations and cannot be killed by callback starvation
 	/// or by a third party settling them in a high-base-fee block.
 	function recoverReport(uint256 reportId) public {
@@ -478,11 +491,7 @@ contract SharedPoolPriceFeed {
 		if (amount2 < minimumToken2ReportAttoRep()) return ('Report REP inventory budget insufficient', 0);
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
 		if (priceTimestamp < lastSettlementTimestamp) return ('Report timestamp not newer', 0);
-		if (
-			priceTimestamp == lastSettlementTimestamp &&
-			(amount1 - minimumReportCollateral) * OPEN_INTEREST_DIVIDER <= acceptedExposureLimitAttoEth &&
-			amount2 * OPEN_INTEREST_DIVIDER <= acceptedRepExposureLimitAttoRep
-		) return ('Report adds no newer observation or capacity', 0);
+
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
 		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);
 		if (Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);

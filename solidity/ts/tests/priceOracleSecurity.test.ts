@@ -1,15 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import {
-	calculateOracleMinimumWethReportAttoEth,
-	DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-	DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
-	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-	ORACLE_REPORT_GAS,
-	ORACLE_FEE_PERCENTAGE,
-	ORACLE_PROTOCOL_FEE,
-} from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_PROTOCOL_FEE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { deployContract } from '../testSupport/deployContract'
 import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
@@ -756,7 +748,7 @@ describe('Shared portfolio oracle security regressions', () => {
 			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
 		})
 		const callbackGasLimit = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'getSettlementCallbackGasLimit' })
-		const requestEthCost = requestBaseFeeAttoEthPerGas * 4n * (callbackGasLimit + ORACLE_REPORT_GAS) + 101n
+		const requestEthCost = (callbackGasLimit + 200_000n) * (requestBaseFeeAttoEthPerGas + DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) + 101n
 		const proposedRepPerEthPrice = 10n ** 18n
 
 		await wrapWeth(client, minimumWethReport * 2n)
@@ -877,7 +869,7 @@ describe('Shared portfolio oracle security regressions', () => {
 	test('the coordinator retains the committed bounty and refunds only the ETH sent above it', async () => {
 		const proposedRepPerEthPrice = await getDefaultInitialReportPrice(client, priceOracle)
 		const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, priceOracle, proposedRepPerEthPrice)
-		const bountyAttoEth = 101n + 5n * 10n ** 15n
+		const bountyAttoEth = (await getRequestPriceCostAttoEth(client, priceOracle)) + 5n * 10n ** 15n
 		const excessAttoEth = 7n * 10n ** 15n
 		const balanceBefore = await getETHBalance(client, client.account.address)
 

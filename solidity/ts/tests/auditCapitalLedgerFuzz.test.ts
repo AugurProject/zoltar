@@ -727,7 +727,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			}
 		}
 		const first = (data: string) => word(data, 0)
-		const capitalScalar = (functionName: 'acceptedPrice' | 'conservativePrice' | 'liquidationPrice' | 'acceptedPriceEpoch' | 'demandAttoEth' | 'totalFreeAttoRep' | 'retirementCashAttoRep' | 'priceValidUntil' | 'frozen') =>
+		const capitalScalar = (functionName: 'acceptedPrice' | 'conservativePrice' | 'liquidationPrice' | 'acceptedPriceEpoch' | 'demandAttoEth' | 'totalFreeAttoRep' | 'retirementCashAttoRep' | 'priceValidUntil' | 'frozen' | 'pendingBurnCash') =>
 			add(
 				ledger,
 				cached(`capital.${functionName}`, () => encodeFunctionData({ abi: capitalAbi, functionName })),
@@ -760,6 +760,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 		const retirementCash = capitalScalar('retirementCashAttoRep')
 		const validUntil = capitalScalar('priceValidUntil')
 		const frozen = capitalScalar('frozen')
+		const pendingBurn = capitalScalar('pendingBurnCash')
 		const totals = add(
 			ledger,
 			cached('capital.totals', () => encodeFunctionData({ abi: capitalAbi, functionName: 'totals' })),
@@ -854,6 +855,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			outstandingEth: outstandingEth(),
 			outstandingRep: outstandingRep(),
 			deferredEth: deferredEth(),
+			pendingBurn: pendingBurn(),
 			deferredRep: deferredRep(),
 			releasedThrough: releasedThrough(),
 			supply: supply(),
@@ -998,10 +1000,10 @@ const compare = (m: Model, a: Snapshot, owners: number, addressOf: (o: number) =
 	if (ledgerRep === undefined || ledgerEth === undefined || burnedEth === undefined) throw new Error('Balance read missing')
 	// (a) custody: every REP and collateral unit the ledger holds has exactly one claimant.
 	check('CONSERVATION.rep', ledgerRep + (m.backingReleased ? m.frozenBacking : 0n), a.indexTotals[0] + a.totalFree + a.retirementCash + pendingRep + ownerRep + a.mockRep + a.outstandingRep + a.deferredRep)
-	check('CONSERVATION.eth', ledgerEth, pendingEth + ownerEth + a.mockEth + a.outstandingEth + a.deferredEth)
+	check('CONSERVATION.eth', ledgerEth, pendingEth + ownerEth + a.mockEth + a.outstandingEth + a.deferredEth + a.pendingBurn)
 	// (c) every funded unit is credited, still vesting, or burned: no dust is created or lost.
-	check('FEES.totalEth', pendingEth + ownerEth + a.mockEth + earnedEth + burnedEth + a.outstandingEth + a.deferredEth, m.fundedEth)
-	check('FEES.burnedEth', burnedEth, m.burnedEth)
+	check('FEES.totalEth', pendingEth + ownerEth + a.mockEth + earnedEth + burnedEth + a.outstandingEth + a.deferredEth + a.pendingBurn, m.fundedEth)
+	check('FEES.unassignedEth', burnedEth + a.pendingBurn, m.unassignedEth)
 	const burnedRep = m.genesisSupply + m.fundedRep + m.mintedToLedger - a.supply
 	check('FEES.totalRep', pendingRep + ownerRep + a.mockRep + earnedRep + burnedRep + a.outstandingRep + a.deferredRep, m.fundedRep)
 	check('FEES.burnedRep', burnedRep, m.burnedRep)

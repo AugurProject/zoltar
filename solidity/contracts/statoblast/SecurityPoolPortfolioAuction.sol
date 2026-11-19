@@ -96,12 +96,14 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	/// winning commitments and the fresh REP inventory before any bid is accepted.
 	function open() external nonReentrant {
 		require(!opened && !finalized && block.timestamp < closesAt, 'Collateral repair auction opening unavailable');
+		require(closesAt - block.timestamp >= 1 days, 'Collateral repair auction opening too late');
 		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
 		require(targetLots != 0 && inventoryAttoRep != 0, 'Collateral repair auction has no saleable lots');
 		ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
 		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote is not funded and fresh');
 		openingConservativePrice = feed.conservativePrice();
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
+		require(required >= repGrid * 1_000, 'Collateral repair auction lot below REP precision');
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
 		require(minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
 		engine.startAuction(block.timestamp, closesAt, lotAttoEth, targetLots, inventoryAttoRep, repGrid, address(this));
@@ -138,11 +140,12 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		if (opened) {
 			ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
 			uint256 forkTime = portfolio.zoltar().getForkTime(universeId);
-			// The closing quote is the last one accepted before the deadline, however old.
-			// Requiring it to be fresh at that exact second would let a few timed
-			// disputes of pending reports void the sale. It is never older than the
-			// fresh quote the opening required, and no report is accepted after closing.
-			bool eligible = (forkTime == 0 || forkTime > closesAt) && _fundedQuote(feed, closesAt, ALLOW_EXPIRED_QUOTE);
+			// The final day's observation avoids requiring freshness at one exact
+			// second while preventing the opening-week quote from setting backing.
+			bool eligible =
+				(forkTime == 0 || forkTime > closesAt) &&
+					_fundedQuote(feed, closesAt, ALLOW_EXPIRED_QUOTE) &&
+					feed.lastSettlementTimestamp() >= closesAt - 1 days;
 			// A higher closing price does not cancel the sale: one marginally higher
 			// report would otherwise void every funded bid and leave the branch
 			// impaired for good. Every winning lot instead receives at least the REP

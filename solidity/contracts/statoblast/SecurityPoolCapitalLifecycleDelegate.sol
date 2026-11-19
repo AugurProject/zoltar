@@ -58,6 +58,8 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(msg.sender == ICapitalSettlementRepairRoot(host.portfolio()).settlement(), 'Only canonical settlement');
 		_requireOpen(host);
 		require(demand >= demandAttoEth, 'Repair cannot remove demand');
+		(, uint256 commitment) = commitmentIndex.totals();
+		require(demand <= commitment, 'Repair exceeds committed capacity');
 		demandAttoEth = demand;
 	}
 

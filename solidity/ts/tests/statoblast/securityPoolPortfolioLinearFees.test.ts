@@ -127,6 +127,26 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect((await loadPortfolioCapitalSnapshot({ client, owner, portfolio: fixture.portfolio })).accruedFeesAttoEth).toBe(0n)
 	})
 
+	test('#1332 prepaid purchase income survives an oracle freshness lapse', async () => {
+		await fixture.prepare()
+		const client = fixture.owner()
+		const fee = await client.readContract({
+			abi: portfolioArtifact.abi,
+			address: fixture.portfolio,
+			functionName: 'purchaseFee',
+			args: [100n * unit],
+		})
+		await fixture.mint(100n * unit)
+		await fixture.base.mockWindow.advanceTime(86_401n)
+		await checkpoint()
+		const snapshot = await loadPortfolioCapitalSnapshot({
+			client,
+			owner: client.account.address,
+			portfolio: fixture.portfolio,
+		})
+		expect(snapshot.accruedFeesAttoEth).toBeGreaterThanOrEqual(fee)
+	})
+
 	test('new deposits do not capture old earnings and stale time stops charging outcome holders', async () => {
 		await fixture.prepare()
 		await fixture.mint(100n * unit)

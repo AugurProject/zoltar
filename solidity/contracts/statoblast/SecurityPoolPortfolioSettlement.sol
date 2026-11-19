@@ -42,6 +42,7 @@ contract SecurityPoolPortfolioSettlement {
 		uint48 timestamp;
 	}
 
+	uint256 public pendingServiceFees;
 	mapping(address => QuestionSource) public questions;
 	mapping(uint248 => mapping(uint256 => address)) public poolsByQuestion;
 
@@ -363,7 +364,16 @@ contract SecurityPoolPortfolioSettlement {
 		(, , cashAttoEth, , ) = ledger.totals(bookId);
 		if (cashAttoEth == 0) return 0;
 		ledger.collectFees(bookId, cashAttoEth);
-		_sendEth(msg.sender == services ? services : portfolio, cashAttoEth);
+		if (msg.sender == services) pendingServiceFees += cashAttoEth;
+		else _sendEth(portfolio, cashAttoEth);
+	}
+
+	/// @notice Move already accounted service income only when a payout needs it.
+	function withdrawServiceFees() external nonReentrant {
+		require(msg.sender == services, 'Only settlement services');
+		uint256 amount = pendingServiceFees;
+		pendingServiceFees = 0;
+		_sendEth(services, amount);
 	}
 
 	function _question(address pool) private view returns (QuestionSource memory source) {

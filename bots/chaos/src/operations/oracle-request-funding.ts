@@ -1,3 +1,4 @@
+import { calculateOracleSettlementBountyAttoEth } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import type { CanonicalUintString } from '../core/units.ts'
 import type { OracleRequestFundingSnapshot, PoolSnapshot } from './types.ts'
@@ -23,7 +24,6 @@ export function isOracleRequestFundingError(error: unknown) {
 
 type CoordinatorFundingValues = {
 	minimumReportCollateral: bigint | undefined
-	fixedRequestPriceCostAttoEth: bigint | undefined
 	escalationHaltMultiplierBps: bigint
 	gasConsumedOpenOracleReportPrice: bigint
 	gasUnitsForOneDispute: bigint
@@ -80,8 +80,6 @@ function mulDivCeil(left: bigint, right: bigint, denominator: bigint, label: str
 function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): CoordinatorFundingValues {
 	const minimumReportCollateral = snapshot.minimumReportCollateral === undefined ? undefined : uint256(snapshot.minimumReportCollateral, 'minimumReportCollateral')
 	if (minimumReportCollateral !== undefined && (minimumReportCollateral === 0n || minimumReportCollateral > UINT128_MAXIMUM)) throw oracleRequestFundingError('Invalid collateral report floor')
-	const fixedRequestPriceCostAttoEth = snapshot.fixedRequestPriceCostAttoEth === undefined ? undefined : uint256(snapshot.fixedRequestPriceCostAttoEth, 'fixedRequestPriceCostAttoEth')
-	if (fixedRequestPriceCostAttoEth !== undefined && fixedRequestPriceCostAttoEth !== 101n) throw oracleRequestFundingError('Shared report bounty must be 101 attoETH')
 	const gasConsumedOpenOracleReportPrice = uint256(snapshot.gasConsumedOpenOracleReportPrice, 'gasConsumedOpenOracleReportPrice')
 	const settlementCallbackGasLimit = uint256(snapshot.settlementCallbackGasLimit, 'settlementCallbackGasLimit')
 	const gasUnitsForOneDispute = uint256(snapshot.gasUnitsForOneDispute, 'gasUnitsForOneDispute')
@@ -114,7 +112,6 @@ function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): Coord
 	}
 	return {
 		minimumReportCollateral,
-		fixedRequestPriceCostAttoEth,
 		escalationHaltMultiplierBps,
 		gasConsumedOpenOracleReportPrice,
 		gasUnitsForOneDispute,
@@ -141,10 +138,9 @@ function minimumToken1ReportAttoEth(baseFeePerGas: bigint, settlementCollateralA
 }
 
 function requestPriceCostAttoEth(baseFeePerGas: bigint, funding: CoordinatorFundingValues) {
-	if (funding.fixedRequestPriceCostAttoEth !== undefined) return funding.fixedRequestPriceCostAttoEth
-	const callbackAndReportGas = checkedAdd(funding.settlementCallbackGasLimit, funding.gasConsumedOpenOracleReportPrice, 'oracle request gas units')
-	const fourBaseFees = checkedMultiply(baseFeePerGas, 4n, 'oracle request base-fee bounty')
-	return checkedAdd(checkedMultiply(fourBaseFees, callbackAndReportGas, 'oracle request bounty'), 101n, 'oracle request bounty')
+	const bounty = calculateOracleSettlementBountyAttoEth({ baseFeePerGas, initialReportPriorityFeeAttoEthPerGas: funding.initialReportPriorityFeeAttoEthPerGas, settlementCallbackGasLimit: funding.settlementCallbackGasLimit })
+	if (bounty > UINT256_MAXIMUM) throw oracleRequestFundingError('oracle request bounty exceeds uint256')
+	return bounty
 }
 
 function fundingBoundsForMaximumBaseFee(parameters: { funding: CoordinatorFundingValues; maximumBaseFeePerGas: bigint; proposedRepPerEthPrice: bigint; settlementCollateralAttoEth: bigint }): OracleRequestFundingBounds {
@@ -173,7 +169,7 @@ function anchoredMinimumToken1ReportAttoEth(parameters: { baseFeePerGas: Canonic
 	return minimumToken1ReportAttoEth(uint256(parameters.baseFeePerGas, 'baseFeePerGas'), uint256(parameters.settlementCollateralAttoEth, 'settlementCollateralAttoEth'), funding).toString()
 }
 
-function anchoredRequestPriceCostAttoEth(parameters: { baseFeePerGas: CanonicalUintString; coordinator: OracleRequestFundingSnapshot }): CanonicalUintString {
+export function oracleRequestPriceCostAttoEth(parameters: { baseFeePerGas: CanonicalUintString; coordinator: OracleRequestFundingSnapshot }): CanonicalUintString {
 	const funding = coordinatorFundingValues(parameters.coordinator)
 	return requestPriceCostAttoEth(uint256(parameters.baseFeePerGas, 'baseFeePerGas'), funding).toString()
 }
@@ -184,7 +180,7 @@ export function assertAnchoredOracleRequestFunding(parameters: { baseFeePerGas: 
 	if (locallyDerivedMinimumReport !== parameters.minimumToken1ReportAttoEth) {
 		throw oracleRequestFundingError(`${subject} minimum oracle report does not match its anchored funding inputs`)
 	}
-	const locallyDerivedRequestCost = anchoredRequestPriceCostAttoEth(parameters)
+	const locallyDerivedRequestCost = oracleRequestPriceCostAttoEth(parameters)
 	if (locallyDerivedRequestCost !== parameters.requestPriceCostAttoEth) {
 		throw oracleRequestFundingError(`${subject} request-price cost does not match its anchored funding inputs`)
 	}

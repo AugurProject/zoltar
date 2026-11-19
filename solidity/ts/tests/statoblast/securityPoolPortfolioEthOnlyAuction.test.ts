@@ -19,7 +19,7 @@ import {
 describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 
-	test('a bidder with no child REP or allowance buys the full inventory under weak demand', async () => {
+	test('a bidder with no child REP or allowance buys only its priced REP under weak demand', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
@@ -48,7 +48,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.finalize()
 		const position = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
 		expect(position.commitment).toBe(2n * unit)
-		expect(position.principal + position.earnedAttoRep).toBe(1_000n * unit)
+		expect(position.principal + position.earnedAttoRep).toBe(2n * minimum)
 	})
 
 	test.each([false, true])('closing a repair auction without bids finalizes its engine (opened %s) (#1412)', async opened => {
@@ -137,7 +137,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [tied.id] })).materialized).toBe(false)
 	})
 
-	test('purchased collateral meets the chosen health target and all rounding belongs to winners', async () => {
+	test('purchased collateral meets the chosen health target without selling unsold inventory', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
@@ -152,8 +152,8 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.closingQuote()
 		await context.finalize()
 		const result = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n, 0n] })
-		expect(result.soldAttoRep).toBe(1_000n * unit)
-		expect(result.roundingAttoRep).toBeGreaterThan(0n)
+		expect(result.soldAttoRep).toBe(3n * minimum)
+		expect(result.roundingAttoRep).toBe(0n)
 		const virtual = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
 		expect(virtual.principal).toBe(3n * result.attoRepPerLot)
 		expect(virtual.principal).toBeGreaterThanOrEqual(3n * required)
@@ -162,11 +162,11 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		expect(incumbent.feesAttoRep).toBe(0n)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeAuctionBid', args: [bid.id] }))
 		const materialized = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
-		expect(materialized.principal + materialized.earnedAttoRep).toBe(1_000n * unit)
+		expect(materialized.principal + materialized.earnedAttoRep).toBe(3n * minimum)
 		expect(materialized.earnedAttoRep).toBe(result.roundingAttoRep)
-		expect(await context.balance(context.capital)).toBe(2_000n * unit)
-		// The initial rounding credit remains a parent-token earning when this
-		// winner later chooses and migrates its pledged principal to another fork.
+		expect(await context.balance(context.capital)).toBe(1_000n * unit + result.soldAttoRep)
+		// Unsold inventory creates no winner earning, including after the winner
+		// migrates its purchased principal to another fork.
 		const threshold = await getZoltarForkThreshold(context.owner, context.child)
 		await addRepToMigrationBalance(context.owner, context.source, threshold)
 		await splitMigrationRep(context.owner, context.source, threshold, [1])

@@ -74,7 +74,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		vaultImplementation,
 		repToken: rep,
 		universeId: 42n,
-		closesAt: 1_000n,
+		closesAt: 100_000n,
 		inventoryAttoRep: 18n * unit + 1n,
 		shortfallAttoEth: 10n * unit,
 		lotAttoEth: unit,
@@ -87,6 +87,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		initialized: opened,
 		controller: auction,
 		maximumBidAttoRepPerLot: 18n * unit,
+		maximumAcceptableBidAttoRepPerLot: 18n * unit,
 		depositedAttoEth: 6n * unit,
 		securityMultiplierBps: 20_000n,
 		conservativePrice: 2n * unit,
@@ -141,6 +142,21 @@ describe('portfolio collateral repair auction SDK', () => {
 		expect(quote).not.toHaveProperty('executionReserveAttoEth')
 		expect(source.calls.some(call => ['refundCreditAttoRep', 'minimumExecutionReservePerLot', 'bidReservePerLotAttoEth'].includes(call.functionName))).toBe(false)
 	})
+	test('#1371 rejects an excluded bid before asking for collateral approval', async () => {
+		const snapshot = await load(fixture())
+		if (snapshot.auction === undefined) throw new Error('Auction snapshot missing')
+		const blocked = { ...snapshot, collateralAllowance: 0n, auction: { ...snapshot.auction, maximumAcceptableBidAttoRepPerLot: (49n * unit) / 10n } }
+		expect(() => quotePortfolioAuctionBid(blocked, bidTerms)).toThrow('Better bids already exclude this limit')
+		expect(() => buildPortfolioAuctionBidRequest(blocked, bidTerms)).toThrow('Better bids already exclude this limit')
+	})
+
+	test('#1371 explains when no new bid can meet the book and backing limits', async () => {
+		const snapshot = await load(fixture())
+		if (snapshot.auction === undefined) throw new Error('Auction snapshot missing')
+		const full = { ...snapshot, auction: { ...snapshot.auction, maximumAcceptableBidAttoRepPerLot: 0n } }
+		expect(() => quotePortfolioAuctionBid(full, bidTerms)).toThrow('No new bid can meet the current backing and funded-book limits')
+	})
+
 	test('authenticates canonical modules and each bidder vault at one block without enumerating other bidders', async () => {
 		const source = fixture({ bidderBidCount: 1_000_000n })
 		const snapshot = await load(source, 123n, 2)
@@ -186,7 +202,7 @@ describe('portfolio collateral repair auction SDK', () => {
 			expect(portfolioAuctionOpeningReason(blocked)).toBeDefined()
 			expect(() => buildPortfolioAuctionOpenRequest(blocked)).toThrow()
 		}
-		expect(portfolioAuctionOpeningReason(await load(fixture({}, { opened: false, timestamp: 1_000n })))).toContain('closed')
+		expect(portfolioAuctionOpeningReason(await load(fixture({}, { opened: false, timestamp: 100_000n })))).toContain('closed')
 		expect(portfolioAuctionOpeningReason(await load(fixture({ inventoryAttoRep: 3n * unit }, { opened: false })))).toContain('cannot back one collateral lot')
 	})
 	test('chosen health rounds exact required collateral once to the grid without multiplying the rounded protocol minimum', async () => {
@@ -214,7 +230,7 @@ describe('portfolio collateral repair auction SDK', () => {
 	test('Collateral balance and closing deadline block submission without increasing signed funding', async () => {
 		const snapshot = await load(fixture({}, { walletAttoEth: 2n * unit - 1n }))
 		expect(() => buildPortfolioAuctionBidRequest(snapshot, bidTerms)).toThrow('Insufficient collateral')
-		const closed = await load(fixture({}, { timestamp: 1_000n }))
+		const closed = await load(fixture({}, { timestamp: 100_000n }))
 		expect(() => buildPortfolioAuctionBidRequest(closed, bidTerms)).toThrow('not accepting')
 		expect(buildPortfolioAuctionBidRequest(await load(fixture({}, { walletAttoEth: 2n * unit })), bidTerms).value).toBe(0n)
 	})

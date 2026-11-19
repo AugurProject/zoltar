@@ -5,12 +5,7 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 
 library TokenId {
 	function getTokenId(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) internal pure returns (uint256 _tokenId) {
-		assembly {
-			_tokenId := or(
-				shl(8, and(_universeId, 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)),
-				and(_outcome, 0xFF)
-			)
-		}
+		return (uint256(_universeId) << 8) | uint8(_outcome);
 	}
 
 	function getTokenIds(uint248 _universeId, BinaryOutcomes.BinaryOutcome[] calldata _outcomes) internal pure returns (uint256[] memory _tokenIds) {
@@ -21,11 +16,8 @@ library TokenId {
 	}
 
 	function unpackTokenId(uint256 _tokenId) internal pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
-		// The assembly below bypasses the enum range check, so an out-of-range byte would panic at the next use.
-		require(uint8(_tokenId) <= uint8(BinaryOutcomes.BinaryOutcome.None), 'Unknown outcome in token id');
-		assembly {
-			_universe := shr(8, and(_tokenId, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00))
-			_outcome := and(_tokenId, 0xFF)
-		}
+		uint8 outcomeByte = uint8(_tokenId);
+		require(outcomeByte <= uint8(BinaryOutcomes.BinaryOutcome.None), 'Unknown outcome in token id');
+		return (uint248(_tokenId >> 8), BinaryOutcomes.BinaryOutcome(outcomeByte));
 	}
 }

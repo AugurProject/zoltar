@@ -36,7 +36,7 @@
 						<tr>
 							<td><code>createQuestion(questionData, outcomeOptions)</code><wbr /></td>
 							<td>Anyone</td>
-							<td>Question ID not already created; end time is on or after start time. Scalar questions use no labels, require display maximum greater than minimum, and positive ticks. Categorical questions reject the reserved names Invalid and Malformed after ASCII case folding and ignoring whitespace and common invisible formatting characters (<code>Reserved protocol outcome label</code>), and require nonempty labels whose <code>keccak256(abi.encode(label))</code> values are strictly descending.</td>
+							<td>Question ID not already created; end time is on or after start time. Scalar questions use no labels, require display maximum greater than minimum, and positive ticks. Categorical labels use 1–64 printable ASCII characters with single interior spaces, must be unique ignoring ASCII case, and cannot use the reserved protocol names Invalid or Malformed (<code>Reserved protocol outcome label</code>). Their <code>keccak256(abi.encode(label))</code> values are strictly descending.</td>
 							<td>Stores the question at its deterministic content hash, records the creation timestamp, appends it to discovery order, and stores categorical labels when supplied.</td>
 							<td><code>QuestionCreated</code></td>
 						</tr>

@@ -1,0 +1,58 @@
+import { expect, test } from 'bun:test'
+import { openOraclePriceCoordinatorAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
+import { createPublicClient, decodeFunctionData, encodeAbiParameters, isHex } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { discoverPoolPriceFeed } from '../../src/monitoring/discovery-price-feed.ts'
+import { address } from '../operations/fixture.ts'
+
+test('#1252 discovers a shared-feed bounty without funding a public RPC call sender', async () => {
+	const baseFeePerGas = 1_111_894_317n
+	const coordinator = address(21)
+	const feed = address(80)
+	const reads: string[] = []
+	const client = createPublicClient({
+		chain: mainnet,
+		transport: custom({
+			async request({ method, params }) {
+				if (method !== 'eth_call' || !Array.isArray(params)) throw new Error('Unexpected RPC request')
+				const call = params[0]
+				if (typeof call !== 'object' || call === null || !('data' in call) || !isHex(call.data) || !('to' in call)) throw new Error('Invalid contract call')
+				if ('gasPrice' in call) throw new Error('Insufficient funds for gas * price + value')
+				expect(params[1]).toBe('0xa')
+				const abi = call.to === coordinator.toLowerCase() ? openOraclePriceCoordinatorAbi : sharedPoolPriceFeedAbi
+				const { functionName } = decodeFunctionData({ abi, data: call.data })
+				reads.push(functionName)
+				switch (functionName) {
+					case 'priceFeed':
+						return encodeAbiParameters([{ type: 'address' }], [feed])
+					case 'collateralToken':
+						return encodeAbiParameters([{ type: 'address' }], [address(7)])
+					case 'aggregateExposureAttoEth':
+						return encodeAbiParameters([{ type: 'uint256' }], [10n])
+					case 'minimumReportCollateral':
+						return encodeAbiParameters([{ type: 'uint256' }], [10_001n])
+					case 'minimumToken1ReportAttoEth':
+						return encodeAbiParameters([{ type: 'uint256' }], [10_002n])
+					default:
+						throw new Error(`Unexpected contract read ${functionName}`)
+				}
+			},
+		}),
+	})
+	const funding = {
+		escalationHaltMultiplierBps: '10000',
+		feePercentage: '0',
+		gasConsumedOpenOracleReportPrice: '1',
+		gasUnitsForOneDispute: '1',
+		initialReportPriorityFeeAttoEthPerGas: 1n.toString(),
+		openOracleSecurityMultiplierBps: '10000',
+		protocolFee: '0',
+		settlementCallbackGasLimit: '1',
+		targetPriceErrorForDispute: '1000',
+	}
+	const snapshot = await discoverPoolPriceFeed(client, coordinator, 10n, 0n, funding, baseFeePerGas, 0n)
+	expect(snapshot.requestPriceCostAttoEth).toBe((200_001n * (baseFeePerGas + 1n) + 101n).toString())
+	expect(snapshot.minimumToken1ReportAttoEth).toBe('10002')
+	expect(reads).not.toContain('getRequestPriceCostAttoEth')
+})

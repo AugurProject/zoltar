@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { CheckedCast } from '../CheckedCast.sol';
+
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
 
 import { Zoltar } from '../Zoltar.sol';
@@ -163,7 +165,6 @@ contract SecurityPoolPortfolioForkCoordinator {
 		_;
 		entered = false;
 	}
-	receive() external payable {}
 
 	function initialize(uint248 origin) external {
 		require(msg.sender == address(portfolio) && !clocks[origin].registered, 'Fork clock initialization unavailable');
@@ -205,7 +206,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		uint256 portfolioTimestamp =
 			clock.portfolioTimeAnchor + (wall > clock.wallAnchor ? wall - clock.wallAnchor : 0);
 		require(portfolioTimestamp <= type(uint48).max, 'Portfolio clock exhausted');
-		return uint48(portfolioTimestamp);
+		return CheckedCast.toUint48(portfolioTimestamp);
 	}
 	function forkPortfolioTime(uint248 universeId) external view returns (uint48) {
 		uint256 forkTime = zoltar.getForkTime(universeId);
@@ -220,7 +221,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		require(clock.registered && timestamp >= clock.portfolioTimeAnchor, 'Portfolio time precedes universe');
 		uint256 wall = uint256(clock.wallAnchor) + timestamp - clock.portfolioTimeAnchor;
 		require(wall <= type(uint48).max, 'Native clock exhausted');
-		return uint48(wall);
+		return CheckedCast.toUint48(wall);
 	}
 
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256) {
@@ -282,7 +283,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		if (branch.prepared) return child;
 		uint256 anchor = zoltar.getForkRecapitalizationDeadline(parent);
 		require(anchor <= type(uint48).max, 'Fork clock exhausted');
-		clocks[child] = UniverseClock(_portfolioTimeAt(parent, zoltar.getForkTime(parent)), uint48(anchor), true, false);
+		clocks[child] = UniverseClock(_portfolioTimeAt(parent, zoltar.getForkTime(parent)), CheckedCast.toUint48(anchor), true, false);
 		portfolio.prepareForkChild(parent, outcome);
 		branch.parent = parent;
 		branch.outcome = outcome;
@@ -403,7 +404,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		if (branch.recoveryAttoRep != 0) token.safeApprove(address(settlement), branch.recoveryAttoRep);
 		ICollateralConfig(address(portfolio)).collateralToken().safeApprove(address(settlement), raisedAttoEth);
 		settlement.createChildUniverse(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep, raisedAttoEth);
-		settlement.setFeeClock(child, uint48(zoltar.getForkRecapitalizationDeadline(branch.parent)));
+		settlement.setFeeClock(child, CheckedCast.toUint48(zoltar.getForkRecapitalizationDeadline(branch.parent)));
 		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
 		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].portfolioTimeAnchor + 3 days);
 	}
