@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolLinearFees } from './SecurityPoolLinearFees.sol';
+import { DelegateErrorReason } from './DelegateErrorReason.sol';
 import { ISecurityPool, AccountingReason } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolPortfolioAccounting } from './interfaces/ISecurityPoolPortfolioAccounting.sol';
 import { IERC20 } from '../IERC20.sol';
@@ -23,9 +24,7 @@ abstract contract SecurityPoolPortfolioAccountingDelegate is SecurityPoolLinearF
 	}
 
 	function decodeError(bytes calldata result) external pure returns (string memory reason) {
-		if (result.length < 68 || bytes4(result[:4]) != bytes4(keccak256('Error(string)')))
-			return 'Delegate call failed';
-		return abi.decode(result[4:], (string));
+		return DelegateErrorReason.decode(result);
 	}
 
 	function setPortfolioCustody(address custody) external {

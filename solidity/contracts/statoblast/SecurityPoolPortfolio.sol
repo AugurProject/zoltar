@@ -97,6 +97,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint256 public immutable minimumPurchaseFeeAttoEth;
 	uint256 public immutable minimumCommitmentAttoEth;
 	uint256 public immutable minimumOutcomeRate;
+	uint48 public constant MAXIMUM_REWARD_VESTING_SECONDS = 3650 days;
 	uint48 public immutable rewardVestingSeconds;
 	IPortfolioAuctionDeployer public immutable auctionDeployer;
 	SecurityPoolPortfolioPurchase public immutable quoteHelper;
@@ -134,7 +135,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
 		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Portfolio deployer has no code');
-		require(config.rewardVestingSeconds > 0 && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
+		// A fee stream ends one vesting duration after its funding time and must fit the uint48 clock.
+		require(config.rewardVestingSeconds > 0 && config.rewardVestingSeconds <= MAXIMUM_REWARD_VESTING_SECONDS && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
 		require(origin.reportPriorityFeeAttoEthPerGas > 0, 'Initial priority fee zero');
 		require(origin.securityMultiplierBps >= SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS, 'Multiplier must be at least 10500 BPS');
 		factory = _factory;

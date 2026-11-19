@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { encodeDeployData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, parseAbi, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact, test_statoblast_SettlementPersistentMapHarness_SettlementPersistentMapHarness as mapArtifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
@@ -603,6 +603,35 @@ describe('Statoblast: central internal settlement units', () => {
 		await redeem(1n, 1n, 100n, 101)
 		await redeem(1n, 2n, 200n, 101)
 		expect(await quote(1n, 1n, 100n)).toEqual([0n, 0n])
+	})
+
+	test('frozen-claim and child-book events report units in the same descaled measure as totals and redemptions', async () => {
+		const settlementEvents = async (hash: Hash) => (await client.getTransactionReceipt({ hash })).logs.map(log => decodeEventLog({ abi: artifact.abi, data: log.data, topics: log.topics }))
+		const frozenClaims = async (hash: Hash) => {
+			for (const event of await settlementEvents(hash)) if (event.eventName === 'FinalClaimsFrozen') return event.args
+			throw new Error('Missing FinalClaimsFrozen event')
+		}
+		const redemption = async (hash: Hash) => {
+			for (const event of await settlementEvents(hash)) if (event.eventName === 'SettlementRedeemed') return event.args
+			throw new Error('Missing SettlementRedeemed event')
+		}
+		const createdBook = async (hash: Hash) => {
+			for (const event of await settlementEvents(hash)) if (event.eventName === 'BookCreated') return event.args
+			throw new Error('Missing BookCreated event')
+		}
+		await mint(1n, 1n, 100n)
+		await mint(1n, 2n, 300n)
+		await schedule(1n, 1n, 100)
+		const frozen = await frozenClaims(await freeze(1n, 101))
+		expect((await book(1n))[1]).toBe(300n)
+		expect(frozen.units).toBe(100n)
+		expect(frozen.cashAttoEth).toBe(100n)
+		const redeemed = await redemption(await redeem(1n, 1n, 100n, 101))
+		expect(redeemed.units).toBe(frozen.units)
+		await seal(1n, 101)
+		const created = await createdBook(await child(1n, 300n))
+		expect(created.units).toBe((await book(2n))[1])
+		expect(created.units).toBe(300n)
 	})
 
 	test('strict finality cutoff preserves finalized parent money and interrupts equal-deadline claims', async () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, encodeAbiParameters, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, encodeAbiParameters, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { deployContract } from '../../testSupport/deployContract'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
@@ -195,9 +195,17 @@ describe('Statoblast: central reporter custody', () => {
 		await deposit(other, threshold)
 		await expect(rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId] }))).rejects.toThrow('Triggering question lacks fork admission REP')
 		await deposit(trigger, 1n)
-		await rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId] }))
+		const forkHash = await rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId] }))
 		const haircut = threshold / 5n
 		expect(await balance(trigger)).toBe(threshold - haircut)
+		// The admission haircut changes the question's balance, so it reports the new balance like deposits and withdrawals.
+		const reportedBalances: bigint[] = []
+		for (const log of (await owner.getTransactionReceipt({ hash: forkHash })).logs) {
+			if (log.address.toLowerCase() !== ledger.toLowerCase()) continue
+			const decoded = decodeEventLog({ abi: artifact.abi, data: log.data, topics: log.topics })
+			if (decoded.eventName === 'ReporterBalanceChanged' && decoded.args.questionId === questionId) reportedBalances.push(decoded.args.balanceAttoRep)
+		}
+		expect(reportedBalances).toEqual([threshold - haircut])
 		expect(await balance(other)).toBe(threshold)
 		expect((await book())[0]).toBe(2n * threshold - haircut)
 		expect(await getERC20Balance(owner, getRepTokenAddress(0n), ledger)).toBe(0n)

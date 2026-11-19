@@ -21,6 +21,8 @@ library TokenId {
 	}
 
 	function unpackTokenId(uint256 _tokenId) internal pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
+		// The assembly below bypasses the enum range check, so an out-of-range byte would panic at the next use.
+		require(uint8(_tokenId) <= uint8(BinaryOutcomes.BinaryOutcome.None), 'Unknown outcome in token id');
 		assembly {
 			_universe := shr(8, and(_tokenId, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00))
 			_outcome := and(_tokenId, 0xFF)

@@ -109,6 +109,15 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 	})
 
+	test('unpackTokenId names every outcome and rejects an outcome byte that names none', async () => {
+		const shareTokenAddress = await deployShareToken()
+		const unpack = (tokenId: bigint) => client.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: shareTokenAddress, functionName: 'unpackTokenId', args: [tokenId] })
+		const universeId = 5n
+		for (const outcome of [0n, 1n, 2n, 3n]) assert.deepStrictEqual([...(await unpack((universeId << 8n) | outcome))], [universeId, outcome], `outcome ${outcome.toString()} unpacks`)
+		// A larger byte is no BinaryOutcome. Returning it as one panics while encoding the enum.
+		for (const outcomeByte of [4n, 255n]) await assert.rejects(unpack((universeId << 8n) | outcomeByte), /Unknown outcome in token id/)
+	})
+
 	test('balance queries and operator approval expose every public ERC1155 guard reason', async () => {
 		const shareTokenAddress = await deployShareToken()
 		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi

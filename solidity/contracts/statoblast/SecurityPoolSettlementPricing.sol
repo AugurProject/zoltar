@@ -25,7 +25,7 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		Book storage book = _book(bookId);
 		uint256 units = frozenBookId == 0 ? book.units : frozenBooks[frozenBookId].units;
 		uint256 net = frozenBookId == 0 ? _netCash(bookId, book) : frozenBooks[frozenBookId].cashAttoEth * UNIT_SCALE;
-		state.units = Math.ceilDiv(state.units, UNIT_SCALE);
+		state.units = _descaled(state.units);
 		state.feePrincipalAttoEth = SettlementMath.rawValue(state.feePrincipalAttoEth, net, units, Math.Rounding.Ceil);
 		state.feeRateAttoEthPerSecond = SettlementMath.scaledValue(state.feeRateAttoEthPerSecond, net, units);
 	}
@@ -112,6 +112,10 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		require(cash < RECOVERY_SCALE - book.cashAttoEth, 'Settlement cash exceeds precision bound');
 		added = SettlementMath.mintUnits(cash, book.units, _netCash(bookId, book));
 		require(added < RECOVERY_SCALE - book.units, 'Settlement units exceed precision bound');
+	}
+	/// @dev Reported units: full-precision claim weights rounded up to whole units.
+	function _descaled(uint256 scaledUnits) internal pure returns (uint256) {
+		return Math.ceilDiv(scaledUnits, UNIT_SCALE);
 	}
 	function _netCash(uint64 bookId, Book storage book) internal view returns (uint256) {
 		return SettlementMath.netCash(book.cashAttoEth, feeRemainders[bookId]);

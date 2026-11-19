@@ -265,7 +265,7 @@ export const securityPoolContractReference: ContractReference = {
 			],
 			effect: 'Freezes shared portfolio accounting and marks the question forked.',
 			preconditions: 'No inherited fixed outcome; the central fork checks apply.',
-			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
+			signals: '`SystemStateSet` on the transition to forked, and none for a repeated call; relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
 			call: '`initializeForkedEscalationGame(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome)`',

@@ -50,15 +50,24 @@ contract EscalationChallengeEscrow {
 		require(block.timestamp <= validUntil, 'Contribution expired');
 		require(deadline <= validUntil, 'Challenge outlasts consent');
 		_requireOpen();
-		require(amountAttoRep >= game.startBondAttoRep(), 'Below start bond');
-		uint256 balance = game.getOutcomeBalancesAttoRep()[uint8(outcome)];
+		uint256 startBondAttoRep = game.startBondAttoRep();
+		require(amountAttoRep >= startBondAttoRep, 'Below start bond');
+		uint256 roomAttoRep = game.nonDecisionThresholdAttoRep() - game.getOutcomeBalancesAttoRep()[uint8(outcome)];
 		if (contributionsAttoRep[msg.sender] == 0) _insertContributor(amountAttoRep);
-		require(totalPendingAttoRep + amountAttoRep <= game.nonDecisionThresholdAttoRep() - balance, 'Challenge exceeds room');
+		require(totalPendingAttoRep + amountAttoRep <= roomAttoRep, 'Challenge exceeds room');
 		contributionsAttoRep[msg.sender] += amountAttoRep;
 		totalPendingAttoRep += amountAttoRep;
 		token.safeTransferFrom(msg.sender, address(this), amountAttoRep);
 		emit Contributed(msg.sender, amountAttoRep);
-		if (canActivate()) _activate();
+		if (canActivate()) {
+			_activate();
+			return;
+		}
+		// Every later contribution is at least the start bond and must fit the room, so a
+		// smaller remainder could never be filled. A round that only activates at the exact
+		// threshold would then stay blocked by this freely withdrawable contribution.
+		uint256 remainingAttoRep = roomAttoRep - totalPendingAttoRep;
+		require(remainingAttoRep == 0 || remainingAttoRep >= startBondAttoRep, 'Challenge leaves unfillable room');
 	}
 
 	/// @notice Only unactivated contributions can be withdrawn, including after expiry or a fork.

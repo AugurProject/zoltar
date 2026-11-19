@@ -75,6 +75,10 @@ abstract contract OpenOraclePriceSource {
 		initialReportPriorityFeeAttoEthPerGas = _initialReportPriorityFeeAttoEthPerGas;
 		targetPriceErrorForDispute = _targetPriceErrorForDispute;
 		openOracleSecurityMultiplierBps = _openOracleSecurityMultiplierBps;
+		// OpenOracle rejects every report created with these values, so a coordinator
+		// holding them could never price its pools.
+		require(_settlementTime > _disputeDelay, 'Settlement time must exceed dispute delay');
+		require(_multiplier >= 100, 'Oracle dispute multiplier must be at least one hundred percent');
 		settlementTime = _settlementTime;
 		disputeDelay = _disputeDelay;
 		protocolFee = _protocolFee;

@@ -116,7 +116,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 			recovery.forkWeightRoot = _addModular(recovery.forkWeightRoot, forkTime, weight);
 		}
 		_setFeeMode(child, isCashFunded(bookId) && source.feesEnabled);
-		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, source.units);
+		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, _descaled(source.units));
 	}
 
 	/// @notice Full-precision claim weights for fork recovery and conservation checks.
@@ -165,13 +165,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		returns (uint256 cashAttoEth, uint256 units, uint256 feeCashAttoEth, uint48 portfolioTimestamp, bool isSealed)
 	{
 		Book storage book = _book(bookId);
-		return (
-			book.cashAttoEth,
-			Math.ceilDiv(book.units, UNIT_SCALE),
-			book.feeCashAttoEth,
-			book.portfolioTimestamp,
-			book.isSealed
-		);
+		return (book.cashAttoEth, _descaled(book.units), book.feeCashAttoEth, book.portfolioTimestamp, book.isSealed);
 	}
 
 	/// @notice Donate the active cash deficit while preserving all recovery REP.
@@ -268,7 +262,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		}
 		_writeQuestionWithRecovery(bookId, questionId, state, correction, 0);
 		_syncFeeMode(bookId, book);
-		unitsBurned = Math.ceilDiv(unitsBurned, UNIT_SCALE);
+		unitsBurned = _descaled(unitsBurned);
 		emit SettlementRedeemed(bookId, questionId, outcomeShares, unitsBurned, cashAttoEth);
 	}
 
@@ -378,14 +372,11 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 				cashAttoEth = SettlementMath.cashForUnits(reserved, state.units, 0, unitsBurned);
 			} else
 				cashAttoEth = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned);
-			return (cashAttoEth, Math.ceilDiv(unitsBurned, UNIT_SCALE));
+			return (cashAttoEth, _descaled(unitsBurned));
 		}
 		FrozenBook storage frozen = frozenBooks[frozenBookId];
 		if (frozen.sourceBookId != bookId) return (0, 0);
-		return (
-			SettlementMath.cashForUnits(frozen.cashAttoEth, frozen.units, 0, unitsBurned),
-			Math.ceilDiv(unitsBurned, UNIT_SCALE)
-		);
+		return (SettlementMath.cashForUnits(frozen.cashAttoEth, frozen.units, 0, unitsBurned), _descaled(unitsBurned));
 	}
 
 	/// @notice Quote REP directly from outcome-share ownership, before rounding ETH units.
@@ -534,7 +525,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		frozenBookId = ++lastFrozenBookId;
 		frozenBooks[frozenBookId] = FrozenBook(cashAttoEth, units, bookId, recoveryAttoRep);
 		_syncFeeMode(bookId, book);
-		emit FinalClaimsFrozen(bookId, frozenBookId, book.portfolioTimestamp, units, cashAttoEth);
+		emit FinalClaimsFrozen(bookId, frozenBookId, book.portfolioTimestamp, _descaled(units), cashAttoEth);
 	}
 
 	/// @notice Remaining collateral that may fund fees, excluding the rounded-up backing floor.
