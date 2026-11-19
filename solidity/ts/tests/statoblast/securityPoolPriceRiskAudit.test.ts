@@ -1,29 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact } from '../../types/contractArtifact'
+import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact } from '../../types/contractArtifact'
 import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
-// Executable audit boundaries, not assertions that the oracle is truthful.
-// These cases deliberately settle undisputed wrong prices through the real feed.
-// They prevent the backing-preserving repair change being mistaken for a fix
-// to #1344's separate withdrawal and auction-allocation risks.
-describe('Statoblast: remaining accepted-price assumptions (#1344)', () => {
+describe('Statoblast: auction closing price assumption (#1344)', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
-
-	test('an undisputed wrong-low price still permits a withdrawal that the fair quote blocks', async () => {
-		await fixture.prepare(400n * unit, 100n * unit)
-		await fixture.mint(100n * unit)
-		const owner = fixture.owner()
-		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
-		const withdraw = () => writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [340n * unit, owner.account.address] }))
-		await expect(withdraw()).rejects.toThrow('Owner collateral too low')
-		await fixture.refreshPrice(fixture.base.questionId, unit / 4n)
-		await withdraw()
-		expect((await owner.readContract({ ...capital, functionName: 'ownerCollateral', args: [owner.account.address] }))[0]).toBe(60n * unit)
-		await fixture.refreshPrice(fixture.base.questionId, unit)
-		expect((await owner.readContract({ ...capital, functionName: 'totals' }))[2]).toBe(0n)
-	})
 
 	test('an undisputed wrong-high closing price still increases a winning bid’s REP allocation', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)

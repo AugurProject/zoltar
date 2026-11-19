@@ -18,6 +18,7 @@ interface ICapitalLifecycleHost {
 	function universeId() external view returns (uint248);
 	function securityMultiplierBps() external view returns (uint256);
 	function ownerConservativePrice(address owner) external view returns (uint256);
+	function ownerWithdrawalPrice(address owner) external view returns (uint256);
 	function repToken() external view returns (IERC20);
 	function zoltar() external view returns (Zoltar);
 	function maximumHealthyPrice(uint256 rep, uint256 commitment) external view returns (uint256);
@@ -69,6 +70,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(uncertainty < 10_000_000, 'Invalid oracle uncertainty');
 		acceptedPrice = price;
 		conservativePrice = Math.mulDiv(price, 10_000_000, 10_000_000 - uncertainty, Math.Rounding.Ceil);
+		_updateWithdrawalPrice(feed, validUntil);
 		liquidationPrice = Math.mulDiv(price, 10_000_000, 10_000_000 + uncertainty);
 		require(liquidationPrice != 0, 'Liquidation price rounds to zero');
 		if (!importing && block.timestamp >= priceValidUntil) commitmentIndex.restartLiquidationClock();
@@ -77,6 +79,28 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		// Imported positions have no operating health history until imports seal.
 		if (!importing) commitmentIndex.observeHealthy(liquidationPrice);
 		emit CapitalPriceAccepted(price, validUntil);
+	}
+
+	/// @dev Tighten the floor immediately. A lower floor needs a second report
+	/// whose full challenge period began while the first lower quote was accepted and fresh.
+	function _updateWithdrawalPrice(ICapitalPriceExposure feed, uint48 validUntil) private {
+		uint48 challengeDuration = feed.settlementTime();
+		WithdrawalObservation memory pending = pendingWithdrawalObservation;
+		if (conservativePrice >= withdrawalPriceFloor || challengeDuration == 0) {
+			withdrawalPriceFloor = conservativePrice;
+			if (pending.price != 0) delete pendingWithdrawalObservation;
+			return;
+		}
+
+		uint256 challengeStartedAt = feed.lastSettlementTimestamp() - challengeDuration;
+		if (pending.price != 0 && challengeStartedAt < pending.validUntil) {
+			if (challengeStartedAt < pending.acceptedAt) return;
+			withdrawalPriceFloor = Math.max(pending.price, conservativePrice);
+		}
+
+		if (conservativePrice < withdrawalPriceFloor)
+			pendingWithdrawalObservation = WithdrawalObservation(conservativePrice, uint48(block.timestamp), validUntil);
+		else delete pendingWithdrawalObservation;
 	}
 
 	/// @dev The ledger has already checkpointed fees, served prior retirements,
@@ -133,7 +157,8 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			require(host.isPriceValid(), 'Capital price stale');
 			require(commitmentIndex.eligibleCommitment(conservativePrice) >= demandAttoEth, 'Portfolio backing insufficient');
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
-			require(pledged <= position.rep && position.rep - pledged >= _requiredRep(host, position.commitment, _target(owner)), 'Owner collateral too low');
+			uint256 required = commitmentIndex.requiredRep(position.commitment, host.ownerWithdrawalPrice(_capitalOwner()), host.securityMultiplierBps(), _target(owner));
+			require(pledged <= position.rep && position.rep - pledged >= required, 'Owner collateral too low');
 			uint256 maxPrice = host.maximumHealthyPrice(position.rep - pledged, position.commitment);
 			commitmentIndex.replace(owner.positionId, position.rep - pledged, position.commitment, maxPrice);
 			if (position.commitment == 0 || maxPrice >= liquidationPrice)

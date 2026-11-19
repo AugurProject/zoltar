@@ -212,6 +212,10 @@ contract PortfolioForkHarness {
 	function acceptedEpoch() external pure returns (uint256) {
 		return 1;
 	}
+	// Synthetic observations are already confirmed by the harness.
+	function settlementTime() external pure returns (uint48) {
+		return 0;
+	}
 	function targetPriceErrorForDispute() external pure returns (uint256) {
 		return 0;
 	}

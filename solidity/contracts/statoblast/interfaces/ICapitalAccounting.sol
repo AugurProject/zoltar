@@ -11,6 +11,8 @@ interface ICapitalPriceExposure {
 	function validateExposure() external view;
 	function targetPriceErrorForDispute() external view returns (uint256);
 	function acceptedEpoch() external view returns (uint256);
+	function settlementTime() external view returns (uint48);
+	function lastSettlementTimestamp() external view returns (uint256);
 	function reportAuthorization(uint256 reportId, uint256 newExposure) external view returns (uint256 conservativeReportPrice, uint256 epoch);
 }
 

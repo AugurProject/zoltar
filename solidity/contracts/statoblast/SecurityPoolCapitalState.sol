@@ -101,6 +101,13 @@ abstract contract SecurityPoolCapitalState {
 		if (commitment == 0) account.positionId = 0;
 	}
 	address internal reportOwner;
+	struct WithdrawalObservation {
+		uint256 price;
+		uint48 acceptedAt;
+		uint48 validUntil;
+	}
+	uint256 internal withdrawalPriceFloor;
+	WithdrawalObservation internal pendingWithdrawalObservation;
 
 	/// @dev Only the ledger's authenticated self-call inherits the report sponsor.
 	/// Reentrant external calls keep their actual caller identity.

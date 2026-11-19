@@ -62,6 +62,8 @@ contract CapitalLedgerHarness {
 	WETH9 public collateralToken;
 	uint256 public targetPriceErrorForDispute;
 	uint256 public acceptedEpoch;
+	// Synthetic observations are already confirmed by the harness.
+	uint48 public constant settlementTime = 0;
 	SecurityPoolCapitalLedger public immutable ledger;
 	CapitalLedgerZoltarMock public immutable zoltar;
 	ReputationToken public immutable token;

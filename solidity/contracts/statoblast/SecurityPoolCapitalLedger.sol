@@ -168,6 +168,10 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 				? Math.max(conservativePrice, owners[owner].fundingPrice.floor)
 				: conservativePrice;
 	}
+	/// @notice Price used to preview and execute withdrawals from active backing.
+	function ownerWithdrawalPrice(address owner) external view returns (uint256) {
+		return Math.max(ownerConservativePrice(owner), withdrawalPriceFloor);
+	}
 	function _requiredRep(uint256 commitment, uint256 health, uint256 price) private view returns (uint256) {
 		return commitmentIndex.requiredRep(commitment, price, securityMultiplierBps, health);
 	}

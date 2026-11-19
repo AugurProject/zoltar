@@ -28,7 +28,7 @@ interface ICapitalAuctionHost {
 	function frozen() external view returns (bool);
 	function exported(address owner) external view returns (bool);
 	function isPriceValid() external view returns (bool);
-	function ownerConservativePrice(address owner) external view returns (uint256);
+	function ownerWithdrawalPrice(address owner) external view returns (uint256);
 	function demandAttoEth() external view returns (uint256);
 	function conservativePrice() external view returns (uint256);
 	function zoltar() external view returns (Zoltar);
@@ -117,7 +117,7 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 			index.eligibleCommitment(host.conservativePrice()) < host.demandAttoEth()
 		) return (principal, commitment, withdrawable);
 		if (target == 0) target = owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
-		uint256 required = index.requiredRep(commitment, host.ownerConservativePrice(holder), host.securityMultiplierBps(), target);
+		uint256 required = index.requiredRep(commitment, host.ownerWithdrawalPrice(holder), host.securityMultiplierBps(), target);
 		if (pledged > required) withdrawable += pledged - required;
 	}
 	function previewAuctionPosition(ICapitalAuctionHost host, uint256 bidId) external view returns (AuctionPosition memory result) {

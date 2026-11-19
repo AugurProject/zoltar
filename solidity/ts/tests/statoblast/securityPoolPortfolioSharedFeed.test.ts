@@ -25,6 +25,38 @@ describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const feed = () => fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 
+	test('pledged REP released by a lower price requires a second challenge window', async () => {
+		await fixture.deposit(1_000n * unit)
+		await fixture.refreshPrice(fixture.base.questionId, 2n * unit)
+		await fixture.authorize(100n * unit)
+		const owner = fixture.owner()
+		const other = fixture.other()
+		const firstCoordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const secondCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
+		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
+		const withdrawable = async () => (await owner.readContract({ ...capital, functionName: 'ownerCollateral', args: [owner.account.address] }))[2]
+		const original = await withdrawable()
+
+		await requestPriceWithValue(owner, firstCoordinator, await getRequestPriceCostAttoEth(owner, firstCoordinator), unit)
+		const firstReport = await getPendingReportId(owner, firstCoordinator)
+		await fixture.base.mockWindow.advanceTime(1n)
+		await requestPriceWithValue(other, secondCoordinator, await getRequestPriceCostAttoEth(other, secondCoordinator), unit)
+		const overlappingReport = await getPendingReportId(other, secondCoordinator)
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, firstReport)
+		expect(await withdrawable()).toBe(original)
+		await openOracleSettle(other, overlappingReport)
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [overlappingReport] })).toBe(1n)
+		expect(await withdrawable()).toBe(original)
+		await expect(owner.simulateContract({ ...capital, functionName: 'withdrawPrincipal', args: [original + 1n, owner.account.address] })).rejects.toThrow('Owner collateral too low')
+		await fixture.refreshPrice()
+		const confirmed = await withdrawable()
+		expect(confirmed).toBeGreaterThan(original)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [confirmed, owner.account.address] }))
+		expect(await withdrawable()).toBe(0n)
+	})
+
 	test('an accurate small report cannot veto an independently funded growth report', async () => {
 		await fixture.deposit(1_000n * unit)
 		await fixture.refreshPrice(fixture.base.questionId, unit, fixture.portfolio, 2n * unit)
