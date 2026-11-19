@@ -5,6 +5,10 @@ import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execu
 
 const shutdownChecks = new WeakMap<object, () => boolean>()
 
+export class FinalizedTakeoverExpired extends Error {
+	override name = 'FinalizedTakeoverExpired'
+}
+
 export class TransactionAwaitingCanonicalFinality extends Error {
 	readonly hash: Hex
 

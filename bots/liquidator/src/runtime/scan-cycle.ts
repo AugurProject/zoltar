@@ -4,7 +4,7 @@ import { sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quor
 import { loadManagedPortfolioObservations, managedPortfolioScopes } from '#monitoring/portfolio-monitor'
 import { shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
-import { OperatorStopping, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
+import { FinalizedTakeoverExpired, OperatorStopping, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
 import { canonicalBlockHash, chainFor } from '#monitoring/operator-chain'
 import { scanPortfolioContext } from '#monitoring/portfolio-context'
@@ -123,7 +123,7 @@ export async function settleInterruptedCycle(runtime: Pick<LiquidatorRuntime, 's
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
 		return true
 	}
-	if (error instanceof PortfolioOpportunityExpired) {
+	if (error instanceof PortfolioOpportunityExpired || error instanceof FinalizedTakeoverExpired) {
 		state.status = runningStatus(state.paused, runtime.settings.runtime.execute)
 		recordActivity(state, { kind: 'liquidation', status: 'info', message: 'Portfolio opportunity expired; rescreen next cycle', details: error.message })
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
