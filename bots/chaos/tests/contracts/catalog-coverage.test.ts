@@ -122,6 +122,7 @@ const expectedCanonicalManifest = [
 	'SecurityPoolMigrationProxy:contracts/statoblast/SecurityPoolMigrationProxy.sol:migration-proxy',
 	'EscalationGameFactory:contracts/statoblast/factories/EscalationGameFactory.sol:static-endpoint',
 	'EscalationGame:contracts/statoblast/EscalationGame.sol:dynamic-endpoint',
+	'EscalationChallengeEscrow:contracts/statoblast/EscalationChallengeEscrow.sol:dynamic-endpoint',
 	'EscalationGameClaimDelegate:contracts/statoblast/EscalationGameClaimDelegate.sol:fallback-module',
 	'EscalationGameDepositDelegate:contracts/statoblast/EscalationGameDepositDelegate.sol:delegate-module',
 	'ShareTokenFactory:contracts/statoblast/factories/ShareTokenFactory.sol:static-endpoint',
@@ -336,6 +337,31 @@ describe('contract operation classification', () => {
 			expect(entry.artifactSource, entry.contract).not.toContain('/test/')
 		}
 		expect(CANONICAL_MUTATING_CONTRACT_MANIFEST.map(entry => entry.contract)).not.toContain('Multicall3')
+	})
+
+	test('every compiled production mutation contract has a manifest entry or a documented exclusion (#1376)', () => {
+		const classified = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.map(entry => `${entry.artifactSource}:${entry.contract}`))
+		const excluded = new Map([
+			['contracts/chaos/GenesisUniswapV3Seeder.sol:GenesisUniswapV3Seeder', 'Genesis liquidity setup runs outside the regular operation catalog.'],
+			['contracts/statoblast/Multicall3.sol:Multicall3', 'Imported generic call transport does not own protocol state.'],
+			['contracts/statoblast/SecurityPoolSettlementState.sol:SecurityPoolSettlementWriter', 'Storage writer is linked into settlement and has no standalone state.'],
+			['contracts/statoblast/tokens/ERC1155.sol:ERC1155', 'The canonical ShareToken classifies the inherited transfer and approval operations.'],
+		])
+		const unclassified: string[] = []
+		const contracts = loadArtifactContracts()
+		for (const [source, artifacts] of Object.entries(contracts)) {
+			if (!source.startsWith('contracts/') || source.includes('/test/') || source.includes('/interfaces/')) continue
+			for (const [name, artifact] of Object.entries(record(artifacts, source))) {
+				const key = `${source}:${name}`
+				const output = record(artifact, key)
+				const bytecode = record(record(output['evm'], key)['deployedBytecode'], key)['object']
+				if (typeof bytecode !== 'string' || bytecode.length === 0 || mutatingAbiEntries(contractAbi(contracts, source, name)).length === 0) continue
+				if (excluded.delete(key) || classified.has(key)) continue
+				unclassified.push(key)
+			}
+		}
+		expect(unclassified).toEqual([])
+		expect([...excluded.keys()]).toEqual([])
 	})
 
 	test('keeps deployment helpers, direct delegates, orphan factories, and migration proxies out of random work', () => {

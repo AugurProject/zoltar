@@ -37,6 +37,7 @@ export async function loadPortfolioPriceReport(client: ReadClient, snapshot: Por
 	const tuple = requireTupleValue(candidate, 4, 'report candidate')
 	const escrow = requireAddressValue(tuple[0], 'report escrow')
 	const sponsor = requireAddressValue(tuple[1], 'report sponsor')
+	const maxSettlementBaseFee = requireBigintValue(tuple[3], 'report settlement base-fee ceiling')
 	if (escrow === zeroAddress) throw new Error('This report does not belong to this price feed.')
 	const pinned: Pick<ReadClient, 'readContract'> = { readContract: parameters => client.readContract({ ...parameters, blockNumber }) }
 	const [escrowFeed, escrowId, escrowSponsor, escrowOracle, state, wethCredit, repCredit] = await Promise.all([
@@ -62,7 +63,7 @@ export async function loadPortfolioPriceReport(client: ReadClient, snapshot: Por
 		throw new Error('Report escrow or oracle identities do not match this price feed.')
 	const [block, chain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chain !== snapshot.chainId) throw new Error('Report state changed. Refresh and retry.')
-	return { reportId, escrow, sponsor, outcome: BigInt(requireIntegerLikeValue(outcome, 'report outcome')), state, eligibleAt: game.reportTimestamp + game.settlementTime, wethCredit: releasedCredit(wethCredit), repCredit: releasedCredit(repCredit) }
+	return { reportId, escrow, sponsor, outcome: BigInt(requireIntegerLikeValue(outcome, 'report outcome')), state, eligibleAt: game.reportTimestamp + game.settlementTime, baseFeePerGas: block.baseFeePerGas, maxSettlementBaseFee, wethCredit: releasedCredit(wethCredit), repCredit: releasedCredit(repCredit) }
 }
 function releasedCredit(value: unknown) {
 	const amount = requireBigintValue(value, 'report token credit')

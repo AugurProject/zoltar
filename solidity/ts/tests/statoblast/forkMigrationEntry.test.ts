@@ -124,6 +124,7 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		})
 		const before = await snapshot()
 		expect(before.claim).toBe(100n * unit)
+		expect(await owner.readContract({ ...target, functionName: 'balanceOfGame', args: [secondGame] })).toBe(0n)
 		await expect(outsider.writeContract({ ...first, functionName: 'registerReporterGame', args: [secondGame] })).rejects.toThrow('Unknown question callback')
 		await expect(outsider.writeContract({ ...first, functionName: 'forkWithReporterQuestion', args: [secondPool] })).rejects.toThrow('Unknown question callback')
 		await expect(outsider.writeContract({ ...first, functionName: 'forkWithReporterQuestion', args: [firstPool] })).rejects.toThrow('Only canonical native forker')

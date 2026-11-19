@@ -3,6 +3,20 @@ import { withBrowserPage } from '../../../tooling/ui/browserSmoke.mts'
 import { browserTest, desktopViewport, origin } from './browser-test.ts'
 
 browserTest(
+	'the operations overview directs readers to prices scoped to capital ledgers',
+	async () => {
+		await withBrowserPage(`${origin}/operations?demo=1&chainId=1`, desktopViewport, async ({ evaluate, waitFor }) => {
+			await waitFor(`document.querySelector('#operations-content .operations-row') !== null`)
+			expect(await evaluate(`!document.querySelector('#operations-content').textContent.includes('Coordinator REP / ETH')`)).toBe(true)
+			expect(await evaluate(`[...document.querySelectorAll('#operations-content a')].some(link => new URL(link.href).pathname === '/operations/risk' && link.textContent.includes('Capital ledgers'))`)).toBe(true)
+			await evaluate(`[...document.querySelectorAll('#operations-content a')].find(link => new URL(link.href).pathname === '/operations/risk' && link.textContent.includes('Capital ledgers')).click()`)
+			await waitFor(`location.pathname === '/operations/risk' && document.querySelector('#operations-content').textContent.includes('200 REP/USDC')`)
+		})
+	},
+	30_000,
+)
+
+browserTest(
 	'navigation closes the account dialog, focuses a rendered heading, and keeps route filters on their own route',
 	async () => {
 		await withBrowserPage(`${origin}/richlist?demo=1&chainId=1&view=cards`, desktopViewport, async session => {

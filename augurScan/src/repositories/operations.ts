@@ -59,11 +59,7 @@ export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string
 }
 
 export const operationsOverviewSupplement = async (sql: SQL, chainId: number, snapshotBlock: string) => {
-	const [prices, recentChanges, totals] = await Promise.all([
-		sql`SELECT coordinator_address AS source_contract, event_name AS source_event, rep_per_eth_1e18::text AS value,
-			block_number::text AS block_number, settlement_timestamp AS observed_timestamp
-			FROM rep_eth_price_snapshots WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
-			ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 1`,
+	const [recentChanges, totals] = await Promise.all([
 		sql`SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
 			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
 			WHERE timeline.chain_id = ${chainId} AND timeline.canonical AND timeline.block_number <= ${snapshotBlock}
@@ -82,7 +78,7 @@ export const operationsOverviewSupplement = async (sql: SQL, chainId: number, sn
 				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS markets,
 			(SELECT count(*) FROM chain_reorganizations WHERE chain_id = ${chainId})::integer AS reorganizations`,
 	])
-	return { prices, recentChanges, totals: totals[0] }
+	return { recentChanges, totals: totals[0] }
 }
 
 export const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<string, unknown>, cursorBlock = String(asOf['blockNumber']), cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 250) => {

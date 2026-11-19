@@ -9,8 +9,43 @@ import { discoveredReceiptReplay } from '../support/replay-receipt-block.ts'
 const feed = getAddress('0x1111111111111111111111111111111111111111')
 const escrow = getAddress('0x2222222222222222222222222222222222222222')
 const sponsor = getAddress('0x3333333333333333333333333333333333333333')
+const factory = getAddress('0x4444444444444444444444444444444444444444')
 const topic = (signature: string) => keccak256(stringToHex(signature))
 const contract = (address: ContractMetadata['address'], kind: string): ContractMetadata => ({ address, kind, label: kind, provenance: 'test' })
+
+test('factory registration discovers a child feed before any question pool exists', async () => {
+	const { database, indexer, hash, tx, header, position } = discoveredReceiptReplay()
+	const registration: Log = {
+		...position,
+		address: factory,
+		logIndex: 0n,
+		topics: [topic('SharedPriceFeedRegistered(address,uint248,address)'), toHex(BigInt(sponsor), { size: 32 }), toHex(2n, { size: 32 }), toHex(BigInt(feed), { size: 32 })],
+		data: '0x',
+	}
+	const mocks = [
+		spyOn(indexer.providers.client, 'getTransaction').mockResolvedValue({ hash: tx, blockHash: hash, blockNumber: 10n, transactionIndex: 0n, from: sponsor, to: factory, gas: 1_000_000n, nonce: 0n, value: 0n, input: '0x' }),
+		spyOn(indexer.providers.client, 'getTransactionReceipt').mockResolvedValue({ transactionHash: tx, blockHash: hash, blockNumber: 10n, transactionIndex: 0n, from: sponsor, to: factory, gasUsed: 1_000_000n, cumulativeGasUsed: 1_000_000n, status: 'success', logs: [registration] }),
+	]
+	try {
+		const result = await indexBlock(
+			indexer,
+			10n,
+			10n,
+			new Map([[factory.toLowerCase(), contract(factory, 'securityPoolFactory')]]),
+			new Map(),
+			header.parentHash,
+			header,
+			[registration],
+			async () => [],
+			async () => header,
+		)
+		expect(result.contracts.get(feed.toLowerCase())).toMatchObject({ kind: 'sharedPoolPriceFeed', discoveryBlock: 10n })
+		expect(indexerLogSources([...result.contracts.values()]).map(source => source.address)).toContain(feed)
+	} finally {
+		for (const mock of mocks) mock.mockRestore()
+		await database.close()
+	}
+})
 
 test('a settled report registers its escrow and stores the completion from the same receipt without a log request', async () => {
 	const { database, indexer, hash, tx, header, position } = discoveredReceiptReplay()

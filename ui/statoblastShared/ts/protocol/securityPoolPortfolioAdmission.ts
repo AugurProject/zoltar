@@ -9,6 +9,13 @@ import { requireBigintValue } from './decoders.js'
 const admissionAbi = parseAbi(['function universeId() view returns (uint248)', 'function isQuestionAllowed(address portfolio,uint248 universeId,uint256 questionId) view returns (bool)', 'function questionCount() view returns (uint256)', 'function getQuestions(uint256 start,uint256 count) view returns (uint256[])'])
 export type PortfolioAdmission = { address: Address; mode: 'open' | 'custom' } | { address: Address; mode: 'fixed'; questions: readonly bigint[]; questionCount: bigint; questionStart: bigint }
 
+// Leave headroom under the per-transaction gas cap even when all IDs use 32 bytes.
+const maxFixedAdmissionQuestions = 700
+
+export function requireFixedAdmissionQuestionLimit(count: number) {
+	if (count > maxFixedAdmissionQuestions) throw new Error(`A fixed admission policy supports up to ${maxFixedAdmissionQuestions} approved questions per deployment.`)
+}
+
 /** Curation is based on deployed bytecode, never an untrusted policy's self-description. */
 export async function loadPortfolioAdmission(client: Pick<ReadClient, 'getCode' | 'readContract'>, address: Address, universeId: bigint, blockNumber?: bigint, questionStart = 0n): Promise<PortfolioAdmission> {
 	const code = await client.getCode({ address, blockNumber })
@@ -36,6 +43,7 @@ export async function loadPortfolioAdmission(client: Pick<ReadClient, 'getCode' 
 
 export function portfolioAdmissionCreationRequest(owner: Address, mode: 'open' | 'fixed', universeId: bigint, questionIds: readonly bigint[]): PortfolioTransaction {
 	if (mode === 'open') return { account: owner, value: 0n, data: encodeDeployData({ abi: openArtifact.abi, bytecode: `0x${openArtifact.evm.bytecode.object}` }), reviewDescription: 'Deploy an immutable open admission policy. Anyone may add eligible questions to portfolios using this policy.' }
+	requireFixedAdmissionQuestionLimit(questionIds.length)
 	if (questionIds.length === 0) throw new Error('Choose at least one approved question.')
 	if (questionIds.some((id, index) => id < 0n || id >= 1n << 256n || (index > 0 && id <= (questionIds[index - 1] ?? id)))) throw new Error('Choose increasing unique question IDs.')
 	return {

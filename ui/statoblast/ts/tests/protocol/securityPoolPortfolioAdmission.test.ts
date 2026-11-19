@@ -6,6 +6,12 @@ import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortf
 
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const policy = getAddress('0x0000000000000000000000000000000000000022')
+
+test('fixed policy deployment rejects a list above the transaction gas limit', () => {
+	const questions = Array.from({ length: 720 }, (_, index) => BigInt(index + 1))
+	expect(() => portfolioAdmissionCreationRequest(owner, 'fixed', 7n, questions)).toThrow('700 approved questions')
+	expect(portfolioAdmissionCreationRequest(owner, 'fixed', 7n, questions.slice(0, 700)).data).toBeDefined()
+})
 function client(code: Hex, universeId = 7n, allowed = true) {
 	return createPublicClient({ transport: http('https://example.test') }).extend(() => ({
 		getCode: async () => code,

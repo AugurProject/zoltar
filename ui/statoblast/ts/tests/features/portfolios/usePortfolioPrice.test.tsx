@@ -164,6 +164,28 @@ test('settlement and recovery remain independent after funding closes', async ()
 	expect(state.requests).toHaveLength(3)
 })
 
+test('price settlement waits for the report base-fee ceiling and rechecks the fee before submission (#1370)', async () => {
+	const state = await setup(fixture => {
+		fixture.values['pendingReportId'] = 9n
+		fixture.source.setSnapshot(capitalSnapshot({ timestamp: 1_200n }))
+		fixture.setBaseFee(2n)
+	})
+	await waitFor(() => expect(state.hook.state().report?.reportId).toBe(9n))
+	expect(state.hook.state().settleReason).toContain('base fee')
+	await expect(state.hook.state().settle()).rejects.toThrow('base fee')
+	expect(state.requests).toHaveLength(0)
+
+	state.setBaseFee(1n)
+	await act(() => state.hook.state().refresh())
+	await waitFor(() => expect(state.hook.state().settleReason).toBeUndefined())
+	await act(() => state.hook.state().settle())
+	const transaction = lastRequest(state.requests)
+	expect(transaction.reviewDescription).toContain('base fee')
+	await transaction.validateBeforeSubmit?.()
+	state.setBaseFee(2n)
+	await expect(transaction.validateBeforeSubmit?.()).rejects.toThrow('base fee')
+})
+
 test('new report funding stops one challenge period before the fixed preparation cutoff', async () => {
 	const state = await setup()
 	await act(() => state.hook.state().setPrice('2'))

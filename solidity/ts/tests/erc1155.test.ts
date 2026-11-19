@@ -813,6 +813,31 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await assertReceiverErrors(/ERC1155: receiver panicked during single-transfer acceptance check/, /ERC1155: receiver panicked during batch-transfer acceptance check/)
 	})
 
+	test('opaque receiver errors identify a rejected transfer and preserve balances (#1406)', async () => {
+		const shareTokenAddress = await deployShareToken()
+		const receiver = await deployReceiver()
+		const token = { abi: statoblast_tokens_ShareToken_ShareToken.abi, address: shareTokenAddress }
+		const sender = client.account.address
+		await mintCompleteSets(shareTokenAddress, sender, 1n)
+		const ids = await Promise.all([readTokenId(shareTokenAddress, 0), readTokenId(shareTokenAddress, 1)])
+		const yes = await readTokenId(shareTokenAddress, 1)
+		// Return an opaque four-byte custom-error selector for both receiver hooks.
+		// PUSH4 selector, PUSH0, MSTORE, PUSH1 4, PUSH1 28, REVERT.
+		await getAnvilWindowEthereum().request({ method: 'anvil_setCode', params: [receiver, '0x63deadbeef5f526004601cfd'] })
+		await assert.rejects(
+			writeContractAndWait(client, () => client.writeContract({ ...token, functionName: 'safeTransferFrom', args: [sender, receiver, yes, 1n] })),
+			/ERC1155: receiver rejected tokens during single-transfer acceptance check/,
+		)
+		await assert.rejects(
+			writeContractAndWait(client, () => client.writeContract({ ...token, functionName: 'safeBatchTransferFrom', args: [sender, receiver, ids, [1n, 1n]] })),
+			/ERC1155: receiver rejected tokens during batch-transfer acceptance check/,
+		)
+		for (const id of ids) {
+			assert.strictEqual(await client.readContract({ ...token, functionName: 'balanceOf', args: [sender, id] }), 1n)
+			assert.strictEqual(await client.readContract({ ...token, functionName: 'balanceOf', args: [receiver, id] }), 0n)
+		}
+	})
+
 	test('safeTransferFrom calls the receiver hook and batch minting to a contract uses the batch hook', async () => {
 		const shareTokenAddress = await deployShareToken()
 		const receiverAddress = await deployReceiver()

@@ -38,6 +38,7 @@ export const outcomeHeldRep = 'You hold'
 export const outcomeAlreadyMigrated = 'Already migrated'
 export const openChildUniverse = 'Open child universe'
 export const outcomeSelectionRequired = 'Select at least one outcome.'
+export const migrationChildDeploymentLimit = 'Select up to seven undeployed outcomes per migration so the transaction fits the network gas limit.'
 
 export const migrationAmountLabel = 'Amount to migrate'
 export const formatUseAllRep = (amount: CopyTemplateValue) => `Use all ${amount}\u00a0REP`

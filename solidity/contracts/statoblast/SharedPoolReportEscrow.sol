@@ -65,12 +65,24 @@ contract SharedPoolReportEscrow {
 		}
 		ISharedReportReceiver(feed).settleReport(id, amount1, amount2);
 		emit ReportCompleted(id, feed, ISharedReportReceiver(feed).reportOutcome(id));
-		withdrawFunding();
+		_withdrawOracleFunding();
 	}
 
 	/// @notice Anyone can deliver already-released report funding to its sponsor.
 	/// A disputed or failed-callback candidate cannot lock another report's funds.
-	function withdrawFunding() public {
+	function withdrawFunding() external {
+		_withdrawOracleFunding();
+		if (reportId == 0) return;
+		_returnDirectBalance(weth);
+		_returnDirectBalance(IERC20(address(reputationToken)));
+	}
+
+	function _returnDirectBalance(IERC20 token) private {
+		uint256 balance = token.balanceOf(address(this));
+		if (balance != 0) token.safeTransfer(sponsor, balance);
+	}
+
+	function _withdrawOracleFunding() private {
 		openOracle.withdrawTo(address(weth), type(uint256).max, sponsor);
 		openOracle.withdrawTo(address(reputationToken), type(uint256).max, sponsor);
 	}

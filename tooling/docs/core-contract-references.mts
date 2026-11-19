@@ -398,7 +398,7 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'ae7aee1f3f93cd610cb79ad0d25933cfc0edc261f68d79918c4ffeac3e574a76',
+		compiledAbiFingerprint: '80647e5bffa52cd141bdde13237ab73104cd8ef447daa1644dd0d4349d341a03',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys every portfolio from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
 		readAbiFingerprint: '896ad4b57b32193677e7a8e6ab745bebb78aa8cc10c5060037753b1802304ab3',
@@ -481,7 +481,7 @@ export const coreContractReferences: ContractReference[] = [
 				],
 				preconditions:
 					'The universe has a REP token and has not forked. A repeated call must match the first call\u2019s REP token and priority fee. The feed starts without an accepted price. The caller satisfies `isPortfolio` (`Portfolio is not canonical`), so no other contract can open a namespace. This call neither registers a question nor allocates REP.',
-				signals: '`PortfolioRegistered` on the first call from a namespace; returns the canonical feed address. No question-deployment event.',
+				signals: 'Returns the canonical feed address. The first setup emits `PortfolioRegistered`. Each new feed emits `SharedPriceFeedRegistered` with the portfolio, universe and feed address.',
 			},
 			{
 				call: '`initializePortfolioPriceFeedForUniverse(universeId)`',
@@ -493,7 +493,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: 'The caller has configured its namespace; the caller\u2019s portfolio clock recognizes the target universe; the target REP token exists.',
-				signals: 'Returns the canonical feed address; no question-deployment event.',
+				signals: 'Returns the canonical feed address. A newly deployed feed emits `SharedPriceFeedRegistered`.',
 			},
 			{
 				call: '`preparePortfolioPriceFeed(source, targetUniverse)`',
@@ -505,7 +505,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: 'Canonical portfolio source; the portfolio clock recognizes the target; the target REP token exists.',
-				signals: 'Returns the canonical feed address.',
+				signals: 'Returns the canonical feed address. A newly deployed feed emits `SharedPriceFeedRegistered`.',
 			},
 			{
 				call: '`deployPortfolioSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
@@ -531,7 +531,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: 'The parent is a canonical portfolio ledger in PoolForked state. Its namespace and oracle configuration determine the feed; Zoltar determines the selected child universe and its REP token.',
-				signals: 'Returns the canonical child feed address; child REP deployment may emit Zoltar events.',
+				signals: 'Returns the canonical child feed address. A newly deployed feed emits `SharedPriceFeedRegistered`. Child REP deployment may emit Zoltar events.',
 			},
 			{
 				call: '`prepareChildPoolCoordinator(parent, outcomeIndex)`',

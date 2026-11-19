@@ -1,6 +1,7 @@
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { validatePortfolioEconomics } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { parsePortfolioAmount, portfolioAmountOrUndefined } from './draft.js'
+import { requireFixedAdmissionQuestionLimit } from '../../../protocol/securityPoolPortfolioAdmission.js'
 
 export type CuratedAdmissionMode = 'open' | 'fixed'
 export type PortfolioCreationDraft = {
@@ -59,7 +60,7 @@ export function parseFixedPortfolioQuestions(input: string) {
 		.split(/[\s,]+/)
 		.filter(Boolean)
 	if (values.length === 0) throw new Error('Enter at least one approved question ID.')
-	return [
+	const questions = [
 		...new Set(
 			values.map(value => {
 				if (!/^(0x[\da-fA-F]+|\d+)$/.test(value)) throw new Error('Use decimal or hexadecimal question IDs separated by commas or spaces.')
@@ -73,6 +74,8 @@ export function parseFixedPortfolioQuestions(input: string) {
 		if (left > right) return 1
 		return 0
 	})
+	requireFixedAdmissionQuestionLimit(questions.length)
+	return questions
 }
 
 /** The wallet review for a portfolio deployment; the purchase fee floor and minimum commitment are in collateral units. */

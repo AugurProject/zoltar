@@ -124,7 +124,6 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 			auctions: allAuctions.slice(0, 250),
 			risk,
 			feeEconomics: risk.feeEconomics,
-			prices: [{ source_event: 'PriceReported', value: '233590000000000000000', block_number: asOf.blockNumber }],
 			forks: [
 				{
 					universe_identity: '0',

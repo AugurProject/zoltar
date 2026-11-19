@@ -50,6 +50,7 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 	let wethBalanceAttoEth = 0n
 	let wethAllowanceAttoEth = 0n
 	let repAllowanceAttoRep = 0n
+	let baseFeePerGas = 0n
 	const game: OpenOracleStatePreimage['game'] = {
 		callbackContract: priceEscrow,
 		callbackGasLimit: 1_000_000n,
@@ -94,14 +95,17 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 			return source.client.readContract(request)
 		}),
 	)
-	const backend = { ...source.backend, createReadClient: () => client }
+	const pricedClient = client.extend(() => ({
+		getBlock: async (parameters: Parameters<typeof client.getBlock>[0]) => ({ ...(await client.getBlock(parameters)), baseFeePerGas }),
+	}))
+	const backend = { ...source.backend, createReadClient: () => pricedClient }
 	installActiveEnvironmentForTesting(backend)
 	return {
 		source,
 		values,
 		game,
 		reads,
-		client,
+		client: pricedClient,
 		backend,
 		fork: () => loadPortfolioForkSnapshot({ client: portfolioReadClient(client), portfolio, owner, universeId: 0n, outcomeIndex: 1n }),
 		setWeth: (amount: bigint) => {
@@ -110,6 +114,9 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 		setAllowances: (weth: bigint, rep: bigint) => {
 			wethAllowanceAttoEth = weth
 			repAllowanceAttoRep = rep
+		},
+		setBaseFee: (fee: bigint) => {
+			baseFeePerGas = fee
 		},
 		set: (address: Address, name: string, value: unknown) => {
 			scoped.set(`${address}:${name}`, value)

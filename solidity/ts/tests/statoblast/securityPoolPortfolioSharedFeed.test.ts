@@ -45,6 +45,29 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'reportOutcome', args: [smallReport] })).toBe(2n)
 	})
 
+	test('returns direct report-token deposits to the sponsor after settlement (#1409)', async () => {
+		await fixture.prepare()
+		const owner = fixture.owner()
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
+		const id = await getPendingReportId(owner, coordinator)
+		const [escrow] = await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'reportCandidates', args: [id] })
+		const { game } = (await loadOpenOracleEventState(owner, id)).latest
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, id)
+		for (const token of [game.token1, game.token2]) {
+			const balance = (address: typeof escrow) => owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })
+			const before = await balance(owner.account.address)
+			await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'transfer', args: [escrow, 1n] }))
+			for (let call = 0; call < 2; call++) {
+				const other = fixture.other()
+				await writeContractAndWait(other, () => other.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
+				expect(await balance(escrow)).toBe(0n)
+				expect(await balance(owner.account.address)).toBe(before)
+			}
+		}
+	})
+
 	test('concurrent sponsors cannot collect another candidate refund, including disputed funding', async () => {
 		await fixture.prepare()
 		const owner = fixture.owner()

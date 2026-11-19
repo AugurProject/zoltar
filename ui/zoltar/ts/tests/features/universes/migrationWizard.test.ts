@@ -65,6 +65,16 @@ describe('deriveMigrationWizard', () => {
 		expect(wizard.reachableStepId).toBe('review')
 	})
 
+	test('limits a migration to seven new child universes while allowing existing children', () => {
+		const children = Array.from({ length: 9 }, (_, index) => child(BigInt(index), `Outcome ${index}`, index === 8))
+		const wizardInput = input({ amountInput: '1', childUniverses: children, childMigratedAttoRep: { '108': 0n }, requiresApproval: false })
+		const all = deriveMigrationWizard({ ...wizardInput, selectedOutcomeIndexes: children.map(outcome => outcome.outcomeIndex) })
+		expect(all.steps[0]?.status).toBe('blocked')
+		expect(all.steps[3]?.status).toBe('incomplete')
+		const withinLimit = deriveMigrationWizard({ ...wizardInput, selectedOutcomeIndexes: children.slice(1).map(outcome => outcome.outcomeIndex) })
+		expect(withinLimit.steps[3]?.status).toBe('ready')
+	})
+
 	test('uses the existing migration balance first and skips approval when it covers the amount', () => {
 		const wizard = deriveMigrationWizard(input({ amountInput: '300', migrationBalanceAttoRep: 500n * ATTO_REP_PER_REP, selectedOutcomeIndexes: [1n] }))
 		expect(wizard.fromMigrationBalanceAttoRep).toBe(300n * ATTO_REP_PER_REP)

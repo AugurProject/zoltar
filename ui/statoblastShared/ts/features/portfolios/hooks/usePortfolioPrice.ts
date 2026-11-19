@@ -159,8 +159,9 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		(report === undefined ? scoped.reportLoading : undefined)
 	// Nothing loads without a target, so the report waits for one instead of showing a load that never ends.
 	const refreshReason = (target === undefined ? scoped.missingTarget : undefined) ?? (current === undefined ? scoped.loading : undefined)
-	const settleReason = selectedReportReason ?? (report?.state.settled ? copy.alreadySettled : undefined) ?? (snapshot !== undefined && report !== undefined && snapshot.timestamp < report.eligibleAt ? copy.waitForSettlement : undefined)
-	const recoverReason = selectedReportReason ?? (!report?.state.settled ? copy.notSettled : undefined) ?? (report?.outcome !== 0n ? copy.callbackComplete : undefined)
+	const feeReason = (selected: PortfolioPriceReport | undefined) => (selected?.baseFeePerGas !== undefined && selected.baseFeePerGas > selected.maxSettlementBaseFee ? copy.waitForBaseFee : undefined)
+	const settleReason = selectedReportReason ?? (report?.state.settled ? copy.alreadySettled : undefined) ?? (snapshot !== undefined && report !== undefined && snapshot.timestamp < report.eligibleAt ? copy.waitForSettlement : undefined) ?? feeReason(report)
+	const recoverReason = selectedReportReason ?? (!report?.state.settled ? copy.notSettled : undefined) ?? (report?.outcome !== 0n ? copy.callbackComplete : undefined) ?? feeReason(report)
 	const withdrawReason = selectedReportReason ?? (report?.wethCredit === 0n && report.repCredit === 0n ? copy.noFunding : undefined)
 
 	const run = (action: string, label: string, reason: string | undefined, build: (selected: PortfolioPriceSnapshot) => PortfolioTransaction, check: (latest: PortfolioPriceSnapshot) => Promise<void> = async () => undefined, captureReport = false) =>
@@ -306,14 +307,25 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 				true,
 			),
 		settle: () =>
-			run(portfolioPriceAction(scope, 'settle'), copy.settle, settleReason, withReport(buildPortfolioPriceSettlement), async latest => {
-				const fresh = await freshReport(latest)
-				if (fresh.state.settled || latest.timestamp < fresh.eligibleAt) throw new Error('This report is not ready to settle.')
-			}),
+			run(
+				portfolioPriceAction(scope, 'settle'),
+				copy.settle,
+				settleReason,
+				withReport((selected, selectedReport) => ({
+					...buildPortfolioPriceSettlement(selected, selectedReport),
+					reviewDescription: copy.formatSettlementReview(selectedReport.baseFeePerGas === undefined ? undefined : formatUnits(selectedReport.baseFeePerGas, 9), formatUnits(selectedReport.maxSettlementBaseFee, 9)),
+				})),
+				async latest => {
+					const fresh = await freshReport(latest)
+					if (fresh.state.settled || latest.timestamp < fresh.eligibleAt) throw new Error('This report is not ready to settle.')
+					if (feeReason(fresh) !== undefined) throw new Error(copy.waitForBaseFee)
+				},
+			),
 		recover: () =>
 			run(portfolioPriceAction(scope, 'recover'), copy.recover, recoverReason, withReport(buildPortfolioPriceRecovery), async latest => {
 				const fresh = await freshReport(latest)
 				if (!fresh.state.settled || fresh.outcome !== 0n) throw new Error(copy.callbackComplete)
+				if (feeReason(fresh) !== undefined) throw new Error(copy.waitForBaseFee)
 			}),
 		withdraw: () =>
 			run(portfolioPriceAction(scope, 'withdraw'), copy.withdraw, withdrawReason, withReport(buildPortfolioPriceFundingWithdrawal), async latest => {

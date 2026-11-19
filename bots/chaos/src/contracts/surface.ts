@@ -29,6 +29,9 @@ const entry = (contract: string, method: string, classification: OperationClassi
 // This is deliberately explicit. New protocol methods should fail the artifact coverage
 // test until their chaos behavior (or exclusion reason) is reviewed.
 export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] = [
+	entry('EscalationChallengeEscrow', 'contribute', 'excluded-dangerous', undefined, 'A contribution locks holder REP until withdrawal or actual escalation. The catalog has no pooled challenge funding budget.'),
+	entry('EscalationChallengeEscrow', 'withdraw', 'excluded-dangerous', undefined, 'Only an escrow contributor can withdraw. The catalog does not create escrow contributions.'),
+	entry('EscalationChallengeEscrow', 'activate', 'excluded-dangerous', undefined, 'Activation spends pledged REP on an escalation. The catalog has no pooled challenge lifecycle or budget.'),
 	entry('ZoltarQuestionData', 'createQuestion', 'selectable', 'zoltar.question.create-binary'),
 	entry('Zoltar', 'forkUniverse', 'selectable', 'zoltar.universe.fork'),
 	entry('Zoltar', 'burnRep', 'selectable', 'zoltar.rep.burn'),

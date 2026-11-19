@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createWalletClient, createRpcEndpointPool, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
+import { securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { capitalUnit as E, useCapitalTestFixture } from '../../../../solidity/ts/tests/statoblast/securityPoolCapitalTestFixture'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
@@ -14,6 +15,9 @@ import { portfolioTakeoverPlan } from '../../src/core/portfolio-strategy.ts'
 import { submitCall } from '../../src/execution/submit-call.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { portfolioObservation, portfolioSettings } from '../support/portfolio-observation.ts'
+import { useSecurityPoolPortfolioFixture } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
+import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
+import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
 
 // The harness supplies book/price authority; Ledger, Index, signing, simulation,
 // public submission and durable receipt settlement all run their real code.
@@ -239,4 +243,62 @@ describe('atomic unpaid cure and portfolio takeover', () => {
 			expect(receiver.feesAttoRep).toBe(0n)
 			expect(await fixture.position(receiver.positionId)).toMatchObject({ rep: 200n * E, commitment: 40n * E, batch: 0n, remainingCommitment: 0n })
 		})
+})
+
+describe('direct takeover against a holding-fee portfolio', () => {
+	const fixture = useSecurityPoolPortfolioFixture()
+
+	test('the checkpoint clamps a quote across elapsed holding fees and the keeper still completes (#1350, #1373)', async () => {
+		const source = fixture.owner()
+		const buyer = fixture.other()
+		await fixture.prepare(300n * E, 100n * E)
+		await fixture.mint(90n * E)
+		await fixture.deposit(900n * E, buyer)
+		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: securityPoolCapitalLedgerAbi, address: fixture.capitalLedger, functionName: 'setHealthTarget', args: [15_000n] }))
+		await fixture.refreshPrice(fixture.base.questionId, 3n * E)
+		const settings = portfolioSettings()
+		settings.runtime.execute = true
+		const { securityPoolFactory, zoltar } = getInfraContractAddresses()
+		settings.deployment = { ...settings.deployment, securityPoolFactory, zoltar }
+		const scope = { address: fixture.portfolio, universeId: fixture.base.genesisUniverse, nextPositionId: 1n, sweepEnd: 0n }
+		settings.selectedPortfolios = [scope]
+		settings.approvedUniverses = [scope.universeId]
+		const wallet = createWalletClient({ account: buyer.account, chain: mainnet, transport: custom(fixture.base.mockWindow) })
+		const state = initialRuntimeState(false, buyer.account.address, 1)
+		const pool = createRpcEndpointPool(['https://unused.example'])
+		const id = 1n
+		const observe = async () => {
+			const block = await buyer.getBlock()
+			if (block.number === undefined) throw new Error('Missing test block')
+			return loadPortfolioObservation(buyer, settings, buyer.account.address, scope, block.number, [id])
+		}
+		const first = await observe()
+		const target = first.positions[0]
+		if (target === undefined) throw new Error('Missing keeper target')
+		const { plan, reason } = portfolioTakeoverPlan(first, target, settings, first.managedPrincipalAttoRep ?? 0n, true)
+		if (plan === undefined) throw new Error(`Keeper could not quote the distressed position: ${reason}`)
+		expect(plan.minimumAward).toBe(0n)
+		expect(plan.ownFunding).toBe(0n)
+		const refresh: typeof refreshPortfolioExecution = async () => {
+			const observation = await observe()
+			return { observation, totalPrincipal: observation.managedPrincipalAttoRep ?? 0n, allowance: 0n }
+		}
+		let transactions = 0
+		const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
+			await buyer.call({ to: call.to, data: call.data, value: call.value })
+			await call.preSubmit?.()
+			await fixture.base.mockWindow.advanceTime(60n)
+			const hash = await writeContractAndWait(buyer, () => buyer.sendTransaction({ to: call.to, data: call.data, value: call.value }))
+			transactions++
+			return hash
+		}
+		await executePortfolioTakeover(wallet, settings, state, pool, first, id, async () => true, { refresh, submit })
+		const after = await observe()
+		expect(transactions).toBe(1)
+		expect(state.paused).toBe(false)
+		expect(after.snapshot.demandAttoEth).toBeLessThan(first.snapshot.demandAttoEth)
+		expect(after.snapshot.ownerCommitmentAttoEth).toBeGreaterThan(0n)
+		expect(after.snapshot.ownerCommitmentAttoEth).toBeLessThan(plan.commitment)
+		expect(after.positions.find(position => position.owner === source.account.address)?.rep).toBe(target.rep)
+	})
 })

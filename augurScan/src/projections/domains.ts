@@ -61,8 +61,9 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled'], ['positionId', 'sourceId']),
 	...definitions('risk', 'portfolio', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
 	...definitions('risk', 'portfolio', ['PortfolioDeployed', 'PortfolioRegistered'], ['portfolio']),
+	...definitions('oracle', 'price-feed', ['SharedPriceFeedRegistered'], ['priceFeed']),
 	// The portfolio auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.
-	...definitions('risk', 'portfolio-auction', ['AuctionOpened', 'WinningVaultCreated', 'AuctionClosed']),
+	...definitions('risk', 'portfolio-auction', ['AuctionOpened', 'BidVaultCreated', 'AuctionClosed']),
 	...definitions('fork', 'portfolio-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen'], ['universeId']),
 	// The reporter ledger creates a child's reporter escrow under the forked source universe.
 	...definitions('fork', 'portfolio-branch', ['ReporterChildCreated'], ['sourceUniverseId']),

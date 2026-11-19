@@ -175,9 +175,10 @@ contract SecurityPool is SecurityPoolStorage {
 		return 0;
 	}
 
-	/// @notice Returns zero once a game exists; otherwise question cash plus available shared portfolio capacity.
+	/// @notice Returns zero once the question ends or a game exists; otherwise question cash plus available shared portfolio capacity.
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
-		if (address(escalationGame) != address(0)) return 0;
+		if (address(escalationGame) != address(0) || block.timestamp >= questionData.getQuestionEndDate(questionId))
+			return 0;
 		if (portfolioCustody != address(0)) {
 			// Existing consumers subtract this question's cash from the reported
 			// ceiling. Shared capacity excludes pending retirement commitments.

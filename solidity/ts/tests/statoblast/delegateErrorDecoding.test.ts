@@ -33,6 +33,8 @@ describe('Statoblast: delegate revert reasons', () => {
 		const reason = 'Question active'
 		const wellFormed: Hex = `${errorSelector}${encodeAbiParameters([{ type: 'string' }], [reason]).slice(2)}`
 		const malformed: readonly Hex[] = [
+			// An Error selector alone has no ABI string header.
+			errorSelector,
 			// The string offset points far outside the payload.
 			`${errorSelector}${word(2n ** 255n)}${word(0n)}`,
 			// The offset is in range, but the declared length runs past the end.

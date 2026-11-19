@@ -48,7 +48,6 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const auctions = operationsCatalogRecords('auctions', data['auctions'])
 	const forks = operationsCatalogRecords('forks', data['forks'])
 	const changes = operationRecords(data['recentChanges'])
-	const prices = operationRecords(data['prices'])
 	const trading = operationsCatalogRecords('trading', data['trading'])
 	const timeline = operationsCatalogRecords('timeline', data['timeline'])
 	const integrity = operationsCatalogRecords('integrity', data['integrity'])
@@ -245,7 +244,6 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		),
 	)
 	const changeRows = changes.map(item => operationRow(String(item['semantic_event_kind'] ?? 'Protocol transition'), 'Canonical semantic evidence', String(item['entity_identity'] ?? ''), item['block_number']))
-	const priceRows = prices.map(item => operationRow('Coordinator REP / ETH', `${exactUnit(String(item['value'] ?? '0'), 18, 'REP/ETH')} · ${String(item['source_event'] ?? 'Unavailable')}`, String(item['source_contract'] ?? ''), item['block_number']))
 	const attentionReportRows: HTMLElement[] = []
 	for (const [index, item] of reports.entries()) {
 		const lifecycle = isPlainRecord(item['lifecycle']) ? item['lifecycle'] : {}
@@ -362,7 +360,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationsPanel('Fee economics', feeRows, 'No capital ledger is indexed.'),
 		operationsPanel('Pool risk', poolRiskRows, 'No risk snapshots are available.'),
 		operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
-		operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),
+		operationsPanel('REP prices', [operationRow('Capital ledgers', 'See the accepted REP price for each ledger.', undefined, undefined, operationsHref('/operations/risk'))], ''),
 		operationsPanel('Recent semantic changes', changeRows, 'No changes match this view.'),
 	]
 	const grid = element('div', panels.length === 1 ? 'operations-grid operations-grid-single' : 'operations-grid')

@@ -248,7 +248,8 @@ contract ERC1155 is IERC1155 {
 			revert('ERC1155: receiver rejected tokens during single-transfer acceptance check');
 		} catch Panic(uint256) {
 			revert('ERC1155: receiver panicked during single-transfer acceptance check');
-		} catch (bytes memory) {
+		} catch (bytes memory reason) {
+			require(reason.length == 0, 'ERC1155: receiver rejected tokens during single-transfer acceptance check');
 			revert('ERC1155: transfer target does not implement ERC1155Receiver for single transfers');
 		}
 	}
@@ -261,7 +262,8 @@ contract ERC1155 is IERC1155 {
 			revert('ERC1155: receiver rejected tokens during batch-transfer acceptance check');
 		} catch Panic(uint256) {
 			revert('ERC1155: receiver panicked during batch-transfer acceptance check');
-		} catch (bytes memory) {
+		} catch (bytes memory reason) {
+			require(reason.length == 0, 'ERC1155: receiver rejected tokens during batch-transfer acceptance check');
 			revert('ERC1155: transfer target does not implement ERC1155Receiver for batch transfers');
 		}
 	}
