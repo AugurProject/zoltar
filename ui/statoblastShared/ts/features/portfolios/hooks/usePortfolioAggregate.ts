@@ -41,7 +41,7 @@ const proofAbi = [
 	},
 ] as const
 
-/** An underwater position's uncovered part is cut at once; only a reduction below the covered amount leaves a queued rest. */
+/** Describe an eligible immediate cure and the portion that can still queue. */
 function retirementQueueDescription(covered: bigint | undefined, remainingCommitment: bigint, collateral: Readonly<{ decimals: number; symbol: string }>) {
 	if (covered === undefined) return ' The reduction waits for spare capacity behind earlier retirement requests.'
 	// Rounding down keeps "covers only" conservative.
@@ -381,7 +381,8 @@ export function usePortfolioAggregate(
 					if (reason !== undefined || remainingCommitment === undefined) throw new Error(reason ?? 'Enter a remaining commitment.')
 					const position = selected.positions.find(item => item.id === id && item.commitment > 0n)
 					const covered = position === undefined ? undefined : coveredUnderwaterCommitment(selected, position)
-					const queue = retirementQueueDescription(covered, remainingCommitment, selected.collateral)
+					const queuesInFull = position !== undefined && covered !== undefined && remainingCommitment === 0n && position.commitment - covered < selected.economics.minimumCommitmentAttoEth
+					const queue = retirementQueueDescription(queuesInFull ? undefined : covered, remainingCommitment, selected.collateral)
 					return {
 						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: remainingCommitment }),
 						reviewDescription: `Reduce position ${id} to ${formatUnits(remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. ${remainingCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,

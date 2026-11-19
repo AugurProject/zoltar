@@ -422,7 +422,9 @@ describe('Contract Test Suite', () => {
 			assert.strictEqual(ourBalance, await getMigrationRepBalanceAttoRep(client, GENESIS_UNIVERSE, client.account.address))
 		}
 
-		// split rest of the rep
+		// Native migration is still available after the portfolio recapitalization deadline (#1377).
+		const recapitalizationDeadline = await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getForkRecapitalizationDeadline', args: [GENESIS_UNIVERSE] })
+		await mockWindow.setTime(recapitalizationDeadline + 1n)
 		const splitOutcomeIndexes = [0, 1, 2]
 		const priorBalances = await Promise.all(
 			splitOutcomeIndexes.map(async index => {

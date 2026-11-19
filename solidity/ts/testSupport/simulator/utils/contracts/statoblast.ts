@@ -13,7 +13,7 @@ import {
 } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
 import { WETH_ADDRESS } from '../constants'
-import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_tokens_ShareToken_ShareToken } from '../../../../types/contractArtifact'
+import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_tokens_ShareToken_ShareToken } from '../../../../types/contractArtifact'
 import type { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
@@ -39,22 +39,18 @@ const ERC20_APPROVE_ABI = [
 	},
 ] as const
 
-const getCoordinatorMinimumToken1Report = async (client: ReadClient, openOraclePriceCoordinator: Address) =>
-	await client.readContract({
-		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'minimumToken1ReportAttoEth',
-		address: openOraclePriceCoordinator,
-		args: [],
-	})
-
 export const getDefaultInitialReportPrice = async (client: ReadClient, openOraclePriceCoordinator: Address) => {
 	const lastPrice = await getLastPrice(client, openOraclePriceCoordinator)
 	return lastPrice > 0n ? lastPrice : PRICE_PRECISION
 }
 
 export const fundCoordinatorInitialReport = async (client: WriteClient, openOraclePriceCoordinator: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) => {
-	const [minimumToken1ReportAttoEth, rawReputationTokenAddress] = await Promise.all([
-		getCoordinatorMinimumToken1Report(client, openOraclePriceCoordinator),
+	const [feed, rawReputationTokenAddress] = await Promise.all([
+		client.readContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'priceFeed',
+			address: openOraclePriceCoordinator,
+		}),
 		client.readContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'reputationToken',
@@ -62,6 +58,12 @@ export const fundCoordinatorInitialReport = async (client: WriteClient, openOrac
 			args: [],
 		}),
 	])
+	const minimumToken1ReportAttoEth = await client.readContract({
+		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
+		functionName: 'minimumToken1ReportAttoEthForPrice',
+		address: feed,
+		args: [proposedRepPerEthPrice],
+	})
 	const reputationTokenAddress = requireAddress(rawReputationTokenAddress, 'Oracle coordinator reputation token')
 	const bufferedMinimumToken1Report = minimumToken1ReportAttoEth * 2n
 	const maximumInitialAttoWeth = requestedInitialAttoWeth > bufferedMinimumToken1Report ? requestedInitialAttoWeth : bufferedMinimumToken1Report
@@ -103,13 +105,14 @@ export const requestPrice = async (client: WriteClient, openOraclePriceCoordinat
 
 export const requestPriceWithValue = async (client: WriteClient, openOraclePriceCoordinator: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, bountyAttoEth = value) => {
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getDefaultInitialReportPrice(client, openOraclePriceCoordinator))
-	await fundCoordinatorInitialReport(client, openOraclePriceCoordinator, resolvedInitialReportPrice, requestedInitialAttoWeth)
+	const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, openOraclePriceCoordinator, resolvedInitialReportPrice, requestedInitialAttoWeth)
+	const budget = requestedInitialAttoWeth > minimumToken1ReportAttoEth ? requestedInitialAttoWeth : minimumToken1ReportAttoEth
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: openOraclePriceCoordinator,
-			args: [resolvedInitialReportPrice, requestedInitialAttoWeth, bountyAttoEth],
+			args: [resolvedInitialReportPrice, budget, bountyAttoEth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),

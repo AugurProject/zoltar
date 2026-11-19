@@ -17,13 +17,29 @@ import {
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, loadOpenOracleEventState, openOracleSettle, requestPriceWithValue, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { fundCoordinatorInitialReport, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, loadOpenOracleEventState, openOracleSettle, requestPriceWithValue, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const feed = () => fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+
+	test('a question coordinator respects the sponsor’s signed collateral budget (#1351)', async () => {
+		await fixture.prepare(1_000n * unit, 100n * unit)
+		const owner = fixture.owner()
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const { minimumToken1ReportAttoEth: minimum } = await fundCoordinatorInitialReport(owner, coordinator, unit)
+		const bounty = await getRequestPriceCostAttoEth(owner, coordinator)
+		const request = { abi: coordinatorArtifact.abi, address: coordinator, functionName: 'requestPrice', value: bounty } as const
+		const pendingBefore = await getPendingReportId(owner, coordinator)
+
+		await expect(owner.simulateContract({ ...request, args: [unit, minimum - 1n, bounty] })).rejects.toThrow('Report funding exceeds approved budget')
+		expect(await getPendingReportId(owner, coordinator)).toBe(pendingBefore)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...request, args: [unit, minimum, bounty] }))
+		const reportId = await getPendingReportId(owner, coordinator)
+		expect((await loadOpenOracleEventState(owner, reportId)).latest.game.currentAmount1).toBe(minimum)
+	})
 
 	test('an accurate small report cannot veto an independently funded growth report', async () => {
 		await fixture.deposit(1_000n * unit)

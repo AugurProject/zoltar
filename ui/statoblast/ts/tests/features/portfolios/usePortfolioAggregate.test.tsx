@@ -197,6 +197,13 @@ test('the retirement review states the immediate cure for a position underwater 
 	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.')
 	expect(requests[0]?.reviewDescription).toContain('The rest waits for spare capacity')
 })
+test('the retirement review queues a full exit whose deficit is below the minimum cure (#1364)', async () => {
+	const snapshot = underwaterSnapshot()
+	const { hook, requests } = await setup({ ...snapshot, economics: { ...snapshot.economics, minimumCommitmentAttoEth: 3n * unit } })
+	await act(() => hook.state().retire(1n))
+	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
+	expect(requests[0]?.reviewDescription).toContain('The reduction waits for spare capacity')
+})
 test('the retirement review states six-decimal collateral amounts in collateral units', async () => {
 	const usdc = 10n ** 6n
 	const snapshot = capitalSnapshot()

@@ -93,6 +93,20 @@ describe('Statoblast: shared price feed defers settlements above the report base
 
 	const freeAttoRep = async (owner: `0x${string}`) => (await fixture.owner().readContract({ ...capital(), functionName: 'ownerAccount', args: [owner] })).freeAttoRep
 
+	test('only a feed-accepted report can authorize commitment growth (#1360)', async () => {
+		const { sponsor, settler, feed, report, ceiling } = await settleAboveCeiling()
+		await setNextBlockBaseFee(ceiling)
+		await fixture.base.mockWindow.request({ method: 'evm_mine', params: [] })
+		const proof = { ...feed, functionName: 'reportAuthorization', args: [report, 100n * unit] } as const
+		await expect(sponsor.readContract(proof)).rejects.toThrow('Report candidate not accepted')
+
+		await setNextBlockBaseFee(ceiling)
+		await writeContractAndWait(settler, () => settler.writeContract({ ...feed, functionName: 'recoverReport', args: [report], gasPrice: ceiling, gas: 5_000_000n }))
+		const [price, epoch] = await sponsor.readContract(proof)
+		expect(price).toBeGreaterThan(unit)
+		expect(epoch).toBe(await sponsor.readContract({ ...feed, functionName: 'acceptedEpoch' }))
+	})
+
 	test('a third-party settlement one attoETH per gas above the ceiling leaves the report pending and its funding released', async () => {
 		const { sponsor, feed, weth, escrow, report, receipt, spike, lastSettlementBefore } = await settleAboveCeiling()
 

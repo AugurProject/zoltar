@@ -31,7 +31,7 @@
 					<dt>Portfolio</dt>
 					<dd>A <a href="../reference/glossary.html#portfolio">shared capital and settlement system</a> that backs admitted questions. Each owner keeps an individual REP account and commitment; each question keeps separate outcome shares and accounting. A portfolio can hold one fixed question or many.</dd>
 					<dt>SecurityPool</dt>
-					<dd>The <a href="../reference/glossary.html#security-pool">question contract</a> inside a portfolio. It exposes outcome shares, reporting and redemption; portfolio modules hold REP and ETH.</dd>
+					<dd>The <a href="../reference/glossary.html#security-pool">question contract</a> inside a portfolio. It exposes outcome shares, reporting and redemption; portfolio modules hold REP and collateral.</dd>
 				</dl>
 			</section>
 			<section id="components">
@@ -44,12 +44,12 @@
 					<dt><a href="./trading.html">Trading</a></dt>
 					<dd>An exchange for Statoblast shares. It is one of possibly many; it neither creates nor resolves markets.</dd>
 					<dt><a href="./open-oracle.html">OpenOracle</a></dt>
-					<dd>A price feed. It supplies a contestable REP/ETH exchange rate whenever the protocol must check that REP still covers ETH obligations. It has no say in market outcomes.</dd>
+					<dd>A price feed. It supplies a contestable REP price in the portfolio’s collateral token so the protocol can check whether REP still covers its obligations. It has no say in market outcomes.</dd>
 				</dl>
 			</section>
 			<section id="lifecycle">
 				<h2>One market, start to finish</h2>
-				<p>Someone registers the Aurora question in Zoltar and admits it to a portfolio under that portfolio’s admission policy. Owners deposit REP and authorize shared commitments. Traders purchase <a href="../reference/glossary.html#complete-set">complete sets</a> through the portfolio: one Yes, one No and one <a href="../reference/glossary.html#invalid">Invalid</a> share at the question’s current backing rate. ETH goes to central settlement custody, with a separate balance for the question. Traders can exchange those shares; reporting begins after the question ends.</p>
+				<p>Someone registers the Aurora question in Zoltar and admits it to a portfolio under that portfolio’s admission policy. Owners deposit REP and authorize shared commitments. Traders purchase <a href="../reference/glossary.html#complete-set">complete sets</a> through the portfolio: one Yes, one No and one <a href="../reference/glossary.html#invalid">Invalid</a> share at the question’s current backing rate. The collateral token goes to central settlement custody, with a separate balance for the question. Traders can exchange those shares; reporting begins after the question ends.</p>
 				<figure class="diagram" id="fig-market-lifecycle" aria-labelledby="market-lifecycle-caption">
 					<ol class="protocol-flow">
 						<li>Register question</li>
@@ -67,7 +67,7 @@
 					<figcaption id="market-lifecycle-caption"><span class="figure-label">Market lifecycle.</span> The ordinary path resolves locally and skips the migration and repair steps. The fork path creates one child pool per answer and uses shared repair accounting and a branch auction for each portfolio child.</figcaption>
 				</figure>
 				<p>Reporters stake REP behind an answer in the pool's <a href="./escalation-game.html">Escalation Game</a>, a dispute round whose deadline moves later as the contested amount grows. When the deadline finally passes, the market resolves if exactly one answer holds more REP than every other, and winning shares redeem the question’s backing from central settlement custody. Usually that is the end of the story.</p>
-				<p>If two answers reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the universe can split into Invalid, Yes and No children. Owners record their branch choices before the portfolio’s cutoff. Shared branch accounting migrates their capital without requiring a separate owner claim for every question. Shareholders can materialize claims in multiple children, but ETH is not duplicated. Each portfolio branch repairs its shortfall through a shared <a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a>; winning bidders become capital owners. <a href="./statoblast.html#forks-migration">Forks and migration</a> explains the process, and <a href="./zoltar.html#non-guarantees">what a fork does and does not promise</a> describes its limits.</p>
+				<p>If two answers reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the universe can split into Invalid, Yes and No children. Owners record their branch choices before the portfolio’s cutoff. Shared branch accounting migrates their capital without requiring a separate owner claim for every question. Shareholders can materialize claims in multiple children, while each branch receives only the collateral allocated to it. Each portfolio branch repairs its shortfall through a shared <a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a>; winning bidders become capital owners. <a href="./statoblast.html#forks-migration">Forks and migration</a> explains the process, and <a href="./zoltar.html#non-guarantees">what a fork does and does not promise</a> describes its limits.</p>
 			</section>
 			<nav aria-label="Continue reading"><a href="./statoblast.html">Follow a market through Statoblast</a> · <a href="./zoltar.html">Understand branching universes</a> · <a href="../reference/glossary.html">Look up a term</a></nav>
 		</main>

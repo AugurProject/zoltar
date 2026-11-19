@@ -91,12 +91,13 @@ describe('Shared portfolio oracle security regressions', () => {
 			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
 		})
 	const requestPriceAtBaseFee = async (repPerEthPrice: bigint, requestEthCost: bigint, baseFeeAttoEthPerGas: bigint) => {
+		const minimum = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [repPerEthPrice] })
 		await setNextBlockBaseFee(baseFeeAttoEthPerGas)
 		const requestHash = await client.writeContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
-			args: [repPerEthPrice, 0n, requestEthCost],
+			args: [repPerEthPrice, minimum, requestEthCost],
 			value: requestEthCost,
 			gasPrice: baseFeeAttoEthPerGas,
 		})
@@ -513,7 +514,7 @@ describe('Shared portfolio oracle security regressions', () => {
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
-			args: [proposedRepPerEthPrice, 0n, await getRequestPriceCostAttoEth(client, priceOracle)],
+			args: [proposedRepPerEthPrice, requestMinimumWethReport, await getRequestPriceCostAttoEth(client, priceOracle)],
 			value: (await getRequestPriceCostAttoEth(client, priceOracle)) + requestMinimumWethReport,
 			gasPrice: requestBaseFeeAttoEthPerGas,
 		})
@@ -875,7 +876,7 @@ describe('Shared portfolio oracle security regressions', () => {
 	})
 	test('the coordinator retains the committed bounty and refunds only the ETH sent above it', async () => {
 		const proposedRepPerEthPrice = await getDefaultInitialReportPrice(client, priceOracle)
-		await fundCoordinatorInitialReport(client, priceOracle, proposedRepPerEthPrice)
+		const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, priceOracle, proposedRepPerEthPrice)
 		const bountyAttoEth = 101n + 5n * 10n ** 15n
 		const excessAttoEth = 7n * 10n ** 15n
 		const balanceBefore = await getETHBalance(client, client.account.address)
@@ -884,7 +885,7 @@ describe('Shared portfolio oracle security regressions', () => {
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
-			args: [proposedRepPerEthPrice, 0n, bountyAttoEth],
+			args: [proposedRepPerEthPrice, minimumToken1ReportAttoEth, bountyAttoEth],
 			value: bountyAttoEth + excessAttoEth,
 		})
 		const requestReceipt = await client.waitForTransactionReceipt({ hash: requestHash })

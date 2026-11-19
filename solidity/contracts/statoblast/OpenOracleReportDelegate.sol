@@ -46,7 +46,8 @@ contract OpenOracleReportDelegate {
 		IOracleReportConfig config = IOracleReportConfig(address(this));
 		SharedPoolPriceFeed feed = config.sharedPriceFeed();
 		uint256 minimum = feed.minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice);
-		uint256 wethAmount = requestedInitialAttoWeth > minimum ? requestedInitialAttoWeth : minimum;
+		require(requestedInitialAttoWeth >= minimum, 'Report funding exceeds approved budget');
+		uint256 wethAmount = requestedInitialAttoWeth;
 		uint256 repAmount = Math.mulDiv(wethAmount, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
 		IERC20 weth = feed.collateralToken();
 		ReputationToken reputationToken = config.reputationToken();
