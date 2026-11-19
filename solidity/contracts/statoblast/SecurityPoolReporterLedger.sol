@@ -222,6 +222,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		book.liveAttoRep -= haircut;
 		_changeFinality(book, state.finalAfter, haircut, false);
 		_writeQuestion(book, questionId, state);
+		emit ReporterBalanceChanged(universeId, questionId, state.balanceAttoRep);
 		IERC20(address(zoltar.getRepToken(universeId))).safeApprove(address(zoltar), threshold);
 		zoltar.forkUniverse(universeId, questionId);
 		_sealFork(universeId, book, zoltar.getForkTime(universeId));

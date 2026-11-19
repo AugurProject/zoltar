@@ -298,7 +298,10 @@ contract SecurityPool is SecurityPoolStorage {
 	function activateForkMode() external onlyForker {
 		if (hasInheritedForkOutcome) revert('Forked');
 		portfolioAccounting.freezeForFork();
+		// The forker may repeat this call; only the transition itself is a state change.
+		if (systemState == SystemState.PoolForked) return;
 		systemState = SystemState.PoolForked;
+		emit SystemStateSet(systemState);
 	}
 
 	/// @notice Forker-only: deploys the fork-continuation escalation game.

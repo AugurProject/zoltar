@@ -138,6 +138,17 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		await assert.rejects(readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.No, yesNodeId ?? 0n, 1n), /Outcome mismatch/)
 	})
 
+	test('fork carry leaf paging rejects a cursor that names no carry node', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+
+		// A missing node reads as the zero outcome, which is Invalid, so the outcome check alone
+		// would page a phantom leaf with no depositor and no amount.
+		for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) {
+			await assert.rejects(readCarryLeafPage(client, escalationGameAddress, outcome, 999n, 1n), /Unknown carry node/)
+		}
+	})
+
 	test('fork carry snapshot initialization normalizes zero nullifier roots to the empty sparse-tree root', async () => {
 		const child = await deployForkContinuationEscalationGame()
 

@@ -172,4 +172,20 @@ describe('Statoblast: question-linked resolution premium expiry', () => {
 		expect(await checkpoint(4 * day + 1, 1n)).toEqual([BigInt(day) * rate, 49n * BigInt(day) * rate])
 		expect(await checkpoint(window, 1n)).toEqual([0n, 0n])
 	})
+	test.each([0, day / 2])('a child response after the prepaid window ended keeps reporting live and refunds the unearned tail (seconds past the prepaid end: %d)', async elapsed => {
+		await fund(1n)
+		await schedule(1n, window - day)
+		expect(await checkpoint(window - 2 * day)).toEqual([BigInt(window - 2 * day) * rate, 0n])
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freeze', args: [0n] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'choose', args: [0n, 1n, 1n, 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChild', args: [0n, 1n] }))
+		// The child takes no refunds for three days, so the question still holds its unearned
+		// tail once the prepaid window has ended. A fresh response then asks for a finality the
+		// prepaid window can no longer fund: nothing more is earned, and reporting must go on.
+		expect(await checkpoint(window + elapsed, 1n)).toEqual([BigInt(day) * rate, 0n])
+		await schedule(1n, window + elapsed + 3 * day, 1n)
+		expect(await checkpoint(window + day + 1, 1n)).toEqual([0n, BigInt(day) * rate])
+		expect((await totals(1n)).slice(0, 2)).toEqual([0n, 0n])
+		expect(await client.readContract({ ...target(), functionName: 'totalCash' })).toBe(0n)
+	})
 })

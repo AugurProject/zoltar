@@ -40,7 +40,7 @@
 							</tr>
 							<tr>
 								<td>Portfolio economic configuration</td>
-								<td><code>EconomicsConfig</code> fixes <code>purchaseFeeBps</code> (at most 10,000), <code>annualFeeBps</code>, <code>minimumPurchaseFeeAttoEth</code>, positive <code>minimumCommitmentAttoEth</code>, <code>minimumOutcomeRate</code>, positive <code>rewardVestingSeconds</code>. Read these immutable settings from the portfolio’s corresponding getters. The security multiplier comes from the canonical seed.</td>
+								<td><code>EconomicsConfig</code> fixes <code>purchaseFeeBps</code> (at most 10,000), <code>annualFeeBps</code>, <code>minimumPurchaseFeeAttoEth</code>, positive <code>minimumCommitmentAttoEth</code>, <code>minimumOutcomeRate</code>, positive <code>rewardVestingSeconds</code> of at most <code>MAXIMUM_REWARD_VESTING_SECONDS</code> (3,650 days). Read these immutable settings from the portfolio’s corresponding getters. The security multiplier comes from the canonical seed.</td>
 								<td>Each provider selects its own health target through <code>setHealthTarget</code>. Raising it on a live position requires a fresh price and sufficient backing. <code>depositAndSetHealthTarget(amount, targetHealthFactorBps)</code> adds REP and updates the target atomically, applying the same backing check to live target increases. Lowering a target does not increase commitment. The protocol’s liquidation requirement remains unchanged.</td>
 							</tr>
 							<tr id="portfolio-underwriting">

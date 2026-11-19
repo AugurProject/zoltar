@@ -60,7 +60,12 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		for (const multiplier of [10_002n, 10_499n]) await expect(deploy(portfolioEconomics, 10_000_000_000n, multiplier)).rejects.toThrow('Multiplier must be at least 10500 BPS')
 		for (const minimumOutcomeRate of [0n, unit + 1n]) await expect(deploy({ ...portfolioEconomics, minimumOutcomeRate })).rejects.toThrow('Invalid minimum exchange rate')
 		await expect(deploy({ ...portfolioEconomics, annualFeeBps: 10_001n })).rejects.toThrow('Invalid portfolio economics')
+		// Fee streams end at the funding time plus the vesting duration and must fit the uint48 clock. A longer
+		// duration deployed, then made every fee funding revert: purchases and escalation deposits with it.
+		for (const rewardVestingSeconds of [2n ** 48n - 1n, 10n * 365n * 86_400n + 1n]) await expect(deploy({ ...portfolioEconomics, rewardVestingSeconds })).rejects.toThrow('Invalid portfolio duration')
 		expect(await portfolioCount()).toBe(before)
+		// The longest accepted duration still deploys.
+		await deploy({ ...portfolioEconomics, rewardVestingSeconds: 10n * 365n * 86_400n })
 		// A creator can no longer choose module deployers. The constructor still rejects a deployer without code,
 		// which is what stops a factory whose pinned deployers are not all deployed yet from creating a portfolio.
 		const construct = (modules: typeof deployers) => deployContract(fixture.owner(), encodeDeployData({ abi: portfolioArtifact.abi, bytecode: creationCode, args: [infrastructure.securityPoolFactory, modules, origin(10_000_000_000n), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, portfolioEconomics] }))

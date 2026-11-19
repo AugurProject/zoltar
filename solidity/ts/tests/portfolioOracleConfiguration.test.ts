@@ -85,6 +85,29 @@ describe('Portfolio oracle configuration guards', () => {
 		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(untrackedArgs)), /Oracle must track disputes on a timestamp clock/)
 	})
 
+	test('coordinator constructor rejects game timing that OpenOracle refuses on every report', async () => {
+		const client = fixture.owner()
+		// OpenOracle reverts each report whose settlement time does not exceed its dispute delay.
+		const equalTimingArgs = getOracleCoordinatorConstructorArgs()
+		equalTimingArgs[9] = equalTimingArgs[10]
+		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(equalTimingArgs)), /Settlement time must exceed dispute delay/)
+		const shorterTimingArgs = getOracleCoordinatorConstructorArgs()
+		shorterTimingArgs[10] = shorterTimingArgs[9] + 1
+		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(shorterTimingArgs)), /Settlement time must exceed dispute delay/)
+	})
+
+	test('coordinator constructor rejects a dispute multiplier that OpenOracle refuses on every report', async () => {
+		const client = fixture.owner()
+		// OpenOracle reverts each report whose dispute escalation multiplier is below one hundred percent.
+		const shrinkingArgs = getOracleCoordinatorConstructorArgs()
+		shrinkingArgs[13] = 99
+		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(shrinkingArgs)), /Oracle dispute multiplier must be at least one hundred percent/)
+		const minimumArgs = getOracleCoordinatorConstructorArgs()
+		minimumArgs[13] = 100
+		const coordinator = await deployContract(client, encodeOracleCoordinatorDeployData(minimumArgs))
+		assert.strictEqual(await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: coordinator, functionName: 'multiplier' }), 100n)
+	})
+
 	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
 		const client = fixture.owner()
 		const baseArgs = getOracleCoordinatorConstructorArgs()

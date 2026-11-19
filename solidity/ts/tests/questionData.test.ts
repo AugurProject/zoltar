@@ -182,6 +182,16 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed', 'does not exist')
 	})
 
+	test('answer helpers agree that a question that was never created has no well-formed answer', async () => {
+		const unknownQuestionId = 123_456_789n
+		// With no stored labels the question reads as scalar with zero ticks, so the zero-sum
+		// valid encoding and the Invalid encoding would both pass as well-formed answers.
+		for (const answer of [0n, 1n, 1n << 255n, (1n << 255n) | 1n]) {
+			assert.ok(await isMalformedAnswerOption(client, unknownQuestionId, answer), `answer ${answer.toString()} of an unknown question is malformed`)
+			assert.strictEqual(await getAnswerOptionName(client, unknownQuestionId, answer), 'Malformed', `answer ${answer.toString()} of an unknown question is named Malformed`)
+		}
+	})
+
 	test('can make scalar question', async () => {
 		const testScalarQuestion = await futureQuestion({ title: 'test scalar question', description: 'test scalar description', numTicks: 1000n, outcomeLabels: [], displayValueMin: -500n * 10n ** 18n, displayValueMax: 500n * 10n ** 18n, answerUnit: 'km' })
 

@@ -87,6 +87,30 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 		)
 	})
 
+	// Stored operation data is read back from storage inside the callback before the operation runs.
+	// The per-operation overhead does not grow with that data, so 96 kB of ignored zero padding behind
+	// an allowed selector used the whole callback allowance: the settlement stood with the callback
+	// failed at any settler gas, and the price was accepted only if someone recovered the report.
+	test('rejects operation data too long for the per-operation callback overhead to read back', async () => {
+		const { sponsor, feed } = await prepare()
+		const claimEarnings = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' })
+		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const timestamp = (await sponsor.getBlock()).timestamp
+		const request = (data: Hex) =>
+			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [{ gasLimit: 500_000n, data }] }], value: bounty })
+		await expect(request(`${claimEarnings}${'00'.repeat(96_000)}`)).rejects.toThrow('Operation data too large')
+		await expect(request(`${claimEarnings}${'00'.repeat(509)}`)).rejects.toThrow('Operation data too large')
+
+		// Padding up to the limit still settles with the callback accepting the price.
+		await writeContractAndWait(sponsor, () => request(`${claimEarnings}${'00'.repeat(508)}`))
+		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
+		await fixture.base.mockWindow.advanceTime(481n)
+		const attacker = fixture.owner()
+		const hash = await attacker.sendTransaction({ to: getInfraContractAddresses().openOracle, data: await settleData(attacker, report), gas: 16_000_000n })
+		expect((await attacker.waitForTransactionReceipt({ hash })).status).toBe('success')
+		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(1n)
+	})
+
 	test('ordinary report: the cheapest settlement that succeeds accepts the price', async () => {
 		const { sponsor, feed } = await prepare()
 		const attacker = fixture.owner()

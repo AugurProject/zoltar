@@ -49,6 +49,10 @@ contract SharedPoolPriceFeed {
 	bool public constant trackDisputes = true;
 	uint256 public constant OPEN_INTEREST_DIVIDER = 100;
 	uint32 public constant REPORT_OPERATION_GAS_OVERHEAD = 100_000;
+	// Every allowed capital operation is a fixed-size call far below this length. Stored
+	// operation data is read back inside the callback, which REPORT_OPERATION_GAS_OVERHEAD
+	// covers only for bounded data.
+	uint256 public constant MAXIMUM_REPORT_OPERATION_DATA_BYTES = 512;
 	uint256 public constant FEED_SETTLEMENT_GAS_OVERHEAD = 4_000_000;
 	/// @dev Upper bound on callback gas, including sponsor operations, so every
 	/// report this feed creates stays settleable within one transaction.
@@ -268,6 +272,7 @@ contract SharedPoolPriceFeed {
 		uint256 requiredGas;
 		for (uint256 index = 0; index < batch.operations.length; index++) {
 			require(batch.operations[index].gasLimit != 0, 'Operation gas zero');
+			require(batch.operations[index].data.length <= MAXIMUM_REPORT_OPERATION_DATA_BYTES, 'Operation data too large');
 			requiredGas += uint256(batch.operations[index].gasLimit) + REPORT_OPERATION_GAS_OVERHEAD;
 		}
 		require(requiredGas <= batch.gasLimit, 'Operation gas budget insufficient');

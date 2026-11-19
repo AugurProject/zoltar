@@ -257,6 +257,24 @@ describe('collective escalation response', () => {
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'canTriggerOwnFork' })).toBe(true)
 	})
 
+	test('a refundable contribution cannot leave a threshold round with room below the start bond', async () => {
+		const { owner, contribution, activated, game, deposit, read, withdraw } = await prepare()
+		const threshold = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'nonDecisionThresholdAttoRep' })
+		await deposit(2, threshold)
+		const gap = threshold - (await read('getOutcomeBalancesAttoRep'))[1]
+		const bond = await read('startBondAttoRep')
+		// The round only activates at the exact threshold. Room below the start bond could be
+		// filled by nobody: the next contribution is either below the bond or exceeds the room.
+		await expect(contribution(fixture.other(), gap - bond / 2n)).rejects.toThrow('Challenge leaves unfillable room')
+		await contribution(fixture.other(), gap - bond)
+		expect(await activated()).toBe(false)
+		await withdraw(fixture.other())
+		await contribution(fixture.other(), gap - 2n * bond)
+		await expect(contribution(owner, bond + bond / 2n)).rejects.toThrow('Challenge leaves unfillable room')
+		await contribution(owner, 2n * bond)
+		expect(await activated()).toBe(true)
+	})
+
 	test('a batch on the third outcome releases only the native minimum-balance surplus', async () => {
 		const { owner, game, rep, read, pool } = await prepare()
 		const before = await e2e.gameBalance(game)

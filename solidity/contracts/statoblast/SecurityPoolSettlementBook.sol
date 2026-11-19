@@ -116,7 +116,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 			recovery.forkWeightRoot = _addModular(recovery.forkWeightRoot, forkTime, weight);
 		}
 		_setFeeMode(child, isCashFunded(bookId) && source.feesEnabled);
-		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, source.units);
+		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, Math.ceilDiv(source.units, UNIT_SCALE));
 	}
 
 	/// @notice Full-precision claim weights for fork recovery and conservation checks.
@@ -534,7 +534,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		frozenBookId = ++lastFrozenBookId;
 		frozenBooks[frozenBookId] = FrozenBook(cashAttoEth, units, bookId, recoveryAttoRep);
 		_syncFeeMode(bookId, book);
-		emit FinalClaimsFrozen(bookId, frozenBookId, book.portfolioTimestamp, units, cashAttoEth);
+		emit FinalClaimsFrozen(bookId, frozenBookId, book.portfolioTimestamp, Math.ceilDiv(units, UNIT_SCALE), cashAttoEth);
 	}
 
 	/// @notice Remaining collateral that may fund fees, excluding the rounded-up backing floor.

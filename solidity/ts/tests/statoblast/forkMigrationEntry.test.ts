@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	ReputationToken_ReputationToken as tokenArtifact,
@@ -58,8 +58,20 @@ describe('Statoblast: shared portfolio fork entry', () => {
 			await approveToken(owner, token, getZoltarAddress())
 			await forkUniverse(owner, universe, getQuestionId(question, fixture.base.outcomes))
 		}
-		for (let retry = 0; retry < 2; retry++) await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'initiateSecurityPoolFork', args: [pool] }))
+		const forkModeHashes: Hash[] = []
+		for (let retry = 0; retry < 2; retry++) forkModeHashes.push(await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'initiateSecurityPoolFork', args: [pool] })))
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'systemState' })).toBe(1n)
+		// Entering fork mode is a pool state change like any other: indexers follow the pool's own event.
+		// An own-question fork enters fork mode inside the fork transaction, so the later calls change nothing.
+		const stateEvents: bigint[] = []
+		for (const hash of forkModeHashes) {
+			for (const log of (await owner.getTransactionReceipt({ hash })).logs) {
+				if (log.address.toLowerCase() !== pool.toLowerCase()) continue
+				const decoded = decodeEventLog({ abi: poolArtifact.abi, data: log.data, topics: log.topics })
+				if (decoded.eventName === 'SystemStateSet') stateEvents.push(BigInt(decoded.args.systemState))
+			}
+		}
+		expect(stateEvents).toEqual(own ? [] : [1n])
 		const game = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'choose', args: [universe, 1n] }))
 		expect(await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'frozenBackingAttoRep' })).toBe(1_000n * unit)

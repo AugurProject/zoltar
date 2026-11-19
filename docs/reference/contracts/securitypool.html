@@ -123,7 +123,7 @@
 							<td>The canonical forker</td>
 							<td>No inherited fixed outcome; the central fork checks apply.</td>
 							<td>Freezes shared portfolio accounting and marks the question forked.</td>
-							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
+							<td><code>SystemStateSet</code> on the transition to forked, and none for a repeated call; relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
 							<td><code>initializeForkedEscalationGame(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome)</code><wbr /></td>

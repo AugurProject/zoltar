@@ -127,6 +127,8 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			}
 			// Disputes may extend finality only within the original prepaid window.
 			const maximumEnd = state.fundedEnd
+			// Once the prepaid window has ended nothing later can be funded; the schedule stands.
+			if (state.end !== 0 && maximumEnd <= book.ts) return { ok: true, touched: [op.u] }
 			const end = op.finalAfter === 0 ? maximumEnd : Math.min(op.finalAfter, maximumEnd)
 			if (end < book.ts) return reject('finality elapsed')
 			state.end = end

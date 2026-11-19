@@ -105,6 +105,10 @@ contract SecurityPoolResolutionPremiumBook {
 			state.portfolioFundedEndTime = book.portfolioTimestamp + MAXIMUM_REPORTING_WINDOW;
 		}
 		uint256 maximumEnd = state.portfolioFundedEndTime;
+		// A child book defers refunds through its response window, so a question can still
+		// hold its unearned tail after the prepaid window ended. Nothing later can be funded:
+		// the scheduled refund stays in place and reporting continues without a premium.
+		if (previousEnd != 0 && maximumEnd <= book.portfolioTimestamp) return;
 		uint48 newEnd = uint48(finalAfterPortfolioTime == 0 ? maximumEnd : Math.min(finalAfterPortfolioTime, maximumEnd));
 		require(newEnd >= book.portfolioTimestamp, 'Premium finality already elapsed');
 		if (newEnd == previousEnd) return;
