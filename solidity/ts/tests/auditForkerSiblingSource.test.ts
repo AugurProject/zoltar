@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
@@ -50,17 +49,13 @@ describe('audit: a portfolio question ledger descends only from an ancestor univ
 		await addRepToMigrationBalance(owner, U0, 1_000_000n * unit)
 		await splitMigrationRep(owner, U0, 1_000_000n * unit, [1n])
 		const fork1 = (await getUniverseData(owner, U0)).forkTime
-		await stagePortfolioForkCapital(owner, coordinator.address, U0, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [U0, 1n], gas: GAS }))
 		const A = getChildUniverseId(U0, 1)
 		const B = getChildUniverseId(U0, 2)
 		await base.mockWindow.setTime(fork1 + 63n * DAY)
-		await stagePortfolioForkCapital(owner, coordinator.address, U0, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [U0, 1n], gas: GAS }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [A], gas: GAS }))
-		await stagePortfolioForkCapital(owner, coordinator.address, U0, 2n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'prepareBranch', args: [U0, 2n], gas: GAS }))
-		await stagePortfolioForkCapital(owner, coordinator.address, U0, 2n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [U0, 2n], gas: GAS }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [B], gas: GAS }))
 
@@ -78,9 +73,7 @@ describe('audit: a portfolio question ledger descends only from an ancestor univ
 		await base.mockWindow.setTime(fork2 + 63n * DAY)
 		const A1 = getChildUniverseId(A, 1)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'freeze', args: [A], gas: GAS }))
-		await stagePortfolioForkCapital(trader, coordinator.address, A, 1n)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'prepareBranch', args: [A, 1n], gas: GAS }))
-		await stagePortfolioForkCapital(trader, coordinator.address, A, 1n)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'startBranch', args: [A, 1n], gas: GAS }))
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [A1], gas: GAS }))
 

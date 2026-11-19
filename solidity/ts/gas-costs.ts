@@ -102,7 +102,6 @@ try {
 	await measure('3. Shared fork', 'Trigger native fork', owner, () => forkUniverse(owner, 0n, getQuestionId(forkQuestion, outcomes)))
 	const branch = { abi: forkArtifact.abi, address: await owner.readContract({ ...portfolio, functionName: 'forkController' }) }
 	await measure('3. Shared fork', 'Deploy native child REP', owner, () => deployChild(owner, 0n, 1n))
-	await measure('3. Shared fork', 'Stage child capital', owner, () => owner.writeContract({ ...portfolio, functionName: 'prepareForkCapital', args: [0n, 1n] }))
 	await measure('3. Shared fork', 'Prepare branch capital and freeze source', owner, () => owner.writeContract({ ...branch, functionName: 'prepareBranch', args: [0n, 1n] }))
 	await measure('3. Shared fork', 'Choose prepared owner branch', owner, () => owner.writeContract({ ...branch, functionName: 'choose', args: [0n, 1n] }))
 	const forkTime = (await getUniverseData(owner, 0n)).forkTime

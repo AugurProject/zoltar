@@ -123,6 +123,7 @@ contract PortfolioForkHarness {
 	uint256 public constant minimumReportCollateral = 1e16;
 	PortfolioForkZoltarMock public immutable zoltar;
 	SecurityPoolCapitalLedgerDeployer private immutable capitalDeployer;
+	SecurityPoolCapitalLedger private immutable capitalImplementation;
 	SecurityPoolCommitmentIndexDeployer private immutable indexDeployer;
 	SecurityPoolCapitalFeeStreamsDeployer private immutable streamsDeployer;
 	uint248 public constant originUniverseId = 0;
@@ -146,6 +147,7 @@ contract PortfolioForkHarness {
 		collateralToken = new WETH9();
 		zoltar = protocol;
 		capitalDeployer = capitals;
+		capitalImplementation = capitals.createImplementation(Zoltar(address(protocol)), 10_500, 1e15, streams);
 		indexDeployer = indices;
 		streamsDeployer = streams;
 		auctionDeployer = auctions;
@@ -179,7 +181,7 @@ contract PortfolioForkHarness {
 		return portfolioTime(u);
 	}
 	function _createCapital(uint248 u) private returns (SecurityPoolCapitalLedger capital) {
-		capital = capitalDeployer.create(address(this), Zoltar(address(zoltar)), u, 10_500, 1e15, 1 days);
+		capital = capitalDeployer.create(capitalImplementation, u);
 		capital.initialize(indexDeployer.create(address(capital)), ICapitalFeeStreams(address(streamsDeployer.create(address(capital), uint48(block.timestamp), 1 days))), forkController, address(this));
 		capitalLedger[u] = capital;
 	}

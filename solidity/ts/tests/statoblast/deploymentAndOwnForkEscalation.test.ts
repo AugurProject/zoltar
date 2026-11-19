@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, isHex, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -36,7 +35,6 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 		const child = getChildUniverseId(fixture.base.genesisUniverse, outcome)
 		const forkTime = (await getUniverseData(owner, fixture.base.genesisUniverse)).forkTime
 		if ((await fixture.base.mockWindow.getTime()) < forkTime + 63n * DAY) await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
-		await stagePortfolioForkCapital(owner, branch.address, fixture.base.genesisUniverse, BigInt(outcome))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, BigInt(outcome)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [pool(), child] }))

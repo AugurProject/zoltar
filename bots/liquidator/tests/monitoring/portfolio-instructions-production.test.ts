@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolPortfolioForkCoordinatorAbi as forkAbi } from '@zoltar/bot-shared/contracts/abi'
+import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
 import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
@@ -113,11 +114,10 @@ describe('explicit portfolio instruction lifecycle', () => {
 			settings.approvedUniverses.push(descendant)
 			settings.selectedPortfolios.push({ ...scope, universeId: descendant })
 			const choose = { ...base, id: 'choose', action: 'vault-fork-choice', vault: winner.vault, outcome: 1n } as const
-			for (let stage = 0; stage < 2; stage++) {
-				expect(await executePortfolioInstruction(wallet, settings, state, pool, choose, async () => true)).toBe(true)
-				expect(state.completedPortfolioInstructions?.['choose']).toBeUndefined()
-			}
+			const childToken = { address: getZoltarAddress(), abi: zoltarAbi, functionName: 'getRepToken', args: [descendant] } as const
+			expect(await client.readContract(childToken)).toBe(zeroAddress)
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, choose, async () => true)).toBe(true)
+			expect(await client.readContract(childToken)).not.toBe(zeroAddress)
 			expect([...(await client.readContract({ address: context.forks, abi: forkAbi, functionName: 'choices', args: [context.child, winner.vault] }))]).toEqual([1n, true])
 			state.portfolioScopes.push({ ...scope, universeId: descendant, managedVaults: [winner.vault] })
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, { ...base, id: 'direct-choice', action: 'fork-choice', outcome: 1n }, async () => true)).toBe(true)

@@ -11,9 +11,6 @@ const abi = parseAbi([
 	'function getForkRecapitalizationDeadline(uint248 universeId) view returns (uint256)',
 	'function getChildUniverseId(uint248 universeId,uint256 outcome) pure returns (uint248)',
 	'function getRepToken(uint248 universeId) view returns (address)',
-	'function deployChild(uint248 source,uint256 outcome)',
-	'function prepareForkCapital(uint248 source,uint256 outcome) returns (address)',
-	'function pendingForkCapital(uint248 child) view returns (address)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
 	'function forks(uint248 universeId) view returns (uint256 backing,uint256 commitment,uint256 cash,uint256 units,uint256 recoveryAttoRep,uint256 assignedCash,uint256 neutralCash,uint256 recoveredUnits,bool frozen,bool recoveryFunded,bool migrationPrepared)',
 	'function branches(uint248 child) view returns (uint248 parent,uint256 outcome,uint256 chosenBacking,uint256 chosenCommitment,uint256 parentCash,uint256 recoveryAttoRep,bool prepared,bool started,bool ready)',
@@ -37,12 +34,6 @@ function request(parameters: ForkRequest, functionName: string, args: readonly A
 /** One irrevocable choice moves the owner's committed principal; idle REP and old fees stay in the source. */
 export function buildPortfolioForkChoiceRequest(parameters: ForkRequest & { outcomeIndex: bigint }) {
 	return request(parameters, 'choose', [decodeUint(parameters.outcomeIndex, 'Fork outcome')])
-}
-export function buildPortfolioNativeChildRequest(parameters: Omit<ForkRequest, 'controller'> & { zoltar: Address; outcomeIndex: bigint }) {
-	return request({ ...parameters, controller: parameters.zoltar }, 'deployChild', [decodeUint(parameters.outcomeIndex, 'Fork outcome')])
-}
-export function buildPortfolioForkLedgerRequest(parameters: Omit<ForkRequest, 'controller'> & { portfolio: Address; outcomeIndex: bigint }) {
-	return request({ ...parameters, controller: parameters.portfolio }, 'prepareForkCapital', [decodeUint(parameters.outcomeIndex, 'Fork outcome')])
 }
 /** Prepare one branch's capital modules in a separate, bounded deployment transaction. */
 export function buildPortfolioForkPreparationRequest(parameters: ForkRequest & { outcomeIndex: bigint }) {
@@ -113,7 +104,7 @@ export async function loadPortfolioForkSnapshot(parameters: { client: PortfolioR
 	const choice = { outcomeIndex: decodeUint(c[0], 'Chosen outcome'), recorded: decodeBool(c[1], 'Invalid portfolio fork state.') }
 	const chosenOutcome = choice.recorded ? choice.outcomeIndex : undefined
 	const outcomeIndex = parameters.outcomeIndex === undefined ? chosenOutcome : decodeUint(parameters.outcomeIndex, 'Fork outcome')
-	let branch: { universeId: bigint; parent: bigint; outcomeIndex: bigint; chosenBacking: bigint; chosenCommitment: bigint; parentCash: bigint; recoveryAttoRep: bigint; prepared: boolean; started: boolean; ready: boolean; repToken: Address; capitalLedger: Address; pendingCapital: Address } | undefined
+	let branch: { universeId: bigint; parent: bigint; outcomeIndex: bigint; chosenBacking: bigint; chosenCommitment: bigint; parentCash: bigint; recoveryAttoRep: bigint; prepared: boolean; started: boolean; ready: boolean; repToken: Address; capitalLedger: Address } | undefined
 	if (outcomeIndex !== undefined) {
 		const child = decodeUint(await read(zoltar, 'getChildUniverseId', [universeId, outcomeIndex]), 'Child universe', 248)
 		const b = decodeFields(await read(controller, 'branches', [child]), ['parent', 'outcome', 'chosenBacking', 'chosenCommitment', 'parentCash', 'recoveryAttoRep', 'prepared', 'started', 'ready'], 'Invalid portfolio fork response.')
@@ -121,7 +112,7 @@ export async function loadPortfolioForkSnapshot(parameters: { client: PortfolioR
 		const parent = decodeUint(b[0], 'Parent universe', 248)
 		const branchOutcome = decodeUint(b[1], 'Branch outcome')
 		if (prepared && (parent !== universeId || branchOutcome !== outcomeIndex)) throw new Error('Selected branch belongs to a different fork.')
-		const [token, capital, pending] = await Promise.all([read(zoltar, 'getRepToken', [child]), prepared ? read(portfolio, 'capitalLedger', [child]) : zeroAddress, prepared || forkTimeValue === 0n ? zeroAddress : read(portfolio, 'pendingForkCapital', [child])])
+		const [token, capital] = prepared ? await Promise.all([read(zoltar, 'getRepToken', [child]), read(portfolio, 'capitalLedger', [child])]) : [zeroAddress, zeroAddress]
 		branch = {
 			universeId: child,
 			parent,
@@ -135,7 +126,6 @@ export async function loadPortfolioForkSnapshot(parameters: { client: PortfolioR
 			ready: decodeBool(b[8], 'Invalid portfolio fork state.'),
 			repToken: address(token, true),
 			capitalLedger: address(capital, !prepared),
-			pendingCapital: address(pending, true),
 		}
 	}
 	const forkTime = decodeUint(forkTimeValue, 'Fork time')

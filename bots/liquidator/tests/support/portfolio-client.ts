@@ -1,5 +1,6 @@
+import { boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { readFileSync } from 'node:fs'
-import { getAddress, createPublicClient } from '@zoltar/bot-shared/ethereum'
+import { getAddress, createPublicClient, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { portfolioObservation, portfolioSettings, targetAddress } from './portfolio-observation.ts'
@@ -51,6 +52,16 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 			return [address, `0x${String(Reflect.get(deployed, 'object'))}`]
 		}),
 	)
+	const capitalImplementation = getAddress('0x00000000000000000000000000000000000000AA')
+	const setClone = (address: Address, implementation: Address, bindings: Hex) => {
+		const runtime = codes.get(address)
+		if (runtime === undefined) throw new Error('Fixture clone implementation missing')
+		codes.set(implementation, runtime)
+		codes.set(address, boundCloneRuntimeCode(implementation, bindings))
+	}
+	setClone(snapshot.capitalLedger, capitalImplementation, universeCloneBindings(snapshot.universeId, snapshot.repToken))
+	setClone(snapshot.commitmentIndex, getAddress('0x00000000000000000000000000000000000000AB'), snapshot.capitalLedger)
+	setClone(module('SecurityPoolCapitalFeeStreams'), getAddress('0x00000000000000000000000000000000000000AC'), snapshot.capitalLedger)
 	const reads: { address: string; functionName: string; blockNumber?: bigint }[] = []
 	const values: Record<string, unknown> = {
 		collateralToken: settings.deployment.weth,
@@ -60,6 +71,7 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		parent: '0x0000000000000000000000000000000000000000',
 		originUniverseId: 0n,
 		capitalLedger: snapshot.capitalLedger,
+		capitalImplementation,
 		settlement: module('SecurityPoolPortfolioSettlement'),
 		ledger: module('SecurityPoolSettlementBook'),
 		reporters: module('SecurityPoolReporterLedger'),
@@ -131,7 +143,7 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 					if (parameters.functionName === 'portfolio') {
 						if (getAddress(parameters.address) === module('SecurityPoolSettlementBook')) return module('SecurityPoolPortfolioSettlement')
 					}
-					if (parameters.functionName === 'ledger' && [module('SecurityPoolCapitalLifecycleDelegate'), module('SecurityPoolCapitalAuctionDelegate')].includes(getAddress(parameters.address))) return snapshot.capitalLedger
+					if (parameters.functionName === 'implementation') return getAddress(parameters.address)
 					if (!(parameters.functionName in values)) throw new Error(`Unexpected read ${parameters.functionName}`)
 					const value = values[parameters.functionName]
 					return typeof value === 'function' ? value(parameters.args ?? []) : value

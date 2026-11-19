@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { parseAbi } from '@zoltar/core-shared/evm/ethereum'
@@ -283,10 +282,9 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await mockWindow.setTime(BigInt(cutoff))
 		await forkUniverse(owner, genesisUniverse, forkQuestion)
 		expect((await getUniverseData(owner, genesisUniverse)).forkTime).toBe(BigInt(cutoff) + 1n)
-		await stagePortfolioForkCapital(owner, forks.address, genesisUniverse, 1n)
-		const combinedCustody = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'prepareBranch', args: [genesisUniverse, 1n], gas: 16_777_216n }))
+		const combinedCustody = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'prepareBranch', args: [genesisUniverse, 1n], gas: 4_600_000n }))
 		const combinedCustodyGas = (await owner.getTransactionReceipt({ hash: combinedCustody })).gasUsed
-		expect(combinedCustodyGas).toBeLessThan(8_000_000n)
+		expect(combinedCustodyGas).toBeLessThan(4_600_000n)
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ fullDepthRedemptionGas, combinedCustodyGas })
 		await mockWindow.anvilRevert(stressSnapshot)
 		await mockWindow.setTime(forkAt)
@@ -296,13 +294,11 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const { forkTime } = await getUniverseData(owner, genesisUniverse)
 		const freezeHash = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'freeze', args: [genesisUniverse], gas: 1_500_000n }))
 		expect((await settlementState()).frozenBookId).not.toBe(0n)
-		await stagePortfolioForkCapital(owner, forks.address, genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'choose', args: [genesisUniverse, 1n] }))
 		const child = getChildUniverseId(genesisUniverse, 1)
 		await mockWindow.setTime(forkTime + 56n * DAY)
-		await stagePortfolioForkCapital(owner, forks.address, genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'startBranch', args: [genesisUniverse, 1n] }))
-		const priceFeedHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [pool().address, child], gas: 9_000_000n }))
+		const priceFeedHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [pool().address, child], gas: 200_000n }))
 		await mockWindow.setTime(forkTime + 63n * DAY)
 		const activateHash = await writeContractAndWait(owner, () => owner.writeContract({ ...forks, functionName: 'finalizeBranch', args: [child], gas: 4_000_000n }))
 		const childBook = await bookId(child)
@@ -435,7 +431,6 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await fixture.base.mockWindow.setTime(fixture.secondEndTime + 1n)
 		await forkUniverse(owner, fixture.base.genesisUniverse, fixture.secondQuestionId)
 		const controller = await owner.readContract({ ...portfolio(), functionName: 'forkController' })
-		await stagePortfolioForkCapital(owner, controller, fixture.base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'choose', args: [fixture.base.genesisUniverse, 1n] }))
 		const forkTime = (await getUniverseData(owner, fixture.base.genesisUniverse)).forkTime
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)

@@ -30,7 +30,6 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		branches: [8n, 7n, 20n, 16n, 10n, 32n, true, false, false],
 		getRepToken: owner,
 		capitalLedger: capital,
-		pendingForkCapital: zeroAddress,
 		...overrides,
 	}
 	const client: PortfolioReadClient = {
@@ -70,7 +69,7 @@ describe('bounded portfolio fork SDK', () => {
 		const { client, calls } = fixture()
 		const snapshot = await loadPortfolioForkSnapshot({ client, portfolio, owner, universeId: 8n })
 		expect(snapshot.choice).toEqual({ outcomeIndex: 7n, recorded: true })
-		expect(snapshot.branch).toMatchObject({ universeId: 42n, capitalLedger: capital, pendingCapital: zeroAddress, recoveryAttoRep: 32n, prepared: true, ready: false })
+		expect(snapshot.branch).toMatchObject({ universeId: 42n, capitalLedger: capital, recoveryAttoRep: 32n, prepared: true, ready: false })
 		expect(snapshot).toMatchObject({ forkTime: 1_000n, choiceDeadline: 2_000n, activationDeadline: 3_000n })
 		expect(new Set(calls.map(c => c.blockNumber))).toEqual(new Set([10n]))
 		expect(calls.length).toBeLessThan(20)

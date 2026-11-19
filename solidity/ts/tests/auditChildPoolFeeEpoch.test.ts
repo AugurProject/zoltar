@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
@@ -43,7 +42,6 @@ describe('Shared portfolio child fee clock', () => {
 		await forkUniverse(owner, base.genesisUniverse, own ? base.questionId : getQuestionId(forkQuestion, base.outcomes))
 		const controller = await owner.readContract({ ...portfolio, functionName: 'forkController' })
 		const fork = { abi: forkArtifact.abi, address: controller }
-		await stagePortfolioForkCapital(owner, fork.address, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
 		// Fund a future child report without depending on underwriter principal withdrawals.
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(base.genesisUniverse), functionName: 'transfer', args: [owner.account.address, 1_000_000n * unit] }))
@@ -54,7 +52,6 @@ describe('Shared portfolio child fee clock', () => {
 		const child = getChildUniverseId(base.genesisUniverse, 1n)
 		const frozenCash = await owner.readContract({ ...portfolio, functionName: 'quoteQuestionSettlement', args: [parent, 10n * unit] })
 		await base.mockWindow.setTime(forkTime + 63n * DAY + delay)
-		await stagePortfolioForkCapital(owner, fork.address, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'finalizeBranch', args: [child] }))
 		const clock = await owner.readContract({ ...fork, functionName: 'clocks', args: [child] })

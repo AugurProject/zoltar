@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -62,7 +61,6 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		for (let retry = 0; retry < 2; retry++) await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'initiateSecurityPoolFork', args: [pool] }))
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'systemState' })).toBe(1n)
 		const game = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
-		await stagePortfolioForkCapital(owner, controller, universe, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'choose', args: [universe, 1n] }))
 		expect(await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'frozenBackingAttoRep' })).toBe(1_000n * unit)
 		const reporterBacking = await owner.readContract({ abi: reporterArtifact.abi, address: reporters, functionName: 'balanceOfGame', args: [game] })
@@ -73,7 +71,6 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		const time = (await getUniverseData(owner, universe)).forkTime
 		await fixture.base.mockWindow.setTime(time + 63n * DAY)
 		const child = getChildUniverseId(universe, 1)
-		await stagePortfolioForkCapital(owner, controller, universe, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
 		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'materializePortfolioQuestion', args: [pool, child] }))

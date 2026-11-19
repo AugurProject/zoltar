@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../testSupport/simulator/utils/contracts/portfolioFork'
 import { expect } from 'bun:test'
 import { zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -167,9 +166,7 @@ export function createE2E(fixture: Fixture) {
 	const choose = async (sender: WriteClient, universe: bigint, outcome: number) => {
 		const target = await coordinator()
 		await writeContractAndWait(sender, () => sender.writeContract({ ...target, functionName: 'freeze', args: [universe], gas: BRANCH_GAS }))
-		await stagePortfolioForkCapital(sender, target.address, universe, BigInt(outcome))
 		await writeContractAndWait(sender, () => sender.writeContract({ ...target, functionName: 'prepareBranch', args: [universe, BigInt(outcome)], gas: BRANCH_GAS }))
-		await stagePortfolioForkCapital(sender, target.address, universe, BigInt(outcome))
 		const hash = await writeContractAndWait(sender, () => sender.writeContract({ ...target, functionName: 'choose', args: [universe, BigInt(outcome)], gas: BRANCH_GAS }))
 		return (await sender.getTransactionReceipt({ hash })).gasUsed
 	}
@@ -183,9 +180,7 @@ export function createE2E(fixture: Fixture) {
 		const choiceDeadline = (await forkTime(parent)) + 8n * WEEK
 		if ((await mock().getTime()) < choiceDeadline) await mock().setTime(choiceDeadline)
 		await freeze(parent, sender)
-		await stagePortfolioForkCapital(sender, target.address, parent, BigInt(outcome))
 		await writeContractAndWait(sender, () => sender.writeContract({ ...target, functionName: 'prepareBranch', args: [parent, BigInt(outcome)], gas: BRANCH_GAS }))
-		await stagePortfolioForkCapital(sender, target.address, parent, BigInt(outcome))
 		await writeContractAndWait(sender, () => sender.writeContract({ ...target, functionName: 'startBranch', args: [parent, BigInt(outcome)], gas: BRANCH_GAS }))
 		return getChildUniverseId(parent, outcome)
 	}

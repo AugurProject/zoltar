@@ -25,25 +25,22 @@ interface ICapitalLifecycleHost {
 }
 
 /// @notice Owner registration and bounded fork choices in the custody ledger's context.
-/// @dev Direct calls and delegatecalls from any other host are rejected. Ledger
+/// @dev Direct mutations are rejected. Ledger
 /// wrappers guard owner authorization and authenticate fork accounting callers.
 contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	using SafeERC20Ops for IERC20;
-	address public immutable ledger;
+	address public immutable implementation = address(this);
 	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
 	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
 	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
 	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
-	constructor(address host) {
-		ledger = host;
-	}
-	modifier onlyLedger() {
-		require(address(this) == ledger, 'Only capital ledger context');
+	modifier onlyDelegateCall() {
+		require(address(this) != implementation, 'Only capital delegatecall');
 		_;
 	}
 
 	/// @dev The ledger validates the floor and checkpoints old-price income first.
-	function setHealthTarget(uint256 targetHealthFactorBps) external onlyLedger {
+	function setHealthTarget(uint256 targetHealthFactorBps) external onlyDelegateCall {
 		_settleOwner(_capitalOwner());
 		Owner storage owner = owners[_capitalOwner()].account;
 		if (owner.positionId != 0 && targetHealthFactorBps > _target(owner)) {
@@ -56,7 +53,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	}
 
 	/// @notice Record a canonical settlement's donation without changing index weights.
-	function recordSettlementRepair(uint256 demand) external onlyLedger {
+	function recordSettlementRepair(uint256 demand) external onlyDelegateCall {
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		require(msg.sender == ICapitalSettlementRepairRoot(host.portfolio()).settlement(), 'Only canonical settlement');
 		_requireOpen(host);
@@ -66,7 +63,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 
 	/// @dev The ledger authenticates the portfolio, validates the input, and
 	/// checkpoints all old-price income before forwarding its canonical feed.
-	function acceptPrice(ICapitalPriceExposure feed, uint256 price, uint48 validUntil) external onlyLedger {
+	function acceptPrice(ICapitalPriceExposure feed, uint256 price, uint48 validUntil) external onlyDelegateCall {
 		uint256 uncertainty = feed.targetPriceErrorForDispute();
 		acceptedPriceEpoch = feed.acceptedEpoch();
 		require(uncertainty < 10_000_000, 'Invalid oracle uncertainty');
@@ -84,7 +81,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 
 	/// @dev The ledger has already checkpointed fees, served prior retirements,
 	/// and required an open universe with a fresh accepted price.
-	function authorize(uint256 commitment, uint256 reportId, bool useReport, uint256 minimumCommitment) external onlyLedger returns (uint96 id) {
+	function authorize(uint256 commitment, uint256 reportId, bool useReport, uint256 minimumCommitment) external onlyDelegateCall returns (uint96 id) {
 		_settleOwner(_capitalOwner());
 		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 health = _target(owner);
@@ -121,7 +118,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	}
 
 	/// @dev These owner operations run after the ledger checkpoints old income.
-	function withdrawPrincipal(uint256 amount, address recipient) external onlyLedger {
+	function withdrawPrincipal(uint256 amount, address recipient) external onlyDelegateCall {
 		require(recipient != address(0) && amount > 0, 'Invalid capital withdrawal');
 		_settleOwner(_capitalOwner());
 		Owner storage owner = owners[_capitalOwner()].account;
@@ -145,7 +142,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		host.repToken().safeTransfer(recipient, amount);
 		emit PrincipalWithdrawn(_capitalOwner(), recipient, amount);
 	}
-	function claimEarnings() external onlyLedger {
+	function claimEarnings() external onlyDelegateCall {
 		_settleOwner(_capitalOwner());
 		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 ethAmount = owner.feesAttoEth;
@@ -157,7 +154,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		emit EarningsClaimed(_capitalOwner(), ethAmount, repAmount);
 	}
 
-	function exportChoice(address owner) external onlyLedger returns (ChoicePosition memory choice, uint256 target) {
+	function exportChoice(address owner) external onlyDelegateCall returns (ChoicePosition memory choice, uint256 target) {
 		require(frozen && !owners[owner].exported, 'Fork choice unavailable');
 		_settleOwner(owner);
 		Owner storage account = owners[owner].account;
@@ -171,13 +168,13 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		owners[owner].exported = true;
 		target = _target(account);
 	}
-	function beginForkImport() external onlyLedger {
+	function beginForkImport() external onlyDelegateCall {
 		(uint256 rep, uint256 commitment) = commitmentIndex.totals();
 		require(rep == 0 && commitment == 0 && !importing, 'Capital already used');
 		importing = true;
 		commitmentIndex.initCohorts(1, 2);
 	}
-	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external onlyLedger {
+	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external onlyDelegateCall {
 		require(importing && target >= BPS, 'Fork import unavailable');
 		Owner storage account = owners[owner].account;
 		require(account.positionId == 0 && account.freeAttoRep == 0, 'Owner already imported');
@@ -186,7 +183,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(position.rep, position.commitment), position.batch, position.remainingCommitment);
 		account.positionId = id;
 	}
-	function finishForkImport(uint256 fundedDemand) external onlyLedger {
+	function finishForkImport(uint256 fundedDemand) external onlyDelegateCall {
 		require(importing, 'Fork import unavailable');
 		(uint256 pledged, ) = commitmentIndex.totals();
 		require(ICapitalLifecycleHost(address(this)).repToken().balanceOf(address(this)) >= pledged + totalFreeAttoRep + retirementCashAttoRep, 'Fork principal unfunded');
@@ -195,7 +192,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		demandAttoEth = fundedDemand;
 		if (ICapitalLifecycleHost(address(this)).isPriceValid()) commitmentIndex.observeHealthy(liquidationPrice);
 	}
-	function releaseForkBacking() external onlyLedger {
+	function releaseForkBacking() external onlyDelegateCall {
 		require(frozen && !migrationPrepared, 'Fork backing release unavailable');
 		migrationPrepared = true;
 		if (frozenBackingAttoRep != 0)

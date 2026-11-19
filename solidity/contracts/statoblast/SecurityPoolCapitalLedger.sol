@@ -10,7 +10,8 @@ import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
 import { SecurityPoolCapitalLifecycleDelegate } from './SecurityPoolCapitalLifecycleDelegate.sol';
-import { SecurityPoolCapitalAuctionDelegate } from './SecurityPoolCapitalAuctionDelegate.sol';
+import { SecurityPoolCapitalAuctionDelegate, ICapitalAuctionHost } from './SecurityPoolCapitalAuctionDelegate.sol';
+import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
@@ -26,11 +27,9 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	using SafeERC20Ops for IERC20;
 	address public immutable portfolio;
+	Zoltar public immutable zoltar;
 	SecurityPoolCapitalLifecycleDelegate public immutable lifecycleDelegate;
 	SecurityPoolCapitalAuctionDelegate public immutable auctionDelegate;
-	Zoltar public immutable zoltar;
-	uint248 public immutable universeId;
-	IERC20 public immutable repToken;
 	uint256 public immutable securityMultiplierBps;
 	uint256 private immutable minimumCommitmentAttoEth;
 
@@ -61,66 +60,76 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
 	event UnassignedFeesBurned(uint256 ethAmount, uint256 repAmount);
 
-	constructor(address authority, Zoltar _zoltar, uint248 _universeId, uint256 multiplier, uint256 minimumCommitment, uint48 vestingDuration) {
+	constructor(address authority, Zoltar protocol, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalLifecycleDelegate lifecycle, SecurityPoolCapitalAuctionDelegate auction) {
 		require(authority != address(0), 'Capital authority missing');
-		require(minimumCommitment > 0 && vestingDuration > 0, 'Capital economic minimum missing');
+		require(minimumCommitment > 0, 'Capital economic minimum missing');
 		portfolio = authority;
-		lifecycleDelegate = new SecurityPoolCapitalLifecycleDelegate(address(this));
-		auctionDelegate = new SecurityPoolCapitalAuctionDelegate(address(this));
-		zoltar = _zoltar;
-		universeId = _universeId;
-		repToken = IERC20(address(_zoltar.getRepToken(_universeId)));
+		zoltar = protocol;
 		securityMultiplierBps = multiplier;
 		minimumCommitmentAttoEth = minimumCommitment;
-		// Genesis REP is burned via transferFrom. Native child REP is burned by Zoltar directly.
-		if (_universeId == 0) repToken.safeApprove(address(_zoltar), type(uint256).max);
+		lifecycleDelegate = lifecycle;
+		auctionDelegate = auction;
 	}
 
-	modifier onlyPortfolio() {
-		require(msg.sender == portfolio, 'Only portfolio');
-		_;
+	function universeId() public view returns (uint248 universe) {
+		(universe, ) = SecurityPoolBoundClones.universeBindings();
 	}
+	function repToken() public view returns (IERC20) {
+		(, address token) = SecurityPoolBoundClones.universeBindings();
+		return IERC20(token);
+	}
+	function _requireInitialized() private view {
+		require(address(commitmentIndex) != address(0), 'Capital not initialized');
+	}
+
 	modifier onlyAccounting() {
+		_requireInitialized();
 		require(msg.sender == portfolio || msg.sender == services, 'Only capital accounting');
 		_;
 	}
 	modifier onlyDemandAccounting() {
+		_requireInitialized();
 		require(msg.sender == portfolio || msg.sender == services || msg.sender == forkAuthority, 'Only demand accounting');
 		_;
 	}
 	modifier onlyForkAuthority() {
+		_requireInitialized();
 		require(msg.sender == portfolio || msg.sender == forkAuthority, 'Only fork authority');
 		_;
 	}
 	modifier nonReentrant() {
+		_requireInitialized();
 		require(!entered, 'Capital operation active');
 		entered = true;
 		_;
 		entered = false;
 	}
 
-	function initialize(SecurityPoolCommitmentIndex index, ICapitalFeeStreams streams, address coordinator, address serviceAuthority) external onlyPortfolio {
+	function initialize(SecurityPoolCommitmentIndex index, ICapitalFeeStreams streams, address coordinator, address serviceAuthority) external {
+		require(msg.sender == portfolio, 'Only portfolio');
+		(uint248 universe, address token) = SecurityPoolBoundClones.universeBindings();
 		require(address(commitmentIndex) == address(0), 'Capital already initialized');
 		require(index.capitalLedger() == address(this), 'Wrong commitment authority');
 		commitmentIndex = index;
 		feeStreams = streams;
 		services = serviceAuthority;
 		forkAuthority = coordinator;
+		if (universe == 0) IERC20(token).safeApprove(address(zoltar), type(uint256).max);
 	}
 
 	function storedOwnerAccount(address owner) external view returns (Owner memory) {
 		return owners[owner].account;
 	}
 	function ownerAccount(address owner) external view returns (Owner memory) {
-		return auctionDelegate.previewOwner(owner);
+		return auctionDelegate.previewOwner(ICapitalAuctionHost(address(this)), owner);
 	}
 	/// @notice Deposited principal includes virtual winning bids and excludes
 	/// earnings, even before either the position or its earnings are claimed.
 	function ownerCollateral(address owner) external view returns (uint256 principal, uint256 commitment, uint256 withdrawable) {
-		return auctionDelegate.previewCollateral(owner);
+		return auctionDelegate.previewCollateral(ICapitalAuctionHost(address(this)), owner);
 	}
 	function auctionPosition(uint256 bidId) external view returns (AuctionPosition memory) {
-		return auctionDelegate.previewAuctionPosition(bidId);
+		return auctionDelegate.previewAuctionPosition(ICapitalAuctionHost(address(this)), bidId);
 	}
 	function installAuctionCohort(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot) external onlyForkAuthority nonReentrant {
 		DelegateCall.invoke(address(auctionDelegate), abi.encodeCall(auctionDelegate.install, (adapter, lots, repPerLot, commitmentPerLot, minimumCommitmentAttoEth)));
@@ -138,7 +147,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 	function effectiveTime() public view returns (uint48) {
 		uint256 timestamp = block.timestamp;
-		uint256 forkTimestamp = zoltar.getForkTime(universeId);
+		uint256 forkTimestamp = zoltar.getForkTime(universeId());
 		if (forkTimestamp != 0) timestamp = Math.min(timestamp, forkTimestamp);
 		require(timestamp <= type(uint48).max, 'Capital clock exhausted');
 		return uint48(timestamp);
@@ -165,7 +174,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		return commitmentIndex.maximumHealthyPrice(rep, commitment, securityMultiplierBps);
 	}
 	function _requireOpen() private view {
-		require(!importing && zoltar.getForkTime(universeId) == 0 && !frozen, 'Capital universe inactive');
+		require(!importing && zoltar.getForkTime(universeId()) == 0 && !frozen, 'Capital universe inactive');
 	}
 	function _requireFresh() private view {
 		require(isPriceValid(), 'Capital price stale');
@@ -192,7 +201,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(account.positionId);
 			_replace(account.positionId, position.rep + amount, position.commitment);
 		}
-		repToken.safeTransferFrom(_capitalOwner(), address(this), amount);
+		repToken().safeTransferFrom(_capitalOwner(), address(this), amount);
 		_serveRetirement(0);
 		emit PrincipalDeposited(_capitalOwner(), owner, amount);
 	}
@@ -255,7 +264,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 	function _serveRetirement(uint96 id) private {
 		require(id == 0 || id != auctionCohort.positionId, 'Materialize an individual auction vault');
-		if (!isPriceValid() || frozen || zoltar.getForkTime(universeId) != 0) return;
+		if (!isPriceValid() || frozen || zoltar.getForkTime(universeId()) != 0) return;
 		SecurityPoolCommitmentIndex.Retirement memory result = commitmentIndex.retire(conservativePrice, demandAttoEth, id);
 		retirementCashAttoRep += result.rep;
 		if (result.boundaryPositionId != 0) {
@@ -289,17 +298,20 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// The canonical settlement checkpoints old fees before receiving cash,
 	/// then supplies its actual active cash balance. No new shares are minted.
 	function recordSettlementRepair(uint256 demand) external {
+		_requireInitialized();
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.recordSettlementRepair, (demand)));
 	}
 
 	/// @dev The callback checkpoints the ledger's cached old price before reading
 	/// the feed's new epoch and bounds; all acceptance changes are atomic.
-	function acceptPrice(uint256 price, uint48 validUntil) external onlyPortfolio {
+	function acceptPrice(uint256 price, uint48 validUntil) external {
+		require(msg.sender == portfolio, 'Only portfolio');
+		_requireInitialized();
 		require(reportOwner == address(0), 'Report operation active');
-		require(zoltar.getForkTime(universeId) == 0, 'Fork price already frozen');
+		require(zoltar.getForkTime(universeId()) == 0, 'Fork price already frozen');
 		require(price > 0 && validUntil > block.timestamp, 'Invalid capital price');
 		_checkpointAccounting();
-		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(portfolio).priceFeed(universeId));
+		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(portfolio).priceFeed(universeId()));
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.acceptPrice, (feed, price, validUntil)));
 	}
 
@@ -316,7 +328,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		uint48 effective = effectiveTime();
 		uint48 through = uint48(Math.min(effective, priceValidUntil));
 		// The canonical book pauses cash-funded fees at stale-price boundaries.
-		ICapitalLedgerAccounting(portfolio).checkpointCapitalFees(universeId, through);
+		ICapitalLedgerAccounting(portfolio).checkpointCapitalFees(universeId(), through);
 		// Prepaid rewards keep their original vesting dates after a fork. Their
 		// old commitments and eligibility are immutable, and parent earnings stay
 		// separately claimable even after the owner has selected a child.
@@ -340,7 +352,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// new provider's jackpot, and no shared pot exists to receive it. Burn it.
 	function _serviceIncome(uint256 ethAmount, uint256 repAmount) private {
 		if (ethAmount == 0 && repAmount == 0) return;
-		if (repAmount != 0) zoltar.burnRep(universeId, repAmount);
+		if (repAmount != 0) zoltar.burnRep(universeId(), repAmount);
 		_sendEth(Constants.BURN_ADDRESS, ethAmount);
 		emit UnassignedFeesBurned(ethAmount, repAmount);
 	}
@@ -354,7 +366,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function fundVestedFees(uint256 cash, uint256 repAmount) external onlyAccounting {
 		require(!importing, 'Capital imports are not complete');
 		_checkpoint();
-		if (repAmount != 0) repToken.safeTransferFrom(msg.sender, address(this), repAmount);
+		if (repAmount != 0) repToken().safeTransferFrom(msg.sender, address(this), repAmount);
 		Collateral.pull(ICollateralConfig(portfolio).collateralToken(), msg.sender, address(this), cash);
 		feeStreams.addStream(cash, repAmount);
 	}
@@ -397,7 +409,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// The canonical feed filters selectors and isolates calls. The selected
 	/// public entrypoint retains its validation and reentrancy guard.
 	function executeReportOperation(address sponsor, bytes calldata data) external {
-		require(msg.sender == ICapitalLedgerAccounting(portfolio).priceFeed(universeId), 'Only canonical shared feed');
+		require(msg.sender == ICapitalLedgerAccounting(portfolio).priceFeed(universeId()), 'Only canonical shared feed');
 		require(!entered && reportOwner == address(0) && sponsor != address(0), 'Capital operation active');
 		reportOwner = sponsor;
 		(bool success, bytes memory result) = address(this).call(data);
@@ -474,7 +486,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	function freeze() external onlyForkAuthority {
-		require(zoltar.getForkTime(universeId) != 0, 'Universe has not forked');
+		require(zoltar.getForkTime(universeId()) != 0, 'Universe has not forked');
 		if (frozen) return;
 		_checkpoint();
 		(frozenBackingAttoRep, frozenCommitmentAttoEth) = commitmentIndex.totals();

@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -53,13 +52,11 @@ describe('audit: a holding fee does not restart in a fork child for a question u
 		await forkUniverse(owner, base.genesisUniverse, getQuestionId(forkQuestion, base.outcomes))
 		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...portfolio, functionName: 'forkController' }) }
 		for (const client of [owner, other]) {
-			await stagePortfolioForkCapital(client, coordinator.address, base.genesisUniverse, 1n)
 			await writeContractAndWait(client, () => client.writeContract({ ...coordinator, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
 		}
 		const forkTime = (await getUniverseData(owner, base.genesisUniverse)).forkTime
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		const child = getChildUniverseId(base.genesisUniverse, 1)
-		await stagePortfolioForkCapital(owner, coordinator.address, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [child] }))
 		// Register the child pool without materializing the branch's own game.

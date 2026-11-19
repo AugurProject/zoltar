@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { useSecurityPoolPortfolioFixture, unit } from './securityPoolPortfolioFixture'
@@ -33,16 +32,12 @@ describe('Statoblast: native fork claim basket recovery', () => {
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
 		await forkUniverse(owner(), base.genesisUniverse, base.questionId)
 		const coordinator = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
-		await stagePortfolioForkCapital(owner(), coordinator, base.genesisUniverse, chosen ? 1n : 2n)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'choose', args: [base.genesisUniverse, chosen ? 1n : 2n] }))
-		await stagePortfolioForkCapital(other(), coordinator, base.genesisUniverse, 2n)
 		await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'choose', args: [base.genesisUniverse, 2n] }))
 		const forkTime = (await getUniverseData(owner(), base.genesisUniverse)).forkTime
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		const child = getChildUniverseId(base.genesisUniverse, 1)
-		await stagePortfolioForkCapital(owner(), coordinator, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'prepareBranch', args: [base.genesisUniverse, 1n], gas: 16_777_216n }))
-		await stagePortfolioForkCapital(owner(), coordinator, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n], gas: 16_777_216n }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(other(), () => other().writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'migrate', args: [base.genesisUniverse * 256n + 1n, [1n]] }))

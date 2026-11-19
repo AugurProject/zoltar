@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
@@ -156,7 +155,6 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		await expect(b4.simulateContract({ ...coordinator, functionName: 'choose', args: [C, BigInt(YES)] })).rejects.toThrow('No pledged fork principal')
 		await viaVault(b4, tieA.vault, YES)
 		expect((await position(tieA.id)).materialized).toBe(true)
-		await stagePortfolioForkCapital(owner, coordinator.address, C, BigInt(NO))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'prepareBranch', args: [C, BigInt(NO)], gas: BRANCH_GAS }))
 		await viaVault(b3, best.vault, NO)
 		await expect(viaVault(b3, best.vault, YES)).rejects.toThrow()

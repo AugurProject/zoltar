@@ -6,9 +6,6 @@ import {
 	buildPortfolioCapitalDepositRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioForkChoiceRequest,
-	buildPortfolioForkLedgerRequest,
-	buildPortfolioNativeChildRequest,
-	buildPortfolioForkPreparationRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioPriceApprovalRequest,
 	buildPortfolioPricePreparationRequest,
@@ -24,12 +21,7 @@ import { Zoltar_Zoltar as zoltarArtifact } from '@zoltar/ui-core-shared/contract
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { createRangeProgressReporter, mintSimulationGenesisRep, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
-	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-} from '../contractArtifact.js'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact } from '../contractArtifact.js'
 import { getInfraContractAddresses } from '../protocol/deploymentHelpers.js'
 import { FORK_MIGRATION_DURATION_SECONDS } from '../protocol/forkMigrationTiming.js'
 import { portfolioReadClient, sendPortfolioTransaction as sendUnlabelled, type PortfolioTransaction } from '../protocol/securityPoolPortfolio.js'
@@ -118,12 +110,6 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	await sendPortfolioTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }) }, 'Fork the origin universe')
 	await reportStep('Forked the origin universe on the first question')
 	const controller = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController' })
-	// Directly forking Zoltar bypasses the normal pool fork transaction's freeze step.
-	await sendPortfolioTransaction(ownerClient, { account: owner, to: controller, value: 0n, data: encodeFunctionData({ abi: forkArtifact.abi, functionName: 'freeze', args: [0n] }) }, 'Freeze the source portfolio')
-	await sendPortfolioTransaction(ownerClient, buildPortfolioNativeChildRequest({ owner, zoltar, universeId: 0n, outcomeIndex: FORK_OUTCOME }), 'Deploy Yes REP')
-	await sendPortfolioTransaction(ownerClient, buildPortfolioForkLedgerRequest({ owner, portfolio, universeId: 0n, outcomeIndex: FORK_OUTCOME }), 'Deploy Yes capital ledger')
-	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkPreparationRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Prepare the Yes branch capital')
-	await reportStep('Prepared the Yes branch capital')
 	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkChoiceRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Choose the Yes branch')
 	await reportStep('Owner chose the Yes branch')
 	await advanceSimulationTime(memoryClient, FORK_MIGRATION_DURATION_SECONDS + 60n)

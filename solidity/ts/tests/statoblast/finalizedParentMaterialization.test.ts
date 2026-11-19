@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
@@ -59,11 +58,9 @@ describe('Statoblast: reject materializing a question that finalized before an u
 		const forkTime = (await getUniverseData(owner, base.genesisUniverse)).forkTime
 		expect(forkTime).toBeGreaterThan(end)
 		const c = await coordinator()
-		await stagePortfolioForkCapital(owner, c.address, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...c, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
 		const child = getChildUniverseId(base.genesisUniverse, 1)
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
-		await stagePortfolioForkCapital(owner, c.address, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...c, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...c, functionName: 'finalizeBranch', args: [child] }))
 

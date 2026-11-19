@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
@@ -44,14 +43,12 @@ describe('Statoblast: lazy child outcome supply', () => {
 		await expect(fixture.mint(unit)).rejects.toThrow()
 		expect(await owner().readContract({ abi: poolArtifact.abi, address: parent.securityPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(20n * unit)
 		const controller = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
-		await stagePortfolioForkCapital(owner(), controller, base.genesisUniverse, chosen ? 1n : 2n)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'choose', args: [base.genesisUniverse, chosen ? 1n : 2n] }))
 		await addRepToMigrationBalance(owner(), base.genesisUniverse, 1_000n * unit)
 		await splitMigrationRep(owner(), base.genesisUniverse, 1_000n * unit, [1n])
 		const forkTime = (await getUniverseData(owner(), base.genesisUniverse)).forkTime
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		const child = getChildUniverseId(base.genesisUniverse, 1)
-		await stagePortfolioForkCapital(owner(), controller, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [parent.securityPool, child] }))

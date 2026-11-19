@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
@@ -35,7 +34,6 @@ describe('Portfolio own-fork reporter claims', () => {
 		const controller = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'forkController' })
 		await fixture.base.mockWindow.advanceTime(63n * 86_400n)
 		const child = getChildUniverseId(universe, outcome)
-		await stagePortfolioForkCapital(relayer, controller, universe, BigInt(outcome))
 		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, BigInt(outcome)] }))
 		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(relayer, () => relayer.writeContract({ ...forker, functionName: 'preparePortfolioQuestion', args: [pool, child] }))

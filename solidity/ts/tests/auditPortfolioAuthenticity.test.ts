@@ -1,15 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, encodeDeployData, getAddress, getCreateAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
+	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamsArtifact,
 	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openAdmissionArtifact,
 } from '../types/contractArtifact'
 import { deployContract } from '../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { applyLibraries, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { maximumQuestionHorizonSeconds, portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
 // Audit regression: registering with the factory used to prove nothing. Any contract could open a pool namespace and
@@ -131,16 +134,18 @@ describe('audit: only portfolios the factory deployed are canonical', () => {
 		const created = await fixture.deployPortfolio()
 		expect(getAddress(await owner.readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'auctionDeployer' }))).toBe(getAddress(infrastructure().securityPoolPortfolioAuctionDeployer))
 		const capital = await fixture.capitalFor(created)
-		const index = await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'commitmentIndex' })
-		const modules: readonly [Address, RuntimeArtifact][] = [
-			[capital, capitalArtifact],
-			[index, indexArtifact],
+		const root = { abi: capitalArtifact.abi, address: capital } as const
+		const modules: readonly [Address, Address, Hex, RuntimeArtifact][] = [
+			[capital, await owner.readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'capitalImplementation' }), universeCloneBindings(fixture.base.genesisUniverse, getRepTokenAddress(fixture.base.genesisUniverse)), capitalArtifact],
+			[await owner.readContract({ ...root, functionName: 'commitmentIndex' }), getCreateAddress({ from: infrastructure().securityPoolCommitmentIndexDeployer, nonce: 1n }), capital, indexArtifact],
+			[await owner.readContract({ ...root, functionName: 'feeStreams' }), getCreateAddress({ from: infrastructure().securityPoolCapitalFeeStreamsDeployer, nonce: 1n }), capital, streamsArtifact],
 		]
-		for (const [address, artifact] of modules) {
-			const code = await owner.getCode({ address })
+		for (const [clone, implementation, bindings, artifact] of modules) {
+			expect((await owner.getCode({ address: clone }))?.toLowerCase()).toBe(boundCloneRuntimeCode(implementation, bindings).toLowerCase())
+			const code = await owner.getCode({ address: implementation })
 			if (code === undefined) throw new Error('Module code missing')
 			expect(withoutImmutables(code, artifact)).toBe(withoutImmutables(applyLibraries(artifact.evm.deployedBytecode.object), artifact))
 		}
-		expect(getAddress(await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'portfolio' }))).toBe(getAddress(created))
+		expect(getAddress(await owner.readContract({ ...root, functionName: 'portfolio' }))).toBe(getAddress(created))
 	})
 })

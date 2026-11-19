@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioPricePreparationRequest, buildPortfolioPriceRequest, loadPortfolioPriceSnapshot, quotePortfolioPriceFunding } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -33,7 +32,6 @@ describe('Statoblast: child portfolio price preparation', () => {
 		await approveToken(owner, getRepTokenAddress(source), getZoltarAddress())
 		await forkUniverse(owner, source, fixture.base.questionId)
 		const forkTime = (await getUniverseData(owner, source)).forkTime
-		await stagePortfolioForkCapital(owner, forks, source, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'choose', args: [source, 1n] }))
 		const child = getChildUniverseId(source, 1)
 		if (useSdk) {
@@ -60,7 +58,6 @@ describe('Statoblast: child portfolio price preparation', () => {
 		}
 		const start = async () => {
 			await fixture.base.mockWindow.setTime(forkTime + 56n * DAY)
-			await stagePortfolioForkCapital(owner, forks, source, 1n)
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'startBranch', args: [source, 1n] }))
 		}
 		const balance = (address: Address) => owner.readContract({ abi: tokenArtifact.abi, address, functionName: 'balanceOf', args: [owner.account.address] })

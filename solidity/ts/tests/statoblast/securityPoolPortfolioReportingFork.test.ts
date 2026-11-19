@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
@@ -50,14 +49,11 @@ describe('Statoblast: native fork reporter registration', () => {
 			await splitMigrationRep(owner, base.genesisUniverse, 3_000n * unit, [1n])
 		}
 		const coordinator = await owner.readContract({ ...portfolio(), functionName: 'forkController' })
-		await stagePortfolioForkCapital(owner, coordinator, base.genesisUniverse, chosen ? 1n : 2n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'choose', args: [base.genesisUniverse, chosen ? 1n : 2n] }))
-		await stagePortfolioForkCapital(other, coordinator, base.genesisUniverse, otherChoosesYes ? 1n : 2n)
 		await writeContractAndWait(other, () => other.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'choose', args: [base.genesisUniverse, otherChoosesYes ? 1n : 2n] }))
 		const forkTime = (await getUniverseData(owner, base.genesisUniverse)).forkTime
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		const child = getChildUniverseId(base.genesisUniverse, 1)
-		await stagePortfolioForkCapital(owner, coordinator, base.genesisUniverse, 1n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }

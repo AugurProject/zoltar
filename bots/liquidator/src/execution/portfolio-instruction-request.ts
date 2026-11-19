@@ -1,12 +1,10 @@
 import type { OperatorSettings } from '#config/settings'
 import type { PortfolioInstruction } from '#config/portfolio-instructions'
 import type { PortfolioExecutionContext } from './portfolio-execution-snapshot.ts'
-import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolPortfolioForkCoordinatorAbi as forkAbi, securityPoolPortfolioAbi as portfolioAbi } from '@zoltar/bot-shared/contracts/abi'
-import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolPortfolioForkCoordinatorAbi as forkAbi } from '@zoltar/bot-shared/contracts/abi'
+import { encodeFunctionData, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import {
 	buildPortfolioAuctionBidRequest,
-	buildPortfolioForkLedgerRequest,
-	buildPortfolioNativeChildRequest,
 	quotePortfolioAuctionBid,
 	buildPortfolioAuctionMaterializeRequest,
 	buildPortfolioAuctionRefundClaimRequest,
@@ -26,22 +24,12 @@ type PreparedInstruction = { request: Request; completes: boolean }
 type VaultInstruction = Extract<PortfolioInstruction, { vault: Address }>
 type AuctionInstruction = Exclude<PortfolioInstruction, VaultInstruction | { action: 'fork-choice' }>
 
-async function forkChoiceRequest({ client, settings, observation, blockNumber }: Context, owner: Address, outcome: bigint): Promise<PreparedInstruction> {
+async function forkChoiceRequest({ client, settings, observation, blockNumber }: Context, owner: Address, outcome: bigint): Promise<Request> {
 	const { snapshot, selection } = observation
 	const child = await client.readContract({ address: settings.deployment.zoltar, abi: zoltarAbi, functionName: 'getChildUniverseId', args: [selection.universeId, outcome], blockNumber })
 	if (!settings.approvedUniverses.includes(child) || !settings.selectedPortfolios.some(scope => scope.address === selection.address && scope.universeId === child)) throw new Error('Select and approve the chosen child universe before recording an irreversible fork choice')
-	const root = { address: selection.address, abi: portfolioAbi, blockNumber } as const
-	const [boundCapital, pendingCapital] = await Promise.all([client.readContract({ ...root, functionName: 'capitalLedger', args: [child] }), client.readContract({ ...root, functionName: 'pendingForkCapital', args: [child] })])
-	if (boundCapital === zeroAddress && pendingCapital === zeroAddress) {
-		const deadline = await client.readContract({ address: settings.deployment.zoltar, abi: zoltarAbi, functionName: 'getForkChoiceDeadline', args: [selection.universeId], blockNumber })
-		if (snapshot.timestamp >= deadline) throw new PortfolioOpportunityExpired('Fork choice window has closed')
-		const rep = await client.readContract({ address: settings.deployment.zoltar, abi: zoltarAbi, functionName: 'getRepToken', args: [child], blockNumber })
-		const base = { owner: snapshot.owner, universeId: selection.universeId, outcomeIndex: outcome }
-		const request = rep === zeroAddress ? buildPortfolioNativeChildRequest({ ...base, zoltar: settings.deployment.zoltar }) : buildPortfolioForkLedgerRequest({ ...base, portfolio: selection.address })
-		return { request, completes: false }
-	}
 	const controller = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'forkAuthority', blockNumber })
-	return { completes: true, request: { account: owner, to: controller, value: 0n, data: encodeFunctionData({ abi: forkAbi, functionName: 'choose', args: [selection.universeId, outcome] }) } }
+	return { account: owner, to: controller, value: 0n, data: encodeFunctionData({ abi: forkAbi, functionName: 'choose', args: [selection.universeId, outcome] }) }
 }
 
 async function vaultInstructionRequest(context: Context, instruction: VaultInstruction): Promise<PreparedInstruction> {
@@ -66,12 +54,9 @@ async function vaultInstructionRequest(context: Context, instruction: VaultInstr
 		case 'vault-health':
 			operation = buildPortfolioCapitalSetHealthRequest({ ...base, targetHealthFactorBps: instruction.targetHealthFactorBps })
 			break
-		case 'vault-fork-choice': {
-			const prepared = await forkChoiceRequest(context, vault.owner, instruction.outcome)
-			if (!prepared.completes) return prepared
-			operation = prepared.request
+		case 'vault-fork-choice':
+			operation = await forkChoiceRequest(context, vault.owner, instruction.outcome)
 			break
-		}
 		case 'vault-retire':
 			if (instruction.commitmentAttoEth > vault.ownerCommitmentAttoEth) throw new Error('Vault retirement cannot increase commitment')
 			operation = buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: instruction.commitmentAttoEth })
@@ -111,7 +96,7 @@ async function auctionInstructionRequest({ client, settings, observation, totalP
 }
 
 export async function buildPortfolioInstructionRequest(context: Context, instruction: PortfolioInstruction): Promise<PreparedInstruction> {
-	if (instruction.action === 'fork-choice') return forkChoiceRequest(context, context.observation.snapshot.owner, instruction.outcome)
+	if (instruction.action === 'fork-choice') return { request: await forkChoiceRequest(context, context.observation.snapshot.owner, instruction.outcome), completes: true }
 	if ('vault' in instruction) return vaultInstructionRequest(context, instruction)
 	return auctionInstructionRequest(context, instruction)
 }

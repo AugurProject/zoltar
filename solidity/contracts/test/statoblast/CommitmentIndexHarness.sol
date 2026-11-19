@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolCommitmentIndex } from '../../statoblast/SecurityPoolCommitmentIndex.sol';
+import { SecurityPoolBoundClones } from '../../statoblast/SecurityPoolBoundClones.sol';
 
 contract InspectableCommitmentIndex is SecurityPoolCommitmentIndex {
 	struct Checked {
@@ -15,7 +16,6 @@ contract InspectableCommitmentIndex is SecurityPoolCommitmentIndex {
 		uint256 leaves;
 		uint256 retainedCommitment;
 	}
-	constructor(address authority) SecurityPoolCommitmentIndex(authority) {}
 	function validate(uint96 batch) external view returns (uint256 leaves, uint16 height) {
 		if (roots[batch] == 0) return (0, 0);
 		Checked memory result = _check(roots[batch], 0);
@@ -60,7 +60,9 @@ contract CommitmentIndexHarness {
 	mapping(uint96 => uint256) public paidRepFees;
 
 	constructor() {
-		index = new InspectableCommitmentIndex(address(this));
+		InspectableCommitmentIndex implementation = new InspectableCommitmentIndex();
+		index = InspectableCommitmentIndex(SecurityPoolBoundClones.create(address(implementation), abi.encodePacked(address(this))));
+		index.initialize();
 	}
 	function validateAll() external view {
 		index.validate(0);

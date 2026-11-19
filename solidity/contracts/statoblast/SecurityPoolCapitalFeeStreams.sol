@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
+
 /// @notice Exact vesting of independently funded ETH and REP fee budgets.
 /// @dev The authority holds the tokens. Nothing here transfers assets or visits
 /// an old stream. All streams share the immutable reward duration, so rates and
@@ -8,12 +10,11 @@ pragma solidity 0.8.35;
 contract SecurityPoolCapitalFeeStreams {
 	uint256 private constant MAX_TIMESTAMP = type(uint48).max;
 	uint256 private constant MAX_OUTSTANDING = type(uint128).max;
-	/// @dev The capital ledger authorizes mutations and holds tokens; this contract only accounts for them.
-	address public immutable capitalLedger;
-	uint48 public immutable rewardDuration;
+	address private immutable initializer = msg.sender;
 	uint48 public releasedThrough;
 	uint48 private lastExpiryId;
 	uint48 private releasedExpiryId;
+	uint48 public rewardDuration;
 	uint256 public outstandingEth;
 	uint256 public outstandingRep;
 	uint256 public deferredEth;
@@ -30,17 +31,23 @@ contract SecurityPoolCapitalFeeStreams {
 	}
 	mapping(uint48 => Expiry) private expiries;
 
-	constructor(address authority, uint48 timestamp, uint48 vestingDuration) {
-		require(authority != address(0), 'Invalid fee authority');
+	/// @dev The capital ledger authorizes mutations and holds tokens; this contract only accounts for them.
+	function capitalLedger() public view returns (address) {
+		return SecurityPoolBoundClones.boundAddress();
+	}
+	function initialize(uint48 timestamp, uint48 vestingDuration) external {
+		require(msg.sender == initializer, 'Only fee streams deployer');
+		require(capitalLedger() != address(0), 'Invalid fee authority');
+		require(rewardDuration == 0, 'Fee streams already initialized');
 		require(timestamp <= block.timestamp, 'Future fee checkpoint');
 		require(vestingDuration != 0, 'Invalid fee duration');
-		capitalLedger = authority;
 		rewardDuration = vestingDuration;
 		releasedThrough = timestamp;
 	}
 
 	modifier onlyCapitalLedger() {
-		require(msg.sender == capitalLedger, 'Only capital ledger');
+		require(msg.sender == capitalLedger(), 'Only capital ledger');
+		require(rewardDuration != 0, 'Fee streams not initialized');
 		_;
 	}
 

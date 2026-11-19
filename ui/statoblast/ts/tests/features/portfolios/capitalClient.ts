@@ -1,3 +1,4 @@
+import { boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createPublicClient, http, getAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createMockReadClient, createBlockWithTimestamp, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -20,6 +21,9 @@ import {
 } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { capitalSnapshot, owner, portfolio, capital, token, index } from './capitalFixture.js'
 export const modules = {
+	capitalImplementation: getAddress('0x0000000000000000000000000000000000000072'),
+	indexImplementation: getAddress('0x0000000000000000000000000000000000000073'),
+	feesImplementation: getAddress('0x0000000000000000000000000000000000000074'),
 	fees: getAddress('0x0000000000000000000000000000000000000061'),
 	engine: getAddress('0x0000000000000000000000000000000000000062'),
 	book: getAddress('0x0000000000000000000000000000000000000063'),
@@ -42,11 +46,13 @@ export function capitalClient(initial = capitalSnapshot()) {
 	const failingMulticallAddresses = new Set<Address>()
 	const codes = new Map<Address, Hex>([
 		[portfolio, getSecurityPoolPortfolioRuntimeCode()],
-		[capital, `0x${capitalArtifact.evm.deployedBytecode.object}`],
+		[modules.capitalImplementation, `0x${capitalArtifact.evm.deployedBytecode.object}`],
 		[modules.lifecycle, `0x${lifecycleArtifact.evm.deployedBytecode.object}`],
 		[modules.auctionDelegate, `0x${auctionDelegateArtifact.evm.deployedBytecode.object}`],
-		[index, `0x${indexArtifact.evm.deployedBytecode.object}`],
-		[modules.fees, `0x${feesArtifact.evm.deployedBytecode.object}`],
+		[index, boundCloneRuntimeCode(modules.indexImplementation, capital)],
+		[modules.indexImplementation, `0x${indexArtifact.evm.deployedBytecode.object}`],
+		[modules.fees, boundCloneRuntimeCode(modules.feesImplementation, capital)],
+		[modules.feesImplementation, `0x${feesArtifact.evm.deployedBytecode.object}`],
 		[modules.engine, `0x${engineArtifact.evm.deployedBytecode.object}`],
 		[modules.book, `0x${bookArtifact.evm.deployedBytecode.object}`],
 		[modules.reporters, `0x${reporterArtifact.evm.deployedBytecode.object}`],
@@ -68,7 +74,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				return failingMulticallAddresses.has(getAddress(contract.address)) ? { status: 'failure', error: new Error('execution reverted') } : { status: 'success', result: overrides[name] }
 			}),
 		),
-		getCode: async ({ address }: { address: Address }) => codes.get(address),
+		getCode: async ({ address }: { address: Address }) => codes.get(address) ?? (address === capital ? boundCloneRuntimeCode(modules.capitalImplementation, universeCloneBindings(snapshot.universeId, token)) : undefined),
 		getBalance: async () => snapshot.walletAttoEth,
 		getBlock: async () => ({ ...createBlockWithTimestamp(snapshot.timestamp), number: snapshot.blockNumber, hash: snapshot.blockHash }),
 		...createMockReadClient(async request => {
@@ -84,6 +90,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				originUniverseId: snapshot.originUniverseId,
 				universeId: snapshot.universeId,
 				capitalLedger: capital,
+				capitalImplementation: modules.capitalImplementation,
 				zoltar: infrastructure?.zoltar,
 				factory: infrastructure?.securityPoolFactory,
 				isPortfolio: true,
@@ -91,7 +98,8 @@ export function capitalClient(initial = capitalSnapshot()) {
 				commitmentIndex: index,
 				repToken: token,
 				getRepToken: token,
-				ledger: request.address === modules.lifecycle || request.address === modules.auctionDelegate ? capital : modules.book,
+				ledger: modules.book,
+				implementation: request.address,
 				lifecycleDelegate: modules.lifecycle,
 				auctionDelegate: modules.auctionDelegate,
 				auctionDeployer: infrastructure?.securityPoolPortfolioAuctionDeployer,

@@ -1,4 +1,3 @@
-import { stagePortfolioForkCapital } from '../testSupport/simulator/utils/contracts/portfolioFork'
 import { describe, expect, test } from 'bun:test'
 import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -66,10 +65,8 @@ describe('portfolio security regression coverage', () => {
 		await approveToken(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(fixture.owner(), fixture.base.genesisUniverse, getQuestionId(scalar, []))
 		const forks = { abi: forkArtifact.abi, address: await fixture.owner().readContract({ ...portfolio(), functionName: 'forkController' }) }
-		await stagePortfolioForkCapital(fixture.owner(), forks.address, fixture.base.genesisUniverse, outcome)
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...forks, functionName: 'choose', args: [fixture.base.genesisUniverse, outcome] }))
 		await fixture.base.mockWindow.advanceTime(63n * DAY)
-		await stagePortfolioForkCapital(fixture.owner(), forks.address, fixture.base.genesisUniverse, outcome)
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...forks, functionName: 'startBranch', args: [fixture.base.genesisUniverse, outcome] }))
 		const child = getChildUniverseId(fixture.base.genesisUniverse, outcome)
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...forks, functionName: 'finalizeBranch', args: [child] }))

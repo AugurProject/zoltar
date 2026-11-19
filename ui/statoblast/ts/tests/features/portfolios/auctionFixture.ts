@@ -1,10 +1,10 @@
-import { auctionVaultRuntimeCode } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { auctionVaultRuntimeCode, boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction as auctionArtifact,
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
 } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import { auctionAddress, auctionEngine, auctionVault, auctionVaultBindings, auctionVaultImplementation, capital, owner, unit } from './capitalFixture.js'
+import { auctionAddress, auctionEngine, auctionVault, auctionVaultBindings, auctionVaultImplementation, capital, owner, token, unit } from './capitalFixture.js'
 import { modules } from './capitalClient.js'
 import { priceFixture } from './priceFixture.js'
 export { auctionAddress, auctionEngine, auctionVault, auctionVaultImplementation }
@@ -57,6 +57,7 @@ export async function auctionFixture() {
 	})
 	fixture.set(capital, 'universeId', 42n)
 	fixture.set(auctionAddress, 'universeId', 42n)
+	fixture.source.codes.set(capital, boundCloneRuntimeCode(modules.capitalImplementation, universeCloneBindings(42n, token)))
 	fixture.source.codes.set(auctionAddress, `0x${auctionArtifact.evm.deployedBytecode.object}`)
 	fixture.source.codes.set(auctionEngine, `0x${engineArtifact.evm.deployedBytecode.object}`)
 	fixture.source.codes.set(auctionVaultImplementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
