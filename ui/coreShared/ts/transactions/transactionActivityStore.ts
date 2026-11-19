@@ -60,16 +60,20 @@ function scheduleActivityExpiry() {
 }
 
 function expirePendingActivity() {
-	const before = transactionActivity.peek().entries
-	const expired = expireStaleTransactionActivity(before, Date.now())
-	if (expired === before) return
-	update(entries => expireStaleTransactionActivity(entries, Date.now()))
-	const after = transactionActivity.peek().entries
-	for (const entry of before) {
-		if (entry.status === 'pending' && after.some(next => next.hash === entry.hash && next.status === 'failed' && next.failureKind === 'dropped')) {
-			watchedHashes.delete(entry.hash)
-			announceTransactionTrackingStopped(entry.hash)
+	const now = Date.now()
+	const isExpired = (entry: TransactionActivityEntry) => entry.status === 'pending' && now - entry.submittedAt > MAX_PENDING_TRANSACTION_AGE_MILLISECONDS
+	if (!transactionActivity.peek().entries.some(isExpired)) return
+	const expiredHashes: Hash[] = []
+	update(entries => {
+		// Settlement caps history, so collect watches before expired rows can be evicted.
+		for (const entry of entries) {
+			if (isExpired(entry)) expiredHashes.push(entry.hash)
 		}
+		return expireStaleTransactionActivity(entries, now)
+	})
+	for (const hash of expiredHashes) {
+		watchedHashes.delete(hash)
+		announceTransactionTrackingStopped(hash)
 	}
 }
 

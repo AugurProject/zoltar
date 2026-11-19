@@ -18,6 +18,7 @@ import {
 	settleTransactionActivity,
 	type TransactionActivityEntry,
 } from '../transactions/transactionActivity.js'
+import { isTransactionTrackingStopped } from '../transactions/transactionTrackingStop.js'
 import { createTransactionScope, mergeTransactionScopes, securityPoolTransactionScope, transactionScopesOverlap, universeTransactionScope } from '../transactions/transactionScope.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
@@ -210,6 +211,30 @@ describe('transaction activity store', () => {
 			expect(transactionActivity.peek().entries[0]?.status).toBe('pending')
 			jest.advanceTimersByTime(1)
 			expect(transactionActivity.peek().entries[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
+			expect(hasPendingTransactionActivity(['market:0x1'])).toBe(false)
+			expect(isTransactionTrackingStopped(hashOf(18))).toBe(true)
+			const storageKey = transactionActivity.peek().storageKey
+			if (storageKey === undefined) throw new Error('Expected persistent activity owner')
+			expect(parseStoredTransactionActivity(window.localStorage.getItem(storageKey))[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
+		} finally {
+			resetTransactionActivityForTesting()
+			jest.useRealTimers()
+			restore()
+		}
+	})
+
+	test('#1389 stops every expired watch even when settled history is capped', () => {
+		const restore = installActiveEnvironmentForTesting(createFakeBackend())
+		jest.useFakeTimers({ now: 100000000 })
+		try {
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			const hashes = Array.from({ length: MAX_TRANSACTION_ACTIVITY_ENTRIES + 1 }, (_, index) => hashOf(index + 100))
+			for (const hash of hashes) recordTransactionSubmitted({ hash, scope: ['market:0x1'], title: 'Stuck transaction' })
+			expect(transactionActivity.peek().entries).toHaveLength(hashes.length)
+			jest.advanceTimersByTime(MAX_PENDING_TRANSACTION_AGE_MILLISECONDS + 1)
+			expect(transactionActivity.peek().entries.length).toBeLessThan(hashes.length)
+			for (const hash of hashes) expect(isTransactionTrackingStopped(hash)).toBe(true)
+			expect(hasPendingTransactionActivity(['market:0x1'])).toBe(false)
 		} finally {
 			resetTransactionActivityForTesting()
 			jest.useRealTimers()
