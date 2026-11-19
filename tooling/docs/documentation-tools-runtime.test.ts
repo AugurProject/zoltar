@@ -708,3 +708,60 @@ for (const scenario of [{ input: 'nonDecisionThreshold', mount: 'fig-statoblast-
 		}
 	})
 }
+
+test('steps a number control without a maximum (#1428)', async () => {
+	const cleanup = await loadDocument('docs/explanation/escalation-game.html', 'http://localhost/docs/explanation/escalation-game.html')
+	try {
+		const input = document.querySelector<HTMLInputElement>('[data-example-input="yes"]')
+		if (input === null) throw new Error('Missing number input')
+		input.removeAttribute('max')
+		await runGeneratedRuntime('interactiveTools')
+		const increment = input.parentElement?.querySelector<HTMLButtonElement>('[data-step-direction="increment"]')
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+		expect(input.hasAttribute('aria-invalid')).toBeFalse()
+		expect(increment?.disabled).toBeFalse()
+		increment?.dispatchEvent(new Event('click', { bubbles: true }))
+		expect(input.value).toBe('2')
+	} finally {
+		cleanup()
+	}
+})
+
+test('reports zero oracle correction margin consistently (#1427)', async () => {
+	const cleanup = await loadDocument('docs/reference/open-oracle.html', 'http://localhost/docs/reference/open-oracle.html')
+	try {
+		const names = ['targetPriceErrorForDispute', 'openOracleProtocolFee', 'openOracleReporterFee']
+		for (const [index, value] of ['4.2', '4.1', '0.1'].entries()) {
+			const input = document.querySelector<HTMLInputElement>(`[data-example-input="${names[index]}"]`)
+			if (input === null) throw new Error('Missing estimator input')
+			input.value = value
+		}
+		await runGeneratedRuntime('openOracleTools')
+		expect(document.querySelector<HTMLElement>('#initial-report-estimator-example')?.dataset['widgetState']).toBe('unsafe')
+		expect(document.querySelector<HTMLOutputElement>('[data-example-output="correctionProfitFraction"]')?.value).toBe('not positive')
+	} finally {
+		cleanup()
+	}
+})
+
+test('clears previous deployment bits when the selected mapping is unavailable (#1426)', async () => {
+	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
+	const restoreFetch = installFetch(input => (String(input).includes('sepolia') ? Promise.resolve(new Response('', { status: 503 })) : serveDeploymentAddresses(input)))
+	try {
+		await runGeneratedRuntime('deploymentMaskDecoder')
+		const network = document.querySelector<HTMLSelectElement>('[data-deployment-mask-network]')
+		const input = document.querySelector<HTMLInputElement>('#deployment-mask-input')
+		const status = document.querySelector('#deployment-status-bit-mapping [data-deployment-bit-status="0"]')
+		if (network === null || input === null || status === null) throw new Error('Missing deployment decoder controls')
+		input.value = '1'
+		input.dispatchEvent(new Event('input'))
+		expect(status.textContent).toBe('Set · code present')
+		network.value = 'sepolia'
+		network.dispatchEvent(new Event('change'))
+		expect(input.disabled).toBeTrue()
+		expect(status.textContent).toBe('Not decoded · other network selected')
+	} finally {
+		restoreFetch()
+		cleanup()
+	}
+})

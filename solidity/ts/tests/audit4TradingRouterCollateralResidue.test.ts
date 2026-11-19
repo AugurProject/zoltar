@@ -98,7 +98,7 @@ describe('audit4: router keeps no wrapped collateral or services allowance', () 
 			await expectEmptyRouter()
 
 			const exitAmount = quote.result.completeSetShares / 3n
-			const exitData = encodeReceiveRequest([1, 0, native.shareToken, native.securityPool, pair, universeId, fixture.base.questionId, ids[0], ids[1], ids[2], 1, exitAmount, quote.result.totalLongShares, 0n, account, account, deadline])
+			const exitData = encodeReceiveRequest([2, 0, native.shareToken, native.securityPool, pair, universeId, fixture.base.questionId, ids[0], ids[1], ids[2], 1, exitAmount, quote.result.totalLongShares, 0n, account, account, deadline, 0n])
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'safeBatchTransferFrom', args: [account, router, [ids[0], ids[1]], [exitAmount, quote.result.totalLongShares], exitData] }))
 			await expectEmptyRouter()
 		}

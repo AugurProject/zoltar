@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { Window } from 'happy-dom'
-import { ariaIdReferenceFailures } from './check-html-structure.mts'
+import { ariaIdReferenceFailures, validateHtmlStructure } from './check-html-structure.mts'
 
 const ariaIdReferenceAttributes = [
 	{ allowsMultiple: false, name: 'aria-activedescendant' },
@@ -42,5 +45,17 @@ describe('HTML ARIA ID reference validation', () => {
 				window.close()
 			})
 		}
+	}
+})
+
+test('accepts the built-in top fragment and rejects unknown fragments (#1424)', async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), 'zoltar-html-links-'))
+	try {
+		const filePath = path.join(directory, 'index.html')
+		await writeFile(filePath, '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Links</title></head><body><a href="#top">Top</a><a href="#missing">Missing</a></body></html>')
+		const failures = await validateHtmlStructure([filePath])
+		expect(failures.map(failure => failure.message)).toEqual(['<a> links to missing anchor "#missing"'])
+	} finally {
+		await rm(directory, { recursive: true, force: true })
 	}
 })

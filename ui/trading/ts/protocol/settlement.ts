@@ -1,10 +1,11 @@
+import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import { outcomeValue, simulateSettlement } from './settlementSimulation.js'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
-import { latestBlockIdentity, retainApprovedMinimum, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
+import { latestBlockIdentity, minimumAfterSlippage, retainApprovedMinimum, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
 import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
 
@@ -82,12 +83,15 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 	if (quote.operation === 'redeem-complete-set') {
 		if (refreshed.operation !== 'redeem-complete-set') throw new Error('Settlement operation changed during revalidation')
 		const minimumEth = retainApprovedMinimum(quote.minimumAttoEth, refreshed.expectedAttoEth, 'ETH output')
+		const approvedMinimumRep = minimumAfterSlippage(quote.expectedAttoRep ?? 0n, quote.slippageBps)
+		const minimumRep = retainApprovedMinimum(approvedMinimumRep, refreshed.expectedAttoRep, 'REP output')
 		const invalidTokenId = quote.market.universeId << 8n
-		const data = encodeReceiveBasedRedeemRequest(quote.market, quote.amount, minimumEth, account, refreshed.deadline)
+		const data = encodeReceiveBasedRedeemRequest(quote.market, quote.amount, minimumEth, account, refreshed.deadline, minimumRep)
 		return await guardedWrite(async () => {
 			const block = await latestBlockIdentity(client)
 			if (block.blockTimestamp >= refreshed.deadline) throw new Error('Transaction deadline has passed; try again')
 			const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
+			retainApprovedMinimum(minimumRep, attoSharesToRecoveryAttoRep(quote.amount, feeMarket), 'REP output')
 			const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.amount, minimumEth, refreshed.deadline)
 			if (feeBlocker !== undefined) throw new Error(feeBlocker)
 			return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] })

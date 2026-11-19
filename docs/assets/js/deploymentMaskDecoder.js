@@ -173,7 +173,6 @@ function updateDecoder() {
   const steps = network.steps;
   if (steps === undefined || maskInput.disabled)
     return;
-  markOtherNetworksNotDecoded();
   const source = maskInput.value.trim();
   const mask = parseMask(source);
   if (mask === undefined) {
@@ -212,6 +211,7 @@ function updateDecoder() {
 function applySelectedNetwork() {
   if (loading)
     return;
+  markOtherNetworksNotDecoded();
   const network = networks[selectedNetworkId()];
   maskInput.removeAttribute("aria-invalid");
   if (network.steps === undefined) {

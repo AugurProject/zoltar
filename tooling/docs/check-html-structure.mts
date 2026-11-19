@@ -30,9 +30,8 @@ const ariaIdReferenceAttributes = [
 	{ allowsMultiple: true, name: 'aria-owns' },
 ] as const
 
-async function validateHtmlStructure(): Promise<ValidationFailure[]> {
+export async function validateHtmlStructure(htmlFilePaths = repositoryHtmlFilePaths().toSorted()): Promise<ValidationFailure[]> {
 	const failures: ValidationFailure[] = []
-	const htmlFilePaths = repositoryHtmlFilePaths().toSorted()
 	const parsedDocuments = await Promise.all(htmlFilePaths.map(parseHtmlDocument))
 	const parsedDocumentsByPath = new Map(parsedDocuments.map(parsedDocument => [parsedDocument.filePath, parsedDocument]))
 
@@ -133,6 +132,7 @@ async function validateLocalHtmlLinks(parsedDocument: ParsedHtmlDocument, parsed
 		if (url.hash.length === 0) continue
 		const targetDocument = parsedDocumentsByPath.get(targetPath)
 		const targetId = decodeURIComponent(url.hash.slice(1))
+		if (targetId.toLowerCase() === 'top') continue
 		if (targetDocument === undefined || !targetDocument.ids.has(targetId)) {
 			addFailure(parsedDocument, `${describeElement(anchor)} links to missing anchor "${href}"`, failures)
 		}

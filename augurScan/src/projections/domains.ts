@@ -55,7 +55,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('risk', 'reporter-ledger', ['ReporterBalanceChanged'], ['universeId']),
 	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
 	...definitions('risk', 'pool', ['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'EthReceived'], ['securityPool']),
-	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'EarningsClaimed'], ['owner']),
+	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'HealthTargetSet', 'EarningsClaimed'], ['owner']),
 	// A materialized auction bid becomes the position of the vault that won it, so the vault is the owner.
 	...definitions('risk', 'vault', ['AuctionBidMaterialized'], ['vault']),
 	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled'], ['positionId', 'sourceId']),

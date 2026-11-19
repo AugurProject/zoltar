@@ -92,7 +92,7 @@ describe('live guarded transaction writes', () => {
 		expect(shareCalls[2]).toBe(shareCalls[0])
 		const decodedTransfer = decodeFunctionData({ abi: shareTokenAbi, data: shareCalls[0] })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
-		expect(decodedTransfer.args[4]).toBe(encodeAbiParameters([receiveRequestParameter], [[1, 0, shareToken, pool, pair, 1n, 2n, 256n, 257n, 258n, 1, 10n, quote.maximumLongShares, quote.minimumEth, account, account, quote.deadline]]))
+		expect(decodedTransfer.args[4]).toBe(encodeAbiParameters([receiveRequestParameter], [[2, 0, shareToken, pool, pair, 1n, 2n, 256n, 257n, 258n, 1, 10n, quote.maximumLongShares, quote.minimumEth, account, account, quote.deadline, 0n]]))
 		longBalance = 13n
 		const largerApprovedQuote = await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)
 		expect(largerApprovedQuote.maximumLongShares).toBe(13n)

@@ -4282,6 +4282,14 @@ body.paper-zoltar .footer-note {
 		overflow-wrap: normal;
 	}
 
+	body.doc-openoracle.docs-shell-page #initial-report-estimator-example[data-widget-state="unsafe"] .oracle-threshold-grid > div {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	body.doc-openoracle.docs-shell-page #initial-report-estimator-example[data-widget-state="unsafe"] .oracle-threshold-grid output {
+		text-align: start;
+	}
+
 	body.docs-shell-page .deployment-bit-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));

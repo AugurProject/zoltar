@@ -105,7 +105,7 @@ contract SecurityPoolUniformPriceAuction {
 	}
 
 	function startAuction(uint256 opensAt_, uint256 closesAt_, uint256 lotAttoEth_, uint256 targetLots_, uint256 inventoryAttoRep_, uint256 repGrid_, address feeAllocator_) external onlyController {
-		require(!initialized, 'Auction has already started');
+		require(!initialized && !finalized, 'Auction has already started');
 		require(closesAt_ > opensAt_, 'Auction closing time must follow opening time');
 		require(lotAttoEth_ > 0 && targetLots_ > 0 && targetLots_ <= type(uint128).max / lotAttoEth_, 'Auction ETH target is outside the supported range');
 		require(inventoryAttoRep_ > 0 && inventoryAttoRep_ <= Constants.MAX_ATTO_REP, 'Auction REP inventory is outside the supported range');
@@ -147,6 +147,13 @@ contract SecurityPoolUniformPriceAuction {
 		emit BidSubmitted(bidId, bidder, vault, lots, minimumAttoRepPerLot, targetHealthBps);
 	}
 
+	/// @notice Records an empty clearing when the controller closes without opening bidding.
+	function finalizeUnopened() external onlyController {
+		require(!initialized && !finalized, 'Auction cannot be finalized');
+		finalized = true;
+		emit AuctionFinalized(0, 0, 0, 0);
+	}
+
 	/// @notice Zero capacity cancels safely. Otherwise the winning prefix must
 	/// fit the inventory at every winner's minimum collateral amount per lot.
 	function finalize(uint256 maximumFilledLots, uint256 floorAttoRepPerLot) external onlyController returns (Clearing memory result) {
@@ -164,8 +171,8 @@ contract SecurityPoolUniformPriceAuction {
 	/// whatever its bid accepted. It lowers the lots the inventory can fund and
 	/// raises the clearing REP per lot, and never changes which bids rank first.
 	function previewFinalization(uint256 maximumFilledLots, uint256 floorAttoRepPerLot) public view returns (Clearing memory result) {
-		require(initialized, 'Auction has not started');
 		if (finalized) return clearing;
+		require(initialized, 'Auction has not started');
 		require(maximumFilledLots <= targetLots, 'Auction raise limit exceeds its target');
 		require(floorAttoRepPerLot % repGrid == 0, 'Auction floor must use the REP price grid');
 		if (maximumFilledLots == 0) return result;

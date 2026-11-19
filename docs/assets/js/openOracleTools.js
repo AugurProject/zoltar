@@ -49,12 +49,10 @@ function calculateMinimumWethEstimate(parameters) {
   const percentagePrecision = 10000000n;
   const targetErrorUnits = BigInt(Math.round(parameters.targetPriceErrorForDispute * 1e5));
   const feeUnits = BigInt(Math.round((parameters.openOracleProtocolFee + parameters.openOracleReporterFee) * 1e5));
-  const targetError = parameters.targetPriceErrorForDispute / 100;
-  const feeFraction = (parameters.openOracleProtocolFee + parameters.openOracleReporterFee) / 100;
-  const correctionProfitFraction = (targetError - feeFraction) / (1 + targetError);
   const disputeGasCostEth = parameters.gasUnitsForOneDispute * (parameters.blockBaseFeeNanoEth + parameters.initialReportPriorityFeeNanoEth) * 0.000000001;
   const bufferedGasCostEth = disputeGasCostEth * parameters.openOracleSecurityMultiplier;
   const correctionProfitUnits = targetErrorUnits - feeUnits;
+  const correctionProfitFraction = Number(correctionProfitUnits) / Number(percentagePrecision + targetErrorUnits);
   let minimumWethReportAttoEth;
   if (correctionProfitUnits > 0n) {
     const denominator = 10000n * correctionProfitUnits;

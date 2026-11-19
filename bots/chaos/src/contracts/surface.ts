@@ -395,6 +395,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolSettlementBook', 'setFeeClock', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolUniformPriceAuction', 'allocateAndRemoveFees', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolUniformPriceAuction', 'finalize', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
+	entry('SecurityPoolUniformPriceAuction', 'finalizeUnopened', 'role-restricted', undefined, 'Only the bound auction controller can close an unopened engine.'),
 	entry('SecurityPoolUniformPriceAuction', 'settleAndWithdrawRefund', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolUniformPriceAuction', 'settleBid', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolUniformPriceAuction', 'startAuction', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),

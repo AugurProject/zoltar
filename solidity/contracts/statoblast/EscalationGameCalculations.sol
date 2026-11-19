@@ -20,11 +20,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function computeTimeSinceStartFromAttritionCostAttoRep(uint256 attritionCostAttoRep) public view returns (uint256) {
 		if (attritionCostAttoRep <= startBondAttoRep) return 0;
 		if (attritionCostAttoRep >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH;
-		// A zero-resolution logarithm leaves the forward curve flat until its terminal step.
-		if (lnRatioScaled == 0) return ESCALATION_TIME_LENGTH;
-
-		uint256 lnCostRatioScaled = proofVerifier.computeLnRatioScaled(startBondAttoRep, attritionCostAttoRep);
-		return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled;
+		return _firstSecondAtCost(attritionCostAttoRep);
 	}
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
@@ -50,14 +46,18 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		uint256 bindingCapital = getBindingCapitalAttoRep();
 		if (bindingCapital < startBondAttoRep) return 0;
 		if (bindingCapital >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH;
+		return _firstSecondAtCost(bindingCapital + 1) - 1;
+	}
+
+	function _firstSecondAtCost(uint256 target) private view returns (uint256) {
 		uint256 lower;
 		uint256 upper = ESCALATION_TIME_LENGTH;
 		while (upper - lower > 1) {
 			uint256 middle = lower + (upper - lower) / 2;
-			if (computeIterativeAttritionCostAttoRep(middle) <= bindingCapital) lower = middle;
+			if (computeIterativeAttritionCostAttoRep(middle) < target) lower = middle;
 			else upper = middle;
 		}
-		return lower;
+		return upper;
 	}
 
 	function totalCostAttoRep() public view returns (uint256) {
@@ -97,7 +97,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		return getQuestionResolution();
 	}
 
-	function _getUniverseForkTime() private view returns (uint256) {
+	function _getUniverseForkTime() internal view returns (uint256) {
 		return securityPool.zoltar().getForkTime(securityPool.universeId());
 	}
 

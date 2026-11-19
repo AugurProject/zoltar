@@ -406,6 +406,15 @@ describe('state projections', () => {
 		expect(projectionsFrom(funded).at(-1)).toMatchObject({ domain: 'risk', entityType: 'portfolio-settlement', entityIdentity: `${emitter}:3`, data: { questionId: '42', payer: vault, amountAttoRep } })
 	})
 
+	test('records standalone health changes in owner activity (#1418)', () => {
+		expect(projectionsFrom(log('HealthTargetSet', { owner: vault, targetHealthFactorBps: '12000' })).at(-1)).toMatchObject({
+			domain: 'risk',
+			entityType: 'vault',
+			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
+			data: { owner: vault, targetHealthFactorBps: '12000' },
+		})
+	})
+
 	test('covers coordinator, escalation, risk, trading, and fork lifecycle taxonomy with stable keys', () => {
 		expect(projectionsFrom(log('PendingReportRecovered', { reportId: '1' })).at(-1)).toMatchObject({
 			type: 'domainEvent',

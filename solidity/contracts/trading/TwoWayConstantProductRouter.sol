@@ -70,9 +70,10 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		address payable payoutRecipient;
 		address refundRecipient;
 		uint256 deadline;
+		uint256 minRepOut;
 	}
 
-	uint8 public constant CALLBACK_VERSION = 1;
+	uint8 public constant CALLBACK_VERSION = 2;
 
 	ITwoWayConstantProductFactory public immutable factory;
 	bool private entered;
@@ -254,6 +255,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		uint256 ethOut = collateral.balanceOf(address(this)) - ethBefore;
 		uint256 repOut = rep.balanceOf(address(this)) - repBefore;
 		require(ethOut >= request.minEthOut && (ethOut > 0 || repOut > 0), 'Minimum ETH output');
+		require(repOut >= request.minRepOut, 'Minimum REP output');
 		if (repOut != 0) rep.safeTransfer(request.payoutRecipient, repOut);
 		if (ethOut != 0) {
 			if (address(collateral) == address(request.securityPool.openOraclePriceCoordinator().weth())) {

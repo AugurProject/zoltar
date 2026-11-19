@@ -152,7 +152,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const exactExitEth = await fixture.client.readContract({ abi: attoSharesToAttoEthAbi, address: native().securityPool, functionName: 'attoSharesToAttoEth', args: [exitAmount] })
 		const acceptedMinimumEth = exactExitEth
 		expect(acceptedMinimumEth).toBeGreaterThan(0n)
-		const exitData = (minimumEth: bigint) => encodeReceiveRequest([1, 0, shareTokenAddress, native().securityPool, pair, universeId, fixture.questionId, ids[0], ids[1], ids[2], 1, exitAmount, entry.result.totalLongShares, minimumEth, account, account, deadline])
+		const exitData = (minimumEth: bigint) => encodeReceiveRequest([2, 0, shareTokenAddress, native().securityPool, pair, universeId, fixture.questionId, ids[0], ids[1], ids[2], 1, exitAmount, entry.result.totalLongShares, minimumEth, account, account, deadline, 0n])
 		const balancesBeforeSlippage = await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])
 		await expect(fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'safeBatchTransferFrom', args: [account, router, [ids[0], ids[1]], [exitAmount, entry.result.totalLongShares], exitData(exactExitEth + 1n)] })).rejects.toThrow()
 		expect(await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])).toEqual(balancesBeforeSlippage)

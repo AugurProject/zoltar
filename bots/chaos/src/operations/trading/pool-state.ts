@@ -1,5 +1,5 @@
 import { sameAddress } from '@zoltar/core-shared/evm/address'
-import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
+import { encodeReceiveRequest, RECEIVE_REQUEST_VERSION } from '@zoltar/trading-shared/trading/receiveRequest'
 import { inputInteger } from '../input-values.ts'
 import { amount, randomDeadline } from '../planning.ts'
 import { shareTokenId } from '../statoblast/planning.ts'
@@ -43,7 +43,7 @@ export function protocolQuestionDeadline(snapshot: EcosystemSnapshot, pool: Pool
 export function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, deadline: bigint) {
 	const invalidTokenId = shareTokenId(shares.universeId, 0)
 	return encodeReceiveRequest([
-		1,
+		RECEIVE_REQUEST_VERSION,
 		operation,
 		shares.shareToken,
 		pool.address,
@@ -60,5 +60,6 @@ export function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapsh
 		snapshot.wallet.address,
 		snapshot.wallet.address,
 		deadline,
+		0n,
 	])
 }

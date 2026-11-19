@@ -85,3 +85,16 @@ describe('formatParagraphsOnSingleLines', () => {
 test('discovers documentation HTML from the repository root', () => {
 	expect(repositoryHtmlFilePaths()).toContain(path.resolve('docs/documentation.html'))
 })
+
+test('formats paragraph text containing a literal less-than sign (#1422)', () => {
+	expect(formatParagraphsOnSingleLines('<p>2 < 3\ncontinues</p>')).toBe('<p>2 < 3 continues</p>')
+})
+
+test('rejects multiline attributes before flattening paragraph source (#1421)', () => {
+	expect(() => formatParagraphsOnSingleLines('<p><abbr title="first\nsecond">x</abbr></p>')).toThrow('multiline attribute')
+})
+
+test('flattens line breaks between separately quoted attributes (#1421)', () => {
+	const html = '<p><abbr id="term"\n title="term definition">x</abbr></p>'
+	expect(formatParagraphsOnSingleLines(html)).toBe('<p><abbr id="term" title="term definition">x</abbr></p>')
+})

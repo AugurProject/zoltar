@@ -51,6 +51,19 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		expect(position.principal + position.earnedAttoRep).toBe(1_000n * unit)
 	})
 
+	test.each([false, true])('closing a repair auction without bids finalizes its engine (opened %s) (#1412)', async opened => {
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		if (opened) {
+			await context.report()
+			await context.open()
+		}
+		await context.finalize()
+		expect(await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'finalized' })).toBeTrue()
+		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'finalized' })).toBeTrue()
+		const clearing = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [0n, 0n] })
+		expect(clearing).toMatchObject({ filledLots: 0n, soldAttoRep: 0n, raisedAttoEth: 0n })
+	})
+
 	test('a losing bidder withdraws and freely reuses ETH before branch finalization', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
@@ -70,6 +83,14 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		const before = await collateralBalance(context.owner, fixture.portfolio, recipient)
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [recipient] }))
 		expect((await collateralBalance(context.owner, fixture.portfolio, recipient)) - before).toBe(2n * unit)
+		// The early-refunded bid vault can return a separately transferred token before close (#1415).
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: tokenArtifact.abi, address: context.token, functionName: 'transfer', args: [loser.vault, 1n] }))
+		const tokenBefore = await context.balance(recipient)
+		const recover = encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'transfer', args: [recipient, 1n] })
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: vaultArtifact.abi, address: loser.vault, functionName: 'execute', args: [context.token, 0n, recover] }))
+		expect(await context.balance(recipient)).toBe(tokenBefore + 1n)
+		expect(await context.balance(loser.vault)).toBe(0n)
+
 		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n, 0n] })).toEqual(clearing)
 		// A new bid is an independent decision; the refund is not locked into rebidding.
 		const replacement = await context.bid(context.other, 2n, 6n * unit)

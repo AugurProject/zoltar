@@ -53,9 +53,10 @@ export async function simulateSettlement(
 			const invalidTokenId = market.universeId << 8n
 			const estimatedEthOut = feeMarket.shareTokenSupplyAttoShares === 0n ? 0n : (amount * feeMarket.settlementCollateralAttoEth) / feeMarket.shareTokenSupplyAttoShares
 			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
+			const expectedAttoRep = attoSharesToRecoveryAttoRep(amount, feeMarket)
 			const feeBlocker = sellHoldingFeeBlocker(feeMarket, amount, minimumEth, deadline)
 			if (feeBlocker !== undefined) throw new Error(feeBlocker)
-			const data = encodeReceiveBasedRedeemRequest(market, amount, minimumEth, account, deadline)
+			const data = encodeReceiveBasedRedeemRequest(market, amount, minimumEth, account, deadline, minimumAfterSlippage(expectedAttoRep, slippageBps))
 			const simulation = await client.simulateContract({
 				abi: shareTokenAbi,
 				address: market.shareToken,
@@ -65,7 +66,7 @@ export async function simulateSettlement(
 				blockNumber: block.blockNumber,
 			})
 			void simulation
-			return { result: estimatedEthOut, expectedAttoRep: attoSharesToRecoveryAttoRep(amount, feeMarket), feeMarket }
+			return { result: estimatedEthOut, expectedAttoRep, feeMarket }
 		})
 		if (simulation.result <= 0n && simulation.expectedAttoRep === 0n) throw new Error('Complete-set redemption would return no ETH or REP')
 		return { blockNumber, blockHash, operation, market: simulation.feeMarket, amount, deadline, slippageBps, expectedAttoEth: simulation.result, expectedAttoRep: simulation.expectedAttoRep, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
