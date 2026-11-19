@@ -35,7 +35,8 @@ void describe('forked categorical simulation backend', () => {
 		expect(overview?.relatedUniversesLoaded).toBe(false)
 		expect(overview?.childUniverses).toEqual([])
 		expect(overview?.forkQuestionDetails).toBeUndefined()
-		expect(calls).toEqual(['getUniverseTheoreticalSupplyAttoRep'])
+		// The fork schedule is read only once the universe is known to exist, in parallel with its supply.
+		expect(calls).toEqual(['getUniverseTheoreticalSupplyAttoRep', 'getEarliestForkTime'])
 	})
 
 	void test('bootstraps a forked five-way categorical universe with two deployed child universes', async () => {
