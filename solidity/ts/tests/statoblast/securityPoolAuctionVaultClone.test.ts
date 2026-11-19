@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeFunctionData, getAddress, getCreate2Address, toHex, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, toHex, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ensureZoltarDeployed, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { deployContract } from '../../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
