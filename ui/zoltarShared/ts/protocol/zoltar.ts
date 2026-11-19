@@ -232,7 +232,7 @@ export async function loadZoltarUniverseSummary(
 	zoltarAddress: Address = getDeploymentStepAddress('zoltar'),
 	{ includeRelatedUniverses = true, scalarOutcomeIndexes = [] }: { includeRelatedUniverses?: boolean; scalarOutcomeIndexes?: readonly bigint[] } = {},
 ): Promise<ZoltarUniverseSummary | undefined> {
-	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor, earliestForkTime] = await readRequiredMulticall(client, [
+	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
 		{
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getRepToken',
@@ -263,20 +263,16 @@ export async function loadZoltarUniverseSummary(
 			address: zoltarAddress,
 			args: [],
 		},
-		{
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getEarliestForkTime',
-			address: zoltarAddress,
-			args: [universeId],
-		},
 	])
 	if (repToken === zeroAddress) return undefined
 	const universeData: UniverseTuple = universe
 	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, , parentUniverseId] = universeData
 	const hasForked = forkTime > 0n || storedForkTime > 0n
-	const [reputationTokenMetadata, totalTheoreticalSupplyAttoRep, lineage] = await Promise.all([
+	// The fork schedule exists only for a known universe; the getter reverts for an unknown one.
+	const [reputationTokenMetadata, totalTheoreticalSupplyAttoRep, earliestForkTime, lineage] = await Promise.all([
 		loadReputationTokenMetadata(client, repToken, universeId === 0n),
 		client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getUniverseTheoreticalSupplyAttoRep', address: zoltarAddress, args: [universeId] }),
+		client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getEarliestForkTime', address: zoltarAddress, args: [universeId] }),
 		includeRelatedUniverses ? loadUniverseLineage(client, universeId, universeData, zoltarAddress) : undefined,
 	])
 

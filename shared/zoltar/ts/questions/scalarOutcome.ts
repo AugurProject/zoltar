@@ -81,10 +81,22 @@ export function getScalarTickIndexForDisplayValue(question: ScalarQuestionDetail
 	return getScalarDisplayValue(question, candidateTick) === displayValue ? candidateTick : undefined
 }
 
+/**
+ * Ticks closer together than one 18-decimal display unit can floor to the
+ * same value. Such inexact ticks are named by their index, matching
+ * `ScalarOutcomes.getScalarOutcomeName`, so distinct answers never share a label.
+ */
+function formatScalarTickAnnotation(question: ScalarQuestionDetails, tickIndex: bigint) {
+	const scalarRange = question.displayValueMax - question.displayValueMin
+	if (scalarRange >= question.numTicks || (tickIndex * scalarRange) % question.numTicks === 0n) return ''
+	return ` (tick ${tickIndex.toString()} of ${question.numTicks.toString()})`
+}
+
 export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIndex: bigint) {
 	const scalarValue = getScalarDisplayValue(question, tickIndex)
 	const formattedValue = formatScalarDisplayValue(scalarValue)
-	return question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
+	const label = question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
+	return `${label}${formatScalarTickAnnotation(question, tickIndex)}`
 }
 
 export function getScalarOutcomeIndexDescriptor(question: ScalarQuestionDetails, outcomeIndex: bigint): ScalarOutcomeIndexDescriptor {
