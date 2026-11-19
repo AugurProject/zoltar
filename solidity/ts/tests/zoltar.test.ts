@@ -64,6 +64,22 @@ describe('Contract Test Suite', () => {
 		await ensureZoltarDeployed(client)
 	})
 
+	test('#1395 unknown universes have no fork schedule before or after genesis forks', async () => {
+		const read = (universeId: bigint) => client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getEarliestForkTime', args: [universeId] })
+		const unknown = 123456n
+		assert.strictEqual(BigInt((await getUniverseData(client, unknown)).reputationToken), 0n)
+		await assert.rejects(read(unknown), /Unknown universe/)
+		assert.strictEqual(await read(0n), 0n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		const question = makeQuestion('Unknown universe schedule')
+		await createQuestion(client, question, ['Yes', 'No'])
+		await forkUniverse(client, 0n, getQuestionId(question, ['Yes', 'No']))
+		await assert.rejects(read(unknown), /Unknown universe/)
+		await deployChild(client, 0n, 1n)
+		const deadline = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkRecapitalizationDeadline', args: [0n] })
+		assert.strictEqual(await read(getChildUniverseId(0n, 1n)), deadline + 604800n)
+	})
+
 	test('canDeployContract', async () => {
 		const isDeployed = await isZoltarDeployed(client)
 		assert.ok(isDeployed, 'Not Deployed!')
