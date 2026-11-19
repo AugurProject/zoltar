@@ -135,7 +135,7 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 	let retirementStatus = 'Not retiring'
 	if (uint(account['batch']) !== 0n && uint(account['commitment']) !== 0n) {
 		const backingPrice = await client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'backingPrice', blockNumber })
-		const raw = await client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'previewRetirement', args: [id, backingPrice, snapshot.demandAttoEth], blockNumber })
+		const raw = await client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'previewRetirement', args: [id, uint(backingPrice), snapshot.demandAttoEth], blockNumber })
 		const preview = record(raw, 'Retirement preview')
 		const status = preview['status']
 		if (typeof status !== 'bigint' && typeof status !== 'number') throw new Error('Invalid retirement preview status')
