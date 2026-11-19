@@ -14,9 +14,15 @@ library ScalarOutcomes {
 		}
 		uint256 scalarValueU = mulDiv(payout, diffU, numTicks);
 		int256 scalarValue = addInt256Uint256(minValue, scalarValueU);
-		string memory decimalString = intToDecimalString(scalarValue, DECIMALS);
-		if (bytes(unit).length == 0) return decimalString;
-		return string.concat(decimalString, ' ', unit);
+		string memory label = intToDecimalString(scalarValue, DECIMALS);
+		if (bytes(unit).length != 0) label = string.concat(label, ' ', unit);
+		// Ticks closer together than one 18-decimal unit can floor to the same
+		// displayed value. Name every such inexact tick by its index so distinct
+		// answers never share a label; exact values are already unique.
+		if (diffU < numTicks && mulmod(payout, diffU, numTicks) != 0) {
+			label = string.concat(label, ' (tick ', uintToString(payout), ' of ', uintToString(numTicks), ')');
+		}
+		return label;
 	}
 
 	function addInt256Uint256(int256 value, uint256 addend) internal pure returns (int256) {

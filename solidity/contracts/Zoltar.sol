@@ -80,8 +80,10 @@ contract Zoltar {
 	}
 
 	/// @notice Returns when this universe may fork after its parent's fixed phases and response interval.
+	/// Reverts for a universe that does not exist rather than inventing a schedule for it.
 	function getEarliestForkTime(uint248 universeId) public view returns (uint256) {
 		if (universeId == 0) return 0;
+		require(address(universes[universeId].reputationToken) != address(0), 'Unknown universe');
 		return getForkRecapitalizationDeadline(universes[universeId].parentUniverseId) + Constants.FORK_RESPONSE_TIME;
 	}
 

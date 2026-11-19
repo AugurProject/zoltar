@@ -77,6 +77,36 @@ describe('Statoblast: auction vault clones', () => {
 		expect(await owner.readContract({ abi: vaultArtifact.abi, address: second, functionName: 'initialPositionMaterialized' })).toBe(false)
 	})
 
+	// ERC-1155 safe transfers accept a deposit exactly when the recipient's hook
+	// returns its selector, so calling the hooks is the deposit decision itself.
+	const erc165Abi = [{ type: 'function', name: 'supportsInterface', stateMutability: 'view', inputs: [{ name: 'interfaceId', type: 'bytes4' }], outputs: [{ name: '', type: 'bool' }] }] as const
+	const depositSimulations = (recipient: Address) => [
+		() => owner.call({ to: recipient, value: 1n }),
+		() => owner.readContract({ abi: vaultArtifact.abi, address: recipient, functionName: 'onERC1155Received', args: [owner.account.address, owner.account.address, 1n, 1n, '0x'] }),
+		() => owner.readContract({ abi: vaultArtifact.abi, address: recipient, functionName: 'onERC1155BatchReceived', args: [owner.account.address, owner.account.address, [1n], [1n], '0x'] }),
+	]
+
+	test('only a clone accepts ETH and ERC-1155 deposits; the ownerless implementation refuses them (#1393)', async () => {
+		const { vault } = await create('createClone', 11n)
+		const [ethToClone, singleToClone, batchToClone] = depositSimulations(vault)
+		await ethToClone?.()
+		expect(await singleToClone?.()).toBe('0xf23a6e61')
+		expect(await batchToClone?.()).toBe('0xbc197c81')
+		for (const deposit of depositSimulations(implementation)) await expect(deposit()).rejects.toThrow('Auction vault is not a clone')
+		await expect(owner.readContract({ abi: vaultArtifact.abi, address: implementation, functionName: 'owner' })).rejects.toThrow('Auction vault is not a clone')
+	})
+
+	test('a clone answers ERC-165 discovery for the ERC-1155 receiver interface (#1394)', async () => {
+		const { vault } = await create('createClone', 12n)
+		const supports = (address: Address, interfaceId: `0x${string}`) => owner.readContract({ abi: erc165Abi, address, functionName: 'supportsInterface', args: [interfaceId] })
+		expect(await supports(vault, '0x01ffc9a7')).toBe(true)
+		expect(await supports(vault, '0x4e2312e0')).toBe(true)
+		expect(await supports(vault, '0xffffffff')).toBe(false)
+		// The implementation refuses deposits, so it must not advertise the receiver interface.
+		expect(await supports(implementation, '0x01ffc9a7')).toBe(true)
+		expect(await supports(implementation, '0x4e2312e0')).toBe(false)
+	})
+
 	test('clone deployment is far cheaper while each later operation pays only a small forwarding overhead', async () => {
 		const full = await create('createReference', 1n)
 		const clone = await create('createClone', 2n)

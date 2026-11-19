@@ -140,8 +140,6 @@ contract ZoltarQuestionData {
 	}
 
 	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
-		// An unknown question has no labels and zero ticks, which would otherwise read as a scalar range.
-		if (questionCreatedTimestamp[questionId] == 0) return true;
 		if (outcomeLabels[questionId].length == 0) {
 			// scalar
 			if (hasNonZeroScalarReservedBits(answer)) return true;
@@ -150,9 +148,10 @@ contract ZoltarQuestionData {
 				if (firstPart == 0 && secondPart == 0) return false;
 				return true;
 			}
-			// When invalid=false (high bit set), malformed iff sum != numTicks
-			uint256 sum = uint256(firstPart) + uint256(secondPart);
-			return sum != questions[questionId].numTicks;
+			// When invalid=false (high bit set), malformed iff sum != numTicks.
+			// An unregistered question has zero ticks and so no valid scalar answer.
+			uint256 numTicks = questions[questionId].numTicks;
+			return numTicks == 0 || uint256(firstPart) + uint256(secondPart) != numTicks;
 		}
 		if (answer == 0) return false;
 		if (answer < outcomeLabels[questionId].length + 1) {
@@ -163,7 +162,6 @@ contract ZoltarQuestionData {
 	}
 
 	function getAnswerOptionName(uint256 questionId, uint256 answer) external view returns (string memory) {
-		if (questionCreatedTimestamp[questionId] == 0) return 'Malformed';
 		if (outcomeLabels[questionId].length == 0) {
 			// scalar
 			if (hasNonZeroScalarReservedBits(answer)) return 'Malformed';
@@ -173,7 +171,7 @@ contract ZoltarQuestionData {
 				return 'Malformed';
 			}
 			uint256 sum = uint256(firstPart) + uint256(secondPart);
-			if (sum == questions[questionId].numTicks) {
+			if (questions[questionId].numTicks != 0 && sum == questions[questionId].numTicks) {
 				return
 					ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
 			}

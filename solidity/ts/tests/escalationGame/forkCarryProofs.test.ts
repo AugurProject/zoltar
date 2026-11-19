@@ -138,15 +138,23 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		await assert.rejects(readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.No, yesNodeId ?? 0n, 1n), /Outcome mismatch/)
 	})
 
-	test('fork carry leaf paging rejects a cursor that names no carry node', async () => {
+	test('fork carry leaf paging rejects a never-issued cursor for every outcome, including the zero-valued Invalid outcome (#1396)', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-
-		// A missing node reads as the zero outcome, which is Invalid, so the outcome check alone
-		// would page a phantom leaf with no depositor and no amount.
+		assert.deepStrictEqual(await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 0n, 1n), [[], 0n], 'a game without local deposits has an empty Invalid page')
+		// Node 1 has not been issued. An absent node's default outcome is Invalid,
+		// so only an existence check keeps it from reading as a zero-valued deposit.
 		for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) {
-			await assert.rejects(readCarryLeafPage(client, escalationGameAddress, outcome, 999n, 1n), /Unknown carry node/)
+			await assert.rejects(readCarryLeafPage(client, escalationGameAddress, outcome, 1n, 1n), /Unknown carry cursor/)
 		}
+
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
+		const [headPage, headNextNodeId] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 0n, 1n)
+		assert.strictEqual(headPage.length, 1, 'a real Invalid deposit is listed from the head')
+		assert.strictEqual(headNextNodeId, 0n)
+		const sourceNodeId = headPage[0]?.sourceNodeId
+		if (sourceNodeId === undefined) throw new Error('Invalid deposit page has no leaf')
+		assert.deepStrictEqual(await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, sourceNodeId, 1n), [headPage, 0n], 'resuming from the issued node returns the same deposit')
+		await assert.rejects(readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, sourceNodeId + 1n, 1n), /Unknown carry cursor/)
 	})
 
 	test('fork carry snapshot initialization normalizes zero nullifier roots to the empty sparse-tree root', async () => {

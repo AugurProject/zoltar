@@ -325,7 +325,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 						sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
 					},
 				],
-				preconditions: 'The operator differs from the caller.',
+				preconditions: 'The operator differs from the caller and from the token itself, which `isApprovedForAll` always reports as an operator.',
 				signals: '`ApprovalForAll`',
 			},
 			{

@@ -47,6 +47,15 @@ describe('questionTimeZone', () => {
 		expect(formatLocalAndUtcTimestamp(253_402_297_200n, 'Europe/Helsinki')).toEqual({ local: '10000-01-01 01:00', utc: '9999-12-31 23:00 UTC', zoneLabel: 'Europe/Helsinki, UTC+2' })
 	})
 
+	test('labels historical offsets that include seconds (#1387)', () => {
+		// On 1970-01-02 Africa/Monrovia kept Monrovia Mean Time, GMT-00:44:30.
+		const formatted = formatLocalAndUtcTimestamp(86_400n, 'Africa/Monrovia')
+		expect(formatted?.local).toBe('1970-01-01 23:15')
+		expect(formatted?.utc).toBe('1970-01-02 00:00 UTC')
+		expect(formatted?.zoneLabel).toBe('Africa/Monrovia, UTC-0:44:30')
+		expect(formatQuestionTimeZoneLabel('Africa/Monrovia', { endTimestamp: WINTER_TIMESTAMP, now: new Date(0), startTimestamp: 86_400n })).toBe('Africa/Monrovia, UTC-0:44:30 at start, UTC at end')
+	})
+
 	test('rejects timestamps before the epoch or outside the supported date range', () => {
 		expect(formatLocalAndUtcTimestamp(8_640_000_000_001n, 'UTC')).toBeUndefined()
 		expect(formatLocalAndUtcTimestamp(-1n, 'Europe/Helsinki')).toBeUndefined()

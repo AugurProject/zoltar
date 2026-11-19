@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
+import { DelegateErrorReason } from './DelegateErrorReason.sol';
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
@@ -30,9 +31,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	/// @notice Decodes an `Error(string)` revert payload into its reason, or returns a generic failure message.
 	function decodeError(bytes calldata result) external pure returns (string memory reason) {
-		if (result.length < 68 || bytes4(result[:4]) != bytes4(keccak256('Error(string)')))
-			return 'Delegate call failed';
-		return abi.decode(result[4:], (string));
+		return DelegateErrorReason.decode(result);
 	}
 
 	event EscalationGameSet(EscalationGame escalationGame);

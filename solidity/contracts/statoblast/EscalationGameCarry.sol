@@ -119,8 +119,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		OutcomeState storage state = outcomeState[outcomeIndex];
 		uint256 nodeId = startNodeId == 0 ? state.localHeadNodeId : startNodeId;
 		if (nodeId != 0) {
-			// A missing node reads as the zero outcome, which is Invalid.
-			require(nodes[nodeId].depositor != address(0), 'Unknown carry node');
+			// An unissued ID reads as a zero node whose default outcome is Invalid.
+			require(nodeId < nextNodeId, 'Unknown carry cursor');
 			require(nodes[nodeId].outcome == outcome, 'Outcome mismatch');
 		}
 		carryLeaves = new CarryLeafView[](maxEntries);

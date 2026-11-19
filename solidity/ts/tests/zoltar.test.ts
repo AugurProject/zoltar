@@ -609,6 +609,29 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(childUniverseData.parentUniverseId, GENESIS_UNIVERSE, 'child universe should point back to the parent')
 	})
 
+	test('getEarliestForkTime rejects an unknown universe before and after genesis forks (#1395)', async () => {
+		const readEarliest = (universeId: bigint) => client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getEarliestForkTime', args: [universeId] })
+		const unknownUniverseId = 999_999n
+		const unknownUniverse = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getRepToken', args: [unknownUniverseId] })
+		assert.strictEqual(unknownUniverse, addressString(0n), 'the fixture universe must not exist')
+		assert.strictEqual(await readEarliest(GENESIS_UNIVERSE), 0n, 'genesis may fork at any time')
+		await assert.rejects(readEarliest(unknownUniverseId), /Unknown universe/)
+
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		const questionData = makeQuestion('earliest fork time of unknown universe')
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		await forkUniverse(client, GENESIS_UNIVERSE, getQuestionId(questionData, outcomes))
+		await assert.rejects(readEarliest(unknownUniverseId), /Unknown universe/)
+
+		await deployChild(client, GENESIS_UNIVERSE, 1n)
+		const childUniverseId = getChildUniverseId(GENESIS_UNIVERSE, 1n)
+		const recapitalizationDeadline = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkRecapitalizationDeadline', args: [GENESIS_UNIVERSE] })
+		assert.ok(recapitalizationDeadline > 0n)
+		assert.strictEqual(await readEarliest(childUniverseId), recapitalizationDeadline + 604_800n, 'a deployed child keeps its parent-derived schedule')
+		assert.strictEqual(await readEarliest(GENESIS_UNIVERSE), 0n)
+	})
+
 	test('child REP names follow successful global deployment order without affecting predicted addresses', async () => {
 		const zoltar = getZoltarAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
