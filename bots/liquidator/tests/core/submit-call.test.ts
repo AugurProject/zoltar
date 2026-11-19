@@ -35,7 +35,7 @@ async function fixture() {
 	return { settings, state, wallet, signed }
 }
 
-test('submission uses a common block when honest RPC endpoints differ by one head', async () => {
+test.each([false, true])('submission uses a common block when honest RPC endpoints differ by one head (budget cap %s)', async capFeeToGasBudget => {
 	const f = await fixture()
 	const directory = await mkdtemp(join(tmpdir(), 'liquidator-quorum-'))
 	f.settings.runtime.stateFile = join(directory, 'state.json')
@@ -51,7 +51,7 @@ test('submission uses a common block when honest RPC endpoints differ by one hea
 				let result: unknown
 				if (method === 'eth_getBlockByNumber') {
 					const number = params[0] === 'latest' ? head : BigInt(params[0])
-					result = { number: `0x${number.toString(16)}`, hash: `0x${number.toString(16).padStart(64, '0')}`, baseFeePerGas: '0x1', timestamp: '0x1', transactions: [] }
+					result = { number: `0x${number.toString(16)}`, hash: `0x${number.toString(16).padStart(64, '0')}`, baseFeePerGas: capFeeToGasBudget ? '0x3b9aca00' : '0x1', timestamp: '0x1', transactions: [] }
 				} else if (method === 'eth_getTransactionCount') result = '0x0'
 				else if (method === 'eth_call') {
 					simulations.push(params[1])
@@ -75,9 +75,9 @@ test('submission uses a common block when honest RPC endpoints differ by one hea
 				{
 					to: poolAddress,
 					data: '0x',
-					gas: 21_000n,
+					gas: capFeeToGasBudget ? 3_500_000n : 21_000n,
 					label: 'Pinned block regression',
-					maxFeePerGasCap: 10n,
+					...(capFeeToGasBudget ? { capFeeToGasBudget } : { maxFeePerGasCap: 10n }),
 					preSubmit: () => {
 						throw new Error('Stop before submission')
 					},
@@ -87,7 +87,12 @@ test('submission uses a common block when honest RPC endpoints differ by one hea
 		).rejects.toThrow('Stop before submission')
 		expect(simulations).toEqual(['0x64', '0x64'])
 		expect(f.signed).toHaveLength(1)
-		expect(f.signed[0]).toMatchObject({ maxFeePerGas: 10n, maxPriorityFeePerGas: 10n })
+		if (capFeeToGasBudget) {
+			const request = f.signed[0]
+			if (request?.gas === undefined || request.maxFeePerGas === undefined) throw new Error('The signer did not receive a gas budget')
+			expect(BigInt(request.gas) * request.maxFeePerGas).toBeLessThanOrEqual(f.settings.strategy.maximumGasCostAttoEth)
+			expect(request.maxFeePerGas).toBeGreaterThan(1_000_000_000n)
+		} else expect(f.signed[0]).toMatchObject({ maxFeePerGas: 10n, maxPriorityFeePerGas: 10n })
 		expect(f.state.pendingTransactions).toHaveLength(0)
 	} finally {
 		for (const server of servers) server.stop(true)

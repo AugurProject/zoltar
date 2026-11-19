@@ -65,6 +65,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event DeploySecurityPool(ISecurityPool indexed securityPool, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas);
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
 	event PortfolioRegistered(address indexed portfolio, uint248 indexed originUniverseId);
+	event SharedPriceFeedRegistered(address indexed portfolio, uint248 indexed universeId, address indexed priceFeed);
 	event PortfolioDeployed(address indexed portfolio, address indexed creator);
 
 	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, address operationsDelegate, SecurityPoolEventEmitter eventEmitter, bytes32 _portfolioCreationCodeHash, address[9] memory portfolioModuleDeployers) {
@@ -341,6 +342,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		if (address(feed) == address(0)) {
 			feed = openOraclePriceCoordinatorFactory.deploySharedPoolPriceFeed(coordinator, portfolio, universeId, zoltar.getRepToken(universeId), keccak256(abi.encode(portfolio, universeId)));
 			sharedPriceFeeds[portfolio][universeId] = address(feed);
+			emit SharedPriceFeedRegistered(portfolio, universeId, address(feed));
 		}
 	}
 

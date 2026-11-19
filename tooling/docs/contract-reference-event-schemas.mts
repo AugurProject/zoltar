@@ -65,6 +65,11 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
+		name: 'SharedPriceFeedRegistered',
+		parameters: 'address indexed portfolio,uint248 indexed universeId,address indexed priceFeed',
+		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
+	},
+	{
 		name: 'DeploySecurityPool',
 		parameters: 'ISecurityPool indexed securityPool,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
@@ -131,4 +136,4 @@ export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArgum
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = '31e4c5ba0a89b1028aead6086f5c292c2b4eee0700b5a204c58deb9111e98066'
+export const referencedEventAbiFingerprint = '119e7797a4ab20ed5fc7434b1798917ac8b0f766854c8cc600d5c8822e971b04'

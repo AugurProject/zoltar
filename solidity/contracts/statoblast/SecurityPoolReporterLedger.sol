@@ -7,10 +7,11 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolReporterLedger } from './interfaces/ISecurityPoolReporterLedger.sol';
 
 interface IReporterPortfolioClock {
+	function factory() external view returns (ISecurityPoolFactory);
 	function forkController() external view returns (address);
 	function portfolioTime(uint248 universeId) external view returns (uint48);
 	function forkPortfolioTime(uint248 universeId) external view returns (uint48);
@@ -126,6 +127,10 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		Game memory identity = games[game];
 		if (!identity.registered) {
 			ISecurityPool pool = IReporterGameIdentity(game).securityPool();
+			if (
+				IReporterPortfolioClock(portfolio).factory().getSecurityPoolPortfolio(pool) != portfolio ||
+				address(pool.escalationGame()) != game
+			) return 0;
 			identity = Game(pool.universeId(), pool.questionId(), false);
 		}
 		(Question memory state, ) = _question(identity.universeId, identity.questionId);

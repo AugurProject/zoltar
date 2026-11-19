@@ -59,7 +59,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	mapping(address => uint256) public bidIdForVault;
 
 	event AuctionOpened(uint256 conservativePrice, uint256 minimumCollateralAttoRepPerLot, uint256 maximumBidAttoRepPerLot);
-	event WinningVaultCreated(uint256 indexed bidId, address indexed bidder, address indexed vault);
+	event BidVaultCreated(uint256 indexed bidId, address indexed bidder, address indexed vault);
 	event AuctionClosed(uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
 
 	constructor(address authority, address root, uint248 child, uint256 deadline, uint256 inventory, uint256 shortfall, address implementation) {
@@ -125,7 +125,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		vault = SecurityPoolAuctionVaultClones.create(vaultImplementation, msg.sender, address(capital), address(this), bidId);
 		bidIdForVault[vault] = bidId;
 		require(engine.submitBid(msg.sender, vault, targetHealthFactorBps, lots, minimumAttoRepPerLot) == bidId, 'Auction bid identity mismatch');
-		emit WinningVaultCreated(bidId, msg.sender, vault);
+		emit BidVaultCreated(bidId, msg.sender, vault);
 	}
 
 	/// @notice Closing never requires a bidder transaction. The quote is tested

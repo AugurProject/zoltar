@@ -19,6 +19,7 @@ type Call = {
 	portfolioFunding?: PendingTransactionIntent['portfolioFunding']
 	portfolioInstruction?: PendingTransactionIntent['portfolioInstruction']
 	data: Hex
+	capFeeToGasBudget?: boolean | undefined
 	gas: bigint | 'estimate'
 	gasBudgetExceeded?: (() => never) | undefined
 	label: string
@@ -72,17 +73,37 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 	// Match the EIP-1559 envelope used by prepareSignedTransaction so contracts
 	// that reimburse tx.gasprice see the same effective fee during preflight.
 	const validityBlocks = transactionMaxBlockNumber(block.number, call.lastValidBlockNumber) - block.number
-	const maxFeePerGas = call.maxFeePerGasCap === undefined ? maximumFeePerGas(block.baseFeePerGas, validityBlocks) : cappedMaximumFeePerGas(block.baseFeePerGas, call.maxFeePerGasCap, validityBlocks)
-	if (maxFeePerGas < block.baseFeePerGas) {
+	const initialMaxFee = call.maxFeePerGasCap === undefined ? maximumFeePerGas(block.baseFeePerGas, validityBlocks) : cappedMaximumFeePerGas(block.baseFeePerGas, call.maxFeePerGasCap, validityBlocks)
+	if (initialMaxFee < block.baseFeePerGas) {
 		call.gasBudgetExceeded?.()
 		throw new Error('Transaction fee cap is below the current base fee')
 	}
-	const fees = { maxFeePerGas, maxPriorityFeePerGas: maxFeePerGas < MAX_PRIORITY_FEE_PER_GAS ? maxFeePerGas : MAX_PRIORITY_FEE_PER_GAS }
+	const feeEnvelope = (maxFeePerGas: bigint) => ({ maxFeePerGas, maxPriorityFeePerGas: maxFeePerGas < MAX_PRIORITY_FEE_PER_GAS ? maxFeePerGas : MAX_PRIORITY_FEE_PER_GAS })
 	// Estimate before enforcing the configured spend ceiling. RPC affordability
 	// must not turn an over-budget opportunity into an ambiguous contract revert.
-	const gas = call.gas === 'estimate' ? await estimateExecutionGas(pinned.readers, { account, data: call.data, to: call.to, value: call.value, blockNumber: pinned.blockNumber, balanceOverride: PREFLIGHT_BALANCE, ...fees }, settings.connectivity.rpcQuorum, validateCanonicalBlock, revalidateRevert) : call.gas
-	if (maximumFeePerGas(block.baseFeePerGas) * paddedTransactionGas(gas) > settings.strategy.maximumGasCostAttoEth) call.gasBudgetExceeded?.()
-	assertGasCostLimitForBaseFee(gas, block.baseFeePerGas, settings.strategy.maximumGasCostAttoEth, call.label)
+	const gas =
+		call.gas === 'estimate' ? await estimateExecutionGas(pinned.readers, { account, data: call.data, to: call.to, value: call.value, blockNumber: pinned.blockNumber, balanceOverride: PREFLIGHT_BALANCE, ...feeEnvelope(initialMaxFee) }, settings.connectivity.rpcQuorum, validateCanonicalBlock, revalidateRevert) : call.gas
+	let feeCap = call.maxFeePerGasCap
+	let maxFeePerGas = initialMaxFee
+	if (call.capFeeToGasBudget === true) {
+		// A direct takeover can use a shorter fee horizon while preserving the
+		// full gas reserve and the effective fee used for the pinned estimate.
+		const allowedFee = settings.strategy.maximumGasCostAttoEth / paddedTransactionGas(gas)
+		const currentFeeWithTip = block.baseFeePerGas + MAX_PRIORITY_FEE_PER_GAS
+		const requiredFee = initialMaxFee < currentFeeWithTip ? initialMaxFee : currentFeeWithTip
+		if (allowedFee < requiredFee) {
+			call.gasBudgetExceeded?.()
+			throw new Error(`${call.label} gas budget cannot cover the current fee with its priority tip`)
+		}
+		if (allowedFee < initialMaxFee) {
+			feeCap = allowedFee
+			maxFeePerGas = allowedFee
+		}
+	} else {
+		if (maximumFeePerGas(block.baseFeePerGas) * paddedTransactionGas(gas) > settings.strategy.maximumGasCostAttoEth) call.gasBudgetExceeded?.()
+		assertGasCostLimitForBaseFee(gas, block.baseFeePerGas, settings.strategy.maximumGasCostAttoEth, call.label)
+	}
+	const fees = feeEnvelope(maxFeePerGas)
 	await simulateWithRevalidation(
 		`${call.label} simulation`,
 		pinned.readers.map(async ({ client, endpoint }) => ({ endpoint, value: await client.call({ account, data: call.data, gas: call.gas === 'estimate' ? paddedTransactionGas(gas) : gas, to: call.to, value: call.value, blockNumber: pinned.blockNumber, ...fees }) })),
@@ -101,7 +122,7 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 	assertExecutionActive(state)
 	const signed = await prepareSignedTransaction({
 		baseFeePerGas: block.baseFeePerGas,
-		maxFeePerGasCap: call.maxFeePerGasCap,
+		maxFeePerGasCap: feeCap,
 		blockNumber: block.number,
 		chainId: settings.network.chainId,
 		data: call.data,

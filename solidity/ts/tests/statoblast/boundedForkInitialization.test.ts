@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import { keccak256, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, getAddress, keccak256, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { formatStorageSlot } from '../../testSupport/storage'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
@@ -158,7 +158,12 @@ describe('Statoblast: bounded fork initialization', () => {
 		await expect(streamsFactoryCaller.simulateContract({ ...streams, address: streamsImplementation, functionName: 'initialize', args: streamArgs })).rejects.toThrow('Capital module requires a clone')
 
 		await checkGas(await initiateSecurityPoolFork(owner(), parent), 'question fork initiation')
-		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'preparePortfolioPriceFeed', args: [parent, childUniverse], gas: 200_000n })), 'price feed deployment', 180_000n)
+		const prepareFeedHash = await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'preparePortfolioPriceFeed', args: [parent, childUniverse], gas: 200_000n }))
+		await checkGas(prepareFeedHash, 'price feed deployment', 180_000n)
+		const createdFeed = await owner().readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'sharedPriceFeeds', args: [fixture.portfolio, childUniverse] })
+		const preparation = await owner().waitForTransactionReceipt({ hash: prepareFeedHash })
+		const factoryEvents = preparation.logs.filter(log => getAddress(log.address) === getAddress(factory)).map(log => decodeEventLog({ abi: factoryArtifact.abi, topics: log.topics, data: log.data }))
+		expect(factoryEvents).toEqual([{ eventName: 'SharedPriceFeedRegistered', args: { portfolio: getAddress(fixture.portfolio), universeId: childUniverse, priceFeed: getAddress(createdFeed) } }])
 		await base.mockWindow.setTime(forkTime + 56n * DAY + 1n)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, BigInt(QuestionOutcome.No)], gas: transactionGasLimit })), 'shared branch migration')
 		await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'prepareChildPoolCoordinator', args: [parent, BigInt(QuestionOutcome.No)] }))

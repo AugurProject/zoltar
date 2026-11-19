@@ -26,9 +26,9 @@ test('summarizes a position with REP principal and commitment in the ledger coll
 })
 
 test('summarizes a ledger and says whether its price is fresh', () => {
-	const state = { pledgedAttoRep: (1_470n * 10n ** 18n).toString(), commitmentAttoEth: '150000000', healthyCommitmentAttoEth: '100000000', priceValid: false, collateral: usdc }
-	expect(capitalLedgerSummary(state, 4)).toBe('1,470 REP pledged · 150 USDC committed · 100 USDC healthy · price expired · 4 owners')
-	expect(capitalLedgerSummary({ ...state, priceValid: true }, '1')).toBe('1,470 REP pledged · 150 USDC committed · 100 USDC healthy · price fresh · 1 owner')
+	const state = { pledgedAttoRep: (1_470n * 10n ** 18n).toString(), commitmentAttoEth: '150000000', healthyCommitmentAttoEth: '100000000', acceptedPrice: (200n * 10n ** 30n).toString(), priceValid: false, collateral: usdc }
+	expect(capitalLedgerSummary(state, 4)).toBe('1,470 REP pledged · 150 USDC committed · 100 USDC healthy · 200 REP/USDC · price expired · 4 owners')
+	expect(capitalLedgerSummary({ ...state, priceValid: true }, '1')).toBe('1,470 REP pledged · 150 USDC committed · 100 USDC healthy · 200 REP/USDC · price fresh · 1 owner')
 })
 
 test('attributes take-overs, cures and report operations to owners and a universe', () => {

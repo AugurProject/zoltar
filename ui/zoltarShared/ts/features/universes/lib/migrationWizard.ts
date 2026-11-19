@@ -120,6 +120,12 @@ const minBigInt = (left: bigint, right: bigint) => (left < right ? left : right)
 
 const isStepSatisfied = (step: MigrationWizardStep) => step.status === 'complete' || step.status === 'notNeeded'
 
+const maxNewChildrenPerMigration = 7
+
+export function exceedsMigrationChildDeploymentLimit(selectedOutcomes: readonly { exists: boolean }[]) {
+	return selectedOutcomes.filter(outcome => !outcome.exists).length > maxNewChildrenPerMigration
+}
+
 /** Derives the migration wizard from balances and form input: choose outcomes, amount, approval, review. */
 export function deriveMigrationWizard(input: MigrationWizardInput): MigrationWizard {
 	const selectedIndexSet = new Set(input.selectedOutcomeIndexes.map(index => index.toString()))
@@ -147,7 +153,14 @@ export function deriveMigrationWizard(input: MigrationWizardInput): MigrationWiz
 	const fromMigrationBalance = canSplitAmount ? minBigInt(amountAttoRep, reusable) : undefined
 	const maxAmount = reusable === undefined ? undefined : reusable + (input.walletRepAttoRep ?? 0n)
 
-	const outcomesStep: MigrationWizardStep = selectedOutcomes.length === 0 ? { id: 'outcomes', reason: zoltarCopy.outcomeSelectionRequired, status: 'incomplete' } : { id: 'outcomes', reason: undefined, status: 'complete' }
+	const outcomesStep: MigrationWizardStep = { id: 'outcomes', reason: undefined, status: 'complete' }
+	if (selectedOutcomes.length === 0) {
+		outcomesStep.reason = zoltarCopy.outcomeSelectionRequired
+		outcomesStep.status = 'incomplete'
+	} else if (exceedsMigrationChildDeploymentLimit(selectedOutcomes)) {
+		outcomesStep.reason = zoltarCopy.migrationChildDeploymentLimit
+		outcomesStep.status = 'blocked'
+	}
 	const amountStep: MigrationWizardStep = { id: 'amount', ...deriveAmountStep(input, selectedOutcomes.length > 0, parsedAmount, reusable, walletRepToBurn, maxAmount) }
 	const approveStep: MigrationWizardStep = { id: 'approve', ...deriveApproveStep(input, amountStep.status, walletRepToBurn) }
 	const earlierSteps = [outcomesStep, amountStep, approveStep]

@@ -56,11 +56,12 @@ export const capitalSummaryMetrics = (state: Readonly<Record<string, unknown>>):
 export const capitalLedgerSummary = (state: Readonly<Record<string, unknown>>, ownerCount: unknown): string => {
 	const collateral = collateralUnit(state)
 	const owners = integer(String(ownerCount ?? ''))
+	const acceptedPrice = integer(state['acceptedPrice'])
 	return [
 		`${amount(state['pledgedAttoRep'], 18, 'REP')} pledged`,
 		`${amount(state['commitmentAttoEth'], collateral.decimals, collateral.symbol)} committed`,
 		`${amount(state['healthyCommitmentAttoEth'], collateral.decimals, collateral.symbol)} healthy`,
-		state['priceValid'] === true ? 'price fresh' : 'price expired',
+		acceptedPrice === undefined || acceptedPrice === '0' ? 'No accepted price' : `${exactUnit(acceptedPrice, Math.max(0, 36 - collateral.decimals), `REP/${collateral.symbol}`)} · ${state['priceValid'] === true ? 'price fresh' : 'price expired'}`,
 		...(owners === undefined ? [] : [`${exactNumber(owners)} ${owners === '1' ? 'owner' : 'owners'}`]),
 	].join(' · ')
 }

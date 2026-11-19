@@ -628,17 +628,19 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
 	})
 
-	test('a takeover after recovery and relapse pays no execution rewards', async () => {
+	test('a fresh price after a gap allows repair without any historical execution award (#1325)', async () => {
 		await deposit(alice, 105n * E)
 		await deposit(bob, 1_000n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
-		await price(2n * E)
+		await price(2n * E, 20)
 		expect((await account(bob)).feesAttoEth).toBe(0n)
-		await price(E)
+		await getAnvilWindowEthereum().advanceTime(21n)
+		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'isPriceValid' })).toBe(false)
 		await price(2n * E)
-		await getAnvilWindowEthereum().advanceTime(3_601n)
+		await expect(writeContractAndWait(bob, () => bob.sendTransaction(buildPortfolioCapitalTakeOverRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id, commitment: 100n * E, minimumAward: 1n, maximumOwnRep: 1_000n * E })))).rejects.toThrow('Repairs pay future income only')
 		await writeContractAndWait(bob, () => bob.sendTransaction(buildPortfolioCapitalTakeOverRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id, commitment: 100n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
+		expect((await position(id)).rep).toBe(105n * E)
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
 		expect((await account(bob)).feesAttoEth).toBe(0n)
 	})

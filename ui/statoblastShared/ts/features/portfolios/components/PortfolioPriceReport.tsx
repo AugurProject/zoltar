@@ -129,6 +129,16 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={copy.settleAt}>
 					<TimestampValue timestamp={report?.eligibleAt} relative={false} />
 				</MetricField>
+				{report === undefined ? undefined : (
+					<>
+						<MetricField label={copy.reportBaseFee}>
+							<CurrencyValue value={report.baseFeePerGas} suffix={copy.reportBaseFeeUnit} units={9} precision='exact' />
+						</MetricField>
+						<MetricField label={copy.reportBaseFeeCeiling}>
+							<CurrencyValue value={report.maxSettlementBaseFee} suffix={copy.reportBaseFeeUnit} units={9} precision='exact' />
+						</MetricField>
+					</>
+				)}
 				<MetricField label={copy.sponsor}>
 					<AddressValue address={report?.sponsor} />
 				</MetricField>

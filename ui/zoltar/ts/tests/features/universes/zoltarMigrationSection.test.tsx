@@ -98,6 +98,24 @@ describe('ZoltarMigrationSection', () => {
 		},
 	})
 
+	test('explains why eight undeployed outcomes block moving past selection (#1369)', async () => {
+		const childUniverses = Array.from({ length: 8 }, (_, index) => ({ ...noChild, outcomeIndex: BigInt(index), outcomeLabel: `Outcome ${index + 1}`, universeId: BigInt(10 + index) }))
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarUniverse: createUniverse({ childUniverses }),
+					zoltarMigrationForm: createForm({ outcomeIndexes: childUniverses.map(child => child.outcomeIndex) }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		expect(queries.getByText('Select up to seven undeployed outcomes per migration so the transaction fits the network gas limit.')).toBeTruthy()
+		expectTransactionButtonDisabled(document.body, 'Migrate REP')
+		expect(getCurrentStepTitle()).toBe('Select outcomes')
+	})
+
 	test('shows full fork question facts alongside REP migration outcome selection', async () => {
 		const question = createMarketDetails({ title: 'Which proposal wins?', description: 'Use the certified final tally.', marketType: 'categorical', outcomeLabels: ['Alpha', 'Beta'], questionId: '0x1234' })
 		const rendered = await renderIntoDocument(

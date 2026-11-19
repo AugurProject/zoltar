@@ -351,7 +351,7 @@ describe('state projections', () => {
 			['PortfolioRegistered', { portfolio: vault, originUniverseId: '0' }, 'risk', 'portfolio', vault.toLowerCase()],
 			['EthReceived', { sender: vault, amountAttoEth: atomic(1n) }, 'risk', 'pool', pool.toLowerCase()],
 			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
-			['WinningVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'portfolio-auction', pool.toLowerCase()],
+			['BidVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'portfolio-auction', pool.toLowerCase()],
 			['AuctionClosed', { filledLots: '1', raisedAttoEth: atomic(1n), soldAttoRep: atomic(2n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
 			['PortfolioRecoveryRightsTransferred', { universeId: '1', from: vault, to: vault, amountsAttoShares: ['1', '2', '3'] }, 'system', 'share-token', pool.toLowerCase()],
 			['PortfolioRecoveryRightsConsumed', { universeId: '1', holder: vault, amountAttoShares: atomic(1n), cumulativeAttoShares: atomic(1n) }, 'system', 'share-token', pool.toLowerCase()],

@@ -31,6 +31,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	bool private entered;
 	address private purchasePayer;
 	uint256 private purchaseMaximumRecoveryAttoRep;
+	address private expectedMintToken;
 	mapping(uint248 => bool) public premiumChildCreated;
 	mapping(uint248 => bool) private syncingFees;
 	mapping(uint248 => bool) public feesEnabled;
@@ -241,7 +242,9 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		IShareToken token = pool.shareToken();
 		uint248 universeId = pool.universeId();
 		uint256 beforeShares = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this));
+		expectedMintToken = address(token);
 		pool.createCompleteSet(cash);
+		expectedMintToken = address(0);
 		minted = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this)) - beforeShares;
 		require(minted > 0 && minted >= minimumShares, 'Minimum shares not met');
 	}
@@ -258,9 +261,10 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		IERC1155(address(token)).safeBatchTransferFrom(address(this), recipient, ids, amounts, '');
 	}
 	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
-		return IERC1155Receiver.onERC1155Received.selector;
+		revert('Unexpected single share transfer');
 	}
-	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
+	function onERC1155BatchReceived(address, address from, uint256[] calldata, uint256[] calldata, bytes calldata) external view returns (bytes4) {
+		require(from == address(0) && msg.sender == expectedMintToken, 'Unexpected share batch');
 		return IERC1155Receiver.onERC1155BatchReceived.selector;
 	}
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {

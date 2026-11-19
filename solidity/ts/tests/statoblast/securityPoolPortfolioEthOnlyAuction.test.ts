@@ -64,13 +64,19 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		expect(clearing).toMatchObject({ filledLots: 0n, soldAttoRep: 0n, raisedAttoEth: 0n })
 	})
 
-	test('a losing bidder withdraws and freely reuses ETH before branch finalization', async () => {
+	test('a losing bidder receives a bid vault and withdraws its refund before finalization (#1410, #1415)', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const loser = await context.bid(context.other, 2n, 100n * unit)
 		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] })).rejects.toThrow('Bid may still win')
-		await context.bid(context.owner, 5n, 10n * unit)
+		const winner = await context.bid(context.owner, 5n, 10n * unit)
+		const [vaultCreated] = parseAbi(['event BidVaultCreated(uint256 indexed bidId, address indexed bidder, address indexed vault)'])
+		if (vaultCreated === undefined) throw new Error('Missing bid vault event')
+		for (const bid of [loser, winner]) {
+			const receipt = await context.owner.getTransactionReceipt({ hash: bid.hash })
+			expect(receipt.logs.some(log => log.address === context.auction && log.topics[0] === toEventSelector(vaultCreated))).toBeTrue()
+		}
 		// Rejecting an already-excluded bid rolls back its controller-created vault too.
 		await expect(context.bid(context.other, 2n, 100n * unit)).rejects.toThrow('Better bids already exclude this bid')
 		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'bidCount' })).toBe(2n)

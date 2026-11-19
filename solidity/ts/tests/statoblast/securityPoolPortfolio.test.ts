@@ -8,6 +8,7 @@ import {
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	ReputationToken_ReputationToken as repArtifact,
+	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 } from '../../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { deployContract } from '../../testSupport/deployContract'
@@ -95,9 +96,11 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'questionCount' })).toBe(0n)
 		const registrationLogs = await fixture.owner().getLogs({ address: factory.address, fromBlock: beforeBlock + 1n, toBlock: await fixture.owner().getBlockNumber() })
 		const registrations = registrationLogs.map(log => decodeEventLog({ abi: factoryArtifact.abi, data: log.data, topics: log.topics }))
+		const feed = await fixture.owner().readContract({ ...factory, functionName: 'sharedPriceFeeds', args: [created, fixture.base.genesisUniverse] })
 		expect(registrations).toEqual([
 			{ eventName: 'PortfolioDeployed', args: { portfolio: getAddress(created), creator: getAddress(fixture.owner().account.address) } },
 			{ eventName: 'PortfolioRegistered', args: { portfolio: getAddress(created), originUniverseId: fixture.base.genesisUniverse } },
+			{ eventName: 'SharedPriceFeedRegistered', args: { portfolio: getAddress(created), universeId: fixture.base.genesisUniverse, priceFeed: getAddress(feed) } },
 		])
 		expect(await fixture.owner().readContract({ ...factory, functionName: 'isPortfolio', args: [created] })).toBe(true)
 		// Reconfigure a real namespace: the feed reads its immutable collateral configuration.
@@ -133,6 +136,20 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await demand()).toBe(0n)
 	})
 
+	test('an ended question advertises no minting capacity before its first report (#1405)', async () => {
+		await fixture.prepare()
+		const { base } = fixture
+		const pool = { abi: poolArtifact.abi, address: fixture.poolFor(base.questionId).securityPool }
+		const capacity = () => fixture.owner().readContract({ ...pool, functionName: 'getCurrentMintingCapacityAttoEth' })
+		await base.mockWindow.setTime(base.questionData.endTime - 600n)
+		await fixture.refreshPrice()
+		await base.mockWindow.setTime(base.questionData.endTime - 1n)
+		expect(await capacity()).toBeGreaterThan(0n)
+		await base.mockWindow.setTime(base.questionData.endTime)
+		expect(await fixture.owner().readContract({ ...portfolio(), functionName: 'availableMintCapacity', args: [base.genesisUniverse] })).toBeGreaterThan(0n)
+		expect(await capacity()).toBe(0n)
+	})
+
 	test('two questions consume one capacity budget while REP remains in one ledger', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		await fixture.mint(60n * unit)
@@ -143,6 +160,23 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		const token = getRepTokenAddress(fixture.base.genesisUniverse)
 		expect(await fixture.owner().readContract({ abi: repArtifact.abi, address: token, functionName: 'balanceOf', args: [fixture.capitalLedger] })).toBe(1_000n * unit)
 		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) expect(await fixture.owner().readContract({ abi: repArtifact.abi, address: token, functionName: 'balanceOf', args: [fixture.poolFor(question).securityPool] })).toBe(0n)
+	})
+
+	test('rejects unsolicited shares at portfolio services while delivering a funded purchase (#1408)', async () => {
+		await fixture.prepare()
+		await fixture.mint()
+		const { base } = fixture
+		const trader = fixture.other()
+		const { shareToken } = fixture.poolFor(base.questionId)
+		const services = await trader.readContract({ ...portfolio(), functionName: 'services' })
+		const balance = () => balanceOfShares(trader, shareToken, base.genesisUniverse, trader.account.address)
+		const before = await balance()
+		expect(before[0]).toBeGreaterThan(0n)
+		const target = { abi: shareArtifact.abi, address: shareToken }
+		const id = base.genesisUniverse << 8n
+		await expect(trader.writeContract({ ...target, functionName: 'safeTransferFrom', args: [trader.account.address, services, id, 1n] })).rejects.toThrow('single-transfer acceptance check')
+		await expect(trader.writeContract({ ...target, functionName: 'safeBatchTransferFrom', args: [trader.account.address, services, [id, id | 1n], [1n, 1n]] })).rejects.toThrow('batch-transfer acceptance check')
+		expect(await balance()).toEqual(before)
 	})
 
 	test('returning complete sets pays traders and retires requested backing without question claims', async () => {

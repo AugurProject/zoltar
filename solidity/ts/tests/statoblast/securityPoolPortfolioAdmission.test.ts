@@ -25,6 +25,18 @@ describe('Statoblast: pluggable question admission', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const deployFixed = (questions: bigint[], universe = fixture.base.genesisUniverse) => deployContract(fixture.owner(), encodeDeployData({ abi: fixedArtifact.abi, bytecode: applyLibraries(fixedArtifact.evm.bytecode.object), args: [universe, questions] }))
 
+	test('the interface’s maximum list of 700 full-width question IDs fits the transaction gas cap (#1354)', async () => {
+		const owner = fixture.owner()
+		const questions = Array.from({ length: 700 }, (_, index) => (1n << 256n) - 700n + BigInt(index))
+		const transactionGasLimit = 16_777_216n
+		const data = encodeDeployData({ abi: fixedArtifact.abi, bytecode: `0x${fixedArtifact.evm.bytecode.object}`, args: [fixture.base.genesisUniverse, questions] })
+		const hash = await writeContractAndWait(owner, () => owner.sendTransaction({ data, gas: transactionGasLimit }))
+		const receipt = await owner.waitForTransactionReceipt({ hash })
+		if (receipt.contractAddress === undefined) throw new Error('Missing fixed admission policy')
+		expect(receipt.gasUsed).toBeLessThan(transactionGasLimit)
+		expect(await owner.readContract({ abi: fixedArtifact.abi, address: receipt.contractAddress, functionName: 'questionCount' })).toBe(700n)
+	})
+
 	test('fixed membership permits lazy registration and rejects other questions or universes', async () => {
 		const policy = await deployFixed([fixture.base.questionId])
 		const portfolio = await fixture.deployPortfolio(policy)

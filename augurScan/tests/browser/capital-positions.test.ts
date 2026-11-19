@@ -21,7 +21,7 @@ for (const viewport of qaViewports) {
 				expect(positions).toContain('Critical · 12,350 REP principal · 50 USDC commitment · health 86.66%')
 				expect(positions).toContain('Warning · health below the scanner threshold · 13,000 REP principal · 40 USDC commitment · health 114.03%')
 				expect(positions).toContain('700 REP principal · 0 USDC commitment · no health factor')
-				expect(await evaluate(`${panel('Capital ledgers')}.textContent`)).toContain('25,350 REP pledged · 90 USDC committed · 40 USDC healthy · price fresh · 3 owners')
+				expect(await evaluate(`${panel('Capital ledgers')}.textContent`)).toContain('25,350 REP pledged · 90 USDC committed · 40 USDC healthy · 200 REP/USDC · price fresh · 3 owners')
 				const feed = await evaluate(`${panel('Liquidation feed')}.textContent`)
 				expect(feed).toContain('attributed to universe and owner, not to a question pool')
 				expect(feed).toContain('position 7 (0x000000…579bde) → position 12 (0xcccccc…cccccc) · 40 USDC commitment · 300 REP award · universe 0')

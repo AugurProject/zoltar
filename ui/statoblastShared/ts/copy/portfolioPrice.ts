@@ -1,5 +1,12 @@
 import { readUnavailable } from './portfolio.js'
 
+export const reportBaseFee = 'Block base fee'
+export const reportBaseFeeCeiling = 'Report base-fee ceiling'
+export const reportBaseFeeUnit = 'nanoETH/gas'
+export const waitForBaseFee = 'Wait for the block base fee to fall to the report’s ceiling.'
+export const formatSettlementReview = (baseFee: string | undefined, ceiling: string) =>
+	`Settle the selected oracle report. The report’s base-fee ceiling is ${ceiling} ${reportBaseFeeUnit}. ${baseFee === undefined ? 'The current block base fee is unavailable.' : `The current block base fee is ${baseFee} ${reportBaseFeeUnit}.`} Price acceptance can be deferred if the fee is above the ceiling at inclusion.`
+
 /** A fork branch reports before activation; an open portfolio account reports for its own universe. */
 export type PortfolioPriceScope = 'branch' | 'universe'
 type ScopeCopy = {

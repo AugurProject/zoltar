@@ -47,6 +47,9 @@ interface IGenesisUniswapV3PoolState {
 }
 
 contract GenesisUniswapV3Seeder {
+	bool private seeding;
+	bytes32 private mintCallbackHash;
+
 	struct CallbackData {
 		address pool;
 		address token0;
@@ -56,27 +59,37 @@ contract GenesisUniswapV3Seeder {
 	}
 
 	function seed(address pool, address token0, address token1, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 maximumAmount0, uint256 maximumAmount1, address recipient) external returns (uint256 amount0, uint256 amount1) {
+		require(!seeding, 'Seed already active');
 		require(pool != address(0) && token0 != address(0) && token1 != address(0) && recipient != address(0), 'Zero address');
 		require(token0 != token1, 'Same token');
-		require(liquidity > 0 && maximumAmount0 > 0 && maximumAmount1 > 0, 'Zero seed');
-		_safeTransferFrom(token0, msg.sender, address(this), maximumAmount0);
-		_safeTransferFrom(token1, msg.sender, address(this), maximumAmount1);
-		(amount0, amount1) = IGenesisSeederUniswapV3Pool(pool).mint(recipient, tickLower, tickUpper, liquidity, abi.encode(CallbackData(pool, token0, token1, maximumAmount0, maximumAmount1)));
+		require(liquidity > 0 && (maximumAmount0 > 0 || maximumAmount1 > 0), 'Zero seed');
+		seeding = true;
+		uint256 balance0 = IGenesisSeederErc20(token0).balanceOf(address(this));
+		uint256 balance1 = IGenesisSeederErc20(token1).balanceOf(address(this));
+		if (maximumAmount0 > 0) _safeTransferFrom(token0, msg.sender, address(this), maximumAmount0);
+		if (maximumAmount1 > 0) _safeTransferFrom(token1, msg.sender, address(this), maximumAmount1);
+		bytes memory callbackData = abi.encode(CallbackData(pool, token0, token1, maximumAmount0, maximumAmount1));
+		mintCallbackHash = keccak256(callbackData);
+		(amount0, amount1) = IGenesisSeederUniswapV3Pool(pool).mint(recipient, tickLower, tickUpper, liquidity, callbackData);
+		require(mintCallbackHash == bytes32(0), 'Missing mint callback');
 		require(amount0 <= maximumAmount0 && amount1 <= maximumAmount1, 'Seed maximum');
-		_refund(token0, msg.sender);
-		_refund(token1, msg.sender);
+		_refund(token0, msg.sender, balance0);
+		_refund(token1, msg.sender, balance1);
+		seeding = false;
 	}
 
 	function uniswapV3MintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata data) external {
+		require(mintCallbackHash != bytes32(0) && mintCallbackHash == keccak256(data), 'Unexpected pool');
 		CallbackData memory callback = abi.decode(data, (CallbackData));
 		require(msg.sender == callback.pool, 'Unexpected pool');
 		require(amount0Owed <= callback.maximumAmount0 && amount1Owed <= callback.maximumAmount1, 'Seed maximum');
+		delete mintCallbackHash;
 		if (amount0Owed > 0) _safeTransfer(callback.token0, msg.sender, amount0Owed);
 		if (amount1Owed > 0) _safeTransfer(callback.token1, msg.sender, amount1Owed);
 	}
 
-	function _refund(address token, address recipient) private {
-		uint256 balance = IGenesisSeederErc20(token).balanceOf(address(this));
+	function _refund(address token, address recipient, uint256 startingBalance) private {
+		uint256 balance = IGenesisSeederErc20(token).balanceOf(address(this)) - startingBalance;
 		if (balance > 0) _safeTransfer(token, recipient, balance);
 	}
 

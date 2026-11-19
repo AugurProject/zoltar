@@ -130,6 +130,7 @@ export async function executePortfolioTakeover(
 			...request,
 			// A cure spends none of the owner's principal, so funding recorded for a takeover stays recorded.
 			portfolioFunding: action === 'approval' || plan.unpaidCure ? undefined : { key: `${base.capitalLedger.toLowerCase()}:${base.owner.toLowerCase()}`, operation: action === 'principal' ? 'fund' : 'consume', target: positionId, amount: action === 'principal' ? plan.ownFunding : 0n },
+			capFeeToGasBudget: action === 'takeover',
 			gas: 'estimate',
 			gasBudgetExceeded: () => {
 				throw new PortfolioOpportunityExpired('Estimated portfolio gas exceeds strategy.maximumGasCostEth')

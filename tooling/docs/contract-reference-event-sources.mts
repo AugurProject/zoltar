@@ -42,6 +42,7 @@ export const eventSourceByName: Record<string, string> = {
 	ForkContinuationResidualRepBurned: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	SecurityPoolSet: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 	SecurityPoolRegistered: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
+	SharedPriceFeedRegistered: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	SystemStateSet: 'solidity/contracts/statoblast/SecurityPool.sol',
 	TheoreticalSupplySet: 'solidity/contracts/ReputationToken.sol',
 	Transfer: 'solidity/contracts/IERC20.sol',
