@@ -21,3 +21,24 @@ describe('shared scalar outcome codec', () => {
 		})
 	}
 })
+
+describe('scalar uint120 question boundary', () => {
+	const question = { answerUnit: '', displayValueMin: 0n, displayValueMax: 1n, numTicks: 1n << 120n }
+
+	test('rejects tick counts that would silently truncate both answer parts', () => {
+		expect(() => getScalarOutcomeIndex(question, 0n)).toThrow('uint120')
+		expect(() => getScalarOutcomeIndex(question, question.numTicks)).toThrow('uint120')
+	})
+
+	test('rejects an impossible question even when two encodable parts sum to its tick count', () => {
+		const answer = (1n << 255n) | (1n << 239n) | (1n << 119n)
+		expect(getScalarOutcomeIndexDescriptor(question, answer)).toEqual({ kind: 'malformed' })
+	})
+
+	test('keeps both endpoints encodable at the largest Solidity tick count', () => {
+		const boundary = { ...question, numTicks: question.numTicks - 1n }
+		for (const tick of [0n, boundary.numTicks]) {
+			expect(getScalarOutcomeIndexDescriptor(boundary, getScalarOutcomeIndex(boundary, tick))).toEqual({ kind: 'tick', tickIndex: tick })
+		}
+	})
+})
