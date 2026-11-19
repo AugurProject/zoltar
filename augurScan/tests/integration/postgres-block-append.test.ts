@@ -253,6 +253,10 @@ postgresTest('returns the originating transaction action on every log row', asyn
 				hash: evidenceHash,
 				transactions: [{ ...transaction(), to: proxy.address, input, decoded }],
 				logs: [0, 1].map(logIndex => ({ ...log(evidenceHash, 'Constructor event'), address: created, blockNumber: 1n, logIndex })),
+				addressActivity: [
+					{ transactionHash, address: created, role: 'referenced' },
+					{ transactionHash, address, role: 'sender' },
+				],
 			},
 			lease,
 		)
@@ -268,9 +272,20 @@ postgresTest('returns the originating transaction action on every log row', asyn
 			expect(row['to_address']).toBe(proxy.address.toLowerCase())
 			expect(row['contract_label']).toBe('Known deployment')
 		}
+		for (const [filter, count] of [
+			[created, 2],
+			[address, 2],
+			[rediscoveredAddress, 0],
+		] as const) {
+			const filtered = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${actionChainId}&address=${filter}`), database.sql)
+			expect(filtered?.status).toBe(200)
+			const filteredBody: unknown = await filtered?.json()
+			if (!isPlainRecord(filteredBody) || !Array.isArray(filteredBody['items'])) throw new Error('Missing filtered logs')
+			expect(filteredBody['items']).toHaveLength(count)
+		}
 	} finally {
 		await lease?.release()
-		for (const table of ['actions', 'logs', 'transactions', 'contracts', 'blocks', 'networks']) await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [actionChainId])
+		for (const table of ['address_activity', 'actions', 'logs', 'transactions', 'contracts', 'blocks', 'networks']) await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [actionChainId])
 		await database.sql`DELETE FROM live_events WHERE payload ->> 'chainId' = ${String(actionChainId)}`
 		await database.close()
 	}
@@ -300,13 +315,14 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 			})
 			lease = await database.tryAcquireIndexerLock(fixtureChain)
 			if (lease === undefined) throw new Error('Missing writer lease')
-			const block = indexedBlock('regression-two', blockHash('regression-parent'), [], 'regression')
+			const separator = String.fromCodePoint(0)
+			const block = indexedBlock('regression-two', blockHash('regression-parent'), [], 'regression', scenario === 'question seconds' ? [{ address: wethAddress, name: `Wrapped${separator}Ether`, symbol: `W${separator}ETH`, decimals: 18, readBlock: 2n }] : [])
 			const questionLogs = ['0', '8640000000000', '8640000000001', '281474976710655'].map((seconds, index) =>
 				decodedLog(block.hash, index, address, 'QuestionCreated', {
 					questionId: String(index),
 					createdTimestamp: '1767225600',
 					outcomeOptions: [],
-					questionData: { title: 'Exact question', description: '', startTime: seconds, endTime: seconds, numTicks: '100', displayValueMin: '0', displayValueMax: '100', answerUnit: '' },
+					questionData: { title: index === 0 ? `Exact${separator}question` : 'Exact question', description: '', startTime: seconds, endTime: seconds, numTicks: '100', displayValueMin: '0', displayValueMax: '100', answerUnit: '' },
 				}),
 			)
 			const creation = decodedLog(block.hash, 1, address, 'PoolCreated', { token0: rediscoveredAddress, token1: wethAddress, pool: uniswapPairAddress, fee: '3000', tickSpacing: '60' })
@@ -324,6 +340,11 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 			await database.storeBlock(fixtureChain, evidence, lease)
 			expect(await database.checkpoint(fixtureChain, lease)).toEqual({ number: 2n, hash: block.hash })
 			if (scenario === 'question seconds') {
+				expect(await database.sql`SELECT title FROM questions WHERE chain_id = ${fixtureChain} AND question_id = 0`).toEqual([{ title: 'Exact�question' }])
+				expect(await database.sql`SELECT arguments->'questionData'->>'title' AS title FROM logs WHERE chain_id = ${fixtureChain} AND log_index = 0`).toEqual([{ title: 'Exact�question' }])
+				for (const table of ['token_metadata', 'token_metadata_observations']) {
+					expect(await database.sql.unsafe(`SELECT name, symbol FROM ${table} WHERE chain_id = $1`, [fixtureChain])).toEqual([{ name: 'Wrapped�Ether', symbol: 'W�ETH' }])
+				}
 				const rows = await database.sql`SELECT start_time::text, end_time::text FROM questions WHERE chain_id = ${fixtureChain} ORDER BY question_id`
 				expect(rows).toEqual(['0', '8640000000000', '8640000000001', '281474976710655'].map(seconds => ({ start_time: seconds, end_time: seconds })))
 				const response = await handleApi(new Request(`http://localhost/api/v1/state/catalog?chainId=${fixtureChain}`), database.sql)
@@ -373,7 +394,8 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 			}
 		} finally {
 			await lease?.release()
-			for (const table of ['questions', 'uniswap_rep_eth_price_observations', 'uniswap_rep_eth_markets', 'protocol_timeline_entries', 'actions', 'logs', 'transactions', 'blocks', 'contracts', 'networks']) await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [fixtureChain])
+			for (const table of ['questions', 'token_metadata', 'token_metadata_observations', 'uniswap_rep_eth_price_observations', 'uniswap_rep_eth_markets', 'protocol_timeline_entries', 'actions', 'logs', 'transactions', 'blocks', 'contracts', 'networks'])
+				await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [fixtureChain])
 			await database.close()
 		}
 	})

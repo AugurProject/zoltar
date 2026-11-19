@@ -17,7 +17,8 @@ export function repositorySourceTarget(href: string): RepositorySourceTarget | u
 }
 
 function repositoryTarget(href: string, prefix: string, kind: RepositorySourceTarget['kind']): RepositorySourceTarget | undefined {
-	const hashIndex = href.indexOf('#')
-	const repositoryPath = decodeURIComponent(hashIndex === -1 ? href.slice(prefix.length) : href.slice(prefix.length, hashIndex))
+	const encodedPath = href.slice(prefix.length)
+	const suffix = encodedPath.search(/[?#]/)
+	const repositoryPath = decodeURIComponent(suffix < 0 ? encodedPath : encodedPath.slice(0, suffix))
 	return repositoryPath.length === 0 ? undefined : { kind, path: repositoryPath }
 }

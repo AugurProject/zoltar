@@ -180,15 +180,16 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationRow(String(item['question_title'] ?? `Question ${shortIdentifier(String(item['question_id'] ?? ''), 9, 6)}`), `${questionFeeStreamSummary(item, asOfSeconds)} · universe ${shortIdentifier(String(item['universe_id'] ?? ''), 9, 6)}`, String(item['tx_hash'] ?? ''), item['block_number']),
 	)
 	const atRiskCapitalRows = capitalPositionRows.filter((_, index) => ['critical', 'warning'].includes(String(capitalPositions[index]?.['scanner_severity'])))
-	const tradingRows = trading.map(item =>
-		operationRow(
+	const tradingRows = trading.map(item => {
+		const asset = collateralUnit(item)
+		return operationRow(
 			String(item['question_title'] ?? 'Augur AMM market'),
-			`${item['conditional_yes_bps'] === null || item['conditional_yes_bps'] === undefined ? 'No reserve price' : `${exactUnit(String(item['conditional_yes_bps']), 2, '%')} YES`} · ${exactUnit(String(item['eth_volume_24h_atto_eth'] ?? '0'), 18, nativeSymbol)} 24-hour volume · ${exactUnit(String(item['eth_volume_atto_eth'] ?? '0'), 18, nativeSymbol)} all-time volume · ${operationCounted(item['swap_count'], 'swap')} · ${operationCounted(item['lp_holder_count'], 'LP participant')}`,
+			`${item['conditional_yes_bps'] === null || item['conditional_yes_bps'] === undefined ? 'No reserve price' : `${exactUnit(String(item['conditional_yes_bps']), 2, '%')} YES`} · ${exactUnit(String(item['eth_volume_24h_atto_eth'] ?? '0'), asset.decimals, asset.symbol)} 24-hour volume · ${exactUnit(String(item['eth_volume_atto_eth'] ?? '0'), asset.decimals, asset.symbol)} all-time volume · ${operationCounted(item['swap_count'], 'swap')} · ${operationCounted(item['lp_holder_count'], 'LP participant')}`,
 			String(item['pair_address'] ?? ''),
 			item['price_block_number'],
 			operationsHref(`/operations/trading/${encodeURIComponent(String(item['pair_address'] ?? ''))}`),
-		),
-	)
+		)
+	})
 	const timelineRows = timeline.map(item => {
 		const rawEvidenceStatus = item['evidence_status'] ?? (item['canonical'] === false ? 'noncanonical' : 'canonical')
 		const invalidation = item['invalidation_reason'] === undefined ? '' : ` · ${historyInvalidationReasonLabel(item['invalidation_reason'])}`

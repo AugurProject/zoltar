@@ -3,7 +3,7 @@
 import { privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { acquirePositionJournalLock, loadPositionJournalState, manuallyReconcilePosition, savePositionJournalState } from '#state/position-store'
 
-const usage = `Close one fully investigated recovery-required position without submitting a transaction.
+const usage = `Close one fully investigated recovery-required or replaced position without submitting a transaction.
 
 PRIVATE_KEY=0x... bun run reconcile -- \\
   --position-file=PATH --chain-id=ID --report-id=ID --confirm-report-id=ID \\

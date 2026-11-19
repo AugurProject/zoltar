@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { RpcError } from '@zoltar/bot-shared/ethereum'
 import { shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { assertExecutionActive, assertGasCostLimitForBaseFee, requireFinalizedTransactionReceipt, setExecutionShutdownCheck } from '../../src/execution/execution-safety.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
@@ -15,6 +16,19 @@ describe('liquidator execution safety', () => {
 		const malformed = [Promise.resolve(agreeing), Promise.resolve({ ...agreeing, endpoint: 'rpc-b' }), Promise.reject(new Error('Constant-product pair returned malformed state'))]
 		const malformedSettled = await Promise.allSettled(malformed)
 		expect(() => availableExecutionObservations('liquidation snapshot', malformedSettled, observation => ({ endpoint: observation.endpoint, value: observation.state }), 2)).toThrow('malformed state')
+	})
+
+	test.each([
+		[-32000, 'Unknown block'],
+		[-32001, 'Resource not found'],
+		[-32004, 'Method not supported'],
+		[-32000, 'Required historical state unavailable'],
+	] as const)('uses an agreeing scan quorum when another reader returns %i %s', (code, message) => {
+		const failed = { status: 'rejected', reason: new Error('Read failed', { cause: new RpcError(message, { code }) }) } as const
+		const primary: PromiseFulfilledResult<{ endpoint: string; value: bigint }> = { status: 'fulfilled', value: { endpoint: 'rpc-a', value: 42n } }
+		const peer = { ...primary, value: { ...primary.value, endpoint: 'rpc-b' } }
+		expect(availableExecutionObservations('snapshot', [primary, failed, peer], value => value, 2)).toEqual([primary.value, peer.value])
+		expect(() => availableExecutionObservations('snapshot', [primary, failed], value => value, 2)).toThrow()
 	})
 
 	test('classifies insufficient transport-only scan observations as degraded connectivity under the explicit quorum policy', () => {

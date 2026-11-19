@@ -109,6 +109,7 @@ export async function demoOperationsCatalogRoute(env: DemoEnvironment, path: str
 				}))
 			: []),
 	]
+	const tokenCollateral = context.pageUrl.searchParams.get('tradingCollateral') === 'usdc' ? { collateral: { symbol: 'USDC', decimals: 6 }, eth_volume_atto_eth: '250000000000', eth_volume_24h_atto_eth: '250000000000' } : {}
 	const demoTradingFixture = [
 		{
 			pair_address: demoAddress('fa'),
@@ -123,6 +124,7 @@ export async function demoOperationsCatalogRoute(env: DemoEnvironment, path: str
 			eth_volume_7d_atto_eth: '21700000000000000000',
 			eth_trade_count: 41,
 			eth_trade_count_24h: 5,
+			...tokenCollateral,
 		},
 	]
 	const integrityCombinedCauses = context.pageUrl.searchParams.get('integrityCombinedCauses') === '1'

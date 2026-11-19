@@ -322,6 +322,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const activation = await owner.readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'activationTime' })
 		await mockWindow.setTime(activation - 1n)
 		const disputeHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'depositWalletRepToEscalationGame', args: [2, 200n * unit], gas: 10_000_000n }))
+		expect((await owner.getTransactionReceipt({ hash: disputeHash })).gasUsed).toBeLessThan(10_000_000n)
 		const [childQuestion] = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [childBook, reportTarget] })
 		const [childReporter] = await owner.readContract({ ...reporters, functionName: 'question', args: [child, reportTarget] })
 		expect(childQuestion.finalAfter).toBeGreaterThan(firstReport.finalAfter)

@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { databaseJsonText } from '../database-json.ts'
+import { databaseJsonText, databaseText } from '../database-json.ts'
 import { storeLogProjections } from '../database-projections.ts'
 import { captureDirectObservationInvalidation, captureHistoryInvalidation, type IndexerLease, invalidateCanonicalHistory, recordChainReorganization, withIndexerLease } from './history.ts'
 import { canonicalBlockLogs, assertBlockAppend, assertContractDeploymentObservation, assertLogScanCursorUpdate, DatabaseConsistencyError, type EvidenceProvenance, type IndexedBlock, lockLiveEventWriter, serializedInterpretation } from './records.ts'
@@ -38,8 +38,8 @@ export async function persistBlockInTransaction(this: ScannerDatabase, transacti
 						chain_id, address, block_hash, name, symbol, decimals, read_status, read_error, read_block, canonical,
 						observed_at, indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
 					) VALUES (
-						${chainId}, ${metadata.address.toLowerCase()}, ${block.hash}, ${metadata.name ?? null}, ${metadata.symbol ?? null},
-						${metadata.decimals ?? null}, ${readStatus}, ${metadata.readError ?? null}, ${metadata.readBlock.toString()}, true,
+						${chainId}, ${metadata.address.toLowerCase()}, ${block.hash}, ${metadata.name === undefined ? null : databaseText(metadata.name)}, ${metadata.symbol === undefined ? null : databaseText(metadata.symbol)},
+						${metadata.decimals ?? null}, ${readStatus}, ${metadata.readError === undefined ? null : databaseText(metadata.readError)}, ${metadata.readBlock.toString()}, true,
 						now(), ${provenance?.indexerRunId ?? null}, ${provenance?.abiSourceHash ?? null},
 						${provenance?.applicationSourceHash ?? null}, ${provenance?.projectionSourceHash ?? null}
 					)
@@ -56,7 +56,7 @@ export async function persistBlockInTransaction(this: ScannerDatabase, transacti
 		await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND address = ${metadata.address.toLowerCase()} AND canonical AND block_hash <> ${block.hash}`
 		await transaction`
 					INSERT INTO token_metadata (chain_id, address, block_hash, name, symbol, decimals, read_error, read_block, canonical, updated_at)
-					VALUES (${chainId}, ${metadata.address.toLowerCase()}, ${block.hash}, ${metadata.name ?? null}, ${metadata.symbol ?? null}, ${metadata.decimals ?? null}, ${metadata.readError ?? null}, ${metadata.readBlock.toString()}, true, now())
+					VALUES (${chainId}, ${metadata.address.toLowerCase()}, ${block.hash}, ${metadata.name === undefined ? null : databaseText(metadata.name)}, ${metadata.symbol === undefined ? null : databaseText(metadata.symbol)}, ${metadata.decimals ?? null}, ${metadata.readError === undefined ? null : databaseText(metadata.readError)}, ${metadata.readBlock.toString()}, true, now())
 					ON CONFLICT (chain_id, address, block_hash) DO UPDATE SET name = EXCLUDED.name, symbol = EXCLUDED.symbol, decimals = EXCLUDED.decimals, read_error = EXCLUDED.read_error, read_block = EXCLUDED.read_block, canonical = true, updated_at = now()
 				`
 	}
@@ -102,7 +102,7 @@ export async function persistBlockInTransaction(this: ScannerDatabase, transacti
 				`
 		await transaction`
 					INSERT INTO actions (chain_id, block_hash, tx_hash, contract_address, function_name, function_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary)
-					VALUES (${chainId}, ${block.hash}, ${item.hash}, ${item.to?.toLowerCase() ?? null}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${databaseJsonText(item.decoded.arguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.displayArguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary})
+					VALUES (${chainId}, ${block.hash}, ${item.hash}, ${item.to?.toLowerCase() ?? null}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${databaseJsonText(item.decoded.arguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.displayArguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error === undefined ? null : databaseText(item.decoded.error)}, ${databaseText(item.decoded.summary)})
 					ON CONFLICT (chain_id, block_hash, tx_hash) DO UPDATE SET function_name = EXCLUDED.function_name, function_signature = EXCLUDED.function_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
 				`
 		if (provenance !== undefined)
@@ -124,7 +124,7 @@ export async function persistBlockInTransaction(this: ScannerDatabase, transacti
 	for (const item of logs) {
 		await transaction`
 					INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, event_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary, canonical, finalized)
-					VALUES (${chainId}, ${item.transactionHash}, ${item.blockHash}, ${item.blockNumber.toString()}, ${item.transactionIndex}, ${item.logIndex}, ${item.address.toLowerCase()}, (${databaseJsonText(item.topics)}::text)::jsonb, ${item.data}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${databaseJsonText(item.decoded.arguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.displayArguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary}, true, ${item.blockNumber <= block.finalizedThrough})
+					VALUES (${chainId}, ${item.transactionHash}, ${item.blockHash}, ${item.blockNumber.toString()}, ${item.transactionIndex}, ${item.logIndex}, ${item.address.toLowerCase()}, (${databaseJsonText(item.topics)}::text)::jsonb, ${item.data}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${databaseJsonText(item.decoded.arguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.displayArguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error === undefined ? null : databaseText(item.decoded.error)}, ${databaseText(item.decoded.summary)}, true, ${item.blockNumber <= block.finalizedThrough})
 					ON CONFLICT (chain_id, block_hash, tx_hash, log_index) DO UPDATE SET canonical = true, finalized = EXCLUDED.finalized, event_name = EXCLUDED.event_name, event_signature = EXCLUDED.event_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
 				`
 		if (provenance !== undefined)

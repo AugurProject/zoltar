@@ -225,3 +225,19 @@ test('an unchanged live refresh keeps the rendered operations page and a changed
 		expect(renderOperations).toHaveBeenCalledTimes(3)
 	})
 })
+
+test('trading catalog displays volumes using each market collateral unit', async () => {
+	await withOperationsPage('http://localhost/operations/trading?chainId=1', () => {
+		const markets = [
+			{ question_title: 'USDC market', volume: '250000000000', collateral: { symbol: 'USDC', decimals: 6 }, pair_address: `0x${'1'.repeat(40)}` },
+			{ question_title: 'WETH market', volume: '2000000000000000000', collateral: { symbol: 'WETH', decimals: 18 }, pair_address: `0x${'2'.repeat(40)}` },
+			{ question_title: 'Unknown collateral market', volume: '25', pair_address: `0x${'3'.repeat(40)}` },
+		]
+		renderOverview({ chainId: '1', asOf: asOfBlock('100'), data: { trading: markets.map(market => ({ ...market, eth_volume_24h_atto_eth: market.volume, eth_volume_atto_eth: market.volume })) } }, false)
+		const rendered = document.body.textContent
+		for (const volume of ['250,000 USDC', '2 WETH', '25 collateral units']) {
+			expect(rendered).toContain(`${volume} 24-hour volume`)
+			expect(rendered).toContain(`${volume} all-time volume`)
+		}
+	})
+})

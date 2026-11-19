@@ -29,6 +29,6 @@ export async function estimateExecutionGas(readers: readonly Reader[], request: 
 		revalidateRevert,
 	)
 	await validateCanonicalBlock()
-	const available = availableSettledValues(await Promise.allSettled(observations))
+	const available = availableSettledValues(await Promise.allSettled(observations), { requirement, endpointOf: observation => observation.endpoint })
 	return available.reduce((maximum, observation) => (observation.value > maximum ? observation.value : maximum), 0n) + PORTFOLIO_CHECKPOINT_GAS_RESERVE
 }

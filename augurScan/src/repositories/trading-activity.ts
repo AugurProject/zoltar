@@ -9,7 +9,8 @@ type TradingLegFilter = {
 	readonly account?: string
 }
 
-// One row per trading action in an Augur AMM market. Pool complete-set events carry the exact ETH amounts; the pair's
+// One row per trading action in an Augur AMM market. CompleteSetsFunded adds purchase fees and identifies the funded
+// recipient when the pool minted shares through Portfolio Services. The pair's
 // Swap or liquidity event in the same transaction, sent by the same minter or redeemer, identifies a router enter,
 // exit, or ETH-funded liquidity action. A minter or redeemer whose share balance is unchanged by the transaction is a
 // pass-through such as the router, so the action belongs to the single account it forwarded shares to or received
@@ -22,8 +23,8 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 		WITH account_transactions AS (
 			SELECT log.block_hash, log.tx_hash FROM logs log
 			WHERE ${account}::text IS NOT NULL AND log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${asOfBlock}
-				AND log.event_name IN ('TransferSingle', 'TransferBatch', 'CompleteSetCreated', 'CompleteSetRedeemed', 'SharesRedeemed')
-				AND ${account} IN (lower(log.arguments->>'from'), lower(log.arguments->>'to'), lower(log.arguments->>'creator'), lower(log.arguments->>'redeemer'))
+				AND log.event_name IN ('TransferSingle', 'TransferBatch', 'CompleteSetCreated', 'CompleteSetsFunded', 'CompleteSetRedeemed', 'SharesRedeemed')
+				AND ${account} IN (lower(log.arguments->>'from'), lower(log.arguments->>'to'), lower(log.arguments->>'creator'), lower(log.arguments->>'redeemer'), lower(log.arguments->>'recipient'))
 			UNION
 			SELECT event.block_hash, event.tx_hash FROM amm_trade_events event
 			WHERE ${account}::text IS NOT NULL AND event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${asOfBlock}
@@ -37,14 +38,36 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 		), pool_events AS (
 			SELECT market.pair_address, market.share_token_address, market.universe_id, log.block_hash, log.tx_hash, log.block_number, log.log_index,
 				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, log.event_name,
-				lower(COALESCE(log.arguments->>'creator', log.arguments->>'redeemer')) AS actor,
-				(CASE log.event_name WHEN 'CompleteSetCreated' THEN log.arguments->>'settlementCollateralProvidedAttoEth' ELSE log.arguments->>'settlementCollateralRedeemedAttoEth' END)::numeric AS eth,
+				lower(COALESCE(funding.arguments->>'recipient', log.arguments->>'creator', log.arguments->>'redeemer')) AS actor,
+				(CASE log.event_name WHEN 'CompleteSetCreated' THEN log.arguments->>'settlementCollateralProvidedAttoEth' ELSE log.arguments->>'settlementCollateralRedeemedAttoEth' END)::numeric
+					+ COALESCE((funding.arguments->>'purchaseFeeAttoEth')::numeric, 0) AS eth,
 				(CASE log.event_name WHEN 'CompleteSetCreated' THEN log.arguments->>'completeSetsMintedAttoShares' WHEN 'CompleteSetRedeemed' THEN log.arguments->>'completeSetsBurnedAttoShares' ELSE log.arguments->>'winningSharesBurnedAttoShares' END)::numeric AS sets
 			FROM markets market
 			JOIN logs log ON log.chain_id = ${chainId} AND log.emitter_address = market.pool_address AND log.canonical AND log.block_number <= ${asOfBlock}
 				AND log.event_name IN ('CompleteSetCreated', 'CompleteSetRedeemed', 'SharesRedeemed')
 				AND (${account}::text IS NULL OR (log.block_hash, log.tx_hash) IN (SELECT block_hash, tx_hash FROM account_transactions))
 			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
+			LEFT JOIN pools pool ON pool.chain_id = log.chain_id AND pool.pool_address = market.pool_address AND pool.canonical
+			LEFT JOIN LATERAL (
+				SELECT funded.arguments
+				FROM logs funded
+				JOIN contracts portfolio ON portfolio.chain_id = funded.chain_id AND portfolio.address = funded.emitter_address
+					AND portfolio.canonical AND portfolio.kind = 'securityPoolPortfolio'
+				WHERE funded.chain_id = log.chain_id AND funded.block_hash = log.block_hash AND funded.tx_hash = log.tx_hash
+					AND funded.canonical AND funded.event_name = 'CompleteSetsFunded' AND funded.log_index > log.log_index
+					AND funded.arguments->>'questionId' = pool.question_id::text AND funded.arguments->>'universeId' = market.universe_id::text
+					AND funded.arguments->>'shares' = log.arguments->>'completeSetsMintedAttoShares'
+					AND funded.arguments->>'cashAttoEth' = log.arguments->>'settlementCollateralProvidedAttoEth'
+					AND EXISTS (
+						SELECT 1 FROM logs delivery
+						WHERE delivery.chain_id = log.chain_id AND delivery.block_hash = log.block_hash AND delivery.tx_hash = log.tx_hash
+							AND delivery.canonical AND delivery.emitter_address = market.share_token_address AND delivery.event_name = 'TransferBatch'
+							AND delivery.log_index > log.log_index AND delivery.log_index < funded.log_index
+							AND lower(delivery.arguments->>'from') = lower(log.arguments->>'creator')
+							AND lower(delivery.arguments->>'to') = lower(funded.arguments->>'recipient')
+					)
+				ORDER BY funded.log_index LIMIT 1
+			) funding ON log.event_name = 'CompleteSetCreated'
 		), pair_events AS (
 			SELECT market.pair_address, event.block_hash, event.tx_hash, event.block_number, event.log_index,
 				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, event.event_name, event.event_data,
