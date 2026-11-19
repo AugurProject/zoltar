@@ -148,9 +148,10 @@ contract ZoltarQuestionData {
 				if (firstPart == 0 && secondPart == 0) return false;
 				return true;
 			}
-			// When invalid=false (high bit set), malformed iff sum != numTicks
-			uint256 sum = uint256(firstPart) + uint256(secondPart);
-			return sum != questions[questionId].numTicks;
+			// When invalid=false (high bit set), malformed iff sum != numTicks.
+			// An unregistered question has zero ticks and so no valid scalar answer.
+			uint256 numTicks = questions[questionId].numTicks;
+			return numTicks == 0 || uint256(firstPart) + uint256(secondPart) != numTicks;
 		}
 		if (answer == 0) return false;
 		if (answer < outcomeLabels[questionId].length + 1) {
@@ -170,7 +171,7 @@ contract ZoltarQuestionData {
 				return 'Malformed';
 			}
 			uint256 sum = uint256(firstPart) + uint256(secondPart);
-			if (sum == questions[questionId].numTicks) {
+			if (questions[questionId].numTicks != 0 && sum == questions[questionId].numTicks) {
 				return
 					ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
 			}

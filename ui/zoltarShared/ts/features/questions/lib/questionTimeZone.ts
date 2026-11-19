@@ -51,23 +51,28 @@ export function getBrowserTimeZone() {
 	return new Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
-/** Minutes the zone is ahead of UTC at the given instant (negative when behind), read from Intl's `GMT+03:00` offset name. */
-function getTimeZoneOffsetMinutes(date: Date, timeZone: string) {
+/**
+ * Seconds the zone is ahead of UTC at the given instant (negative when behind), read from Intl's `GMT+03:00` offset
+ * name. Historical local mean times carry a seconds component, such as Monrovia's `GMT-00:44:30`.
+ */
+function getTimeZoneOffsetSeconds(date: Date, timeZone: string) {
 	const offsetName = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' }).formatToParts(date).find(part => part.type === 'timeZoneName')?.value
 	if (offsetName === undefined) throw new Error(`Time zone formatting omitted the offset of ${timeZone}`)
 	if (offsetName === 'GMT') return 0
-	const match = /^GMT([+-])(\d{1,2})(?::(\d{2}))?$/.exec(offsetName)
+	const match = /^GMT([+-])(\d{1,2})(?::(\d{2})(?::(\d{2}))?)?$/.exec(offsetName)
 	if (match === null) throw new Error(`Unrecognized time zone offset ${offsetName}`)
-	const minutes = Number(match[2]) * 60 + Number(match[3] ?? '0')
-	return match[1] === '-' ? -minutes : minutes
+	const seconds = Number(match[2]) * 3600 + Number(match[3] ?? '0') * 60 + Number(match[4] ?? '0')
+	return match[1] === '-' ? -seconds : seconds
 }
 
-function formatUtcOffset(offsetMinutes: number) {
-	if (offsetMinutes === 0) return 'UTC'
-	const sign = offsetMinutes > 0 ? '+' : '-'
-	const absoluteMinutes = Math.abs(offsetMinutes)
-	const hours = Math.floor(absoluteMinutes / 60)
-	const minutes = absoluteMinutes % 60
+function formatUtcOffset(offsetSeconds: number) {
+	if (offsetSeconds === 0) return 'UTC'
+	const sign = offsetSeconds > 0 ? '+' : '-'
+	const absoluteSeconds = Math.abs(offsetSeconds)
+	const hours = Math.floor(absoluteSeconds / 3600)
+	const minutes = Math.floor(absoluteSeconds / 60) % 60
+	const seconds = absoluteSeconds % 60
+	if (seconds !== 0) return `UTC${sign}${hours}:${pad(minutes)}:${pad(seconds)}`
 	return `UTC${sign}${hours}${minutes === 0 ? '' : `:${pad(minutes)}`}`
 }
 
@@ -76,7 +81,7 @@ function formatUtcOffset(offsetMinutes: number) {
  * Labels a zone with its offset at the given instant, e.g. `Europe/Helsinki, UTC+3`, or just `UTC`.
  */
 export function formatTimeZoneLabel(timeZone: string, date: Date) {
-	const offset = formatUtcOffset(getTimeZoneOffsetMinutes(date, timeZone))
+	const offset = formatUtcOffset(getTimeZoneOffsetSeconds(date, timeZone))
 	if (timeZone === 'UTC' || timeZone === 'Etc/UTC') return offset
 	return `${timeZone}, ${offset}`
 }
@@ -90,8 +95,8 @@ export function formatQuestionTimeZoneLabel(timeZone: string, { endTimestamp, no
 	const start = startTimestamp === undefined ? undefined : toDate(startTimestamp)
 	const end = endTimestamp === undefined ? undefined : toDate(endTimestamp)
 	if (start !== undefined && end !== undefined) {
-		const startOffset = formatUtcOffset(getTimeZoneOffsetMinutes(start, timeZone))
-		const endOffset = formatUtcOffset(getTimeZoneOffsetMinutes(end, timeZone))
+		const startOffset = formatUtcOffset(getTimeZoneOffsetSeconds(start, timeZone))
+		const endOffset = formatUtcOffset(getTimeZoneOffsetSeconds(end, timeZone))
 		if (startOffset !== endOffset) return `${timeZone}, ${marketCopy.formatStartAndEndUtcOffsets(startOffset, endOffset)}`
 	}
 	return formatTimeZoneLabel(timeZone, end ?? start ?? now)

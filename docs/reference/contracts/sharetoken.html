@@ -36,7 +36,7 @@
 						<tr>
 							<td><code>setApprovalForAll(operator, approved)</code><wbr /></td>
 							<td>Any token account setting its own operator approval</td>
-							<td>The operator differs from the caller.</td>
+							<td>The operator differs from the caller and from the token itself, which <code>isApprovedForAll</code> always reports as an operator.</td>
 							<td>Sets or clears the operator's authority over all of the caller's outcome-token balances.</td>
 							<td><code>ApprovalForAll</code></td>
 						</tr>

@@ -77,6 +77,13 @@ export const SCALAR_PARITY_QUESTIONS: ScalarParityQuestion[] = [
 		numTicks: SCALAR_PARITY_PART_MASK,
 	},
 	{
+		name: 'sub-unit-thirds',
+		answerUnit: 'km',
+		displayValueMax: 2n,
+		displayValueMin: 0n,
+		numTicks: 3n,
+	},
+	{
 		name: 'int256-extreme',
 		answerUnit: '',
 		displayValueMax: SCALAR_PARITY_INT256_MAX,
@@ -101,6 +108,11 @@ export const SCALAR_PARITY_LABEL_FIXTURES: ScalarParityLabelFixture[] = [
 	{ name: 'repeating upper endpoint', questionName: 'repeating-sevenths', tickIndex: 7n, expectedLabel: '2' },
 	{ name: 'uint120 lower endpoint', questionName: 'uint120-boundary', tickIndex: 0n, expectedLabel: '0' },
 	{ name: 'uint120 upper endpoint', questionName: 'uint120-boundary', tickIndex: SCALAR_PARITY_PART_MASK, expectedLabel: '0.000000000000000001' },
+	{ name: 'uint120 interior tick', questionName: 'uint120-boundary', tickIndex: 1n, expectedLabel: `0 (tick 1 of ${SCALAR_PARITY_PART_MASK.toString()})` },
+	{ name: 'sub-unit lower endpoint', questionName: 'sub-unit-thirds', tickIndex: 0n, expectedLabel: '0 km' },
+	{ name: 'sub-unit tick flooring onto the lower endpoint', questionName: 'sub-unit-thirds', tickIndex: 1n, expectedLabel: '0 km (tick 1 of 3)' },
+	{ name: 'sub-unit tick flooring onto a lower value', questionName: 'sub-unit-thirds', tickIndex: 2n, expectedLabel: '0.000000000000000001 km (tick 2 of 3)' },
+	{ name: 'sub-unit upper endpoint', questionName: 'sub-unit-thirds', tickIndex: 3n, expectedLabel: '0.000000000000000002 km' },
 	{
 		name: 'int256 lower endpoint',
 		questionName: 'int256-extreme',
@@ -210,7 +222,9 @@ export function formatScalarParityLabel(question: ScalarParityQuestion, tickInde
 	const scalarRange = question.displayValueMax - question.displayValueMin
 	const scalarValue = question.displayValueMin + (tickIndex * scalarRange) / question.numTicks
 	const formattedValue = formatSignedDecimal(scalarValue)
-	return question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
+	const label = question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
+	const inexactSubUnitTick = scalarRange < question.numTicks && (tickIndex * scalarRange) % question.numTicks !== 0n
+	return inexactSubUnitTick ? `${label} (tick ${tickIndex.toString()} of ${question.numTicks.toString()})` : label
 }
 
 export function describeScalarParityOutcomeIndex(question: ScalarParityQuestion, outcomeIndex: bigint): ScalarParityOutcomeIndexDescriptor {
