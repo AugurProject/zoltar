@@ -1,31 +1,45 @@
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
+import type { Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
 } from '../../types/contractArtifact'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { formatStorageSlot, getAddressMappingStorageSlot, getUintMappingStorageSlot } from '../../testSupport/storage'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getShareTokenSupplyAttoShares, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: bound complete-set delivery', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
-	test('new purchases exclude donated outcomes and forced ETH, and minimum delivery failures revert all accounting', async () => {
+	test('new purchases exclude pre-existing outcomes and forced ETH, and minimum delivery failures revert all accounting', async () => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		const { owner, other, base } = fixture
 		const pool = fixture.poolFor(base.questionId)
 		const helper = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
-		const ids = await Promise.all([0, 1, 2].map(outcome => owner().readContract({ abi: shareArtifact.abi, address: pool.shareToken, functionName: 'getTokenId', args: [base.genesisUniverse, outcome] })))
-		await writeContractAndWait(other(), () => other().writeContract({ abi: shareArtifact.abi, address: pool.shareToken, functionName: 'safeBatchTransferFrom', args: [other().account.address, helper, ids, [unit, unit, unit], '0x'] }))
+		const token = { abi: shareArtifact.abi, address: pool.shareToken }
+		const buyer = other().account.address
+		const ids = await Promise.all([0, 1, 2].map(outcome => owner().readContract({ ...token, functionName: 'getTokenId', args: [base.genesisUniverse, outcome] })))
+		// Services reject unsolicited transfers. Seed the same balances directly for the accounting regression.
+		const stateDiff: Record<Hex, bigint> = {}
+		for (const id of ids) {
+			const tokenBalances = getUintMappingStorageSlot(id, 0n) // ERC1155._balances
+			const balance = await owner().readContract({ ...token, functionName: 'balanceOf', args: [buyer, id] })
+			stateDiff[formatStorageSlot(getAddressMappingStorageSlot(buyer, tokenBalances))] = balance - unit
+			stateDiff[formatStorageSlot(getAddressMappingStorageSlot(helper, tokenBalances))] = unit
+		}
+		await base.mockWindow.addStateOverrides({ [pool.shareToken]: { stateDiff } })
 		await base.mockWindow.setBalance(helper, (await owner().getBalance({ address: helper })) + 7n)
 		await expect(other().writeContract({ abi: servicesArtifact.abi, address: helper, functionName: 'purchase', args: [other().account.address, base.genesisUniverse, base.questionId, unit, other().account.address, 0n, unit, 0n] })).rejects.toThrow('Only service portfolio')
 		const supply = await getShareTokenSupplyAttoShares(owner(), pool.securityPool)
+		const buyerBalances = await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, buyer)
+		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, helper)).toEqual([unit, unit, unit])
 		await expect(fixture.mint(20n * unit, base.questionId, { minimumShares: 21n * unit })).rejects.toThrow('Minimum shares not met')
 		expect(await getShareTokenSupplyAttoShares(owner(), pool.securityPool)).toBe(supply)
+		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, buyer)).toEqual(buyerBalances)
 		await fixture.mint(20n * unit, base.questionId, { minimumShares: 20n * unit })
 		const delivered = (await getShareTokenSupplyAttoShares(owner(), pool.securityPool)) - unit
 		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, other().account.address)).toEqual([delivered, delivered, delivered])
