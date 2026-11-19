@@ -454,6 +454,8 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 	const chainId = Reflect.get(value, 'chainId')
 	const activities = Reflect.get(value, 'activities')
 	const lastScannedBlock = Reflect.get(value, 'lastScannedBlock')
+	const lastExpiredTakeoverBlock = Reflect.get(value, 'lastExpiredTakeoverBlock')
+	if (lastExpiredTakeoverBlock !== undefined && (typeof lastExpiredTakeoverBlock !== 'string' || !/^[0-9]+$/.test(lastExpiredTakeoverBlock))) throw new Error('Invalid takeover retry budget block')
 	const pendingStagedOperations = Reflect.get(value, 'pendingStagedOperations')
 	const pendingTransactions = Reflect.get(value, 'pendingTransactions')
 	if (version !== 2 || !Array.isArray(activities)) throw new Error('Liquidator state version is unsupported')
@@ -485,6 +487,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 		}),
 		chainId,
 		lastScannedBlock: typeof lastScannedBlock === 'string' ? lastScannedBlock : undefined,
+		lastExpiredTakeoverBlock: lastExpiredTakeoverBlock === undefined ? undefined : BigInt(lastExpiredTakeoverBlock),
 		pendingTransactions: await Promise.all(pendingTransactions.map((intent: unknown) => parsePendingTransactionIntent(intent, expectedChainId))),
 		sponsoredReports: parseSponsoredReports(Reflect.get(value, 'sponsoredReports')),
 		portfolioFunding: parsePortfolioFunding(Reflect.get(value, 'portfolioFunding')),

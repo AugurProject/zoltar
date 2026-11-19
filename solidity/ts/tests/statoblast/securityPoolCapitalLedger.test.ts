@@ -578,6 +578,21 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(keeper)).feesAttoRep).toBe(0n)
 	})
 
+	test('retirement preserves supported commitment when the cure is below the economic minimum (#1364)', async () => {
+		const minimum = E / 1_000n
+		const commitment = minimum + 1n
+		const required = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'requiredRep', args: [commitment, 10_000n] })
+		await deposit(alice, required)
+		const id = await authorize(alice, commitment)
+		await demand(1n)
+		await price((12n * E) / 10n)
+
+		await setCommitment(alice, 0n)
+
+		expect(await position(id)).toMatchObject({ rep: required, commitment, remainingCommitment: 0n })
+		expect((await account(alice)).freeAttoRep).toBe(0n)
+	})
+
 	test('an extreme adverse price releases principal only through retirement when demand is zero', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)

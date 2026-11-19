@@ -295,7 +295,7 @@ contract SharedPoolPriceFeed {
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		require(bountyAttoEth >= getRequestPriceCostAttoEth(), 'Oracle bounty too small');
 		require(msg.value == bountyAttoEth, 'Incorrect oracle bounty');
-		ReportFundingQuote memory quote = _quoteReportFunding(coordinator, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
+		ReportFundingQuote memory quote = _quoteReportFunding(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 		pendingExposureLimitAttoEth = quote.exposureLimitAttoEth;
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = quote.maxSettlementBaseFeeAttoEthPerGas;
 		pendingReportSponsor = sponsor;
@@ -309,14 +309,9 @@ contract SharedPoolPriceFeed {
 	}
 
 	/// @dev Quote first; custody changes and the self-only escrow call stay in the request path.
-	function _quoteReportFunding(address coordinator, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private view returns (ReportFundingQuote memory quote) {
-		uint256 minimumWethReportAttoEth = minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice);
-		// Direct sponsors sign an exact budget, even when a standing token approval
-		// is larger. A changed capital exposure or base fee must require a new quote.
-		if (coordinator == address(this))
-			require(requestedInitialAttoWeth >= minimumWethReportAttoEth, 'Report funding exceeds approved budget');
-		quote.wethAttoEth =
-			requestedInitialAttoWeth > minimumWethReportAttoEth ? requestedInitialAttoWeth : minimumWethReportAttoEth;
+	function _quoteReportFunding(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private view returns (ReportFundingQuote memory quote) {
+		require(requestedInitialAttoWeth >= minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice), 'Report funding exceeds approved budget');
+		quote.wethAttoEth = requestedInitialAttoWeth;
 		quote.repAttoRep = Math.mulDiv(quote.wethAttoEth, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
 		quote.haltAttoEth = Math.mulDiv(quote.wethAttoEth, escalationHaltMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 		uint256 exposureEscalationHaltAttoEth = Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER);
@@ -493,13 +488,14 @@ contract SharedPoolPriceFeed {
 		if (Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);
 	}
 
-	/// @notice A settled candidate may authorize its owner's growth even when a
+	/// @notice An accepted candidate may authorize growth even when a
 	/// newer, smaller canonical report has already arrived. The capital ledger
 	/// retains this conservative quote as that owner's withdrawal floor until
 	/// a later canonical epoch has independently secured the enlarged exposure.
 	function reportAuthorization(uint256 reportId, uint256 newExposure) external view returns (uint256 conservativeReportPrice, uint256 epoch) {
 		ReportCandidate memory candidate = reports[reportId];
 		require(address(candidate.escrow) != address(0), 'Unknown report candidate');
+		require(candidate.outcome == REPORT_ACCEPTED, 'Report candidate not accepted');
 		(
 			uint128 amount1,
 			uint128 amount2,

@@ -285,6 +285,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		// `supported` rounds down, so the deficit rounds up and removing it leaves
 		// a residual that the remaining REP fully backs.
 		uint256 reduction = account.commitment - supported;
+		// Preserve supported commitment when a full exit queues for retirement.
+		if (ownerExit && reduction < minimumCommitment) return result;
 		uint256 removed = Math.min(account.commitment - target, Math.min(Math.max(reduction, minimumCommitment), spare));
 		if (removed < minimumCommitment && removed != account.commitment) removed = 0;
 		// A rest above the target must be at least the minimum: it is either queued

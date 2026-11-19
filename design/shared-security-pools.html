@@ -875,7 +875,7 @@
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption">Until <code>340d802f1</code> a third part topped up a per-question <em>reporting budget</em> (see the <a href="#glossary">glossary</a>); it is gone. Quotes are exact at the current checkpoint. On a question that already has shares, holding fees lower the question's units but not the original cash behind them, so the same ETH buys slightly more shares and a slightly larger premium each block, and a quote can be too low a few blocks later. The transaction re-checkpoints, enforces the caller's total budget and minimum shares, and refunds any excess ETH; the SDK allows a fee up to 1% above the quote.</p>
+					<p class="equation-caption">Until <code>340d802f1</code> a third part topped up a per-question <em>reporting budget</em> (see the <a href="#glossary">glossary</a>); it is gone. Quotes are exact at the current checkpoint. On a question that already has shares, holding fees lower the question's units but not the original cash behind them, so the same collateral amount buys slightly more shares and a slightly larger premium each block, and a quote can be too low a few blocks later. The transaction re-checkpoints, enforces the caller's total budget and minimum shares, and pulls only the cash plus the actual fee; the SDK allows a fee up to 1% above the quote.</p>
 				</div>
 				<p>Worked example: the first 1 ETH purchase of a fresh question.</p>
 				<div class="table-wrap">

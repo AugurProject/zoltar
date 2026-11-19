@@ -6,6 +6,7 @@ import type { OperatorSettings } from '#config/settings'
 import { PRIVATE_INTENT_FINALITY_BLOCKS } from '#core/cycle-control'
 import { type initialRuntimeState, assertIntentSender, saveDurableState } from '#state/operator-state'
 import { resolveFinalizedReceipt } from '#execution/receipt-transition'
+import { explainTakeoverReceiptExpiry } from './takeover-receipt-expiry.ts'
 
 function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, pool: ReturnType<typeof createRpcEndpointPool>) {
 	const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
@@ -19,6 +20,17 @@ function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transp
 		})),
 		endpoints,
 	}
+}
+
+export function resolvePortfolioReceipt(
+	settings: OperatorSettings,
+	wallet: WalletClient<Transport, Chain, Account>,
+	state: ReturnType<typeof initialRuntimeState>,
+	pool: ReturnType<typeof createRpcEndpointPool>,
+	intent: Parameters<typeof resolveFinalizedReceipt>[2],
+	receipt: Parameters<typeof resolveFinalizedReceipt>[3],
+) {
+	return resolveFinalizedReceipt(settings.runtime.stateFile, state, intent, receipt, () => explainTakeoverReceiptExpiry(intent, receipt, recoveryReaders(settings, wallet, pool).clients, settings.connectivity.rpcQuorum))
 }
 
 export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, hash: Hex, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
@@ -57,7 +69,7 @@ export async function recoverPendingTransactions(
 		const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, intent.hash, pool)
 		const receipt = receiptResult.receipt
 		if (receipt !== undefined) {
-			await resolveFinalizedReceipt(settings.runtime.stateFile, state, intent, receipt)
+			await resolvePortfolioReceipt(settings, wallet, state, pool, intent, receipt)
 			continue
 		}
 		if (receiptResult.observed) return true

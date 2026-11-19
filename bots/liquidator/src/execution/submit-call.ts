@@ -6,8 +6,7 @@ import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectiv
 import { quorumPendingNonce, settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { OperatorSettings } from '#config/settings'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '#state/operator-state'
-import { resolveFinalizedReceipt } from '#execution/receipt-transition'
-import { finalizedReceiptWithQuorum } from '#execution/recovery'
+import { finalizedReceiptWithQuorum, resolvePortfolioReceipt } from '#execution/recovery'
 import { assertExecutionActive, assertGasCostLimitForBaseFee, assertOperatorNotStopping, requireFinalizedTransactionReceipt } from '#execution/execution-safety'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
@@ -204,7 +203,7 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 	const receipt = requireFinalizedTransactionReceipt(call.label, hash, receiptResult)
 	const intent = state.pendingTransactions.find(pending => pending.hash.toLowerCase() === hash.toLowerCase())
 	if (intent === undefined) throw new Error('Submitted transaction is missing its pending intent')
-	await resolveFinalizedReceipt(settings.runtime.stateFile, state, intent, receipt)
+	await resolvePortfolioReceipt(settings, wallet, state, pool, intent, receipt)
 	return receipt.transactionHash
 }
 
