@@ -5,7 +5,7 @@ import { Zoltar } from '../Zoltar.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
-import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolReporterLedger } from './interfaces/ISecurityPoolReporterLedger.sol';
@@ -26,7 +26,7 @@ interface IReporterGameIdentity {
 /// Games finalized strictly before a fork retain parent REP; only live escrow migrates.
 contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	using SafeERC20Ops for IERC20;
-	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolMaturityMap for SecurityPoolMaturityMap.Store;
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
@@ -59,7 +59,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	address public immutable portfolio;
 	Zoltar public immutable zoltar;
-	SecurityPoolPersistentMap.Store private tree;
+	SecurityPoolMaturityMap.Store private tree;
 	SecurityPoolQuestionMap.Store private questionMap;
 	SecurityPoolFrozenHistory.Store private frozenHistory;
 	uint64 private lastQuestionStateId;
@@ -183,11 +183,16 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		require(!finalClaim, 'Reporter finality is immutable');
 		// Deadlines are expressed in the portfolio clock, which pauses across forks.
 		require(finalAfter == 0 || finalAfter >= _portfolioTime(identity.universeId), 'Reporter finality already elapsed');
-		_changeFinality(book, state.finalAfter, state.balanceAttoRep, false);
-		state.finalAfter = finalAfter;
-		state.scheduledUniverseId = identity.universeId;
-		_changeFinality(book, finalAfter, state.balanceAttoRep, true);
-		_writeQuestion(book, identity.questionId, state);
+		// Deposits already credit new REP at the stored deadline.
+		if (state.finalAfter != finalAfter) {
+			_changeFinality(book, state.finalAfter, state.balanceAttoRep, false);
+			_changeFinality(book, finalAfter, state.balanceAttoRep, true);
+		}
+		if (state.finalAfter != finalAfter || state.scheduledUniverseId != identity.universeId) {
+			state.finalAfter = finalAfter;
+			state.scheduledUniverseId = identity.universeId;
+			_writeQuestion(book, identity.questionId, state);
+		}
 		emit ReporterFinalityScheduled(game, finalAfter);
 	}
 
@@ -279,7 +284,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		require(timestamp >= book.timestamp, 'Reporter clock moved backwards');
 		book.timestamp = timestamp;
 		if (timestamp == 0 || timestamp <= book.minimumFinalAfter) return;
-		uint256 prefix = tree.prefixTotalModular(book.finalityRoot, timestamp - 1);
+		(uint256 prefix, ) = tree.prefix(book.finalityRoot, timestamp - 1);
 		uint256 amountAttoRep;
 		// Unprocessed scheduled REP is bounded by live custody. Historical
 		// prefixes may wrap; their modular difference cannot exceed that custody.
@@ -295,9 +300,13 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	function _changeFinality(Book storage book, uint48 finalAfter, uint256 amountAttoRep, bool increase) private {
 		if (finalAfter == 0 || amountAttoRep == 0) return;
-		uint256 prior = tree.get(book.finalityRoot, finalAfter);
-		uint256 next = increase ? prior + amountAttoRep : prior - amountAttoRep;
-		book.finalityRoot = tree.setModular(book.finalityRoot, finalAfter, next, next);
+		if (!increase) {
+			(uint256 prior, ) = tree.get(book.finalityRoot, finalAfter);
+			require(prior >= amountAttoRep, 'Reporter deadline balance too low');
+		}
+		unchecked {
+			book.finalityRoot = tree.add(book.finalityRoot, finalAfter, increase ? amountAttoRep : 0 - amountAttoRep, 0);
+		}
 	}
 
 	function _writeQuestion(Book storage book, uint256 questionId, Question memory state) private {

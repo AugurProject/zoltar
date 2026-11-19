@@ -24,7 +24,6 @@ export async function forkSeededPortfolio(parameters: BootstrapScenarioApplyPara
 	await reportBootstrapProgress(onProgress, 'Forking the portfolio universe', 0.99)
 	await send(zoltar, encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }), 'Fork portfolio universe')
 	const controller = await reader.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
-	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'prepareBranch', args: [0n, 1n] }), 'Prepare Yes branch')
 	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'choose', args: [0n, 1n] }), 'Choose Yes branch')
 	await advanceSimulationTime(memoryClient, 63n * 86_400n)
 	await reportBootstrapProgress(onProgress, 'Preparing shared branch settlement', 0.992)

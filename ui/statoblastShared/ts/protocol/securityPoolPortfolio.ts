@@ -7,6 +7,10 @@ import {
 	portfolioAddressFromDeploymentLogs,
 	loadPortfolioCapitalSnapshot,
 	loadPortfolioClaimableEarnings,
+	boundCloneImplementation,
+	boundCloneRuntimeCode,
+	universeCloneBindings,
+	verifyBoundCloneCode,
 	type PortfolioReadClient,
 	type PortfolioEconomicsConfig,
 	type PortfolioOriginConfig,
@@ -38,6 +42,8 @@ import { authenticatePortfolioAuctionVault, isCanonicalAuctionVaultImplementatio
 export type PortfolioTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
 const linksAbi = parseAbi([
 	'function portfolio() view returns (address)',
+	'function implementation() view returns (address)',
+	'function capitalImplementation() view returns (address)',
 	'function capitalLedger() view returns (address)',
 	'function zoltar() view returns (address)',
 	'function universeId() view returns (uint248)',
@@ -82,11 +88,24 @@ export function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, refere
 	if (mask(actual) !== mask(expected)) throw new Error(`Unrecognized ${label} runtime code.`)
 }
 
-async function verifyModule(client: ReadClient, address: Address, artifact: RuntimeArtifact, authority: Address, label: string, blockNumber: bigint, authorityGetter: 'portfolio' | 'capitalLedger' | 'ledger' | 'services' = 'portfolio') {
+async function verifyModule(client: ReadClient, address: Address, artifact: RuntimeArtifact, authority: Address, label: string, blockNumber: bigint, authorityGetter: 'portfolio' | 'implementation' | 'services' = 'portfolio') {
 	verifyRuntimeCode(await client.getCode({ address, blockNumber }), `0x${artifact.evm.deployedBytecode.object}`, artifact.evm.deployedBytecode.immutableReferences, label)
 	const actualValue = await client.readContract({ address, abi: linksAbi, functionName: authorityGetter, blockNumber })
 	const actual = requireAddressValue(actualValue, 'module authority')
 	if (getAddress(actual) !== getAddress(authority)) throw new Error(`${label} belongs to another authority.`)
+}
+
+export async function verifyCapitalModuleClone(client: ReadClient, address: Address, artifact: RuntimeArtifact, ledger: Address, label: string, blockNumber: bigint) {
+	const implementation = boundCloneImplementation(await client.getCode({ address, blockNumber }), ledger, label)
+	const [code, authority] = await Promise.all([client.getCode({ address: implementation, blockNumber }), client.readContract({ address, abi: linksAbi, functionName: 'capitalLedger', blockNumber })])
+	verifyRuntimeCode(code, `0x${artifact.evm.deployedBytecode.object}`, artifact.evm.deployedBytecode.immutableReferences, label)
+	if (getAddress(requireAddressValue(authority, 'capital ledger')) !== getAddress(ledger)) throw new Error(`${label} belongs to another authority.`)
+}
+
+export async function verifyCapitalLedgerClone(client: ReadClient, portfolio: Address, ledger: Address, universeId: bigint, repToken: Address, blockNumber: bigint) {
+	const implementation = requireAddressValue(await client.readContract({ address: portfolio, abi: linksAbi, functionName: 'capitalImplementation', blockNumber }), 'capital implementation')
+	const expected = boundCloneRuntimeCode(implementation, universeCloneBindings(universeId, repToken))
+	await Promise.all([verifyModule(client, implementation, capitalArtifact, portfolio, 'capital implementation', blockNumber), client.getCode({ address: ledger, blockNumber }).then(code => verifyBoundCloneCode(code, expected, 'capital ledger'))])
 }
 
 /**
@@ -189,11 +208,11 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 	const book = requireAddressValue(bookValue, 'settlement book')
 	const premium = requireAddressValue(premiumValue, 'resolution premium book')
 	await Promise.all([
-		verifyModule(client, snapshot.capitalLedger, capitalArtifact, portfolio, 'capital ledger', blockNumber),
-		verifyModule(client, lifecycle, lifecycleArtifact, snapshot.capitalLedger, 'capital lifecycle delegate', blockNumber, 'ledger'),
-		verifyModule(client, auctionDelegate, auctionDelegateArtifact, snapshot.capitalLedger, 'capital auction delegate', blockNumber, 'ledger'),
-		verifyModule(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber, 'capitalLedger'),
-		verifyModule(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber, 'capitalLedger'),
+		verifyCapitalLedgerClone(client, portfolio, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber),
+		verifyModule(client, lifecycle, lifecycleArtifact, lifecycle, 'capital lifecycle delegate', blockNumber, 'implementation'),
+		verifyModule(client, auctionDelegate, auctionDelegateArtifact, auctionDelegate, 'capital auction delegate', blockNumber, 'implementation'),
+		verifyCapitalModuleClone(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber),
+		verifyCapitalModuleClone(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
 		verifyModule(client, settlement, settlementArtifact, portfolio, 'settlement engine', blockNumber),
 		verifyModule(client, book, bookArtifact, settlement, 'settlement book', blockNumber),
 		verifyModule(client, reporters, reporterArtifact, portfolio, 'reporter ledger', blockNumber),

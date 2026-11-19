@@ -38,19 +38,16 @@ interface ICapitalAuctionHost {
 /// @notice A funded auction cohort represents individually owned, equal-ratio
 /// positions. Only one bid is detached before any owner mutation or keeper loss.
 contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
-	address public immutable ledger;
+	address public immutable implementation = address(this);
 	event AuctionCohortInstalled(address indexed adapter, uint96 indexed positionId, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot);
 	event AuctionBidMaterialized(uint256 indexed bidId, address indexed vault, uint96 indexed positionId, uint256 principal, uint256 commitment);
 
-	constructor(address host) {
-		ledger = host;
-	}
-	modifier onlyLedger() {
-		require(address(this) == ledger, 'Only capital ledger context');
+	modifier onlyDelegateCall() {
+		require(address(this) != implementation, 'Only capital delegatecall');
 		_;
 	}
 
-	function install(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot, uint256 minimumCommitment) external onlyLedger {
+	function install(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot, uint256 minimumCommitment) external onlyDelegateCall {
 		require(importing && address(auctionCohort.adapter) == address(0), 'Auction cohort installation unavailable');
 		require(adapter.code.length != 0 && lots != 0 && repPerLot != 0 && commitmentPerLot == minimumCommitment, 'Invalid auction cohort');
 		ICapitalAuctionHost host = ICapitalAuctionHost(address(this));
@@ -67,7 +64,7 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 		emit AuctionCohortInstalled(adapter, id, lots, repPerLot, commitmentPerLot);
 	}
 
-	function materialize(uint256 bidId) external onlyLedger returns (address vault, uint96 id) {
+	function materialize(uint256 bidId) external onlyDelegateCall returns (address vault, uint96 id) {
 		AuctionCohort storage cohort = auctionCohort;
 		require(!importing && address(cohort.adapter) != address(0) && bidId != 0, 'Auction capital unavailable');
 		ISecurityPoolAuctionCapital.BidPosition memory bid = cohort.adapter.bidPosition(bidId);
@@ -93,17 +90,15 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 		emit AuctionBidMaterialized(bidId, vault, id, principal, commitment);
 	}
 
-	/// @dev View calls read the immutable host explicitly; they do not delegatecall
+	/// @dev View calls read the selected host explicitly; they do not delegatecall
 	/// or inspect this helper's empty state. Heavy previews stay outside the host's
 	/// runtime while its ordinary public getters keep the same interpretation.
-	function previewOwner(address holder) external view returns (Owner memory owner) {
-		ICapitalAuctionHost host = ICapitalAuctionHost(ledger);
+	function previewOwner(ICapitalAuctionHost host, address holder) external view returns (Owner memory owner) {
 		owner = host.storedOwnerAccount(holder);
 		(, , uint256 target) = _virtualCapital(host, holder);
 		if (target != 0) owner.targetHealthFactorBps = target;
 	}
-	function previewCollateral(address holder) external view returns (uint256 principal, uint256 commitment, uint256 withdrawable) {
-		ICapitalAuctionHost host = ICapitalAuctionHost(ledger);
+	function previewCollateral(ICapitalAuctionHost host, address holder) external view returns (uint256 principal, uint256 commitment, uint256 withdrawable) {
 		Owner memory owner = host.storedOwnerAccount(holder);
 		SecurityPoolCommitmentIndex index = host.commitmentIndex();
 		SecurityPoolCommitmentIndex.Account memory position = index.accountOf(owner.positionId);
@@ -125,8 +120,7 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 		uint256 required = index.requiredRep(commitment, host.ownerConservativePrice(holder), host.securityMultiplierBps(), target);
 		if (pledged > required) withdrawable += pledged - required;
 	}
-	function previewAuctionPosition(uint256 bidId) external view returns (AuctionPosition memory result) {
-		ICapitalAuctionHost host = ICapitalAuctionHost(ledger);
+	function previewAuctionPosition(ICapitalAuctionHost host, uint256 bidId) external view returns (AuctionPosition memory result) {
 		(ISecurityPoolAuctionCapital adapter, uint96 cohortId, , uint256 repPerLot, uint256 commitmentPerLot) = host.auctionCohort();
 		require(address(adapter) != address(0), 'Auction capital unavailable');
 		ISecurityPoolAuctionCapital.BidPosition memory bid = adapter.bidPosition(bidId);

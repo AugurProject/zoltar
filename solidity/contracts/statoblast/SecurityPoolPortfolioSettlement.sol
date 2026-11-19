@@ -12,6 +12,7 @@ interface IPortfolioForkAuthority {
 	function forkController() external view returns (address);
 	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
 	function zoltar() external view returns (Zoltar);
+	function portfolioTime(uint248 universeId) external view returns (uint48);
 }
 
 /// @notice Actual ERC20 custody for the portfolio's virtual question and branch settlement books.
@@ -134,7 +135,7 @@ contract SecurityPoolPortfolioSettlement {
 	function _mint(address pool, address payer, uint256 cash, uint256 minimumShares, uint256 maximumRecoveryAttoRep, uint48 timestamp) private returns (uint256 shares, Snapshot memory snapshot) {
 		QuestionSource memory source = _question(pool);
 		uint64 bookId = _bookId(source.universeId);
-		ledger.freezeMatured(bookId, timestamp);
+		ledger.checkpointFees(bookId, timestamp);
 		uint256 recoveryAttoRep = ledger.quoteMintRecoveryRep(bookId, source.questionId, cash);
 		require(recoveryAttoRep <= maximumRecoveryAttoRep, 'Recovery REP exceeds budget');
 		if (recoveryAttoRep != 0) {
@@ -158,11 +159,23 @@ contract SecurityPoolPortfolioSettlement {
 		_sendEth(recipient, cashAttoEth);
 	}
 
+	/// @notice Reserve a mature ledger claim even if its native child pool has not been deployed.
+	function finalizeQuestion(uint248 universeId, uint256 questionId) external {
+		require(!entered, 'Settlement reentry');
+		IPortfolioForkAuthority root = IPortfolioForkAuthority(portfolio);
+		require(root.zoltar().getForkTime(universeId) == 0, 'Settlement universe forked');
+		uint64 bookId = _bookId(universeId);
+		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
+		capital.checkpoint();
+		ledger.finalizeQuestion(bookId, questionId, root.portfolioTime(universeId));
+		capital.checkpoint();
+	}
+
 	function checkpointQuestion(address pool, uint48 timestamp) external onlyPortfolio nonReentrant returns (Snapshot memory snapshot) {
 		QuestionSource memory source = _question(pool);
 		uint64 bookId = _bookId(source.universeId);
 		(, , , , bool isSealed) = ledger.totals(bookId);
-		if (!isSealed) ledger.freezeMatured(bookId, timestamp);
+		if (!isSealed) ledger.finalizeQuestion(bookId, source.questionId, timestamp);
 		return _snapshot(source, _collectFees(bookId));
 	}
 
@@ -185,7 +198,7 @@ contract SecurityPoolPortfolioSettlement {
 	function checkpointUniverse(uint248 universeId, uint48 timestamp) external onlyPortfolio nonReentrant returns (uint256 earnedFeesAttoEth, uint256 demandAttoEth) {
 		uint64 bookId = _bookId(universeId);
 		(, , , , bool isSealed) = ledger.totals(bookId);
-		if (!isSealed) ledger.freezeMatured(bookId, timestamp);
+		if (!isSealed) ledger.checkpointFees(bookId, timestamp);
 		earnedFeesAttoEth = _collectFees(bookId);
 		(demandAttoEth, , , , ) = ledger.totals(bookId);
 	}
@@ -260,16 +273,21 @@ contract SecurityPoolPortfolioSettlement {
 		return _snapshot(_question(pool), 0);
 	}
 
-	/// @notice Final cash remains in its original book, even when inherited by a child.
-	function isQuestionFrozen(address pool) external view returns (bool) {
+	/// @notice Scheduled claims have already stopped their holding-fee stream.
+	function isQuestionScheduled(address pool) external view returns (bool) {
 		QuestionSource memory source = _question(pool);
-		(, uint64 frozenBookId) = ledger.question(_bookId(source.universeId), source.questionId);
-		return frozenBookId != 0;
+		(SecurityPoolSettlementBook.Question memory state, ) = ledger.scaledQuestion(_bookId(source.universeId), source.questionId);
+		return state.finalAfter != 0;
 	}
 
 	function quoteRedemption(address pool, uint256 shares) external view returns (uint256 cashAttoEth) {
 		QuestionSource memory source = _question(pool);
 		(cashAttoEth, ) = ledger.quoteRedemption(_bookId(source.universeId), source.questionId, shares);
+	}
+
+	function quoteRedemptionAt(address pool, uint256 shares, uint48 portfolioTimestamp) external view returns (uint256 cashAttoEth) {
+		QuestionSource memory source = _question(pool);
+		(cashAttoEth, ) = ledger.quoteRedemptionAt(_bookId(source.universeId), source.questionId, shares, portfolioTimestamp);
 	}
 
 	function quoteRecoveryRep(address pool, uint256 shares) external view returns (uint256) {
@@ -290,11 +308,17 @@ contract SecurityPoolPortfolioSettlement {
 		require(root.zoltar().getForkTime(universeId) == 0, 'Settlement universe forked');
 		// Checkpoint before taking the custody lock: capital's normal callback
 		// enters this settlement to pause stale time and protect finalized claims.
-		root.capitalLedger(universeId).checkpoint();
+		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
+		capital.checkpoint();
+		uint64 bookId = _bookId(universeId);
+		(, , , uint48 timestamp, ) = ledger.totals(bookId);
+		// Protect already-final claims at the old exchange rate, then release
+		// their capital demand before the donation reprices the live basket.
+		if (ledger.freezeMatured(bookId, timestamp) != 0) capital.checkpoint();
 		cashAttoEth = _repair(universeId, maximumCashAttoEth);
 		// The custody lock is released before capital synchronizes the repaired
 		// cash demand through its ordinary settlement callback.
-		root.capitalLedger(universeId).checkpoint();
+		capital.checkpoint();
 	}
 
 	function _repair(uint248 universeId, uint256 maximumCashAttoEth) private nonReentrant returns (uint256 cashAttoEth) {

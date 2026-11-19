@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { keccak256, zeroAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { keccak256, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { formatStorageSlot } from '../../testSupport/storage'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
@@ -16,29 +17,65 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
+	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory as oracleFactoryArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
+	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamsArtifact,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer as indexDeployerArtifact,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer as streamsDeployerArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
+	ReputationToken_ReputationToken as tokenArtifact,
+	Zoltar_Zoltar as zoltarArtifact,
 } from '../../types/contractArtifact'
 import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 const outcomes = [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]
 const transactionGasLimit = 16_777_216n
 
+function findCallGas(frame: unknown, target: Address): bigint | undefined {
+	if (typeof frame !== 'object' || frame === null) return undefined
+	const to: unknown = Reflect.get(frame, 'to')
+	const gasUsed: unknown = Reflect.get(frame, 'gasUsed')
+	if (typeof to === 'string' && to.toLowerCase() === target.toLowerCase() && typeof gasUsed === 'string') return BigInt(gasUsed)
+	const calls: unknown = Reflect.get(frame, 'calls')
+	if (Array.isArray(calls)) {
+		for (const call of calls) {
+			const gas = findCallGas(call, target)
+			if (gas !== undefined) return gas
+		}
+	}
+	return undefined
+}
+
 describe('Statoblast: bounded fork initialization', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 
-	test('central first-use preparation and direct materialization fit the gas cap with 192 nonzero carry peaks', async () => {
+	test('one fresh branch preparation and subsequent question materialization fit tight gas caps with 192 nonzero carry peaks', async () => {
 		const { owner, other, base, poolFor, secondQuestionId } = fixture
 		const parent = poolFor(secondQuestionId).securityPool
 		const forker = getInfraContractAddresses().securityPoolForker
+		const factory = getInfraContractAddresses().securityPoolFactory
 		const coordinator = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'forkController' })
 		const gasMeasurements: Record<string, string> = {}
-		const checkGas = async (hash: Hash, stage: string) => {
+		const checkGas = async (hash: Hash, stage: string, limit = transactionGasLimit) => {
 			const { gasUsed } = await owner().waitForTransactionReceipt({ hash })
-			expect(gasUsed).toBeLessThanOrEqual(transactionGasLimit)
+			expect(gasUsed).toBeLessThanOrEqual(limit)
 			gasMeasurements[stage] = gasUsed.toString()
 		}
+		const outcomeIndex = BigInt(QuestionOutcome.No)
+		const childUniverse = getChildUniverseId(base.genesisUniverse, QuestionOutcome.No)
+		const prepare = { abi: coordinatorArtifact.abi, address: coordinator, functionName: 'prepareBranch', args: [base.genesisUniverse, outcomeIndex], gas: 3_300_000n } as const
+		const readCapital = () => owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'capitalLedger', args: [childUniverse] })
+		const originToken = getRepTokenAddress(base.genesisUniverse)
+		expect(await owner().readContract({ abi: tokenArtifact.abi, address: originToken, functionName: 'allowance', args: [fixture.capitalLedger, getZoltarAddress()] })).toBe((1n << 256n) - 1n)
+		const ledgerImplementation = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'capitalImplementation' })
+		const implementation = { abi: capitalArtifact.abi, address: ledgerImplementation } as const
+		const portfolioCaller = createWriteClient(base.mockWindow, BigInt(fixture.portfolio))
+		const emptyModules = [zeroAddress, zeroAddress, zeroAddress, zeroAddress] as const
+		await expect(owner().readContract({ ...implementation, functionName: 'universeId' })).rejects.toThrow('Universe module requires a clone')
+		await expect(portfolioCaller.simulateContract({ ...implementation, functionName: 'initialize', args: emptyModules })).rejects.toThrow('Universe module requires a clone')
 		await base.mockWindow.setTime(fixture.secondEndTime + 1n)
 		await approveToken(owner(), getRepTokenAddress(base.genesisUniverse), parent)
 		for (const outcome of outcomes) {
@@ -63,23 +100,91 @@ describe('Statoblast: bounded fork initialization', () => {
 		await approveToken(owner(), getRepTokenAddress(base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(owner(), base.genesisUniverse, base.questionId)
 		const forkTime = (await getUniverseData(owner(), base.genesisUniverse)).forkTime
-		await checkGas(await initiateSecurityPoolFork(owner(), parent), 'aggregate freeze')
+		const readNativeToken = () => owner().readContract({ abi: zoltarArtifact.abi, address: getZoltarAddress(), functionName: 'getRepToken', args: [childUniverse] })
+		expect((await owner().readContract({ ...prepare, functionName: 'forks', args: [base.genesisUniverse] }))[8]).toBe(false)
+		expect(await readCapital()).toBe(zeroAddress)
+		expect(await readNativeToken()).toBe(zeroAddress)
+		const branchHash = await writeContractAndWait(other(), () => other().writeContract(prepare))
+		await checkGas(branchHash, 'fresh branch preparation including native REP and source freeze', prepare.gas)
+		if (process.env['REPORT_BOUNDED_FORK_GAS'] === '1') {
+			const trace = await base.mockWindow.request({ method: 'debug_traceTransaction', params: [branchHash, { tracer: 'callTracer' }] })
+			const ledgerGas = findCallGas(trace, getInfraContractAddresses().securityPoolCapitalLedgerDeployer)
+			if (ledgerGas === undefined) throw new Error('The branch trace did not contain the ledger deployer call')
+			gasMeasurements['ledger deployment call'] = ledgerGas.toString()
+		}
+		const childLedger = await readCapital()
+		expect(childLedger).not.toBe(zeroAddress)
+		expect(await readNativeToken()).toBe(getRepTokenAddress(childUniverse))
+		expect((await owner().readContract({ ...prepare, functionName: 'forks', args: [base.genesisUniverse] }))[8]).toBe(true)
+		const ledger = { abi: capitalArtifact.abi, address: childLedger } as const
+		expect(await owner().readContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(childUniverse), functionName: 'allowance', args: [childLedger, getZoltarAddress()] })).toBe(0n)
+		await expect(other().simulateContract({ ...ledger, functionName: 'initialize', args: emptyModules })).rejects.toThrow('Only portfolio')
+		for (const functionName of ['lifecycleDelegate', 'auctionDelegate'] as const) {
+			const origin = await owner().readContract({ ...ledger, address: fixture.capitalLedger, functionName })
+			expect(await owner().readContract({ ...ledger, functionName })).toBe(origin)
+		}
+		expect(await owner().readContract({ ...ledger, functionName: 'universeId' })).toBe(childUniverse)
+		expect(await owner().readContract({ ...ledger, functionName: 'repToken' })).toBe(getRepTokenAddress(childUniverse))
+		expect((await owner().getCode({ address: childLedger }))?.toLowerCase()).toBe(boundCloneRuntimeCode(ledgerImplementation, universeCloneBindings(childUniverse, getRepTokenAddress(childUniverse))).toLowerCase())
+		await expect(portfolioCaller.simulateContract({ ...ledger, functionName: 'initialize', args: emptyModules })).rejects.toThrow('Capital already initialized')
+		await expect(other().call({ to: childLedger, value: 1n, gas: 23_300n })).rejects.toThrow()
+		const index = { abi: indexArtifact.abi, address: await owner().readContract({ ...ledger, functionName: 'commitmentIndex' }) } as const
+		const streams = { abi: streamsArtifact.abi, address: await owner().readContract({ ...ledger, functionName: 'feeStreams' }) } as const
+		const indexDeployer = getInfraContractAddresses().securityPoolCommitmentIndexDeployer
+		const streamsDeployer = getInfraContractAddresses().securityPoolCapitalFeeStreamsDeployer
+		const indexImplementation = await owner().readContract({ abi: indexDeployerArtifact.abi, address: indexDeployer, functionName: 'implementation' })
+		const streamsImplementation = await owner().readContract({ abi: streamsDeployerArtifact.abi, address: streamsDeployer, functionName: 'implementation' })
+		const indexFactoryCaller = createWriteClient(base.mockWindow, BigInt(indexDeployer))
+		const streamsFactoryCaller = createWriteClient(base.mockWindow, BigInt(streamsDeployer))
+		const branchBlock = await owner().getBlock({ blockNumber: (await owner().waitForTransactionReceipt({ hash: branchHash })).blockNumber })
+		const streamArgs = [branchBlock.timestamp, await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'rewardVestingSeconds' })] as const
+		expect(await owner().readContract({ ...streams, functionName: 'releasedThrough' })).toBe(streamArgs[0])
+		expect(await owner().readContract({ ...streams, functionName: 'rewardDuration' })).toBe(streamArgs[1])
+		expect(await owner().readContract({ ...index, functionName: 'nextBatch' })).toBe(2n)
+		for (const [address, implementation] of [
+			[index.address, indexImplementation],
+			[streams.address, streamsImplementation],
+		] as const) {
+			expect((await owner().getCode({ address }))?.toLowerCase()).toBe(boundCloneRuntimeCode(implementation, childLedger).toLowerCase())
+			expect(await owner().readContract({ ...index, address, functionName: 'capitalLedger' })).toBe(childLedger)
+			await expect(owner().readContract({ ...index, address: implementation, functionName: 'capitalLedger' })).rejects.toThrow('Capital module requires a clone')
+			await expect(other().call({ to: address, value: 1n, gas: 23_300n })).rejects.toThrow()
+		}
+		await expect(other().simulateContract({ ...index, functionName: 'initialize' })).rejects.toThrow('Only commitment deployer')
+		await expect(indexFactoryCaller.simulateContract({ ...index, functionName: 'initialize' })).rejects.toThrow('Commitment index already initialized')
+		await expect(indexFactoryCaller.simulateContract({ ...index, address: indexImplementation, functionName: 'initialize' })).rejects.toThrow('Capital module requires a clone')
+		await expect(other().simulateContract({ ...streams, functionName: 'initialize', args: streamArgs })).rejects.toThrow('Only fee streams deployer')
+		await expect(streamsFactoryCaller.simulateContract({ ...streams, functionName: 'initialize', args: streamArgs })).rejects.toThrow('Fee streams already initialized')
+		await expect(streamsFactoryCaller.simulateContract({ ...streams, address: streamsImplementation, functionName: 'initialize', args: streamArgs })).rejects.toThrow('Capital module requires a clone')
+
+		await checkGas(await initiateSecurityPoolFork(owner(), parent), 'question fork initiation')
+		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'preparePortfolioPriceFeed', args: [parent, childUniverse], gas: 200_000n })), 'price feed deployment', 180_000n)
 		await base.mockWindow.setTime(forkTime + 56n * DAY + 1n)
-		const childUniverse = getChildUniverseId(base.genesisUniverse, QuestionOutcome.No)
-		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'prepareBranch', args: [base.genesisUniverse, BigInt(QuestionOutcome.No)], gas: transactionGasLimit })), 'shared branch custody preparation')
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, BigInt(QuestionOutcome.No)], gas: transactionGasLimit })), 'shared branch migration')
-		const factory = getInfraContractAddresses().securityPoolFactory
-		await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'preparePortfolioPriceFeed', args: [parent, childUniverse] }))
 		await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'prepareChildPoolCoordinator', args: [parent, BigInt(QuestionOutcome.No)] }))
 		const childCoordinator = await owner().readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getChildPoolCoordinator', args: [parent, BigInt(QuestionOutcome.No)] })
 		const feed = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [childUniverse] })
+		const originFeed = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [base.genesisUniverse] })
+		const feedImplementation = await owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().openOraclePriceCoordinatorFactory, functionName: 'sharedPriceFeedImplementations', args: [factory, fixture.portfolio] })
+		for (const [universe, address] of [
+			[base.genesisUniverse, originFeed],
+			[childUniverse, feed],
+		] as const) {
+			const token = getRepTokenAddress(universe)
+			const feedRef = { abi: feedArtifact.abi, address } as const
+			expect((await owner().getCode({ address }))?.toLowerCase()).toBe(boundCloneRuntimeCode(feedImplementation, universeCloneBindings(universe, token)).toLowerCase())
+			expect(await owner().readContract({ ...feedRef, functionName: 'universeId' })).toBe(universe)
+			expect(await owner().readContract({ ...feedRef, functionName: 'reputationToken' })).toBe(token)
+			await expect(other().call({ to: address, value: 1n, gas: 23_300n })).rejects.toThrow()
+		}
+		await expect(other().simulateContract({ abi: feedArtifact.abi, address: feedImplementation, functionName: 'requestPortfolioPrice', args: [1n, 0n, 0n] })).rejects.toThrow('Universe module requires a clone')
 		const coordinatorCaller = createWriteClient(base.mockWindow, BigInt(childCoordinator))
 		// Coordinator registration requires the native child, whose preparation
 		// cannot bypass the shared fork activation window.
 		await expect(coordinatorCaller.simulateContract({ abi: feedArtifact.abi, address: feed, functionName: 'requestPrice', args: [other().account.address, 1n, 0n, 0n] })).rejects.toThrow('Unregistered coordinator')
 		await expect(other().simulateContract({ abi: forkerArtifact.abi, address: forker, functionName: 'preparePortfolioQuestion', args: [parent, childUniverse] })).rejects.toThrow('Fork activation window still open')
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
-		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [childUniverse] })), 'shared branch activation')
+		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [childUniverse] })), 'shared branch activation', 2_000_000n)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'preparePortfolioQuestion', args: [parent, childUniverse] })), 'question preparation')
 		const child = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getPool', args: [secondQuestionId, childUniverse] })
 		expect(await getSecurityPoolsEscalationGame(owner(), child)).toBe(zeroAddress)
@@ -108,5 +213,29 @@ describe('Statoblast: bounded fork initialization', () => {
 			expect(state.balanceAttoRep).toBe(expected.balanceAttoRep)
 		}
 		if (process.env['REPORT_BOUNDED_FORK_GAS'] === '1') console.log('Bounded central fork gas', gasMeasurements)
+	})
+
+	test('choose and startBranch each initialize a fresh branch with no native child', async () => {
+		const { base, owner, other } = fixture
+		const source = base.genesisUniverse
+		const coordinator = { abi: coordinatorArtifact.abi, address: await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'forkController' }) } as const
+		const nativeToken = (universe: bigint) => owner().readContract({ abi: zoltarArtifact.abi, address: getZoltarAddress(), functionName: 'getRepToken', args: [universe] })
+		await fixture.prepare()
+		await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		await approveToken(owner(), getRepTokenAddress(source), getZoltarAddress())
+		await forkUniverse(owner(), source, base.questionId)
+		const yes = getChildUniverseId(source, QuestionOutcome.Yes)
+		const no = getChildUniverseId(source, QuestionOutcome.No)
+		expect(await nativeToken(yes)).toBe(zeroAddress)
+		expect(await nativeToken(no)).toBe(zeroAddress)
+		const choiceHash = await writeContractAndWait(owner(), () => owner().writeContract({ ...coordinator, functionName: 'choose', args: [source, BigInt(QuestionOutcome.Yes)], gas: 4_000_000n }))
+		expect(await nativeToken(yes)).toBe(getRepTokenAddress(yes))
+		expect([...(await owner().readContract({ ...coordinator, functionName: 'choices', args: [source, owner().account.address] }))]).toEqual([BigInt(QuestionOutcome.Yes), true])
+		const forkTime = (await getUniverseData(owner(), source)).forkTime
+		await base.mockWindow.setTime(forkTime + 56n * DAY + 1n)
+		const startHash = await writeContractAndWait(other(), () => other().writeContract({ ...coordinator, functionName: 'startBranch', args: [source, BigInt(QuestionOutcome.No)], gas: 4_000_000n }))
+		expect(await nativeToken(no)).toBe(getRepTokenAddress(no))
+		expect((await owner().readContract({ ...coordinator, functionName: 'branches', args: [no] })).slice(6)).toEqual([true, true, false])
+		if (process.env['REPORT_BOUNDED_FORK_GAS'] === '1') console.log('Fresh branch entrypoint gas', { choose: (await owner().getTransactionReceipt({ hash: choiceHash })).gasUsed, startBranch: (await owner().getTransactionReceipt({ hash: startHash })).gasUsed })
 	})
 })

@@ -6,7 +6,7 @@ import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
 
 /// @dev Question accounting mirrors the portfolio settlement book.
 abstract contract SecurityPoolLinearFees is SecurityPoolStorage {
-	/// @notice Mirror the central book after its aggregate fee and finality checkpoint.
+	/// @notice Mirror the central book after accruing fees and reserving any matured claim for this question.
 	function updateLinearFees() public payable {
 		require(portfolioCustody != address(0), 'Portfolio settlement missing');
 		uint48 portfolioTime;

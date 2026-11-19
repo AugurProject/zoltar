@@ -3,6 +3,9 @@ pragma solidity 0.8.35;
 
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { Zoltar } from '../Zoltar.sol';
+import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
+import { SecurityPoolCapitalLifecycleDelegate } from './SecurityPoolCapitalLifecycleDelegate.sol';
+import { SecurityPoolCapitalAuctionDelegate } from './SecurityPoolCapitalAuctionDelegate.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolCapitalFeeStreams } from './SecurityPoolCapitalFeeStreams.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
@@ -17,25 +20,40 @@ import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol
 contract SecurityPoolCapitalLedgerDeployer is SecurityPoolCreationCodeDeployer {
 	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolCapitalLedger).creationCode) {}
 
-	function create(address authority, Zoltar zoltar, uint248 universeId, uint256 multiplier, uint256 minimumCommitment, uint48 vestingDuration) external returns (SecurityPoolCapitalLedger) {
+	function createImplementation(Zoltar zoltar, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalFeeStreamsDeployer modules) external returns (SecurityPoolCapitalLedger) {
 		return
-			SecurityPoolCapitalLedger(_deploy(abi.encode(authority, zoltar, universeId, multiplier, minimumCommitment, vestingDuration)));
+			SecurityPoolCapitalLedger(_deploy(abi.encode(msg.sender, zoltar, multiplier, minimumCommitment, new SecurityPoolCapitalLifecycleDelegate(), modules.createAuctionDelegate())));
+	}
+
+	function create(SecurityPoolCapitalLedger implementation, uint248 universeId) external returns (SecurityPoolCapitalLedger capital) {
+		require(implementation.portfolio() == msg.sender, 'Only capital portfolio');
+		address rep = address(implementation.zoltar().getRepToken(universeId));
+		require(rep != address(0), 'Capital REP unavailable');
+		capital = SecurityPoolCapitalLedger(SecurityPoolBoundClones.create(address(implementation), abi.encodePacked(universeId, rep)));
 	}
 }
 contract SecurityPoolCommitmentIndexDeployer {
-	function create(address authority) external returns (SecurityPoolCommitmentIndex) {
-		return new SecurityPoolCommitmentIndex(authority);
+	SecurityPoolCommitmentIndex public immutable implementation = new SecurityPoolCommitmentIndex();
+
+	function create(address authority) external returns (SecurityPoolCommitmentIndex index) {
+		index = SecurityPoolCommitmentIndex(SecurityPoolBoundClones.create(address(implementation), abi.encodePacked(authority)));
+		index.initialize();
 	}
 }
 contract SecurityPoolCapitalFeeStreamsDeployer {
-	function create(address authority, uint48 timestamp, uint48 vestingDuration) external returns (SecurityPoolCapitalFeeStreams) {
-		return new SecurityPoolCapitalFeeStreams(authority, timestamp, vestingDuration);
+	SecurityPoolCapitalFeeStreams public immutable implementation = new SecurityPoolCapitalFeeStreams();
+
+	function createAuctionDelegate() external returns (SecurityPoolCapitalAuctionDelegate) {
+		return new SecurityPoolCapitalAuctionDelegate();
+	}
+	function create(address authority, uint48 timestamp, uint48 vestingDuration) external returns (SecurityPoolCapitalFeeStreams streams) {
+		streams = SecurityPoolCapitalFeeStreams(SecurityPoolBoundClones.create(address(implementation), abi.encodePacked(authority)));
+		streams.initialize(timestamp, vestingDuration);
 	}
 }
 contract SecurityPoolSettlementBookDeployer is SecurityPoolCreationCodeDeployer {
-	/// @dev 2^17 seconds (about 36.4 hours): fee-end keys differ only in bits 17..32, so each key path
-	/// in the fee aggregate maps has at most 16 branch nodes.
-	uint48 public constant FEE_END_GRANULARITY = uint48(1) << 17;
+	/// @dev Daily bucket numbers below the fee-end ceiling fit in 17 bits.
+	uint48 public constant FEE_END_GRANULARITY = 1 days;
 	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolSettlementBook).creationCode) {}
 	function create(address authority, uint256 minimumOutcomeRate) external returns (SecurityPoolSettlementBook) {
 		return SecurityPoolSettlementBook(_deploy(abi.encode(authority, minimumOutcomeRate, FEE_END_GRANULARITY)));

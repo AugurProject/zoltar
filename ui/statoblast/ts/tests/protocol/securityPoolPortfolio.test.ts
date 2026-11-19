@@ -21,9 +21,9 @@ test('an unrecognized capital lifecycle delegate fails closed before approvals',
 	fixture.setRead('lifecycleDelegate', modules.engine)
 	await expect(loadPortfolioAccount(fixture.client, portfolio, owner, 0n)).rejects.toThrow('capital lifecycle delegate runtime')
 })
-test('a genuine lifecycle delegate bound to another ledger fails authentication', async () => {
+test('a lifecycle delegate whose implementation getter points elsewhere fails authentication', async () => {
 	const fixture = capitalClient()
-	fixture.setRead('ledger', modules.engine, modules.lifecycle)
+	fixture.setRead('implementation', modules.engine, modules.lifecycle)
 	await expect(loadPortfolioAccount(fixture.client, portfolio, owner, 0n)).rejects.toThrow('capital lifecycle delegate belongs to another authority')
 })
 test('an unrecognized capital auction delegate fails closed before approvals', async () => {
@@ -31,9 +31,9 @@ test('an unrecognized capital auction delegate fails closed before approvals', a
 	fixture.setRead('auctionDelegate', modules.engine)
 	await expect(loadPortfolioAccount(fixture.client, portfolio, owner, 0n)).rejects.toThrow('capital auction delegate runtime')
 })
-test('a genuine auction delegate bound to another ledger fails authentication', async () => {
+test('an auction delegate whose implementation getter points elsewhere fails authentication', async () => {
 	const fixture = capitalClient()
-	fixture.setRead('ledger', modules.engine, modules.auctionDelegate)
+	fixture.setRead('implementation', modules.engine, modules.auctionDelegate)
 	await expect(loadPortfolioAccount(fixture.client, portfolio, owner, 0n)).rejects.toThrow('capital auction delegate belongs to another authority')
 })
 test('setup and account authentication reject an unrecognized future auction deployer', async () => {

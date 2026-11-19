@@ -70,8 +70,8 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 
 	test('installation requires real collateral, valid lot precision and the fork authority', async () => {
 		const delegate = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionDelegate' })
-		await expect(caller.writeContract({ abi: delegateArtifact.abi, address: delegate, functionName: 'install', args: [adapter, 3n, REP, LOT, LOT] })).rejects.toThrow('Only capital ledger context')
-		await expect(caller.writeContract({ abi: delegateArtifact.abi, address: delegate, functionName: 'materialize', args: [1n] })).rejects.toThrow('Only capital ledger context')
+		await expect(caller.writeContract({ abi: delegateArtifact.abi, address: delegate, functionName: 'install', args: [adapter, 3n, REP, LOT, LOT] })).rejects.toThrow('Only capital delegatecall')
+		await expect(caller.writeContract({ abi: delegateArtifact.abi, address: delegate, functionName: 'materialize', args: [1n] })).rejects.toThrow('Only capital delegatecall')
 		await expect(call('installAuction')).rejects.toThrow('Auction principal unfunded')
 		await expect(call('installAuction', REP + 1n)).rejects.toThrow('Auction collateral ratio rounds per vault')
 		await expect(call('installAuction', REP, LOT - 1n)).rejects.toThrow('Invalid auction cohort')

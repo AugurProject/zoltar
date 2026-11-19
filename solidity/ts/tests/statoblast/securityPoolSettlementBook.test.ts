@@ -340,7 +340,7 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [3n] })).toBe(0n)
 	})
 
-	test('partial REP claims and moved deadlines preserve shared finality correction totals', async () => {
+	test.each([false, true])('partial REP claims and moved deadlines preserve shared finality corrections (named: %s)', async named => {
 		const shares = 10n ** 18n
 		await forkTwoFeeBearingQuestions(shares, 2_000n * shares)
 		const deadline = 3 * 86_400 + 10
@@ -349,6 +349,7 @@ describe('Statoblast: central internal settlement units', () => {
 		await redeem(2n, 1n, shares / 2n)
 		await redeem(2n, 2n, shares / 4n)
 		await schedule(2n, 1n, deadline + 100)
+		if (named) await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [2n, 2n, deadline + 1] }))
 		await freeze(2n, deadline + 1)
 		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(500n * shares)
 		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, shares / 2n] })).toBe(500n * shares)
@@ -578,6 +579,32 @@ describe('Statoblast: central internal settlement units', () => {
 		await redeem(1n, 1n, state.outcomeSupplyAttoShares, 202)
 	})
 
+	test('individual finalization and fork sealing reserve disjoint claims at a shared deadline', async () => {
+		await mint(1n, 1n, 100n)
+		await mint(1n, 2n, 200n)
+		await mint(1n, 3n, 300n)
+		for (const id of [1n, 2n]) await schedule(1n, id, 100)
+		const finalize = (timestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [1n, 1n, timestamp] }))
+		await finalize(100)
+		expect((await question(1n, 1n))[1]).toBe(0n)
+		await finalize(101)
+		const frozen = (await question(1n, 1n))[1]
+		expect(frozen).not.toBe(0n)
+		expect((await question(1n, 2n))[1]).toBe(0n)
+		expect((await book(1n)).slice(0, 2)).toEqual([500n, 500n])
+		await seal(1n, 101)
+		expect((await book(1n)).slice(0, 2)).toEqual([300n, 300n])
+		expect((await question(1n, 1n))[1]).toBe(frozen)
+		expect((await question(1n, 2n))[1]).not.toBe(0n)
+		await child(1n, 300n)
+		expect(await quote(2n, 1n, 100n)).toEqual([0n, 0n])
+		expect(await quote(2n, 2n, 200n)).toEqual([0n, 0n])
+		expect(await quote(2n, 3n, 300n)).toEqual([300n, 300n])
+		await redeem(1n, 1n, 100n, 101)
+		await redeem(1n, 2n, 200n, 101)
+		expect(await quote(1n, 1n, 100n)).toEqual([0n, 0n])
+	})
+
 	test('strict finality cutoff preserves finalized parent money and interrupts equal-deadline claims', async () => {
 		await mint(1n, 1n, 100n)
 		await mint(1n, 2n, 200n)
@@ -616,6 +643,83 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(gas).toBeLessThan(600_000n)
 		expect((await book(1n)).slice(0, 2)).toEqual([47n, 47n])
 		expect(await quote(1n, 1n, 1n)).toEqual([1n, 1n])
+		expect((await question(1n, 2n))[1]).toBe(0n)
+	})
+
+	test('quotes the first partial final redemption after reservation rounding and conserves the residual', async () => {
+		await mint(1n, 1n, 3n)
+		await mint(1n, 2n, 1n)
+		await seal(1n, 0)
+		await child(1n, 2n)
+		const cutoff = 3 * 86_400 + 2
+		await schedule(2n, 1n, cutoff - 1)
+		const preview = (timestamp: number) => client.readContract({ ...target(), functionName: 'quoteRedemptionAt', args: [2n, 1n, 2n, timestamp] })
+		expect((await preview(cutoff - 1))[0]).toBe(1n)
+		expect((await preview(cutoff))[0]).toBe(0n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'checkpointFees', args: [2n, cutoff] }))
+		const [cash] = await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [2n, 1n, 2n] })
+		const close = await client.simulateContract({ ...target(), functionName: 'redeem', args: [2n, 1n, 2n, 0n, cutoff] })
+		expect(cash).toBe(close.result[0])
+		await redeem(2n, 1n, 2n, cutoff)
+		const [residual] = await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [2n, 1n, 1n] })
+		const [remainingCash] = await book(2n)
+		expect(cash + residual + remainingCash).toBe(2n)
+	})
+
+	test('named and fork-bulk finality preserve custody with bounded rounding dust', async () => {
+		for (const id of [1n, 2n, 3n, 4n]) await mint(1n, id, 1_000n)
+		await seal(1n, 0)
+		await child(1n, 2_002n, 2_003n)
+		const cutoff = 3 * 86_400 + 2
+		for (const id of [1n, 2n]) await schedule(2n, id, cutoff - 1)
+		await schedule(2n, 3n, cutoff)
+		const ethereum = getAnvilWindowEthereum()
+		const prior = await ethereum.anvilSnapshot()
+		const settle = async (named: boolean) => {
+			if (named) {
+				for (const id of [1n, 2n]) {
+					await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [2n, id, cutoff] }))
+				}
+			}
+			await seal(2n, cutoff)
+			const frozenIds = await Promise.all([1n, 2n, 3n, 4n].map(async id => (await question(2n, id))[1]))
+			expect(frozenIds.slice(0, 2).every(id => id !== 0n)).toBe(true)
+			expect(frozenIds.slice(2)).toEqual([0n, 0n])
+			const frozen = await Promise.all([...new Set(frozenIds.slice(0, 2))].map(id => client.readContract({ ...target(), functionName: 'frozenBooks', args: [id] })))
+			const [liveCash] = await book(2n)
+			const liveRep = await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })
+			expect(frozen.reduce((sum, [cash]) => sum + cash, liveCash)).toBe(2_002n)
+			expect(frozen.reduce((sum, [, , , rep]) => sum + rep, liveRep)).toBe(2_003n)
+			return { liveCash, liveRep }
+		}
+		const named = await settle(true)
+		await ethereum.anvilRevert(prior)
+		const bulk = await settle(false)
+		// With two individually rounded reservations, the live basket can retain one extra raw unit of each asset.
+		expect(named.liveCash - bulk.liveCash).toBe(1n)
+		expect(named.liveRep - bulk.liveRep).toBe(1n)
+	})
+
+	test('the first child finalization stays within budget on a full-depth shared deadline path', async () => {
+		for (let bit = 0; bit < 48; bit++) {
+			const id = BigInt(bit + 1)
+			await mint(1n, id, 1n)
+			await schedule(1n, id, Number(1n << BigInt(bit)))
+		}
+		// Keep the deepest leaf populated when one claim is finalized. That
+		// forces the write to copy the path instead of pruning its last node.
+		await mint(1n, 49n, 1n)
+		await schedule(1n, 49n, 3)
+		await mint(1n, 50n, 1n)
+		await schedule(1n, 50n, 2)
+		await seal(1n, 0)
+		await child(1n, 50n)
+		const hash = await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'finalizeQuestion', args: [2n, 2n, 3 * 86_400 + 1] }))
+		const gas = (await client.getTransactionReceipt({ hash })).gasUsed
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ fullDepthChildFinalizationGas: gas })
+		expect(gas).toBeLessThan(3_000_000n)
+		expect((await question(2n, 2n))[1]).not.toBe(0n)
+		expect((await question(2n, 50n))[1]).toBe(0n)
 		expect((await question(1n, 2n))[1]).toBe(0n)
 	})
 

@@ -1,11 +1,12 @@
 import { describe, test } from 'bun:test'
-import { getCreateAddress, encodeDeployData, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getCreateAddress, encodeDeployData, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../testSupport/deployContract'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
+import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { applyLibraries, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
+import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker as feedWorkerArtifact } from '../types/contractArtifact'
 import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 import {
 	DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
@@ -199,13 +200,20 @@ describe('Portfolio oracle configuration guards', () => {
 
 	test('shared feeds retain their collateral floor across configured priority-fee boundaries', async () => {
 		const client = fixture.owner()
+		const infrastructure = getInfraContractAddresses()
+		const worker = { abi: feedWorkerArtifact.abi, address: infrastructure.sharedPoolPriceFeedDeploymentWorker } as const
 		for (const priority of [DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS]) {
 			const args = getOracleCoordinatorConstructorArgs()
 			args[6] = priority
 			args[7] = 1_000_000n
 			args[8] = 30_000n
 			const coordinator = await deployContract(client, encodeOracleCoordinatorDeployData(args))
-			const feed = await deployContract(client, encodeDeployData({ abi: feedArtifact.abi, bytecode: applyLibraries(feedArtifact.evm.bytecode.object), args: [coordinator, getInfraContractAddresses().securityPoolFactory, fixture.portfolio, fixture.base.genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN)] }))
+			const implementationRequest = { ...worker, functionName: 'deployImplementation', args: [coordinator, infrastructure.securityPoolFactory, fixture.portfolio] } as const
+			const { result: implementation } = await client.simulateContract(implementationRequest)
+			await writeContractAndWait(client, () => client.writeContract(implementationRequest))
+			const cloneRequest = { ...worker, functionName: 'deployClone', args: [implementation, fixture.base.genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), zeroHash] } as const
+			const { result: feed } = await client.simulateContract(cloneRequest)
+			await writeContractAndWait(client, () => client.writeContract(cloneRequest))
 			for (const baseFee of [0n, 30n * 10n ** 9n]) {
 				await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFee.toString(16)}`] })
 				await fixture.base.mockWindow.request({ method: 'evm_mine', params: [] })

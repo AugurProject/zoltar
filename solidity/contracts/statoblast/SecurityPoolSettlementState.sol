@@ -3,15 +3,18 @@ pragma solidity 0.8.35;
 
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
 /// @dev Shared settlement types and storage; accounting behavior remains in the book.
 abstract contract SecurityPoolSettlementState {
+	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 	uint64 public lastBookId;
 	uint64 public lastFrozenBookId;
 	uint64 internal lastQuestionStateId;
 	uint64 internal lastFeeModeId;
 	SecurityPoolPersistentMap.Store internal tree;
+	SecurityPoolMaturityMap.Store internal maturities;
 	SecurityPoolQuestionMap.Store internal questionMap;
 	SecurityPoolFrozenHistory.Store internal frozenHistory;
 
@@ -72,7 +75,6 @@ abstract contract SecurityPoolSettlementState {
 	/// They price lazily materialized fees at the index each fee unit held.
 	struct RecoveryState {
 		uint256 index;
-		uint64 finalityRoot;
 		uint64 forkIncrementRoot;
 		uint64 forkWeightRoot;
 		uint256 finalizedPrefix;
@@ -90,10 +92,49 @@ abstract contract SecurityPoolSettlementState {
 		Question question;
 		uint256 recoveryCorrection;
 		uint256 recoveryIndex;
+		uint64 frozenBookId;
 	}
 	mapping(uint64 => StoredQuestionState) internal questionStates;
 	mapping(uint64 => FeeMode) internal feeModes;
 	mapping(uint64 => RecoveryState) internal recoveryStates;
 	mapping(uint64 => uint256) internal feeRemainders;
 	mapping(uint64 => FundingTarget) internal fundingTargets;
+
+	function _frozenBookId(Book storage book, StoredQuestionState storage stored) internal view returns (uint64) {
+		uint64 frozenBookId = stored.frozenBookId;
+		if (frozenBookId != 0 || stored.question.finalAfter == 0) return frozenBookId;
+		return uint64(frozenHistory.ceiling(book.frozenRoot, stored.question.finalAfter));
+	}
+}
+
+/// @dev Writes immutable question snapshots from the settlement book's storage context.
+contract SecurityPoolSettlementWriter is SecurityPoolSettlementState {
+	using SecurityPoolMaturityMap for SecurityPoolMaturityMap.Store;
+	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
+
+	address private immutable host = msg.sender;
+
+	function writeQuestion(uint64 bookId, uint256 questionId, Question memory state, uint256 correction, uint64 frozenBookId) external {
+		require(address(this) == host, 'Only settlement book context');
+		Book storage book = books[bookId];
+		StoredQuestionState storage stored = questionStates[uint64(questionMap.get(book.questionRoot, questionId))];
+		Question storage previous = stored.question;
+		if (_frozenBookId(book, stored) == 0) {
+			// All scheduled questions have stopped accruing fees. Their stored
+			// units therefore equal the units already in the deadline index.
+			unchecked {
+				if (frozenBookId != 0) {
+					book.finalityRoot = maturities.add(book.finalityRoot, previous.finalAfter, 0 - previous.units, 0 - stored.recoveryCorrection);
+				} else if (previous.finalAfter == state.finalAfter) {
+					book.finalityRoot = maturities.add(book.finalityRoot, state.finalAfter, state.units - previous.units, correction - stored.recoveryCorrection);
+				} else {
+					uint64 root = maturities.add(book.finalityRoot, previous.finalAfter, 0 - previous.units, 0 - stored.recoveryCorrection);
+					book.finalityRoot = maturities.add(root, state.finalAfter, state.units, correction);
+				}
+			}
+		}
+		uint64 stateId = ++lastQuestionStateId;
+		questionStates[stateId] = StoredQuestionState(state, correction, recoveryStates[bookId].index, frozenBookId == 0 ? stored.frozenBookId : frozenBookId);
+		book.questionRoot = questionMap.set(book.questionRoot, questionId, stateId);
+	}
 }

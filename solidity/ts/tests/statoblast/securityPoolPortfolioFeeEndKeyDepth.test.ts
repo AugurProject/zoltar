@@ -10,14 +10,10 @@ import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
-// Regression for dust questions bought at chosen seconds to deepen a victim question's path in the
-// fee aggregate maps (keyed by fee-stream end) until its redemption exceeded the transaction cap.
-// Ends now round down to the book's granularity, so an attacker can only add neighbours in the
-// sibling subtrees of granularity bits and above. The attacker fills every level it can reach at
-// once around a victim key whose bits from the granularity up to bit 27 are ones.
+// On-chain redemption gas regression with densely populated reachable fee-end buckets.
 const CAP = 16_777_216n
 const YEAR = 365n * 86_400n
-const LAST_LEVEL = 27n
+const REACHABLE_LEVELS = 11n
 
 describe('Statoblast portfolio: fee-stream end keys chosen by dust buyers', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -31,8 +27,7 @@ describe('Statoblast portfolio: fee-stream end keys chosen by dust buyers', () =
 		const bookId = await attacker.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bookIds', args: [fixture.base.genesisUniverse] })
 		const feeEnd = async (questionId: bigint) => BigInt((await attacker.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, questionId] }))[0].feeEnd)
 		const granularity = await attacker.readContract({ abi: bookArtifact.abi, address: book, functionName: 'feeEndGranularity' })
-		const granularityBits = BigInt(granularity.toString(2).length - 1)
-		expect(granularity).toBe(1n << 17n)
+		expect(granularity).toBe(86_400n)
 		const annualFeeBps = await attacker.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'annualFeeBps' })
 		const minimumRate = await attacker.readContract({ abi: bookArtifact.abi, address: book, functionName: 'minimumOutcomeExchangeRate' })
 		const services = await attacker.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
@@ -66,22 +61,21 @@ describe('Statoblast portfolio: fee-stream end keys chosen by dust buyers', () =
 		}
 		const now0 = await window.getTime()
 		const makeId = async (title: string) => {
-			// Aligning the victim key may move the clock up to 2^28 seconds (8.5 years) forward.
+			// The fixture can advance by up to 2,048 daily buckets.
 			const data = makeQuestion(title, now0 + 15n * YEAR)
 			await createQuestion(attacker, data, fixture.base.outcomes)
 			return getQuestionId(data, fixture.base.outcomes)
 		}
 
-		// The victim buys at a second whose rounded stream end has ones in bits granularity..27, so every
-		// sibling subtree of those levels lies below its key and is reachable by a purchase made now.
+		// Place the reference stream above the other reachable buckets in the fixture.
 		const victimId = await makeId('fee end depth victim')
 		await fixture.register(victimId, fixture.portfolio, victim)
 		const victimPool = fixture.poolFor(victimId).securityPool
 		const victimDuration = duration(10n * unit)
-		const mask = (1n << (LAST_LEVEL + 1n)) - granularity
+		const mask = (1n << REACHABLE_LEVELS) - 1n
 		const earliest = (await window.getTime()) + 2n * granularity + 5_000n + victimDuration
-		const key = ((earliest | ((1n << (LAST_LEVEL + 1n)) - 1n)) >> granularityBits) << granularityBits
-		expect(key & mask).toBe(mask)
+		const bucket = ((earliest + granularity - 1n) / granularity) | mask
+		const key = bucket * granularity
 		const victimPurchase = key - victimDuration + granularity / 2n
 		await window.setTime(victimPurchase - 700n)
 		await fixture.refreshPrice()
@@ -98,9 +92,9 @@ describe('Statoblast portfolio: fee-stream end keys chosen by dust buyers', () =
 		await window.anvilRevert(snapshot)
 
 		const placed: bigint[] = []
-		for (let level = granularityBits; level <= LAST_LEVEL; level++) {
-			const width = 1n << level
-			const lo = ((key >> level) ^ 1n) << level
+		for (let level = 0n; level < REACHABLE_LEVELS; level++) {
+			const width = (1n << level) * granularity
+			const lo = (((bucket >> level) ^ 1n) << level) * granularity
 			await fixture.refreshPrice()
 			const when = (await window.getTime()) + 3n
 			const amount = bestDust(lo + width - 1n - width / 8n - when)
@@ -114,15 +108,14 @@ describe('Statoblast portfolio: fee-stream end keys chosen by dust buyers', () =
 			expect(end >= lo && end < lo + width).toBe(true)
 			placed.push(level)
 		}
-		expect(placed.length).toBe(Number(LAST_LEVEL - granularityBits + 1n))
+		expect(placed.length).toBe(Number(REACHABLE_LEVELS))
 		expect(await feeEnd(victimId)).toBe(key)
 
 		await fixture.refreshPrice()
 		const receipt = await redeemWithCap()
 		console.log({ victimFeeEndKey: key, placedLevels: placed.length, baselineRedeemCompleteSetGas: baseline.gasUsed, attackedRedeemCompleteSetGas: receipt.gasUsed })
 		expect(receipt.status).toBe('success')
-		// The provable bound (16 branch levels, six fee-map writes) stays near 9.4M gas; see
-		// securityPoolSettlementFeeEndDepth.test.ts. This partially attacked tree must stay far below it.
+		// The settlement-book test separately covers all 17 possible branching levels.
 		expect(receipt.gasUsed).toBeLessThan(10_000_000n)
 	})
 })

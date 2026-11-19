@@ -6,7 +6,8 @@ import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
-import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
+import { SecurityPoolBoundClones } from '../SecurityPoolBoundClones.sol';
+import { SharedPoolPriceFeed, ISharedPoolPriceCoordinator } from '../SharedPoolPriceFeed.sol';
 import { OpenOracleReportDelegate } from '../OpenOracleReportDelegate.sol';
 
 contract CreationCodeChunk {
@@ -85,11 +86,19 @@ contract SharedPoolPriceFeedDeploymentWorker {
 		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SharedPoolPriceFeed).creationCode);
 	}
 
-	function deploy(address coordinator, address securityPoolFactory, address portfolio, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed) {
-		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(coordinator, securityPoolFactory, portfolio, universeId, reputationToken));
+	function deployImplementation(address coordinator, address securityPoolFactory, address portfolio) external returns (SharedPoolPriceFeed) {
+		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(ISharedPoolPriceCoordinator(coordinator), securityPoolFactory, portfolio));
+		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, securityPoolFactory, portfolio)));
+		require(deployed != address(0), 'Shared feed implementation deployment failed');
+		return SharedPoolPriceFeed(deployed);
+	}
+
+	function deployClone(SharedPoolPriceFeed implementation, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed) {
+		require(address(reputationToken) != address(0), 'REP token missing');
+		bytes memory initCode = SecurityPoolBoundClones.initCode(address(implementation), abi.encodePacked(universeId, address(reputationToken)));
 		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, salt)));
 		require(deployed != address(0), 'Shared price feed deployment failed');
-		return SharedPoolPriceFeed(payable(deployed));
+		return SharedPoolPriceFeed(deployed);
 	}
 }
 
@@ -98,6 +107,8 @@ contract OpenOraclePriceCoordinatorFactory {
 	SharedPoolPriceFeedDeploymentWorker private immutable sharedPoolPriceFeedDeploymentWorker;
 	mapping(address => address) private coordinatorDeployers;
 	mapping(address => address) private feedDeployers;
+	/// @dev Coordinator deployers own independent portfolio namespaces.
+	mapping(address => mapping(address => SharedPoolPriceFeed)) public sharedPriceFeedImplementations;
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
@@ -148,7 +159,12 @@ contract OpenOraclePriceCoordinatorFactory {
 
 	function deploySharedPoolPriceFeed(OpenOraclePriceCoordinator coordinator, address portfolio, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed feed) {
 		require(coordinatorDeployers[address(coordinator)] == msg.sender, 'Only coordinator deployer');
-		feed = sharedPoolPriceFeedDeploymentWorker.deploy(address(coordinator), msg.sender, portfolio, universeId, reputationToken, keccak256(abi.encode(msg.sender, salt)));
+		SharedPoolPriceFeed implementation = sharedPriceFeedImplementations[msg.sender][portfolio];
+		if (address(implementation) == address(0)) {
+			implementation = sharedPoolPriceFeedDeploymentWorker.deployImplementation(address(coordinator), msg.sender, portfolio);
+			sharedPriceFeedImplementations[msg.sender][portfolio] = implementation;
+		}
+		feed = sharedPoolPriceFeedDeploymentWorker.deployClone(implementation, universeId, reputationToken, keccak256(abi.encode(msg.sender, salt)));
 		feedDeployers[address(feed)] = msg.sender;
 	}
 

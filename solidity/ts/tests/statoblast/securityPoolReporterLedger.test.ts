@@ -83,6 +83,24 @@ describe('Statoblast: central reporter custody', () => {
 		expect(await balance(second)).toBe(20n * unit)
 	})
 
+	test('keeping the same reporter deadline reuses the roots and finalizes the added REP', async () => {
+		const game = await createGame(questionId)
+		const schedule = async (deadline: number) => await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: game, functionName: 'schedule', args: [deadline] }))
+		await deposit(game, 10n * unit)
+		await schedule(1_000)
+		await deposit(game, 3n * unit)
+		const [, , questionRoot, finalityRoot] = await book()
+		await schedule(1_000)
+		expect((await book()).slice(2, 4)).toEqual([questionRoot, finalityRoot])
+		await schedule(1_100)
+		await ethereum.setTime(1_000n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint', args: [0n] }))
+		expect((await book()).slice(0, 2)).toEqual([13n * unit, 0n])
+		await ethereum.setTime(1_100n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint', args: [0n] }))
+		expect((await book()).slice(0, 2)).toEqual([0n, 13n * unit])
+	})
+
 	test('successive frozen prefixes never reclassify paid claims when new reporter custody arrives', async () => {
 		const first = await createGame(questionId)
 		const second = await createGame(questionId + 1n)

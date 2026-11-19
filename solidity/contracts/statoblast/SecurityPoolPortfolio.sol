@@ -112,6 +112,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint8 private constant SETUP_COMPLETE = 4;
 	uint8 public setupStage;
 	Deployers private deployers;
+	SecurityPoolCapitalLedger public capitalImplementation;
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
 	mapping(address => bool) private capitalAddresses;
 	mapping(uint256 => bytes32) public questionOriginIds;
@@ -201,6 +202,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 			forkController = deployers.forks.create(address(this), zoltar);
 			IPortfolioForkCoordinator(forkController).initialize(originUniverseId);
 		} else if (setupStage == SETUP_CAPITAL) {
+			capitalImplementation = deployers.capital.createImplementation(zoltar, statoblastSecurityMultiplierBps, minimumCommitmentAttoEth, deployers.fees);
 			_createCapital(originUniverseId);
 		} else if (setupStage == SETUP_PRICE_FEED) {
 			factory.initializePortfolioPriceFeed(originUniverseId, initialReportPriorityFeeAttoEthPerGas);
@@ -365,8 +367,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		return services.checkpointQuestionSettlement(_pool(msg.sender), true);
 	}
 	function quoteQuestionSettlement(address pool, uint256 shares) external view returns (uint256) {
-		_pool(pool);
-		return settlement.quoteRedemption(pool, shares);
+		uint248 universeId = _pool(pool).universeId();
+		return settlement.quoteRedemptionAt(pool, shares, portfolioTime(universeId));
 	}
 	function quoteQuestionRecoveryRep(address pool, uint256 shares) external view returns (uint256) {
 		_pool(pool);
@@ -425,7 +427,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		IPortfolioForkCoordinator(forkController).freeze(pool.universeId());
 	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {
-		capital = deployers.capital.create(address(this), zoltar, universeId, statoblastSecurityMultiplierBps, minimumCommitmentAttoEth, rewardVestingSeconds);
+		capital = deployers.capital.create(capitalImplementation, universeId);
 		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
 		capitalLedger[universeId] = capital;
 		capitalAddresses[address(capital)] = true;

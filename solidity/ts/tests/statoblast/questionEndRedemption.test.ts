@@ -6,6 +6,7 @@ import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { redeemShares } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../../types/contractArtifact'
+import { statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact } from '../../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: question end and portfolio principal redemption', () => {
@@ -64,6 +65,9 @@ describe('Statoblast: question end and portfolio principal redemption', () => {
 		await fixture.mint(8n * unit)
 		const game = await finalize()
 		await fixture.refreshPrice()
+		await expect(withdraw(1_000n * unit)).rejects.toThrow()
+		const settlement = await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'finalizeQuestion', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))
 		await fixture.authorize(0n)
 		const beforeSupply = await supply()
 		const token = getRepTokenAddress(fixture.base.genesisUniverse)

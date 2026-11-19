@@ -13,7 +13,7 @@ import { collateralBalance, burnedCollateralBalance } from './burnEvidence'
 
 describe('Statoblast: composed capital economics and fork intent', () => {
 	const fixture = useCapitalTestFixture()
-	test('lifecycle delegate rejects direct updates and authenticated foreign hosts', async () => {
+	test('lifecycle delegate rejects direct updates and isolates foreign storage', async () => {
 		const sender = fixture.client()
 		const delegate = await sender.readContract({ ...fixture.capital, functionName: 'lifecycleDelegate' })
 		const delegateAbi = parseAbi([
@@ -32,17 +32,21 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			encodeFunctionData({ abi: delegateAbi, functionName: 'authorize', args: [E, 0n, false, E / 1_000n] }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'importChoice', args: [sender.account.address, { rep: 2n * E, commitment: E, batch: 0n, remainingCommitment: 0n }, 10_000n] }),
 		])
-			await expect(sender.call({ to: delegate, data })).rejects.toThrow('Only capital ledger context')
+			await expect(sender.call({ to: delegate, data })).rejects.toThrow('Only capital delegatecall')
 		const runtime = await sender.getCode({ address: fixture.capital.address })
 		if (runtime === undefined) throw new Error('Ledger runtime unavailable for foreign-context regression')
 		const foreign = '0x000000000000000000000000000000000000f00d' as const
 		await fixture.getAnvilWindowEthereum().addStateOverrides({ [foreign]: { code: hexToBytes(runtime) } })
-		await expect(sender.call({ account: fixture.harness.address, to: foreign, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'beginForkImport' }) })).rejects.toThrow('Only capital ledger context')
-		// A transparent delegatecall host reaches the new methods without unrelated
-		// ledger checkpoint state. An authenticated caller still cannot change context.
+		await expect(sender.call({ account: fixture.harness.address, to: foreign, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'beginForkImport' }) })).rejects.toThrow('Capital not initialized')
+		// A foreign delegatecall host can only write its own state.
 		const forwardingRuntime = concatHex(['0x363d3d373d3d3d363d73', delegate, '0x5af43d82803e903d91602b57fd5bf3'])
 		await fixture.getAnvilWindowEthereum().addStateOverrides({ [foreign]: { code: hexToBytes(forwardingRuntime) } })
-		for (const data of ownerUpdates) await expect(sender.call({ account: fixture.harness.address, to: foreign, data })).rejects.toThrow('Only capital ledger context')
+		const owner = sender.account.address
+		const before = await sender.readContract({ ...fixture.capital, functionName: 'storedOwnerAccount', args: [owner] })
+		const setTarget = ownerUpdates[0]
+		if (setTarget === undefined) throw new Error('Missing health target call')
+		await writeContractAndWait(sender, () => sender.sendTransaction({ to: foreign, data: setTarget }))
+		expect(await sender.readContract({ ...fixture.capital, functionName: 'storedOwnerAccount', args: [owner] })).toEqual(before)
 	})
 	test('fork backing release leaves free principal and already retired cash separately withdrawable', async () => {
 		const sender = fixture.client()

@@ -2,13 +2,16 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolCapitalFeeStreams } from '../../statoblast/SecurityPoolCapitalFeeStreams.sol';
+import { SecurityPoolBoundClones } from '../../statoblast/SecurityPoolBoundClones.sol';
 
 contract CapitalFeeStreamsHarness {
 	SecurityPoolCapitalFeeStreams public immutable streams;
 	uint256 public releasedEth;
 	uint256 public releasedRep;
 	constructor(uint48 vestingDuration) {
-		streams = new SecurityPoolCapitalFeeStreams(address(this), uint48(block.timestamp), vestingDuration);
+		SecurityPoolCapitalFeeStreams implementation = new SecurityPoolCapitalFeeStreams();
+		streams = SecurityPoolCapitalFeeStreams(SecurityPoolBoundClones.create(address(implementation), abi.encodePacked(address(this))));
+		streams.initialize(uint48(block.timestamp), vestingDuration);
 	}
 	function add(uint256 ethAmount, uint256 repAmount) external {
 		_release(uint48(block.timestamp));

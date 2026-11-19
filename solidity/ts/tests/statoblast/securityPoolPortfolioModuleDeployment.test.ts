@@ -19,11 +19,12 @@ describe('Statoblast: production portfolio module deployment', () => {
 		const lifecycle = await client.readContract({ ...capital, functionName: 'lifecycleDelegate' })
 		const auction = await client.readContract({ ...capital, functionName: 'auctionDelegate' })
 		expect(await client.readContract({ ...capital, functionName: 'portfolio' })).toBe(fixture.portfolio)
-		expect(await client.readContract({ abi: lifecycleArtifact.abi, address: lifecycle, functionName: 'ledger' })).toBe(fixture.capitalLedger)
-		expect(await client.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'ledger' })).toBe(fixture.capitalLedger)
+		expect(await client.readContract({ abi: lifecycleArtifact.abi, address: lifecycle, functionName: 'implementation' })).toBe(lifecycle)
+		expect(await client.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'implementation' })).toBe(auction)
 		const observations = []
 		for (const [name, address] of [
-			['capital', fixture.capitalLedger],
+			['capital clone', fixture.capitalLedger],
+			['capital implementation', await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'capitalImplementation' })],
 			['services', services],
 			['lifecycle', lifecycle],
 			['auction', auction],
@@ -31,7 +32,7 @@ describe('Statoblast: production portfolio module deployment', () => {
 			const code = await client.getCode({ address })
 			if (code === undefined || code === '0x') throw new Error(`Production ${name} runtime missing`)
 			const runtimeBytes = (code.length - 2) / 2
-			expect(runtimeBytes).toBeLessThanOrEqual(24_576 - 1_024)
+			expect(runtimeBytes).toBeLessThanOrEqual(name === 'capital implementation' ? 24_576 : 24_576 - 1_024)
 			observations.push({ name, address, runtimeBytes, runtimeHash: keccak256(code) })
 		}
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ productionPortfolioModules: observations })

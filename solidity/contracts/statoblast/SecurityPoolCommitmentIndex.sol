@@ -3,18 +3,18 @@ pragma solidity 0.8.35;
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
+import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 
 /// @notice Portfolio-owned collateral, commitment, fee and retirement accounting.
 /// @dev The controller settles time and prices before mutations and owns token
 /// custody. Keys are exact uint256 health thresholds followed by unique uint96
 /// position IDs. Balanced paths depend on live positions, never price-key entropy.
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
-	/// @dev The capital ledger authorizes mutations and holds tokens; this contract only accounts for them.
-	address public immutable capitalLedger;
+	address private immutable initializer = msg.sender;
 	uint96 public lastPositionId;
 	uint96 public currentBatch;
-	uint96 public nextBatch = 1;
-	uint96 private lastBatch = 1;
+	uint96 public nextBatch;
+	uint96 private lastBatch;
 	bool public importsOpen;
 	bool private importsInitialized;
 	uint64 public healthObservationEpoch;
@@ -62,13 +62,21 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 releasedRep;
 	}
 
-	constructor(address authority) {
-		require(authority != address(0), 'Invalid commitment authority');
-		capitalLedger = authority;
+	/// @dev The capital ledger authorizes mutations and holds tokens; this contract only accounts for them.
+	function capitalLedger() public view returns (address) {
+		return SecurityPoolBoundClones.boundAddress();
+	}
+	function initialize() external {
+		require(msg.sender == initializer, 'Only commitment deployer');
+		require(capitalLedger() != address(0), 'Invalid commitment authority');
+		require(nextBatch == 0, 'Commitment index already initialized');
+		nextBatch = 1;
+		lastBatch = 1;
 	}
 
 	modifier onlyCapitalLedger() {
-		require(msg.sender == capitalLedger, 'Only capital ledger');
+		require(msg.sender == capitalLedger(), 'Only capital ledger');
+		require(nextBatch != 0, 'Commitment index not initialized');
 		_;
 	}
 

@@ -1,3 +1,4 @@
+import { wrapWeth } from './testSupport/simulator/utils/contracts/statoblast'
 import { bigintToSafeNumber, encodeDeployData, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, portfolioAddressFromDeploymentLogs } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
@@ -12,7 +13,7 @@ import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from
 import { createWriteClient, type WriteClient } from './testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from './testSupport/simulator/utils/constants'
 import { setupTestAccounts, approveToken, getChildUniverseId } from './testSupport/simulator/utils/utilities'
-import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress, forkUniverse, getUniverseData } from './testSupport/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress, deployChild, forkUniverse, getUniverseData } from './testSupport/simulator/utils/contracts/zoltar'
 import { applyLibraries, ensureInfraDeployed, getInfraContractAddresses } from './testSupport/simulator/utils/contracts/deployStatoblast'
 import { manipulatePriceOracle } from './testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { createQuestion, makeQuestion } from './testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -84,6 +85,10 @@ try {
 	await manipulatePriceOracle(owner, anvil, coordinator, unit, 100n * unit)
 	await measure('2. Shared underwriting and trading', 'Set owner commitment', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [200n * unit] }))
 	const quote = await trader.readContract({ ...portfolio, functionName: 'purchaseQuote', args: [0n, questionId, 100n * unit] })
+	const collateral = await trader.readContract({ ...portfolio, functionName: 'collateralToken' })
+	const services = await trader.readContract({ ...portfolio, functionName: 'services' })
+	await wrapWeth(trader, 101n * unit + quote[0])
+	await approveToken(trader, collateral, services)
 	await measure('2. Shared underwriting and trading', 'Purchase complete sets', trader, () => trader.writeContract({ ...portfolio, functionName: 'createCompleteSet', args: [0n, questionId, 100n * unit, trader.account.address, 0n, 100n * unit + (quote[0] * 10_100n + 9_999n) / 10_000n - 100n * unit], value: 0n }))
 	const shares = await trader.readContract({ ...pool, functionName: 'shareTokenSupplyAttoShares' })
 	await measure('2. Shared underwriting and trading', 'Return half of complete sets', trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [shares / 2n] }))
@@ -96,6 +101,7 @@ try {
 	await approveToken(owner, getRepTokenAddress(0n), getZoltarAddress())
 	await measure('3. Shared fork', 'Trigger native fork', owner, () => forkUniverse(owner, 0n, getQuestionId(forkQuestion, outcomes)))
 	const branch = { abi: forkArtifact.abi, address: await owner.readContract({ ...portfolio, functionName: 'forkController' }) }
+	await measure('3. Shared fork', 'Deploy native child REP', owner, () => deployChild(owner, 0n, 1n))
 	await measure('3. Shared fork', 'Prepare branch capital and freeze source', owner, () => owner.writeContract({ ...branch, functionName: 'prepareBranch', args: [0n, 1n] }))
 	await measure('3. Shared fork', 'Choose prepared owner branch', owner, () => owner.writeContract({ ...branch, functionName: 'choose', args: [0n, 1n] }))
 	const forkTime = (await getUniverseData(owner, 0n)).forkTime

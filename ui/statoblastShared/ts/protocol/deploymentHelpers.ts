@@ -160,6 +160,8 @@ type BootstrapDescendantAddresses = {
 	sharedPoolPriceFeedCreationCodeSecondChunk: Address
 	securityPoolCreationCodeFirstChunk: Address
 	securityPoolCreationCodeSecondChunk: Address
+	securityPoolCommitmentIndexImplementation: Address
+	securityPoolCapitalFeeStreamsImplementation: Address
 	securityPoolDeployer: Address
 	securityPoolDeploymentWorker: Address
 }
@@ -184,6 +186,8 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		securityPoolCreationCodeSecondChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 2n }),
 		securityPoolCapitalCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }),
 		securityPoolCapitalCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }),
+		securityPoolCommitmentIndexImplementation: getCreateAddress({ from: infrastructure.securityPoolCommitmentIndexDeployer, nonce: 1n }),
+		securityPoolCapitalFeeStreamsImplementation: getCreateAddress({ from: infrastructure.securityPoolCapitalFeeStreamsDeployer, nonce: 1n }),
 		securityPoolServicesCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 1n }),
 		securityPoolServicesCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 2n }),
 		securityPoolSettlementBookCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 1n }),

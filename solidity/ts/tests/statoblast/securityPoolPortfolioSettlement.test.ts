@@ -126,7 +126,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		expect(await collateralBalance(address)).toBe(0n)
 	})
 
-	test('the inherited fork question freezes after its child response window without a native pool', async () => {
+	test('the inherited fork question stays pending until its own checkpoint after the child response window', async () => {
 		await mint(nativePool, 100n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 100] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 100n, zeroAddress, 0n, 0n] }))
@@ -137,8 +137,10 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await checkpoint(1n, deadline)
 		expect((await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [2n] })).slice(0, 2)).toEqual([100n, 100n])
 		await checkpoint(1n, deadline + 1)
-		expect((await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [2n] })).slice(0, 2)).toEqual([0n, 0n])
+		expect((await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [2n] })).slice(0, 2)).toEqual([100n, 100n])
 		await register(childPool, 1n, 1n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'checkpointQuestion', args: [childPool, deadline + 1] }))
+		expect((await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [2n] })).slice(0, 2)).toEqual([0n, 0n])
 		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ questionCashAttoEth: 100n, outcomeSupplyAttoShares: 100n })
 		await redeem(childPool, 100n, deadline + 1)
 		expect(await collateralBalance(address)).toBe(0n)

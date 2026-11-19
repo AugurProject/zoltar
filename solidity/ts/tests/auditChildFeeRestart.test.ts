@@ -51,7 +51,9 @@ describe('audit: a holding fee does not restart in a fork child for a question u
 		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(owner, base.genesisUniverse, getQuestionId(forkQuestion, base.outcomes))
 		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...portfolio, functionName: 'forkController' }) }
-		for (const client of [owner, other]) await writeContractAndWait(client, () => client.writeContract({ ...coordinator, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
+		for (const client of [owner, other]) {
+			await writeContractAndWait(client, () => client.writeContract({ ...coordinator, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
+		}
 		const forkTime = (await getUniverseData(owner, base.genesisUniverse)).forkTime
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		const child = getChildUniverseId(base.genesisUniverse, 1)

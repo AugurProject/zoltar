@@ -18,7 +18,7 @@ const implementation = getAddress('0x0000000000000000000000000000000000000094')
 const bindings = { implementation, owner, capital, auction, bidId: 3n }
 const vault = predictAuctionVaultAddress(bindings)
 function fixture() {
-	const source = capitalClient()
+	const source = capitalClient(capitalSnapshot({ universeId: 42n }))
 	source.codes.set(auction, `0x${auctionArtifact.evm.deployedBytecode.object}`)
 	source.codes.set(engine, `0x${engineArtifact.evm.deployedBytecode.object}`)
 	source.codes.set(implementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
@@ -98,7 +98,7 @@ test('vault binding rejects another owner, fork route, initial ledger, bid or co
 		[portfolio, 'capitalLedger', token],
 		[auction, 'bidIdForVault', 4n],
 		[capital, 'portfolio', token],
-		[modules.auctionDelegate, 'ledger', token],
+		[modules.auctionDelegate, 'implementation', token],
 		[index, 'capitalLedger', token],
 		[modules.fees, 'capitalLedger', token],
 		[capital, 'services', token],
@@ -108,7 +108,7 @@ test('vault binding rejects another owner, fork route, initial ledger, bid or co
 		source.set(address, getter, value)
 		await expect(authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).rejects.toThrow()
 	}
-	for (const address of [vault, auction, engine, capital, implementation, modules.fork, modules.lifecycle, modules.auctionDelegate, index, modules.fees, modules.services]) {
+	for (const address of [vault, auction, engine, capital, modules.capitalImplementation, implementation, modules.fork, modules.lifecycle, modules.auctionDelegate, index, modules.indexImplementation, modules.fees, modules.feesImplementation, modules.services]) {
 		const source = fixture()
 		source.source.codes.set(address, '0x6000')
 		await expect(authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).rejects.toThrow('runtime')

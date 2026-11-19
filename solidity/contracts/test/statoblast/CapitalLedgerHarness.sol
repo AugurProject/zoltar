@@ -3,11 +3,13 @@ pragma solidity 0.8.35;
 
 import { SecurityPoolCapitalLedger } from '../../statoblast/SecurityPoolCapitalLedger.sol';
 import { SecurityPoolCapitalState } from '../../statoblast/SecurityPoolCapitalState.sol';
-import { SecurityPoolCreationCodeDeployer } from '../../statoblast/SecurityPoolCreationCode.sol';
-import { SecurityPoolCapitalLedgerDeployer } from '../../statoblast/SecurityPoolPortfolioModuleDeployers.sol';
+import {
+	SecurityPoolCapitalLedgerDeployer,
+	SecurityPoolCommitmentIndexDeployer,
+	SecurityPoolCapitalFeeStreamsDeployer
+} from '../../statoblast/SecurityPoolPortfolioModuleDeployers.sol';
 import { ICapitalFeeStreams } from '../../statoblast/interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from '../../statoblast/SecurityPoolCommitmentIndex.sol';
-import { SecurityPoolCapitalFeeStreams } from '../../statoblast/SecurityPoolCapitalFeeStreams.sol';
 import { WETH9 } from '../../statoblast/WETH9.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { Zoltar } from '../../Zoltar.sol';
@@ -39,20 +41,20 @@ contract CapitalLedgerZoltarMock {
 	}
 }
 
-contract CapitalLedgerTestComponents is SecurityPoolCreationCodeDeployer {
+contract CapitalLedgerTestComponents {
 	SecurityPoolCapitalLedgerDeployer public immutable capitalDeployer;
-	constructor(SecurityPoolCapitalLedgerDeployer deployer) SecurityPoolCreationCodeDeployer(type(SecurityPoolCommitmentIndex).creationCode) {
+	SecurityPoolCapitalFeeStreamsDeployer
+		public
+		immutable streamsDeployer = new SecurityPoolCapitalFeeStreamsDeployer();
+	SecurityPoolCommitmentIndexDeployer private immutable indexDeployer = new SecurityPoolCommitmentIndexDeployer();
+	constructor(SecurityPoolCapitalLedgerDeployer deployer) {
 		capitalDeployer = deployer;
 	}
-	function createLedger(address authority, Zoltar zoltar) external returns (SecurityPoolCapitalLedger) {
-		return capitalDeployer.create(authority, zoltar, 1, 10_500, 1e15, 1 days);
-	}
 	function createIndex(address authority) external returns (SecurityPoolCommitmentIndex) {
-		return SecurityPoolCommitmentIndex(_deploy(abi.encode(authority)));
+		return indexDeployer.create(authority);
 	}
 	function createStreams(address authority, uint48 duration) external returns (ICapitalFeeStreams) {
-		return
-			ICapitalFeeStreams(address(new SecurityPoolCapitalFeeStreams(authority, uint48(block.timestamp), duration)));
+		return ICapitalFeeStreams(address(streamsDeployer.create(authority, uint48(block.timestamp), duration)));
 	}
 }
 
@@ -67,7 +69,9 @@ contract CapitalLedgerHarness {
 		collateralToken = new WETH9();
 		zoltar = new CapitalLedgerZoltarMock();
 		token = zoltar.token();
-		ledger = components.createLedger(address(this), Zoltar(address(zoltar)));
+		SecurityPoolCapitalLedgerDeployer deployer = components.capitalDeployer();
+		SecurityPoolCapitalLedger implementation = deployer.createImplementation(Zoltar(address(zoltar)), 10_500, 1e15, components.streamsDeployer());
+		ledger = deployer.create(implementation, 1);
 		ledger.initialize(components.createIndex(address(ledger)), components.createStreams(address(ledger), 1 days), address(0), address(0));
 	}
 	function mint(address owner, uint256 amount) external {

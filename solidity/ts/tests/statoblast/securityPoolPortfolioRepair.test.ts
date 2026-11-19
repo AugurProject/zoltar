@@ -10,6 +10,7 @@ import {
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
@@ -122,6 +123,88 @@ describe('Statoblast: permissionless settlement repair', () => {
 		expect(await ownerRep()).toBe(beforeRep - requiredRep)
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, freshQuestionId, unit] })).toBe(0n)
 		expect(await owner.readContract({ ...book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.secondQuestionId, 10n * unit] })).toBe(oldClaim)
+	})
+
+	test.each([0, 4])('a repair reserves matured claims before donating to the live basket with %i additional deadlines', async additionalCount => {
+		const owner = fixture.owner()
+		const donor = fixture.other()
+		const genesis = fixture.base.genesisUniverse
+		const additional: bigint[] = []
+		for (let index = 1; index <= additionalCount; index++) {
+			const data = makeQuestion(`Repair deadline ${index}`, fixture.base.questionData.endTime + BigInt(index) * DAY)
+			const id = getQuestionId(data, fixture.base.outcomes)
+			await createQuestion(owner, data, fixture.base.outcomes)
+			await fixture.register(id)
+			additional.push(id)
+		}
+		await fixture.prepare()
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(genesis), functionName: 'transfer', args: [donor.account.address, 5n * unit] }))
+		await fixture.deposit(5n * unit, donor)
+		const minimum = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'minimumCommitmentAttoEth' })
+		await fixture.authorize(minimum, donor)
+		await fixture.mint(10n * unit, fixture.base.questionId)
+		await fixture.mint(10n * unit, fixture.secondQuestionId)
+		for (const id of additional) await fixture.mint(unit, id)
+		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
+		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
+		let cutoff = forkTime + 67n * DAY
+		if (additional.length !== 0) {
+			await addRepToMigrationBalance(owner, genesis, 1000n * unit)
+			await splitMigrationRep(owner, genesis, 1000n * unit, [1])
+			const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
+			for (const [index, questionId] of additional.entries()) {
+				await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [fixture.poolFor(questionId).securityPool, child] }))
+				const address = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getPool', args: [questionId, child] })
+				const pool = { abi: poolArtifact.abi, address }
+				await approveToken(owner, getRepTokenAddress(child), address)
+				// Report the last claim just before the cutoff, leaving its
+				// deadline on the live side of the repair.
+				const last = index === additional.length - 1
+				if (last) await fixture.base.mockWindow.setTime(cutoff - 60n)
+				const reportHash = await writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
+				if (index === 0) {
+					const childReportGas = (await owner.getTransactionReceipt({ hash: reportHash })).gasUsed
+					if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ childReportGas })
+					expect(childReportGas).toBeLessThan(10_000_000n)
+				}
+				const game = await owner.readContract({ ...pool, functionName: 'escalationGame' })
+				const deadline = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
+				if (last) expect(deadline).toBeGreaterThan(cutoff)
+				else if (cutoff <= deadline) cutoff = deadline + 1n
+			}
+		}
+		await fixture.base.mockWindow.setTime(cutoff)
+
+		const settlement = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const ledger = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
+		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [child] })
+		const book = { abi: bookArtifact.abi, address: ledger }
+		const finalState = () => owner.readContract({ ...book, functionName: 'question', args: [bookId, fixture.base.questionId] })
+		const quote = (question: bigint) => owner.readContract({ ...book, functionName: 'quoteRedemption', args: [bookId, question, 10n * unit] })
+		const [priorCash] = await owner.readContract({ ...book, functionName: 'totals', args: [bookId] })
+		const priorDeficit = (await owner.readContract({ ...book, functionName: 'requiredCash', args: [bookId] })) - priorCash
+		const [finalPayout] = await quote(fixture.base.questionId)
+		expect((await finalState())[1]).toBe(0n)
+		expect(priorDeficit).toBeGreaterThan(0n)
+
+		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		await approveToken(donor, collateral, settlement)
+		const payerBefore = await collateralBalance(donor, fixture.portfolio, donor.account.address)
+		const hash = await writeContractAndWait(donor, () => donor.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, priorDeficit] }))
+		const repairGas = (await donor.getTransactionReceipt({ hash })).gasUsed
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ additionalCount, repairGas })
+		expect(repairGas).toBeLessThan(1_000_000n)
+		for (const [index, id] of additional.entries()) {
+			const [, frozenId] = await owner.readContract({ ...book, functionName: 'question', args: [bookId, id] })
+			expect(frozenId === 0n).toBe(index === additional.length - 1)
+		}
+		const donated = payerBefore - (await collateralBalance(donor, fixture.portfolio, donor.account.address))
+		expect(donated).toBeGreaterThan(0n)
+		expect(donated).toBeLessThan(priorDeficit)
+		expect((await finalState())[1]).not.toBe(0n)
+		expect((await quote(fixture.base.questionId))[0]).toBe(finalPayout)
+		expect((await quote(fixture.secondQuestionId))[0]).toBe(10n * unit)
 	})
 
 	test('#1321 a redemption that moves the deficit before inclusion does not revert a bounded repair', async () => {

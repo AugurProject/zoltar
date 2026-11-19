@@ -1,14 +1,16 @@
 import { portfolioRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, parseAbiItem, type Address } from '@zoltar/bot-shared/ethereum'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
-import type { PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { boundCloneImplementation, boundCloneRuntimeCode, universeCloneBindings, verifyBoundCloneCode, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from './read-client.ts'
 
 const links = [
 	parseAbiItem('function forkAuthority() view returns (address)'),
 	parseAbiItem('function zoltar() view returns (address)'),
 	parseAbiItem('function portfolio() view returns (address)'),
+	parseAbiItem('function capitalImplementation() view returns (address)'),
 	parseAbiItem('function capitalLedger() view returns (address)'),
+	parseAbiItem('function implementation() view returns (address)'),
 	parseAbiItem('function ledger() view returns (address)'),
 	parseAbiItem('function settlement() view returns (address)'),
 	parseAbiItem('function reporters() view returns (address)'),
@@ -36,6 +38,11 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 		await verifyCode(address, name)
 		if ((await readAddress(address, authorityFunction)) !== authority) throw new Error(`${name} belongs to another authority`)
 	}
+	const verifyCapitalClone = async (address: Address, name: RuntimeName) => {
+		const implementation = boundCloneImplementation(await client.getCode({ address, blockNumber }), snapshot.capitalLedger, name)
+		await verifyCode(implementation, name)
+		if ((await readAddress(address, 'capitalLedger')) !== snapshot.capitalLedger) throw new Error(`${name} belongs to another authority`)
+	}
 	await verifyCode(snapshot.portfolio, 'SecurityPoolPortfolio')
 	const [settlement, reporters, quote, fork, fees, services, lifecycle, auctionDelegate] = await Promise.all([
 		readAddress(snapshot.portfolio, 'settlement'),
@@ -51,18 +58,21 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 	if (capitalServices !== services) throw new Error('Capital ledger uses another services authority')
 	if (forkAuthority !== fork) throw new Error('Capital ledger uses another fork authority')
 	for (const module of [snapshot.capitalLedger, reporters, fork]) if ((await readAddress(module, 'zoltar')) !== protocol) throw new Error('Portfolio custody module uses another protocol')
+	const capitalImplementation = await readAddress(snapshot.portfolio, 'capitalImplementation')
+	const expected = boundCloneRuntimeCode(capitalImplementation, universeCloneBindings(snapshot.universeId, snapshot.repToken))
+	verifyBoundCloneCode(await client.getCode({ address: snapshot.capitalLedger, blockNumber }), expected, 'capital ledger')
 	await Promise.all([
-		verifyModule(snapshot.capitalLedger, 'SecurityPoolCapitalLedger', snapshot.portfolio),
-		verifyModule(snapshot.commitmentIndex, 'SecurityPoolCommitmentIndex', snapshot.capitalLedger, 'capitalLedger'),
-		verifyModule(fees, 'SecurityPoolCapitalFeeStreams', snapshot.capitalLedger, 'capitalLedger'),
+		verifyModule(capitalImplementation, 'SecurityPoolCapitalLedger', snapshot.portfolio),
+		verifyCapitalClone(snapshot.commitmentIndex, 'SecurityPoolCommitmentIndex'),
+		verifyCapitalClone(fees, 'SecurityPoolCapitalFeeStreams'),
 		verifyModule(settlement, 'SecurityPoolPortfolioSettlement', snapshot.portfolio),
 		verifyModule(book, 'SecurityPoolSettlementBook', settlement),
 		verifyModule(reporters, 'SecurityPoolReporterLedger', snapshot.portfolio),
 		verifyModule(quote, 'SecurityPoolPortfolioPurchase', snapshot.portfolio),
 		verifyModule(fork, 'SecurityPoolPortfolioForkCoordinator', snapshot.portfolio),
 		verifyModule(services, 'SecurityPoolPortfolioServices', snapshot.portfolio),
-		verifyModule(lifecycle, 'SecurityPoolCapitalLifecycleDelegate', snapshot.capitalLedger, 'ledger'),
-		verifyModule(auctionDelegate, 'SecurityPoolCapitalAuctionDelegate', snapshot.capitalLedger, 'ledger'),
+		verifyModule(lifecycle, 'SecurityPoolCapitalLifecycleDelegate', lifecycle, 'implementation'),
+		verifyModule(auctionDelegate, 'SecurityPoolCapitalAuctionDelegate', auctionDelegate, 'implementation'),
 		verifyModule(premium, 'SecurityPoolResolutionPremiumBook', services, 'services'),
 	])
 }

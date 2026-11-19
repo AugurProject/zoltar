@@ -8,6 +8,7 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
+	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory as oracleFactoryArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
@@ -409,6 +410,11 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await fixture.owner().readContract({ abi: feedArtifact.abi, address: secondFeed, functionName: 'lastPrice' })).toBe(0n)
 		await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'registerCoordinator', args: [fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator] })).rejects.toThrow('Only security pool factory')
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
+		const implementation = (portfolio: typeof second) => fixture.owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().openOraclePriceCoordinatorFactory, functionName: 'sharedPriceFeedImplementations', args: [factory.address, portfolio] })
+		const [firstImplementation, secondImplementation] = await Promise.all([implementation(fixture.portfolio), implementation(second)])
+		expect(firstImplementation).not.toBe(zeroAddress)
+		expect(secondImplementation).not.toBe(firstImplementation)
+		expect(await fixture.owner().readContract({ abi: feedArtifact.abi, address: secondImplementation, functionName: 'portfolio' })).toBe(second)
 		await expect(fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] })).rejects.toThrow('Portfolio is not canonical')
 		const ownNamespace = await fixture.other().readContract({ ...factory, functionName: 'sharedPriceFeeds', args: [fixture.other().account.address, fixture.base.genesisUniverse] })
 		expect(ownNamespace).toBe(zeroAddress)

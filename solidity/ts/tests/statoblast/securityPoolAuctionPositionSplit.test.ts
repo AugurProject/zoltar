@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, encodeDeployData, hexToBytes, toHex, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { boundCloneRuntimeCode } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { deployContract } from '../../testSupport/deployContract'
 import { test_statoblast_CommitmentIndexHarness_InspectableCommitmentIndex as artifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
@@ -37,9 +39,11 @@ describe('Statoblast: auction position materialization preserves cohort history'
 		await setupTestAccounts(ethereum)
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
 		outsider = createWriteClient(ethereum, TEST_ADDRESSES[1])
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address] }) }) })
-		if (receipt.contractAddress === undefined) throw new Error('Auction index deployment address missing')
-		address = receipt.contractAddress
+		const implementation = await deployContract(client, encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` }))
+		const runtime = boundCloneRuntimeCode(implementation, client.account.address)
+		// Copy and return the runtime after the 11-byte creation prefix.
+		address = await deployContract(client, concatHex(['0x3d61', toHex(hexToBytes(runtime).length, { size: 2 }), '0x80600b3d3981f3', runtime]))
+		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'initialize' }))
 		await setBaselineSnapshot()
 	})
 

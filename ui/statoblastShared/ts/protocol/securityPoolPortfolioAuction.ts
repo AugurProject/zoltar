@@ -4,7 +4,6 @@ import { decodeAuctionVaultBindings, loadPortfolioAuctionSnapshot, predictAuctio
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
 	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as auctionDelegateArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
@@ -16,7 +15,7 @@ import {
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
 } from '../contractArtifact.js'
 import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode } from './deploymentHelpers.js'
-import { portfolioReadClient, verifyRuntimeCode } from './securityPoolPortfolio.js'
+import { portfolioReadClient, verifyCapitalLedgerClone, verifyCapitalModuleClone, verifyRuntimeCode } from './securityPoolPortfolio.js'
 import { requireAddressValue, requireBigintValue, requireTupleValue, requireObjectValue } from './decoders.js'
 
 const vaultIdentityAbi = parseAbi([
@@ -36,6 +35,7 @@ const vaultIdentityAbi = parseAbi([
 	'function ledger() view returns (address)',
 	'function auctionDeployer() view returns (address)',
 	'function zoltar() view returns (address)',
+	'function getRepToken(uint248 universeId) view returns (address)',
 	'function universeId() view returns (uint248)',
 	'function capital() view returns (address)',
 	'function forkAuthority() view returns (address)',
@@ -61,12 +61,8 @@ export async function loadPortfolioBranchAuction(client: ReadClient, portfolio: 
 	const auction = snapshot.auction
 	if (auction !== undefined) {
 		await verifyAuctionCapitalCustody(client, portfolio, snapshot.capitalLedger, blockNumber)
-		modules.push(
-			{ address: snapshot.capitalLedger, artifact: capitalArtifact, label: 'capital ledger' },
-			{ address: auction.address, artifact: auctionArtifact, label: 'portfolio auction' },
-			{ address: auction.engine, artifact: engineArtifact, label: 'auction engine' },
-			{ address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction vault implementation' },
-		)
+		await verifyCapitalLedgerClone(client, portfolio, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber)
+		modules.push({ address: auction.address, artifact: auctionArtifact, label: 'portfolio auction' }, { address: auction.engine, artifact: engineArtifact, label: 'auction engine' }, { address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction vault implementation' })
 	}
 	await Promise.all(modules.map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)))
 	// Every vault is the exact clone the auction creates for the bidder, ledger, auction and bid.
@@ -143,12 +139,13 @@ export async function authenticatePortfolioAuctionVault(client: ReadClient, port
 		client.getCode({ address: portfolio, blockNumber }).then(code => verifyRuntimeCode(code, getSecurityPoolPortfolioRuntimeCode(), portfolioArtifact.evm.deployedBytecode.immutableReferences, 'portfolio')),
 		...[
 			{ address: controller, artifact: forkArtifact, label: 'fork coordinator' },
-			{ address: initialCapital, artifact: capitalArtifact, label: 'initial capital ledger' },
 			{ address: auction, artifact: auctionArtifact, label: 'portfolio auction' },
 			{ address: engine, artifact: engineArtifact, label: 'auction engine' },
 			{ address: bindings.implementation, artifact: vaultArtifact, label: 'auction vault implementation' },
 		].map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)),
 	])
+	const rep = requireAddressValue(await read(zoltar, 'getRepToken', [initialUniverse]), 'initial universe REP')
+	await verifyCapitalLedgerClone(client, portfolio, initialCapital, initialUniverse, rep, blockNumber)
 	await verifyAuctionCapitalCustody(client, portfolio, initialCapital, blockNumber)
 	const finalized = await read(engine, 'finalized')
 	if (typeof finalized !== 'boolean') throw new Error('Invalid auction finalization state.')
@@ -183,18 +180,18 @@ async function verifyAuctionCapitalCustody(client: ReadClient, portfolio: Addres
 	if (getAddress(requireAddressValue(capitalServices, 'capital services')) !== getAddress(requireAddressValue(portfolioServices, 'portfolio services')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolPortfolioAuctionDeployer))
 		throw new Error('Auction custody uses another services authority or deployer.')
 	const modules = [
-		{ value: lifecycle, artifact: lifecycleArtifact, label: 'capital lifecycle delegate', getter: 'ledger', authority: capitalLedger },
-		{ value: auctionDelegate, artifact: auctionDelegateArtifact, label: 'capital auction delegate', getter: 'ledger', authority: capitalLedger },
-		{ value: index, artifact: indexArtifact, label: 'commitment index', getter: 'capitalLedger', authority: capitalLedger },
-		{ value: fees, artifact: feesArtifact, label: 'capital fee streams', getter: 'capitalLedger', authority: capitalLedger },
+		{ value: lifecycle, artifact: lifecycleArtifact, label: 'capital lifecycle delegate', getter: 'implementation', authority: undefined },
+		{ value: auctionDelegate, artifact: auctionDelegateArtifact, label: 'capital auction delegate', getter: 'implementation', authority: undefined },
 		{ value: portfolioServices, artifact: servicesArtifact, label: 'portfolio services', getter: 'portfolio', authority: portfolio },
 	]
-	await Promise.all(
-		modules.map(async module => {
+	await Promise.all([
+		verifyCapitalModuleClone(client, requireAddressValue(index, 'commitment index'), indexArtifact, capitalLedger, 'commitment index', blockNumber),
+		verifyCapitalModuleClone(client, requireAddressValue(fees, 'capital fee streams'), feesArtifact, capitalLedger, 'capital fee streams', blockNumber),
+		...modules.map(async module => {
 			const address = requireAddressValue(module.value, module.label)
 			const [code, authority] = await Promise.all([client.getCode({ address, blockNumber }), client.readContract({ abi: module.artifact.abi, address, functionName: module.getter, blockNumber })])
 			verifyRuntimeCode(code, `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)
-			if (getAddress(requireAddressValue(authority, 'custody module authority')) !== getAddress(module.authority)) throw new Error(`${module.label} belongs to another authority.`)
+			if (getAddress(requireAddressValue(authority, 'custody module authority')) !== getAddress(module.authority ?? address)) throw new Error(`${module.label} belongs to another authority.`)
 		}),
-	)
+	])
 }
