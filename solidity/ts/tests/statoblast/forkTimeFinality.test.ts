@@ -16,7 +16,7 @@ describe('Statoblast: fork-time escalation finality', () => {
 		const owner = fixture.owner()
 		const base = fixture.base
 		const pool = fixture.poolFor(base.questionId).securityPool
-		const unrelated = { ...base.questionData, title: 'Rounding gap external fork' }
+		const unrelated = { ...base.questionData, title: 'Finality boundary external fork' }
 		await createQuestion(owner, unrelated, base.outcomes)
 		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), pool)
 		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), getZoltarAddress())
@@ -31,19 +31,18 @@ describe('Statoblast: fork-time escalation finality', () => {
 		const contract = { abi: gameArtifact.abi, address: game }
 		const activation = await owner.readContract({ ...contract, functionName: 'activationTime' })
 		const end = await owner.readContract({ ...contract, functionName: 'getEscalationGameEndDate' })
-		const estimatedElapsed = await owner.readContract({ ...contract, functionName: 'computeTimeSinceStartFromAttritionCostAttoRep', args: [7n * bond] })
-		return { owner, base, pool, contract, bond, activation, end, estimatedEnd: activation + estimatedElapsed, unrelatedId: getQuestionId(unrelated, base.outcomes) }
+		return { owner, base, pool, contract, bond, activation, end, unrelatedId: getQuestionId(unrelated, base.outcomes) }
 	}
 
-	test.each([1n, 12n, DAY].map(delay => ({ delay })))('a parent unresolved at the rounding-gap fork stays unresolved after $delay seconds', async ({ delay }) => {
-		const { owner, base, contract, bond, activation, estimatedEnd, unrelatedId } = await prepareDisputedPool()
-		const cost = await owner.readContract({ ...contract, functionName: 'computeIterativeAttritionCostAttoRep', args: [estimatedEnd - activation + 1n] })
-		expect(cost).toBeLessThan(7n * bond)
-		await base.mockWindow.setTime(estimatedEnd)
+	test.each([1n, 12n, DAY].map(delay => ({ delay })))('a parent unresolved at the deadline stays unresolved after $delay seconds', async ({ delay }) => {
+		const { owner, base, contract, bond, activation, end, unrelatedId } = await prepareDisputedPool()
+		const cost = await owner.readContract({ ...contract, functionName: 'computeIterativeAttritionCostAttoRep', args: [end - activation] })
+		expect(cost).toBeLessThanOrEqual(7n * bond)
+		await base.mockWindow.setTime(end - 1n)
 		await forkUniverse(owner, base.genesisUniverse, unrelatedId)
-		expect((await getUniverseData(owner, base.genesisUniverse)).forkTime).toBe(estimatedEnd + 1n)
+		expect((await getUniverseData(owner, base.genesisUniverse)).forkTime).toBe(end)
 		expect(await owner.readContract({ ...contract, functionName: 'getFinalQuestionResolution' })).toBe(BigInt(QuestionOutcome.None))
-		await base.mockWindow.setTime(estimatedEnd + 1n + delay)
+		await base.mockWindow.setTime(end + delay)
 		expect(await owner.readContract({ ...contract, functionName: 'getFinalQuestionResolution' })).toBe(BigInt(QuestionOutcome.None))
 		expect(await owner.readContract({ ...contract, functionName: 'totalCostAttoRep' })).toBe(cost)
 		await expect(owner.writeContract({ ...contract, functionName: 'settleOrdinaryGame' })).rejects.toThrow('Question not final')
