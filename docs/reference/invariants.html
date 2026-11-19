@@ -578,7 +578,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								Every successful question creation appends its deterministic ID exactly once and leaves prior question data and labels immutable. For every stored question and answer, the malformed classifier is true exactly when the public answer name is
-								<code>Malformed</code>, except that a categorical question may use the literal label <code>Malformed</code> for a well-formed outcome.
+								<code>Malformed</code>.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Appending a scalar question after two categorical questions preserves the first two records and their order; a scalar answer with reserved bits is both classified and named malformed.</p>
 							<dl class="invariant-metadata">

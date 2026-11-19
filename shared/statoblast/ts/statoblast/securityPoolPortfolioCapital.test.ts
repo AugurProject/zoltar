@@ -52,6 +52,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		acceptedExposureLimitAttoEth: 100n,
 		acceptedPrice: 2n,
 		conservativePrice: 3n,
+		backingPrice: 4n,
 		ownerConservativePrice: 3n,
 		liquidationPrice: 1n,
 		securityMultiplierBps: 10_500n,
@@ -178,7 +179,7 @@ describe('personal portfolio capital SDK', () => {
 		const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })
 		expect(snapshot.positions[0]).toMatchObject({ batch: 9n, commitment: 20n, remainingCommitment: 7n, retirementPreview: { status: 'ready', effectiveCurrentBatch: 9n, healthyCommitment: 50n, spareCommitment: 10n, queuedAheadCommitment: 0n, commitmentReduction: 13n, releasedRep: 0n } })
 		expect(calls.filter(call => call.functionName === 'accountOf')).toHaveLength(1)
-		expect(calls.filter(call => call.functionName === 'previewRetirement')).toEqual([{ functionName: 'previewRetirement', blockNumber: 42n, args: [1n, 3n, 40n] }])
+		expect(calls.filter(call => call.functionName === 'previewRetirement')).toEqual([{ functionName: 'previewRetirement', blockNumber: 42n, args: [1n, 4n, 40n] }])
 	})
 	test('retirement preview rejects an unknown status and does not inspect active or lazily closed history', async () => {
 		const retiring = { owner, batch: 9n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 7n }

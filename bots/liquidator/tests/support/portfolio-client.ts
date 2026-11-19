@@ -94,6 +94,7 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		commitmentIndex: snapshot.commitmentIndex,
 		acceptedPrice: snapshot.acceptedPrice,
 		conservativePrice: snapshot.conservativePrice,
+		backingPrice: snapshot.conservativePrice,
 		liquidationPrice: snapshot.liquidationPrice,
 		ownerConservativePrice: snapshot.ownerConservativePrice,
 		acceptedExposureLimitAttoEth: snapshot.oracleExposureLimitAttoEth,

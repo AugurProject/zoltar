@@ -103,6 +103,7 @@ export async function createLiquidatorRuntime(loaded: LoadedSettings, collaborat
 	state.sponsoredReports = durable.sponsoredReports
 	state.portfolioFunding = durable.portfolioFunding
 	state.completedPortfolioInstructions = durable.completedPortfolioInstructions
+	state.lastExpiredTakeoverBlock = durable.lastExpiredTakeoverBlock
 	state.portfolioScopes = durable.portfolioScopes
 	state.activities = durable.activities
 	state.lastScannedBlock = durable.lastScannedBlock === undefined ? undefined : BigInt(durable.lastScannedBlock)

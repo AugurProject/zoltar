@@ -18,6 +18,7 @@ interface ICapitalLifecycleHost {
 	function universeId() external view returns (uint248);
 	function securityMultiplierBps() external view returns (uint256);
 	function ownerConservativePrice(address owner) external view returns (uint256);
+	function backingPrice() external view returns (uint256);
 	function ownerWithdrawalPrice(address owner) external view returns (uint256);
 	function repToken() external view returns (IERC20);
 	function zoltar() external view returns (Zoltar);
@@ -159,7 +160,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			require(owner.positionId != 0 && _capitalOwner() != forkAuthority, 'Insufficient owner principal');
 			_requireOpen(host);
 			require(host.isPriceValid(), 'Capital price stale');
-			require(commitmentIndex.eligibleCommitment(conservativePrice) >= demandAttoEth, 'Portfolio backing insufficient');
+			require(commitmentIndex.eligibleCommitment(host.backingPrice()) >= demandAttoEth, 'Portfolio backing insufficient');
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
 			uint256 required = commitmentIndex.requiredRep(position.commitment, host.ownerWithdrawalPrice(_capitalOwner()), host.securityMultiplierBps(), _target(owner));
 			require(pledged <= position.rep && position.rep - pledged >= required, 'Owner collateral too low');

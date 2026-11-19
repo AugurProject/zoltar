@@ -8,6 +8,7 @@ export type DurableState = {
 	sponsoredReports?: SponsoredReport[] | undefined
 	portfolioFunding?: Record<string, PortfolioFunding>
 	completedPortfolioInstructions?: Record<string, string>
+	lastExpiredTakeoverBlock?: bigint | undefined
 	portfolioScopes: PortfolioScope[]
 	activities: Activity[]
 	chainId: number
@@ -23,6 +24,7 @@ export function durableStateDocument(state: RuntimeState) {
 		activities: state.activities,
 		chainId: state.chainId,
 		lastScannedBlock: state.lastScannedBlock,
+		lastExpiredTakeoverBlock: state.lastExpiredTakeoverBlock,
 		pendingTransactions: state.pendingTransactions,
 		portfolioFunding: state.portfolioFunding ?? {},
 		completedPortfolioInstructions: state.completedPortfolioInstructions ?? {},

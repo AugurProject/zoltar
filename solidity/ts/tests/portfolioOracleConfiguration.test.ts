@@ -221,7 +221,7 @@ describe('Portfolio oracle configuration guards', () => {
 		}
 	})
 
-	test('shared feeds retain their collateral floor across configured priority-fee boundaries', async () => {
+	test('shared feeds retain a positive collateral floor even with zero base fee (#595)', async () => {
 		const client = fixture.owner()
 		const infrastructure = getInfraContractAddresses()
 		const worker = { abi: feedWorkerArtifact.abi, address: infrastructure.sharedPoolPriceFeedDeploymentWorker } as const
@@ -240,8 +240,10 @@ describe('Portfolio oracle configuration guards', () => {
 			for (const baseFee of [0n, 30n * 10n ** 9n]) {
 				await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFee.toString(16)}`] })
 				await fixture.base.mockWindow.request({ method: 'evm_mine', params: [] })
+				assert.strictEqual((await client.getBlock()).baseFeePerGas, baseFee)
 				const minimum = await client.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEth' })
 				assert.strictEqual(minimum, await client.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumReportCollateral' }))
+				assert.ok(minimum > 1n)
 				assert.ok(minimum <= (1n << 128n) - 1n)
 			}
 			await fixture.base.mockWindow.setNextBlockBaseFeePerGasToZero()

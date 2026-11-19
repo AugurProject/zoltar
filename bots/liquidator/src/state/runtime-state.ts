@@ -10,6 +10,7 @@ export type RuntimeState = {
 	sponsoredReports?: SponsoredReport[] | undefined
 	portfolioFunding?: Record<string, PortfolioFunding> | undefined
 	completedPortfolioInstructions?: Record<string, string> | undefined
+	lastExpiredTakeoverBlock?: bigint | undefined
 	activities: Activity[]
 	chainId: number
 	centralizedMarket: CentralizedMarketEstimate | undefined

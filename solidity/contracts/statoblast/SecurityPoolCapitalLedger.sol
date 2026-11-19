@@ -170,10 +170,10 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 	/// @notice Price used to preview and execute withdrawals from active backing.
 	function ownerWithdrawalPrice(address owner) external view returns (uint256) {
-		return Math.max(ownerConservativePrice(owner), mintRiskPrice());
+		return Math.max(ownerConservativePrice(owner), backingPrice());
 	}
-	/// @notice Upper REP requirement for newly authorized settlement demand.
-	function mintRiskPrice() public view returns (uint256) {
+	/// @notice Conservative REP price used when increasing demand or releasing backing.
+	function backingPrice() public view returns (uint256) {
 		return Math.max(conservativePrice, withdrawalPriceFloor);
 	}
 	function _requiredRep(uint256 commitment, uint256 health, uint256 price) private view returns (uint256) {
@@ -275,7 +275,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function _serveRetirement(uint96 id) private {
 		require(id == 0 || id != auctionCohort.positionId, 'Materialize an individual auction vault');
 		if (!isPriceValid() || frozen || zoltar.getForkTime(universeId()) != 0) return;
-		SecurityPoolCommitmentIndex.Retirement memory result = commitmentIndex.retire(conservativePrice, demandAttoEth, id);
+		SecurityPoolCommitmentIndex.Retirement memory result = commitmentIndex.retire(backingPrice(), demandAttoEth, id);
 		retirementCashAttoRep += result.rep;
 		if (result.boundaryPositionId != 0) {
 			SecurityPoolCommitmentIndex.Account memory boundary = commitmentIndex.accountOf(result.boundaryPositionId);

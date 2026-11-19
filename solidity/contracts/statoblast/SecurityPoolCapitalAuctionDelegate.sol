@@ -30,7 +30,7 @@ interface ICapitalAuctionHost {
 	function isPriceValid() external view returns (bool);
 	function ownerWithdrawalPrice(address owner) external view returns (uint256);
 	function demandAttoEth() external view returns (uint256);
-	function conservativePrice() external view returns (uint256);
+	function backingPrice() external view returns (uint256);
 	function zoltar() external view returns (Zoltar);
 	function universeId() external view returns (uint248);
 }
@@ -114,7 +114,7 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 			host.exported(holder) ||
 			host.zoltar().getForkTime(host.universeId()) != 0 ||
 			!host.isPriceValid() ||
-			index.eligibleCommitment(host.conservativePrice()) < host.demandAttoEth()
+			index.eligibleCommitment(host.backingPrice()) < host.demandAttoEth()
 		) return (principal, commitment, withdrawable);
 		if (target == 0) target = owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
 		uint256 required = index.requiredRep(commitment, host.ownerWithdrawalPrice(holder), host.securityMultiplierBps(), target);

@@ -23,6 +23,7 @@ const abi = parseAbi([
 	'function commitmentIndex() view returns (address)',
 	'function acceptedPrice() view returns (uint256)',
 	'function conservativePrice() view returns (uint256)',
+	'function backingPrice() view returns (uint256)',
 	'function liquidationPrice() view returns (uint256)',
 	'function ownerConservativePrice(address owner) view returns (uint256)',
 	'function securityMultiplierBps() view returns (uint256)',
@@ -333,7 +334,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 			if (decodeAddress(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
 			const cohort = decodeUint(batch, 'Cohort id', 96)
 			const liveCommitment = decodeUint(commitment, 'Commitment')
-			const preview = cohort !== 0n && liveCommitment !== 0n ? retirementPreview(await read(commitmentIndex, 'previewRetirement', [id, decodeUint(conservative, 'Conservative price'), decodeUint(demand, 'Demand')])) : undefined
+			const preview = cohort !== 0n && liveCommitment !== 0n ? retirementPreview(await read(commitmentIndex, 'previewRetirement', [id, decodeUint(await read(capitalLedger, 'backingPrice'), 'Confirmed backing price'), decodeUint(demand, 'Demand')])) : undefined
 			return {
 				id,
 				owner,

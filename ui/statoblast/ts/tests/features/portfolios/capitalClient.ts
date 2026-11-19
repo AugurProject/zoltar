@@ -110,6 +110,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				...snapshot.economics,
 				acceptedPrice: snapshot.acceptedPrice,
 				conservativePrice: snapshot.conservativePrice,
+				backingPrice: snapshot.conservativePrice,
 				liquidationPrice: snapshot.liquidationPrice,
 				ownerConservativePrice: snapshot.ownerConservativePrice,
 				priceFeed: snapshot.priceFeed,

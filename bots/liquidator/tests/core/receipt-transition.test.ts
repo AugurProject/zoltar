@@ -10,6 +10,48 @@ import { initialRuntimeState, loadDurableState, saveDurableState } from '#state/
 import { resolveFinalizedReceipt } from '#execution/receipt-transition'
 import { validateReceiptExpectation } from '#execution/receipt-validation'
 import { portfolioReceiptIntent } from './portfolio-receipt-fixture.ts'
+import { explainTakeoverReceiptExpiry } from '#execution/takeover-receipt-expiry'
+import { portfolioClient } from '../support/portfolio-client.ts'
+
+test('takeover expiry requires consistent final receipt-block evidence (#1372)', async () => {
+	const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
+	receipt.status = 'reverted'
+	receipt.blockNumber = 123n
+	const newEpoch = portfolioClient({ acceptedPriceEpoch: 3n })
+	const unchanged = portfolioClient({ acceptedPriceEpoch: 2n })
+	receipt.blockHash = newEpoch.observation.snapshot.blockHash
+	const updatedReaders = [{ client: newEpoch.client, endpoint: 'https://read.example' }]
+	expect(await explainTakeoverReceiptExpiry(intent, receipt, updatedReaders, 1)).toBe('Accepted price epoch changed')
+	expect(await explainTakeoverReceiptExpiry(intent, receipt, [{ client: unchanged.client, endpoint: 'https://read.example' }], 1)).toBeUndefined()
+	await expect(explainTakeoverReceiptExpiry(intent, receipt, [...updatedReaders, { client: unchanged.client, endpoint: 'https://other.example' }], 2)).rejects.toThrow('RPC disagreement')
+	await expect(explainTakeoverReceiptExpiry(intent, { ...receipt, blockHash: `0x${'fe'.repeat(32)}` }, updatedReaders, 1)).rejects.toThrow('receipt block changed')
+	expect(await explainTakeoverReceiptExpiry(intent, { ...receipt, gasUsed: 1_000_000n }, updatedReaders, 1)).toBeUndefined()
+})
+
+test('a finalized takeover whose terms expired is recorded as failed and retires its intent (#1372)', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'expired-takeover-'))
+	try {
+		const path = join(directory, 'state.json')
+		const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
+		receipt.status = 'reverted'
+		const state = initialRuntimeState(false, intent.sender, 1)
+		state.pendingTransactions.push(intent)
+		const result = resolveFinalizedReceipt(path, state, intent, receipt, async () => 'Accepted price epoch changed')
+		await expect(result).rejects.toMatchObject({ name: 'FinalizedTakeoverExpired' })
+		const persisted = await loadDurableState(path, 1)
+		expect(persisted.pendingTransactions).toHaveLength(0)
+		expect(persisted.activities[0]).toMatchObject({ hash: intent.hash, status: 'failed', details: 'Accepted price epoch changed' })
+		expect(persisted.portfolioFunding).toEqual({})
+		expect(persisted.lastExpiredTakeoverBlock).toBe(receipt.blockNumber)
+		const restarted = initialRuntimeState(false, intent.sender, 1)
+		restarted.lastExpiredTakeoverBlock = persisted.lastExpiredTakeoverBlock
+		restarted.pendingTransactions.push(intent)
+		await expect(resolveFinalizedReceipt(path, restarted, intent, { ...receipt, blockNumber: receipt.blockNumber + 1n }, async () => 'Portfolio demand changed')).rejects.toThrow('reverted')
+		expect((await loadDurableState(path, 1)).lastExpiredTakeoverBlock).toBe(receipt.blockNumber)
+	} finally {
+		await rm(directory, { recursive: true, force: true })
+	}
+})
 
 for (const status of ['success', 'reverted'] as const) {
 	test(`durably resolves portfolio ${status} after restart and deduplicates retries`, async () => {

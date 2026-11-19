@@ -35,6 +35,7 @@ const portfolioMonitorAbi = [
 	parseAbiItem('function getRepToken(uint248 universeId) view returns (address)'),
 	parseAbiItem('function lastPositionId() view returns (uint96)'),
 	parseAbiItem('function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)'),
+	parseAbiItem('function backingPrice() view returns (uint256)'),
 	parseAbiItem('function liquidationStarted(uint96 id) view returns (uint48)'),
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
@@ -133,7 +134,8 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 	}
 	let retirementStatus = 'Not retiring'
 	if (uint(account['batch']) !== 0n && uint(account['commitment']) !== 0n) {
-		const raw = await client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'previewRetirement', args: [id, snapshot.conservativePrice, snapshot.demandAttoEth], blockNumber })
+		const backingPrice = await client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'backingPrice', blockNumber })
+		const raw = await client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'previewRetirement', args: [id, backingPrice, snapshot.demandAttoEth], blockNumber })
 		const preview = record(raw, 'Retirement preview')
 		const status = preview['status']
 		if (typeof status !== 'bigint' && typeof status !== 'number') throw new Error('Invalid retirement preview status')

@@ -17,13 +17,36 @@ import {
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, loadOpenOracleEventState, openOracleSettle, requestPriceWithValue, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { fundCoordinatorInitialReport, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, loadOpenOracleEventState, openOracleSettle, requestPriceWithValue, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const feed = () => fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+
+	test('a lower quote alone cannot restore aggregate backing for withdrawals or retirements', async () => {
+		await fixture.prepare(212n * unit, 100n * unit)
+		const other = fixture.other()
+		await fixture.deposit(500n * unit, other)
+		await fixture.authorize(100n * unit, other)
+		await fixture.mint(150n * unit)
+		await fixture.refreshPrice(fixture.base.questionId, (101n * unit) / 100n)
+		await fixture.refreshPrice()
+
+		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
+		const collateral = () => other.readContract({ ...capital, functionName: 'ownerCollateral', args: [other.account.address] })
+		expect((await collateral())[2]).toBe(0n)
+		await expect(other.simulateContract({ ...capital, functionName: 'withdrawPrincipal', args: [unit, other.account.address] })).rejects.toThrow('Portfolio backing insufficient')
+		await fixture.authorize(50n * unit, other)
+		expect((await collateral())[1]).toBe(100n * unit)
+
+		await fixture.refreshPrice()
+		await writeContractAndWait(other, () => other.writeContract({ ...capital, functionName: 'serveRetirement', args: [0n] }))
+		const [, commitment, withdrawable] = await collateral()
+		expect(commitment).toBe(50n * unit)
+		expect(withdrawable).toBeGreaterThan(0n)
+	})
 
 	test('additional mint capacity requires a second challenge window after a lower quote', async () => {
 		await fixture.prepare(212n * unit, 100n * unit)
@@ -74,6 +97,22 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(confirmed).toBeGreaterThan(original)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [confirmed, owner.account.address] }))
 		expect(await withdrawable()).toBe(0n)
+	})
+
+	test('a question coordinator respects the sponsor’s signed collateral budget (#1351)', async () => {
+		await fixture.prepare(1_000n * unit, 100n * unit)
+		const owner = fixture.owner()
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const { minimumToken1ReportAttoEth: minimum } = await fundCoordinatorInitialReport(owner, coordinator, unit)
+		const bounty = await getRequestPriceCostAttoEth(owner, coordinator)
+		const request = { abi: coordinatorArtifact.abi, address: coordinator, functionName: 'requestPrice', value: bounty } as const
+		const pendingBefore = await getPendingReportId(owner, coordinator)
+
+		await expect(owner.simulateContract({ ...request, args: [unit, minimum - 1n, bounty] })).rejects.toThrow('Report funding exceeds approved budget')
+		expect(await getPendingReportId(owner, coordinator)).toBe(pendingBefore)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...request, args: [unit, minimum, bounty] }))
+		const reportId = await getPendingReportId(owner, coordinator)
+		expect((await loadOpenOracleEventState(owner, reportId)).latest.game.currentAmount1).toBe(minimum)
 	})
 
 	test('an accurate small report cannot veto an independently funded growth report', async () => {
