@@ -269,3 +269,8 @@ describe('AugurScan runtime logging', () => {
 		expect(() => databaseJsonText(undefined)).toThrow('Database JSON value cannot be serialized')
 	})
 })
+
+test('database JSON replaces unsupported characters in nested text values', () => {
+	const separator = String.fromCodePoint(0)
+	expect(JSON.parse(databaseJsonText({ labels: [`First${separator}Second`, String.raw`\u0000`] }))).toEqual({ labels: ['First�Second', String.raw`\u0000`] })
+})

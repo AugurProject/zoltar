@@ -1,5 +1,6 @@
+import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import type { Address } from '../ethereum.ts'
+import { type Address, RpcError } from '../ethereum.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from './resilience.ts'
 import { rpcQuorumDescription, type RpcQuorumRequirement } from './rpc-quorum-policy.ts'
 
@@ -28,15 +29,21 @@ export function quorumValue<T>(label: string, observations: readonly { endpoint:
 	return first.value
 }
 
-export function availableSettledValues<T>(settled: readonly PromiseSettledResult<T>[]) {
-	const safetyFailure = settled.find(result => result.status === 'rejected' && operationalFailureDisposition(result.reason) === 'safety-paused')
+function isEndpointResponseError(error: unknown): boolean {
+	return [...errorChain(error)].some(cause => cause instanceof RpcError && typeof cause.code === 'number' && cause.code < 0 && !/\bexecution reverted\b/i.test(cause.shortMessage ?? cause.message))
+}
+
+export function availableSettledValues<T>(settled: readonly PromiseSettledResult<T>[], quorum?: { requirement: RpcQuorumRequirement; endpointOf: (value: T) => string }) {
+	const available = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
+	const hasQuorum = quorum !== undefined && new Set(available.map(quorum.endpointOf)).size >= quorum.requirement
+	const safetyFailure = settled.find(result => result.status === 'rejected' && !(hasQuorum && isEndpointResponseError(result.reason)) && operationalFailureDisposition(result.reason) === 'safety-paused')
 	if (safetyFailure?.status === 'rejected') throw safetyFailure.reason
-	return settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
+	return available
 }
 
 export async function settledQuorumValue<T>(label: string, observations: readonly Promise<{ endpoint: string; value: T }>[], requirement: RpcQuorumRequirement) {
 	const settled = await Promise.allSettled(observations)
-	const available = availableSettledValues(settled)
+	const available = availableSettledValues(settled, { requirement, endpointOf: observation => observation.endpoint })
 	if (available.length < requirement) {
 		const failures = settled.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
 		throw new ConnectivityDegradedError(`${label} requires at least ${requirement === 1 ? 'one available RPC endpoint' : 'two available independent RPC endpoints'}${failures.length === 0 ? '' : `; ${failures.join('; ')}`}`)
@@ -81,6 +88,7 @@ export async function sharedQuorumReadTargets<T extends { endpoint: string; clie
 				return { reader, number: block.number }
 			}),
 		),
+		{ requirement, endpointOf: item => item.reader.endpoint },
 	)
 	if (new Set(available.map(item => item.reader.endpoint)).size < requirement) throw new ConnectivityDegradedError('Not enough independent RPC heads for the configured quorum')
 	const blockNumber = sharedQuorumBlockNumber(

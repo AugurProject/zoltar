@@ -21,22 +21,26 @@ export const logListRows = async (sql: SQL, query: LogListQuery) => {
 		values.push(value)
 		return `$${values.length}`
 	}
-	clauses.push(`l.chain_id = ${bind(query.chainId)}`)
+	const chainParameter = bind(query.chainId)
+	clauses.push(`l.chain_id = ${chainParameter}`)
+	let addressJoin = ''
 	if (query.event !== null) clauses.push(`l.event_name ILIKE ${bind(literalContainsPattern(query.event))}`)
 	if (query.address !== null) {
 		const addressParameter = bind(query.address)
-		const addressPatternParameter = bind(`%${query.address}%`)
-		clauses.push(`(
-			l.emitter_address = ${addressParameter}
-			OR l.arguments::text ILIKE ${addressPatternParameter}
-			OR EXISTS (
-				SELECT 1 FROM address_activity activity
-				WHERE activity.chain_id = l.chain_id
-					AND activity.block_hash = l.block_hash
-					AND activity.tx_hash = l.tx_hash
-					AND activity.address = ${addressParameter}
-			)
-		)`)
+		const canonicalLogs = query.canonical === 'all' ? '' : `AND candidate.canonical = ${query.canonical === 'canonical' ? 'true' : 'false'}`
+		// Start with emitter and participant index lookups. Match the full occurrence so
+		// a transaction repeated on another block does not inherit those matches.
+		addressJoin = `JOIN (
+			SELECT candidate.chain_id, candidate.block_hash, candidate.tx_hash, candidate.log_index
+			FROM logs candidate
+			WHERE candidate.chain_id = ${chainParameter} AND candidate.emitter_address = ${addressParameter} ${canonicalLogs}
+			UNION
+			SELECT candidate.chain_id, candidate.block_hash, candidate.tx_hash, candidate.log_index
+			FROM logs candidate
+			JOIN address_activity activity USING (chain_id, block_hash, tx_hash)
+			WHERE activity.chain_id = ${chainParameter} AND activity.address = ${addressParameter} ${canonicalLogs}
+				${query.canonical === 'canonical' ? 'AND activity.canonical' : ''}
+		) matched USING (chain_id, block_hash, tx_hash, log_index)`
 	}
 	if (query.decoded === 'true') clauses.push("l.decode_status = 'decoded'")
 	if (query.decoded === 'false') clauses.push("l.decode_status <> 'decoded'")
@@ -56,6 +60,7 @@ export const logListRows = async (sql: SQL, query: LogListQuery) => {
 			invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
 			invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at
 		FROM logs l
+		${addressJoin}
 		JOIN blocks b ON b.chain_id = l.chain_id AND b.hash = l.block_hash
 		JOIN transactions t ON t.chain_id = l.chain_id AND t.block_hash = l.block_hash AND t.hash = l.tx_hash
 		LEFT JOIN actions a ON a.chain_id = l.chain_id AND a.block_hash = l.block_hash AND a.tx_hash = l.tx_hash

@@ -1481,3 +1481,13 @@ test.each(['header not found', 'block not found', 'missing trie node'])('a provi
 	expect(operationalFailureDisposition(unavailable)).toBe('connectivity-degraded')
 	expect(await settledQuorumValue('head', [Promise.resolve({ endpoint: 'a', value: 10n }), Promise.resolve({ endpoint: 'b', value: 10n }), Promise.reject(unavailable)], 2)).toBe(10n)
 })
+
+test('an available signing-block quorum tolerates a coded provider response error', async () => {
+	const first = Promise.resolve({ endpoint: 'a', value: 10n })
+	const second = Promise.resolve({ endpoint: 'b', value: 10n })
+	const unavailable = new RpcError('Resource not found', { code: -32001 })
+	await expect(settledQuorumValue('signing block', [first, second, Promise.reject(unavailable)], 2)).resolves.toBe(10n)
+	await expect(settledQuorumValue('signing block', [first, first, Promise.reject(unavailable)], 2)).rejects.toThrow('Resource not found')
+	const reverted = new RpcError('execution reverted', { code: -32000 })
+	await expect(settledQuorumValue('simulation', [first, second, Promise.reject(reverted)], 2)).rejects.toThrow('execution reverted')
+})

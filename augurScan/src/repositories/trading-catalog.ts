@@ -13,6 +13,10 @@ export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: nu
 		)
 		SELECT market.pair_address, market.pool_address, market.share_token_address,
 			market.universe_id::text, market.fee_bps::text, question.question_id::text, question.title AS question_title,
+			(SELECT state.read_result->'collateral' FROM entity_state_snapshots state
+			 WHERE state.chain_id = market.chain_id AND state.entity_identity = market.pool_address
+				AND state.entity_type = 'pool' AND state.canonical AND state.read_status = 'success' AND state.block_number <= ${asOfBlock}
+			 ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral,
 			price.yes_reserve_atto_shares::text, price.no_reserve_atto_shares::text,
 			price.conditional_yes_bps::text, price.conditional_no_bps::text,
 			price.block_number::text AS price_block_number, price.timestamp AS price_timestamp,

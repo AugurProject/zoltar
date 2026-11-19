@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { databaseJsonText } from './database-json.ts'
+import { databaseJsonText, databaseText } from './database-json.ts'
 import { zeroAddress } from './ethereum.ts'
 import { type Projection, projectionsFrom } from './projections.ts'
 import type { StoredLog } from './types.ts'
@@ -76,7 +76,7 @@ const storeProjection = async (transaction: SQL, chainId: number, item: StoredLo
 	if (projection.type === 'question') {
 		await transaction`
 			INSERT INTO questions (chain_id, block_hash, tx_hash, log_index, block_number, question_id, created_timestamp, title, description, start_time, end_time, num_ticks, display_value_min, display_value_max, answer_unit, outcome_options, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.questionId}, ${projection.createdTimestamp}, ${projection.title}, ${projection.description}, ${projection.startTime}, ${projection.endTime}, ${projection.numTicks}, ${projection.displayValueMin}, ${projection.displayValueMax}, ${projection.answerUnit}, (${databaseJsonText(projection.outcomeOptions)}::text)::jsonb, true)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.questionId}, ${projection.createdTimestamp}, ${databaseText(projection.title)}, ${databaseText(projection.description)}, ${projection.startTime}, ${projection.endTime}, ${projection.numTicks}, ${projection.displayValueMin}, ${projection.displayValueMax}, ${databaseText(projection.answerUnit)}, (${databaseJsonText(projection.outcomeOptions)}::text)::jsonb, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, question_id) DO UPDATE SET canonical = true
 		`
 		return

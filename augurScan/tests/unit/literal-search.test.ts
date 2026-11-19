@@ -8,6 +8,7 @@ import { tradingCatalogRows } from '../../src/repositories/trading-catalog.ts'
 // is recorded when it is awaited; one embedded in another query as a fragment contributes its
 // bindings to that query instead.
 function captureQueries() {
+	const statements: string[] = []
 	const bindings: unknown[][] = []
 	const fragments = new WeakMap<object, readonly unknown[]>()
 	const expand = (values: readonly unknown[]): unknown[] => values.flatMap(value => (typeof value === 'object' && value !== null && fragments.has(value) ? expand(fragments.get(value) ?? []) : [value]))
@@ -27,9 +28,10 @@ function captureQueries() {
 		get(target, property, receiver) {
 			// Like a tagged call, an unsafe query runs when awaited and is otherwise an embedded fragment.
 			if (property === 'unsafe')
-				return (_query: string, values: readonly unknown[] = []) => {
+				return (statement: string, values: readonly unknown[] = []) => {
 					const query = {
 						then: (resolve: (rows: unknown[]) => void) => {
+							statements.push(statement)
 							bindings.push([...values])
 							resolve([])
 						},
@@ -40,7 +42,7 @@ function captureQueries() {
 			return Reflect.get(target, property, receiver)
 		},
 	})
-	return { bindings, database, sql }
+	return { bindings, database, sql, statements }
 }
 
 const search = String.raw`50%_\off`
@@ -72,6 +74,19 @@ test('log event search escapes wildcard characters before binding', async () => 
 	try {
 		await logListRows(sql, { chainId: 1, event: search, address: null, decoded: null, canonical: 'canonical', limit: 10 })
 		expect(bindings.flat()).toContain(escaped)
+	} finally {
+		await database.close()
+	}
+})
+
+test('address log filters select candidate occurrences through indexed addresses', async () => {
+	const { bindings, database, sql, statements } = captureQueries()
+	try {
+		const address = `0x${'1'.repeat(40)}`
+		await logListRows(sql, { chainId: 1, event: null, address, decoded: null, canonical: 'canonical', limit: 10 })
+		expect(bindings.flat()).toContain(address)
+		expect(statements[0]).toContain('JOIN address_activity')
+		expect(statements[0]).not.toContain('arguments::text')
 	} finally {
 		await database.close()
 	}

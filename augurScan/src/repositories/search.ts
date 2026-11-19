@@ -30,7 +30,8 @@ export const searchItems = async (sql: SQL, chainId: number, query: string, limi
 		const blocks = await sql`SELECT number::text, hash FROM blocks WHERE chain_id = ${chainId} AND number = ${query}::bigint AND canonical LIMIT 1`
 		for (const block of blocks) items.push({ type: 'block', label: `Block #${block['number']}`, href: `/block/${block['number']}?chainId=${chainId}`, detail: String(block['hash']) })
 	}
-	if (/^\d{1,78}$/.test(query)) {
+	const questionId = /^\d{1,78}$/.test(query) ? query : null
+	if (questionId !== null) {
 		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND question_id = ${query}::numeric AND canonical LIMIT 1`
 		for (const question of questions) items.push({ type: 'question', label: String(question['title']), href: `/question/${question['question_id']}?chainId=${chainId}`, detail: `Question #${query}` })
 		const reports = await sql`SELECT DISTINCT open_oracle_address, report_id::text FROM open_oracle_report_events WHERE chain_id = ${chainId} AND report_id = ${query}::numeric AND canonical LIMIT ${limit}`
@@ -38,7 +39,7 @@ export const searchItems = async (sql: SQL, chainId: number, query: string, limi
 	}
 	if (query.length >= 2 && !hashPattern.test(query)) {
 		const pattern = literalContainsPattern(query)
-		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND title ILIKE ${pattern} AND canonical ORDER BY created_timestamp DESC LIMIT ${limit}`
+		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND title ILIKE ${pattern} AND canonical AND question_id IS DISTINCT FROM ${questionId}::numeric ORDER BY created_timestamp DESC LIMIT ${limit}`
 		for (const question of questions) items.push({ type: 'question', label: String(question['title']), href: `/question/${question['question_id']}?chainId=${chainId}` })
 	}
 	return items.slice(0, limit)

@@ -1,17 +1,16 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { ConnectivityDegradedError, operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
+import { availableSettledValues, quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export function availableExecutionObservations<T, V>(label: string, settled: readonly PromiseSettledResult<T>[], observation: (value: T) => { endpoint: string; value: V }, requirement: RpcQuorumRequirement) {
-	const safetyFailure = settled.find(result => result.status === 'rejected' && operationalFailureDisposition(result.reason) === 'safety-paused')
-	if (safetyFailure?.status === 'rejected') throw safetyFailure.reason
-	const available = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
-	if (available.length < requirement) {
+	const available = availableSettledValues(settled, { requirement, endpointOf: value => observation(value).endpoint })
+	const observations = available.map(observation)
+	if (new Set(observations.map(entry => entry.endpoint)).size < requirement) {
 		const failures = settled.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
 		throw new ConnectivityDegradedError(`${label} requires at least ${requirement === 1 ? 'one available RPC endpoint' : 'two available independent RPC endpoints'}${failures.length === 0 ? '' : `: ${failures.join('; ')}`}`)
 	}
-	quorumValue(label, available.map(observation), requirement)
+	quorumValue(label, observations, requirement)
 	return available
 }
 

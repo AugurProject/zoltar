@@ -1,7 +1,11 @@
 type DatabaseJsonValue = boolean | null | number | string | DatabaseJsonValue[] | { readonly [key: string]: DatabaseJsonValue }
 
+// PostgreSQL text and JSONB cannot store U+0000. The raw chain bytes are retained separately.
+export const databaseText = (value: string): string => value.replaceAll(String.fromCodePoint(0), '�')
+
 const databaseJsonValue = (value: unknown): DatabaseJsonValue | undefined => {
-	if (value === null || typeof value === 'boolean' || typeof value === 'string') return value
+	if (value === null || typeof value === 'boolean') return value
+	if (typeof value === 'string') return databaseText(value)
 	if (typeof value === 'number') return Number.isFinite(value) ? value : null
 	if (typeof value === 'bigint') return value.toString()
 	if (Array.isArray(value)) return value.map(item => databaseJsonValue(item) ?? null)
@@ -11,7 +15,7 @@ const databaseJsonValue = (value: unknown): DatabaseJsonValue | undefined => {
 	const result: Record<string, DatabaseJsonValue> = {}
 	for (const [key, item] of Object.entries(value)) {
 		const normalized = databaseJsonValue(item)
-		if (normalized !== undefined) result[key] = normalized
+		if (normalized !== undefined) Object.defineProperty(result, databaseText(key), { value: normalized, enumerable: true, configurable: true })
 	}
 	return result
 }

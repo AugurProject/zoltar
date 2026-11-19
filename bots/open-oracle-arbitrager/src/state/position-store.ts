@@ -432,7 +432,7 @@ export function manuallyReconcilePosition(
 		recordedBy: Address
 	},
 ) {
-	if (position.status !== 'recovery-required') throw new Error(`Position ${position.reportId} is not recovery-required`)
+	if (position.status !== 'recovery-required' && position.status !== 'replaced') throw new Error(`Position ${position.reportId} must be recovery-required or replaced`)
 	if (parameters.confirmedReportId !== position.reportId) throw new Error('Typed report confirmation does not match the position')
 	if (parameters.recordedBy.toLowerCase() !== position.account.toLowerCase()) throw new Error('Only the position signer can record manual reconciliation')
 	if (parameters.pnlUnavailable === (parameters.realizedNetProfitEth !== undefined)) throw new Error('Choose exactly one of realized P&L or P&L unavailable')

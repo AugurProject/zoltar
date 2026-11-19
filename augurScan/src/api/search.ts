@@ -11,7 +11,8 @@ export const searchResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const limit = Math.min(Math.max(integer(url.searchParams.get('limit'), 'limit') ?? 10, 1), 25)
 	const chainIds = chainId === undefined ? await searchNetworkIds(sql) : [chainId]
 	const matches = await Promise.all(chainIds.map(id => searchItems(sql, id, query, limit)))
-	return json({ items: matches.flat().slice(0, limit), query, chainId })
+	const items = matches.flat().sort((left, right) => Number(left.type === 'address') - Number(right.type === 'address'))
+	return json({ items: items.slice(0, limit), query, chainId })
 }
 
 export const transactionResponse = async (sql: SQL, parts: readonly string[]): Promise<Response> => {

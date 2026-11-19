@@ -37,7 +37,7 @@ test('manual realized P&L requires an explicit all-in accounting acknowledgement
 	expect(acknowledged.stderr).toContain('PRIVATE_KEY must be')
 })
 
-test('retains a newly reconciled recovery record when the terminal journal is full', async () => {
+test.each(['recovery-required', 'replaced'] as const)('retains a newly reconciled %s record when the terminal journal is full', async status => {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-reconcile-'))
 	directories.push(directory)
 	const positionFile = join(directory, 'positions.json')
@@ -47,7 +47,7 @@ test('retains a newly reconciled recovery record when the terminal journal is fu
 		lockedToken: '2',
 		lockedWeth: '1',
 		realizedNetProfitEth: undefined,
-		status: 'recovery-required',
+		status,
 		withdrawnToken: '0',
 		withdrawnWeth: '0',
 	})
@@ -56,5 +56,5 @@ test('retains a newly reconciled recovery record when the terminal journal is fu
 	const result = await run([`--position-file=${positionFile}`, '--chain-id=1', '--report-id=501', '--confirm-report-id=501', '--evidence=archived receipts', '--note=manual unwind complete', '--external-cost-eth=0.003', '--final-wallet-weth=4', '--final-wallet-token=5', '--pnl-unavailable=true'], privateKey)
 	expect(result).toMatchObject({ exitCode: 0, stderr: '' })
 	const journal = await loadPositionJournalState(positionFile, 1)
-	expect(journal.positions.find(position => position.reportId === '501')?.manualReconciliation).toMatchObject({ evidence: 'archived receipts', note: 'manual unwind complete' })
+	expect(journal.positions.find(position => position.reportId === '501')).toMatchObject({ status: 'closed', manualReconciliation: { evidence: 'archived receipts', note: 'manual unwind complete' } })
 })
