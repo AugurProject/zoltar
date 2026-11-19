@@ -123,6 +123,48 @@ describe('Question Data', () => {
 		await assert.rejects(createQuestion(client, question, sortStringArrayByKeccak(['Yes', label])), /Reserved protocol outcome label/)
 	})
 
+	test.each([
+		{ name: 'negative fractional scalar labels retain their sign', min: -10n, max: 0n, ticks: 3n, tick: 1n, label: '-0.000000000000000007' },
+		{ name: 'sub-unit scalar labels retain leading fractional zeroes', min: 0n, max: 10n, ticks: 10n, tick: 1n, label: '0.000000000000000001' },
+		{ name: 'scalar upper endpoints do not round below the display maximum', min: -10n, max: 11n, ticks: 7n, tick: 7n, label: '0.000000000000000011' },
+		{ name: 'scalar zero crossings do not produce negative zero', min: -10n, max: 10n, ticks: 2n, tick: 1n, label: '0' },
+	])('closed candidate: $name', async ({ name, min, max, ticks, tick, label }) => {
+		const question = await futureQuestion({ title: name, displayValueMin: min, displayValueMax: max, numTicks: ticks })
+		await createQuestion(client, question, [])
+		const id = getQuestionId(question, [])
+		const answer = combineUint256FromTwoWithInvalid(false, ticks - tick, tick)
+		assert.strictEqual(await getAnswerOptionName(client, id, answer), label)
+		assert.strictEqual(await isMalformedAnswerOption(client, id, answer), false)
+	})
+
+	test.each([
+		{ name: 'zero page size returns no entries', start: 0n, count: 0n, expected: [] },
+		{ name: 'start at the end returns no entries', start: 2n, count: 1n, expected: [] },
+		{ name: 'maximum start does not overflow', start: MAX_UINT256, count: MAX_UINT256, expected: [] },
+		{ name: 'maximum count clamps to the remaining entries', start: 1n, count: MAX_UINT256, expected: [1] },
+		{ name: 'partial final pages contain no padding', start: 1n, count: 5n, expected: [1] },
+	])('closed candidate: $name', async ({ name, start, count, expected }) => {
+		const question = await futureQuestion({ title: name })
+		const labels = ['Yes', 'No']
+		await createQuestion(client, question, labels)
+		const id = getQuestionId(question, labels)
+		const address = getInfraContractAddresses().zoltarQuestionData
+		const page = await client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address, functionName: 'getOutcomeLabels', args: [id, start, count] })
+		assert.deepStrictEqual(
+			page,
+			expected.map(index => labels[index]),
+		)
+		// Exercise the separate question-id pagination entry point with the same boundary.
+		const secondQuestion = { ...question, title: `${name} second` }
+		await createQuestion(client, secondQuestion, labels)
+		const questionIds = [id, getQuestionId(secondQuestion, labels)]
+		const ids = await client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address, functionName: 'getQuestions', args: [start, count] })
+		assert.deepStrictEqual(
+			ids,
+			expected.map(index => questionIds[index]),
+		)
+	})
+
 	test('can make categorical question', async () => {
 		const outcomeLabels = ['Yes', 'No']
 		const testCategoricalQuestion = await futureQuestion({ title: 'test categorical question', description: 'test categorical description' })

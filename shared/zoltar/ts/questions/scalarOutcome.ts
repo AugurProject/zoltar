@@ -30,6 +30,7 @@ function combineUint256FromTwoWithInvalid(invalid: boolean, firstPart: bigint, s
 
 function validateTickIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
 	if (question.numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
+	if (question.numTicks > SCALAR_PART_MASK) throw new Error('Scalar question numTicks exceeds uint120')
 	if (tickIndex < 0n || tickIndex > question.numTicks) throw new Error('Tick index is out of range')
 }
 
@@ -88,7 +89,7 @@ export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIn
 }
 
 export function getScalarOutcomeIndexDescriptor(question: ScalarQuestionDetails, outcomeIndex: bigint): ScalarOutcomeIndexDescriptor {
-	if (question.numTicks <= 0n || outcomeIndex < 0n || outcomeIndex >= 1n << SCALAR_TOTAL_BITS) return { kind: 'malformed' }
+	if (question.numTicks <= 0n || question.numTicks > SCALAR_PART_MASK || outcomeIndex < 0n || outcomeIndex >= 1n << SCALAR_TOTAL_BITS) return { kind: 'malformed' }
 	if ((outcomeIndex & SCALAR_RESERVED_BITS_MASK) !== 0n) return { kind: 'malformed' }
 
 	const { invalid, firstPart, secondPart } = splitScalarOutcomeIndex(outcomeIndex)
