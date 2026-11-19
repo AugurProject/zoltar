@@ -49,20 +49,20 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		const report = own ? threshold : 100n * unit
 		await approveToken(owner, token, pool)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [1, report] }))
+		const forkModeHashes: Hash[] = []
 		if (own) {
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [2, report] }))
-			await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'forkZoltarWithOwnEscalationGame', args: [pool] }))
+			forkModeHashes.push(await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'forkZoltarWithOwnEscalationGame', args: [pool] })))
 		} else {
 			const question = { ...fixture.base.questionData, title: 'Unrelated fork with unsolicited REP' }
 			await createQuestion(owner, question, fixture.base.outcomes)
 			await approveToken(owner, token, getZoltarAddress())
 			await forkUniverse(owner, universe, getQuestionId(question, fixture.base.outcomes))
 		}
-		const forkModeHashes: Hash[] = []
 		for (let retry = 0; retry < 2; retry++) forkModeHashes.push(await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'initiateSecurityPoolFork', args: [pool] })))
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'systemState' })).toBe(1n)
 		// Entering fork mode is a pool state change like any other: indexers follow the pool's own event.
-		// An own-question fork enters fork mode inside the fork transaction, so the later calls change nothing.
+		// An own-question fork enters fork mode inside the fork transaction. Repeated calls change nothing.
 		const stateEvents: bigint[] = []
 		for (const hash of forkModeHashes) {
 			for (const log of (await owner.getTransactionReceipt({ hash })).logs) {
@@ -71,7 +71,7 @@ describe('Statoblast: shared portfolio fork entry', () => {
 				if (decoded.eventName === 'SystemStateSet') stateEvents.push(BigInt(decoded.args.systemState))
 			}
 		}
-		expect(stateEvents).toEqual(own ? [] : [1n])
+		expect(stateEvents).toEqual([1n])
 		const game = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'choose', args: [universe, 1n] }))
 		expect(await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'frozenBackingAttoRep' })).toBe(1_000n * unit)
