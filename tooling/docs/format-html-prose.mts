@@ -21,6 +21,10 @@ export function paragraphSourceSpans(html: string): SourceSpan[] {
 			index = commentEnd < 0 ? html.length : commentEnd + 3
 			continue
 		}
+		if (!/^<[/!]?[a-z?]/i.test(html.slice(tagStart, tagStart + 3))) {
+			index = tagStart + 1
+			continue
+		}
 		const tagEnd = findTagEnd(html, tagStart)
 		if (tagEnd < 0) break
 		const tagSource = html.slice(tagStart, tagEnd + 1)
@@ -34,6 +38,9 @@ export function paragraphSourceSpans(html: string): SourceSpan[] {
 		const closing = tagMatch[1] === '/'
 		const tagName = matchedTagName.toLowerCase()
 		if (!closing && tagName === 'p') paragraphStart = tagStart
+		if (paragraphStart !== undefined && tagSource.match(/"[^"]*"|'[^']*'/g)?.some(value => /[\r\n]/.test(value))) {
+			throw new Error('<p> contains a multiline attribute that cannot be safely placed on one source line')
+		}
 		if (paragraphStart !== undefined && !closing && unsafeParagraphDescendant(tagName, tagSource)) {
 			throw new Error(`<p> contains whitespace-sensitive <${tagName}> content that cannot be safely placed on one source line`)
 		}

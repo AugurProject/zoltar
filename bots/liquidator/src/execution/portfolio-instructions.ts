@@ -47,6 +47,23 @@ export async function executePortfolioInstruction(wallet: Wallet, settings: Oper
 	let kind: 'migration' | 'deposit' | 'withdrawal' = 'withdrawal'
 	if (instruction.action === 'fork-choice' || instruction.action === 'vault-fork-choice') kind = 'migration'
 	if (instruction.action === 'auction-bid' || instruction.action === 'vault-deposit') kind = 'deposit'
-	await submitCall(wallet, settings, state, pool, { ...request, gas: 'estimate', label: `Portfolio instruction ${instruction.id}: ${instruction.action}`, portfolioInstruction: completes ? { id: instruction.id, fingerprint } : undefined, preSubmit: validate, revalidateSimulationRevert: validate }, kind)
+	await submitCall(
+		wallet,
+		settings,
+		state,
+		pool,
+		{
+			...request,
+			gas: 'estimate',
+			label: `Portfolio instruction ${instruction.id}: ${instruction.action}`,
+			portfolioInstruction: completes ? { id: instruction.id, fingerprint } : undefined,
+			preSubmit: validate,
+			revalidateSimulationRevert: validate,
+			gasBudgetExceeded: () => {
+				throw new PortfolioOpportunityExpired('Estimated instruction gas exceeds strategy.maximumGasCostEth')
+			},
+		},
+		kind,
+	)
 	return true
 }

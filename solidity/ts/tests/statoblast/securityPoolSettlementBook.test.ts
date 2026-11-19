@@ -1,6 +1,10 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, parseAbi, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact, test_statoblast_SettlementPersistentMapHarness_SettlementPersistentMapHarness as mapArtifact } from '../../types/contractArtifact'
+import {
+	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer as deployerArtifact,
+	test_statoblast_SettlementPersistentMapHarness_SettlementPersistentMapHarness as mapArtifact,
+} from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -11,6 +15,15 @@ describe('Statoblast: central internal settlement units', () => {
 	let client: WriteClient
 	let address: Address
 	let baselineAddress: Address
+	test('module deployment surfaces settlement constructor diagnostics (#1414)', async () => {
+		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: deployerArtifact.abi, bytecode: `0x${deployerArtifact.evm.bytecode.object}` }) })
+		const { contractAddress } = await client.waitForTransactionReceipt({ hash })
+		if (contractAddress == null) throw new Error('Settlement book deployer missing')
+		const create = (rate: bigint) => client.simulateContract({ abi: deployerArtifact.abi, address: contractAddress, functionName: 'create', args: [client.account.address, rate] })
+		await expect(create(0n)).rejects.toThrow('Invalid minimum exchange rate')
+		await expect(create(10n ** 18n)).resolves.toBeDefined()
+	})
+
 	const target = () => ({ abi: artifact.abi, address })
 	const mint = async (book: bigint, question: bigint, cash: bigint, minimum = 0n, timestamp?: number) => {
 		const nowTime = timestamp ?? Number((await client.readContract({ ...target(), functionName: 'totals', args: [book] }))[3])

@@ -1,5 +1,5 @@
 import { zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
+import { encodeReceiveRequest, RECEIVE_REQUEST_VERSION } from '@zoltar/trading-shared/trading/receiveRequest'
 import { statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveMarket } from './liveMarket.js'
@@ -15,13 +15,32 @@ export function shareOperationRouter(configuration: DeploymentConfiguration) {
 function encodeReceiveBasedExitRequest(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint): Hex {
 	if (market.pair === undefined) throw new Error('The trading pool is unavailable')
 	const invalidTokenId = market.universeId << 8n
-	return encodeReceiveRequest([1, 0, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, side === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, recipient, deadline])
+	return encodeReceiveRequest([RECEIVE_REQUEST_VERSION, 0, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, side === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, recipient, deadline, 0n])
 }
 
-export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeSetShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint): Hex {
+export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeSetShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint, minimumRepAttoRep = 0n): Hex {
 	const invalidTokenId = market.universeId << 8n
 	const noLongOutcome = 3 // BinaryOutcomes.BinaryOutcome.None: redemption has no directional leg.
-	return encodeReceiveRequest([1, 1, market.shareToken, market.pool, market.pair ?? zeroAddress, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, noLongOutcome, completeSetShares, 0n, minimumEthAttoEth, recipient, recipient, deadline])
+	return encodeReceiveRequest([
+		RECEIVE_REQUEST_VERSION,
+		1,
+		market.shareToken,
+		market.pool,
+		market.pair ?? zeroAddress,
+		market.universeId,
+		market.questionId,
+		invalidTokenId,
+		invalidTokenId | 1n,
+		invalidTokenId | 2n,
+		noLongOutcome,
+		completeSetShares,
+		0n,
+		minimumEthAttoEth,
+		recipient,
+		recipient,
+		deadline,
+		minimumRepAttoRep,
+	])
 }
 
 export function receiveBasedExitArguments(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint) {

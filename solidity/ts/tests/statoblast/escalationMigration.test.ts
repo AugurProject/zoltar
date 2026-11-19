@@ -79,6 +79,21 @@ describe('Statoblast: portfolio reporting carry and atomic claims', () => {
 	const rootProof = async (source: Address, index: bigint, tree: SparseNullifierTree) =>
 		createCarryProof(fixture.owner(), source, { expectedOutcome: 1, parentDepositIndex: index, leafIndex: index, sourceNodeId: index + 1n, merkleMountainRangePeakIndex: 1n, merkleMountainRangeSiblings: [await readCarryLeafHash(fixture.owner(), source, 2n - index)], nullifierSiblings: tree.getProof(index) })
 
+	test('parent preview closes when an unrelated question forks the universe (#1411)', async () => {
+		const owner = fixture.owner()
+		const universe = fixture.base.genesisUniverse
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		await deposit(owner, sourcePool(), 1, 40n * unit)
+		const game = await gameFor(sourcePool())
+		const preview = () => owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'previewDepositOnOutcome', args: [2, 20n * unit] })
+		expect((await preview())[0]).toBe(20n * unit)
+		const forkQuestion = { ...fixture.base.questionData, title: 'Unrelated fork closes report preview' }
+		await createQuestion(owner, forkQuestion, fixture.base.outcomes)
+		await approveToken(owner, getRepTokenAddress(universe), getZoltarAddress())
+		await forkUniverse(owner, universe, getQuestionId(forkQuestion, fixture.base.outcomes))
+		await expect(preview()).rejects.toThrow('Invalid deposit preview')
+	})
+
 	test('unfunded reporting rolls back game creation and central custody', async () => {
 		const owner = fixture.owner()
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)

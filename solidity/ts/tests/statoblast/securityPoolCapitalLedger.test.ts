@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { decodeEventLog, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, parseAbi, toEventSelector, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioCapitalTakeOverRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as artifact,
@@ -120,6 +120,19 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 100n * E })
 		expect(await collateralBalance(alice, harness, ledger)).toBe(0n)
 		await expect(withdraw(alice, E)).rejects.toThrow('Capital universe inactive')
+	})
+
+	test('records a standalone change to the authorized owner health target (#1418)', async () => {
+		await deposit(alice, 200n * E)
+		const setTarget = (target: bigint) => writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setHealthTarget', args: [target] }))
+		await setTarget(15_000n)
+		await authorize(alice, 100n * E)
+		const receipt = await alice.getTransactionReceipt({ hash: await setTarget(12_000n) })
+		expect((await account(alice)).targetHealthFactorBps).toBe(12_000n)
+		const [event] = parseAbi(['event HealthTargetSet(address indexed owner, uint256 targetHealthFactorBps)'])
+		if (event === undefined) throw new Error('Missing health target event ABI')
+		const abi = [event]
+		expect(receipt.logs.filter(log => log.topics[0] === toEventSelector(event)).map(log => decodeEventLog({ abi, topics: log.topics, data: log.data }).args)).toEqual([{ owner: alice.account.address, targetHealthFactorBps: 12_000n }])
 	})
 
 	test('personal health targets and exact principal survive other owners entering and leaving', async () => {

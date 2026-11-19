@@ -30,6 +30,16 @@ describe('Escalation Game: attrition math', () => {
 		assert.strictEqual(costAtMax, nonDecisionThresholdAttoRep, 'cost at max time equals nonDecisionThresholdAttoRep')
 	})
 
+	test('finds the first second the forward curve reaches a small interior cost (#1404)', async () => {
+		const bond = 10n ** 18n
+		const game = await deployEscalationGame(client, bond, bond + 4n * 10n ** 12n)
+		const target = bond + 10n ** 12n
+		const midpoint = ESCALATION_TIME_LENGTH / 2n
+		assert.ok((await readIterativeAttritionCost(client, game, midpoint - 1n)) < target)
+		assert.strictEqual(await readIterativeAttritionCost(client, game, midpoint), target)
+		assert.strictEqual(await readTimeSinceStartFromAttritionCost(client, game, target), midpoint)
+	})
+
 	// Quantifies the maximum round‑trip error in seconds across the entire time range.
 	test('Round‑trip error: max deviation ≤ 20 seconds', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)

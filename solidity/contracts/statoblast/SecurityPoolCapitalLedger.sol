@@ -52,6 +52,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 
 	event PrincipalDeposited(address indexed payer, address indexed owner, uint256 amountAttoRep);
 	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
+	event HealthTargetSet(address indexed owner, uint256 targetHealthFactorBps);
 	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
 	event RetirementServed(uint256 rep, uint256 commitment);
 	event CommitmentCured(uint96 indexed positionId, uint256 removedCommitment);
@@ -219,6 +220,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		require(targetHealthFactorBps >= BPS, 'Health below protocol floor');
 		_checkpoint();
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.setHealthTarget, (targetHealthFactorBps)));
+		emit HealthTargetSet(_capitalOwner(), targetHealthFactorBps);
 	}
 
 	/// @notice Set the owner's single commitment, which all deposited principal backs.

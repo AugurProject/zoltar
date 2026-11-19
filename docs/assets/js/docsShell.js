@@ -21,13 +21,14 @@ function docsIndexElement(name, className, text) {
   return node;
 }
 function appendLandingSectionIndexes(data, pageUrl) {
+  const indexes = new Map;
   for (const section of data.sections) {
     const container = document.getElementById(section.id);
     const pages = docsSectionPages(data, section.id);
     if (container === null || container.tagName !== "SECTION" || pages.length === 0)
       continue;
     const index = docsIndexElement("details", "docs-section-index");
-    index.open = location.hash === `#${section.id}`;
+    indexes.set(`#${section.id}`, index);
     index.append(docsIndexElement("summary", "", `All ${pages.length} pages in ${section.title}`));
     for (const [topic, topicPages] of docsTopicGroups(data, section.id)) {
       const list = docsIndexElement("ul", "docs-section-index-list");
@@ -42,6 +43,13 @@ function appendLandingSectionIndexes(data, pageUrl) {
     }
     container.append(index);
   }
+  const openTargetIndex = () => {
+    const index = indexes.get(location.hash);
+    if (index !== undefined)
+      index.open = true;
+  };
+  openTargetIndex();
+  window.addEventListener("hashchange", openTargetIndex);
 }
 
 // docs/runtime/docsShell.ts

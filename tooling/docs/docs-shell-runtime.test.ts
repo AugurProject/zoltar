@@ -479,3 +479,16 @@ test('the theme control follows the system preference until the reader picks a t
 		second.cleanup()
 	}
 })
+
+test('section navigation opens the matching index within the current document (#1425)', async () => {
+	const shell = await loadShell('http://localhost/docs/documentation.html')
+	try {
+		const index = document.querySelector<HTMLDetailsElement>('#how-to > .docs-section-index')
+		expect(index?.open).toBeFalse()
+		shell.window.location.hash = '#how-to'
+		shell.window.dispatchEvent(new shell.window.Event('hashchange'))
+		expect(index?.open).toBeTrue()
+	} finally {
+		shell.cleanup()
+	}
+})

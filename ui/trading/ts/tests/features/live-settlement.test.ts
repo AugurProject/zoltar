@@ -100,7 +100,7 @@ describe('live settlement contract encoding', () => {
 			expect(transfer.ids).toEqual([1792n, 1792n | BigInt(outcome)])
 			expect(transfer.amounts).toEqual([10n, 23n])
 			const request = decodeReceiveRequest(transfer.data)
-			expect(request).toEqual([1n, 0n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, BigInt(outcome), 10n, 23n, 9n, account, account, 421n])
+			expect(request).toEqual([2n, 0n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, BigInt(outcome), 10n, 23n, 9n, account, account, 421n, 0n])
 		})
 	}
 
@@ -158,7 +158,7 @@ describe('live settlement contract encoding', () => {
 		expect(decodedTransfer.args.slice(0, 4)).toEqual([account, configuration.router, [1792n, 1793n, 1794n], [10n, 10n, 10n]])
 		// Decode independently from the production encoder and assert the router ABI contract.
 		const request = decodeReceiveRequest(decodedTransfer.args[4])
-		expect(request).toEqual([1n, 1n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, 3n, 10n, 0n, 9n, account, account, 421n])
+		expect(request).toEqual([2n, 1n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, 3n, 10n, 0n, 9n, account, account, 421n, 0n])
 	})
 
 	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {
@@ -168,6 +168,26 @@ describe('live settlement contract encoding', () => {
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		await expect(submitFreshSettlement(client, configuration, account, { ...quote, minimumAttoEth: quote.expectedAttoEth + 1n }, async write => await write())).rejects.toThrow('approved minimum ETH output')
 		expect(counts.sends).toBe(0)
+	})
+
+	test('retains the approved recovery REP floor through refreshed simulation and submission (#1430)', async () => {
+		const recovery = { ...market, pair: account, shareTokenSupplyAttoShares: 100n, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 100n }
+		const { client, chain, transactionData, counts } = recordingSettlementClient(recovery)
+		const quote = await simulateSettlement(client, configuration, recovery, account, 'redeem-complete-set', { amount: 100n, slippageBps: 100n })
+		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
+		const requestFor = (data: Hex | undefined) => {
+			if (data === undefined) throw new Error('Missing share transfer')
+			const transfer = decodeFunctionData({ abi: shareTokenAbi, data })
+			if (transfer.functionName !== 'safeBatchTransferFrom' || transfer.args === undefined) throw new Error('Expected share batch transfer')
+			return decodeReceiveRequest(transfer.args[4])
+		}
+		expect(requestFor(transactionData[0]).at(-1)).toBe(99n)
+		chain.market = { ...recovery, settlementRecoveryAttoRep: 98n }
+		await expect(submitFreshSettlement(client, configuration, account, quote, async write => await write())).rejects.toThrow('approved minimum REP output')
+		expect(counts.sends).toBe(0)
+		chain.market = { ...recovery, settlementRecoveryAttoRep: 101n }
+		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
+		expect(requestFor(transactionData.at(-1)).at(-1)).toBe(99n)
 	})
 
 	test('rejects zero-slippage child redemption while holding fees accrue beyond question end', async () => {

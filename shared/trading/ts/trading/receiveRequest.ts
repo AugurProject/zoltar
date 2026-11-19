@@ -1,5 +1,7 @@
 import { encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 
+export const RECEIVE_REQUEST_VERSION = 2
+
 /** @internal ABI of the TwoWayConstantProductRouter request carried in ERC-1155 receive callback data; tests decode router payloads with it. */
 export const receiveRequestParameter = {
 	type: 'tuple',
@@ -21,6 +23,7 @@ export const receiveRequestParameter = {
 		{ name: 'payoutRecipient', type: 'address' },
 		{ name: 'refundRecipient', type: 'address' },
 		{ name: 'deadline', type: 'uint256' },
+		{ name: 'minRepOut', type: 'uint256' },
 	],
 } as const
 
@@ -43,6 +46,7 @@ export type ReceiveRequest = readonly [
 	payoutRecipient: Address,
 	refundRecipient: Address,
 	deadline: bigint,
+	minRepOutAttoRep: bigint,
 ]
 
 export function encodeReceiveRequest(request: ReceiveRequest): Hex {

@@ -209,6 +209,15 @@ describe('Escalation Game: lifecycle and guards', () => {
 		await assert.rejects(initializeSnapshotFromSourceViaTestSecurityPool(badId.testSecurityPoolAddress, client.account.address, `0x${'0'.repeat(63)}1`, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Snapshot id mismatch/)
 	})
 
+	test('deposit preview rejects a tie trim that accepts zero REP (#1413)', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
+		await startEscalation(escalationGameAddress, 1n, 2n)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n)
+		const preview = (amount: bigint) => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'previewDepositOnOutcome', args: [QuestionOutcome.No, amount] })
+		await assert.rejects(preview(1n), /Invalid deposit preview/)
+		assert.deepStrictEqual(await preview(2n), [2n, 2n])
+	})
+
 	test('deposit preview and recording guards cover resolved, full, zero, mismatched, oversized, and maximum-height deposits', async () => {
 		const record = (testSecurityPoolAddress: Address, amountAttoRep: bigint, expectedCumulativeAmount: bigint) =>
 			client.writeContract({

@@ -110,15 +110,24 @@ describe('factory, pair, and router integration', () => {
 			const recipient = `0x${TEST_ADDRESSES[1].toString(16).padStart(40, '0')}` as const
 			const beforeEth = await client.getBalance({ address: recipient })
 			const ids = [universe << 8n, (universe << 8n) | 1n, (universe << 8n) | 2n]
-			const redeem = (minEth: bigint) =>
+			const redeem = (minEth: bigint, minRep: bigint) =>
 				client.writeContract({
 					abi: mocks.TradingMockShareToken.abi,
 					address: token,
 					functionName: 'safeBatchTransferFrom',
-					args: [account, router, ids, [rate, rate, rate], encodeReceiveBasedRedeemRequest({ shareToken: token, pool, pair: onlyRep ? zeroAddress : pair, universeId: universe, questionId: question }, rate, minEth, recipient, 10n ** 12n)],
+					args: [account, router, ids, [rate, rate, rate], encodeReceiveBasedRedeemRequest({ shareToken: token, pool, pair: onlyRep ? zeroAddress : pair, universeId: universe, questionId: question }, rate, minEth, recipient, 10n ** 12n, minRep)],
 				})
-			if (onlyRep) await expect(redeem(1n)).rejects.toThrow('Minimum ETH output')
-			await writeContractAndWait(client, () => redeem(onlyRep ? 0n : 1n))
+			const minEth = onlyRep ? 0n : 1n
+			if (onlyRep) await expect(redeem(1n, 0n)).rejects.toThrow('Minimum ETH output')
+			const holderBalances = () => Promise.all(([0n, 1n, 2n] as const).map(outcome => tokenBalance(account, outcome)))
+			const beforeShares = await holderBalances()
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [6n, onlyRep, true] }))
+			await expect(redeem(minEth, 7n)).rejects.toThrow('Minimum REP output')
+			expect(await holderBalances()).toEqual(beforeShares)
+			expect(await client.getBalance({ address: recipient })).toBe(beforeEth)
+			expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(0n)
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [7n, onlyRep, true] }))
+			await writeContractAndWait(client, () => redeem(minEth, 7n))
 			expect(await client.getBalance({ address: recipient })).toBe(beforeEth + (onlyRep ? 0n : 1n))
 			expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(7n)
 			expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [router] })).toBe(11n)
@@ -655,7 +664,7 @@ describe('factory, pair, and router integration', () => {
 		const ids = [universe << 8n, (universe << 8n) | 1n, (universe << 8n) | 2n] as const
 		const deadline = 10n ** 12n
 		const redeemRequest = ({
-			version = 1,
+			version = 2,
 			operation = 1,
 			shareToken = token,
 			securityPool = pool,
@@ -690,7 +699,7 @@ describe('factory, pair, and router integration', () => {
 			payoutRecipient: Address
 			refundRecipient: Address
 			requestDeadline: bigint
-		}> = {}) => encodeReceiveRequest([version, operation, shareToken, securityPool, configuredPair, universeId, questionId, invalidTokenId, yesTokenId, noTokenId, longOutcome, completeSetShares, maxLongSharesIn, minEthOut, payoutRecipient, refundRecipient, requestDeadline])
+		}> = {}) => encodeReceiveRequest([version, operation, shareToken, securityPool, configuredPair, universeId, questionId, invalidTokenId, yesTokenId, noTokenId, longOutcome, completeSetShares, maxLongSharesIn, minEthOut, payoutRecipient, refundRecipient, requestDeadline, 0n])
 		const requestData = encodeReceiveBasedRedeemRequest({ shareToken: token, pool, pair: currentPair, universeId: universe, questionId: question }, redeemAmount, 1n, recipient, deadline)
 		const sharesBeforeRedeem = await shareBalances(account)
 		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'isApprovedForAll', args: [account, currentRouter] })).toBe(false)
@@ -713,7 +722,7 @@ describe('factory, pair, and router integration', () => {
 		const maximumLongShares = exitAmount + swapInput + 17n
 		const yesBeforeExit = await tokenBalance(account, 1n)
 		const exitRecipientEthBefore = await client.getBalance({ address: recipient })
-		const exitData = encodeReceiveRequest([1, 0, token, pool, currentPair, universe, question, ids[0], ids[1], ids[2], 1, exitAmount, maximumLongShares, 1n, recipient, account, deadline])
+		const exitData = encodeReceiveRequest([2, 0, token, pool, currentPair, universe, question, ids[0], ids[1], ids[2], 1, exitAmount, maximumLongShares, 1n, recipient, account, deadline, 0n])
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, currentRouter, [ids[0], ids[1]], [exitAmount, maximumLongShares], exitData] }))
 		expect(yesBeforeExit - (await tokenBalance(account, 1n))).toBe(exitAmount + swapInput)
 		expect((await client.getBalance({ address: recipient })) - exitRecipientEthBefore).toBe(1n)
@@ -721,7 +730,7 @@ describe('factory, pair, and router integration', () => {
 		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'isApprovedForAll', args: [currentRouter, currentPair] })).toBe(false)
 
 		const malformedRequests = [
-			{ name: 'version', data: redeemRequest({ version: 2 }) },
+			{ name: 'version', data: redeemRequest({ version: 1 }) },
 			{ name: 'operation', data: redeemRequest({ operation: 2 }) },
 			{ name: 'share token', data: redeemRequest({ shareToken: account }) },
 			{ name: 'security pool', data: redeemRequest({ securityPool: account }) },

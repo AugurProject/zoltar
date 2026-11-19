@@ -108,8 +108,8 @@ function numericInputValueIsValid(input: HTMLInputElement, value: string): boole
 	if (value.trim().length === 0) return false
 	const numericValue = Number(value)
 	if (!Number.isFinite(numericValue)) return false
-	const minimum = Number(input.min)
-	const maximum = Number(input.max)
+	const minimum = Number(input.min.trim() || undefined)
+	const maximum = Number(input.max.trim() || undefined)
 	if (Number.isFinite(minimum) && numericValue < minimum) return false
 	if (Number.isFinite(maximum) && numericValue > maximum) return false
 	const step = Number(input.step)
@@ -322,8 +322,8 @@ function decimalPlaces(value: string): number {
 
 function updateNumberControl(input: HTMLInputElement, wrapper: HTMLElement): void {
 	const value = Number(input.value)
-	const minimum = Number(input.min)
-	const maximum = Number(input.max)
+	const minimum = Number(input.min.trim() || undefined)
+	const maximum = Number(input.max.trim() || undefined)
 	const hasBounds = Number.isFinite(minimum) && Number.isFinite(maximum) && maximum > minimum
 	const progress = hasBounds && Number.isFinite(value) ? ((value - minimum) / (maximum - minimum)) * 100 : 0
 	wrapper.style.setProperty('--control-progress', `${Math.min(100, Math.max(0, progress))}%`)
@@ -339,8 +339,8 @@ function updateNumberControl(input: HTMLInputElement, wrapper: HTMLElement): voi
 function numberControlError(input: HTMLInputElement): string | undefined {
 	const value = Number(input.value)
 	if (input.value.trim().length === 0 || !Number.isFinite(value)) return 'Enter a number.'
-	const minimum = Number(input.min)
-	const maximum = Number(input.max)
+	const minimum = Number(input.min.trim() || undefined)
+	const maximum = Number(input.max.trim() || undefined)
 	if (Number.isFinite(minimum) && value < minimum) return `Enter a value of at least ${input.min}.`
 	if (Number.isFinite(maximum) && value > maximum) return `Enter a value of at most ${input.max}.`
 	const step = Number(input.step)
@@ -404,8 +404,8 @@ function stepNumberInput(input: HTMLInputElement, direction: -1 | 1): void {
 	const current = Number(input.value)
 	const step = Number(input.step)
 	const increment = Number.isFinite(step) && step > 0 ? step : 1
-	const minimum = Number(input.min)
-	const maximum = Number(input.max)
+	const minimum = Number(input.min.trim() || undefined)
+	const maximum = Number(input.max.trim() || undefined)
 	let next = (Number.isFinite(current) ? current : 0) + increment * direction
 	if (Number.isFinite(minimum)) next = Math.max(minimum, next)
 	if (Number.isFinite(maximum)) next = Math.min(maximum, next)

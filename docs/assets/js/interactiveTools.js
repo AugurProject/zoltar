@@ -119,8 +119,8 @@ function numericInputValueIsValid(input, value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue))
     return false;
-  const minimum = Number(input.min);
-  const maximum = Number(input.max);
+  const minimum = Number(input.min.trim() || undefined);
+  const maximum = Number(input.max.trim() || undefined);
   if (Number.isFinite(minimum) && numericValue < minimum)
     return false;
   if (Number.isFinite(maximum) && numericValue > maximum)
@@ -337,8 +337,8 @@ function decimalPlaces(value) {
 }
 function updateNumberControl(input, wrapper) {
   const value = Number(input.value);
-  const minimum = Number(input.min);
-  const maximum = Number(input.max);
+  const minimum = Number(input.min.trim() || undefined);
+  const maximum = Number(input.max.trim() || undefined);
   const hasBounds = Number.isFinite(minimum) && Number.isFinite(maximum) && maximum > minimum;
   const progress = hasBounds && Number.isFinite(value) ? (value - minimum) / (maximum - minimum) * 100 : 0;
   wrapper.style.setProperty("--control-progress", `${Math.min(100, Math.max(0, progress))}%`);
@@ -356,8 +356,8 @@ function numberControlError(input) {
   const value = Number(input.value);
   if (input.value.trim().length === 0 || !Number.isFinite(value))
     return "Enter a number.";
-  const minimum = Number(input.min);
-  const maximum = Number(input.max);
+  const minimum = Number(input.min.trim() || undefined);
+  const maximum = Number(input.max.trim() || undefined);
   if (Number.isFinite(minimum) && value < minimum)
     return `Enter a value of at least ${input.min}.`;
   if (Number.isFinite(maximum) && value > maximum)
@@ -425,8 +425,8 @@ function stepNumberInput(input, direction) {
   const current = Number(input.value);
   const step = Number(input.step);
   const increment = Number.isFinite(step) && step > 0 ? step : 1;
-  const minimum = Number(input.min);
-  const maximum = Number(input.max);
+  const minimum = Number(input.min.trim() || undefined);
+  const maximum = Number(input.max.trim() || undefined);
   let next = (Number.isFinite(current) ? current : 0) + increment * direction;
   if (Number.isFinite(minimum))
     next = Math.max(minimum, next);

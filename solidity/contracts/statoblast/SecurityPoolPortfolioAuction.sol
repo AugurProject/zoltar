@@ -154,7 +154,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 					Math.ceilDiv(capital.commitmentIndex().requiredRep(lotAttoEth, feed.conservativePrice(), capital.securityMultiplierBps(), 10_000), repGrid) * repGrid;
 			result = engine.finalize(eligible ? targetLots : 0, floorAttoRepPerLot);
 			engine.withdrawRaised(payable(forkAuthority));
-		}
+		} else engine.finalizeUnopened();
 		// All sold inventory enters capital custody. Any indivisible remainder is
 		// owned only by winning bids through the auction's initial REP fee credits.
 		if (result.soldAttoRep != 0) repToken.safeTransfer(address(capital), result.soldAttoRep);
@@ -169,6 +169,12 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 			SecurityPoolAuctionVaultClones.predict(address(this), vaultImplementation, bidder, address(capital), address(this), bidId);
 	}
 	function bidPosition(uint256 bidId) external view returns (BidPosition memory position) {
+		if (!finalized) {
+			(, address vault, uint256 targetHealthBps, , , bool settled, ) = engine.bids(bidId);
+			// Before closing, a bid can settle only when it is permanently excluded.
+			require(settled, 'Auction has not been finalized');
+			return BidPosition(vault, targetHealthBps, 0);
+		}
 		SecurityPoolUniformPriceAuction.Fill memory fill = engine.previewBid(bidId);
 		return BidPosition(fill.vault, fill.targetHealthBps, fill.filledLots);
 	}

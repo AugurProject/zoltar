@@ -33,6 +33,11 @@ abstract contract SecurityPoolCreationCodeDeployer {
 		bytes memory initCode = abi.encodePacked(code, arguments);
 		assembly ('memory-safe') {
 			deployed := create(0, add(initCode, 32), mload(initCode))
+			if and(iszero(deployed), gt(returndatasize(), 0)) {
+				let pointer := mload(0x40)
+				returndatacopy(pointer, 0, returndatasize())
+				revert(pointer, returndatasize())
+			}
 		}
 		require(deployed != address(0), 'Module deployment failed');
 	}

@@ -87,9 +87,12 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 		bytes32 claimId = _claimKey(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
 		EscalationClaimCheckpoint storage checkpoint = claimCheckpoints[claimId];
 		if (_hasCentralReporterCustody()) {
-			checkpoint.initialized = true;
-			checkpoint.complete = true;
-			checkpoint.interval = _initialInterval(amountAttoRep, cumulativeAmountAttoRep);
+			if (!checkpoint.initialized) {
+				checkpoint.initialized = true;
+				checkpoint.complete = true;
+				checkpoint.interval = _initialInterval(amountAttoRep, cumulativeAmountAttoRep);
+				emit ClaimCheckpointProgress(claimId, address(0x0), 0, true);
+			}
 			return true;
 		}
 		if (
@@ -152,16 +155,13 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	/// @notice A completed cache excludes this game's immediate source transform.
 	function getReusableClaimCheckpoint(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) external view returns (bool complete, address anchorSourceGame, EscalationClaimInterval memory interval) {
 		_validateClaim(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
+		anchorSourceGame = _hasInheritedSource(outcomeIndex, leafIndex) ? forkCarrySourceGame : address(0x0);
 		if (_hasCentralReporterCustody())
-			return (true, forkCarrySourceGame, _initialInterval(amountAttoRep, cumulativeAmountAttoRep));
+			return (true, anchorSourceGame, _initialInterval(amountAttoRep, cumulativeAmountAttoRep));
 		EscalationClaimCheckpoint storage checkpoint = claimCheckpoints[
 			_claimKey(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex)
 		];
-		return (
-			checkpoint.complete,
-			_hasInheritedSource(outcomeIndex, leafIndex) ? forkCarrySourceGame : address(0x0),
-			checkpoint.interval
-		);
+		return (checkpoint.complete, anchorSourceGame, checkpoint.interval);
 	}
 
 	function getClaimCheckpointState(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex)

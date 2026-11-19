@@ -28,12 +28,13 @@ function docsIndexElement<K extends keyof HTMLElementTagNameMap>(name: K, classN
  * so a section link (such as the breadcrumb's) never lands on a subset. The section the URL fragment names opens its list.
  */
 export function appendLandingSectionIndexes(data: StatoblastDocumentationData, pageUrl: (path: string) => string): void {
+	const indexes = new Map<string, HTMLDetailsElement>()
 	for (const section of data.sections) {
 		const container = document.getElementById(section.id)
 		const pages = docsSectionPages(data, section.id)
 		if (container === null || container.tagName !== 'SECTION' || pages.length === 0) continue
 		const index = docsIndexElement('details', 'docs-section-index')
-		index.open = location.hash === `#${section.id}`
+		indexes.set(`#${section.id}`, index)
 		index.append(docsIndexElement('summary', '', `All ${pages.length} pages in ${section.title}`))
 		for (const [topic, topicPages] of docsTopicGroups(data, section.id)) {
 			const list = docsIndexElement('ul', 'docs-section-index-list')
@@ -48,4 +49,10 @@ export function appendLandingSectionIndexes(data: StatoblastDocumentationData, p
 		}
 		container.append(index)
 	}
+	const openTargetIndex = () => {
+		const index = indexes.get(location.hash)
+		if (index !== undefined) index.open = true
+	}
+	openTargetIndex()
+	window.addEventListener('hashchange', openTargetIndex)
 }

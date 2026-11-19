@@ -7,6 +7,7 @@ import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts
 import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addRepToMigrationBalance, splitMigrationRep, getZoltarForkThreshold, forkUniverse, getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
+import { PortfolioOpportunityExpired } from '../../src/execution/portfolio-executor.ts'
 import { executePortfolioInstruction } from '../../src/execution/portfolio-instructions.ts'
 import { loadDurableState } from '../../src/state/operator-state.ts'
 import { repairAuctionKeeper } from '../support/collateral-repair-auction.ts'
@@ -47,6 +48,11 @@ describe('explicit portfolio instruction lifecycle', () => {
 			await context.bid(context.owner, 5n, 10n * unit)
 			const beforeRefund = await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })
 			const refund = { ...base, id: 'early-refund', action: 'auction-refund' as const, bidId: loser.id }
+			settings.strategy.maximumGasCostAttoEth = 1n
+			await expect(executePortfolioInstruction(wallet, settings, state, pool, refund, async () => true)).rejects.toBeInstanceOf(PortfolioOpportunityExpired)
+			expect(state.pendingTransactions).toHaveLength(0)
+			expect(state.completedPortfolioInstructions?.[refund.id]).toBeUndefined()
+			settings.strategy.maximumGasCostAttoEth = unit
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, refund, async () => true)).toBe(true)
 			const refundHash = state.activities.find(activity => activity.status === 'confirmed')?.hash
 			if (refundHash === undefined) throw new Error('Missing refund transaction')
