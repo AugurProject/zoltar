@@ -33,7 +33,7 @@ export const minting = 'Minting complete sets…'
 export const mintHint = 'Choose a question and amount. Shared capacity backs all outcomes, delivered to your connected wallet.'
 export const mintAmount = 'Collateral'
 export const minimumShares = 'Minimum complete sets'
-export const openPrice = 'Open pool price workflow'
+export const openQuestionShares = 'Open question shares'
 
 export const maximumPurchaseFee = 'Maximum purchase fee'
 export const maximumPurchaseFeeHint = 'Charged on every purchase, including reused backing. Only the actual fee is transferred.'

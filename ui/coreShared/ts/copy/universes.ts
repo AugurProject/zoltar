@@ -11,7 +11,8 @@ export const formatUnknownLineageUniverse = (shortUniverseId: CopyTemplateValue)
 export const lineageAriaLabel = 'Universe lineage'
 export const universeId = 'Universe ID'
 export const parentUniverse = 'Parent universe'
-export const repSupply = 'REP supply'
+/** Zoltar's accounting figure for fork thresholds, not the child token's ERC-20 totalSupply. */
+export const theoreticalRepSupply = 'Theoretical REP supply'
 export const childrenBeforeForkDetail = 'Child universes appear after this universe forks.'
 export const openUniverse = 'Open'
 export const forkQuestion = 'Fork question'

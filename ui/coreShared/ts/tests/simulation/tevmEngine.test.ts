@@ -71,6 +71,14 @@ describe('simulation engine prepared states', () => {
 		expect(await restored.request({ method: 'eth_getCode', params: [repAddress, 'latest'] })).toBe(await engine.request({ method: 'eth_getCode', params: [repAddress, 'latest'] }))
 	}, 60_000)
 
+	test('reads the native balance of an untouched account at the current block', async () => {
+		const engine = await createBaselineEngine()
+		const untouched = '0x00000000000000000000000000000000000abcde'
+		const head = await engine.request({ method: 'eth_blockNumber', params: [] })
+		expect(await engine.request({ method: 'eth_getBalance', params: [untouched, head] })).toBe('0x0')
+		expect(await engine.request({ method: 'eth_getBalance', params: [engine.getState().selectedAccount, head] })).toBe(await engine.request({ method: 'eth_getBalance', params: [engine.getState().selectedAccount, 'latest'] }))
+	})
+
 	test('a state saved without block history still restores at its clock', async () => {
 		const engine = await createBaselineEngine()
 		await engine.bootstrap()

@@ -13,6 +13,7 @@ import { createQuestionParameters } from '../lib/questionCreation.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { getDefaultMarketFormState } from '../lib/questionForm.js'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
+import { formatLocalDateTimeInput, tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import type { MarketFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { CreateWriteClientCallbacks } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -82,13 +83,43 @@ function isMarketFormState(value: unknown): value is MarketFormState {
 
 type NormalizeQuestionForm = (form: MarketFormState) => MarketFormState
 
+const UNIX_TIMESTAMP_PATTERN = /^\d+$/
+
+/**
+ * A `datetime-local` time names a wall clock in the browser's zone, so the draft also stores the instant it meant.
+ * Reopening the draft in another zone shows that instant's local time instead of moving the on-chain deadline.
+ */
+function getDraftInstant(localTime: string) {
+	if (localTime.trim() === '' || UNIX_TIMESTAMP_PATTERN.test(localTime.trim())) return undefined
+	return tryParseTimestampInput(localTime)?.toString()
+}
+
+function restoreDraftLocalTime(localTime: string, storedInstant: unknown) {
+	if (typeof storedInstant !== 'string' || !UNIX_TIMESTAMP_PATTERN.test(storedInstant)) return localTime
+	return formatLocalDateTimeInput(BigInt(storedInstant)) ?? localTime
+}
+
 function readStoredQuestionDraft(storageKey: string | undefined, normalizeForm: NormalizeQuestionForm) {
 	if (storageKey === undefined) return undefined
 	try {
 		const storedValue = getQuestionDraftStorage()?.getItem(storageKey)
 		if (storedValue === null || storedValue === undefined) return undefined
 		const parsedValue: unknown = JSON.parse(storedValue)
-		return isMarketFormState(parsedValue) ? normalizeForm(parsedValue) : undefined
+		if (!isMarketFormState(parsedValue)) return undefined
+		const { answerUnit, categoricalOutcomes, description, endTime, marketType, scalarIncrement, scalarMax, scalarMin, startTime, title } = parsedValue
+		const storedInstants = 'instants' in parsedValue && typeof parsedValue.instants === 'object' && parsedValue.instants !== null ? parsedValue.instants : {}
+		return normalizeForm({
+			answerUnit,
+			categoricalOutcomes,
+			description,
+			endTime: restoreDraftLocalTime(endTime, 'endTime' in storedInstants ? storedInstants.endTime : undefined),
+			marketType,
+			scalarIncrement,
+			scalarMax,
+			scalarMin,
+			startTime: restoreDraftLocalTime(startTime, 'startTime' in storedInstants ? storedInstants.startTime : undefined),
+			title,
+		})
 	} catch (error) {
 		if (!(error instanceof SyntaxError) && !(error instanceof DOMException)) throw error
 		return undefined
@@ -104,7 +135,7 @@ function writeQuestionDraft(storageKey: string | undefined, form: MarketFormStat
 	try {
 		const storage = getQuestionDraftStorage()
 		if (storage === undefined) return false
-		storage.setItem(storageKey, JSON.stringify(form))
+		storage.setItem(storageKey, JSON.stringify({ ...form, instants: { endTime: getDraftInstant(form.endTime), startTime: getDraftInstant(form.startTime) } }))
 		return true
 	} catch (error) {
 		if (!(error instanceof DOMException)) throw error

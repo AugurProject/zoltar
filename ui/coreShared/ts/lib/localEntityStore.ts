@@ -15,8 +15,11 @@ export type LocalEntityKind = 'pool' | 'question' | 'market' | 'oracleReport'
  */
 export type LocalEntityScope = Readonly<{ app: LocalEntityApp; kind: LocalEntityKind; network: string; persistence?: 'browser' | 'session' }>
 export type FavoriteEntry = Readonly<{ id: string; addedAt: number }>
-export type DownloadedEntry<T> = Readonly<{ id: string; fetchedAt: number; data: T }>
-export type DownloadedItem<T> = Readonly<{ id: string; data: T }>
+/** `registryIndex` is the entity's position in an append-only on-chain registry, when it was read from a registry page. */
+export type DownloadedEntry<T> = Readonly<{ id: string; fetchedAt: number; data: T; registryIndex?: number }>
+export type DownloadedItem<T> = Readonly<{ id: string; data: T; registryIndex?: number }>
+/** One authoritative registry read: the ids at consecutive positions from `startIndex`, and the registry's current length. */
+export type RegistryPageSnapshot = Readonly<{ startIndex: number; ids: readonly string[]; totalCount: bigint }>
 
 const STORAGE_PREFIX = 'zoltar-ui'
 const STORE_VERSION = 1
@@ -57,6 +60,10 @@ function readTimestamp(value: unknown) {
 	return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function readRegistryIndex(value: unknown) {
+	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+}
+
 function readEnvelopeItems(value: unknown) {
 	if (!isStoredRecord(value) || value['version'] !== STORE_VERSION) return []
 	const items = value['items']
@@ -89,7 +96,8 @@ export function parseDownloadedEntries<T>(value: unknown, decode: (data: unknown
 		const data = decode(item['data'])
 		if (data === undefined) return []
 		seen.add(normalizedId)
-		return [{ id: normalizedId, fetchedAt, data }]
+		const registryIndex = readRegistryIndex(item['registryIndex'])
+		return [registryIndex === undefined ? { id: normalizedId, fetchedAt, data } : { id: normalizedId, fetchedAt, data, registryIndex }]
 	})
 }
 
@@ -112,17 +120,35 @@ export function removeFavoriteEntry(entries: readonly FavoriteEntry[], id: strin
 
 /** Replaces cached items by id, keeps the newest fetches, and never evicts a protected (favorited) entry before an unprotected one. */
 export function upsertDownloadedEntries<T>(entries: readonly DownloadedEntry<T>[], items: readonly DownloadedItem<T>[], fetchedAt: number, protectedIds: ReadonlySet<string>, limit = DOWNLOADED_LIMIT): DownloadedEntry<T>[] {
+	const previousById = new Map(entries.map(entry => [entry.id, entry]))
 	const byId = new Map<string, DownloadedEntry<T>>()
 	for (const item of items) {
 		const id = normalizeEntityId(item.id)
 		if (id === '') continue
-		byId.set(id, { id, fetchedAt, data: item.data })
+		// A summary refreshed outside a registry page (opening the entity) keeps the position it was last listed at.
+		const registryIndex = item.registryIndex ?? previousById.get(id)?.registryIndex
+		byId.set(id, registryIndex === undefined ? { id, fetchedAt, data: item.data } : { id, fetchedAt, data: item.data, registryIndex })
 	}
 	// Fresh items keep their given (chain) order ahead of older entries; the stable sort only moves stale fetches back.
 	for (const entry of entries) if (!byId.has(entry.id)) byId.set(entry.id, entry)
 	const newestFirst = [...byId.values()].sort((left, right) => right.fetchedAt - left.fetchedAt)
 	const kept = new Set([...newestFirst.filter(entry => protectedIds.has(entry.id)), ...newestFirst.filter(entry => !protectedIds.has(entry.id))].slice(0, limit))
 	return newestFirst.filter(entry => kept.has(entry))
+}
+
+/**
+ * Drops cached entries the registry no longer holds where they were listed: a position at or past the current length,
+ * or a position in the page now occupied by another id. A chain reorganization can remove or replace registry tail entries.
+ */
+export function pruneRegistryEntries<T>(entries: readonly DownloadedEntry<T>[], page: RegistryPageSnapshot): DownloadedEntry<T>[] {
+	const pageIds = page.ids.map(normalizeEntityId)
+	return entries.filter(entry => {
+		if (entry.registryIndex === undefined) return true
+		if (BigInt(entry.registryIndex) >= page.totalCount) return false
+		const offset = entry.registryIndex - page.startIndex
+		if (offset < 0 || offset >= pageIds.length) return true
+		return pageIds[offset] === entry.id
+	})
 }
 
 type Listener = () => void
@@ -233,6 +259,8 @@ export function setEntityFavorite(scope: LocalEntityScope, id: string, favorite:
 export type DownloadedEntityStore<T> = Readonly<{
 	read: (scope: LocalEntityScope) => DownloadedEntry<T>[]
 	record: (scope: LocalEntityScope, items: readonly DownloadedItem<T>[], now?: number) => void
+	/** Records a registry page's items at their positions and drops cached entries the page shows are gone. */
+	recordRegistryPage: (scope: LocalEntityScope, page: RegistryPageSnapshot, items: readonly DownloadedItem<T>[], now?: number) => void
 }>
 
 /** One store per entity shape, so cached entries keep their decoded type without re-validating on every render. */
@@ -248,16 +276,24 @@ export function createDownloadedEntityStore<T>(decode: (data: unknown) => T | un
 		cache.set(key, entries)
 		return entries
 	}
-	const record = (scope: LocalEntityScope, items: readonly DownloadedItem<T>[], now = Date.now()) => {
-		if (items.length === 0) return
+	const write = (scope: LocalEntityScope, next: DownloadedEntry<T>[]) => {
 		const key = getDownloadedStorageKey(scope)
-		const protectedIds = new Set(readFavoriteEntries(scope).map(entry => entry.id))
-		const next = upsertDownloadedEntries(read(scope), items, now, protectedIds, limit)
 		cache.set(key, next)
 		if (!writeStorageItem(scope, key, next)) writeStorageItem(scope, key, next.slice(0, Math.max(1, Math.floor(next.length / 2))))
 		notifyListeners()
 	}
-	return { read, record }
+	const upsert = (scope: LocalEntityScope, entries: readonly DownloadedEntry<T>[], items: readonly DownloadedItem<T>[], now: number) => upsertDownloadedEntries(entries, items, now, new Set(readFavoriteEntries(scope).map(entry => entry.id)), limit)
+	const record = (scope: LocalEntityScope, items: readonly DownloadedItem<T>[], now = Date.now()) => {
+		if (items.length === 0) return
+		write(scope, upsert(scope, read(scope), items, now))
+	}
+	const recordRegistryPage = (scope: LocalEntityScope, page: RegistryPageSnapshot, items: readonly DownloadedItem<T>[], now = Date.now()) => {
+		const current = read(scope)
+		const pruned = pruneRegistryEntries(current, page)
+		if (items.length === 0 && pruned.length === current.length) return
+		write(scope, items.length === 0 ? pruned : upsert(scope, pruned, items, now))
+	}
+	return { read, record, recordRegistryPage }
 }
 
 export function resetLocalEntityStoreForTesting() {

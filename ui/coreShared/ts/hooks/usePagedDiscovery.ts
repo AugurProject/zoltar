@@ -12,7 +12,7 @@ type PagedDiscoveryOptions<TItem> = {
 	/** Changing the context (network, account, environment) restarts the scan from the first page. */
 	contextKey: string
 	loadPage: (pageIndex: number, requestKey: string) => Promise<unknown> | void
-	onItems: (items: readonly TItem[]) => void
+	onPage: (page: DiscoveredPage<TItem>) => void
 	pageSize: number
 	receivedPage: DiscoveredPage<TItem> | undefined
 }
@@ -34,17 +34,17 @@ function matchesDiscoveryRequest<TItem>(page: DiscoveredPage<TItem>, request: Di
  * Loads the first registry page automatically, then one additional page per user request.
  * Each result joins the downloaded cache once, so search covers every downloaded page.
  */
-export function usePagedDiscovery<TItem>({ contextKey, loadPage, onItems, pageSize, receivedPage }: PagedDiscoveryOptions<TItem>) {
+export function usePagedDiscovery<TItem>({ contextKey, loadPage, onPage, pageSize, receivedPage }: PagedDiscoveryOptions<TItem>) {
 	const [scan, setScan] = useState<{ contextKey: string; scannedPageCount: number; totalCount: bigint | undefined }>({ contextKey, scannedPageCount: 0, totalCount: undefined })
 	const [pendingRequestKey, setPendingRequestKey] = useState<string | undefined>(undefined)
 	const [loadFailed, setLoadFailed] = useState(false)
 	const lastRequestRef = useRef<DiscoveryRequest | undefined>(undefined)
 	const requestNonceRef = useRef(0)
-	const onItemsRef = useRef(onItems)
+	const onPageRef = useRef(onPage)
 	const loadPageRef = useRef(loadPage)
 	const receivedPageRef = useRef(receivedPage)
 	const pageBeforeRequestRef = useRef<DiscoveredPage<TItem> | undefined>(undefined)
-	onItemsRef.current = onItems
+	onPageRef.current = onPage
 	loadPageRef.current = loadPage
 	receivedPageRef.current = receivedPage
 	const currentScan = scan.contextKey === contextKey ? scan : { contextKey, scannedPageCount: 0, totalCount: undefined }
@@ -54,7 +54,7 @@ export function usePagedDiscovery<TItem>({ contextKey, loadPage, onItems, pageSi
 		const request = lastRequestRef.current
 		if (receivedPage === undefined || receivedPage === pageBeforeRequestRef.current || request?.contextKey !== contextKey || !matchesDiscoveryRequest(receivedPage, request, pageSize, loading)) return
 		lastRequestRef.current = undefined
-		onItemsRef.current(receivedPage.items)
+		onPageRef.current(receivedPage)
 		setScan({ contextKey, scannedPageCount: receivedPage.pageIndex + 1, totalCount: receivedPage.totalCount })
 	}, [contextKey, loading, pageSize, receivedPage])
 

@@ -2,6 +2,7 @@
 
 import { getAddress, zeroAddress, zeroHash, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -413,5 +414,49 @@ describe('useQuestionCreation', () => {
 			await Promise.resolve()
 		})
 		expect(requireHookState(hookState).questionForm.title).toBe('')
+	})
+
+	test('keeps a reopened draft on the same deadline instant when the browser time zone changes', async () => {
+		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined }),
+		}))
+		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseQuestionCreationState | undefined
+		const Harness = function QuestionDraftZoneHarness() {
+			hookState = useQuestionCreation({
+				accountAddress: WALLET_ADDRESS,
+				activeUniverseId: 1n,
+				autoLoadInitialData: false,
+				deploymentStatuses: [DEPLOYED_QUESTION_DATA],
+				environmentRefreshKey: 0,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			})
+			return <div />
+		}
+		const originalTimeZone = process.env['TZ']
+		try {
+			process.env['TZ'] = 'America/New_York'
+			const drafted = await renderIntoDocument(h(Harness, {}))
+			await act(async () => requireHookState(hookState).setQuestionForm(current => ({ ...current, endTime: '2027-06-02T12:00', startTime: '2027-06-01T08:30' })))
+			const draftedEnd = tryParseTimestampInput('2027-06-02T12:00')
+			const draftedStart = tryParseTimestampInput('2027-06-01T08:30')
+			await drafted.cleanup()
+
+			process.env['TZ'] = 'America/Los_Angeles'
+			const reopened = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(reopened.cleanup)
+			const { endTime, startTime } = requireHookState(hookState).questionForm
+			expect(endTime).toBe('2027-06-02T09:00')
+			expect(startTime).toBe('2027-06-01T05:30')
+			expect(tryParseTimestampInput(endTime)).toBe(draftedEnd)
+			expect(tryParseTimestampInput(startTime)).toBe(draftedStart)
+		} finally {
+			if (originalTimeZone === undefined) delete process.env['TZ']
+			else process.env['TZ'] = originalTimeZone
+		}
 	})
 })

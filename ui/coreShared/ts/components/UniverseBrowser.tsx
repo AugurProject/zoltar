@@ -187,7 +187,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 						<MetricField label={universeCopy.parentUniverse}>
 							<ParentUniverseLink universe={universe} />
 						</MetricField>
-						<MetricField label={universeCopy.repSupply}>
+						<MetricField label={universeCopy.theoreticalRepSupply}>
 							<CurrencyValue value={universe.totalTheoreticalSupplyAttoRep} suffix={universe.reputationTokenSymbol ?? commonCopy.rep} />
 						</MetricField>
 					</MetricGrid>

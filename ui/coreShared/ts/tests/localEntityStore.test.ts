@@ -11,6 +11,7 @@ import {
 	parseDownloadedEntries,
 	parseFavoriteEntries,
 	parseStoredValue,
+	pruneRegistryEntries,
 	readFavoriteEntries,
 	removeFavoriteEntry,
 	resetLocalEntityStoreForTesting,
@@ -108,6 +109,33 @@ void describe('downloaded entries', () => {
 			{ data: 'old', fetchedAt: 2, id: 'old' },
 		]
 		expect(upsertDownloadedEntries(entries, [{ data: 'new', id: 'new' }], 3, new Set(['favorite']), 2).map(entry => entry.id)).toEqual(['new', 'favorite'])
+	})
+
+	void test('keeps a registry position across refreshes and drops entries a shorter or replaced registry no longer holds', () => {
+		const listed = upsertDownloadedEntries(
+			[],
+			[
+				{ data: 'a', id: 'a', registryIndex: 0 },
+				{ data: 'b', id: 'b', registryIndex: 1 },
+				{ data: 'c', id: 'c', registryIndex: 2 },
+			],
+			10,
+			new Set(),
+		)
+		const opened = upsertDownloadedEntries(
+			listed,
+			[
+				{ data: 'b2', id: 'b' },
+				{ data: 'unlisted', id: 'unlisted' },
+			],
+			20,
+			new Set(),
+		)
+		expect(opened.find(entry => entry.id === 'b')?.registryIndex).toBe(1)
+		// Position 1 now holds another id and position 2 is past the registry's end; unlisted entries are never pruned.
+		expect(pruneRegistryEntries(opened, { ids: ['a', 'replacement'], startIndex: 0, totalCount: 2n }).map(entry => entry.id)).toEqual(['unlisted', 'a'])
+		// A later page leaves earlier positions alone.
+		expect(pruneRegistryEntries(opened, { ids: [], startIndex: 10, totalCount: 3n }).map(entry => entry.id)).toEqual(['b', 'unlisted', 'a', 'c'])
 	})
 
 	void test('drops stored entries the decoder rejects', () => {
