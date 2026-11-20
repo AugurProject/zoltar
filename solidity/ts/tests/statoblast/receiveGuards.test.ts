@@ -6,20 +6,24 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 
 describe('Portfolio question ETH custody boundaries', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
-	test('unsolicited question ETH is rejected without changing outcome collateral or depositor claims', async () => {
+	test('#1355 rejects native ETH throughout the ERC20 portfolio stack', async () => {
 		await fixture.prepare()
 		await fixture.mint(unit)
 		const owner = fixture.owner()
 		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const target = { abi: portfolioArtifact.abi, address: fixture.portfolio }
+		const services = await owner.readContract({ ...target, functionName: 'services' })
+		const coordinator = await owner.readContract({ ...target, functionName: 'forkController' })
 		const supply = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'shareTokenSupplyAttoShares' })
-		const quote = () => owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'quoteQuestionSettlement', args: [pool, supply] })
+		const quote = () => owner.readContract({ ...target, functionName: 'quoteQuestionSettlement', args: [pool, supply] })
 		const before = await quote()
-		await expect(owner.sendTransaction({ to: pool, value: unit })).rejects.toThrow()
-		expect(await owner.getBalance({ address: pool })).toBe(0n)
+		for (const to of [pool, coordinator, services, fixture.portfolio]) {
+			await expect(owner.sendTransaction({ to, value: unit })).rejects.toThrow()
+			expect(await owner.getBalance({ address: to })).toBe(0n)
+		}
 		expect(await quote()).toBeLessThanOrEqual(before)
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'shareTokenSupplyAttoShares' })).toBe(supply)
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [supply] }))
-		expect(await owner.getBalance({ address: pool })).toBe(0n)
 	})
 
 	test('the native forker no longer accepts auction ETH', async () => {

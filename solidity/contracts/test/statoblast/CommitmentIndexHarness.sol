@@ -74,10 +74,10 @@ contract CommitmentIndexHarness {
 		index.initCohorts(currentId, nextId);
 	}
 	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 price, uint96 batch) external {
-		index.importPosition(owner, rep, commitment, price, batch, 0);
+		index.importPosition(owner, rep, commitment, price, batch, 0, 0);
 	}
 	function importPartial(address owner, uint256 rep, uint256 commitment, uint256 price, uint96 batch, uint256 remainingCommitment) external {
-		index.importPosition(owner, rep, commitment, price, batch, remainingCommitment);
+		index.importPosition(owner, rep, commitment, price, batch, remainingCommitment, 0);
 	}
 
 	function sealImports() external {

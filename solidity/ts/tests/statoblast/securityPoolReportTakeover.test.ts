@@ -75,7 +75,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 	}
 	test('a competing settler executes the funded sponsor takeover before they can take it', async () => {
 		const { sponsor, feed, intent } = await prepare()
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
@@ -99,7 +99,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 			if (failure === 'health target') intent.expectedTargetHealthFactorBps = 12_000n
 			// Expiry and price must be valid at submission, then become invalid before acceptance.
 			if (failure === 'price') intent.minimumPrice = 0n
-			const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+			const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 			await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
 			const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 			const before = await sponsor.readContract({ ...capital(), functionName: 'ownerAccount', args: [sponsor.account.address] })
@@ -126,7 +126,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		await context.closingQuote()
 		await context.finalize()
 		const ledger = { abi: capitalArtifact.abi, address: context.capital }
-		await writeContractAndWait(context.owner, () => context.owner.writeContract({ ...ledger, functionName: 'setCommitment', args: [0n] }))
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ ...ledger, functionName: 'setCommitment', args: [5n * unit] }))
 		await context.report(5n * unit)
 		await context.mock.advanceTime(3601n)
 		const sponsor = createWriteClient(context.mock, TEST_ADDRESSES[2])
@@ -138,7 +138,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		await wrapWeth(sponsor, 10n * unit)
 		await approveToken(sponsor, weth, context.feed)
 		const timestamp = (await context.owner.getBlock()).timestamp
-		const bounty = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const intent = {
 			positionId: 0n,
 			bidId: winner.id,
@@ -162,7 +162,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 	})
 	test('a starved takeover callback remains recoverable with sponsor priority', async () => {
 		const { sponsor, feed, intent } = await prepare()
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		const epoch = await sponsor.readContract({ ...feed, functionName: 'acceptedEpoch' })

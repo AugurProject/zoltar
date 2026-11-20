@@ -24,6 +24,7 @@ export function isOracleRequestFundingError(error: unknown) {
 
 type CoordinatorFundingValues = {
 	minimumReportCollateral: bigint | undefined
+	settlementBountyMultiplierBps: bigint | undefined
 	escalationHaltMultiplierBps: bigint
 	gasConsumedOpenOracleReportPrice: bigint
 	gasUnitsForOneDispute: bigint
@@ -80,6 +81,9 @@ function mulDivCeil(left: bigint, right: bigint, denominator: bigint, label: str
 function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): CoordinatorFundingValues {
 	const minimumReportCollateral = snapshot.minimumReportCollateral === undefined ? undefined : uint256(snapshot.minimumReportCollateral, 'minimumReportCollateral')
 	if (minimumReportCollateral !== undefined && (minimumReportCollateral === 0n || minimumReportCollateral > UINT128_MAXIMUM)) throw oracleRequestFundingError('Invalid collateral report floor')
+	const settlementBountyMultiplierBps = snapshot.settlementBountyMultiplierBps === undefined ? undefined : uint256(snapshot.settlementBountyMultiplierBps, 'settlementBountyMultiplierBps')
+	if (settlementBountyMultiplierBps !== undefined && settlementBountyMultiplierBps < BPS_DENOMINATOR) throw oracleRequestFundingError('Invalid shared settlement fee multiplier')
+	if (minimumReportCollateral !== undefined && settlementBountyMultiplierBps === undefined) throw oracleRequestFundingError('Shared settlement fee multiplier missing')
 	const gasConsumedOpenOracleReportPrice = uint256(snapshot.gasConsumedOpenOracleReportPrice, 'gasConsumedOpenOracleReportPrice')
 	const settlementCallbackGasLimit = uint256(snapshot.settlementCallbackGasLimit, 'settlementCallbackGasLimit')
 	const gasUnitsForOneDispute = uint256(snapshot.gasUnitsForOneDispute, 'gasUnitsForOneDispute')
@@ -112,6 +116,7 @@ function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): Coord
 	}
 	return {
 		minimumReportCollateral,
+		settlementBountyMultiplierBps,
 		escalationHaltMultiplierBps,
 		gasConsumedOpenOracleReportPrice,
 		gasUnitsForOneDispute,
@@ -138,6 +143,11 @@ function minimumToken1ReportAttoEth(baseFeePerGas: bigint, settlementCollateralA
 }
 
 function requestPriceCostAttoEth(baseFeePerGas: bigint, funding: CoordinatorFundingValues) {
+	if (funding.settlementBountyMultiplierBps !== undefined) {
+		const bounty = calculateOracleSettlementBountyAttoEth({ baseFeePerGas, initialReportPriorityFeeAttoEthPerGas: funding.initialReportPriorityFeeAttoEthPerGas, settlementCallbackGasLimit: funding.settlementCallbackGasLimit, maxSettlementBaseFeeMultiplierBps: funding.settlementBountyMultiplierBps })
+		if (bounty > UINT256_MAXIMUM) throw oracleRequestFundingError('oracle request bounty exceeds uint256')
+		return bounty
+	}
 	const bounty = calculateOracleSettlementBountyAttoEth({ baseFeePerGas, initialReportPriorityFeeAttoEthPerGas: funding.initialReportPriorityFeeAttoEthPerGas, settlementCallbackGasLimit: funding.settlementCallbackGasLimit })
 	if (bounty > UINT256_MAXIMUM) throw oracleRequestFundingError('oracle request bounty exceeds uint256')
 	return bounty

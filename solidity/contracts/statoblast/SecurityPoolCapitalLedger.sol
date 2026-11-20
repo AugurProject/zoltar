@@ -204,12 +204,12 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			_replace(account.positionId, position.rep + amount, position.commitment);
 		}
 		repToken().safeTransferFrom(_capitalOwner(), address(this), amount);
-		_serveRetirement(0);
 		emit PrincipalDeposited(_capitalOwner(), owner, amount);
 	}
 
 	function withdrawPrincipal(uint256 amount, address recipient) external nonReentrant {
 		_checkpoint();
+		_serveRetirement(owners[_capitalOwner()].account.positionId);
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.withdrawPrincipal, (amount, recipient)));
 	}
 
@@ -240,7 +240,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function _setCommitment(uint256 commitment, uint256 reportId, bool useReport) private returns (uint96 id) {
 		_requireOpen();
 		_checkpoint();
-		_serveRetirement(0);
 		_settleOwner(_capitalOwner());
 		id = owners[_capitalOwner()].account.positionId;
 		SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
@@ -257,15 +256,19 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		if (isPriceValid()) current -= _cure(id, commitment, commitment == 0);
 		if (current > commitment && !pending)
 			commitmentIndex.requestRetirement(id, commitment, minimumCommitmentAttoEth);
-		_serveRetirement(0);
+		_serveRetirement(id);
 	}
 
 	function serveRetirement(uint96 id) external nonReentrant {
 		_requireOpen();
+		require(id != 0 && commitmentIndex.accountOf(id).owner == _capitalOwner(), 'Only retirement owner');
 		_checkpoint();
 		_serveRetirement(id);
 	}
 	function _serveRetirement(uint96 id) private {
+		if (id == 0) return;
+		SecurityPoolCommitmentIndex.Account memory pending = commitmentIndex.accountOf(id);
+		if (pending.batch == 0 || pending.commitment == 0) return;
 		require(id == 0 || id != auctionCohort.positionId, 'Materialize an individual auction vault');
 		if (!isPriceValid() || frozen || zoltar.getForkTime(universeId()) != 0) return;
 		SecurityPoolCommitmentIndex.Retirement memory result = commitmentIndex.retire(conservativePrice, demandAttoEth, id);
@@ -283,11 +286,9 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_checkpoint();
 		if (demand > demandAttoEth) {
 			_requireFresh();
-			_serveRetirement(0);
-			require(demand <= commitmentIndex.eligibleCommitment(conservativePrice), 'Healthy commitment insufficient');
+			require(demand <= commitmentIndex.eligibleActiveCommitment(conservativePrice), 'Healthy commitment insufficient');
 		}
 		demandAttoEth = demand;
-		_serveRetirement(0);
 	}
 
 	/// @dev The book may remove matured liabilities during the pre-mutation fee
@@ -442,7 +443,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireFresh();
 		require(minimumAward == 0, 'Repairs pay future income only');
 		_checkpoint();
-		_serveRetirement(0);
 		require(commitmentIndex.liquidationStarted(id) != 0, 'Adverse observation missing');
 		SecurityPoolCommitmentIndex.Account memory beforeCure = commitmentIndex.accountOf(id);
 		require(beforeCure.owner != receiverOwner && beforeCure.maxHealthyPrice < liquidationPrice, 'Position does not need takeover');

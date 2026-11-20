@@ -167,6 +167,8 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
 		// Once healthy commitment covers the returned demand, the queued unbacked exit completes with all its REP.
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [LOT] }))
+		expect(await position(secondId)).toMatchObject({ commitment: LOT, releasedRep: 0n })
+		await writeContractAndWait(second, () => second.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'serveRetirement', args: [secondId] }))
 		expect(await position(secondId)).toMatchObject({ commitment: 0n, releasedRep: REP })
 	})
 

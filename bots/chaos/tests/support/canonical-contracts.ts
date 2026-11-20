@@ -10,7 +10,7 @@ interface CanonicalMutatingContract {
 
 // This is the canonical runtime code-family boundary for mutating-surface coverage.
 // It contains user-facing protocol endpoints plus deployed factories, workers,
-// migration proxies, and storage-coupled delegate modules. Pure/view-only runtime
+// and storage-coupled delegate modules. Pure/view-only runtime
 // helpers, generic Multicall transport, libraries, interfaces, and test contracts
 // are deliberately outside this economic-operation manifest.
 export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingContract[] = [

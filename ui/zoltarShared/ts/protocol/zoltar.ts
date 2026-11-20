@@ -2,7 +2,7 @@ import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
-import { getMarketType, getProtocolPageOffset, isStringArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
+import { formatCategoricalOutcomeLabel, getMarketType, getProtocolPageOffset, isStringArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { formatScalarOutcomeIndexLabel, isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -189,6 +189,17 @@ export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: numb
 
 const MAX_LINEAGE_DEPTH = 64
 
+/** Three labels distinguish categorical choices without enumerating their outcomes. */
+async function loadOutcomeDisplayName(client: ReadClient, questionDataAddress: Address, questionId: bigint, outcomeIndex: bigint) {
+	const [label, probe] = await Promise.all([
+		client.readContract({ abi: ANSWER_OPTION_ABI, address: questionDataAddress, functionName: 'getAnswerOptionName', args: [questionId, outcomeIndex] }),
+		client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionDataAddress, functionName: 'getOutcomeLabels', args: [questionId, 0n, 3n] }),
+	])
+	if (!isStringArray(probe)) throw new Error('Unexpected outcome label probe')
+	const categorical = probe.length > 0 && !(probe.length === 2 && probe[0] === 'Yes' && probe[1] === 'No')
+	return categorical ? formatCategoricalOutcomeLabel(label, outcomeIndex) : label
+}
+
 /**
  * Walks a universe's ancestry to genesis and names each generation by the fork outcome that created it.
  * A child's `forkingOutcomeIndex` indexes its parent's fork question, which never changes once the parent has forked.
@@ -202,7 +213,7 @@ async function loadUniverseLineage(client: ReadClient, universeId: bigint, unive
 		const [, , forkingOutcomeIndex, , parentUniverseId] = currentUniverse
 		const parentUniverse: UniverseTuple = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'universes', address: zoltarAddress, args: [parentUniverseId] })
 		const [, parentForkQuestionId] = parentUniverse
-		const outcomeLabel = parentForkQuestionId === 0n ? undefined : await client.readContract({ abi: ANSWER_OPTION_ABI, functionName: 'getAnswerOptionName', address: getDeploymentStepAddress('zoltarQuestionData'), args: [parentForkQuestionId, forkingOutcomeIndex] })
+		const outcomeLabel = parentForkQuestionId === 0n ? undefined : await loadOutcomeDisplayName(client, getDeploymentStepAddress('zoltarQuestionData'), parentForkQuestionId, forkingOutcomeIndex)
 		ancestry.push({ outcomeLabel, universeId: currentUniverseId })
 		currentUniverseId = parentUniverseId
 		currentUniverse = parentUniverse
@@ -218,7 +229,7 @@ async function loadUniverseOutcomeName(client: ReadClient, zoltarAddress: Addres
 	])
 	const [, questionId] = parent
 	if (questionId === 0n) return undefined
-	return await client.readContract({ abi: ANSWER_OPTION_ABI, address: questionDataAddress, functionName: 'getAnswerOptionName', args: [questionId, outcomeIndex] })
+	return await loadOutcomeDisplayName(client, questionDataAddress, questionId, outcomeIndex)
 }
 
 /**
@@ -291,6 +302,7 @@ export async function loadZoltarUniverseSummary(
 						return { outcomeIndex, outcomeLabel: formatScalarOutcomeIndexLabel(marketDetails, outcomeIndex) }
 					})
 				: [{ outcomeIndex: 0n, outcomeLabel: 'Invalid' }, ...marketDetails.outcomeLabels.map((outcomeLabel, index) => ({ outcomeIndex: BigInt(index + 1), outcomeLabel }))]
+		if (marketDetails.marketType === 'categorical') for (const entry of childOutcomeEntries) entry.outcomeLabel = formatCategoricalOutcomeLabel(entry.outcomeLabel, entry.outcomeIndex)
 		if (childOutcomeEntries.length > 0) {
 			const childUniverseIds = requireBigintArray(
 				await readRequiredMulticall(

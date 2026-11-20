@@ -163,6 +163,6 @@ describe('migration wizard helpers', () => {
 
 	test('getOutcomeLabelForIndex names outcomes and falls back to a position', () => {
 		expect(getOutcomeLabelForIndex(childUniverses, 2n)).toBe('No')
-		expect(getOutcomeLabelForIndex(undefined, 2n)).toBe('Outcome 3')
+		expect(getOutcomeLabelForIndex(undefined, 2n)).toBe('Outcome 2')
 	})
 })

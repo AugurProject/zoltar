@@ -117,7 +117,10 @@ export const fallbackRoutedEntrypointSignatures: Record<string, Record<string, R
 	'solidity/contracts/statoblast/EscalationGame.sol': {
 		'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol': {
 			depositRepOnOutcomeWithAuthorization: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
-			depositRepOnOutcomeWithPermit: ['external(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
+			depositRepOnOutcomeWithPermit: ['public(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
+			depositRepOnOutcomeWithLead: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
+			depositRepOnOutcomeWithPermitAndLead: ['external(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
+			depositRepOnOutcomeWithAuthorizationAndLead: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
 		},
 	},
 }

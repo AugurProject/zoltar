@@ -171,10 +171,11 @@ describe('Statoblast: owner health policy', () => {
 
 	test('settling a completed retirement permits idle target changes without an oracle', async () => {
 		await deposit(alice, 105n * E)
-		await authorize(alice, 100n * E)
+		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await retire(alice)
 		await demand(0n)
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))
 		await price(E, 5)
 		await getAnvilWindowEthereum().advanceTime(6n)
 		await target(alice, 15_000n)
@@ -204,11 +205,13 @@ describe('Statoblast: owner health policy', () => {
 		expect(await position(id)).toMatchObject({ commitment: 100n * E, remainingCommitment: 80n * E })
 		await expect(target(alice, 15_000n)).rejects.toThrow('Chosen health target unmet')
 		await demand(80n * E)
+		expect(await position(id)).toMatchObject({ commitment: 100n * E, remainingCommitment: 80n * E })
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))
 		expect(await position(id)).toMatchObject({ rep: 126n * E, commitment: 80n * E, remainingCommitment: 0n, batch: 0n, releasedRep: 0n })
 		await target(alice, 15_000n)
 		expect([...(await collateral(alice))]).toEqual([126n * E, 80n * E, 0n])
 		await demand(0n)
-		await writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [0n] }))
+		await expect(writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))).rejects.toThrow('Only retirement owner')
 		expect(await position(id)).toMatchObject({ rep: 126n * E, commitment: 80n * E, batch: 0n })
 	})
 

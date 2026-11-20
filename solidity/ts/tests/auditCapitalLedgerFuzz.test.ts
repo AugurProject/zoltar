@@ -478,6 +478,7 @@ const KNOWN_REVERTS = [
 	'Takeover owner target changed',
 	'Takeover source cohort changed',
 	'Receiver retirement differs',
+	'Only retirement owner',
 	'Receiver consent exceeded',
 	'Receiver collateral insufficient',
 	'Takeover owner principal exceeds limit',
@@ -650,7 +651,10 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			case 'setBid':
 				return [{ from: adminAddress, to: adapter, data: encodeFunctionData({ abi: adapterArtifact.abi, functionName: 'setBid', args: [op.bid, ownerAddress(op.o), op.health, op.lots] }) }]
 			case 'importChoice':
-				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'mint', args: [ledger, op.rep] })), asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'importChoice', args: [ownerAddress(op.o), { rep: op.rep, commitment: op.k, batch: op.batch, remainingCommitment: op.remaining }, op.target] }))]
+				return [
+					asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'mint', args: [ledger, op.rep] })),
+					asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'importChoice', args: [ownerAddress(op.o), { rep: op.rep, commitment: op.k, batch: op.batch, remainingCommitment: op.remaining, retirementOrder: 0n }, op.target] })),
+				]
 			case 'finishImport':
 				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'finishImport', args: [op.demand] }))]
 			case 'fork': {

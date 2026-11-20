@@ -441,11 +441,3 @@ test('pool events use resolved collateral decimals for cash and shares', () => {
 		expect(decoded.displayArguments?.['completeSetsMintedAttoShares']).toBe('1 shares')
 	}
 })
-
-test('native ETH received by a USDC pool stays native ETH', () => {
-	const abi = parseAbi(['event EthReceived(address indexed sender,uint256 amountAttoEth)'])
-	const topics = requireTopics(encodeEventTopics({ abi, eventName: 'EthReceived', args: { sender: account } }))
-	const data = encodeAbiParameters([{ type: 'uint256' }], [10n ** 18n])
-	const decoded = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), { nativeSymbol: 'ETH', collateral: { symbol: 'USDC', decimals: 6 } })
-	expect(decoded.displayArguments?.['amountAttoEth']).toBe('1 ETH')
-})

@@ -36,8 +36,8 @@ describe('Statoblast: funded fork choice imports', () => {
 	})
 
 	test('imported choices preserve personal collateral, retirement cohorts without ETH funding', async () => {
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n }, 12_000n] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [owner.account.address, { rep: 158n * E, commitment: 100n * E, batch: 1n, remainingCommitment: 0n }, 15_000n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n, retirementOrder: 0n }, 12_000n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [owner.account.address, { rep: 158n * E, commitment: 100n * E, batch: 1n, remainingCommitment: 0n, retirementOrder: 0n }, 15_000n] }))
 		expect(await position(1n)).toMatchObject({ rep: 126n * E, commitment: 100n * E, batch: 0n })
 		expect(await position(2n)).toMatchObject({ rep: 158n * E, commitment: 100n * E, batch: 1n })
 		expect((await account(owner.account.address)).targetHealthFactorBps).toBe(15_000n)
@@ -48,13 +48,28 @@ describe('Statoblast: funded fork choice imports', () => {
 	})
 
 	test('choice import requires authenticated authority without an ETH payment', async () => {
-		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n }
+		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n, retirementOrder: 0n }
 		await expect(buyer.writeContract({ abi: artifact.abi, address: ledger, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n] })).rejects.toThrow('Only fork authority')
 		expect((await account(buyer.account.address)).positionId).toBe(0n)
 	})
+	test('#1326 importing in reverse order preserves FIFO and lets a later owner claim with earlier capacity reserved', async () => {
+		for (const [holder, retirementOrder] of [
+			[buyer.account.address, 20n],
+			[owner.account.address, 10n],
+		] as const)
+			await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [holder, { rep: 126n * E, commitment: 100n * E, batch: 1n, remainingCommitment: 60n * E, retirementOrder }, 12_000n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [ledger, 252n * E] }))
+		await finish()
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [120n * E] }))
+		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'retirementOrder', args: [1n] })).toBe(20n)
+		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'previewRetirement', args: [1n, E, 120n * E] })).toMatchObject({ status: 5n, queuedAheadCommitment: 40n * E })
+		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [1n] }))
+		expect(await position(1n)).toMatchObject({ commitment: 60n * E, batch: 0n })
+		expect(await position(2n)).toMatchObject({ commitment: 100n * E, remainingCommitment: 60n * E, batch: 1n })
+	})
 
 	test('a fresh child price is cached during import without starting liquidation observations', async () => {
-		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n }
+		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n, retirementOrder: 0n }
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [ledger, imported.rep] }))
 		const now = (await owner.getBlock()).timestamp
@@ -75,12 +90,13 @@ describe('Statoblast: funded fork choice imports', () => {
 		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'healthObservationEpoch' })).toBe(1n)
 	})
 	test('a fork import preserves a partial retirement stop and keeps all collateral behind the residual', async () => {
-		const imported = { rep: 126n * E, commitment: 100n * E, batch: 1n, remainingCommitment: 60n * E }
+		const imported = { rep: 126n * E, commitment: 100n * E, batch: 1n, remainingCommitment: 60n * E, retirementOrder: 0n }
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [ledger, imported.rep] }))
 		await finish()
 		expect(await position(1n)).toMatchObject({ commitment: 100n * E, remainingCommitment: 60n * E, batch: 1n })
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [60n * E] }))
+		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [1n] }))
 		expect(await position(1n)).toMatchObject({ rep: 126n * E, commitment: 60n * E, remainingCommitment: 0n, batch: 0n, releasedRep: 0n })
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [0n] }))
 		expect(await position(1n)).toMatchObject({ rep: 126n * E, commitment: 60n * E, batch: 0n })

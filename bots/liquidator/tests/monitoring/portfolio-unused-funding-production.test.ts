@@ -12,13 +12,14 @@ import { distressedSecondWinner, repairAuctionKeeper } from '../support/collater
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
 describe('portfolio abandoned funding integration', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1000n })
+	// 1,971 bps makes per-second fees on whole ETH exact (year * 10,000 / 1,971 = 160,000,000),
+	// preserving multiple equal lots while retaining profitable holding-fee income.
+	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1971n })
 	test('a restarted keeper returns only its journaled funding after the original target becomes healthy', async () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
-		// Set purchased collateral explicitly so the later price makes these
-		// positions distressed, independently of the shared bidding helper default.
+		// Back both winners at opening and leave the second distressed by the later quote.
 		await context.bid(context.owner, 2n, (35n * unit) / 10n)
 		const second = await context.bid(context.other, 3n, (35n * unit) / 10n)
 		await context.closingQuote()

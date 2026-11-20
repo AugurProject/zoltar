@@ -45,7 +45,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const priority = await client.readContract({ abi: feedArtifact.abi, address: snapshot.feed, functionName: 'initialReportPriorityFeeAttoEthPerGas' })
 		const authoritative = await fixture.owner().readContract({ abi: feedArtifact.abi, address: snapshot.feed, functionName: 'getRequestPriceCostAttoEth', gasPrice: 7n, account: fixture.owner().account.address })
 		expect(snapshot.observation?.bounty).toBe(authoritative)
-		expect(authoritative).toBe(4_200_000n * (7n + priority) + 101n)
+		expect(authoritative).toBe(15_804_573n * (7n + priority) + 101n)
 	})
 
 	test('#1340 independent same-block reports can both settle', async () => {
@@ -439,7 +439,7 @@ describe('Statoblast: central capital shared price feed', () => {
 								.toString(16)
 								.padStart(40, '0')}`,
 						)
-			const position = { rep, commitment: unit, batch: BigInt(i % 3), remainingCommitment: 0n }
+			const position = { rep, commitment: unit, batch: BigInt(i % 3), remainingCommitment: 0n, retirementOrder: 0n }
 			const hash = await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'importChoice', args: [holder, position, 10_000n] }))
 			positionSetupGas += (await root.waitForTransactionReceipt({ hash })).gasUsed
 			backing += rep

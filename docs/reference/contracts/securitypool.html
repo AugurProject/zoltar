@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns. All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.</p>
 				<!-- Validated read ABI fingerprint: bb7f9551cde59425e97ae1385f4e225183103e0ff33d578edb9bc768302838ce -->
-				<!-- Validated complete compiled ABI fingerprint: 18d03a7d738baa7163966e6ade8f61428af92d7d3cd8802903d111d3f89b998d -->
+				<!-- Validated complete compiled ABI fingerprint: f275b60774a048940a26b49aa82e844e7a8bd8d30e6d8c45dba3289acea0dcd6 -->
 				<table>
 					<thead>
 						<tr>
@@ -93,9 +93,9 @@
 						<tr>
 							<td><code>depositWalletRepToEscalationGameWithLead(outcome, maximumDepositAttoRep)</code><wbr /></td>
 							<td>Any reporter</td>
-							<td>The ordinary wallet-report prerequisites. The resulting outcome balance exceeds every competing balance or equals the non-decision threshold (<code>Deposit does not lead</code>).</td>
-							<td>Creates the game if needed, transfers accepted wallet REP into reporter custody and records the outcome only when it leads or completes the non-decision threshold.</td>
-							<td>The ordinary wallet-report game creation and deposit events.</td>
+							<td>Ordinary wallet reporting prerequisites; the resulting outcome balance exceeds every other balance or fills its threshold (<code>Deposit does not lead</code>). An opposing top-up that invalidates this condition causes the whole transaction to revert.</td>
+							<td>Performs the ordinary wallet deposit only if it leaves the chosen outcome strictly leading, or fills its non-decision threshold. The reporting UI uses this protected form when the caller requests a leading result.</td>
+							<td>The ordinary wallet deposit signals; none survive a failed lead condition.</td>
 						</tr>
 						<tr>
 							<td><code>withdrawFromEscalationGame(outcome, depositIndexes)</code><wbr /></td>

@@ -108,21 +108,34 @@ contract EscalationGame is EscalationGameSettlement {
 		// Right-aligned selector words compare directly against `shr(224, calldataload(0))`.
 		uint256 depositWithPermitSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermit.selector);
 		uint256 depositWithAuthorizationSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorization.selector);
-		assembly {
+		uint256 depositWithLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithLead.selector);
+		uint256 depositWithPermitAndLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermitAndLead.selector);
+		uint256 depositWithAuthorizationAndLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorizationAndLead.selector);
+		assembly ('memory-safe') {
 			let selector := shr(224, calldataload(0))
 			let delegate := claimDelegateAddress
-			// Only the two signed public deposit entrypoints may reach the deposit
+			// Only the signed and protected public deposit entrypoints reach the deposit
 			// delegate. Other selectors remain on the claim delegate's narrow surface.
-			if or(eq(selector, depositWithPermitSelector), eq(selector, depositWithAuthorizationSelector)) {
+			if or(
+				or(eq(selector, depositWithPermitSelector), eq(selector, depositWithAuthorizationSelector)),
+				or(
+					eq(selector, depositWithLeadSelector),
+					or(
+						eq(selector, depositWithPermitAndLeadSelector),
+						eq(selector, depositWithAuthorizationAndLeadSelector)
+					)
+				)
+			) {
 				delegate := depositDelegateAddress
 			}
-			calldatacopy(0, 0, calldatasize())
-			if iszero(delegatecall(gas(), delegate, 0, calldatasize(), 0, 0)) {
-				returndatacopy(0, 0, returndatasize())
-				revert(0, returndatasize())
+			let pointer := mload(0x40)
+			calldatacopy(pointer, 0, calldatasize())
+			if iszero(delegatecall(gas(), delegate, pointer, calldatasize(), 0, 0)) {
+				returndatacopy(pointer, 0, returndatasize())
+				revert(pointer, returndatasize())
 			}
-			returndatacopy(0, 0, returndatasize())
-			return(0, returndatasize())
+			returndatacopy(pointer, 0, returndatasize())
+			return(pointer, returndatasize())
 		}
 	}
 }

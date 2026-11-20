@@ -4,6 +4,10 @@ pragma solidity 0.8.35;
 import { IERC20 } from '../../IERC20.sol';
 
 contract FalseReturningERC20 is IERC20 {
+	function getTotalTheoreticalSupply() external pure returns (uint256) {
+		return 11_000_000e18;
+	}
+
 	function totalSupply() external pure returns (uint256) {
 		return 0;
 	}

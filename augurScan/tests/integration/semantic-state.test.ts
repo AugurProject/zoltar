@@ -62,7 +62,7 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		// Timeline auction entries carry the same collateral token; other entities carry none.
 		for (const [index, [entityType, eventName]] of [
 			['auction', 'BidSettled'],
-			['pool', 'EthReceived'],
+			['pool', 'SystemStateSet'],
 		].entries())
 			await connection`INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, source_contract, source_event, canonical) VALUES (1, ${hash}, ${hash}, ${index}, 1, ${entityType}, ${token}, ${eventName}, '{}'::jsonb, ${token}, ${eventName}, true)`
 		const timeline = await timelineCatalogRows(connection, {

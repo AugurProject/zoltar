@@ -1,6 +1,6 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: '18d03a7d738baa7163966e6ade8f61428af92d7d3cd8802903d111d3f89b998d',
+	compiledAbiFingerprint: 'f275b60774a048940a26b49aa82e844e7a8bd8d30e6d8c45dba3289acea0dcd6',
 	name: 'SecurityPool',
 	interactionNotes:
 		'All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
@@ -210,10 +210,10 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`depositWalletRepToEscalationGameWithLead(outcome, maximumDepositAttoRep)`',
 			caller: 'Any reporter',
-			effect: 'Creates the game if needed, transfers accepted wallet REP into reporter custody and records the outcome only when it leads or completes the non-decision threshold.',
+			effect: 'Performs the ordinary wallet deposit only if it leaves the chosen outcome strictly leading, or fills its non-decision threshold. The reporting UI uses this protected form when the caller requests a leading result.',
 			declarations: [{ name: 'depositWalletRepToEscalationGameWithLead' }],
-			preconditions: 'The ordinary wallet-report prerequisites. The resulting outcome balance exceeds every competing balance or equals the non-decision threshold (`Deposit does not lead`).',
-			signals: 'The ordinary wallet-report game creation and deposit events.',
+			preconditions: 'Ordinary wallet reporting prerequisites; the resulting outcome balance exceeds every other balance or fills its threshold (`Deposit does not lead`). An opposing top-up that invalidates this condition causes the whole transaction to revert.',
+			signals: 'The ordinary wallet deposit signals; none survive a failed lead condition.',
 		},
 		{
 			call: '`withdrawFromEscalationGame(outcome, depositIndexes)`',

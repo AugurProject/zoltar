@@ -63,7 +63,6 @@ contract SecurityPool is SecurityPoolStorage {
 	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	event CompleteSetRedeemed(address indexed redeemer, uint256 completeSetsBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	event SharesRedeemed(address indexed redeemer, uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
-	event EthReceived(address indexed sender, uint256 amountAttoEth);
 
 	modifier isOperational() {
 		// Once a universe forks, the parent pool freezes operational flows permanently.
@@ -268,7 +267,7 @@ contract SecurityPool is SecurityPoolStorage {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositWalletRepToEscalationGame, (outcome, maximumDepositAttoRep)));
 	}
 
-	/// @notice Wallet-funded report that must lead or authorize a non-decision fork.
+	/// @notice Reverts unless the deposit leads outright or fills its non-decision threshold.
 	function depositWalletRepToEscalationGameWithLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
 		if (hasInheritedForkOutcome) revert('Forked');
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositWalletRepToEscalationGameWithLead, (outcome, maximumDepositAttoRep)));
@@ -353,6 +352,4 @@ contract SecurityPool is SecurityPoolStorage {
 	function authorizeChildPool(ISecurityPool pool) external onlyForker {
 		shareToken.authorize(pool);
 	}
-
-	/// @notice Accepts native ETH without creating a settlement-collateral claim.
 }

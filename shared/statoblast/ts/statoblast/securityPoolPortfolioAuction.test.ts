@@ -87,7 +87,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		initialized: opened,
 		controller: auction,
 		maximumBidAttoRepPerLot: 18n * unit,
-		maximumAcceptableBidAttoRepPerLot: 18n * unit,
+		maximumAdmissibleBidAttoRepPerLot: 18n * unit,
 		depositedAttoEth: 6n * unit,
 		securityMultiplierBps: 20_000n,
 		conservativePrice: 2n * unit,
@@ -145,16 +145,16 @@ describe('portfolio collateral repair auction SDK', () => {
 	test('#1371 rejects an excluded bid before asking for collateral approval', async () => {
 		const snapshot = await load(fixture())
 		if (snapshot.auction === undefined) throw new Error('Auction snapshot missing')
-		const blocked = { ...snapshot, collateralAllowance: 0n, auction: { ...snapshot.auction, maximumAcceptableBidAttoRepPerLot: (49n * unit) / 10n } }
-		expect(() => quotePortfolioAuctionBid(blocked, bidTerms)).toThrow('Better bids already exclude this limit')
-		expect(() => buildPortfolioAuctionBidRequest(blocked, bidTerms)).toThrow('Better bids already exclude this limit')
+		const blocked = { ...snapshot, collateralAllowance: 0n, auction: { ...snapshot.auction, maximumAdmissibleBidAttoRepPerLot: (49n * unit) / 10n } }
+		expect(() => quotePortfolioAuctionBid(blocked, bidTerms)).toThrow('Better funded bids exclude this limit')
+		expect(() => buildPortfolioAuctionBidRequest(blocked, bidTerms)).toThrow('Better funded bids exclude this limit')
 	})
 
 	test('#1371 explains when no new bid can meet the book and backing limits', async () => {
 		const snapshot = await load(fixture())
 		if (snapshot.auction === undefined) throw new Error('Auction snapshot missing')
-		const full = { ...snapshot, auction: { ...snapshot.auction, maximumAcceptableBidAttoRepPerLot: 0n } }
-		expect(() => quotePortfolioAuctionBid(full, bidTerms)).toThrow('No new bid can meet the current backing and funded-book limits')
+		const full = { ...snapshot, auction: { ...snapshot.auction, maximumAdmissibleBidAttoRepPerLot: 0n } }
+		expect(() => quotePortfolioAuctionBid(full, bidTerms)).toThrow('Better funded bids leave no admissible new limit')
 	})
 
 	test('authenticates canonical modules and each bidder vault at one block without enumerating other bidders', async () => {
@@ -205,6 +205,23 @@ describe('portfolio collateral repair auction SDK', () => {
 		expect(portfolioAuctionOpeningReason(await load(fixture({}, { opened: false, timestamp: 100_000n })))).toContain('closed')
 		expect(portfolioAuctionOpeningReason(await load(fixture({ inventoryAttoRep: 3n * unit }, { opened: false })))).toContain('cannot back one collateral lot')
 	})
+	test('#1331 opening quotes reserve a full day for competing bidders', async () => {
+		const snapshot = await load(fixture({}, { opened: false, timestamp: 13_601n }))
+		expect(portfolioAuctionOpeningReason(snapshot)).toContain('one day')
+		expect(() => buildPortfolioAuctionOpenRequest(snapshot)).toThrow('one day')
+	})
+
+	test('#1371 better funded bids block both the quote and its approval amount', async () => {
+		const snapshot = await load(fixture({ maximumAdmissibleBidAttoRepPerLot: 4n * unit }))
+		expect(() => quotePortfolioAuctionBid(snapshot, bidTerms)).toThrow('Better funded bids')
+		expect(() => buildPortfolioAuctionBidRequest(snapshot, bidTerms)).toThrow('Better funded bids')
+	})
+
+	test('#1371 a full book reports when no limit can meet the protocol backing floor', async () => {
+		const snapshot = await load(fixture({ maximumAdmissibleBidAttoRepPerLot: 3n * unit }))
+		expect(() => quotePortfolioAuctionBid(snapshot, bidTerms)).toThrow('no admissible new limit')
+	})
+
 	test('chosen health rounds exact required collateral once to the grid without multiplying the rounded protocol minimum', async () => {
 		const snapshot = await load(fixture({ openingConservativePrice: 3n, securityMultiplierBps: 10_000n, repGrid: 2n, minimumCollateralAttoRepPerLot: 4n }))
 		const quote = quotePortfolioAuctionBid(snapshot, { ...bidTerms, minimumAttoRepPerLot: 4n, targetHealthFactorBps: 12_000n })

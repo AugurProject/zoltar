@@ -241,11 +241,18 @@ contract SharedPoolPriceFeed {
 		return uint32(FEED_SETTLEMENT_GAS_OVERHEAD);
 	}
 
-	/// @notice Fund permissionless settlement at the request block's gas price.
-	/// The callback allowance includes report acceptance and ordinary sponsor work.
+	/// @notice Sponsor-funded incentive for independent settlement, including
+	/// callback dispatch, EIP-150 slack, and collecting the public reward.
 	function getRequestPriceCostAttoEth() public view returns (uint256) {
+		return _minimumSettlementBounty(getSettlementCallbackGasLimit());
+	}
+
+	function _minimumSettlementBounty(uint256 callbackGas) private view returns (uint256) {
+		uint256 gasBudget = callbackGas + callbackGas / 63 + 310_000;
+		uint256 feeAllowance = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 		return
-			(FEED_SETTLEMENT_GAS_OVERHEAD + 200_000) * (block.basefee + initialReportPriorityFeeAttoEthPerGas) +
+			Math.mulDiv(gasBudget, 12_000, SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil) * feeAllowance +
+			20_000 * feeAllowance +
 			REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
 
@@ -294,7 +301,7 @@ contract SharedPoolPriceFeed {
 		require(ISharedPoolPortfolioPriceCheckpoint(portfolio).isPriceReportingOpen(universeId()), 'Portfolio reporting window closed');
 		require(sponsor != address(0), 'Report sponsor zero');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
-		require(bountyAttoEth >= getRequestPriceCostAttoEth(), 'Oracle bounty too small');
+		require(bountyAttoEth >= _minimumSettlementBounty(callbackGasLimit), 'Oracle bounty too small');
 		require(msg.value == bountyAttoEth, 'Incorrect oracle bounty');
 		ReportFundingQuote memory quote = _quoteReportFunding(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 		pendingExposureLimitAttoEth = quote.exposureLimitAttoEth;
@@ -491,7 +498,8 @@ contract SharedPoolPriceFeed {
 		if (amount2 < minimumToken2ReportAttoRep()) return ('Report REP inventory budget insufficient', 0);
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
 		if (priceTimestamp < lastSettlementTimestamp) return ('Report timestamp not newer', 0);
-
+		// Equal-time observations are independently challenged evidence. Ordering
+		// their settlements must not suppress a sponsor's authorized operation.
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
 		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);
 		if (Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);

@@ -17,6 +17,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	uint96 public currentBatch;
 	uint96 public nextBatch;
 	uint96 private lastBatch;
+	uint64 private lastRetirementOrder;
+	mapping(uint96 => uint64) public retirementOrder;
+	mapping(uint96 => uint256) private reservedReduction;
+	mapping(uint256 => uint256) private retirementSums;
 	bool public importsOpen;
 	bool private importsInitialized;
 	uint64 public healthObservationEpoch;
@@ -99,11 +103,18 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		importsOpen = true;
 	}
 
-	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice, uint96 batch, uint256 remainingCommitment) external onlyCapitalLedger returns (uint96) {
+	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice, uint96 batch, uint256 remainingCommitment, uint64 order) external onlyCapitalLedger returns (uint96) {
 		require(importsOpen, 'Commitment imports are sealed');
 		require(batch == 0 || batch == currentBatch || batch == nextBatch, 'Unknown imported cohort');
 		require(remainingCommitment < commitment && (batch != 0 || remainingCommitment == 0), 'Invalid imported retirement target');
-		return _create(owner, batch, rep, commitment, maxHealthyPrice, remainingCommitment);
+		uint96 id = _create(owner, batch, rep, commitment, maxHealthyPrice, remainingCommitment);
+		if (batch != 0 && order != 0) {
+			_syncReservation(id, 0);
+			retirementOrder[id] = order;
+			if (lastRetirementOrder < order) lastRetirementOrder = order;
+			_syncReservation(id, commitment - remainingCommitment);
+		}
+		return id;
 	}
 
 	function sealImports() external onlyCapitalLedger {
@@ -186,21 +197,26 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		Position storage receiver = positions[receiverId];
 		Node storage from = nodes[source.node];
 		Node storage to = nodes[receiver.node];
-		require(source.batch == receiver.batch || receiver.batch == 0, 'Commitment cohorts differ');
+		require(receiver.batch == 0 || source.batch == receiver.batch, 'Commitment cohorts differ');
 		require(!from.retired && !to.retired && to.commitment != 0, 'Position is not live');
 		require(commitment != 0 && commitment <= from.commitment && rep <= from.rep, 'Invalid commitment transfer');
 		require(commitment != from.commitment || rep == from.rep, 'Residual REP has no commitment');
 		_detach(source.batch, source.node);
 		_detach(receiver.batch, receiver.node);
+		// Adding commitment to an existing queued receiver creates a new request
+		// at the tail. Added backing alone never changes request priority.
+		if (receiver.batch != 0) {
+			_syncReservation(receiverId, 0);
+			_assignRetirementOrder(receiverId);
+		}
 		from.rep -= rep;
 		from.commitment -= commitment;
 		from.price = sourceMaxPrice;
 		to.rep += rep;
 		to.commitment += commitment;
 		to.price = receiverMaxPrice;
-		uint256 inheritedRemaining = _transferRemaining(source, from.commitment);
-		// Joining active capital forfeits the source retirement request.
-		if (receiver.batch != 0) receiver.remainingCommitment += inheritedRemaining;
+		uint256 transferredRemaining = _transferRemaining(source, from.commitment);
+		if (receiver.batch != 0) receiver.remainingCommitment += transferredRemaining;
 		_reinsert(source);
 		_reinsert(receiver);
 	}
@@ -214,9 +230,11 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(remainingCommitment == 0 || (remainingCommitment >= minimumCommitment && leaf.commitment - remainingCommitment >= minimumCommitment), 'Retirement below economic minimum');
 		_detach(0, position.node);
 		position.batch = nextBatch;
+		_assignRetirementOrder(id);
 		position.remainingCommitment = remainingCommitment;
 		leaf.retainedCommitment = remainingCommitment;
 		_insert(nextBatch, position.node);
+		_syncReservation(id, leaf.commitment - remainingCommitment);
 	}
 
 	/// @notice Record which existing live positions are healthy at a fresh price.
@@ -410,47 +428,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		return (ethAmount - assignedEth, repAmount - assignedRep);
 	}
 
-	/// @notice Serve existing retirement groups before authorizing new demand.
-	/// @dev At most two cohorts and one partial boundary are processed. A capped
-	/// request rejoins active capacity at its residual K; full exits can close in
-	/// bulk. The controller rekeys the sole boundary while retaining all its REP.
+	/// @notice Owners serve their own ready requests. Zero never processes other owners.
 	function retire(uint256 acceptedPrice, uint256 demand, uint96 id) external onlyCapitalLedger operational returns (Retirement memory result) {
 		if (id != 0) return _retirePosition(id, acceptedPrice, demand);
-		uint256 healthy = eligibleCommitment(acceptedPrice);
-		if (healthy < demand) return result;
-		uint256 spare = healthy - demand;
-		for (uint256 group; group < 2; group++) {
-			_promote();
-			if (currentBatch == 0) break;
-			uint256 root = roots[currentBatch];
-			uint256 eligible = _eligible(root, acceptedPrice);
-			uint256 amount = Math.min(spare >= eligible ? nodes[root].commitment : spare, _retirementLimit(root));
-			if (amount == nodes[root].commitment) {
-				result.rep += nodes[root].rep;
-				result.commitment += nodes[root].commitment;
-				spare -= eligible;
-				_close(root);
-				roots[currentBatch] = 0;
-				currentBatch = 0;
-			} else {
-				if (amount == 0) break;
-				(uint256 replacement, uint256 rep, uint96 boundary) = _retirePrefix(root, amount);
-				roots[currentBatch] = replacement;
-				nodes[replacement].parent = 0;
-				result.rep += rep;
-				result.commitment += amount;
-				result.boundaryPositionId = boundary;
-				Position storage position = positions[boundary];
-				if (
-					position.remainingCommitment != 0 && nodes[position.node].commitment == position.remainingCommitment
-				) {
-					_touch(boundary);
-					_detach(position.batch, position.node);
-					_reinsert(position);
-				}
-				break;
-			}
-		}
 	}
 
 	/// @dev A requested position may finish without processing earlier owners,
@@ -467,6 +447,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		Node storage leaf = nodes[position.node];
 		_detach(position.batch, position.node);
 		result.commitment = preview.commitmentReduction;
+		_syncReservation(id, 0);
 		if (position.remainingCommitment == 0) {
 			result.rep = leaf.rep;
 			_close(position.node);
@@ -492,7 +473,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		if (account.remainingCommitment == 0) result.releasedRep = account.rep;
 		result.healthyCommitment = eligibleCommitment(acceptedPrice);
 		result.spareCommitment = result.healthyCommitment > demand ? result.healthyCommitment - demand : 0;
-		result.queuedAheadCommitment = _queuedAhead(positions[id], acceptedPrice, result.effectiveCurrentBatch);
+		result.queuedAheadCommitment = _queuedAhead(id);
 		if (importsOpen) result.status = RetirementStatus.ImportsOpen;
 		else if (result.healthyCommitment < demand) result.status = RetirementStatus.DemandExceedsHealthy;
 		else if (result.spareCommitment < result.queuedAheadCommitment)
@@ -504,24 +485,34 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		else result.status = RetirementStatus.Ready;
 	}
 
-	function _queuedAhead(Position storage position, uint256 acceptedPrice, uint96 effectiveCurrentBatch) private view returns (uint256 ahead) {
-		uint256 cursor = position.node;
-		if (nodes[cursor].price < acceptedPrice) {
-			uint256 root = roots[position.batch];
-			ahead = _eligible(root, acceptedPrice) - _eligibleRetained(root, acceptedPrice);
-		} else {
-			while (nodes[cursor].parent != 0) {
-				uint256 parent = nodes[cursor].parent;
-				if (nodes[parent].left == cursor) {
-					Node storage right = nodes[nodes[parent].right];
-					ahead += right.commitment - right.retainedCommitment;
-				}
-				cursor = parent;
-			}
+	/// @dev A uint64 Fenwick tree bounds both updates and reads to 65 slots,
+	/// independent of queue length, health rekeys, and the number of earlier owners.
+	/// Reserve every earlier requested reduction conservatively, even if unhealthy.
+	function _queuedAhead(uint96 id) private view returns (uint256 ahead) {
+		uint256 cursor = retirementOrder[id];
+		if (cursor == 0) return 0;
+		--cursor;
+		while (cursor != 0) {
+			ahead += retirementSums[cursor];
+			cursor &= cursor - 1;
 		}
-		if (effectiveCurrentBatch != 0 && position.batch != effectiveCurrentBatch) {
-			uint256 root = roots[effectiveCurrentBatch];
-			ahead += _eligible(root, acceptedPrice) - _eligibleRetained(root, acceptedPrice);
+	}
+
+	function _assignRetirementOrder(uint96 id) private {
+		require(lastRetirementOrder != type(uint64).max, 'Retirement order exhausted');
+		retirementOrder[id] = ++lastRetirementOrder;
+	}
+
+	function _syncReservation(uint96 id, uint256 amount) private {
+		uint256 old = reservedReduction[id];
+		if (old == amount) return;
+		uint256 cursor = retirementOrder[id];
+		require(cursor != 0, 'Retirement order missing');
+		reservedReduction[id] = amount;
+		while (cursor <= uint256(1) << 64) {
+			if (amount > old) retirementSums[cursor] += amount - old;
+			else retirementSums[cursor] -= old - amount;
+			cursor += cursor & (~cursor + 1);
 		}
 	}
 
@@ -577,6 +568,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		nodes[node] = Node(0, 0, 0, rep, commitment, 0, 0, price, price, id, 0, false, 0, remainingCommitment);
 		positions[id] = Position(owner, batch, node, 0, false, healthObservationEpoch, remainingCommitment);
 		_insert(batch, node);
+		if (batch != 0) {
+			_assignRetirementOrder(id);
+			_syncReservation(id, commitment - remainingCommitment);
+		}
 	}
 
 	/// @dev Takeovers transfer requested exits first. Only commitment beyond the
@@ -599,6 +594,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		}
 		leaf.retainedCommitment = position.remainingCommitment;
 		if (leaf.commitment != 0) _insert(position.batch, position.node);
+		_syncReservation(leaf.positionId, position.batch == 0 || leaf.commitment == 0 ? 0 : leaf.commitment - position.remainingCommitment);
 	}
 
 	function _promote() private {

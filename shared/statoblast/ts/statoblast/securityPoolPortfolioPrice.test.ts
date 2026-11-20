@@ -12,7 +12,7 @@ const rep: Address = '0x0000000000000000000000000000000000000007'
 const weth: Address = '0x0000000000000000000000000000000000000008'
 const oracle: Address = '0x0000000000000000000000000000000000000009'
 const unit = 10n ** 18n
-const settlementBounty = 4_200_000n * 10_000_000_000n + 101n
+const settlementBounty = 15_804_573n * 10_000_000_000n + 101n
 const hash: Hex = `0x${'11'.repeat(32)}`
 const abi = parseAbi([
 	'function preparePortfolioPriceFeed(address source,uint248 universeId) returns (address)',
@@ -42,10 +42,13 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		reputationToken: rep,
 		weth,
 		openOracle: oracle,
+		oracleExposure: 100n * unit,
+		minimumReportCollateral: unit,
 		minimumToken1ReportAttoEth: 2n * unit,
 		minimumToken2ReportAttoRep: 0n,
 		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		getSettlementCallbackGasLimit: 4_000_000n,
+		maxSettlementBaseFeeMultiplierBps: 30_000n,
 		lastPrice: unit,
 		lastSettlementTimestamp: 800n,
 		priceValidityWindowSeconds: 600n,
@@ -74,13 +77,26 @@ function fixture(overrides: Record<string, unknown> = {}) {
 const load = (client: Parameters<typeof loadPortfolioPriceSnapshot>[0]['client']) => loadPortfolioPriceSnapshot({ client, portfolio, owner, universeId: 42n })
 
 describe('portfolio branch price SDK', () => {
+	test('#1341 exposes the report coverage and its remaining growth headroom', async () => {
+		const snapshot = await load(fixture().client)
+		expect(quotePortfolioPriceFunding(snapshot, unit, (25n * unit) / 10n)).toMatchObject({ coveredExposureAttoEth: 150n * unit, growthHeadroomAttoEth: 50n * unit })
+	})
+	test('#1252 operation batches fund the extra public settlement work', async () => {
+		const snapshot = await load(fixture({ getRequestPriceCostAttoEth: 1_000_000_101n }).client)
+		const quoted = quotePortfolioPriceFunding(snapshot, unit, 2n * unit, 200_000n)
+		expect(quoted.bounty).toBeGreaterThan(1_000_000_101n)
+		expect(quoted.requiredEth).toBe(quoted.bounty)
+		const batch = { gasLimit: 200_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations: [{ gasLimit: 100_000n, data: '0x12345678' as const }] }
+		const request = buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, batch)
+		expect(request.value).toBeGreaterThan(1_000_000_101n)
+	})
 	test('operation batches are bounded by gas and preserve caller order without a count cap', async () => {
 		const snapshot = await load(fixture().client)
 		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 80_000n, data: '0x12345678' as const }))
 		const batch = { gasLimit: 5_760_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations }
 		const request = buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, batch)
 		const operationAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
-		expect(decodeFunctionData({ abi: operationAbi, data: request.data })).toEqual({ functionName: 'requestPortfolioPriceWithOperations', args: [unit, 2n * unit, settlementBounty, batch] })
+		expect(decodeFunctionData({ abi: operationAbi, data: request.data })).toEqual({ functionName: 'requestPortfolioPriceWithOperations', args: [unit, 2n * unit, 36_869_712n * 10_000_000_000n + 101n, batch] })
 		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: batch.gasLimit - 1n })).toThrow('gas budget')
 		// The feed adds 4,000,000 settlement gas and rejects a callback above 10,000,000.
 		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: 6_000_000n })).not.toThrow()
@@ -113,7 +129,7 @@ describe('portfolio branch price SDK', () => {
 		const { client, calls } = fixture()
 		const anchored = { ...client, getBlock: async () => ({ number: 10n, hash, timestamp: 1_000n, baseFeePerGas: 7n }) }
 		const snapshot = await load(anchored)
-		expect(snapshot.observation?.bounty).toBe(4_200_000n * (10_000_000_000n + 7n) + 101n)
+		expect(snapshot.observation?.bounty).toBe(15_804_573n * (10_000_000_000n + 7n) + 101n)
 		expect(calls.find(call => call.functionName === 'getSettlementCallbackGasLimit')).toMatchObject({ blockNumber: 10n })
 	})
 
@@ -155,7 +171,7 @@ describe('portfolio branch price SDK', () => {
 	})
 	test('quotes upward REP rounding and exact wrap and bounty requirements', async () => {
 		const snapshot = await load(fixture({ minimumToken1ReportAttoEth: 3n, balanceOf: 1n }).client)
-		expect(quotePortfolioPriceFunding(snapshot, unit + 1n)).toEqual({ price: unit + 1n, weth: 3n, minimumWeth: 3n, rep: 4n, wrap: 2n, bounty: settlementBounty, requiredEth: settlementBounty + 2n })
+		expect(quotePortfolioPriceFunding(snapshot, unit + 1n)).toEqual({ price: unit + 1n, weth: 3n, minimumWeth: 3n, rep: 4n, wrap: 2n, bounty: settlementBounty, requiredEth: settlementBounty + 2n, coveredExposureAttoEth: 0n, growthHeadroomAttoEth: 0n })
 		expect(quotePortfolioPriceFunding(snapshot, unit, 7n)).toMatchObject({ weth: 7n, rep: 7n, wrap: 6n })
 		expect(() => quotePortfolioPriceFunding(snapshot, 0n)).toThrow('positive')
 	})

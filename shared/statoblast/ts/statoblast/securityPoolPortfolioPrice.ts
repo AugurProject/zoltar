@@ -23,10 +23,13 @@ const abi = parseAbi([
 	'function weth() view returns (address)',
 	'function collateralToken() view returns (address)',
 	'function openOracle() view returns (address)',
+	'function oracleExposure(uint248 universeId) view returns (uint256)',
+	'function minimumReportCollateral() view returns (uint256)',
 	'function minimumToken1ReportAttoEth() view returns (uint256)',
 	'function minimumToken2ReportAttoRep() view returns (uint256)',
 	'function initialReportPriorityFeeAttoEthPerGas() view returns (uint256)',
 	'function getSettlementCallbackGasLimit() view returns (uint32)',
+	'function maxSettlementBaseFeeMultiplierBps() view returns (uint256)',
 	'function lastPrice() view returns (uint256)',
 	'function lastSettlementTimestamp() view returns (uint256)',
 	'function priceValidityWindowSeconds() view returns (uint256)',
@@ -84,6 +87,8 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 				openOracle: Address
 				minimumWethAttoEth: bigint | undefined
 				minimumRepAttoRep: bigint | undefined
+				currentExposureAttoEth: bigint
+				minimumReportCollateral: bigint
 				bounty: bigint
 				lastPrice: bigint
 				lastSettlementTimestamp: bigint
@@ -102,11 +107,14 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 		const weth = decodeAddress(wethValue, 'Collateral')
 		const wrappedNative = decodeAddress(await read(feed, 'weth'), 'Wrapped native token')
 		const openOracle = decodeAddress(oracleValue, 'OpenOracle')
-		const [minimum, minimumRep, priority, callbackGas, price, settled, validity, settlement, pending, wethBalanceAttoEth, repBalanceAttoRep, wethAllowanceAttoEth, repAllowanceAttoRep] = await Promise.all([
+		const [exposure, reportCollateral, minimum, minimumRep, priority, callbackGas, multiplier, price, settled, validity, settlement, pending, wethBalanceAttoEth, repBalanceAttoRep, wethAllowanceAttoEth, repAllowanceAttoRep] = await Promise.all([
+			read(portfolio, 'oracleExposure', [universeId]),
+			read(feed, 'minimumReportCollateral'),
 			reportingOpen ? read(feed, 'minimumToken1ReportAttoEth') : undefined,
 			reportingOpen ? read(feed, 'minimumToken2ReportAttoRep') : undefined,
 			read(feed, 'initialReportPriorityFeeAttoEthPerGas'),
 			read(feed, 'getSettlementCallbackGasLimit'),
+			read(feed, 'maxSettlementBaseFeeMultiplierBps'),
 			read(feed, 'lastPrice'),
 			read(feed, 'lastSettlementTimestamp'),
 			read(feed, 'priceValidityWindowSeconds'),
@@ -120,12 +128,19 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 		// Fee-priced eth_call can fail for an unfunded caller. Derive the exact
 		// contract quote from immutable settings and the pinned block instead.
 		const bounty = decodeUint(
-			calculateOracleSettlementBountyAttoEth({ settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement callback gas', 32), baseFeePerGas: decodeUint(block.baseFeePerGas ?? 0n, 'Block base fee'), initialReportPriorityFeeAttoEthPerGas: decodeUint(priority, 'Report priority fee') }),
+			calculateOracleSettlementBountyAttoEth({
+				maxSettlementBaseFeeMultiplierBps: decodeUint(multiplier, 'Settlement fee multiplier'),
+				settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement callback gas', 32),
+				baseFeePerGas: decodeUint(block.baseFeePerGas ?? 0n, 'Block base fee'),
+				initialReportPriorityFeeAttoEthPerGas: decodeUint(priority, 'Report priority fee'),
+			}),
 			'Settlement bounty',
 			96,
 		)
 		observation = {
 			wrappedNative,
+			currentExposureAttoEth: decodeUint(exposure, 'Current exposure'),
+			minimumReportCollateral: decodeUint(reportCollateral, 'Report collateral offset'),
 			weth,
 			openOracle,
 			minimumWethAttoEth: minimum === undefined ? undefined : decodeUint(minimum, 'Minimum WETH', 128),
@@ -150,7 +165,7 @@ export type PortfolioPriceSnapshot = Awaited<ReturnType<typeof loadPortfolioPric
 
 /** Reports without a requested size carry 5% more than the current minimum, a margin for exposure growth the minimum does not cover. */
 const PORTFOLIO_REPORT_FUNDING_HEADROOM_DIVISOR = 20n
-export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWeth = 0n) {
+export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWeth = 0n, operationsGas = 0n) {
 	const observation = snapshot.observation
 	if (observation === undefined) throw new Error('Prepare the branch price feed first.')
 	if (observation.minimumWethAttoEth === undefined || observation.minimumRepAttoRep === undefined) throw new Error('The branch price reporting window is closed.')
@@ -165,7 +180,14 @@ export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, pro
 	const weth = decodeUint(suggested > required ? suggested : required, 'Initial WETH report', 128)
 	const rep = decodeUint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)
 	const wrap = observation.weth === observation.wrappedNative && weth > observation.wethBalanceAttoEth ? weth - observation.wethBalanceAttoEth : 0n
-	return { price, weth, minimumWeth: required, rep, wrap, bounty: observation.bounty, requiredEth: wrap + observation.bounty }
+	const coveredExposureAttoEth = weth > observation.minimumReportCollateral ? (weth - observation.minimumReportCollateral) * 100n : 0n
+	const growthHeadroomAttoEth = coveredExposureAttoEth > observation.currentExposureAttoEth ? coveredExposureAttoEth - observation.currentExposureAttoEth : 0n
+	const callbackGas = PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS + decodeUint(operationsGas, 'Operations gas', 32)
+	if (callbackGas > MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS) throw new Error('Callback gas exceeds limit.')
+	const paddedGas = (callback: bigint) => ((callback + callback / 63n + 310_000n) * 12_000n + 9_999n) / 10_000n + 20_000n
+	const baseGas = paddedGas(PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS)
+	const bounty = operationsGas === 0n ? observation.bounty : ((observation.bounty - 101n) * paddedGas(callbackGas) + baseGas - 1n) / baseGas + 101n
+	return { price, weth, minimumWeth: required, rep, wrap, bounty, requiredEth: wrap + bounty, coveredExposureAttoEth, growthHeadroomAttoEth }
 }
 export function buildPortfolioPricePreparationRequest(snapshot: PortfolioPriceSnapshot) {
 	if (snapshot.sourcePool === undefined) throw new Error('No registered origin question is available to prepare this feed.')
@@ -197,7 +219,7 @@ export type PortfolioReportOperations = { gasLimit: bigint; minimumPrice: bigint
 /** Existing ledger entrypoints encoded in sponsor order, with no fixed count cap. */
 export function buildPortfolioPriceOperationsRequest(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWethAttoEth: bigint, batch: PortfolioReportOperations) {
 	const request = buildPortfolioPriceRequest(snapshot, proposedRepPerEth, requestedWethAttoEth)
-	const funding = quotePortfolioPriceFunding(snapshot, proposedRepPerEth, requestedWethAttoEth)
+	const funding = quotePortfolioPriceFunding(snapshot, proposedRepPerEth, requestedWethAttoEth, batch.gasLimit)
 	if (decodeUint(batch.gasLimit, 'Operations gas') + PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS > MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS) throw new Error('Callback gas exceeds limit.')
 	decodeUint(batch.minimumPrice, 'Minimum operation price')
 	decodeUint(batch.maximumPrice, 'Maximum operation price')
@@ -209,5 +231,6 @@ export function buildPortfolioPriceOperationsRequest(snapshot: PortfolioPriceSna
 		requiredGas += operation.gasLimit + 100_000n
 	}
 	if (requiredGas > batch.gasLimit) throw new Error('Operation gas budget insufficient.')
-	return { ...request, data: encodeFunctionData({ abi, functionName: 'requestPortfolioPriceWithOperations', args: [funding.price, funding.weth, funding.bounty, batch] }) }
+	if (snapshot.ethBalanceAttoEth < funding.bounty) throw new Error('Insufficient ETH for operation settlement bounty.')
+	return { ...request, value: funding.bounty, data: encodeFunctionData({ abi, functionName: 'requestPortfolioPriceWithOperations', args: [funding.price, funding.weth, funding.bounty, batch] }) }
 }

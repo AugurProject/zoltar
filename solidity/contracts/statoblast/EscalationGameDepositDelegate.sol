@@ -181,7 +181,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	}
 
 	/// @notice Game delegatecall target: like `depositRepOnOutcome`, after a permit, falling back to an existing allowance.
-	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
+	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
 		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
@@ -195,6 +195,11 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		}
 		IERC20(token).safeTransferFrom(msg.sender, address(this), depositedAttoRep);
 		_recordDeposit(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
+	}
+
+	function depositRepOnOutcomeWithPermitAndLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
+		depositRepOnOutcomeWithPermit(outcome, maximumDepositAttoRep, deadline, v, r, s);
+		require(_strictStakeLeader() == outcome || outcomeState[uint256(outcome)].balanceAttoRep == nonDecisionThresholdAttoRep, 'Deposit does not take the lead');
 	}
 
 	/// @notice Game delegatecall target: pulls `owner`'s previewed deposit through an ERC-3009 authorization bound to this operation and records it.

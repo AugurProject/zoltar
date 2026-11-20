@@ -71,6 +71,15 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={scoped.requiredRep}>
 					<CurrencyValue value={model.funding?.rep} suffix={common.rep} />
 				</MetricField>
+				<MetricField label={copy.currentExposure} loading={model.loading}>
+					<CurrencyValue value={observation?.currentExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+				</MetricField>
+				<MetricField label={copy.reportCoverage}>
+					<CurrencyValue value={model.funding?.coveredExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+				</MetricField>
+				<MetricField label={copy.growthHeadroom}>
+					<CurrencyValue value={model.funding?.growthHeadroomAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+				</MetricField>
 				<MetricField label={copy.bounty} loading={model.loading}>
 					<CurrencyValue value={observation?.bounty} suffix={common.eth} />
 				</MetricField>
@@ -122,6 +131,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				tokenUnits={18}
 			/>
 			<UserMessage tone='warning' detail={scoped.requestWarning} />
+			<UserMessage detail={copy.coverageWarning} />
 			<PortfolioButton model={parameters.actions} action={model.actionId('request')} label={scoped.request} pendingLabel={scoped.requesting} reason={model.requestReason} onClick={model.request} />
 			<PortfolioInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportId} disabled={disabled} />
 			<MetricGrid>

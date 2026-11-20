@@ -29,7 +29,7 @@ describe('settlement repair underwriting capacity', () => {
 		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
 		await approveToken(other, collateral, settlement)
 		const before = await collateralBalance(other, fixture.portfolio, other.account.address)
-		await expect(writeContractAndWait(other, () => other.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'topUp', args: [child, 150n * unit] }))).rejects.toThrow('Repair exceeds committed capacity')
+		await expect(writeContractAndWait(other, () => other.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'topUp', args: [child, 150n * unit] }))).rejects.toThrow('Repair exceeds underwriting commitment')
 		expect(await collateralBalance(other, fixture.portfolio, other.account.address)).toBe(before)
 	})
 })

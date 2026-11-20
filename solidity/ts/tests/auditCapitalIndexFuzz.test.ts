@@ -17,7 +17,7 @@ import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 //
 // `securityPoolCommitmentIndex.test.ts` already compares create, replace, observation and fee
 // credits with a naive live ledger over 80 steps. This extends that model to everything else
-// the index does: retirement requests, bulk and targeted service, cohort promotion, splits and
+// the index does: retirement requests, owner-targeted service, cohort promotion, splits and
 // merges, cures, claims and liquidation clocks. Trees hold up to a few hundred leaves with
 // clustered, equal and full-width keys, prices and demand are arbitrary per call, and the
 // harness's structural validator runs after every step.
@@ -48,8 +48,24 @@ const requireModel = (condition: boolean, reason: string) => {
 	if (!condition) throw new ModelRevert(reason)
 }
 
-type Position = { id: bigint; batch: bigint; rep: bigint; k: bigint; price: bigint; remaining: bigint; retired: boolean; repClaimed: boolean; distress: bigint | undefined; ethFees: bigint; repFees: bigint; dust: bigint; paidRep: bigint; paidEth: bigint; paidRepFees: bigint }
-type Model = { now: bigint; positions: Position[]; currentBatch: bigint; nextBatch: bigint; lastBatch: bigint; observedPrice: bigint; importsOpen: boolean; imported: boolean; released: bigint; retiredCommitment: bigint; creditedEth: bigint; creditedRep: bigint; unassignedEth: bigint; unassignedRep: bigint }
+type Position = { id: bigint; order: bigint; batch: bigint; rep: bigint; k: bigint; price: bigint; remaining: bigint; retired: boolean; repClaimed: boolean; distress: bigint | undefined; ethFees: bigint; repFees: bigint; dust: bigint; paidRep: bigint; paidEth: bigint; paidRepFees: bigint }
+type Model = {
+	now: bigint
+	lastOrder: bigint
+	positions: Position[]
+	currentBatch: bigint
+	nextBatch: bigint
+	lastBatch: bigint
+	observedPrice: bigint
+	importsOpen: boolean
+	imported: boolean
+	released: bigint
+	retiredCommitment: bigint
+	creditedEth: bigint
+	creditedRep: bigint
+	unassignedEth: bigint
+	unassignedRep: bigint
+}
 
 const find = (m: Model, id: bigint) => (id === 0n ? undefined : m.positions[Number(id) - 1])
 const inTree = (p: Position) => !p.retired && p.k !== 0n
@@ -77,7 +93,7 @@ const reinsert = (p: Position) => {
 const create = (m: Model, batch: bigint, rep: bigint, k: bigint, price: bigint, remaining: bigint) => {
 	requireModel(k !== 0n, 'Invalid commitment position')
 	const id = BigInt(m.positions.length + 1)
-	m.positions.push({ id, batch, rep, k, price, remaining, retired: false, repClaimed: false, distress: undefined, ethFees: 0n, repFees: 0n, dust: 0n, paidRep: 0n, paidEth: 0n, paidRepFees: 0n })
+	m.positions.push({ id, order: batch === 0n ? 0n : ++m.lastOrder, batch, rep, k, price, remaining, retired: false, repClaimed: false, distress: undefined, ethFees: 0n, repFees: 0n, dust: 0n, paidRep: 0n, paidEth: 0n, paidRepFees: 0n })
 	return id
 }
 const replace = (m: Model, id: bigint, rep: bigint, k: bigint, price: bigint) => {
@@ -106,10 +122,9 @@ const preview = (m: Model, id: bigint, price: bigint, demand: bigint) => {
 	const reduction = p.k - p.remaining
 	const healthy = eligible(m, price)
 	const spare = healthy > demand ? healthy - demand : 0n
-	const queued = (members: Position[]) => members.reduce((sum, q) => sum + (q.price >= price ? q.k - q.remaining : 0n), 0n)
-	const own = cohort(m, p.batch)
-	let ahead = p.price < price ? queued(own) : own.slice(own.findIndex(q => q.id === p.id) + 1).reduce((sum, q) => sum + q.k - q.remaining, 0n)
-	if (effective !== 0n && p.batch !== effective) ahead += queued(cohort(m, effective))
+	const ahead = live(m)
+		.filter(q => q.batch !== 0n && q.order < p.order)
+		.reduce((sum, q) => sum + q.k - q.remaining, 0n)
 	const statusOf = (): (typeof STATUS)[number] => {
 		if (m.importsOpen) return 'ImportsOpen'
 		if (healthy < demand) return 'DemandExceedsHealthy'
@@ -121,68 +136,22 @@ const preview = (m: Model, id: bigint, price: bigint, demand: bigint) => {
 }
 const retire = (m: Model, price: bigint, demand: bigint, id: bigint) => {
 	operational(m)
-	if (id !== 0n) {
-		const result = preview(m, id, price, demand)
-		requireModel(result.status !== 'NotRetiring', 'Position is not retiring')
-		promote(m)
-		if (result.status !== 'Ready') return
-		const p = known(m, id)
-		m.retiredCommitment += result.reduction
-		if (p.remaining === 0n) {
-			m.released += p.rep
-			p.retired = true
-		} else {
-			p.k = p.remaining
-			reinsert(p)
-		}
-		return
-	}
-	const healthy = eligible(m, price)
-	if (healthy < demand) return
-	let spare = healthy - demand
-	for (let group = 0; group < 2; group++) {
-		promote(m)
-		if (m.currentBatch === 0n) break
-		const members = cohort(m, m.currentBatch)
-		const total = members.reduce((sum, p) => sum + p.k, 0n)
-		const healthyMembers = members.reduce((sum, p) => sum + (p.price >= price ? p.k : 0n), 0n)
-		let limit = total
-		for (let i = members.length - 1; i >= 0; i--) {
-			const member = members[i]
-			if (member === undefined || member.remaining === 0n) continue
-			limit = members.slice(i + 1).reduce((sum, p) => sum + p.k, 0n) + member.k - member.remaining
-			break
-		}
-		const amount = min(spare >= healthyMembers ? total : spare, limit)
-		if (amount === total) {
-			for (const p of members) {
-				m.released += p.rep
-				p.retired = true
-			}
-			m.retiredCommitment += total
-			spare -= healthyMembers
-			m.currentBatch = 0n
-			continue
-		}
-		if (amount === 0n) break
-		let left = amount
-		for (let i = members.length - 1; i >= 0 && left !== 0n; i--) {
-			const p = members[i]
-			if (p === undefined) throw new Error('Model cohort member missing')
-			if (left >= p.k) {
-				left -= p.k
-				m.released += p.rep
-				p.retired = true
-			} else {
-				p.k -= left
-				left = 0n
-				if (p.remaining !== 0n && p.k === p.remaining) reinsert(p)
-			}
-		}
-		m.retiredCommitment += amount
-		break
+	if (id === 0n) return
+	const result = preview(m, id, price, demand)
+	requireModel(result.status !== 'NotRetiring', 'Position is not retiring')
+	promote(m)
+	if (result.status !== 'Ready') return
+	const p = known(m, id)
+	m.retiredCommitment += result.reduction
+	if (p.remaining === 0n) {
+		m.released += p.rep
+		p.retired = true
+	} else {
+		p.k = p.remaining
+		reinsert(p)
 	}
 }
+
 const credit = (m: Model, price: bigint, eth: bigint, rep: bigint) => {
 	const recipients = live(m).filter(p => p.price >= price)
 	const share = recipients.reduce((sum, p) => sum + p.k, 0n)
@@ -229,6 +198,7 @@ const apply = (m: Model, op: Operation) => {
 			requireModel(op.remaining < p.k, 'Retirement must reduce commitment')
 			requireModel(op.remaining === 0n || (op.remaining >= op.minimum && p.k - op.remaining >= op.minimum), 'Retirement below economic minimum')
 			p.batch = m.nextBatch
+			p.order = ++m.lastOrder
 			p.remaining = op.remaining
 			return
 		}
@@ -258,18 +228,18 @@ const apply = (m: Model, op: Operation) => {
 			requireModel(op.from !== op.to, 'Same commitment position')
 			const source = known(m, op.from)
 			const receiver = known(m, op.to)
-			requireModel(source.batch === receiver.batch || receiver.batch === 0n, 'Commitment cohorts differ')
+			requireModel(receiver.batch === 0n || source.batch === receiver.batch, 'Commitment cohorts differ')
 			requireModel(!source.retired && inTree(receiver), 'Position is not live')
 			requireModel(op.k !== 0n && op.k <= source.k && op.rep <= source.rep, 'Invalid commitment transfer')
 			requireModel(op.k !== source.k || op.rep === source.rep, 'Residual REP has no commitment')
 			source.rep -= op.rep
 			source.k -= op.k
 			source.price = op.oldPrice
+			if (receiver.batch !== 0n) receiver.order = ++m.lastOrder
 			receiver.rep += op.rep
 			receiver.k += op.k
 			receiver.price = op.newPrice
 			if (source.remaining > source.k) {
-				// An active destination acquires active commitment, without the source exit request.
 				if (receiver.batch !== 0n) receiver.remaining += source.remaining - source.k
 				source.remaining = source.k
 			}
@@ -288,6 +258,7 @@ const apply = (m: Model, op: Operation) => {
 			}
 			const total = live(m).reduce((sum, q) => sum + q.k, 0n)
 			const spare = total > op.demand ? total - op.demand : 0n
+			if (op.ownerExit && p.k - supported < op.minimum) return
 			let removed = min(p.k - op.target, min(max(p.k - supported, op.minimum), spare))
 			if (removed < op.minimum && removed !== p.k) removed = 0n
 			const rest = p.k - op.target - removed
@@ -295,6 +266,7 @@ const apply = (m: Model, op: Operation) => {
 				if (removed >= op.minimum && p.k - op.target <= spare) removed = p.k - op.target
 				else removed = removed >= op.minimum + (op.minimum - rest) ? removed - (op.minimum - rest) : 0n
 			}
+			if (p.rep !== 0n && removed === p.k) removed = 0n
 			const remaining = p.k - removed
 			if (removed !== 0n) {
 				if (remaining === 0n) replace(m, p.id, 0n, 0n, 0n)
@@ -716,7 +688,7 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		const wide = random.chance(0.5)
 		const capacity = random.pick([6, 20, 60, 150, 300])
 		const imports = random.chance(0.25)
-		let m: Model = { now: genesis, positions: [], currentBatch: 0n, nextBatch: 1n, lastBatch: 1n, observedPrice: 0n, importsOpen: false, imported: false, released: 0n, retiredCommitment: 0n, creditedEth: 0n, creditedRep: 0n, unassignedEth: 0n, unassignedRep: 0n }
+		let m: Model = { now: genesis, lastOrder: 0n, positions: [], currentBatch: 0n, nextBatch: 1n, lastBatch: 1n, observedPrice: 0n, importsOpen: false, imported: false, released: 0n, retiredCommitment: 0n, creditedEth: 0n, creditedRep: 0n, unassignedEth: 0n, unassignedRep: 0n }
 		const trace: Operation[] = []
 		const total = fixed === undefined ? steps : fixed.length
 		for (let step = 0; step < total; step++) {

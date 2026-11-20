@@ -177,7 +177,7 @@ describe('reporting protocol client', () => {
 		expect(previews[0]?.functionName).toBe('approve')
 		expect(previews[0]?.args).toEqual([securityPoolAddress, 7n])
 		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)
-		expect(previews[1]?.functionName).toBe('depositWalletRepToEscalationGame')
+		expect(previews[1]?.functionName).toBe('depositWalletRepToEscalationGameWithLead')
 		expect(previews[1]?.args).toEqual([1, 7n])
 	})
 
@@ -255,7 +255,7 @@ describe('reporting protocol client', () => {
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGame')
+		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGameWithLead')
 		expect(decodedCall.args).toEqual([1n, 7n])
 		expect(result).toMatchObject({ action: 'reportOutcome', securityPoolAddress, universeId: 9n })
 	})
@@ -328,7 +328,7 @@ describe('reporting protocol client', () => {
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGame')
+		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGameWithLead')
 		expect(decodedCall.args).toEqual([2n, 11n])
 	})
 

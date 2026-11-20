@@ -89,6 +89,8 @@ export interface QuestionSnapshot {
 
 /** Immutable coordinator inputs used to bound inclusion-time oracle funding. */
 export interface OracleRequestFundingSnapshot {
+	/** Shared feeds budget public settlement at this request-time fee multiplier. */
+	settlementBountyMultiplierBps?: CanonicalUintString
 	/** Shared feed collateral stake floor, in raw token units. */
 	minimumReportCollateral?: CanonicalUintString
 	collateralToken?: Address
@@ -234,6 +236,7 @@ export interface AuctionSnapshot {
 	unroundedCollateralAttoRepPerLot: CanonicalUintString
 	minimumCollateralAttoRepPerLot: CanonicalUintString
 	maximumBidAttoRepPerLot: CanonicalUintString
+	maximumAdmissibleBidAttoRepPerLot: CanonicalUintString
 	pendingEthRefund: string
 	pendingEthRefundGeneration?: Hash
 	bids: AuctionBidSnapshot[]

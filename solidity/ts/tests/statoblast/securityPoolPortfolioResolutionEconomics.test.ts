@@ -203,7 +203,7 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		expect(newcomer.accruedFeesAttoEth).toBe(0n)
 	})
 
-	test('stale-price reporting preserves REP claims without an ETH subsidy', async () => {
+	test('#1334 stale-price reporting preserves REP claims without paying the reporter a collateral subsidy', async () => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)

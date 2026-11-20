@@ -22,10 +22,10 @@ describe('protocol boundary hardening', () => {
 		}
 	})
 	test('#1357 rejects a zero logarithm denominator without exhausting gas', async () => {
-		await expect(fixture.owner().readContract({ abi: verifierArtifact.abi, address: getInfraContractAddresses().escalationGameProofVerifier, functionName: 'computeLnRatioScaled', args: [0n, 1n], gas: 100_000n })).rejects.toThrow('Invalid logarithm ratio')
+		await expect(fixture.owner().readContract({ abi: verifierArtifact.abi, address: getInfraContractAddresses().escalationGameProofVerifier, functionName: 'computeLnRatioScaled', args: [0n, 1n], gas: 100_000n })).rejects.toThrow('Invalid logarithm inputs')
 	})
 	test('#1357 rejects an attrition exponent that cannot fit its fixed-point word', async () => {
-		await expect(fixture.owner().readContract({ abi: verifierArtifact.abi, address: getInfraContractAddresses().escalationGameProofVerifier, functionName: 'computeIterativeAttritionCostAttoRep', args: [1n, (1n << 256n) - 1n, 500n * 693_147n, 1n, 2n] })).rejects.toThrow('Attrition exponent too high')
+		await expect(fixture.owner().readContract({ abi: verifierArtifact.abi, address: getInfraContractAddresses().escalationGameProofVerifier, functionName: 'computeIterativeAttritionCostAttoRep', args: [1n, (1n << 256n) - 1n, 500n * 693_147n, 1n, 2n] })).rejects.toThrow('Attrition exponent too large')
 	})
 	test('#1357 accepts the complete clock domain and rejects timestamp truncation', async () => {
 		const artifact = artifacts.test_CheckedCastHarness_CheckedCastHarness

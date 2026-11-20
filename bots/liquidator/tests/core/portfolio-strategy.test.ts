@@ -221,7 +221,7 @@ test('takeover prerequisites reject demand or total-capacity changes even below 
 	}
 })
 
-test('atomic cure crossing the retained commitment joins the active receiver cohort', () => {
+test('#1255 active keepers accept queued targets while retiring keepers retain their cohort bounds', () => {
 	const observation = portfolioObservation()
 	const position = observation.positions[0]
 	if (position === undefined) throw new Error('Fixture position missing')
@@ -240,6 +240,8 @@ test('atomic cure crossing the retained commitment joins the active receiver coh
 	receiver.batch = 2n
 	expect(evaluate(observation).reason).toContain('cohorts differ')
 	position.remainingCommitment = 80n * unit
+	expect(evaluate(observation).plan).toMatchObject({ commitment: 40n * unit, expectedSourceBatch: 2n })
+	receiver.batch = 0n
 	expect(evaluate(observation).plan).toMatchObject({ commitment: 40n * unit, expectedSourceBatch: 2n })
 })
 

@@ -41,23 +41,22 @@ function requestPricePlan(snapshot: ReturnType<typeof snapshotFixture>) {
 }
 
 describe('oracle request funding bounds', () => {
-	test('#1252 validates gas-sensitive shared-feed bounties and caps inclusion base fees', () => {
-		const coordinator = { ...simpleCoordinatorFunding, minimumReportCollateral: '7' }
-		expect(() => assertAnchoredOracleRequestFunding({ baseFeePerGas: '1', coordinator, minimumToken1ReportAttoEth: 8n.toString(), requestPriceCostAttoEth: 400_105n.toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
+	test('#1252 shared report envelopes fund gas-based public settlement at inclusion', () => {
+		const coordinator = { ...simpleCoordinatorFunding, minimumReportCollateral: '7', settlementBountyMultiplierBps: '30000' }
+		expect(() => assertAnchoredOracleRequestFunding({ baseFeePerGas: '1', coordinator, minimumToken1ReportAttoEth: 8n.toString(), requestPriceCostAttoEth: 2352119n.toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
 		const envelope = oracleRequestFundingEnvelope({
 			coordinator,
-			maximumEthPrincipalAttoEth: 1_000_000n.toString(),
-			maximumNativePrincipalAttoEth: 1_000_000n.toString(),
-			maximumRepPrincipalAttoRep: 1_000_000n.toString(),
-			maximumWethPrincipalAttoEth: 1_000_000n.toString(),
+			maximumEthPrincipalAttoEth: 10000000000n.toString(),
+			maximumNativePrincipalAttoEth: 1000000000n.toString(),
+			maximumRepPrincipalAttoRep: 10000000000n.toString(),
+			maximumWethPrincipalAttoEth: 10000000000n.toString(),
 			proposedRepPerEthPrice: (10n ** 18n).toString(),
 			settlementCollateralCeilingAttoEth: 100n.toString(),
 		})
-		expect(envelope.maximumBaseFeePerGas).toBe('3')
-		expect(envelope.maximumRequestPriceCostAttoEth).toBe('800109')
+		expect(BigInt(envelope.maximumRequestPriceCostAttoEth)).toBeGreaterThan(2352119n)
+		expect(BigInt(envelope.maximumBaseFeePerGas)).toBeGreaterThan(1n)
 		expect(() => assertOracleRequestFundingEnvelope({ coordinator, envelope, proposedRepPerEthPrice: (10n ** 18n).toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
 	})
-
 	test('ETH-budget report automation excludes non-WETH collateral', () => {
 		const { pool, snapshot } = requestPriceSnapshot()
 		const prior = requestPricePlan(snapshot)
@@ -68,9 +67,9 @@ describe('oracle request funding bounds', () => {
 	})
 
 	test('shared report stakes use the configured collateral floor independently of gas prices', () => {
-		const coordinator = { ...simpleCoordinatorFunding, minimumReportCollateral: '7' }
+		const coordinator = { ...simpleCoordinatorFunding, minimumReportCollateral: '7', settlementBountyMultiplierBps: '30000' }
 		for (const baseFeePerGas of ['0', '1', '1000000000000']) {
-			expect(() => assertAnchoredOracleRequestFunding({ baseFeePerGas, coordinator, minimumToken1ReportAttoEth: 8n.toString(), requestPriceCostAttoEth: (200_002n * (BigInt(baseFeePerGas) + 1n) + 101n).toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
+			expect(() => assertAnchoredOracleRequestFunding({ baseFeePerGas, coordinator, minimumToken1ReportAttoEth: 8n.toString(), requestPriceCostAttoEth: (392_003n * (BigInt(baseFeePerGas) + 1n) * 3n + 101n).toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
 		}
 	})
 

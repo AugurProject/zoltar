@@ -41,9 +41,10 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 		const engine = getAddress(engineAddress)
 		const engineController = await client.readContract({ abi: abis.securityPoolUniformPriceAuctionAbi, address: engine, functionName: 'controller', blockNumber })
 		requireGraphEdge(getAddress(engineController), address, 'Auction engine controller binding')
-		const [opensAt, maximumBid, pendingRefund] = await Promise.all([
+		const [opensAt, maximumBid, admissibleBid, pendingRefund] = await Promise.all([
 			client.readContract({ abi: abis.securityPoolUniformPriceAuctionAbi, address: engine, functionName: 'opensAt', blockNumber }),
 			client.readContract({ abi: abis.securityPoolUniformPriceAuctionAbi, address: engine, functionName: 'maximumBidAttoRepPerLot', blockNumber }),
+			client.readContract({ abi: abis.securityPoolUniformPriceAuctionAbi, address: engine, functionName: 'maximumAdmissibleBidAttoRepPerLot', blockNumber }),
 			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: abis.securityPoolUniformPriceAuctionAbi, address: engine, functionName: 'refundCreditAttoEth', args: [wallet], blockNumber }),
 		])
 		const bids = (context.indexedAuctionBids?.[engine.toLowerCase()] ?? []).map(bid => ({ ...bid }))
@@ -81,6 +82,7 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 			unroundedCollateralAttoRepPerLot: unroundedCollateral.toString(),
 			minimumCollateralAttoRepPerLot: minimumCollateral.toString(),
 			maximumBidAttoRepPerLot: maximumBid.toString(),
+			maximumAdmissibleBidAttoRepPerLot: admissibleBid.toString(),
 			pendingEthRefund: pendingRefund.toString(),
 			...(generation === undefined ? {} : { pendingEthRefundGeneration: generation }),
 			bids,

@@ -49,7 +49,7 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 
 	function install(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot, uint256 minimumCommitment) external onlyDelegateCall {
 		require(importing && address(auctionCohort.adapter) == address(0), 'Auction cohort installation unavailable');
-		require(adapter.code.length != 0 && lots != 0 && repPerLot != 0 && commitmentPerLot == minimumCommitment, 'Invalid auction cohort');
+		require(adapter.code.length != 0 && lots != 0 && repPerLot != 0 && commitmentPerLot >= minimumCommitment, 'Invalid auction cohort');
 		ICapitalAuctionHost host = ICapitalAuctionHost(address(this));
 		// The ordinary index floors REP before dividing by K. This congruence
 		// makes that first division exact per lot, including a one-lot winner.
@@ -59,7 +59,7 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 		(uint256 existing, ) = commitmentIndex.totals();
 		require(host.repToken().balanceOf(address(this)) >= existing + principal + totalFreeAttoRep + retirementCashAttoRep, 'Auction principal unfunded');
 		uint256 threshold = host.maximumHealthyPrice(repPerLot, commitmentPerLot);
-		uint96 id = commitmentIndex.importPosition(adapter, principal, commitment, threshold, 0, 0);
+		uint96 id = commitmentIndex.importPosition(adapter, principal, commitment, threshold, 0, 0, 0);
 		auctionCohort = AuctionCohort(ISecurityPoolAuctionCapital(adapter), id, lots, repPerLot, commitmentPerLot);
 		emit AuctionCohortInstalled(adapter, id, lots, repPerLot, commitmentPerLot);
 	}
@@ -117,7 +117,14 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 			index.eligibleCommitment(host.conservativePrice()) < host.demandAttoEth()
 		) return (principal, commitment, withdrawable);
 		if (target == 0) target = owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
-		uint256 required = index.requiredRep(commitment, host.ownerConservativePrice(holder), host.securityMultiplierBps(), target);
+		uint256 withdrawalCommitment = commitment;
+		if (
+			position.batch != 0 &&
+			position.commitment != 0 &&
+			index.previewRetirement(owner.positionId, host.conservativePrice(), host.demandAttoEth()).status ==
+				SecurityPoolCommitmentIndex.RetirementStatus.Ready
+		) withdrawalCommitment -= position.commitment - position.remainingCommitment;
+		uint256 required = index.requiredRep(withdrawalCommitment, host.ownerConservativePrice(holder), host.securityMultiplierBps(), target);
 		if (pledged > required) withdrawable += pledged - required;
 	}
 	function previewAuctionPosition(ICapitalAuctionHost host, uint256 bidId) external view returns (AuctionPosition memory result) {

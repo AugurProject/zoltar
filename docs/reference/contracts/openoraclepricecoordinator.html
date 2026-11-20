@@ -37,7 +37,7 @@
 						<tr>
 							<td><code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)</code> with report funding<wbr /></td>
 							<td>Anyone; shared candidates may coexist and renew before the accepted price expires</td>
-							<td>Supply a nonzero raw REP-per-collateral price scaled by 1e18 and a bounty of at least the gas-funded minimum quoted by the shared feed covered by msg.value. Approve the exact requested collateral and the matching REP for that price. The request reverts if the shared feed’s <code>minimumToken1ReportAttoEthForPrice</code> exceeds the requested collateral. The creator-configured floor and current exposure set the minimum, independent of dispute gas costs. Funding is isolated in a new report escrow. The caller must accept any excess-ETH refund.</td>
+							<td>Supply a nonzero raw REP-per-collateral price scaled by 1e18 and a bounty covering the shared feed’s gas-based minimum, funded by msg.value. Approve the exact requested collateral and the matching REP for that price. The request reverts if the shared feed’s <code>minimumToken1ReportAttoEthForPrice</code> exceeds the requested collateral. The creator-configured floor and current exposure set the minimum, independent of dispute gas costs. Funding is isolated in a new report escrow. The caller must accept any excess-ETH refund.</td>
 							<td>Opens and atomically funds a fresh collateral/REP report without staging a new operation, retains the whole committed bounty as the settler reward, then refunds any ETH above the bounty through a low-level caller callback. Callback rejection rolls back the report and initial position.</td>
 							<td><code>PriceRequested</code> and <code>ReportFundingAssigned</code> from the shared feed.</td>
 						</tr>

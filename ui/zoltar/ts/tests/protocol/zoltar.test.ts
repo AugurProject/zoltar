@@ -49,7 +49,7 @@ function createReadClient({ multicallResponses, readContractHandlers }: { multic
 }
 
 describe('zoltar contract helpers', () => {
-	test('overview reads stay constant for a forked universe without walking ancestry or scanning outcomes or children', async () => {
+	test('overview reads stay constant for a forked universe without walking ancestry or enumerating outcomes or children', async () => {
 		const reads: string[] = []
 		const client = createReadClient({
 			multicallResponses: [
@@ -59,6 +59,11 @@ describe('zoltar contract helpers', () => {
 			],
 			readContractHandlers: {
 				getEarliestForkTime: async () => 0n,
+				getOutcomeLabels: async request => {
+					reads.push('bounded outcome probe')
+					expect(request.args).toEqual([41n, 0n, 3n])
+					return ['Beta', 'Alpha', 'Gamma']
+				},
 				getAnswerOptionName: async request => {
 					reads.push('outcome name')
 					expect(request.args).toEqual([41n, 2n])
@@ -77,8 +82,8 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.relatedUniversesLoaded).toBe(false)
 		expect(summary?.forkQuestionDetails).toBeUndefined()
 		expect(summary?.lineage).toBeUndefined()
-		expect(summary?.outcomeLabel).toBe('Alpha')
-		expect(reads).toEqual(['supply', 'outcome name'])
+		expect(summary?.outcomeLabel).toBe('Outcome 2: Alpha')
+		expect(reads).toEqual(['supply', 'outcome name', 'bounded outcome probe'])
 	})
 
 	test('loadMarketDetails marks missing question data as non-existent without loading labels', async () => {

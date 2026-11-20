@@ -169,35 +169,6 @@ abstract contract SecurityPoolCommitmentTree {
 		_refresh(replacement);
 	}
 
-	/// @dev Join two ordered AVL trees after a bulk retirement. The taller spine
-	/// is traversed once; ordinary single-deletion balancing would not suffice.
-	function _join(uint256 left, uint256 right, uint256 branch) private returns (uint256 replacement) {
-		nodes[left].parent = 0;
-		nodes[right].parent = 0;
-		uint256[MAX_DEPTH] memory path;
-		uint256 depth;
-		bool leftTall = nodes[left].height > nodes[right].height;
-		uint256 cursor = leftTall ? left : right;
-		uint256 shorter = leftTall ? right : left;
-		while (nodes[cursor].height > nodes[shorter].height + 1) {
-			_push(cursor);
-			path[depth++] = cursor;
-			cursor = leftTall ? nodes[cursor].right : nodes[cursor].left;
-		}
-		if (leftTall) _branch(branch, cursor, shorter, 0);
-		else _branch(branch, shorter, cursor, 0);
-		replacement = branch;
-		while (depth != 0) {
-			uint256 parent = path[--depth];
-			if (leftTall) nodes[parent].right = replacement;
-			else nodes[parent].left = replacement;
-			nodes[replacement].parent = parent;
-			_refresh(parent);
-			replacement = _balance(parent);
-		}
-		nodes[replacement].parent = 0;
-	}
-
 	function _eligible(uint256 cursor, uint256 price) internal view returns (uint256) {
 		return _eligibleAmount(cursor, price, false);
 	}
@@ -310,66 +281,6 @@ abstract contract SecurityPoolCommitmentTree {
 	function _close(uint256 root) internal {
 		nodes[root].retired = true;
 		nodes[root].parent = 0;
-	}
-
-	/// @dev All leaves to the right of the first partial request are full exits.
-	/// Capping a prefix here lets one service call complete bulk full exits and
-	/// change at most one retained owner's health key and active membership.
-	function _retirementLimit(uint256 cursor) internal view returns (uint256 amount) {
-		if (nodes[cursor].retainedCommitment == 0) return nodes[cursor].commitment;
-		while (nodes[cursor].left != 0) {
-			uint256 right = nodes[cursor].right;
-			if (nodes[right].retainedCommitment != 0) cursor = right;
-			else {
-				amount += nodes[right].commitment;
-				cursor = nodes[cursor].left;
-			}
-		}
-		return amount + nodes[cursor].commitment - positions[nodes[cursor].positionId].remainingCommitment;
-	}
-
-	function _retirePrefix(uint256 cursor, uint256 amount) internal returns (uint256 replacement, uint256 released, uint96 boundary) {
-		uint256[MAX_DEPTH] memory kept;
-		uint256 depth;
-		while (true) {
-			Node storage node = nodes[cursor];
-			if (amount == node.commitment) {
-				released += node.rep;
-				_close(cursor);
-				break;
-			}
-			if (node.left == 0) {
-				// A private owner's full deposit keeps backing its residual K.
-				// Only complete retirement releases custody from this leaf.
-				node.commitment -= amount;
-				replacement = cursor;
-				boundary = node.positionId;
-				break;
-			}
-			_push(cursor);
-			uint256 right = node.right;
-			if (amount < nodes[right].commitment) {
-				kept[depth++] = cursor;
-				cursor = right;
-			} else {
-				amount -= nodes[right].commitment;
-				released += nodes[right].rep;
-				_close(right);
-				cursor = node.left;
-				nodes[cursor].parent = 0;
-				if (amount == 0) {
-					replacement = cursor;
-					break;
-				}
-			}
-		}
-		while (depth != 0) {
-			uint256 parent = kept[--depth];
-			if (replacement == 0) {
-				replacement = nodes[parent].left;
-				nodes[replacement].parent = 0;
-			} else replacement = _join(nodes[parent].left, replacement, parent);
-		}
 	}
 
 	function _preview(uint256 leafId) internal view returns (bool retired, uint256 ethFees, uint256 repFees) {

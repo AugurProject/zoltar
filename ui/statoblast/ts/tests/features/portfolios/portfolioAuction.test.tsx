@@ -28,6 +28,15 @@ function metric(container: HTMLElement, text: string) {
 		?.parentElement?.querySelector('.metric-field-value')?.textContent
 }
 
+test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
+	const fixture = await auctionFixture()
+	fixture.values.maximumAdmissibleBidAttoRepPerLot = 3n * unit
+	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
+	expect(view.container.textContent).toContain('No admissible new limit')
+})
+
 test('auction funding controls and bid rows stay in place through reload and failure', async () => {
 	const fixture = await auctionFixture()
 	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)
@@ -133,12 +142,12 @@ test('early refund status enables only crediting then a separate unrestricted wi
 })
 
 test.each([
-	{ maximumAcceptableBid: (49n * unit) / 10n, reason: 'Better bids already exclude this limit' },
-	{ maximumAcceptableBid: 0n, reason: 'No new bid can meet the current backing and funded-book limits' },
+	{ maximumAcceptableBid: (49n * unit) / 10n, reason: 'Better funded bids exclude this limit' },
+	{ maximumAcceptableBid: 0n, reason: 'Better funded bids leave no admissible new limit' },
 ])('#1371 excluded bids show $reason without an allowance-read failure', async ({ maximumAcceptableBid, reason }) => {
 	const fixture = await auctionFixture()
 	// The default 120% health target requires 4.8 REP per lot.
-	fixture.values['maximumAcceptableBidAttoRepPerLot'] = maximumAcceptableBid
+	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = maximumAcceptableBid
 	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))

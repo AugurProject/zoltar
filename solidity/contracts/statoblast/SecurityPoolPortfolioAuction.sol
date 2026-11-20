@@ -44,8 +44,8 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	uint256 public immutable closesAt;
 	uint256 public immutable inventoryAttoRep;
 	uint256 public immutable shortfallAttoEth;
-	uint256 public immutable lotAttoEth;
-	uint256 public immutable targetLots;
+	uint256 public lotAttoEth;
+	uint256 public targetLots;
 	uint256 public immutable repGrid;
 	/// @notice Shared code behind every bid's vault clone; each clone binds its own owner, ledger, auction and bid.
 	address public immutable vaultImplementation;
@@ -74,8 +74,12 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		closesAt = deadline;
 		inventoryAttoRep = inventory;
 		shortfallAttoEth = shortfall;
-		lotAttoEth = portfolio.minimumCommitmentAttoEth();
-		targetLots = shortfall / lotAttoEth;
+		uint256 minimumLot = portfolio.minimumCommitmentAttoEth();
+		targetLots = Math.max(1, shortfall / minimumLot);
+		// Exact equal lots: use the requested count when it divides the deficit,
+		// otherwise a power-of-two divisor found in at most 128 halvings.
+		if (shortfall % targetLots != 0) targetLots = _powerOfTwoDivisor(shortfall, targetLots);
+		lotAttoEth = Math.max(minimumLot, Math.ceilDiv(shortfall, targetLots));
 		uint256 multiplier = capital.securityMultiplierBps();
 		repGrid = multiplier / _gcd(multiplier, 10_000);
 		engine = new SecurityPoolUniformPriceAuction(address(this), ICollateralConfig(root).collateralToken());
@@ -96,14 +100,20 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	/// winning commitments and the fresh REP inventory before any bid is accepted.
 	function open() external nonReentrant {
 		require(!opened && !finalized && block.timestamp < closesAt, 'Collateral repair auction opening unavailable');
-		require(closesAt - block.timestamp >= 1 days, 'Collateral repair auction opening too late');
+		require(closesAt - block.timestamp >= 1 days, 'Collateral repair auction requires one day of bidding');
 		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
 		require(targetLots != 0 && inventoryAttoRep != 0, 'Collateral repair auction has no saleable lots');
 		ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
 		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote is not funded and fresh');
 		openingConservativePrice = feed.conservativePrice();
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
-		require(required >= repGrid * 1_000, 'Collateral repair auction lot below REP precision');
+		// Fewer, larger lots bound REP-grid rounding without losing any of the
+		// deficit. A single full-deficit lot is the liveness exception.
+		while (targetLots > 1 && (Math.ceilDiv(required, repGrid) * repGrid - required) * 100 >= required) {
+			targetLots = _powerOfTwoDivisor(shortfallAttoEth, targetLots / 2);
+			lotAttoEth = Math.max(portfolio.minimumCommitmentAttoEth(), Math.ceilDiv(shortfallAttoEth, targetLots));
+			required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
+		}
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
 		require(minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
 		engine.startAuction(block.timestamp, closesAt, lotAttoEth, targetLots, inventoryAttoRep, repGrid, address(this));
@@ -140,12 +150,12 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		if (opened) {
 			ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
 			uint256 forkTime = portfolio.zoltar().getForkTime(universeId);
-			// The final day's observation avoids requiring freshness at one exact
-			// second while preventing the opening-week quote from setting backing.
+			// A final-day observation survives short settlement delays, while an
+			// unattended auction cannot silently reuse its week-old opening quote.
 			bool eligible =
 				(forkTime == 0 || forkTime > closesAt) &&
 					_fundedQuote(feed, closesAt, ALLOW_EXPIRED_QUOTE) &&
-					feed.lastSettlementTimestamp() >= closesAt - 1 days;
+					closesAt - feed.lastSettlementTimestamp() <= 1 days;
 			// A higher closing price does not cancel the sale: one marginally higher
 			// report would otherwise void every funded bid and leave the branch
 			// impaired for good. Every winning lot instead receives at least the REP
@@ -218,6 +228,10 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	function _gcd(uint256 a, uint256 b) private pure returns (uint256) {
 		while (b != 0) (a, b) = (b, a % b);
 		return a;
+	}
+	function _powerOfTwoDivisor(uint256 amount, uint256 maximum) private pure returns (uint256 count) {
+		count = 1;
+		while (count <= maximum / 2 && amount % (count * 2) == 0) count *= 2;
 	}
 }
 

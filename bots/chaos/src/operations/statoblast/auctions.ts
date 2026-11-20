@@ -20,6 +20,7 @@ function bidTerms(snapshot: EcosystemSnapshot, options: PlanningOptions, auction
 		minimum < required ||
 		minimum % grid !== 0n ||
 		minimum > amount(auction.maximumBidAttoRepPerLot) ||
+		minimum > amount(auction.maximumAdmissibleBidAttoRepPerLot) ||
 		value > optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n) ||
 		amount(auction.walletCollateral) < value ||
 		amount(snapshot.wallet.ethBalanceAttoEth) < optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n)
@@ -98,7 +99,7 @@ function auctionLifecycle(kind: LifecycleKind): OperationDefinition {
 			if (options !== undefined && !inputMatches(options, 'auction', auction.address)) return []
 			if (kind === 'settle' || kind === 'early-refund') return auction.finalized === (kind === 'settle') ? auction.refundableBidIds.map(bidId => ({ auction, bidId })) : []
 			let enabled = amount(auction.pendingEthRefund) > 0n && auction.pendingEthRefundGeneration !== undefined
-			if (kind === 'open') enabled = !auction.opened && !auction.finalized && now < amount(auction.endTime)
+			if (kind === 'open') enabled = !auction.opened && !auction.finalized && now + 86_400n <= amount(auction.endTime)
 			if (kind === 'finalize') enabled = !auction.finalized && now >= amount(auction.endTime)
 			return enabled ? [{ auction, bidId: undefined }] : []
 		})

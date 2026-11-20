@@ -30,6 +30,8 @@ test('#1252 discovers a shared-feed bounty without funding a public RPC call sen
 						return encodeAbiParameters([{ type: 'address' }], [address(7)])
 					case 'aggregateExposureAttoEth':
 						return encodeAbiParameters([{ type: 'uint256' }], [10n])
+					case 'maxSettlementBaseFeeMultiplierBps':
+						return encodeAbiParameters([{ type: 'uint256' }], [30_000n])
 					case 'minimumReportCollateral':
 						return encodeAbiParameters([{ type: 'uint256' }], [10_001n])
 					case 'minimumToken1ReportAttoEth':
@@ -52,7 +54,7 @@ test('#1252 discovers a shared-feed bounty without funding a public RPC call sen
 		targetPriceErrorForDispute: '1000',
 	}
 	const snapshot = await discoverPoolPriceFeed(client, coordinator, 10n, 0n, funding, baseFeePerGas, 0n)
-	expect(snapshot.requestPriceCostAttoEth).toBe((200_001n * (baseFeePerGas + 1n) + 101n).toString())
+	expect(snapshot.requestPriceCostAttoEth).toBe((392_002n * 3n * (baseFeePerGas + 1n) + 101n).toString())
 	expect(snapshot.minimumToken1ReportAttoEth).toBe('10002')
 	expect(reads).not.toContain('getRequestPriceCostAttoEth')
 })

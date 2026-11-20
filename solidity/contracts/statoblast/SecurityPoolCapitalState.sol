@@ -46,6 +46,7 @@ abstract contract SecurityPoolCapitalState {
 		uint256 commitment;
 		uint96 batch;
 		uint256 remainingCommitment;
+		uint64 retirementOrder;
 	}
 	struct FundingPrice {
 		uint256 floor;

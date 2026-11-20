@@ -75,5 +75,5 @@ test('#1252 the UI portfolio adapter preserves the base fee for bounty quotes', 
 	const fixture = priceFixture()
 	fixture.setBaseFee(7n)
 	const snapshot = await loadPortfolioBranchPrice(fixture.client, portfolio, owner, 42n)
-	expect(snapshot.observation?.bounty).toBe(4_200_000n * (10_000_000_000n + 7n) + 101n)
+	expect(snapshot.observation?.bounty).toBe(15_804_573n * (10_000_000_000n + 7n) + 101n)
 })

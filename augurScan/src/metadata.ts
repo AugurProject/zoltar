@@ -115,7 +115,6 @@ const tokenAmountRules: Readonly<Record<string, readonly TokenAmountRule[]>> = {
 }
 
 const fixedNativeAmountRules: Readonly<Record<string, readonly { readonly path: string; readonly decimals: number }[]>> = {
-	'securityPool.EthReceived': [{ path: 'amountAttoEth', decimals: 18 }],
 	'openOracle.dispute': [{ path: 'params.settlerReward', decimals: 18 }],
 	'openOracle.report': [{ path: 'params.settlerReward', decimals: 18 }],
 }

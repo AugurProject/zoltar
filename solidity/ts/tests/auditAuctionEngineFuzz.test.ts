@@ -674,7 +674,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 			const grid = pick([1n, 7n, 21n])
 			// Huge: realistic 18-decimal magnitudes up to the protocol's REP cap, with prices near inventory / target.
 			const smallUnits = () => (large ? BigInt(50 + below(2000)) : BigInt(1 + below(40)))
-			const units = huge ? minOf(10n ** BigInt(18 + below(8)) + BigInt(Math.floor(random() * 2 ** 50)), (11_000_000n * 10n ** 18n) / grid - BigInt(below(3))) : smallUnits()
+			const units = huge ? minOf(10n ** BigInt(18 + below(8)) + BigInt(Math.floor(random() * 2 ** 50)), (11_000_000n * 10n ** 18n - (grid - 1n)) / grid - BigInt(below(3))) : smallUnits()
 			const target = large ? BigInt(1 + below(60)) : BigInt(1 + below(8))
 			const config: Config = { grid, lot: huge ? pick([10n ** 18n, 10n ** 15n, 123_456_789n]) : pick([1n, 1000n, 10n ** 15n]), target, inventory: grid * units + (below(3) === 0 ? BigInt(below(Number(grid))) : 0n) }
 			const engine = await createEngine(config)

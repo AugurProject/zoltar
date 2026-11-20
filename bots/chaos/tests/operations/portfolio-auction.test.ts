@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi, securityPoolPortfolioAuctionAbi, securityPoolPortfolioForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import { auctionFixture } from '../support/portfolio-fixtures.ts'
-import { auctionDefinition, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids } from '../../src/operations/statoblast/auctions.ts'
+import { auctionDefinition, startCollateralRepairAuction, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids } from '../../src/operations/statoblast/auctions.ts'
 import { address, hash, snapshotFixture, planningOptionsFixture } from './fixture.ts'
 
 test('portfolio auction bids exact collateral lots and chosen REP price on the grid', () => {
@@ -90,4 +90,25 @@ test('auction bids approve collateral separately, enforce token balances, and cl
 	auction.walletCollateral = '2000'
 	auction.collateralToken = address(8)
 	expect(operation.buildPlan(snapshot, options)).toBeUndefined()
+})
+
+test('#1331 unattended opening reserves a full day for competing bids', () => {
+	const snapshot = snapshotFixture()
+	const auction = auctionFixture()
+	auction.opened = false
+	auction.endTime = (BigInt(snapshot.anchor.timestamp) + 86_399n).toString()
+	snapshot.auctions = [auction]
+	expect(startCollateralRepairAuction.buildPlan(snapshot, planningOptionsFixture())).toBeUndefined()
+	auction.endTime = (BigInt(snapshot.anchor.timestamp) + 86_400n).toString()
+	expect(startCollateralRepairAuction.buildPlan(snapshot, planningOptionsFixture())).toBeDefined()
+})
+
+test('#1371 excluded bid prices do not produce an unattended approval or bid plan', () => {
+	const snapshot = snapshotFixture()
+	const auction = auctionFixture()
+	auction.maximumAdmissibleBidAttoRepPerLot = '14'
+	auction.collateralAllowance = '0'
+	snapshot.auctions = [auction]
+	const options = planningOptionsFixture({ maxEthSpendAttoEth: 2000n.toString(), operationInputs: { lots: '2', minimumAttoRepPerLot: 15n.toString(), healthFactorBps: '10000' } })
+	expect(auctionDefinition('bid').buildPlan(snapshot, options)).toBeUndefined()
 })

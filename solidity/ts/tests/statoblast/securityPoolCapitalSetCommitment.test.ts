@@ -82,9 +82,13 @@ describe('Statoblast: owner-set capital commitment', () => {
 		expect(cured.commitment).toBe(50n * E)
 		expect(cured.batch).toBe(0n)
 		expect(cured.rep).toBe(105n * E)
-		// The cured remainder counts as healthy again; that new spare serves part of bob's earlier request.
-		expect((await position(bobId)).commitment).toBe(50n * E)
-		expect(await healthy()).toBe(200n * E)
+		// The cured remainder adds 50 spare, but Bob's full request remains all-or-nothing and owner-served.
+		expect((await position(bobId)).commitment).toBe(100n * E)
+		expect(await healthy()).toBe(250n * E)
+		await demand(150n * E)
+		await writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [bobId] }))
+		expect((await position(bobId)).commitment).toBe(0n)
+		expect(await healthy()).toBe(150n * E)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [aliceId] })).toBe(0n)
 	})
 
@@ -144,8 +148,8 @@ describe('Statoblast: owner-set capital commitment', () => {
 		const id = await commit(alice, 210n * E, 100n * E)
 		await demand(100n * E)
 		await setCommitment(alice, 50n * E)
-		// Any later service promotes the request into the closed current cohort.
-		await writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [0n] }))
+		// The owner can recheck the request without changing its place or processing others.
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))
 		const promoted = await currentBatch()
 		expect((await position(id)).batch).toBe(promoted)
 		await setCommitment(alice, 50n * E)

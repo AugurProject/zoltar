@@ -1,3 +1,5 @@
+import { formatStorageSlot } from '../testSupport/storage'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../types/contractArtifact'
@@ -7,14 +9,12 @@ import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/u
 import { getSecurityPoolsEscalationGame, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
-import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { balanceOfShares } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
-
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 describe('Audit regression: escalation start configuration liveness', () => {
 	const portfolio = useSecurityPoolPortfolioFixture()
@@ -26,7 +26,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		const securityPoolAddresses = portfolio.poolFor(fixture.questionId)
 		const openInterestAmount = 1n * 10n ** 18n
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
-		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
+		const genesisSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 		const readNonDecisionThreshold = async () =>
 			await client.readContract({
 				abi: Zoltar_Zoltar.abi,
@@ -62,13 +62,13 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			'the share redemption must represent funded outcome balances',
 		)
 
-		// Change only Zoltar's tracked supply: token balances, canonical factory wiring,
+		// Change only the external genesis token's theoretical supply: token balances, canonical factory wiring,
 		// vault accounting, and the real complete-set liabilities remain untouched.
 		const trackedSupplyForOneRepThreshold = 2n * reportBond * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		await mockWindow.addStateOverrides({
-			[getZoltarAddress()]: {
+			[getRepTokenAddress(genesisUniverse)]: {
 				stateDiff: {
-					[universeSupplySlot]: trackedSupplyForOneRepThreshold,
+					[genesisSupplySlot]: trackedSupplyForOneRepThreshold,
 				},
 			},
 		})

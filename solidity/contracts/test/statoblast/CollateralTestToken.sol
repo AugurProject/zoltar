@@ -52,7 +52,7 @@ contract CollateralTestToken {
 	}
 	function _transfer(address from, address to, uint256 amount) private {
 		require(!paused, 'Collateral paused');
-		require(!blocked[from] && !blocked[to], 'Collateral address blocked');
+		require(!blocked[from] && !blocked[to], 'Collateral account blocked');
 		require(balanceOf[from] >= amount, 'Insufficient collateral');
 		balanceOf[from] -= amount;
 		uint256 received = amount - (amount * feeBps) / 10_000;

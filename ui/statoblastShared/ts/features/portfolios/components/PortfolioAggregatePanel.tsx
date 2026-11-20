@@ -171,10 +171,6 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 				<PortfolioButton model={actions} action='authorizePortfolioCommitment' label={copy.authorize} pendingLabel={copy.authorizing} reason={model.authorizeReason} onClick={model.authorize} />
 			</SectionBlock>
 			<SectionBlock title={copy.positions} description={copy.positionsHint}>
-				<MetricGrid>
-					<MetricField label={copy.currentCohort}>{snapshot === undefined ? undefined : String(snapshot.currentBatch)}</MetricField>
-					<MetricField label={copy.nextCohort}>{snapshot === undefined ? undefined : String(snapshot.nextBatch)}</MetricField>
-				</MetricGrid>
 				{snapshot !== undefined && model.livePositions.length === 0 ? <EmptyState title={copy.noPositions} detail={copy.noPositionsHint} /> : undefined}
 				{model.livePositions.map(position => {
 					const reasons = model.positionReasons(position.id)
