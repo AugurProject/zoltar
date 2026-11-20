@@ -61,12 +61,16 @@ describe('audit: fee conservation at the fork instant', () => {
 		expect(after.coordinator).toBe(0n)
 		// The sealed book holds no uncollected fee escrow.
 		expect(totals[2]).toBe(0n)
-		// Settlement custody equals the sealed live cash (there are no frozen claims here).
-		expect(after.engine).toBe(totals[0])
+		// Settlement also retains collected fees until an assigned payout needs cash.
+		const pendingSettlementFees = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'pendingServiceFees' })
+		expect(after.engine).toBe(totals[0] + pendingSettlementFees)
 		expect(fork[2]).toBe(totals[0])
-		// Premium custody equals the premium book.
-		expect(after.services).toBe(premiumTotal)
-		// A second checkpoint long after the fork moves no settlement cash.
+		// Service custody includes earned-but-unpaid income and quarantined burns;
+		// the settlement portion of that income has not moved into services yet.
+		const pendingCapitalCash = await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'pendingCapitalCash', args: [fixture.capitalLedger] })
+		const pendingBurnCash = await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'pendingBurnCash', args: [base.genesisUniverse] })
+		expect(after.services).toBe(premiumTotal + pendingCapitalCash + pendingBurnCash - pendingSettlementFees)
+		// A later payout drains assigned fee escrow without consuming sealed trader cash.
 		await base.mockWindow.advanceTime(30n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'claimEarnings' }))
 		expect(await cash(engine)).toBe(totals[0])

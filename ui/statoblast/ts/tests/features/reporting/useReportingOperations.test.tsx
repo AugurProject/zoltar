@@ -353,6 +353,7 @@ describe('useReportingOperations', () => {
 			viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
 		})
 		let submittedFunding: 'wallet' | 'vault' | undefined
+		let submittedRequireLead: boolean | undefined
 		let submittedMaximumAttoRep: bigint | undefined
 		let submittedReviewAttoRep: bigint | undefined
 		const loadReportingDetails = mock(async () => walletFundingDetails)
@@ -360,6 +361,7 @@ describe('useReportingOperations', () => {
 			submittedMaximumAttoRep = args[4]
 			submittedReviewAttoRep = args[5]
 			submittedFunding = args[6]
+			submittedRequireLead = args[8]
 			return {
 				action: 'reportOutcome' as const,
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000a1' as const,
@@ -383,6 +385,7 @@ describe('useReportingOperations', () => {
 
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
 		expect(submittedFunding).toBe('wallet')
+		expect(submittedRequireLead).toBe(true)
 		// The typed 5 REP exceeds the remaining threshold room, so the previewed accepted amount is smaller.
 		expect(submittedReviewAttoRep ?? 0n).toBeLessThan(5n * ATTO_REP)
 		// Wallet deposits pull the accepted amount with transferFrom, so the maximum must not exceed the reviewed and approved amount.
@@ -406,12 +409,14 @@ describe('useReportingOperations', () => {
 			viewerPoolHeldVaultRepBackingAttoRep: 0n,
 			viewerVaultExists: false,
 		})
+		let submittedRequireLead: boolean | undefined
 		let submittedMaximumAttoRep: bigint | undefined
 		let submittedReviewAttoRep: bigint | undefined
 		const loadReportingDetails = mock(async () => tiedDetails)
 		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
 			submittedMaximumAttoRep = args[4]
 			submittedReviewAttoRep = args[5]
+			submittedRequireLead = args[8]
 			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a4' as const, outcome: 'no' as const, securityPoolAddress, universeId: 1n }
 		})
 		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }))
@@ -423,6 +428,7 @@ describe('useReportingOperations', () => {
 		// The tie leaves the report one attoREP behind the leader, but the game's preview only accepts offers of at least the start bond.
 		expect(submittedReviewAttoRep).toBe(bond - 1n)
 		expect(submittedMaximumAttoRep).toBe(bond)
+		expect(submittedRequireLead).toBe(false)
 	})
 
 	test.each([true, false])('reportOutcome marks fork-triggering reports for review only when the displayed report already triggered the fork (displayed: %s)', async displayedTriggersFork => {

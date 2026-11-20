@@ -6,6 +6,7 @@ import {
 	ICapitalPriceExposure,
 	ICapitalLedgerAccounting
 } from './interfaces/ICapitalAccounting.sol';
+import { CheckedCast } from '../CheckedCast.sol';
 import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
@@ -334,8 +335,10 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		// Prepaid rewards keep their original vesting dates after a fork. Their
 		// old commitments and eligibility are immutable, and parent earnings stay
 		// separately claimable even after the owner has selected a child.
-		if (effective < block.timestamp && effective < priceValidUntil) through = uint48(block.timestamp);
-		_checkpointStream(feeStreams, through);
+		if (effective < block.timestamp && effective < priceValidUntil) through = CheckedCast.toUint48(block.timestamp);
+		// Prepaid income belongs to the commitments at the last accepted price.
+		// Every weight mutation checkpoints first, including during a price lapse.
+		_checkpointStream(feeStreams, acceptedPrice == 0 ? through : CheckedCast.toUint48(block.timestamp));
 		checkpointing = false;
 	}
 	function _checkpointStream(ICapitalFeeStreams streams, uint48 through) private {
@@ -355,8 +358,23 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function _serviceIncome(uint256 ethAmount, uint256 repAmount) private {
 		if (ethAmount == 0 && repAmount == 0) return;
 		if (repAmount != 0) zoltar.burnRep(universeId(), repAmount);
-		_sendEth(Constants.BURN_ADDRESS, ethAmount);
-		emit UnassignedFeesBurned(ethAmount, repAmount);
+		pendingBurnCash += ethAmount;
+		if (repAmount != 0) emit UnassignedFeesBurned(0, repAmount);
+	}
+
+	/// @notice Flush quarantined collateral independently of REP operations.
+	function flushBurn() external nonReentrant {
+		uint256 amount = pendingBurnCash;
+		pendingBurnCash = 0;
+		_sendEth(Constants.BURN_ADDRESS, amount);
+		if (amount != 0) emit UnassignedFeesBurned(amount, 0);
+	}
+
+	/// @dev Services retain custody until an earnings or burn payout needs cash.
+	function creditDeferredTimedFees(uint256 cash) external {
+		require(msg.sender == services, 'Only capital services');
+		pendingServiceCash += cash;
+		_creditEarnings(cash, 0);
 	}
 
 	/// @dev An already time-earned amount; only the canonical checkpoint may call.
@@ -448,7 +466,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		SecurityPoolCommitmentIndex.Account memory existing;
 		if (receiverId != 0) {
 			existing = commitmentIndex.accountOf(receiverId);
-			require(existing.batch == source.batch, 'Receiver retirement differs');
+			require(existing.batch == source.batch || existing.batch == 0, 'Receiver retirement differs');
 		}
 		// Any previously idle receiver principal joins its one live position.
 		uint256 receiverFreePrincipalAttoRep = receiver.freeAttoRep;

@@ -70,3 +70,5 @@ export const questionDetails = 'Question details'
 
 export const universeAlreadyForked = 'Universe already forked'
 export const formatUniverseAlreadyForkedLabel = (questionTitle: string, questionId: string) => `Universe already forked: ${questionTitle} (${questionId})`
+
+export const categoricalOutcomeLabelFormatError = 'Use 1–64 printable ASCII characters with single spaces between words for each outcome.'

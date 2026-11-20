@@ -268,6 +268,12 @@ contract SecurityPool is SecurityPoolStorage {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositWalletRepToEscalationGame, (outcome, maximumDepositAttoRep)));
 	}
 
+	/// @notice Wallet-funded report that must lead or authorize a non-decision fork.
+	function depositWalletRepToEscalationGameWithLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		if (hasInheritedForkOutcome) revert('Forked');
+		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositWalletRepToEscalationGameWithLead, (outcome, maximumDepositAttoRep)));
+	}
+
 	/// @notice Withdraws local escalation deposits after the question is final; all indexes must share one depositor.
 	/// @dev Reverts when the universe forked before the game ended without a non-decision.
 	function withdrawFromEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256[] calldata depositIndexes) external {
@@ -349,8 +355,4 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	/// @notice Accepts native ETH without creating a settlement-collateral claim.
-	receive() external payable {
-		require(portfolioCustody != address(0) || msg.sender == securityPoolForker || msg.sender == address(parent), 'Bad ETH sender');
-		emit EthReceived(msg.sender, msg.value);
-	}
 }

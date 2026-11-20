@@ -146,7 +146,9 @@ describe('audit: multi-question portfolio across two universe forks', () => {
 		const servicesCash = await cash(services)
 		const premiumTotal = await owner.readContract({ ...premiumBook, functionName: 'totalCash' })
 		// Every attoETH of sealed origin settlement cash is either paid to the holder or still accounted.
-		expect(engineAfter).toBeLessThanOrEqual(8n)
+		const pendingFees = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'pendingServiceFees' })
+		expect(engineAfter).toBeGreaterThanOrEqual(pendingFees)
+		expect(engineAfter - pendingFees).toBeLessThanOrEqual(8n)
 		expect(coordinatorCash).toBeLessThanOrEqual(8n)
 		expect(q2FromA1 + q2FromU0 + q2FromA + q1FromA + q1FromU0).toBeGreaterThanOrEqual(sealed0[0] - 16n)
 		expect(servicesCash).toBeGreaterThanOrEqual(premiumTotal)

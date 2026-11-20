@@ -101,7 +101,7 @@ export type Model = {
 	releasedThrough: bigint
 	fundedEth: bigint
 	fundedRep: bigint
-	burnedEth: bigint
+	unassignedEth: bigint
 	burnedRep: bigint
 	creditEvents: bigint
 	cohortId: bigint
@@ -144,7 +144,7 @@ export const newModel = (now: bigint, releasedThrough: bigint, wallet: bigint, g
 	releasedThrough,
 	fundedEth: 0n,
 	fundedRep: 0n,
-	burnedEth: 0n,
+	unassignedEth: 0n,
 	burnedRep: 0n,
 	creditEvents: 0n,
 	cohortId: 0n,
@@ -214,7 +214,7 @@ const release = (m: Model, until: bigint) => {
 	return [afterEth - beforeEth, afterRep - beforeRep] as const
 }
 const burn = (m: Model, eth: bigint, rep: bigint) => {
-	m.burnedEth += eth
+	m.unassignedEth += eth
 	m.burnedRep += rep
 }
 const creditEarnings = (m: Model, eth: bigint, rep: bigint) => {
@@ -240,7 +240,7 @@ export const checkpoint = (m: Model) => {
 	if (m.importing) return
 	const effective = m.forkTime !== 0n ? min(m.now, m.forkTime) : m.now
 	let through = min(effective, m.validUntil)
-	if (m.forkTime !== 0n && m.forkTime < m.validUntil) through = m.now
+	if (m.accepted !== 0n) through = m.now
 	let eth = 0n
 	let rep = 0n
 	if (through > m.releasedThrough) [eth, rep] = release(m, through)
@@ -531,7 +531,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	const existing = findPosition(m, receiver.positionId)
 	const existingRep = existing === undefined ? 0n : existing.rep
 	const existingK = existing === undefined ? 0n : existing.k
-	if (existing !== undefined) requireModel(existing.batch === sourceBatch, 'Receiver retirement differs')
+	if (existing !== undefined) requireModel(existing.batch === sourceBatch || existing.batch === 0n, 'Receiver retirement differs')
 	const free = receiver.free
 	requireModel(free <= maxOwn, 'Receiver consent exceeded')
 	requireModel(existingRep + award + free >= requiredRep(existingK + k, m.cons, targetOf(receiver)), 'Receiver collateral insufficient')
@@ -559,7 +559,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	} else {
 		existing.rep += debit
 		existing.k += k
-		existing.remaining += transferred
+		if (existing.batch !== 0n) existing.remaining += transferred
 		reinsert(existing)
 	}
 	ledgerReplace(m, receiverId, existingRep + received, existingK + k)

@@ -44,6 +44,7 @@ export type UseReportingOperationsDependencies = {
 		reviewAmount?: bigint,
 		contributionFunding?: 'vault' | 'wallet',
 		triggersFork?: boolean,
+		requireLead?: boolean,
 	) => ReturnType<typeof reportOutcomeInSecurityPool>
 	withdrawEscalationFromSecurityPool: (
 		accountAddress: Address,
@@ -58,8 +59,8 @@ export type UseReportingOperationsDependencies = {
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
 	approveReportingRep: async (accountAddress, callbacks, securityPoolAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount),
 	loadReportingDetails: async (securityPoolAddress, accountAddress) => await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress),
-	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork) =>
-		await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork),
+	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork, requireLead) =>
+		await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork, requireLead),
 	withdrawEscalationFromSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, depositIndexes, claimAmount),
 }
 
@@ -299,8 +300,26 @@ export function useReportingOperations(
 				const minimumOfferAttoRep = preflight.reportAmount < preflight.latestDetails.startBondAttoRep ? preflight.reportAmount : preflight.latestDetails.startBondAttoRep
 				const walletMaximumAttoRep = preflight.actualDepositAmount > minimumOfferAttoRep ? preflight.actualDepositAmount : minimumOfferAttoRep
 				const maximumDepositAttoRep = preflight.contributionFunding === 'wallet' ? walletMaximumAttoRep : preflight.reportAmount
+				const latestDetails = preflight.latestDetails
+				let requireLead = true
+				if (latestDetails.status === 'active') {
+					const selectedSide = latestDetails.sides.find(side => side.key === preflight.selectedOutcome)
+					if (selectedSide === undefined) throw new Error('The selected reporting outcome is unavailable.')
+					const resultingBalance = selectedSide.balance + preflight.actualDepositAmount
+					requireLead = triggersFork || latestDetails.sides.every(side => side.key === preflight.selectedOutcome || resultingBalance > side.balance)
+				}
 				return {
-					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, maximumDepositAttoRep, preflight.actualDepositAmount, preflight.contributionFunding, triggersFork)),
+					...(await dependencies.reportOutcomeInSecurityPool(
+						walletAddress,
+						{ onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal },
+						securityPoolAddress,
+						preflight.selectedOutcome,
+						maximumDepositAttoRep,
+						preflight.actualDepositAmount,
+						preflight.contributionFunding,
+						triggersFork,
+						requireLead,
+					)),
 					amountAttoRep: preflight.actualDepositAmount,
 				}
 			},

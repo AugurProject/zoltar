@@ -48,6 +48,7 @@ function fixture() {
 		openingConservativePrice: unit,
 		minimumCollateralAttoRepPerLot: 2n * unit,
 		maximumBidAttoRepPerLot: 10n * unit,
+		maximumAcceptableBidAttoRepPerLot: 0n,
 		depositedAttoEth: unit,
 		bidderBidCount: 0n,
 		refundCreditAttoEth: 0n,

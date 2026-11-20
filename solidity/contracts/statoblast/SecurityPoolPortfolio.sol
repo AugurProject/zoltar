@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { CheckedCast } from '../CheckedCast.sol';
+
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolQuestionAdmissionPolicy } from './interfaces/ISecurityPoolQuestionAdmissionPolicy.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
@@ -195,8 +197,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 			settlement = deployers.settlement.create(address(this));
 			settlement.initialize(deployers.books.create(address(settlement), minimumOutcomeRate));
 			settlement.authorizeServices(address(services));
-			settlement.registerUniverse(originUniverseId, uint48(block.timestamp));
-			settlement.setFeesEnabled(originUniverseId, false, uint48(block.timestamp));
+			settlement.registerUniverse(originUniverseId, CheckedCast.toUint48(block.timestamp));
+			settlement.setFeesEnabled(originUniverseId, false, CheckedCast.toUint48(block.timestamp));
 			services.registerUniverse(originUniverseId);
 		} else if (setupStage == SETUP_REPORTERS_AND_FORKS) {
 			reporters = deployers.reporters.create(address(this), zoltar);
@@ -212,9 +214,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		}
 		setupStage++;
 		emit SetupAdvanced(setupStage);
-	}
-	receive() external payable {
-		require(msg.sender == address(settlement) || msg.sender == address(services) || msg.sender == forkController || capitalAddresses[msg.sender], 'Unexpected portfolio ETH');
 	}
 	function reporterLedger(uint248) external view returns (address) {
 		return address(reporters);
@@ -430,7 +429,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {
 		capital = deployers.capital.create(capitalImplementation, universeId);
-		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
+		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), CheckedCast.toUint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
 		capitalLedger[universeId] = capital;
 		capitalAddresses[address(capital)] = true;
 		emit UniversePrepared(universeId, address(capital));

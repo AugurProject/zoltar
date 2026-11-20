@@ -107,7 +107,7 @@ export async function assertCoordinatorParameterTableValues(openOracleReferenceH
 	const feed = await readFile('solidity/contracts/statoblast/SharedPoolPriceFeed.sol', 'utf8')
 	const callbackGasLimit = readInteger(feed, /FEED_SETTLEMENT_GAS_OVERHEAD = ([0-9_]+);/, 'FEED_SETTLEMENT_GAS_OVERHEAD')
 	const bountyOffset = readInteger(priceCoordinatorTypes, /REQUEST_BOUNTY_OFFSET_ATTO_ETH = ([0-9_]+);/, 'REQUEST_BOUNTY_OFFSET_ATTO_ETH')
-	assert.match(feed, /function getRequestPriceCostAttoEth\(\) public pure returns \(uint256\) \{\s*return REQUEST_BOUNTY_OFFSET_ATTO_ETH;/)
+	const settlementOverhead = readInteger(feed, /return\s+\(FEED_SETTLEMENT_GAS_OVERHEAD \+ ([0-9_]+)\) \* \(block.basefee \+ initialReportPriorityFeeAttoEthPerGas\) \+\s+REQUEST_BOUNTY_OFFSET_ATTO_ETH;/, 'settlement gas overhead')
 	const grouped = (value: bigint): string => value.toLocaleString('en-US')
 	const parametersSection = openOracleReferenceHtml.match(/<section id="parameters">[\s\S]*?<\/section>/)?.[0]
 	assert.ok(parametersSection !== undefined, 'OpenOracle reference must keep its parameters section')
@@ -132,5 +132,5 @@ export async function assertCoordinatorParameterTableValues(openOracleReferenceH
 	assertStartsWith('multiplier', grouped(configured('ORACLE_MULTIPLIER')))
 	assert.equal(durationSeconds('PRICE_VALID_FOR_SECONDS'), 300n, 'The page states a five-minute price freshness window')
 	assert.equal(durationSeconds('SEPOLIA_PRICE_VALID_FOR_SECONDS'), 3600n, 'The page states a one-hour Sepolia price freshness window')
-	assertStartsWith('getRequestPriceCostAttoEth()', `${bountyOffset} attoETH`)
+	assertStartsWith('getRequestPriceCostAttoEth()', `${grouped(callbackGasLimit + settlementOverhead)} × (block.basefee + priority fee) + ${bountyOffset} attoETH`)
 }

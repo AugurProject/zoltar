@@ -152,7 +152,8 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				expect(custodyRep).toBe(principal + feesRep + outstandingRep)
 				const burnedRep = initialSupply + fundedRep - (await sender.readContract({ ...fixture.token, functionName: 'totalSupply' }))
 				expect(fundedRep).toBe(feesRep + outstandingRep + paidRep + burnedRep)
-				expect(await collateralBalance(sender, fixture.harness.address, fixture.capital.address)).toBe(feesEth + outstandingEth)
+				const pendingBurn = await sender.readContract({ ...fixture.capital, functionName: 'pendingBurnCash' })
+				expect(await collateralBalance(sender, fixture.harness.address, fixture.capital.address)).toBe(feesEth + outstandingEth + pendingBurn)
 				// Unassigned income is burned; nothing is retained by the harness authority.
 				expect(await collateralBalance(sender, fixture.harness.address, fixture.harness.address)).toBe(0n)
 				const burnedEth = (await burnedCollateralBalance(sender, fixture.harness.address)) - initialBurnedEth
@@ -289,6 +290,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			)
 			await expect(writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [carol.commitment] }))).rejects.toThrow('Retirement pending')
 			await ethereum.advanceTime(86_401n)
+			await action('flush quarantined collateral', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'flushBurn' })))
 			await action('checkpoint all mature income', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'checkpoint' })))
 			const forkTime = (await sender.getBlock()).timestamp
 			await action('freeze parent', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'setFork', args: [forkTime] })))

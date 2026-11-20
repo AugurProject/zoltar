@@ -38,6 +38,14 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	/// @notice Pool delegatecall target: deposits the caller's wallet REP into the escalation game, deploying the game if needed.
 	function depositWalletRepToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		_depositWalletRep(outcome, maximumDepositAttoRep, false);
+	}
+
+	function depositWalletRepToEscalationGameWithLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		_depositWalletRep(outcome, maximumDepositAttoRep, true);
+	}
+
+	function _depositWalletRep(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, bool requireLead) private {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		IZoltarForkState zoltar = IZoltarForkState(pool.zoltar());
 		uint248 universeId = pool.universeId();
@@ -49,7 +57,9 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 			emit EscalationGameSet(escalationGame);
 		}
 		require(!escalationGame.forkContinuation() || (portfolioCustody != address(0) && escalationGame.forkResumedAt() != 0), 'Fork game');
-		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = escalationGame.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = requireLead
+			? escalationGame.previewLeadingDepositOnOutcome(outcome, maximumDepositAttoRep)
+			: escalationGame.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
 		// Wallet funding enters dispute escrow directly and never acquires pool backing or capacity.
 		IERC20(pool.repToken()).safeTransferFrom(msg.sender, address(escalationGame), depositedAttoRep);
 		escalationGame.recordDepositFromSecurityPool(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);

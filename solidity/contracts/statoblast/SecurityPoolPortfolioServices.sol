@@ -6,6 +6,7 @@ import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettleme
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { CheckedCast } from '../CheckedCast.sol';
 import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
@@ -35,6 +36,8 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	mapping(uint248 => bool) public premiumChildCreated;
 	mapping(uint248 => bool) private syncingFees;
 	mapping(uint248 => bool) public feesEnabled;
+	mapping(address => uint256) public pendingCapitalCash;
+	mapping(uint248 => uint256) public pendingBurnCash;
 
 	event PremiumFunded(uint248 indexed universeId, uint256 indexed questionId, uint256 amountAttoEth, uint256 units);
 	event PremiumRecovered(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient, uint256 amountAttoEth);
@@ -57,9 +60,6 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		entered = true;
 		_;
 		entered = false;
-	}
-	receive() external payable {
-		require(msg.sender == address(IPortfolioServiceRoot(portfolio).settlement()), 'Unexpected service ETH');
 	}
 	function purchase(address trader, uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) external onlyPortfolio nonReentrant returns (uint256 minted, uint256 fee) {
 		require(cash != 0, 'Purchase amount zero');
@@ -150,10 +150,10 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		}
 		(, , uint48 premiumTime, bool premiumSealed) = premiumLedger.totals(universeId);
 		if (!premiumSealed) {
-			(uint256 earned, uint256 unused) = premiumLedger.checkpoint(universeId, uint48(Math.max(premiumTime, earnedThrough)));
+			(uint256 earned, uint256 unused) = premiumLedger.checkpoint(universeId, uint48(Math.max(premiumTime, capital.acceptedPrice() == 0 ? earnedThrough : nowTime)));
 			if (earned != 0) _creditTimedFees(capital, earned);
-			// Premium paid for unhealthy or stale time belongs to no current
-			// underwriter, and the book does not record which buyer paid it.
+			// Only income without an accepted underwriting price is unassigned.
+			// Stale prices still retain their checkpointed commitment weights.
 			(uint256 stale, uint256 remainingUnused) = premiumLedger.checkpoint(universeId, nowTime);
 			_burn(universeId, unused + stale + remainingUnused);
 		}
@@ -185,7 +185,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		capital.synchronizeDemand(demand);
 	}
 	function registerUniverse(uint248 universeId) external onlyPortfolio {
-		premiumLedger.register(universeId, uint48(block.timestamp));
+		premiumLedger.register(universeId, CheckedCast.toUint48(block.timestamp));
 	}
 	function _fundPremium(uint248 universeId, uint256 questionId, uint256 amount) private {
 		uint256 units = premiumLedger.fund(universeId, questionId, amount);
@@ -224,15 +224,32 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	}
 
 	function _creditTimedFees(SecurityPoolCapitalLedger capital, uint256 amount) private {
-		ICollateralConfig(portfolio).collateralToken().safeApprove(address(capital), amount);
-		capital.creditTimedFees(amount);
+		pendingCapitalCash[address(capital)] += amount;
+		capital.creditDeferredTimedFees(amount);
 	}
 
 	function _burn(uint248 universeId, uint256 amount) private {
 		if (amount == 0) return;
+		pendingBurnCash[universeId] += amount;
+	}
+	/// @notice Pay only income already assigned to the calling capital ledger.
+	function withdrawCapitalCash() external nonReentrant {
+		uint256 amount = pendingCapitalCash[msg.sender];
+		require(amount != 0, 'No assigned capital cash');
+		pendingCapitalCash[msg.sender] = 0;
+		IPortfolioServiceRoot(portfolio).settlement().withdrawServiceFees();
+		_send(msg.sender, amount);
+	}
+	/// @notice A failing collateral burn cannot block accounting or REP actions.
+	function flushBurn(uint248 universeId) external nonReentrant {
+		uint256 amount = pendingBurnCash[universeId];
+		pendingBurnCash[universeId] = 0;
+		if (amount == 0) return;
+		IPortfolioServiceRoot(portfolio).settlement().withdrawServiceFees();
 		_send(Constants.BURN_ADDRESS, amount);
 		emit UnusedServiceCashBurned(universeId, amount);
 	}
+
 	function _send(address recipient, uint256 amount) private {
 		if (amount == 0) return;
 		Collateral.send(ICollateralConfig(portfolio).collateralToken(), recipient, amount);

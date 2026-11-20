@@ -21,6 +21,11 @@ export const ORACLE_TRACK_DISPUTES = true
 export const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
 export const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
 
+/** Exact native settlement reward required by the shared REP price feed. */
+export function calculateOracleSettlementBountyAttoEth(parameters: { baseFeePerGas: bigint; initialReportPriorityFeeAttoEthPerGas: bigint; settlementCallbackGasLimit: bigint }) {
+	return (parameters.settlementCallbackGasLimit + 200_000n) * (parameters.baseFeePerGas + parameters.initialReportPriorityFeeAttoEthPerGas) + 101n
+}
+
 const BPS_DENOMINATOR = 10000n
 const UINT128_MAX = (1n << 128n) - 1n
 

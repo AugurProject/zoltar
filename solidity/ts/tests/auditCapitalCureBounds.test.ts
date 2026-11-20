@@ -129,6 +129,9 @@ describe('audit: the unpaid cure never leaves a commitment below the minimum', (
 		// Alice receives her share of total commitment, not of healthy commitment: half is burned.
 		expect(earnedByAlice).toBeGreaterThan((499n * E) / 1000n)
 		expect(earnedByAlice).toBeLessThanOrEqual(E / 2n)
+		const quarantined = await admin().readContract({ ...fixture.capital, functionName: 'pendingBurnCash' })
+		expect(earnedByAlice + quarantined + (await burned())).toBe(E)
+		await writeContractAndWait(admin(), () => admin().writeContract({ ...fixture.capital, functionName: 'flushBurn' }))
 		expect(earnedByAlice + (await burned())).toBe(E)
 
 		// Bob keeps every unit of principal: an unhealthy exit needs no spare and no keeper.

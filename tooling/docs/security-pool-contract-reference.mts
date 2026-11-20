@@ -1,6 +1,6 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: '84b5f0d838aa455f3dcb8323841b42e3314a28c84a7b44b25337e17bb94d5c26',
+	compiledAbiFingerprint: '18d03a7d738baa7163966e6ade8f61428af92d7d3cd8802903d111d3f89b998d',
 	name: 'SecurityPool',
 	interactionNotes:
 		'All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
@@ -208,6 +208,14 @@ export const securityPoolContractReference: ContractReference = {
 			signals: '`EscalationGameSet` when the game is created, followed by reporter deposit and REP transfer events.',
 		},
 		{
+			call: '`depositWalletRepToEscalationGameWithLead(outcome, maximumDepositAttoRep)`',
+			caller: 'Any reporter',
+			effect: 'Creates the game if needed, transfers accepted wallet REP into reporter custody and records the outcome only when it leads or completes the non-decision threshold.',
+			declarations: [{ name: 'depositWalletRepToEscalationGameWithLead' }],
+			preconditions: 'The ordinary wallet-report prerequisites. The resulting outcome balance exceeds every competing balance or equals the non-decision threshold (`Deposit does not lead`).',
+			signals: 'The ordinary wallet-report game creation and deposit events.',
+		},
+		{
 			call: '`withdrawFromEscalationGame(outcome, depositIndexes)`',
 			caller: 'Anyone, for one recorded depositor',
 			effect: 'Settles the supplied local deposit indexes. Payout goes to the recorded owner; losing claims receive no REP.',
@@ -350,19 +358,6 @@ export const securityPoolContractReference: ContractReference = {
 			effect: 'Asks the lineage share token to establish `pool` as the canonical authorized pool for its universe; reauthorizing the same pool is a no-op.',
 			preconditions: 'This parent pool is already authorized; candidate reports this share token; candidate universe has no different canonical pool. No pool-lifecycle guard.',
 			signals: '`AuthorizationUpdated` only on first authorization; no event when already authorized',
-		},
-		{
-			call: 'Direct ETH transfer to `receive()`',
-			caller: 'Portfolio transfers and permitted initialization senders',
-			effect: 'Accepts ETH; unsolicited ETH creates no settlement or provider claim.',
-			declarations: [
-				{
-					kind: 'receive',
-					name: 'receive',
-				},
-			],
-			preconditions: 'Bound portfolio, or the configured parent, forker or auction sender before binding.',
-			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 	],
 }

@@ -258,7 +258,7 @@ const apply = (m: Model, op: Operation) => {
 			requireModel(op.from !== op.to, 'Same commitment position')
 			const source = known(m, op.from)
 			const receiver = known(m, op.to)
-			requireModel(source.batch === receiver.batch, 'Commitment cohorts differ')
+			requireModel(source.batch === receiver.batch || receiver.batch === 0n, 'Commitment cohorts differ')
 			requireModel(!source.retired && inTree(receiver), 'Position is not live')
 			requireModel(op.k !== 0n && op.k <= source.k && op.rep <= source.rep, 'Invalid commitment transfer')
 			requireModel(op.k !== source.k || op.rep === source.rep, 'Residual REP has no commitment')
@@ -269,7 +269,8 @@ const apply = (m: Model, op: Operation) => {
 			receiver.k += op.k
 			receiver.price = op.newPrice
 			if (source.remaining > source.k) {
-				receiver.remaining += source.remaining - source.k
+				// An active destination acquires active commitment, without the source exit request.
+				if (receiver.batch !== 0n) receiver.remaining += source.remaining - source.k
 				source.remaining = source.k
 			}
 			reinsert(source)
@@ -835,6 +836,23 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		}
 		return current
 	}
+
+	test('#1255 transfers into active capital discard acquired retirement requests in the reference model', async () => {
+		baseline = ''
+		const trace: Operation[] = [
+			{ c: 'create', rep: 100n, k: 10n, price: 10n },
+			{ c: 'create', rep: 100n, k: 10n, price: 10n },
+			{ c: 'request', id: 1n, remaining: 4n, minimum: 1n },
+			{ c: 'transfer', from: 1n, to: 2n, rep: 70n, k: 7n, oldPrice: 10n, newPrice: 10n },
+			{ c: 'create', rep: 100n, k: 10n, price: 10n },
+			{ c: 'request', id: 3n, remaining: 3n, minimum: 1n },
+			{ c: 'transfer', from: 3n, to: 2n, rep: 20n, k: 2n, oldPrice: 10n, newPrice: 10n },
+			{ c: 'transfer', from: 2n, to: 3n, rep: 10n, k: 1n, oldPrice: 10n, newPrice: 10n },
+			{ c: 'transfer', from: 3n, to: 2n, rep: 80n, k: 8n, oldPrice: 10n, newPrice: 10n },
+		]
+		const outcome = await run(1, trace.length, trace)
+		expect(outcome.failure).toBeUndefined()
+	})
 
 	test('random index operations keep every aggregate, cohort, fee, clock and preview equal to the reference model', async () => {
 		// The shared fixture reverts to its own snapshot before each test, which consumes ours.

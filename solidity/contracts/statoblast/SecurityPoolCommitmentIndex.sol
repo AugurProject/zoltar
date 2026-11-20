@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { CheckedCast } from '../CheckedCast.sol';
+
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
@@ -184,7 +186,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		Position storage receiver = positions[receiverId];
 		Node storage from = nodes[source.node];
 		Node storage to = nodes[receiver.node];
-		require(source.batch == receiver.batch, 'Commitment cohorts differ');
+		require(source.batch == receiver.batch || receiver.batch == 0, 'Commitment cohorts differ');
 		require(!from.retired && !to.retired && to.commitment != 0, 'Position is not live');
 		require(commitment != 0 && commitment <= from.commitment && rep <= from.rep, 'Invalid commitment transfer');
 		require(commitment != from.commitment || rep == from.rep, 'Residual REP has no commitment');
@@ -196,7 +198,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		to.rep += rep;
 		to.commitment += commitment;
 		to.price = receiverMaxPrice;
-		receiver.remainingCommitment += _transferRemaining(source, from.commitment);
+		uint256 inheritedRemaining = _transferRemaining(source, from.commitment);
+		// Joining active capital forfeits the source retirement request.
+		if (receiver.batch != 0) receiver.remainingCommitment += inheritedRemaining;
 		_reinsert(source);
 		_reinsert(receiver);
 	}
@@ -218,13 +222,13 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Record which existing live positions are healthy at a fresh price.
 	/// @dev Epochs distinguish recovery and relapse even within the same block.
 	function restartLiquidationClock() external onlyCapitalLedger {
-		distressRestart = uint48(block.timestamp);
+		distressRestart = CheckedCast.toUint48(block.timestamp);
 	}
 
 	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
-		observationTimes[epoch] = uint48(block.timestamp);
+		observationTimes[epoch] = CheckedCast.toUint48(block.timestamp);
 		observedPrice = price;
 		_observeHealthy(roots[0], price, epoch);
 		if (currentBatch != 0) _observeHealthy(roots[currentBatch], price, epoch);
@@ -255,7 +259,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			cursor = node.parent;
 		}
 		if (epoch == healthObservationEpoch) return 0;
-		return uint48(Math.max(observationTimes[epoch + 1], distressRestart));
+		return CheckedCast.toUint48(Math.max(observationTimes[epoch + 1], distressRestart));
 	}
 
 	/// @dev The controller calls only after an actual healthy mutation at a fresh

@@ -89,8 +89,6 @@ export interface QuestionSnapshot {
 
 /** Immutable coordinator inputs used to bound inclusion-time oracle funding. */
 export interface OracleRequestFundingSnapshot {
-	/** Shared feeds use a fixed native bounty instead of the standalone gas formula. */
-	fixedRequestPriceCostAttoEth?: CanonicalUintString
 	/** Shared feed collateral stake floor, in raw token units. */
 	minimumReportCollateral?: CanonicalUintString
 	collateralToken?: Address

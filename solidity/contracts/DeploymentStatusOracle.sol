@@ -13,7 +13,8 @@ contract DeploymentStatusOracle {
 	}
 
 	function getDeploymentMask() external view returns (uint256 deployedMask) {
-		for (uint256 index = 0; index < deploymentAddresses.length; ++index) {
+		uint256 count = deploymentAddresses.length;
+		for (uint256 index = 0; index < count; ++index) {
 			if (deploymentAddresses[index].code.length > 0) {
 				deployedMask |= uint256(1) << index;
 			}
