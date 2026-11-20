@@ -67,6 +67,8 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 	const current = loaded.value?.key === key ? loaded.value : undefined
 	const quote = current?.quote
 	const recoveryBudget = quote?.recoveryAttoRep === 0n ? 0n : parsedRecoveryBudget
+	// The contract pulls the collateral plus the fee it computes, never the unused part of the fee cap.
+	const requiredCollateral = amount === undefined || quote === undefined ? undefined : amount + quote.purchaseFeeAttoEth
 	let reason = actions.ownerReason ?? (model.loading ? 'Refreshing portfolio balances.' : undefined)
 	if (reason === undefined) {
 		if (snapshot === undefined) reason = 'Load a portfolio first.'
@@ -80,15 +82,15 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 		else if (amount > quote.availableCommitmentAttoEth) reason = 'Insufficient available backing after queued retirement.'
 		else if (fee === undefined || fee < quote.purchaseFeeAttoEth) reason = 'Set a maximum fee that covers the quote.'
 		else if (minimum > quote.shares) reason = 'Minimum shares exceed the current quote.'
-		else if (amount + fee > snapshot.walletCollateral) reason = collateralCopy.formatInsufficientBalance(snapshot.collateral.symbol)
-		else if (snapshot.collateralAllowance < amount + fee) reason = collateralCopy.approvalRequired
+		else if (amount + quote.purchaseFeeAttoEth > snapshot.walletCollateral) reason = collateralCopy.formatInsufficientBalance(snapshot.collateral.symbol)
+		else if (snapshot.collateralAllowance < amount + quote.purchaseFeeAttoEth) reason = collateralCopy.approvalRequired
 		else if (recoveryBudget === undefined || recoveryBudget < quote.recoveryAttoRep) reason = collateralCopy.recoveryBudgetRequired
 		else if (current.recovery === undefined) reason = collateralCopy.recoveryFundingLoading
 		else if (current.recovery.balance < recoveryBudget) reason = collateralCopy.insufficientRecoveryRep
 		else if (current.recovery.allowance < recoveryBudget) reason = collateralCopy.recoveryApprovalRequired
 	}
 	return {
-		requiredCollateral: amount === undefined || fee === undefined ? undefined : amount + fee,
+		requiredCollateral,
 		approve: (approvalAmount: bigint) =>
 			actions.runPortfolioAction('approvePurchaseCollateral', 'Approve purchase collateral', () => {
 				if (snapshot === undefined) throw new Error('Portfolio unavailable.')
@@ -158,8 +160,8 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 							fresh.availableCommitmentAttoEth < captured.mintAttoEth ||
 							fresh.purchaseFeeAttoEth > captured.maximumPurchaseFeeAttoEth ||
 							fresh.shares < captured.minimumShares ||
-							latest.walletCollateral < captured.mintAttoEth + captured.maximumPurchaseFeeAttoEth ||
-							latest.collateralAllowance < captured.mintAttoEth + captured.maximumPurchaseFeeAttoEth
+							latest.walletCollateral < captured.mintAttoEth + fresh.purchaseFeeAttoEth ||
+							latest.collateralAllowance < captured.mintAttoEth + fresh.purchaseFeeAttoEth
 						)
 							throw new Error('Purchase prerequisites changed. Refresh and review again.')
 					},

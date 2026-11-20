@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { getRouteHref, resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { installStatoblastRouting, statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { buildQuestionPoolHref, installStatoblastRouting, statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from '../../app/lib/routeValidation.js'
 
 let cleanup: (() => void) | undefined
@@ -24,6 +24,15 @@ test('preserves the selected pool and tab through Advanced navigation and refres
 	expect(getRouteHref('pools')).toBe(`#/pools/${pool}/vaults?universe=7`)
 	window.history.replaceState({}, '', '#/pools?universe=7')
 	expect(getRouteHref('open-oracle')).toBe('#/open-oracle?universe=7&poolsView=browse')
+})
+
+test('a portfolio purchase links to its question pool page inside the same simulation', () => {
+	const pool = '0x3333333333333333333333333333333333333333'
+	window.history.replaceState({}, '', `#/portfolios?simulate=1&genesis=yes&simScenario=portfolio&portfolio=${pool}&owner=${pool}`)
+	const href = buildQuestionPoolHref(pool)
+	expect(href).toBe(`#/pools/${pool}?simulate=1&genesis=yes&simScenario=portfolio`)
+	window.history.replaceState({}, '', href)
+	expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute: 'pools', search: '?simulate=1&genesis=yes&simScenario=portfolio', selectedPoolView: '' }))).toBe(false)
 })
 
 test('does not remember incomplete pool addresses or invent a pool tab', () => {

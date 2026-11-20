@@ -38,6 +38,19 @@ export function tryParseTimestampInput(value: string) {
 	return BigInt(Math.floor(timestampMs / 1000))
 }
 
+function padDateTimePart(value: number, length = 2) {
+	return value.toString().padStart(length, '0')
+}
+
+/** The `datetime-local` value naming this instant in the browser's zone: the inverse of `tryParseTimestampInput`. */
+export function formatLocalDateTimeInput(timestamp: bigint) {
+	const date = new Date(Number(timestamp) * 1000)
+	if (Number.isNaN(date.getTime()) || date.getFullYear() < 0) return undefined
+	const seconds = date.getSeconds()
+	const time = `${padDateTimePart(date.getHours())}:${padDateTimePart(date.getMinutes())}${seconds === 0 ? '' : `:${padDateTimePart(seconds)}`}`
+	return `${padDateTimePart(date.getFullYear(), 4)}-${padDateTimePart(date.getMonth() + 1)}-${padDateTimePart(date.getDate())}T${time}`
+}
+
 export function parseTimestampInput(value: string, label: string) {
 	const timestamp = tryParseTimestampInput(value)
 	if (timestamp === undefined) throw new Error(`${label} is invalid`)

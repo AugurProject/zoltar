@@ -750,6 +750,31 @@ describe('#1481 OpenOracle reports with unusable token metadata', () => {
 		expect(report.token1Decimals).toBe(18)
 	})
 
+	test('a native ETH report reads without ERC-20 metadata and keeps the other reports on its page', async () => {
+		const reportTokens: Record<string, [Address, Address]> = { '1': [token1Address, token2Address], '2': [zeroAddress, wethAddress] }
+		const readContract = async (request: { functionName: string; args?: readonly unknown[] | undefined }) => {
+			if (request.functionName === 'nextReportId') return 3n
+			const reportId = request.args?.[0]
+			if (typeof reportId !== 'bigint') throw new Error('Missing report id')
+			const preimage = createOpenOraclePreimage(reportId)
+			const pair = reportTokens[reportId.toString()]
+			if (pair === undefined) throw new Error('Unexpected report id')
+			;[preimage.game.token1, preimage.game.token2] = pair
+			return readStoredOracleFixture(request.functionName, preimage)
+		}
+		// The token fixture has no zero-address entry: reading ERC-20 metadata from the native sentinel would fail.
+		const multicall = createOpenOracleMulticall({ tokens: { ...defaultTokenFixtures, [wethAddress]: { decimals: 18n, symbol: 'WETH' } } })
+		const client = createMockLoaderClient({ getBlock: async () => ({ number: 2n, timestamp: 200n }), multicall, readContract })
+		const page = await loadOpenOracleReportSummaries(client, 0, 10)
+		expect(page.unavailableReports).toEqual([])
+		expect(page.reports.map(report => [report.reportId, report.token1Symbol, report.token1Decimals, report.token2Symbol])).toEqual([
+			[2n, 'ETH', 18, 'WETH'],
+			[1n, 'ONE (0x000000…0000D1)', 18, 'TWO (0x000000…0000D2)'],
+		])
+		const details = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 2n)
+		expect([details.token1Symbol, details.token1Decimals]).toEqual(['ETH', 18])
+	})
+
 	test('loadOpenOracleReportSummaries keeps good rows and lists reports with unusable token metadata as unavailable', async () => {
 		const badDecimalsToken = getAddress('0x00000000000000000000000000000000000000d3')
 		const noSymbolToken = getAddress('0x00000000000000000000000000000000000000d4')

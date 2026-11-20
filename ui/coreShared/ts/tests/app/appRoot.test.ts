@@ -70,7 +70,7 @@ for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Tradin
 		expect(within(document.body).getByRole('heading', { name: 'Universe', level: 2 })).not.toBeNull()
 		expect(within(document.body).getByRole('heading', { name: 'Augur v2 universe', level: 3 })).not.toBeNull()
 		expect(within(document.body).getByText('Forked', { selector: '.decision-heading .badge' })).not.toBeNull()
-		for (const label of ['Universe ID', 'Parent universe', 'REP supply']) expect(within(document.body).queryByText(label)).toBeNull()
+		for (const label of ['Universe ID', 'Parent universe', 'Theoretical REP supply']) expect(within(document.body).queryByText(label)).toBeNull()
 		expect(document.querySelectorAll('.migration-outcome-list .badge')).toHaveLength(0)
 		expect(document.querySelectorAll('.migration-outcome-label')).toHaveLength(2)
 		for (const outcome of ['Yes', 'No']) {

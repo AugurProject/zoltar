@@ -225,6 +225,50 @@ describe('QuestionsView', () => {
 		expect(getRenderedQuestionTitles()).toEqual(['Refreshed on a new block'])
 	})
 
+	test('drops a cached question that a chain reorganization removed from the registry, on refresh and on reload', async () => {
+		const loadPage = mock(async () => undefined)
+		const survivor = createQuestion(1)
+		const reorganized = createQuestion(2)
+		const fullPage: MarketDetailsPage = { pageIndex: 0, pageSize: 10, questionCount: 2n, questions: [survivor, reorganized] }
+		const reorganizedPage: MarketDetailsPage = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [survivor] }
+		const renderedComponent = await renderIntoDocument(view({ loadPage }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			await Promise.resolve()
+		})
+		await act(async () => {
+			render(view({ loadPage, zoltarQuestionPage: fullPage }), renderedComponent.container)
+			await Promise.resolve()
+		})
+		expect(getRenderedQuestionTitles()).toEqual([survivor.title, reorganized.title])
+
+		await act(async () => {
+			render(view({ loadPage, zoltarQuestionPage: reorganizedPage }), renderedComponent.container)
+			await Promise.resolve()
+		})
+		expect(getRenderedQuestionTitles()).toEqual([survivor.title])
+
+		// A browser that cached the removed question before reloading drops it once the first page loads.
+		await cleanupRenderedComponent()
+		cleanupRenderedComponent = undefined
+		questionDownloadStore.recordRegistryPage(
+			getLocalEntityScope('zoltar', 'question'),
+			{ ids: [survivor.questionId, reorganized.questionId], startIndex: 0, totalCount: 2n },
+			fullPage.questions.map((item, index) => ({ data: item, id: item.questionId, registryIndex: index })),
+		)
+		const reloaded = await renderIntoDocument(view({ loadPage }))
+		cleanupRenderedComponent = reloaded.cleanup
+		expect(getRenderedQuestionTitles()).toEqual([survivor.title, reorganized.title])
+		await act(async () => {
+			await Promise.resolve()
+		})
+		await act(async () => {
+			render(view({ loadPage, zoltarQuestionPage: reorganizedPage }), reloaded.container)
+			await Promise.resolve()
+		})
+		expect(getRenderedQuestionTitles()).toEqual([survivor.title])
+	})
+
 	test('searches every downloaded question rather than one page', async () => {
 		seedQuestions(
 			Array.from({ length: 14 }, (_, index) => createQuestion(index + 1)),

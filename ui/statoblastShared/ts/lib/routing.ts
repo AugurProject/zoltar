@@ -1,4 +1,4 @@
-import { buildRouteHref, createRouting, getCurrentRouteHash, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { buildRouteHref, createRouting, getCurrentRouteHash, getRouteHashSearch, getTopLevelRouteSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
@@ -52,4 +52,9 @@ export const statoblastRouting = createRouting(STATOBLAST_ROUTING_CONFIG)
 
 export function installStatoblastRouting() {
 	installRouting(STATOBLAST_ROUTING_CONFIG)
+}
+
+/** A question pool page that keeps the shared context (simulation, genesis, network, universe) of the current page. */
+export function buildQuestionPoolHref(securityPoolAddress: string) {
+	return buildRouteHref(buildPoolsRouteHash({ securityPoolAddress, tab: '', view: 'operate' }), getTopLevelRouteSearch('pools'))
 }
