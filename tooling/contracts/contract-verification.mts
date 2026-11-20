@@ -1,8 +1,8 @@
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, getCreate2Address, getCreateAddress, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
-import { SECURITY_POOL_UTILS_SOURCE_PATH, STEP_DEFINITIONS, UNVERIFIABLE_STEPS, type CompilerProfile } from './contract-verification-steps.mts'
+import { CREATE_DERIVED_CONTRACTS, SECURITY_POOL_UTILS_SOURCE_PATH, STEP_DEFINITIONS, UNVERIFIABLE_STEPS, type CompilerProfile } from './contract-verification-steps.mts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const ZERO_SALT = toHex(0, { size: 32 })
@@ -13,6 +13,9 @@ export type DeploymentManifest = {
 	// constructor takes none); it is absent for steps not deployed from
 	// compiled init code, such as the raw proxy deployer.
 	deploymentSteps: readonly { address: Address; constructorArguments?: string; id: string; label: string }[]
+	// Contracts the deployment creates indirectly, listed for operators; each
+	// must match a deployment step or a CREATE_DERIVED_CONTRACTS definition.
+	derivedContracts: readonly { address: Address; id: string; label: string }[]
 	network: { chainId: number; genesisOutcome: GenesisOutcome; genesisRepTokenAddress: Address; id: 'mainnet' | 'sepolia'; wethAddress: Address }
 	protocolConfig: { forkBurnDivisor: bigint; forkThresholdDivisor: bigint }
 }
@@ -58,9 +61,11 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 	const network = rawManifest['network']
 	const protocolConfig = rawManifest['protocolConfig']
 	const deploymentSteps = rawManifest['deploymentSteps']
+	const derivedContracts = rawManifest['derivedContracts']
 	if (!isPlainRecord(network)) throw new Error('Deployment manifest network must be an object')
 	if (!isPlainRecord(protocolConfig)) throw new Error('Deployment manifest protocolConfig must be an object')
 	if (!Array.isArray(deploymentSteps)) throw new Error('Deployment manifest deploymentSteps must be an array')
+	if (!Array.isArray(derivedContracts)) throw new Error('Deployment manifest derivedContracts must be an array')
 	const chainId = network['chainId']
 	if (typeof chainId !== 'number') throw new Error('Deployment manifest network.chainId must be a number')
 	const networkId = readString(network, 'id', 'network.id')
@@ -79,6 +84,14 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 				...(constructorArguments === undefined ? {} : { constructorArguments }),
 				id: readString(step, 'id', `deploymentSteps[${index.toString()}].id`),
 				label: readString(step, 'label', `deploymentSteps[${index.toString()}].label`),
+			}
+		}),
+		derivedContracts: derivedContracts.map((contract, index) => {
+			if (!isPlainRecord(contract)) throw new Error(`Deployment manifest derived contract ${index.toString()} must be an object`)
+			return {
+				address: getAddress(readString(contract, 'address', `derivedContracts[${index.toString()}].address`)),
+				id: readString(contract, 'id', `derivedContracts[${index.toString()}].id`),
+				label: readString(contract, 'label', `derivedContracts[${index.toString()}].label`),
 			}
 		}),
 		network: {
@@ -130,6 +143,27 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 			contractIdentifier: `${definition.inputPath ?? definition.artifactPath}:${definition.contractName}`,
 			id: step.id,
 			label: step.label,
+		})
+	}
+	for (const contract of manifest.derivedContracts) {
+		const step = stepsById.get(contract.id)
+		if (step !== undefined) {
+			if (step.address !== contract.address) throw new Error(`Derived contract ${contract.id} lists ${contract.address}, but its deployment step deploys ${step.address}. Regenerate the manifests with bun ./tooling/contracts/check-mainnet-deployment.mts --write.`)
+			continue
+		}
+		const definition = CREATE_DERIVED_CONTRACTS[contract.id]
+		if (definition === undefined) throw new Error(`Derived contract ${contract.id} has no contract-verification definition. Add one to tooling/contracts/contract-verification-steps.mts.`)
+		const computedAddress = getCreateAddress({ from: stepAddress(definition.createdBy), nonce: definition.createNonce })
+		if (computedAddress !== contract.address) throw new Error(`Derived contract ${contract.id} lists ${contract.address}, but ${definition.createdBy} creates ${computedAddress} at nonce ${definition.createNonce.toString()}. Regenerate the manifests.`)
+		// Confirms the artifact exists before any explorer submission.
+		getArtifact(definition.artifactPath, definition.contractName)
+		jobs.push({
+			address: contract.address,
+			compilerProfile: definition.compilerProfile,
+			constructorArguments: '',
+			contractIdentifier: `${definition.inputPath ?? definition.artifactPath}:${definition.contractName}`,
+			id: contract.id,
+			label: contract.label,
 		})
 	}
 	return { jobs, libraryAddresses, skipped }

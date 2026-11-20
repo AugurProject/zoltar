@@ -182,7 +182,27 @@ describe('UI Docker packaging', () => {
 			const stage = requireDockerStage(stages, `local-runtime-${appId}`)
 			expect(dockerInstructions(stage, 'EXPOSE')).toContain(port.toString())
 			expect(dockerInstructions(stage, 'ENV')).toContain(`PORT=${port}`)
-			expect(dockerInstructions(stage, 'HEALTHCHECK').some(value => value.includes(`http://127.0.0.1:${port}/`))).toBe(true)
+			expect(dockerInstructions(stage, 'HEALTHCHECK').some(value => value.includes(`process.env.PORT || '${port.toString()}'`))).toBe(true)
+		}
+	})
+
+	test('every runtime health check probes the PORT the server listens on', async () => {
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('ok') })
+		try {
+			const port = server.port
+			if (port === undefined) throw new Error('Health check stand-in server has no port')
+			for (const appId of UI_APP_IDS) {
+				const healthcheck = dockerInstructions(requireDockerStage(stages, `local-runtime-${appId}`), 'HEALTHCHECK')[0]
+				const commandStart = healthcheck?.indexOf('CMD ') ?? -1
+				if (healthcheck === undefined || commandStart < 0) throw new Error(`local-runtime-${appId} has no HEALTHCHECK CMD`)
+				const command: unknown = JSON.parse(healthcheck.slice(commandStart + 'CMD '.length))
+				if (!Array.isArray(command) || command[0] !== 'bun' || command[1] !== '-e' || typeof command[2] !== 'string') throw new Error(`local-runtime-${appId} HEALTHCHECK must run bun -e <probe>`)
+				const probe = Bun.spawn([process.execPath, '-e', command[2]], { env: { ...process.env, PORT: port.toString() }, stderr: 'ignore', stdout: 'ignore' })
+				expect(await probe.exited).toBe(0)
+			}
+		} finally {
+			await server.stop(true)
 		}
 	})
 

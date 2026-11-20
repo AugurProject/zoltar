@@ -462,6 +462,42 @@ test('deployment decoder decodes a mask against the selected network mapping', a
 	}
 })
 
+test('deployment decoder reads a complete Zoltar-only mask without reporting later steps as missing', async () => {
+	const sepoliaSteps = getDeploymentSteps(SEPOLIA_NETWORK_PROFILE).filter(step => step.id !== 'deploymentStatusOracle')
+	const zoltarPrefixLength = sepoliaSteps.findIndex(step => step.id === 'zoltar') + 1
+	expect(zoltarPrefixLength).toBe(5)
+	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
+	const restoreFetch = installFetch(serveDeploymentAddresses)
+	try {
+		await runGeneratedRuntime('deploymentMaskDecoder')
+		const network = document.querySelector<HTMLSelectElement>('[data-deployment-mask-network]')
+		const oracle = document.querySelector<HTMLSelectElement>('[data-deployment-mask-oracle]')
+		const input = document.querySelector<HTMLInputElement>('#deployment-mask-input')
+		const summary = document.querySelector<HTMLOutputElement>('[data-deployment-mask-summary]')
+		const guidance = document.querySelector<HTMLElement>('[data-deployment-mask-guidance]')
+		if (network === null || oracle === null || input === null || summary === null || guidance === null) throw new Error('Deployment decoder oracle controls are missing')
+		network.value = 'sepolia'
+		network.dispatchEvent(new Event('change'))
+		oracle.value = 'zoltar'
+		oracle.dispatchEvent(new Event('change'))
+		input.value = '31'
+		input.dispatchEvent(new Event('input'))
+		expect(summary.value).toStartWith(`Sepolia Zoltar-only oracle: ${zoltarPrefixLength} of ${zoltarPrefixLength} tracked steps have set bits`)
+		expect(guidance.textContent).toBe('No bits are set above the tracked manifest range.')
+		expect(document.querySelectorAll('[data-deployment-bit-toggle]')).toHaveLength(zoltarPrefixLength)
+		const statuses = Array.from(document.querySelectorAll<HTMLTableCellElement>('#sepolia-deployment-status-bit-mapping [data-deployment-bit-status]'))
+		expect(statuses).toHaveLength(sepoliaSteps.length)
+		expect(statuses.filter(cell => cell.textContent === 'Clear · no code')).toHaveLength(0)
+		expect(statuses.slice(zoltarPrefixLength).every(cell => cell.textContent === 'Not tracked · Zoltar-only oracle')).toBeTrue()
+		oracle.value = 'full'
+		oracle.dispatchEvent(new Event('change'))
+		expect(summary.value).toStartWith(`Sepolia: ${zoltarPrefixLength} of ${sepoliaSteps.length} tracked steps have set bits`)
+	} finally {
+		restoreFetch()
+		cleanup()
+	}
+})
+
 test('deployment decoder exposes retryable HTTP and malformed-manifest failures', async () => {
 	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
 	let mainnetResponse: 'http-error' | 'malformed' = 'http-error'

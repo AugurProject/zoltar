@@ -157,7 +157,7 @@ function isIpv4LoopbackHostname(hostname: string) {
 	return true
 }
 
-function isLocalHttpRpcHostname(hostname: string) {
+export function isLocalHttpRpcHostname(hostname: string) {
 	return LOCAL_HTTP_RPC_HOSTNAMES.has(hostname) || isIpv4LoopbackHostname(hostname)
 }
 

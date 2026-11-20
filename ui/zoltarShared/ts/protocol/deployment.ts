@@ -498,6 +498,22 @@ export function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'addr
 	return true
 }
 
+/**
+ * Builds a status snapshot by reading every step's code when this plan's status
+ * oracle is absent. Shared infrastructure that another plan (such as the other
+ * genesis root) already installed is then reported as deployed instead of
+ * missing until this plan's oracle exists.
+ */
+export async function loadDeploymentStatusSnapshotFromCode(client: Pick<ReadClient, 'getCode'>, steps: readonly DeploymentStep[]): Promise<DeploymentStatusSnapshot> {
+	const deploymentStatuses = await Promise.all(
+		steps.map(async step => ({
+			...step,
+			deployed: step.id === 'deploymentStatusOracle' ? false : assertDeploymentStepRuntimeCode(step, await client.getCode({ address: step.address })),
+		})),
+	)
+	return { applicationDeploymentComplete: false, deploymentStatuses }
+}
+
 export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
 	const profile = getRuntimeNetworkProfile()
 	if (profile.id === 'simulation') {
@@ -512,15 +528,10 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 
 	const steps = getDeploymentSteps(profile)
 	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-	const proxyStep = steps.find(step => step.id === 'proxyDeployer')
-	if (oracleStep === undefined || proxyStep === undefined) throw new Error('Deployment plan is missing required verification steps')
+	if (oracleStep === undefined) throw new Error('Deployment plan is missing its deployment status oracle step')
 	const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
 	const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
-	if (!assertDeploymentStepRuntimeCode(oracleStep, deploymentStatusOracleCode)) {
-		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-		const proxyDeployerDeployed = assertDeploymentStepRuntimeCode(proxyStep, proxyDeployerCode)
-		return getDeploymentStatusSnapshot(proxyDeployerDeployed ? 1n : 0n, false)
-	}
+	if (!assertDeploymentStepRuntimeCode(oracleStep, deploymentStatusOracleCode)) return await loadDeploymentStatusSnapshotFromCode(client, steps)
 
 	const deployedMask = await loadDeploymentStatusOracleMask(client)
 	const snapshot = getDeploymentStatusSnapshot(deployedMask, true)

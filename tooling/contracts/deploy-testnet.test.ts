@@ -26,6 +26,7 @@ import { createCompleteDeploymentPlan, createDualGenesisDeploymentPlan } from '.
 import { getUniswapDeployment } from './uniswap-deployment.mts'
 import { getTradingDeploymentPlan } from '../../ui/trading/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
+import { createAnvilNodeForConnectionMode } from '../../solidity/ts/testSupport/simulator/anvilNode.ts'
 
 const FIRST_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECOND_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
@@ -302,6 +303,25 @@ describe('testnet deployment transaction authorization', () => {
 			`  ├─ Submit transaction\n  │  ├─ Nonce: 7\n  │  ├─ To: ${FIRST_ADDRESS}\n  │  ├─ Gas limit: 130000\n  │  ├─ Value: 0.000000000000000001 ETH\n  │  └─ Maximum cost: 0.000000000003900001 ETH`,
 			`  ├─ Transaction submitted\n  │  ├─ Nonce: 7\n  │  └─ Transaction: ${FIRST_HASH}`,
 		])
+	})
+
+	test('signs a positive fee cap on a zero-fee development node', async () => {
+		let signed: string | undefined
+		const send = createBudgetedTransactionSender(
+			wallet({
+				getBlock: async () => ({ baseFeePerGas: 0n }) as never,
+				getGasPrice: async () => 0n,
+				sendTransaction: async request => {
+					signed = await account.signTransaction({ chainId: 11_155_111, gas: request.gas, maxFeePerGas: request.maxFeePerGas, maxPriorityFeePerGas: request.maxPriorityFeePerGas, nonce: request.nonce, to: request.to ?? undefined })
+					return FIRST_HASH
+				},
+			}),
+			account,
+			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000n },
+		)
+
+		expect(await send({ to: FIRST_ADDRESS })).toBe(FIRST_HASH)
+		expect(signed).toMatch(/^0x02/)
 	})
 
 	test('rejects estimates above the Osaka transaction gas limit', async () => {
@@ -789,3 +809,33 @@ describe('testnet deployment plan', () => {
 		expect(codeReadCount).toBe(descendantCount * 2)
 	})
 })
+
+test('a cost probe on a fresh development node changes no chain state before the preflight rejects it', async () => {
+	const node = await createAnvilNodeForConnectionMode({ type: 'spawn-isolated', rpcUrl: '', port: 0 }, { chainId: 11_155_111, context: 'testnet deployment cost probe', hardfork: 'osaka', zeroFees: true })
+	const rpc = async (method: string, params: readonly unknown[]) => {
+		const response = await fetch(node.rpcUrl, { body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params }), headers: { 'content-type': 'application/json' }, method: 'POST' })
+		const payload: unknown = await response.json()
+		if (typeof payload !== 'object' || payload === null || !('result' in payload)) throw new Error(`${method} failed`)
+		return payload.result
+	}
+	try {
+		const startBlock = await rpc('eth_blockNumber', [])
+		await expect(
+			deployTestnet({
+				chainId: 11_155_111,
+				log: () => undefined,
+				maxTotalCost: 1_000_000_000_000n,
+				// Anvil's first public development account.
+				privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+				rpcUrl: node.rpcUrl,
+				writeGitHubSummary: false,
+			}),
+		).rejects.toThrow('no funding or deployment transaction was attempted')
+		expect(await rpc('eth_blockNumber', [])).toBe(startBlock)
+		const { publishedContracts } = await getUniswapDeployment(11_155_111)
+		expect(publishedContracts.length).toBeGreaterThan(0)
+		for (const contract of publishedContracts) expect(await rpc('eth_getCode', [contract.address, 'latest'])).toBe('0x')
+	} finally {
+		await node.dispose()
+	}
+}, 120_000)

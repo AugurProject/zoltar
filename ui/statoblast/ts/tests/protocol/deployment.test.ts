@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, createSimulationProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, getDeploymentStepConstructorArguments, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
@@ -115,6 +116,31 @@ describe('statoblast deployment steps', () => {
 			const initCode = await captureDeploymentInitCode(oracleStep.deploy)
 			expect(initCode.startsWith(ORACLE_CREATION_CODE)).toBe(true)
 			expect(`0x${initCode.slice(ORACLE_CREATION_CODE.length)}`).toBe(encodeAbiParameters([{ type: 'address[]' }], [expectedMonitoredAddresses]))
+		}
+	})
+
+	test('reports shared steps already installed by the other genesis root before this root has a status oracle', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+		try {
+			const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
+			const proxyStep = steps.find(step => step.id === 'proxyDeployer')
+			const questionDataStep = steps.find(step => step.id === 'zoltarQuestionData')
+			if (proxyStep === undefined || questionDataStep === undefined) throw new Error('Expected proxy and question data deployment steps')
+			const questionDataRuntimeCode: Hex = `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`
+			const snapshot = await loadDeploymentStatusOracleSnapshot({
+				getCode: async ({ address }) => {
+					if (address === proxyStep.address) return PROXY_DEPLOYER_RUNTIME_CODE
+					if (address === questionDataStep.address) return questionDataRuntimeCode
+					return '0x'
+				},
+				readContract: async ({ functionName }) => {
+					throw new Error(`Unexpected read without a status oracle: ${functionName}`)
+				},
+			})
+			expect(snapshot.deploymentStatuses.filter(step => step.deployed).map(step => step.id)).toEqual(['proxyDeployer', 'zoltarQuestionData'])
+			expect(snapshot.applicationDeploymentComplete).toBe(false)
+		} finally {
+			resetEnvironment()
 		}
 	})
 

@@ -1,4 +1,5 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { isLocalHttpRpcHostname } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 
 export type DeploymentConfiguration = Readonly<{
 	chainId: number
@@ -25,8 +26,8 @@ function requiredRpcUrl(value: unknown) {
 		if (error instanceof TypeError) throw new Error('RPC URL must be a valid URL')
 		throw error
 	}
-	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'
-	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error('RPC URL must use HTTPS or loopback HTTP')
+	// Accept exactly the loopback hosts the shared RPC settings accept.
+	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLocalHttpRpcHostname(parsed.hostname))) throw new Error('RPC URL must use HTTPS or loopback HTTP')
 	if (parsed.username !== '' || parsed.password !== '') throw new Error('RPC URL must not contain embedded credentials')
 	return parsed.toString()
 }

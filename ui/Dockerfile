@@ -88,7 +88,7 @@ USER bun
 EXPOSE 8012
 ENV UI_APP=zoltar
 ENV PORT=8012
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8012/'); process.exit(response.ok ? 0 : 1)" ]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:' + (process.env.PORT || '8012') + '/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # Extend the common Zoltar libraries only for downstream applications.
@@ -123,7 +123,7 @@ USER bun
 EXPOSE 8011
 ENV UI_APP=statoblast
 ENV PORT=8011
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8011/'); process.exit(response.ok ? 0 : 1)" ]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:' + (process.env.PORT || '8011') + '/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 FROM statoblast-dependencies AS openoracle-builder
@@ -145,7 +145,7 @@ USER bun
 EXPOSE 4143
 ENV UI_APP=openoracle
 ENV PORT=4143
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:4143/'); process.exit(response.ok ? 0 : 1)" ]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:' + (process.env.PORT || '4143') + '/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # Build Trading as an application leaf.
@@ -173,7 +173,7 @@ USER bun
 EXPOSE 8080
 ENV UI_APP=trading
 ENV PORT=8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:' + (process.env.PORT || '8080') + '/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # The publisher intentionally includes every independently built application.

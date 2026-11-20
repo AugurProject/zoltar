@@ -39,7 +39,8 @@
 				<pre class="code-scroll" tabindex="0"><code>bun run anvil -- --chain-id 11155111 --hardfork osaka</code></pre>
 				<ol>
 					<li>Deploy to the node with the testnet deployer, following <a href="./deploy-testnet-contracts.html#deploy-locally">Deploy locally</a> with <code>--rpc-url=http://127.0.0.1:8545</code> and an Anvil account's key. It installs the core and the Trading factory and router. Its final explorer-verification step targets public Sepolia, so a failure there does not mean the local deployment failed.</li>
-					<li>In your wallet, point the chain <code>11155111</code> network at <code>http://127.0.0.1:8545</code> and import an Anvil account. Once a wallet is connected, the UI reads and sends through the wallet's RPC, so a wallet still on public Sepolia would use the real network.</li>
+					<li>In the Trading UI's <strong>Settings</strong>, set the Sepolia RPC URL to <code>http://127.0.0.1:8545</code>. The deploy page reads deployment status through this RPC URL, not through the wallet, even after a wallet connects.</li>
+					<li>In your wallet, point the chain <code>11155111</code> network at <code>http://127.0.0.1:8545</code> and import an Anvil account. The wallet sends the deployment transactions through its own RPC, so a wallet still on public Sepolia would send them to the real network.</li>
 					<li>Start the Trading UI, connect the wallet, and open <code>#/deploy</code>. <strong>Deployment progress</strong> shows <code>2 / 2</code>.</li>
 				</ol>
 			</section>

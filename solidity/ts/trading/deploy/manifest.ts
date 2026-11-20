@@ -49,3 +49,10 @@ export function requireSafeChainId(chainId: bigint) {
 	if (chainId < 0n || chainId > 9_007_199_254_740_991n) throw new Error('Chain ID must fit in a JavaScript safe integer')
 	return Number.parseInt(chainId.toString(), 10)
 }
+
+/** Reads TRADING_FEE_BPS: unset selects the default 30, and anything other than a whole number from 0 to 9999 is rejected. */
+export function parseTradingFeeBps(value: string | undefined) {
+	if (value === undefined) return 30n
+	if (!/^(0|[1-9]\d{0,3})$/.test(value)) throw new Error('TRADING_FEE_BPS must be a whole number from 0 to 9999')
+	return BigInt(value)
+}

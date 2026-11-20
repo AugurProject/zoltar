@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
 import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type DeploymentManifest, type ExplorerFetch, type ExplorerTarget, type StandardJsonInputs, type VerificationJob } from './contract-verification.mts'
-import { createArtifactLookup, main, parseRequestedChainIds } from './verify-contracts.mts'
+import { createArtifactLookup, main, parseVerificationRequest } from './verify-contracts.mts'
 import { getDeploymentManifestFileName, getDeploymentManifestId } from './deployment-manifests.mts'
 
 async function loadRealManifest(networkId: 'mainnet' | 'sepolia', genesisOutcome: 'yes' | 'no' = 'yes'): Promise<DeploymentManifest> {
@@ -24,7 +24,7 @@ test('every manifest deployment step is either verifiable or explicitly skipped,
 			const manifest = await loadRealManifest(networkId, genesisOutcome)
 			const plan = buildVerificationPlan(manifest, artifactLookup)
 			expect(plan.skipped.map(step => step.id)).toEqual(['proxyDeployer'])
-			expect(plan.jobs.map(job => job.id)).toEqual(manifest.deploymentSteps.map(step => step.id).filter(id => id !== 'proxyDeployer'))
+			expect(plan.jobs.map(job => job.id)).toEqual([...manifest.deploymentSteps.map(step => step.id).filter(id => id !== 'proxyDeployer'), 'escalationGameProofVerifier'])
 		}
 	}
 })
@@ -43,6 +43,36 @@ test('verification authenticates the directly deployed shared escalation deposit
 		id: 'escalationGameDepositDelegate',
 		label: delegateStep.label,
 	})
+})
+
+test('verification submits the factory-created escalation proof verifier listed in derived contracts', async () => {
+	const artifactLookup = await loadRealArtifactLookup()
+	for (const networkId of ['mainnet', 'sepolia'] as const) {
+		for (const genesisOutcome of ['yes', 'no'] as const) {
+			const manifest = await loadRealManifest(networkId, genesisOutcome)
+			const derived = manifest.derivedContracts.find(contract => contract.id === 'escalationGameProofVerifier')
+			if (derived === undefined) throw new Error('Missing escalation game proof verifier in derived contracts')
+			const plan = buildVerificationPlan(manifest, artifactLookup)
+			expect(plan.jobs.find(job => job.id === 'escalationGameProofVerifier')).toEqual({
+				address: derived.address,
+				compilerProfile: 'main',
+				constructorArguments: '',
+				contractIdentifier: 'contracts/statoblast/EscalationGameProofVerifier.sol:EscalationGameProofVerifier',
+				id: 'escalationGameProofVerifier',
+				label: derived.label,
+			})
+		}
+	}
+})
+
+test.each([
+	{ error: 'creates', name: 'a derived address that the creator did not create', tamper: (manifest: DeploymentManifest) => manifest.derivedContracts.map(contract => (contract.id === 'escalationGameProofVerifier' ? { ...contract, address: manifest.network.wethAddress } : contract)) },
+	{ error: 'its deployment step deploys', name: 'a derived address that contradicts its deployment step', tamper: (manifest: DeploymentManifest) => manifest.derivedContracts.map(contract => (contract.id === 'escalationGameFactory' ? { ...contract, address: manifest.network.wethAddress } : contract)) },
+	{ error: 'has no contract-verification definition', name: 'an unknown derived contract', tamper: (manifest: DeploymentManifest) => [...manifest.derivedContracts, { address: manifest.network.wethAddress, id: 'newDerivedModule', label: 'New' }] },
+])('verification rejects $name instead of omitting it', async ({ error, tamper }) => {
+	const artifactLookup = await loadRealArtifactLookup()
+	const manifest = await loadRealManifest('sepolia')
+	expect(() => buildVerificationPlan({ ...manifest, derivedContracts: tamper(manifest) }, artifactLookup)).toThrow(error)
 })
 
 test('manifest parsing rejects a different genesis outcome', async () => {
@@ -121,9 +151,31 @@ test('the compile module tolerates verification CLI arguments when imported inst
 })
 
 test('requested chain ids default to mainnet and sepolia', () => {
-	expect(parseRequestedChainIds([])).toEqual([1, 11155111])
-	expect(parseRequestedChainIds(['--chain-id=11155111'])).toEqual([11155111])
-	expect(() => parseRequestedChainIds(['--chain-id=0x1'])).toThrow('canonical positive decimal integer')
+	expect(parseVerificationRequest([])).toEqual({ kind: 'verify', chainIds: [1, 11155111] })
+	expect(parseVerificationRequest(['--chain-id=11155111'])).toEqual({ kind: 'verify', chainIds: [11155111] })
+	expect(() => parseVerificationRequest(['--chain-id=0x1'])).toThrow('canonical positive decimal integer')
+})
+
+test('verification arguments never widen help or a space-separated chain id to both networks', () => {
+	expect(parseVerificationRequest(['--help'])).toEqual({ kind: 'help' })
+	expect(parseVerificationRequest(['-h'])).toEqual({ kind: 'help' })
+	expect(parseVerificationRequest(['--chain-id', '11155111'])).toEqual({ kind: 'verify', chainIds: [11155111] })
+	expect(() => parseVerificationRequest(['--chain-id'])).toThrow('requires a chain ID value')
+	expect(() => parseVerificationRequest(['11155111'])).toThrow('Unknown argument 11155111')
+	expect(() => parseVerificationRequest(['--chainid=1'])).toThrow('Unknown argument --chainid=1')
+})
+
+test('verification help submits nothing', async () => {
+	const log = spyOn(console, 'log').mockImplementation(() => undefined)
+	const fetchFn: ExplorerFetch = async () => {
+		throw new Error('help must not contact an explorer')
+	}
+	try {
+		expect(await main(['--help'], {}, { fetchFn, sleep: async () => undefined })).toBe(0)
+		expect(log.mock.calls.map(call => String(call[0])).join('\n')).toContain('--chain-id')
+	} finally {
+		log.mockRestore()
+	}
 })
 
 test('explorer targets cover Etherscan and Blockscout for known chains only', () => {
