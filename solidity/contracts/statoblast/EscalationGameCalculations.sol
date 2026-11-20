@@ -33,11 +33,11 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
 					: forkResumedAt + uint256(requiredElapsed - forkElapsedAtStart);
-			uint256 minimumResponseEnd = _responseEnd();
-			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
+			uint256 responseEnd = forkResumedAt + ACTIVATION_DELAY;
+			return curveEnd > responseEnd ? curveEnd : responseEnd;
 		}
-		endTime = activationTime + _finalityElapsed();
-		if (responseRestartedUntil > endTime) endTime = responseRestartedUntil;
+		// The forward curve crossing binding capital is the only deadline: a leader change adds no time.
+		return activationTime + _finalityElapsed();
 	}
 
 	/// @dev Finality is strictly after this last second at or below binding capital.

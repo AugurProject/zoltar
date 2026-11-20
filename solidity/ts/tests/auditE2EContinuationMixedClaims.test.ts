@@ -57,18 +57,19 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		// Reporters bring wallet REP into the child universe.
 		for (const reporter of [r2, r3, r4, r5]) await e2e.migrateWalletRep(reporter, U0, 400n * K, [YES])
 		await e2e.migrateWalletRep(r6, U0, 900n * K, [YES])
-		const latest = async () => (await base.mockWindow.getBlock()).timestamp
-		const restartedUntil = () => owner.readContract({ ...gA, functionName: 'responseRestartedUntil' })
-		// No overtakes Yes: the response period restarts for three days.
+		const end = () => owner.readContract({ ...gA, functionName: 'getEscalationGameEndDate' })
+		// No overtakes Yes, which raises the median from 50k to 70k and can only move the curve deadline later.
+		const before = await end()
 		expect(await e2e.deposit(r5, childA.pool, NO, 30n * K)).toBe(30n * K)
-		expect(await restartedUntil()).toBe(BigInt(await latest()) + 3n * DAY)
-		// Yes retakes the lead: another restart.
+		const afterFlip = await end()
+		expect(afterFlip).toBeGreaterThanOrEqual(before)
+		// Yes retakes the lead, raising the median to No's 80k.
 		expect(await e2e.deposit(r2, childA.pool, YES, 20n * K)).toBe(20n * K)
-		const secondRestart = await restartedUntil()
-		expect(secondRestart).toBe(BigInt(await latest()) + 3n * DAY)
-		// More support for the leader does not restart it.
+		const afterSecondFlip = await end()
+		expect(afterSecondFlip).toBeGreaterThanOrEqual(afterFlip)
+		// More support for the leader leaves the median, and so the deadline, unchanged.
 		expect(await e2e.deposit(r4, childA.pool, YES, 40n * K)).toBe(40n * K)
-		expect(await restartedUntil()).toBe(secondRestart)
+		expect(await end()).toBe(afterSecondFlip)
 		expect(await e2e.gameBalance(childA.game)).toBe(inheritedBacking + 90n * K)
 		return { owner, U0, q, source, game0, A, childA, ledger, engine, sealedCash, inheritedBacking, reporters: { r2, r3, r4, r5, r6 } }
 	}

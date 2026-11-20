@@ -149,37 +149,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_depositRepOnOutcome(outcome, maximumDepositAttoRep, true);
 	}
 
-	/// @notice Pulls only the caller's REP; beneficiaries acquire native deposits, never caller funds or allowances.
-	function depositRepOnOutcomeForBatch(BinaryOutcomes.BinaryOutcome outcome, address[] calldata beneficiaries, uint256[] calldata amountsAttoRep) external {
-		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		_validateGameForDeposit(game);
-		uint256 count = beneficiaries.length;
-		require(count > 0 && count <= 16 && count == amountsAttoRep.length, 'Invalid contribution count');
-		uint256 total;
-		for (uint256 index = 0; index < count; index++) {
-			require(beneficiaries[index] != address(0) && amountsAttoRep[index] != 0, 'Invalid contribution');
-			total += amountsAttoRep[index];
-		}
-		for (uint256 index = 0; index < count; index++)
-			require(amountsAttoRep[index] >= startBondAttoRep || (index == count - 1 && outcomeState[uint8(outcome)].balanceAttoRep + total == nonDecisionThresholdAttoRep), 'Invalid contribution');
-		(uint256 accepted, uint256 cumulative) = game.previewDepositOnOutcome(outcome, total);
-		require(accepted == total, 'Contributions would be trimmed');
-		_validateAcceptedDeposit(outcome, uint8(outcome), outcomeState[uint8(outcome)].balanceAttoRep, total, cumulative);
-		// A challenge must actually lead, or complete the threshold tie that authorizes a fork.
-		for (uint8 index = 0; index < 3; index++) {
-			if (index != uint8(outcome))
-				require(cumulative > outcomeState[index].balanceAttoRep || cumulative == nonDecisionThresholdAttoRep, 'Challenge does not lead');
-		}
-		IERC20(game.repToken()).safeTransferFrom(msg.sender, address(this), total);
-		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), total);
-		// Admission is checked once against the full report. The internal append path is
-		// unreachable through delegate dispatch and does not admit independent small replies.
-		for (uint256 index = 0; index < count; index++) {
-			_appendDeposit(beneficiaries[index], outcome, amountsAttoRep[index], outcomeState[uint8(outcome)].balanceAttoRep + amountsAttoRep[index]);
-		}
-		_afterDeposit();
-	}
-
 	/// @notice Game delegatecall target: like `depositRepOnOutcome`, after a permit, falling back to an existing allowance.
 	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
@@ -248,27 +217,21 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 
 	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
 		uint8 outcomeIndex = uint8(outcome);
-		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
+		_validateAcceptedDeposit(outcome, outcomeIndex, outcomeState[outcomeIndex].balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), amountAttoRep);
 		parentDepositIndex = _appendDeposit(depositor, outcome, amountAttoRep, expectedCumulativeRepAmountAttoRep);
-		_afterDeposit();
+		// Every accepted deposit records the threshold settlement scales by.
+		address poolAddress = game.securityPool();
+		_recordSettlementForkThreshold(poolAddress);
+		_scheduleReporterFinality();
+		IEscalationGameSecurityPoolContext(poolAddress).refreshPortfolioFees();
 	}
 
 	function _appendDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
 		uint8 outcomeIndex = uint8(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		// Whoever led before must be able to answer a change of strict leader, whatever the curve allows.
-		BinaryOutcomes.BinaryOutcome previousLeader = _strictStakeLeader();
-		bool hadReport =
-			outcomeState[0].balanceAttoRep != 0 ||
-				outcomeState[1].balanceAttoRep != 0 ||
-				outcomeState[2].balanceAttoRep != 0;
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
-		BinaryOutcomes.BinaryOutcome nextLeader = _strictStakeLeader();
-		if (hadReport && nextLeader != BinaryOutcomes.BinaryOutcome.None && nextLeader != previousLeader)
-			responseRestartedUntil = block.timestamp + ACTIVATION_DELAY;
 		_increaseEscrowedRepForBundle(depositor, amountAttoRep);
 		vaultAccounting[depositor].unresolvedAttoRep += amountAttoRep;
 		totalLocalUnresolvedAttoRep += amountAttoRep;
@@ -305,14 +268,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_accrueOrdinarySurplus(depositor, amountAttoRep);
 	}
 
-	function _afterDeposit() private {
-		address poolAddress = IEscalationGameDepositContext(address(this)).securityPool();
-		// Every accepted deposit, single or batch, records the threshold settlement scales by.
-		_recordSettlementForkThreshold(poolAddress);
-		_scheduleReporterFinality();
-		IEscalationGameSecurityPoolContext(poolAddress).refreshPortfolioFees();
-	}
-
 	function _accrueOrdinarySurplus(address depositor, uint256 depositedAttoRep) private {
 		if (forkContinuation) return;
 		uint256 minimumBalance = outcomeState[0].balanceAttoRep;
@@ -328,14 +283,11 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit EscalationSurplusAccrued(amount, minimumBalance);
 	}
 
-	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private view returns (bool takesLead) {
+	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private view {
 		require(!forkContinuation || forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		BinaryOutcomes.BinaryOutcome provisional = IEscalationGameDepositContext(address(this)).getQuestionResolution();
-		require(_isDepositResolutionOpen(provisional), 'Question resolved');
-		// Past the median, only support that meets the rising curve can reopen the result.
-		require(provisional == BinaryOutcomes.BinaryOutcome.None || expectedCumulativeRepAmountAttoRep >= IEscalationGameDepositContext(address(this)).totalCostAttoRep(), 'Response below curve');
+		require(_isDepositResolutionOpen(IEscalationGameDepositContext(address(this)).getQuestionResolution()), 'Question resolved');
 		require(currentBalanceAttoRep < nonDecisionThresholdAttoRep, 'Outcome full');
 		require(amountAttoRep > 0, 'Deposit zero');
 		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + amountAttoRep, 'Preview mismatch');
@@ -345,9 +297,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (outcomeState[2].balanceAttoRep > maxBalance) maxBalance = outcomeState[2].balanceAttoRep;
 		// A start-bond report that would tie the leader is trimmed by one attoREP.
 		require(amountAttoRep >= startBondAttoRep || expectedCumulativeRepAmountAttoRep == nonDecisionThresholdAttoRep || (amountAttoRep + 1 == startBondAttoRep && expectedCumulativeRepAmountAttoRep + 1 == maxBalance && maxBalance < nonDecisionThresholdAttoRep), 'Below start bond');
-		takesLead = currentBalanceAttoRep < maxBalance && expectedCumulativeRepAmountAttoRep > maxBalance;
-		if (expectedCumulativeRepAmountAttoRep != maxBalance || maxBalance >= nonDecisionThresholdAttoRep)
-			return takesLead;
+		if (expectedCumulativeRepAmountAttoRep != maxBalance || maxBalance >= nonDecisionThresholdAttoRep) return;
 		for (uint8 otherOutcomeIndex = 0; otherOutcomeIndex < 3; otherOutcomeIndex++) {
 			if (otherOutcomeIndex != outcomeIndex && outcomeState[otherOutcomeIndex].balanceAttoRep == maxBalance) {
 				revert('Preview mismatch');

@@ -282,8 +282,6 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	forkContinuation?: boolean | undefined
 	forkResumedAt?: bigint | undefined
 	forkElapsedAtStart?: bigint | undefined
-	/** End of the response period restarted by the last change of leader; zero or absent before any. */
-	responseRestartedUntil?: bigint | undefined
 }
 
 export type ReportingDetails =

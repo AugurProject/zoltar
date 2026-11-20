@@ -19,7 +19,7 @@ describe('escalation deposit lead bounds', () => {
 	const e2e = createE2E(fixture)
 	for (const throughPool of [true, false]) {
 		for (const frontRun of [true, false]) {
-			test(`#1328 ${throughPool ? 'pool' : 'game'} leading reply ${frontRun ? 'rejects a changed leader' : 'restarts the response period'}`, async () => {
+			test(`#1328 ${throughPool ? 'pool' : 'game'} leading reply ${frontRun ? 'rejects a changed leader' : 'raises the median and the curve deadline'}`, async () => {
 				const honest = e2e.account(2)
 				const attacker = e2e.account(3)
 				const pool = fixture.poolFor(fixture.base.questionId).securityPool
@@ -29,15 +29,15 @@ describe('escalation deposit lead bounds', () => {
 				await e2e.deposit(attacker, pool, NO, 900n * unit)
 				const gameAddress = await e2e.gameOf(pool)
 				const game = e2e.game(gameAddress)
-				const read = <const Name extends 'getEscalationGameEndDate' | 'totalCostAttoRep' | 'getOutcomeBalancesAttoRep' | 'responseRestartedUntil'>(functionName: Name) => fixture.owner().readContract({ ...game, functionName })
+				const read = <const Name extends 'getEscalationGameEndDate' | 'getOutcomeBalancesAttoRep'>(functionName: Name) => fixture.owner().readContract({ ...game, functionName })
 				await fixture.base.mockWindow.setTime((await read('getEscalationGameEndDate')) - 2n)
+				// The flip raises the median to Yes's stake, which moves the curve deadline later.
 				await e2e.deposit(attacker, pool, NO, 200n * unit)
-				const oldEnd = await read('responseRestartedUntil')
+				const end = await read('getEscalationGameEndDate')
 				await approveToken(honest, getRepTokenAddress(fixture.base.genesisUniverse), throughPool ? pool : gameAddress)
-				await fixture.base.mockWindow.setTime(oldEnd - 61n)
-				const cost = await read('totalCostAttoRep')
-				const target = cost + cost / 200n
+				await fixture.base.mockWindow.setTime(end - 61n)
 				const balances = await read('getOutcomeBalancesAttoRep')
+				const target = balances[NO] + 10n * unit
 				const amount = target - balances[YES]
 				if (frontRun) await e2e.deposit(attacker, pool, NO, target + 1n - balances[NO])
 				const guarded = throughPool
@@ -48,12 +48,13 @@ describe('escalation deposit lead bounds', () => {
 					await honest.simulateContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, amount] })
 					await expect(guarded()).rejects.toThrow('Deposit does not lead')
 					expect(await read('getOutcomeBalancesAttoRep')).toEqual([balances[0], balances[YES], target + 1n])
-					expect(await read('responseRestartedUntil')).toBe(oldEnd)
+					// A top-up on the leader adds no time.
+					expect(await read('getEscalationGameEndDate')).toBe(end)
 				} else {
 					await guarded()
-					const landed = (await honest.getBlock()).timestamp
-					expect(await read('responseRestartedUntil')).toBe(landed + 3n * DAY)
 					expect((await read('getOutcomeBalancesAttoRep'))[YES]).toBe(target)
+					// The new median is No's stake: the deadline is the later curve crossing, not a fresh period.
+					expect(await read('getEscalationGameEndDate')).toBeGreaterThan(end)
 				}
 			})
 		}

@@ -33,12 +33,9 @@ describe('escalation game: a start-bond report that would tie the leader', () =>
 		const balances = await e2e.balances(game.address)
 		expect(balances[YES]).toBe(bond - 1n)
 		expect(balances[NO]).toBe(bond)
-		// The trimmed report does not take the lead, so it does not restart the response period.
-		expect(await fixture.owner().readContract({ ...game, functionName: 'responseRestartedUntil' })).toBe(0n)
-		// The reporter can still top up past the leader, which restarts the response period.
+		// The reporter can still top up past the leader.
 		await deposit(second, YES, bond)
 		expect((await e2e.balances(game.address))[YES]).toBe(2n * bond - 1n)
-		expect(await fixture.owner().readContract({ ...game, functionName: 'responseRestartedUntil' })).toBeGreaterThan(0n)
 	})
 
 	test('still rejects an offered amount below the start bond', async () => {

@@ -367,8 +367,8 @@ export const cure = (m: Model, id: bigint, target: bigint, ownerExit: boolean) =
 	const total = totalCommitment(m)
 	const spare = total > m.demand ? total - m.demand : 0n
 	const reduction = p.k - supported
-	// An owner's full exit keeps a sub-minimum deficit as supported commitment and queues it for retirement.
-	if (ownerExit && reduction < MINC) return 0n
+	// An owner-initiated reduction with a sub-minimum deficit queues instead of cutting a whole minimum (#1364, #1449).
+	if ((ownerExit || target !== 0n) && reduction < MINC) return 0n
 	let removed = min(p.k - target, min(max(reduction, MINC), spare))
 	if (removed < MINC && removed !== p.k) removed = 0n
 	const rest = p.k - target - removed

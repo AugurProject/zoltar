@@ -1,7 +1,7 @@
 import * as reportingCopy from '../../../copy/reporting.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingDetails } from '../../../types/contracts.js'
-import { getReportingBelowRequiredSupportReason, getReportingForkTriggerAmount, getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution } from './reportingDomain.js'
+import { getReportingForkTriggerAmount, getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution } from './reportingDomain.js'
 
 type ReportingMaxContribution = { amountAttoRep: bigint | undefined; reason: string | undefined; stopsBelowFork?: boolean }
 
@@ -41,8 +41,5 @@ export function getReportingMaxContribution({
 	const stopsBelowFork = forkTriggerAmount !== undefined && cappedAmount >= forkTriggerAmount && !forkConfirmed
 	if (stopsBelowFork) cappedAmount = forkTriggerAmount - 1n
 	if (cappedAmount < details.startBondAttoRep) return { amountAttoRep: undefined, reason: stopsBelowFork ? reportingCopy.maxBelowForkReason : reportingCopy.selectedSideBelowMinimumReason }
-	// The funding source can cap Max below the support the game now requires.
-	const belowRequiredSupportReason = getReportingBelowRequiredSupportReason(details, selectedSide.balance, selectedSide.balance + cappedAmount)
-	if (belowRequiredSupportReason !== undefined) return { amountAttoRep: undefined, reason: belowRequiredSupportReason }
 	return { amountAttoRep: cappedAmount, reason: undefined, stopsBelowFork }
 }

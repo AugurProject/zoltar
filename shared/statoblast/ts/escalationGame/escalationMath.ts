@@ -4,13 +4,11 @@ export type ProjectedEscalationDeposit = {
 	acceptedAmountAttoRep: bigint
 	projectedBalancesAttoRep: EscalationBalanceTuple
 	reachesNonDecision: boolean
-	/** The outcome was below the previous maximum and now exceeds it, which restarts the response period. */
-	takesLead: boolean
 	tieAdjusted: boolean
 }
 
 export const ESCALATION_TIME_LENGTH = 4233600n
-/** Activation delay, and the response period a change of leader restarts. */
+/** Delay between the first report and the start of the curve, and the fixed response period a resumed fork continuation guarantees. */
 export const ESCALATION_ACTIVATION_DELAY = 259200n
 
 const SCALE = 1000000n
@@ -134,34 +132,18 @@ function setBalanceAtIndex(balancesAttoRep: EscalationBalanceTuple, index: numbe
 }
 
 /**
- * Support an accepted deposit's outcome must reach: the curve once it has passed
- * the median and one outcome strictly leads, otherwise zero. Mirrors the
- * contract's provisional resolution, which stays open while two outcomes meet
- * the curve or while the two largest outcomes tie.
- */
-export function getEscalationRequiredSupportAttoRep(balancesAttoRep: EscalationBalanceTuple, curveAttoRep: bigint) {
-	if (balancesAttoRep.filter(balanceAttoRep => balanceAttoRep >= curveAttoRep).length >= 2) return 0n
-	const maxBalanceAttoRep = getMaxEscalationBalanceAttoRep(balancesAttoRep)
-	if (maxBalanceAttoRep > 0n && balancesAttoRep.filter(balanceAttoRep => balanceAttoRep === maxBalanceAttoRep).length >= 2) return 0n
-	return curveAttoRep
-}
-
-/**
- * Projects the deposit the game accepts, or undefined when it rejects the amount.
- * Pass the curve at the deposit's timestamp to apply the rule that support added
- * after the curve passes the median must meet the curve.
+ * Projects the deposit an open game accepts, or undefined when it rejects the amount.
+ * Any deposit of at least the start bond is accepted while the game is open.
  */
 export function projectEscalationDeposit({
 	amountAttoRep,
 	balancesAttoRep,
-	curveAttoRep = 0n,
 	nonDecisionThresholdAttoRep,
 	outcome,
 	startBondAttoRep,
 }: {
 	amountAttoRep: bigint
 	balancesAttoRep: EscalationBalanceTuple
-	curveAttoRep?: bigint
 	nonDecisionThresholdAttoRep: bigint
 	outcome: EscalationOutcomeKey
 	startBondAttoRep: bigint
@@ -186,51 +168,42 @@ export function projectEscalationDeposit({
 		acceptedAmountAttoRep -= 1n
 		newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
 	}
-	if (newBalanceAttoRep < getEscalationRequiredSupportAttoRep(balancesAttoRep, curveAttoRep)) return undefined
 	const projectedBalancesAttoRep = setBalanceAtIndex(balancesAttoRep, outcomeIndex, newBalanceAttoRep)
 	return {
 		acceptedAmountAttoRep,
 		projectedBalancesAttoRep,
 		reachesNonDecision: hasReachedNonDecision(projectedBalancesAttoRep, nonDecisionThresholdAttoRep),
-		takesLead: currentBalanceAttoRep < maxBalanceAttoRep && newBalanceAttoRep > maxBalanceAttoRep,
 		tieAdjusted,
 	}
 }
 
 /**
  * The contract's `getEscalationGameEndDate` for an unresolved game without a
- * fixed outcome, after a deposit accepted at `timestamp`. A continuation must
- * already be resumed.
+ * fixed outcome, given `balancesAttoRep`: the last second the forward curve is at or
+ * below the median balance. A resumed continuation rebases the curve to its
+ * resume time and never ends before its fixed response period.
  */
 export function projectEscalationEndTime({
 	activationTime,
+	balancesAttoRep,
 	continuation,
 	nonDecisionThresholdAttoRep,
-	projection,
-	responseRestartedUntil,
 	startBondAttoRep,
-	timestamp,
 }: {
 	activationTime: bigint
+	balancesAttoRep: EscalationBalanceTuple
 	continuation?: { forkElapsedAtStart: bigint; forkResumedAt: bigint } | undefined
 	nonDecisionThresholdAttoRep: bigint
-	projection: Pick<ProjectedEscalationDeposit, 'projectedBalancesAttoRep' | 'takesLead'>
-	responseRestartedUntil: bigint
 	startBondAttoRep: bigint
-	timestamp: bigint
 }) {
-	const [, medianBalanceAttoRep] = [...projection.projectedBalancesAttoRep].sort((left, right) => {
+	const [, medianBalanceAttoRep] = [...balancesAttoRep].sort((left, right) => {
 		if (left < right) return -1
 		return left > right ? 1 : 0
 	})
 	const finalityElapsed = computeEscalationFinalityElapsed(startBondAttoRep, nonDecisionThresholdAttoRep, medianBalanceAttoRep ?? 0n)
-	let curveEnd = activationTime + finalityElapsed
-	let responseEnd = projection.takesLead ? timestamp + ESCALATION_ACTIVATION_DELAY : responseRestartedUntil
-	if (continuation !== undefined) {
-		curveEnd = finalityElapsed <= continuation.forkElapsedAtStart ? continuation.forkResumedAt : continuation.forkResumedAt + finalityElapsed - continuation.forkElapsedAtStart
-		const resumedResponseEnd = continuation.forkResumedAt + ESCALATION_ACTIVATION_DELAY
-		if (resumedResponseEnd > responseEnd) responseEnd = resumedResponseEnd
-	}
+	if (continuation === undefined) return activationTime + finalityElapsed
+	const curveEnd = finalityElapsed <= continuation.forkElapsedAtStart ? continuation.forkResumedAt : continuation.forkResumedAt + finalityElapsed - continuation.forkElapsedAtStart
+	const responseEnd = continuation.forkResumedAt + ESCALATION_ACTIVATION_DELAY
 	return curveEnd > responseEnd ? curveEnd : responseEnd
 }
 

@@ -36,7 +36,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		]
 		for (const [sender, outcome, amount] of plan) await e2e.deposit(sender, source, outcome, amount)
 		const game0 = await e2e.gameOf(source)
-		const read = <Name extends 'forkResumedAt' | 'forkElapsedAtStart' | 'totalCostAttoRep' | 'getEscalationGameEndDate' | 'getFinalQuestionResolution' | 'activationTime' | 'responseRestartedUntil' | 'getQuestionResolution'>(game: Address, functionName: Name) => owner.readContract({ ...e2e.game(game), functionName })
+		const read = <Name extends 'forkResumedAt' | 'forkElapsedAtStart' | 'totalCostAttoRep' | 'getEscalationGameEndDate' | 'getFinalQuestionResolution' | 'activationTime' | 'getQuestionResolution'>(game: Address, functionName: Name) => owner.readContract({ ...e2e.game(game), functionName })
 		const activation = await read(game0, 'activationTime')
 		const end0 = await read(game0, 'getEscalationGameEndDate')
 		// Run the origin game five days past activation so the cost curve has started to rise.
@@ -109,8 +109,8 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		expect(await e2e.gameBalance(childAA.game)).toBe(backing)
 		expect(await read(childAA.game, 'getFinalQuestionResolution')).toBe(NONE)
 		const remainingA = endA - forkA
-		// The restarted response period of the interrupted child is replaced by the grandchild's own three days.
-		const curveEndA = (await read(childA.game, 'responseRestartedUntil')) >= endA ? 0n : remainingA
+		// The interrupted child's remaining curve time is rebased onto the grandchild, which also gets its own three days.
+		const curveEndA = remainingA
 		const endAA = await read(childAA.game, 'getEscalationGameEndDate')
 		expect(endAA).toBeGreaterThanOrEqual(anchorAA + 3n * DAY)
 		if (curveEndA > 3n * DAY) expect(endAA).toBe(anchorAA + curveEndA)
@@ -118,11 +118,11 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		const costAA = await read(childAA.game, 'totalCostAttoRep')
 		expect(costAA).toBeGreaterThanOrEqual(costA)
 		expect(await read(childAA.game, 'getQuestionResolution')).toBe(provisionalA)
-		// A response below the frozen curve is refused; one above it is accepted throughout the three days.
+		// Any start-bond response is accepted throughout the three days, and a change of leader restarts nothing.
 		await base.mockWindow.setTime(anchorAA + 3n * DAY - 60n)
 		await accrue(r6, childAA.pool)
 		expect(await e2e.deposit(r5, childAA.pool, NO, 25n * K)).toBe(25n * K)
-		expect(await read(childAA.game, 'responseRestartedUntil')).toBeGreaterThan(anchorAA + 3n * DAY)
+		expect(await read(childAA.game, 'getEscalationGameEndDate')).toBeGreaterThanOrEqual(anchorAA + 3n * DAY)
 		const balancesAA = await e2e.balances(childAA.game)
 		expect(balancesAA).toEqual([5n * K, 90n * K, 105n * K])
 		const finalEndAA = await read(childAA.game, 'getEscalationGameEndDate')
