@@ -6,7 +6,7 @@ import type { NetworkProfile } from '../wallet/networkProfile.js'
 import { exportSimulationChainHistory, restoreSimulationChainHistory } from './chainHistory.js'
 import { getSimulationNode, mineLockedSimulationTransaction, withSimulationLock, type SimulationNode, type SimulationVm, type TevmLikeClient } from './clock.js'
 import type { SerializedSimulationBlock } from './savedStates.js'
-import type { SimulationProviderRequest } from './simulationProvider.js'
+import { BLOCK_SELECTOR_INDEX_BY_METHOD, type SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationTransactionReceipt } from './transactionReceipts.js'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -219,7 +219,25 @@ export async function createSimulationChain(profile: Pick<NetworkProfile, 'chain
 			return response.result
 		})
 
+	/**
+	 * A restored save brings back its blocks and receipts but only the state of its head, and tevm answers a read at an
+	 * older height with empty code or a fork error. Such a read fails with the reason instead of reporting absent state.
+	 */
+	const requireStateAtRequestedBlock = async (parameters: SimulationProviderRequest) => {
+		const selectorIndex = BLOCK_SELECTOR_INDEX_BY_METHOD[parameters.method]
+		if (selectorIndex === undefined || !Array.isArray(parameters.params)) return
+		const selector: unknown = parameters.params[selectorIndex]
+		if (typeof selector !== 'string' || !isHex(selector)) return
+		const blockNumber = BigInt(selector)
+		const head = await vm.blockchain.getCanonicalHeadBlock()
+		if (blockNumber > head.header.number) return
+		const block = await vm.blockchain.getBlock(blockNumber)
+		if (await vm.stateManager.hasStateRoot(block.header.stateRoot)) return
+		throw createRpcError({ code: -32000, message: `Simulation state at block ${blockNumber.toString()} is unavailable: this simulation keeps the blocks and receipts at that height but not their state, as after restoring a saved state` })
+	}
+
 	const request: SimulationChain['request'] = async parameters => {
+		await requireStateAtRequestedBlock(parameters)
 		if (parameters.method === 'eth_getTransactionReceipt') {
 			const hash = parseReceiptHash(parameters.params)
 			if (hash !== undefined) return receipts.get(hash.toLowerCase()) ?? null

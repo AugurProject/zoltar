@@ -22,11 +22,47 @@ async function delayMilliseconds(milliseconds: number) {
 	})
 }
 
-function normalizeTevmRequest(parameters: SimulationProviderRequest): SimulationProviderRequest {
-	if (parameters.method !== 'eth_call' || !Array.isArray(parameters.params) || parameters.params.length < 2) return parameters
-	const blockSelector = parameters.params[1]
-	if (typeof blockSelector !== 'object' || blockSelector === null || !('blockHash' in blockSelector)) return parameters
-	return { ...parameters, params: [parameters.params[0], 'latest'] }
+/** Where each state-reading method takes its EIP-1898 block selector. */
+export const BLOCK_SELECTOR_INDEX_BY_METHOD: Readonly<Record<string, number>> = {
+	eth_call: 1,
+	eth_estimateGas: 1,
+	eth_getBalance: 1,
+	eth_getCode: 1,
+	eth_getStorageAt: 2,
+	eth_getTransactionCount: 1,
+}
+
+/** EIP-1898's error for a block hash the node does not know or that is not canonical. */
+const INVALID_BLOCK_SELECTOR_ERROR_CODE = -32001
+
+function readBlockHashSelector(selector: unknown) {
+	if (typeof selector !== 'object' || selector === null || !('blockHash' in selector) || typeof selector.blockHash !== 'string') return undefined
+	return { blockHash: selector.blockHash, requireCanonical: 'requireCanonical' in selector && selector.requireCanonical === true }
+}
+
+function readBlockField(block: unknown, field: 'hash' | 'number') {
+	if (typeof block !== 'object' || block === null || !(field in block)) return undefined
+	const value: unknown = Reflect.get(block, field)
+	return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * TEVM reads state at a block number but not at an EIP-1898 block hash, so the hash is resolved to its number first.
+ * An unknown hash, or one that is not canonical when `requireCanonical` asks, fails like on a node instead of reading
+ * the latest state, which would silently answer a pinned read with different state.
+ */
+async function resolveBlockHashSelector(parameters: SimulationProviderRequest, requestRpc: (parameters: SimulationProviderRequest) => Promise<unknown>): Promise<SimulationProviderRequest> {
+	const selectorIndex = BLOCK_SELECTOR_INDEX_BY_METHOD[parameters.method]
+	if (selectorIndex === undefined || !Array.isArray(parameters.params) || parameters.params.length <= selectorIndex) return parameters
+	const selector = readBlockHashSelector(parameters.params[selectorIndex])
+	if (selector === undefined) return parameters
+	const blockNumber = readBlockField(await requestRpc({ method: 'eth_getBlockByHash', params: [selector.blockHash, false] }), 'number')
+	if (blockNumber === undefined) throw createProviderRpcError(INVALID_BLOCK_SELECTOR_ERROR_CODE, `Block ${selector.blockHash} not found`)
+	if (selector.requireCanonical) {
+		const canonicalHash = readBlockField(await requestRpc({ method: 'eth_getBlockByNumber', params: [blockNumber, false] }), 'hash')
+		if (canonicalHash?.toLowerCase() !== selector.blockHash.toLowerCase()) throw createProviderRpcError(INVALID_BLOCK_SELECTOR_ERROR_CODE, `Block ${selector.blockHash} is not canonical`)
+	}
+	return { ...parameters, params: parameters.params.map((parameter: unknown, index) => (index === selectorIndex ? blockNumber : parameter)) }
 }
 
 function readRequestedChainId(params: unknown) {
@@ -93,7 +129,7 @@ export function createSimulationProvider({
 		if (parameters.method === 'eth_chainId') return getReportedChainId()
 		if (parameters.method === 'wallet_switchEthereumChain') return switchChain(parameters.params)
 		await delayMilliseconds(getQueryDelayMilliseconds())
-		return await requestRpc(normalizeTevmRequest(parameters))
+		return await requestRpc(await resolveBlockHashSelector(parameters, requestRpc))
 	}) as InjectedEthereum['request']
 
 	return {

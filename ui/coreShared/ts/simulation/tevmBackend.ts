@@ -1,4 +1,5 @@
 import { withTimeout } from '../lib/promise.js'
+import { clearSessionLocalEntities } from '../lib/localEntityStore.js'
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ChainBackend, WriteClient } from '../wallet/chainBackend.js'
 import { normalizeAccount } from '../wallet/chainBackend.js'
@@ -463,6 +464,7 @@ export async function createSimulationBackend(
 		reset: async () => {
 			bootstrapWarning = undefined
 			await callWorker('reset', undefined)
+			clearSessionLocalEntities()
 		},
 		selectAccount: async address => {
 			await callWorker('selectAccount', { address })

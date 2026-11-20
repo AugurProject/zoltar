@@ -2,10 +2,15 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { getLocalEntityStoreRevision, hasFavoriteEntry, normalizeEntityId, readFavoriteEntries, setEntityFavorite, subscribeLocalEntityStore, type DownloadedEntityStore, type DownloadedItem, type LocalEntityApp, type LocalEntityKind, type LocalEntityScope } from '../lib/localEntityStore.js'
 
-/** The network and genesis deployment each keep their own favorites and downloaded summaries. */
+/**
+ * The network and genesis deployment each keep their own favorites and downloaded summaries. A simulation chain is
+ * rebuilt on every load and reset, so its favorites last only as long as that chain instead of carrying ids into an
+ * unrelated simulation of the same genesis root.
+ */
 export function getLocalEntityScope(app: LocalEntityApp, kind: LocalEntityKind): LocalEntityScope {
 	const profile = getActiveNetworkProfile()
-	return { app, kind, network: `${profile.id}-${profile.chainIdHex.toLowerCase()}-${profile.genesisRepTokenAddress.toLowerCase()}` }
+	const network = `${profile.id}-${profile.chainIdHex.toLowerCase()}-${profile.genesisRepTokenAddress.toLowerCase()}`
+	return profile.id === 'simulation' ? { app, kind, network, persistence: 'session' } : { app, kind, network }
 }
 
 function useLocalEntityStoreVersion() {
@@ -51,10 +56,12 @@ export function useRememberOpenedEntity<T>(app: LocalEntityApp, kind: LocalEntit
 			favoritedEntityKeyRef.current = undefined
 			return
 		}
-		store.record(scope, [{ id, data }])
 		const entityKey = `${app}:${kind}:${scope.network}:${normalizeEntityId(id)}`
-		if (favoritedEntityKeyRef.current === entityKey) return
-		favoritedEntityKeyRef.current = entityKey
-		setEntityFavorite(scope, id, true)
+		// Star before caching: the cache never evicts a favorite for a non-favorite, so a newly opened entity keeps its summary even when every cached slot holds a favorite.
+		if (favoritedEntityKeyRef.current !== entityKey) {
+			favoritedEntityKeyRef.current = entityKey
+			setEntityFavorite(scope, id, true)
+		}
+		store.record(scope, [{ id, data }])
 	}, [app, data, id, kind, scope.network, store])
 }

@@ -12,7 +12,7 @@ import { LoadingText } from './LoadingText.js'
 import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatCeilingAmount, formatCeilingAmountDisplay, formatUnitSuffix, withApproximateMarker } from '../lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatCeilingAmountDisplay, formatCeilingApprovalLabel, formatUnitSuffix } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
@@ -65,13 +65,12 @@ function resolveApprovalButtonLabel({
 	if (requirementSatisfied && !isCustomAmount) return commonCopy.approvalSatisfied
 	// An effectively unlimited allowance is named as such before signing instead of dropping the amount from the label.
 	if (shouldDisplayMaxTokenApprovalAmount(nextApprovalAmount)) return commonCopy.formatApproveUnlimitedValue(tokenSymbol)
-	const amount = formatCeilingAmount(nextApprovalAmount, tokenUnits)
-	const amountLabel = amount === undefined ? undefined : withApproximateMarker(amount)
+	const amountLabel = formatCeilingApprovalLabel(nextApprovalAmount, tokenUnits)
 	return (
 		<span className='approval-button-label' title={commonCopy.formatApproveTokenAmount(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)}>
 			{commonCopy.approve}{' '}
-			{amount === undefined ? undefined : (
-				<span className={amount.text.length > 3 ? 'approval-button-amount approval-button-amount-long' : 'approval-button-amount'}>
+			{amountLabel === undefined ? undefined : (
+				<span className={amountLabel.length > 3 ? 'approval-button-amount approval-button-amount-long' : 'approval-button-amount'}>
 					{amountLabel}
 					{'\u00a0'}
 				</span>

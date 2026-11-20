@@ -8,7 +8,12 @@ import { isStoredRecord } from './storedValueReader.js'
  */
 export type LocalEntityApp = 'zoltar' | 'statoblast' | 'trading' | 'openoracle'
 export type LocalEntityKind = 'pool' | 'question' | 'market' | 'oracleReport'
-export type LocalEntityScope = Readonly<{ app: LocalEntityApp; kind: LocalEntityKind; network: string }>
+/**
+ * `session` scopes belong to one browser-local simulation chain, which starts over on every load and reset, so they live
+ * in memory only and `clearSessionLocalEntities` empties them when that chain is replaced. Ids from an earlier simulation
+ * would otherwise name entities that do not exist, or different ones, in the next.
+ */
+export type LocalEntityScope = Readonly<{ app: LocalEntityApp; kind: LocalEntityKind; network: string; persistence?: 'browser' | 'session' }>
 export type FavoriteEntry = Readonly<{ id: string; addedAt: number }>
 export type DownloadedEntry<T> = Readonly<{ id: string; fetchedAt: number; data: T }>
 export type DownloadedItem<T> = Readonly<{ id: string; data: T }>
@@ -19,12 +24,16 @@ const BIGINT_TAG = '$bigint'
 const FAVORITE_LIMIT = 500
 const DOWNLOADED_LIMIT = 200
 
+function getScopeKeySuffix(scope: LocalEntityScope) {
+	return `${scope.app}:${scope.network}:${scope.kind}${scope.persistence === 'session' ? ':session' : ''}`
+}
+
 export function getFavoritesStorageKey(scope: LocalEntityScope) {
-	return `${STORAGE_PREFIX}:favorites:v${STORE_VERSION}:${scope.app}:${scope.network}:${scope.kind}`
+	return `${STORAGE_PREFIX}:favorites:v${STORE_VERSION}:${getScopeKeySuffix(scope)}`
 }
 
 export function getDownloadedStorageKey(scope: LocalEntityScope) {
-	return `${STORAGE_PREFIX}:downloaded:v${STORE_VERSION}:${scope.app}:${scope.network}:${scope.kind}`
+	return `${STORAGE_PREFIX}:downloaded:v${STORE_VERSION}:${getScopeKeySuffix(scope)}`
 }
 
 export function normalizeEntityId(id: string) {
@@ -161,9 +170,28 @@ export function subscribeLocalEntityStore(listener: Listener) {
 	}
 }
 
-function readStorageItem(key: string) {
+const sessionStorageItems = new Map<string, string>()
+
+function getScopeStorage(scope: LocalEntityScope): Pick<Storage, 'getItem' | 'setItem'> | undefined {
+	if (scope.persistence !== 'session') return getBrowserStorage('localStorage')
+	return {
+		getItem: key => sessionStorageItems.get(key) ?? null,
+		setItem: (key, value) => {
+			sessionStorageItems.set(key, value)
+		},
+	}
+}
+
+/** Forgets every simulation-session favorite and summary, for a simulation chain that was replaced or reset. */
+export function clearSessionLocalEntities() {
+	sessionStorageItems.clear()
+	for (const reset of cacheResetters) reset()
+	notifyListeners()
+}
+
+function readStorageItem(scope: LocalEntityScope, key: string) {
 	try {
-		const text = getBrowserStorage('localStorage')?.getItem(key) ?? null
+		const text = getScopeStorage(scope)?.getItem(key) ?? null
 		return text === null ? undefined : parseStoredValue(text)
 	} catch (error) {
 		if (error instanceof DOMException || error instanceof SyntaxError) return undefined
@@ -171,9 +199,9 @@ function readStorageItem(key: string) {
 	}
 }
 
-function writeStorageItem(key: string, items: readonly unknown[]) {
+function writeStorageItem(scope: LocalEntityScope, key: string, items: readonly unknown[]) {
 	try {
-		getBrowserStorage('localStorage')?.setItem(key, serializeStoredValue({ version: STORE_VERSION, items }))
+		getScopeStorage(scope)?.setItem(key, serializeStoredValue({ version: STORE_VERSION, items }))
 		return true
 	} catch (error) {
 		// Quota and privacy-mode failures keep the in-memory state for this session.
@@ -187,7 +215,7 @@ export function readFavoriteEntries(scope: LocalEntityScope): FavoriteEntry[] {
 	const key = getFavoritesStorageKey(scope)
 	const cached = favoritesCache.get(key)
 	if (cached !== undefined) return cached
-	const entries = parseFavoriteEntries(readStorageItem(key))
+	const entries = parseFavoriteEntries(readStorageItem(scope, key))
 	favoritesCache.set(key, entries)
 	return entries
 }
@@ -198,7 +226,7 @@ export function setEntityFavorite(scope: LocalEntityScope, id: string, favorite:
 	const next = favorite ? addFavoriteEntry(current, id, now) : removeFavoriteEntry(current, id)
 	const key = getFavoritesStorageKey(scope)
 	favoritesCache.set(key, next)
-	writeStorageItem(key, next)
+	writeStorageItem(scope, key, next)
 	notifyListeners()
 }
 
@@ -216,7 +244,7 @@ export function createDownloadedEntityStore<T>(decode: (data: unknown) => T | un
 		const key = getDownloadedStorageKey(scope)
 		const cached = cache.get(key)
 		if (cached !== undefined) return cached
-		const entries = parseDownloadedEntries(readStorageItem(key), decode)
+		const entries = parseDownloadedEntries(readStorageItem(scope, key), decode)
 		cache.set(key, entries)
 		return entries
 	}
@@ -226,13 +254,14 @@ export function createDownloadedEntityStore<T>(decode: (data: unknown) => T | un
 		const protectedIds = new Set(readFavoriteEntries(scope).map(entry => entry.id))
 		const next = upsertDownloadedEntries(read(scope), items, now, protectedIds, limit)
 		cache.set(key, next)
-		if (!writeStorageItem(key, next)) writeStorageItem(key, next.slice(0, Math.max(1, Math.floor(next.length / 2))))
+		if (!writeStorageItem(scope, key, next)) writeStorageItem(scope, key, next.slice(0, Math.max(1, Math.floor(next.length / 2))))
 		notifyListeners()
 	}
 	return { read, record }
 }
 
 export function resetLocalEntityStoreForTesting() {
+	sessionStorageItems.clear()
 	for (const reset of cacheResetters) reset()
 	listeners.clear()
 	storageListenerInstalled = false

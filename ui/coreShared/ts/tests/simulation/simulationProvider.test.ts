@@ -5,28 +5,55 @@ import { normalizeAccount } from '../../wallet/chainBackend.js'
 import { createSimulationProvider } from '../../simulation/simulationProvider.js'
 import { SIMULATION_WRONG_CHAIN_ID_HEX, UNRECOGNIZED_CHAIN_ERROR_CODE, parseSimulationWalletMode } from '../../simulation/simulationWallet.js'
 
-test('simulation providers use the latest block for EIP-1898 calls unsupported by TEVM', async () => {
+const pinnedHash = `0x${'01'.repeat(32)}`
+
+function createPinnedReadHarness(blocks: { byHash: Record<string, { hash: string; number: string }>; byNumber: Record<string, { hash: string; number: string }> }) {
 	const account = normalizeAccount('0x00000000000000000000000000000000000000a1')
 	if (account === undefined) throw new Error('Expected a valid simulation account')
-	const requestRpc = mock(async () => '0x')
-	const provider = createSimulationProvider({
-		getChainId: () => '0x1',
-		getSelectedAccount: () => account,
-		requestRpc,
-	})
+	const requests: unknown[] = []
+	const requestRpc = async (parameters: { method: string; params?: unknown }) => {
+		requests.push(parameters)
+		const params = Array.isArray(parameters.params) ? parameters.params : []
+		if (parameters.method === 'eth_getBlockByHash') return blocks.byHash[String(params[0])] ?? null
+		if (parameters.method === 'eth_getBlockByNumber') return blocks.byNumber[String(params[0])] ?? null
+		return '0x'
+	}
+	const provider = createSimulationProvider({ getChainId: () => '0x1', getSelectedAccount: () => account, requestRpc })
+	return { account, provider, requests }
+}
+
+test('simulation providers read EIP-1898 hash-pinned state at that block instead of the latest block', async () => {
+	const block = { hash: pinnedHash, number: '0x3' }
+	const { account, provider, requests } = createPinnedReadHarness({ byHash: { [pinnedHash]: block }, byNumber: { '0x3': block } })
 
 	await provider.request({
 		method: 'eth_call',
 		params: [
 			{ data: '0x', to: account },
-			{ blockHash: `0x${'01'.repeat(32)}`, requireCanonical: true },
+			{ blockHash: pinnedHash, requireCanonical: true },
 		],
 	})
+	await provider.request({ method: 'eth_getBalance', params: [account, { blockHash: pinnedHash }] })
 
-	expect(requestRpc).toHaveBeenCalledWith({
-		method: 'eth_call',
-		params: [{ data: '0x', to: account }, 'latest'],
-	})
+	expect(requests).toContainEqual({ method: 'eth_call', params: [{ data: '0x', to: account }, '0x3'] })
+	expect(requests).toContainEqual({ method: 'eth_getBalance', params: [account, '0x3'] })
+	expect(requests).not.toContainEqual(expect.objectContaining({ params: expect.arrayContaining(['latest']) }))
+})
+
+test('simulation providers reject unknown and non-canonical pinned blocks instead of reading the latest state', async () => {
+	const { account, provider, requests } = createPinnedReadHarness({ byHash: { [pinnedHash]: { hash: pinnedHash, number: '0x3' } }, byNumber: { '0x3': { hash: `0x${'02'.repeat(32)}`, number: '0x3' } } })
+
+	await expect(provider.request({ method: 'eth_call', params: [{ data: '0x', to: account }, { blockHash: `0x${'03'.repeat(32)}` }] })).rejects.toThrow('not found')
+	await expect(
+		provider.request({
+			method: 'eth_call',
+			params: [
+				{ data: '0x', to: account },
+				{ blockHash: pinnedHash, requireCanonical: true },
+			],
+		}),
+	).rejects.toThrow('not canonical')
+	expect(requests.filter(request => typeof request === 'object' && request !== null && 'method' in request && request.method === 'eth_call')).toEqual([])
 })
 
 function createProviderHarness(initialWalletMode?: 'connected' | 'disconnected' | 'wrong-chain') {
