@@ -13,6 +13,7 @@ import { initializeProcessContext, recordProcessStop } from './process-bootstrap
 installConsoleTimestamps()
 
 const { database, indexerRunId, networks } = await initializeProcessContext(false)
+const enabledChainIds = networks.map(network => network.chainId)
 const API_DATABASE_CONNECTIONS = 10
 const healthDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2)
 // Readiness has its own connection so slow /health/indexers or /metrics queries cannot hold it.
@@ -47,7 +48,7 @@ const freshnessThresholdMs = Math.max(runtimeConfig.pollIntervalMs * 4, 45_000)
 const apiRequest = createConcurrencyGate(API_DATABASE_CONNECTIONS, () => Response.json({ error: 'Server is busy; retry shortly' }, { status: 503, headers: { ...securityHeaders, 'retry-after': '2' } }))
 const healthRoutes = createHealthRoutes({
 	checkReadiness: async () => await readinessDatabase.read(async sql => await sql`SELECT 1`, 3_000),
-	readIndexerHealth: async () => await healthDatabase.read(async sql => await readIndexerHealth(sql, transaction => healthDatabase.auditIntegrity(transaction), freshnessThresholdMs), 3_000),
+	readIndexerHealth: async () => await healthDatabase.read(async sql => await readIndexerHealth(sql, transaction => healthDatabase.auditIntegrity(transaction), networks, freshnessThresholdMs), 3_000),
 	networks,
 	securityHeaders,
 })
@@ -125,7 +126,7 @@ const server = Bun.serve({
 			return respond(
 				await apiRequest(async () => {
 					try {
-						const response = await apiDatabase.read(sql => handleApi(request, sql, freshnessThresholdMs), API_TRANSACTION_TIMEOUT_MS)
+						const response = await apiDatabase.read(sql => handleApi(request, sql, freshnessThresholdMs, enabledChainIds), API_TRANSACTION_TIMEOUT_MS)
 						if (response !== undefined) {
 							for (const [name, value] of Object.entries(securityHeaders)) response.headers.set(name, String(value))
 							return response

@@ -43,9 +43,13 @@ for (const mode of ['quiet', 'events', 'event-reorg'] as const) {
 				stored.push(...blocks)
 			}),
 		]
+		const samples: (readonly [bigint, string])[] = []
 		const operations: PollOperations = {
 			reconcileReorg: async () => {},
 			refreshContractDeployment: async () => {},
+			refreshStateSamples: async (_state, blockNumber, blockHash) => {
+				samples.push([blockNumber, blockHash])
+			},
 			getBlockHeader: async (_providers, number) => ({ ...header(number), hash: changedBeforeCommit && number === 10n ? zeroHash : header(number).hash }),
 			getNextLogSegment: async () => ({ toBlock: 100_009n, logs, endBlockHash: header(100_009n).hash, endBlockHeader: header(100_009n), scanInputs: [{ address: zeroAddress, startBlock: 10n, fromBlock: 10n }], deploymentObservations: [] }),
 			indexBlock,
@@ -57,6 +61,8 @@ for (const mode of ['quiet', 'events', 'event-reorg'] as const) {
 			if (mode !== 'event-reorg') expect(stored.at(-1)?.logScanCursors).toEqual([{ contractAddress: zeroAddress, startBlock: 10n, lastRetrievedBlock: 100_009n }])
 			expect(transactionReads).toEqual(logs.map(log => log.transactionHash))
 			expect(fullBlocks).not.toHaveBeenCalled()
+			// Reaching the observed head samples state there in the same poll; an abandoned range samples nothing.
+			expect(samples).toEqual(mode === 'event-reorg' ? [] : [[100_009n, header(100_009n).hash]])
 		} finally {
 			for (const mock of mocks) mock.mockRestore()
 			await database.close()

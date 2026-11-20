@@ -29,6 +29,31 @@ test('fingerprints canonical contract sources independently of generated import 
 	expect(contractSourceHash({ ...sources, 'contracts/Zoltar.sol': { content: 'contract Zoltar { uint256 value; }' } })).not.toBe(baseline)
 })
 
+test('changes the projection hash when a re-exported projection implementation changes', async () => {
+	const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'augurscan-projection-provenance-'))
+	const projectRoot = path.join(repositoryRoot, 'augurScan')
+	try {
+		await mkdir(path.join(projectRoot, 'src/projections'), { recursive: true })
+		await Promise.all([
+			writeFile(path.join(projectRoot, 'package.json'), '{}'),
+			writeFile(path.join(projectRoot, '../bun.lock'), ''),
+			writeFile(path.join(projectRoot, 'src/operations.ts'), "export const operation = 'stable'\n"),
+			writeFile(path.join(projectRoot, 'src/projections.ts'), "export * from './projections/domains.ts'\nexport * from './projections/events.ts'\n"),
+			writeFile(path.join(projectRoot, 'src/projections/domains.ts'), "export const questionCreated = 'one'\n"),
+			writeFile(path.join(projectRoot, 'src/projections/events.ts'), "export const event = 'stable'\n"),
+			writeFile(path.join(projectRoot, 'src/database-projections.ts'), "export const store = 'stable'\n"),
+		])
+		const baseline = await sourceProvenance(projectRoot)
+		await writeFile(path.join(projectRoot, 'src/projections/domains.ts'), "export const questionCreated = 'two'\n")
+		const changedDomain = await sourceProvenance(projectRoot)
+		expect(changedDomain.projectionSourceHash).not.toBe(baseline.projectionSourceHash)
+		await writeFile(path.join(projectRoot, 'src/database-projections.ts'), "export const store = 'changed'\n")
+		expect((await sourceProvenance(projectRoot)).projectionSourceHash).not.toBe(changedDomain.projectionSourceHash)
+	} finally {
+		await rm(repositoryRoot, { recursive: true, force: true })
+	}
+})
+
 test('changes the application hash when a shared runtime dependency changes', async () => {
 	const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'augurscan-provenance-'))
 	const projectRoot = path.join(repositoryRoot, 'augurScan')

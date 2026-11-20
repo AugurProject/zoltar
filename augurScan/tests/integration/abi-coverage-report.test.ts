@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
-import { unknownCallReport } from '../../src/abi-coverage-report.ts'
+import { chainDecodeCoverage, unknownCallReport } from '../../src/abi-coverage-report.ts'
 import { initializeSchema } from '../../src/schema.ts'
 
 const postgresUrl = process.env['POSTGRES_TEST_URL']
@@ -43,6 +43,12 @@ test.skipIf(postgresUrl === undefined)('reports undecoded canonical calls by cha
 			expect(report.some(row => row.chain_id === '1' && row.decode_status === 'failed' && row.transaction_count === '1')).toBe(true)
 			expect(report.some(row => row.chain_id === '11155111' && row.transaction_count === '1')).toBe(true)
 			expect(report.some(row => row.selector === null && row.transaction_count === '1')).toBe(true)
+			// The explorer overview applies the same scope: no creation, and short calldata under a null selector.
+			const coverage = await chainDecodeCoverage(connection, 1, '100')
+			expect(coverage.undecoded_calls).toBe('4')
+			expect(coverage.observed_calls).toBe('5')
+			const cliGroups = report.filter(row => row.chain_id === '1').map(row => [row.destination, row.selector, row.decode_status, row.transaction_count])
+			expect(coverage.groups.map((row: Record<string, unknown>) => [row['destination'], row['selector'], row['decode_status'], row['transaction_count']])).toEqual(cliGroups)
 			expect(await unknownCallReport(connection, 1)).toHaveLength(1)
 			await expect(unknownCallReport(connection, 0)).rejects.toThrow('Report limit')
 			await expect(unknownCallReport(connection, 1001)).rejects.toThrow('Report limit')

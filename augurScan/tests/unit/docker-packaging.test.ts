@@ -209,6 +209,31 @@ describe('Docker packaging', () => {
 		expect(gitIgnorePatterns).toContain('/augurScan/logs/')
 	})
 
+	test('probes readiness on the port the server listens on', async () => {
+		const healthCheck = dockerInstructions(requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'runtime'), 'HEALTHCHECK')[0]
+		const probe = healthCheck === undefined ? undefined : /CMD (\[.*\])$/u.exec(healthCheck)?.[1]
+		if (probe === undefined) throw new Error('The runtime image must declare an exec-form health check')
+		const command: unknown = JSON.parse(probe)
+		if (!Array.isArray(command) || !command.every(part => typeof part === 'string')) throw new Error('The health check must be a string array')
+		const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: request => new Response(undefined, { status: new URL(request.url).pathname === '/health/ready' ? 200 : 404 }) })
+		try {
+			const run = async (port: string) => {
+				const child = Bun.spawn(
+					command.map(part => (part === 'bun' ? process.execPath : part)),
+					{ env: { ...process.env, PORT: port }, stdout: 'pipe', stderr: 'pipe' },
+				)
+				return await child.exited
+			}
+			expect(await run(String(server.port ?? ''))).toBe(0)
+			const unused = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response() })
+			const unusedPort = String(unused.port ?? '')
+			await unused.stop(true)
+			expect(await run(unusedPort)).not.toBe(0)
+		} finally {
+			await server.stop(true)
+		}
+	})
+
 	test('runs the web app separately from the indexer in Compose', async () => {
 		const source = await readFile(composeFile, 'utf8')
 		expect(source).toContain(`POSTGRES_URL: \${POSTGRES_URL:-postgres://augurscan:\${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}`)

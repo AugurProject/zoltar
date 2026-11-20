@@ -130,6 +130,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		(item.escalation_positions ?? []).slice(0, 250).map(position => {
 			let state = 'Unconsumed losing principal'
 			if (position['consumed_block'] != null) state = `Consumed at block ${position['consumed_block']} (${['winning claim', 'losing settlement', 'export', 'direct parent claim'][Number(position['consumption_reason'])] ?? 'unknown consumption reason'})`
+			else if (position['retired_block'] != null) state = `Losing principal retired by settlement at block ${position['retired_block']}`
 			else if (position['final_resolution'] == null || position['final_resolution'] === '3') state = 'Pending resolution'
 			else if (position['final_resolution'] === position['outcome']) state = 'Unconsumed winning principal; see tagged payout evidence'
 			return operationRow(`Deposit ${position['deposit_index']}`, `${exactUnit(String(position['principal_atto_rep']), 18, 'REP')} principal · ${state}`, String(position['game_address']), position['resolution_block'], operationsHref(`/escalation/${position['game_address']}`))
@@ -170,7 +171,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		operationRecords(shares['items']).map(position =>
 			operationRow(
 				`Universe ${String(position['universe_id'])}`,
-				`${exactUnit(String(position['invalid_atto_shares']), 18, 'INVALID')} · ${exactUnit(String(position['yes_atto_shares']), 18, 'YES')} · ${exactUnit(String(position['no_atto_shares']), 18, 'NO')} · ${exactUnit(String(position['complete_sets_atto_shares']), 18, 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}`,
+				`${exactUnit(String(position['invalid_atto_shares']), 18, 'INVALID')} · ${exactUnit(String(position['yes_atto_shares']), 18, 'YES')} · ${exactUnit(String(position['no_atto_shares']), 18, 'NO')} · ${exactUnit(String(position['complete_sets_atto_shares']), 18, 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}${position['recovery_locked'] === true ? ' · Recovery-spent source shares locked' : ''}`,
 				String(position['token']),
 				undefined,
 			),

@@ -79,6 +79,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			'token_metadata',
 			'universe_events',
 			'questions',
+			'logs',
 		])
 			await connection.unsafe(`CREATE TEMP TABLE ${table} (LIKE public.${table} INCLUDING DEFAULTS INCLUDING INDEXES)`)
 		for (const number of [1, 2, 3]) await connection`INSERT INTO blocks (chain_id, number, hash, parent_hash, canonical, timestamp) VALUES (${chainId}, ${number}, ${blockHash(number)}, ${zeroHash}, true, ${new Date(Date.UTC(2026, 0, number))})`
@@ -224,9 +225,19 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 		await snapshot('auction', keylessAuction, 1, { lotAttoEth: '1', collateral: keylessAuctionToken })
 		await snapshot('auction', keylessAuction, 3, { lotAttoEth: '1' })
 		expect(await auctionCollateral(connection, chainId, '3', keylessAuction)).toEqual(keylessAuctionToken)
+		// Bob withdrew his refund credit to Alice: the payment belongs to Alice's auction interactions too.
+		const refundData = { bidder: lower(bob), recipient: lower(alice), amountAttoEth: '1000000' }
+		await connection`INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, arguments, decode_status, event_name, summary, canonical)
+			VALUES (${chainId}, ${blockHash(1_003)}, ${blockHash(3)}, 3, 0, 7, ${auction}, '[]'::jsonb, '0x', ${JSON.stringify(refundData)}::text::jsonb, 'decoded', 'RefundWithdrawn', 'RefundWithdrawn', true)`
+		await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical)
+			VALUES (${chainId}, 3, ${blockHash(3)}, ${blockHash(1_003)}, 7, ${auction}, 'RefundWithdrawn', ${JSON.stringify(refundData)}::text::jsonb, true)`
 		for (const number of [1, 2, 3]) await refreshHistoryAggregates(connection, chainId, blockHash(number), String(number))
 		const rich = await richListRows(connection, { chainId, address: lower(alice), snapshotBlock: '3', limit: 10, offset: 0, sort: 'transactions' })
-		expect(rich[0]?.['auction_claims']).toEqual([expect.objectContaining({ type: 'BidSettled', entity: auction, collateral: auctionCollateralToken }), expect.objectContaining({ type: 'BidSettled', entity: keylessAuction, collateral: keylessAuctionToken })])
+		expect(rich[0]?.['auction_claims']).toEqual([
+			expect.objectContaining({ type: 'RefundWithdrawn', entity: auction, blockNumber: '3', collateral: auctionCollateralToken }),
+			expect.objectContaining({ type: 'BidSettled', entity: auction, collateral: auctionCollateralToken }),
+			expect.objectContaining({ type: 'BidSettled', entity: keylessAuction, collateral: keylessAuctionToken }),
+		])
 		expect(rich[0]?.['capital_positions']).toEqual([
 			{
 				ledgerAddress: lower(ledger),

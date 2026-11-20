@@ -172,9 +172,18 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 					-- Auction amounts are in the auction's immutable collateral token, from its latest successful tagged read.
 					'collateral', ${latestAuctionCollateralSql('page.chain_id', 'event.auction_address', throughSnapshot('auction_snapshot.block_number'))}
 				) ORDER BY event.block_number DESC, event.log_index DESC)
-				FROM (SELECT * FROM collateral_repair_auction_events evidence WHERE evidence.chain_id = page.chain_id
-					AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'bidder') = page.address
-					ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 100) event
+				FROM (SELECT * FROM (
+					SELECT evidence.* FROM collateral_repair_auction_events evidence WHERE evidence.chain_id = page.chain_id
+						AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'bidder') = page.address
+					UNION ALL
+					-- A bidder can withdraw its refund to another wallet; the recipient-indexed log finds that payment.
+					SELECT evidence.* FROM logs refund
+					JOIN collateral_repair_auction_events evidence ON evidence.chain_id = refund.chain_id AND evidence.block_hash = refund.block_hash
+						AND evidence.tx_hash = refund.tx_hash AND evidence.log_index = refund.log_index AND evidence.canonical
+					WHERE refund.chain_id = page.chain_id AND refund.canonical ${throughSnapshot('refund.block_number')}
+						AND lower(refund.arguments->>'recipient') = page.address AND refund.event_name = 'RefundWithdrawn'
+						AND lower(evidence.event_data->>'bidder') IS DISTINCT FROM page.address
+					) matched ORDER BY matched.block_number DESC, matched.log_index DESC LIMIT 100) event
 			), '[]'::jsonb) AS auction_claims,
 				-- The latest tagged read of each capital position the address owns: one per universe ledger.
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(

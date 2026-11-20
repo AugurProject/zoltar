@@ -73,6 +73,7 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 		const operations: PollOperations = {
 			reconcileReorg: async () => {},
 			refreshContractDeployment: async () => {},
+			refreshStateSamples: async () => {},
 			getNextLogSegment: async (_state, fromBlock, maximumToBlock) => {
 				if (mode === 'heartbeat') expectUncommittedHeartbeat()
 				if (largeRange) {

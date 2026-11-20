@@ -4,12 +4,13 @@ import { ApiRequestError, integer, json, routeInteger } from './shared.ts'
 
 const hashPattern = /^0x[0-9a-f]{64}$/i
 
-export const searchResponse = async (sql: SQL, url: URL): Promise<Response> => {
+/** Without a chainId, searches every stored network that this process enables; a disabled network keeps its retained history but leaves unfiltered search. */
+export const searchResponse = async (sql: SQL, url: URL, enabledChainIds?: readonly number[]): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	const query = url.searchParams.get('q')?.trim() ?? ''
 	if (query.length === 0 || query.length > 128) throw new ApiRequestError('q must contain 1 to 128 characters')
 	const limit = Math.min(Math.max(integer(url.searchParams.get('limit'), 'limit') ?? 10, 1), 25)
-	const chainIds = chainId === undefined ? await searchNetworkIds(sql) : [chainId]
+	const chainIds = chainId === undefined ? (await searchNetworkIds(sql)).filter(id => enabledChainIds === undefined || enabledChainIds.includes(id)) : [chainId]
 	const matches = await Promise.all(chainIds.map(id => searchItems(sql, id, query, limit)))
 	const items = matches.flat().sort((left, right) => Number(left.type === 'address') - Number(right.type === 'address'))
 	return json({ items: items.slice(0, limit), query, chainId })

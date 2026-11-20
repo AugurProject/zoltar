@@ -47,11 +47,6 @@ export const uniswapV4PoolIds = (contracts: ReadonlyMap<string, ContractMetadata
 const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint, stateStartBlock = 0n): boolean =>
 	blockNumber >= stateStartBlock && (metadata === undefined || (metadata.decimals === undefined && !permanentTokenMetadataFailure(metadata.readError) && (metadata.readError === prunedTokenMetadataError || blockNumber >= metadata.readBlock + 25n)))
 
-export const reorgSearchFloor = (startBlock: bigint, checkpoint: bigint, confirmationDepth: bigint): bigint => {
-	const candidate = checkpoint > confirmationDepth ? checkpoint - confirmationDepth : startBlock
-	return candidate > startBlock ? candidate : startBlock
-}
-
 export type TokenMetadataCalls = {
 	readonly decimals: () => Promise<number>
 	readonly name: () => Promise<string>

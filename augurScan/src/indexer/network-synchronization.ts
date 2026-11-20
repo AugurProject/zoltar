@@ -25,7 +25,7 @@ import {
 import { rpcQueueSaturationFrom } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata, TokenMetadata } from '../types.ts'
-import { findContractDeploymentBlock, type LogScanInput, logScanCursorUpdates, manifestReplayAncestor, planManifestBackfill, type RpcBlockHeader, reorgSearchFloor } from './planning.ts'
+import { findContractDeploymentBlock, type LogScanInput, logScanCursorUpdates, manifestReplayAncestor, planManifestBackfill, type RpcBlockHeader } from './planning.ts'
 import { indexBlock, refreshEntityStateSnapshots, refreshRichListBalances } from './ingestion-operations.ts'
 import { getAllLogs, getKnownLogs, getNextLogSegment, mergeLogs } from './log-scanner.ts'
 import { discoverStateStartBlock, findManifestDeployment, getBlockHeader, historicalCodeUnavailable, rememberHistoricalCodeUnavailable } from './network-provider.ts'
@@ -38,6 +38,16 @@ export type PollOperations = {
 	readonly getNextLogSegment: typeof getNextLogSegment
 	readonly getBlockHeader: typeof getBlockHeader
 	readonly indexBlock: typeof indexBlock
+	readonly refreshStateSamples: typeof refreshStateSamples
+}
+
+/**
+ * Samples balances and tagged entity state at an indexed head. It runs after every head the indexer reaches, also
+ * when that head was just indexed, so a chain that advances on every poll cannot starve sampling.
+ */
+async function refreshStateSamples(state: NetworkIndexerState, blockNumber: bigint, blockHash: Hash): Promise<void> {
+	await refreshRichListBalances(state, blockNumber, blockHash)
+	await refreshEntityStateSnapshots(state, blockNumber, blockHash)
 }
 
 function reportProgress(state: Pick<NetworkIndexerState, 'network' | 'progress'>, startBlock: bigint, endBlock: bigint, observedHead: bigint, scanReport: ReturnType<typeof startScanReport>, logsAdded: number): void {
@@ -104,10 +114,8 @@ async function reconcileReorg(state: NetworkIndexerState): Promise<void> {
 	if (checkpoint === undefined) return
 	const remote = await getBlockHeader(state.providers, checkpoint.number)
 	if (remote.hash === checkpoint.hash) return
-	const floor = reorgSearchFloor(state.network.startBlock, checkpoint.number, state.network.confirmationDepth)
 	const ancestor = await findSparseCanonicalAncestor(
 		checkpoint.number - 1n,
-		floor,
 		blockNumber => state.database.canonicalCheckpointAtOrBefore(state.network.chainId, blockNumber, requireLease(state)),
 		async blockNumber => (await getBlockHeader(state.providers, blockNumber)).hash,
 	)
@@ -207,10 +215,7 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 	const checkpoint = await state.database.checkpoint(state.network.chainId, requireLease(state))
 	const nextBlock = checkpoint === undefined ? state.network.startBlock : checkpoint.number + 1n
 	if (nextBlock > observedHead) {
-		if (checkpoint !== undefined) {
-			await refreshRichListBalances(state, checkpoint.number, checkpoint.hash)
-			await refreshEntityStateSnapshots(state, checkpoint.number, checkpoint.hash)
-		}
+		if (checkpoint !== undefined) await operations.refreshStateSamples(state, checkpoint.number, checkpoint.hash)
 		await assertLease(state)
 		await state.database.updateObservedHead(state.network.chainId, observedHead, 'live', requireLease(state))
 		if (checkpoint === undefined) reportWaitingForStart(state, observedHead)
@@ -406,7 +411,11 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		state.signal.throwIfAborted()
 		await operations.refreshContractDeployment(state, end)
 	}
+	if (end >= observedHead && commitCheckpoint !== undefined && commitCheckpoint.number === end) {
+		state.signal.throwIfAborted()
+		await operations.refreshStateSamples(state, commitCheckpoint.number, commitCheckpoint.hash)
+	}
 	return end >= observedHead
 }
 
-const pollOperations: PollOperations = { reconcileReorg, refreshContractDeployment, getNextLogSegment, getBlockHeader, indexBlock }
+const pollOperations: PollOperations = { reconcileReorg, refreshContractDeployment, getNextLogSegment, getBlockHeader, indexBlock, refreshStateSamples }

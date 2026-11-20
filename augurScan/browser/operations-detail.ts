@@ -271,7 +271,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				operationRecords(shares['items']).map(position =>
 					operationRow(
 						String(position['address']),
-						`${exactUnit(String(position['invalid_atto_shares']), 18, 'INVALID')} · ${exactUnit(String(position['yes_atto_shares']), 18, 'YES')} · ${exactUnit(String(position['no_atto_shares']), 18, 'NO')} · ${exactUnit(String(position['complete_sets_atto_shares']), 18, 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}`,
+						`${exactUnit(String(position['invalid_atto_shares']), 18, 'INVALID')} · ${exactUnit(String(position['yes_atto_shares']), 18, 'YES')} · ${exactUnit(String(position['no_atto_shares']), 18, 'NO')} · ${exactUnit(String(position['complete_sets_atto_shares']), 18, 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}${position['recovery_locked'] === true ? ' · Recovery-spent source shares locked' : ''}`,
 						undefined,
 						undefined,
 						operationsHref(`/address/${position['address']}`),

@@ -220,6 +220,7 @@ export const renderUniverseDetailPage = async (deps: StateEntityDeps, universe: 
 		staticField('Universe ID', universe.universe_id),
 		staticField('Parent universe', universe.parent_universe_id),
 		staticField('Forking outcome', universe.forking_outcome_index),
+		staticField('Parent fork question', questionIdHex(universe.inherited_fork_question_id)),
 		staticAddressField('REP token', universe.reputation_token_address, universe.chain_id),
 		staticField('Fork question', questionIdHex(universe.active_fork_question_id)),
 		staticField('Fork time', universe.active_fork_time ? utcDateTime(universe.active_fork_time) : 'Not forked'),

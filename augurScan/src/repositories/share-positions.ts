@@ -2,7 +2,8 @@ import type { SQL } from 'bun'
 import { latestAuctionCollateral } from './auction-collateral.ts'
 
 // Migration mints emit TransferSingle. Counting Migrate as another credit would
-// double count the child balance; the source remains held but becomes locked.
+// double count the child balance; the source remains held but becomes locked. Spending portfolio recovery rights
+// beyond the credits received also locks the source balance, which the recovery events reveal.
 export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: string, filter: { address?: string; market?: string }) => {
 	const rows = await sql`
 		WITH transfers AS (
@@ -38,20 +39,55 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 				COALESCE(sum(balance) FILTER (WHERE outcome = 1), 0) AS yes,
 				COALESCE(sum(balance) FILTER (WHERE outcome = 2), 0) AS no
 			FROM balances GROUP BY token, address, universe_id
+		), recovery_moves AS (
+			-- Recovery rights move per outcome. A transfer spends the sender's rights and credits the recipient; a
+			-- consumption spends the holder's rights in every outcome.
+			SELECT log.emitter_address AS token, (log.arguments->>'universeId')::numeric AS universe_id, log.block_number, log.log_index,
+				amounts.n - 1 AS outcome, lower(log.arguments->>'from') AS spender, lower(log.arguments->>'to') AS recipient, (amounts.value #>> '{}')::numeric AS amount
+			FROM logs log
+			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
+			CROSS JOIN LATERAL jsonb_array_elements(log.arguments->'amountsAttoShares') WITH ORDINALITY amounts(value, n)
+			WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.event_name = 'PortfolioRecoveryRightsTransferred'
+			UNION ALL
+			SELECT log.emitter_address, (log.arguments->>'universeId')::numeric, log.block_number, log.log_index,
+				outcome, lower(log.arguments->>'holder'), NULL, (log.arguments->>'amountAttoShares')::numeric
+			FROM logs log
+			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
+			CROSS JOIN generate_series(0, 2) outcome
+			WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.event_name = 'PortfolioRecoveryRightsConsumed'
+		), recovery_ledger AS (
+			SELECT token, universe_id, outcome, spender AS holder, block_number, log_index, amount AS spent, 0::numeric AS received FROM recovery_moves
+			UNION ALL SELECT token, universe_id, outcome, recipient, block_number, log_index, 0, amount FROM recovery_moves WHERE recipient IS NOT NULL
+		), recovery_locks AS (
+			-- ShareToken spends received credits first and locks the holder's source balance of an outcome once a spend
+			-- exceeds the credits received before it; the lock is never lifted.
+			SELECT DISTINCT token, universe_id, holder FROM (
+				SELECT token, universe_id, holder, spent,
+					sum(spent) OVER running AS cumulative_spent, sum(received) OVER running AS cumulative_received
+				FROM recovery_ledger
+				WHERE ${filter.address ?? null}::text IS NULL OR holder = ${filter.address ?? null}
+				WINDOW running AS (PARTITION BY token, universe_id, outcome, holder ORDER BY block_number, log_index ROWS UNBOUNDED PRECEDING)
+			) movement WHERE spent > 0 AND cumulative_spent > cumulative_received
 		)
 		SELECT token, address, universe_id::text, invalid::text AS invalid_atto_shares, yes::text AS yes_atto_shares, no::text AS no_atto_shares,
 			least(invalid, yes, no)::text AS complete_sets_atto_shares,
 			EXISTS (SELECT 1 FROM logs migration WHERE migration.chain_id = ${chainId} AND migration.canonical
 				AND migration.block_number <= ${snapshotBlock} AND migration.emitter_address = positions.token
 				AND migration.event_name = 'Migrate' AND lower(migration.arguments->>'migrator') = positions.address
-				AND trunc((migration.arguments->>'fromId')::numeric / 256) = positions.universe_id) AS migration_locked
+				AND trunc((migration.arguments->>'fromId')::numeric / 256) = positions.universe_id) AS migration_locked,
+			EXISTS (SELECT 1 FROM recovery_locks lock WHERE lock.token = positions.token AND lock.universe_id = positions.universe_id
+				AND lock.holder = positions.address) AS recovery_locked
 		FROM positions WHERE ${filter.market ?? null}::text IS NULL OR EXISTS (
 			SELECT 1 FROM amm_markets market WHERE market.chain_id = ${chainId} AND market.canonical AND market.block_number <= ${snapshotBlock}
 				AND market.pair_address = ${filter.market ?? null} AND market.share_token_address = positions.token AND market.universe_id = positions.universe_id
 		)
 		ORDER BY token, universe_id, address LIMIT 251
 	`
-	return { items: rows.slice(0, 250), truncated: rows.length > 250, basis: 'Canonical indexed ERC-1155 transfers; incomplete deployment history can yield partial balances. Migrated source shares are locked, and complete-set inventory is not a redemption quote.' }
+	return {
+		items: rows.slice(0, 250),
+		truncated: rows.length > 250,
+		basis: 'Canonical indexed ERC-1155 transfers; incomplete deployment history can yield partial balances. Migrated source shares, and source shares whose portfolio recovery rights were spent, are locked; complete-set inventory is not a redemption quote.',
+	}
 }
 
 // BidSettled credits a bidder's refund; RefundWithdrawn pays out the bidder's whole outstanding credit.
@@ -76,7 +112,8 @@ export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlo
 			deposit.event_data->>'parentDepositIndex' AS deposit_index, deposit.event_data->>'amountAttoRep' AS principal_atto_rep,
 			consumed.event_data->>'reason' AS consumption_reason, consumed.block_number::text AS consumed_block,
 			snapshot.read_result->>'finalQuestionResolution' AS final_resolution,
-			snapshot.block_number::text AS resolution_block
+			snapshot.block_number::text AS resolution_block,
+			CASE WHEN settlement.event_data->>'outcome' IS DISTINCT FROM deposit.event_data->>'outcome' THEN settlement.block_number::text END AS retired_block
 		FROM escalation_game_events deposit
 		LEFT JOIN LATERAL (SELECT event_data, block_number FROM escalation_game_events event
 			WHERE event.chain_id = deposit.chain_id AND event.canonical AND event.game_address = deposit.game_address
@@ -84,6 +121,11 @@ export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlo
 				AND event.event_data->>'outcome' = deposit.event_data->>'outcome'
 				AND event.event_data->>'parentDepositIndex' = deposit.event_data->>'parentDepositIndex'
 			ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1) consumed ON true
+		-- Ordinary settlement retires every losing outcome at once, without a per-deposit consumption event.
+		LEFT JOIN LATERAL (SELECT event_data, block_number FROM escalation_game_events event
+			WHERE event.chain_id = deposit.chain_id AND event.canonical AND event.game_address = deposit.game_address
+				AND event.block_number <= ${snapshotBlock} AND event.event_name = 'OrdinarySettlementInitialized'
+			ORDER BY event.block_number, event.log_index LIMIT 1) settlement ON true
 		LEFT JOIN LATERAL (SELECT state.* FROM entity_state_snapshots state
 			WHERE state.chain_id = deposit.chain_id AND state.canonical AND state.entity_type = 'escalation'
 				AND state.entity_identity = deposit.game_address AND state.block_number <= ${snapshotBlock}
