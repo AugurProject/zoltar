@@ -65,7 +65,7 @@ export async function demoAddressPortfolioRoute(env: DemoEnvironment, path: stri
 				availability: 'Awaiting indexed evidence',
 			}),
 			share_positions: {
-				items: [{ token: demoAddress('2'), universe_id: '0', invalid_atto_shares: '1000000000000000000', yes_atto_shares: '3000000000000000001', no_atto_shares: '2000000000000000000', complete_sets_atto_shares: '1000000000000000000', migration_locked: false }],
+				items: [{ token: demoAddress('2'), universe_id: '0', invalid_atto_shares: '1000000000000000000', yes_atto_shares: '3000000000000000001', no_atto_shares: '2000000000000000000', complete_sets_atto_shares: '1000000000000000000', migration_locked: false, collateral: { symbol: 'WETH', decimals: 18 } }],
 				truncated: false,
 				basis: 'Canonical indexed transfers',
 			},

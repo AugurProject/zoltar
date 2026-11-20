@@ -38,6 +38,7 @@ RUN bun run --cwd shared/statoblast build
 WORKDIR /workspace/augurScan
 COPY augurScan/browser ./browser
 COPY augurScan/src/collateral.ts ./src/collateral.ts
+COPY augurScan/src/rich-list-limits.ts ./src/rich-list-limits.ts
 COPY augurScan/src/timeline-search.ts ./src/timeline-search.ts
 COPY augurScan/scripts/build-browser.ts ./scripts/build-browser.ts
 COPY augurScan/public ./public

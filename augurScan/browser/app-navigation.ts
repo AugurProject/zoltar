@@ -3,7 +3,7 @@ import { lookup, type HistoryRangeElements } from './app-dom.ts'
 import { reconcileRouteNetwork, type NetworkControls } from './app-network.ts'
 import { focusNewRoute, hydrateVisibleRoute, invalidateRouteRequests, loadVisibleRoute, refocusLoadedRoute, restoreOperationsRoute, restoreRouteDeepLink, stashOperationsRoute, syncVisibleRoute } from './app-routing.ts'
 import type { ScannerViews } from './app-views.ts'
-import { navigationTarget } from './routes.ts'
+import { navigationTarget, sectionLinkTarget } from './routes.ts'
 
 export interface NavigationDeps {
 	readonly views: ScannerViews
@@ -105,7 +105,10 @@ export const bindNavigation = (context: ScannerContext, deps: NavigationDeps): v
 	const { operationsRouteSelect } = context.elements
 	lookup('#operations-route-form').addEventListener('submit', event => {
 		event.preventDefault()
-		navigate(navigationTarget(new URL(operationsRouteSelect.value, location.origin), new URL(location.href)))
+		// Like the desktop tabs, choosing the section already shown keeps the current view and its historical block.
+		const target = new URL(operationsRouteSelect.value, location.origin)
+		if (target.pathname === location.pathname) return
+		navigate(sectionLinkTarget(target, new URL(location.href)))
 	})
 
 	document.addEventListener('click', event => {

@@ -41,6 +41,13 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 		)
 		SELECT token, address, universe_id::text, invalid::text AS invalid_atto_shares, yes::text AS yes_atto_shares, no::text AS no_atto_shares,
 			least(invalid, yes, no)::text AS complete_sets_atto_shares,
+			-- Outcome shares use the collateral token's precision; a pool on this share token and universe samples it.
+			(SELECT state.read_result->'collateral' FROM pools pool
+				JOIN entity_state_snapshots state ON state.chain_id = pool.chain_id AND state.entity_type = 'pool' AND state.entity_identity = pool.pool_address
+				WHERE pool.chain_id = ${chainId} AND pool.canonical AND pool.block_number <= ${snapshotBlock}
+					AND pool.share_token_address = positions.token AND pool.universe_id = positions.universe_id
+					AND state.canonical AND state.read_status = 'success' AND state.block_number <= ${snapshotBlock} AND state.read_result->'collateral' IS NOT NULL
+				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral,
 			EXISTS (SELECT 1 FROM logs migration WHERE migration.chain_id = ${chainId} AND migration.canonical
 				AND migration.block_number <= ${snapshotBlock} AND migration.emitter_address = positions.token
 				AND migration.event_name = 'Migrate' AND lower(migration.arguments->>'migrator') = positions.address

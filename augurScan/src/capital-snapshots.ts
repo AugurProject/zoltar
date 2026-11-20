@@ -14,6 +14,8 @@ const quantity = (value: unknown, name: string): bigint => {
 	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
 	throw new Error(`${name} returned an invalid value`)
 }
+/** The health target the ledger enforces: a stored zero is the default 100% target (`_target` in SecurityPoolCapitalState). */
+const effectiveTargetHealthFactorBps = (stored: bigint): bigint => (stored === 0n ? BPS : stored)
 const flag = (value: unknown, name: string): boolean => {
 	if (typeof value !== 'boolean') throw new Error(`${name} returned an invalid value`)
 	return value
@@ -293,7 +295,7 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 		withdrawableAttoRep: quantity(collateral[2], 'ownerCollateral.withdrawable').toString(),
 		freeAttoRep: freeAttoRep.toString(),
 		pledgedAttoRep: pledged.toString(),
-		targetHealthFactorBps: quantity(account['targetHealthFactorBps'], 'ownerAccount.targetHealthFactorBps').toString(),
+		targetHealthFactorBps: effectiveTargetHealthFactorBps(quantity(account['targetHealthFactorBps'], 'ownerAccount.targetHealthFactorBps')).toString(),
 		unclaimedFeesAttoEth: unclaimedEth.toString(),
 		unclaimedFeesAttoRep: unclaimedRep.toString(),
 		ownerConservativePrice: quantity(ownerPrice, 'ownerConservativePrice').toString(),

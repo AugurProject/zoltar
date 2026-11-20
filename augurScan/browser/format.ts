@@ -50,3 +50,10 @@ export const exactUnit = (value: string | number | bigint | null | undefined, de
 	if (symbol === '%') return `${number}%`
 	return symbol ? `${number} ${symbol}` : number
 }
+
+/** A token's display precision: its indexed `decimals` when valid, otherwise the 18 the SQL ranking assumes for missing metadata. */
+export const tokenDecimals = (value: string | number | null | undefined): number => {
+	if (value === null || value === undefined || value === '') return 18
+	const decimals = Number(value)
+	return Number.isInteger(decimals) && decimals >= 0 && decimals <= 255 ? decimals : 18
+}

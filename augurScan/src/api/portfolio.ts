@@ -4,6 +4,7 @@ import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { addressPortfolioRows, richListRows, type RichListSort } from '../repositories/portfolio.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import { ApiConflictError, ApiRequestError, boundedInteger, evmAddress, hasCursorSnapshot, integer, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
+import { RICH_LIST_MAX_OFFSET } from '../rich-list-limits.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { accountTradingPnl } from './trading-activity.ts'
 
@@ -13,7 +14,7 @@ export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	if (address !== undefined && chainId === undefined) throw new ApiRequestError('chainId is required when filtering by address')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 50
 	const limit = Math.min(Math.max(requestedLimit, 1), 100)
-	const offset = boundedInteger(url.searchParams.get('offset'), 'offset', 100_000) ?? 0
+	const offset = boundedInteger(url.searchParams.get('offset'), 'offset', RICH_LIST_MAX_OFFSET) ?? 0
 	const requestedSort = url.searchParams.get('sort') ?? 'transactions'
 	if (requestedSort !== 'eth' && requestedSort !== 'weth' && requestedSort !== 'rep' && requestedSort !== 'transactions') throw new ApiRequestError('sort must be eth, weth, rep, or transactions')
 	const sort: RichListSort = requestedSort

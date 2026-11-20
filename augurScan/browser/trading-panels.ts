@@ -96,6 +96,13 @@ export const tradingPnlSummary = (item: JsonRecord, _nativeSymbol: string): stri
 	].join(' · ')
 }
 
+/** One share-token position: outcome shares in the collateral token's precision, raw units when its metadata is unsampled. */
+export const sharePositionSummary = (position: JsonRecord): string => {
+	const asset = collateralUnit(position)
+	const shares = (key: string, unit: string) => exactUnit(text(position[key]) ?? '0', asset.decimals, unit)
+	return `${shares('invalid_atto_shares', 'INVALID')} · ${shares('yes_atto_shares', 'YES')} · ${shares('no_atto_shares', 'NO')} · ${shares('complete_sets_atto_shares', 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}`
+}
+
 /** @internal Exported for presentation unit tests. */
 export const tradingPnlHoldings = (item: JsonRecord): string => {
 	const asset = collateralUnit(item)

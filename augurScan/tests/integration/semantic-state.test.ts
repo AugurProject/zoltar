@@ -14,7 +14,7 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 	await initializeSchema(sql)
 	const connection = await sql.reserve()
 	try {
-		for (const table of ['logs', 'blocks', 'contracts', 'amm_markets', 'escalation_game_events', 'collateral_repair_auction_events', 'entity_state_snapshots', 'protocol_timeline_entries', 'transactions', 'actions']) {
+		for (const table of ['logs', 'blocks', 'contracts', 'amm_markets', 'escalation_game_events', 'collateral_repair_auction_events', 'entity_state_snapshots', 'protocol_timeline_entries', 'transactions', 'actions', 'pools']) {
 			await connection.unsafe(`CREATE TEMP TABLE ${table} AS SELECT * FROM public.${table} WITH NO DATA`)
 		}
 		const token = `0x${'1'.repeat(40)}`
@@ -59,12 +59,17 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		// A later failed read does not hide the immutable collateral token sampled earlier.
 		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5', collateral: usdc })])
 		expect(await auctionCollateral(connection, 1, '1', token)).toEqual(usdc)
-		// Timeline auction entries carry the same collateral token; other entities carry none.
-		for (const [index, [entityType, eventName]] of [
-			['auction', 'BidSettled'],
-			['pool', 'SystemStateSet'],
+		// Timeline auction entries carry the same collateral token, portfolio entries the collateral their capital ledger samples; other entities carry none.
+		const ledger = `0x${'6'.repeat(40)}`
+		const services = `0x${'7'.repeat(40)}`
+		await connection`INSERT INTO contracts (chain_id, address, kind, canonical) VALUES (1, ${ledger}, 'securityPoolCapitalLedger', true)`
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'capital-ledger', ${ledger}, 1, ${hash}, 'success', ${JSON.stringify({ portfolio: `0x${'8'.repeat(40)}`, universeId: '0', fees: { services }, collateral: usdc })}::text::jsonb, true, '2026-01-01T00:00:00Z')`
+		for (const [index, [entityType, eventName, identity]] of [
+			['auction', 'BidSettled', token],
+			['pool', 'SystemStateSet', token],
+			['portfolio-services', 'PremiumFunded', `${services}:0`],
 		].entries())
-			await connection`INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, source_contract, source_event, canonical) VALUES (1, ${hash}, ${hash}, ${index}, 1, ${entityType}, ${token}, ${eventName}, '{}'::jsonb, ${token}, ${eventName}, true)`
+			await connection`INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, source_contract, source_event, canonical) VALUES (1, ${hash}, ${hash}, ${index}, 1, ${entityType}, ${identity}, ${eventName}, '{}'::jsonb, ${token}, ${eventName}, true)`
 		const timeline = await timelineCatalogRows(connection, {
 			chainId: 1,
 			fromBlock: '0',
@@ -75,8 +80,17 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 			limit: 10,
 		})
 		expect(timeline.rows.map((row: Record<string, unknown>) => [row['entity_type'], row['collateral']])).toEqual([
+			['portfolio-services', usdc],
 			['pool', null],
 			['auction', usdc],
+		])
+		// Outcome shares carry the collateral token a pool on their share token and universe samples.
+		const pool = `0x${'9'.repeat(40)}`
+		await connection`INSERT INTO pools (chain_id, block_number, pool_address, share_token_address, universe_id, canonical) VALUES (1, 1, ${pool}, ${token}, 0, true)`
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'pool', ${pool}, 1, ${hash}, 'success', ${JSON.stringify({ collateral: usdc })}::text::jsonb, true, '2026-01-01T00:00:00Z')`
+		expect((await sharePositions(connection, 1, '1', { address: owner })).items.map((item: Record<string, unknown>) => [item['universe_id'], item['collateral']])).toEqual([
+			['0', usdc],
+			['1', null],
 		])
 		await connection`DELETE FROM entity_state_snapshots WHERE entity_type = 'auction'`
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 1, ${hash}, ${hash}, 1, 'LocalDepositAppended', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', amountAttoRep: '200' })}::text::jsonb, true)`
