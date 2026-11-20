@@ -14,7 +14,6 @@ import {
 	planManifestBackfill,
 	queryAdaptiveLogRange,
 	readTokenMetadata,
-	reorgSearchFloor,
 	rpcLogQueryGroups,
 	startIndexers,
 	tokenMetadataReadCandidates,
@@ -2019,6 +2018,9 @@ describe('network indexer lifecycle', () => {
 		spyOn(database, 'contractDeploymentCandidates').mockResolvedValue([{ address: repAddress, kind: 'reputationToken', label: 'Reputation', provenance: 'Zoltar.DeployChild' }])
 		const recordContractDeployment = spyOn(database, 'recordContractDeployment').mockResolvedValue()
 		spyOn(database, 'recordFailure').mockResolvedValue()
+		// Reaching the head samples state there; this lifecycle has nothing to sample.
+		spyOn(database, 'richListBalanceTargets').mockResolvedValue({ addresses: [], assets: [] })
+		spyOn(database, 'stateSnapshotTargets').mockResolvedValue([])
 		const info = spyOn(console, 'info').mockImplementation(() => {})
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const warn = spyOn(console, 'warn').mockImplementation(() => {})
@@ -2895,11 +2897,6 @@ describe('network indexer lifecycle', () => {
 		expect(metadataReadCandidates(undefined, 42n, 42n)).toEqual([address])
 	})
 
-	test('never requires RPC history below a configured start boundary', () => {
-		expect(reorgSearchFloor(1_000n, 1_003n, 64n)).toBe(1_000n)
-		expect(reorgSearchFloor(1_000n, 2_000n, 64n)).toBe(1_936n)
-	})
-
 	test('searches only stored sparse anchors for a reorganization ancestor', async () => {
 		const matchingHash = `0x${'1'.repeat(64)}` as const
 		const replacedHash = `0x${'2'.repeat(64)}` as const
@@ -2911,7 +2908,6 @@ describe('network indexer lifecycle', () => {
 		const headerReads: bigint[] = []
 		const ancestor = await findSparseCanonicalAncestor(
 			12n,
-			10n,
 			async atOrBefore => {
 				checkpointReads.push(atOrBefore)
 				const number = [...hashes.keys()].filter(candidate => candidate <= atOrBefore).toSorted((left, right) => (left < right ? 1 : -1))[0]
@@ -2930,12 +2926,11 @@ describe('network indexer lifecycle', () => {
 		expect(headerReads).toEqual([12n, 10n])
 	})
 
-	test('checks the nearest sparse anchor below the reorg search floor', async () => {
+	test('checks the nearest sparse anchor far below the checkpoint', async () => {
 		const hash = `0x${'4'.repeat(64)}` as const
 		const headerReads: bigint[] = []
 		const ancestor = await findSparseCanonicalAncestor(
 			199n,
-			164n,
 			async () => ({ number: 100n, hash }),
 			async number => {
 				headerReads.push(number)

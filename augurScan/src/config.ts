@@ -77,9 +77,20 @@ const configRoot = path.resolve(import.meta.dir, '../config')
 
 const resolveRpcLogPath = (configuredPath: string | undefined): string => (configuredPath === undefined ? path.resolve(import.meta.dir, '../logs/rpc.jsonl') : path.resolve(configuredPath))
 
-const requirePositiveInteger = (value: string, name: string, allowZero = false): number => {
-	const parsed = Number(value)
+type RuntimeEnvironment = Readonly<Record<string, string | undefined>>
+
+type IntegerSettingOptions = { readonly allowZero?: boolean; readonly maximum?: number }
+
+const MAX_TCP_PORT = 65_535
+
+/** Reads an integer setting; an unset or blank value selects the documented default, as Compose's `${NAME:-default}` does. */
+const integerSetting = (environment: RuntimeEnvironment, name: string, fallback: number, options: IntegerSettingOptions = {}): number => {
+	const configured = environment[name]?.trim()
+	if (configured === undefined || configured === '') return fallback
+	const parsed = Number(configured)
+	const allowZero = options.allowZero === true
 	if (!Number.isSafeInteger(parsed) || (allowZero ? parsed < 0 : parsed <= 0)) throw new Error(`${name} must be a ${allowZero ? 'non-negative' : 'positive'} safe integer`)
+	if (options.maximum !== undefined && parsed > options.maximum) throw new Error(`${name} must not exceed ${options.maximum.toString()}`)
 	return parsed
 }
 
@@ -152,21 +163,23 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 	return networks
 }
 
-export const runtimeConfig = {
-	port: requirePositiveInteger(process.env['PORT'] ?? '3000', 'PORT'),
-	pollIntervalMs: requirePositiveInteger(process.env['POLL_INTERVAL_MS'] ?? '12000', 'POLL_INTERVAL_MS'),
-	logScanRangeSize: requirePositiveInteger(process.env['LOG_SCAN_RANGE_SIZE'] ?? '100000', 'LOG_SCAN_RANGE_SIZE'),
-	postgresUrl: process.env['POSTGRES_URL'] ?? 'postgres://augurscan:augurscan@localhost:5432/augurscan',
-	rpcLogPath: resolveRpcLogPath(process.env['RPC_LOG_PATH']),
-	traceSelectedTransactions: process.env['TRACE_SELECTED_TRANSACTIONS'] === '1',
-	disableIndexer: process.env['DISABLE_INDEXER'] === '1',
-	apiRateLimitPerMinute: requirePositiveInteger(process.env['API_RATE_LIMIT_PER_MINUTE'] ?? '600', 'API_RATE_LIMIT_PER_MINUTE', true),
+const parseRuntimeConfig = (environment: RuntimeEnvironment) => ({
+	port: integerSetting(environment, 'PORT', 3000, { maximum: MAX_TCP_PORT }),
+	pollIntervalMs: integerSetting(environment, 'POLL_INTERVAL_MS', 12_000),
+	logScanRangeSize: integerSetting(environment, 'LOG_SCAN_RANGE_SIZE', 100_000),
+	postgresUrl: environment['POSTGRES_URL'] ?? 'postgres://augurscan:augurscan@localhost:5432/augurscan',
+	rpcLogPath: resolveRpcLogPath(environment['RPC_LOG_PATH']),
+	traceSelectedTransactions: environment['TRACE_SELECTED_TRANSACTIONS'] === '1',
+	disableIndexer: environment['DISABLE_INDEXER'] === '1',
+	apiRateLimitPerMinute: integerSetting(environment, 'API_RATE_LIMIT_PER_MINUTE', 600, { allowZero: true }),
 	/** Proxies whose X-Forwarded-For is trusted for the per-client rate-limit and live-stream key; empty trusts none. */
-	trustedProxies: parseTrustedProxies(process.env['TRUSTED_PROXY_ADDRESSES'] ?? ''),
-	liveBackpressureTimeoutMs: requirePositiveInteger(process.env['LIVE_BACKPRESSURE_TIMEOUT_MS'] ?? '60000', 'LIVE_BACKPRESSURE_TIMEOUT_MS'),
-	liveMaxClients: requirePositiveInteger(process.env['LIVE_MAX_CLIENTS'] ?? '256', 'LIVE_MAX_CLIENTS'),
-	liveMaxClientsPerClient: requirePositiveInteger(process.env['LIVE_MAX_CLIENTS_PER_CLIENT'] ?? '16', 'LIVE_MAX_CLIENTS_PER_CLIENT'),
-	liveMaxStreamLifetimeMs: requirePositiveInteger(process.env['LIVE_MAX_STREAM_LIFETIME_MS'] ?? '1800000', 'LIVE_MAX_STREAM_LIFETIME_MS'),
+	trustedProxies: parseTrustedProxies(environment['TRUSTED_PROXY_ADDRESSES'] ?? ''),
+	liveBackpressureTimeoutMs: integerSetting(environment, 'LIVE_BACKPRESSURE_TIMEOUT_MS', 60_000),
+	liveMaxClients: integerSetting(environment, 'LIVE_MAX_CLIENTS', 256),
+	liveMaxClientsPerClient: integerSetting(environment, 'LIVE_MAX_CLIENTS_PER_CLIENT', 16),
+	liveMaxStreamLifetimeMs: integerSetting(environment, 'LIVE_MAX_STREAM_LIFETIME_MS', 1_800_000),
 	/** Raw lagging-report block interval override; `scanBlockTimeMs` validates it and applies per-chain defaults. */
-	scanBlockTimeMsOverride: process.env['SCAN_BLOCK_TIME_MS'],
-}
+	scanBlockTimeMsOverride: environment['SCAN_BLOCK_TIME_MS'],
+})
+
+export const runtimeConfig = parseRuntimeConfig(process.env)

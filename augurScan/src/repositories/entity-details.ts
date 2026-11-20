@@ -40,6 +40,16 @@ export const reportDetailData = async (
 			AND event.report_id = ${reportId} AND event.canonical AND event.block_number <= ${snapshotBlock}
 		ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1
 	`
+	// A settlement event does not repeat the report's flags and timing, so the lifecycle clock comes from the latest round,
+	// as in the operations catalog.
+	const roundRows = await sql`
+		SELECT event.report_data FROM open_oracle_report_events event
+		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical
+		WHERE event.chain_id = ${chainId} AND event.open_oracle_address = ${openOracleAddress}
+			AND event.report_id = ${reportId} AND event.canonical AND event.block_number <= ${snapshotBlock}
+			AND event.event_name IN ('ReportSubmitted', 'ReportDisputed')
+		ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1
+	`
 	// The feed emits the request and its decision. The report's escrow emits the completion and names the feed that created it.
 	const coordinatorDecisions = await sql`
 		WITH coordinators AS (
@@ -61,7 +71,7 @@ export const reportDetailData = async (
 			AND (log.block_number, log.log_index, log.tx_hash) < (${decisions.block}::bigint, ${decisions.log}::integer, ${decisions.tx})
 		ORDER BY log.block_number DESC, log.log_index DESC, log.tx_hash DESC LIMIT ${decisions.limit}
 	`
-	return { rows, current: currentRows[0], coordinatorDecisions }
+	return { rows, current: currentRows[0], round: roundRows[0], coordinatorDecisions }
 }
 
 export const eventEntityRows = async (sql: SQL, query: { readonly snapshotBlock: string; readonly chainId: number; readonly address: string; readonly domain: 'auction' | 'escalation'; readonly page: PageBoundary }) => {

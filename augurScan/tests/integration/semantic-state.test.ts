@@ -37,6 +37,27 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		expect(positions.items[0]).toMatchObject({ universe_id: '0', invalid_atto_shares: '10', yes_atto_shares: '15', no_atto_shares: '30', complete_sets_atto_shares: '10', migration_locked: true })
 		expect(positions.items[1]).toMatchObject({ universe_id: '1', yes_atto_shares: '15', complete_sets_atto_shares: '0', migration_locked: false })
 		expect((await sharePositions(connection, 1, '0', { address: owner })).items).toEqual([])
+		expect(positions.items.map((item: Record<string, unknown>) => item['recovery_locked'])).toEqual([false, false])
+		// Spending recovery rights beyond the credits received earlier locks the source balance, as ShareToken does.
+		const recoveryHash = `0x${'6'.repeat(64)}`
+		const recipient = `0x${'7'.repeat(40)}`
+		const giver = `0x${'8'.repeat(40)}`
+		await connection`INSERT INTO blocks (chain_id, number, hash, canonical) VALUES (1, 3, ${recoveryHash}, true)`
+		for (const [index, [name, data]] of [
+			['TransferBatch', { from: zero, to: recipient, ids: ['512', '513', '514'], values: ['21', '21', '21'] }],
+			['TransferBatch', { from: zero, to: giver, ids: ['512', '513', '514'], values: ['5', '5', '5'] }],
+			// The giver transfers rights to the recipient, which first spends those credits and then its own source rights.
+			['PortfolioRecoveryRightsTransferred', { universeId: '2', from: giver, to: recipient, amountsAttoShares: ['5', '5', '5'] }],
+			['PortfolioRecoveryRightsConsumed', { universeId: '2', holder: recipient, amountAttoShares: '5', cumulativeAttoShares: '5' }],
+		].entries())
+			await connection`INSERT INTO logs (chain_id, block_number, block_hash, tx_hash, log_index, emitter_address, event_name, arguments, canonical) VALUES (1, 3, ${recoveryHash}, ${recoveryHash}, ${index}, ${token}, ${name}, ${JSON.stringify(data)}::text::jsonb, true)`
+		// Spending exactly the received credits leaves the recipient's own balance transferable; the giver spent its own.
+		expect((await sharePositions(connection, 1, '3', { address: recipient })).items).toEqual([expect.objectContaining({ universe_id: '2', invalid_atto_shares: '21', migration_locked: false, recovery_locked: false })])
+		expect((await sharePositions(connection, 1, '3', { address: giver })).items).toEqual([expect.objectContaining({ universe_id: '2', recovery_locked: true })])
+		await connection`INSERT INTO logs (chain_id, block_number, block_hash, tx_hash, log_index, emitter_address, event_name, arguments, canonical) VALUES (1, 3, ${recoveryHash}, ${recoveryHash}, 10, ${token}, 'PortfolioRecoveryRightsConsumed', ${JSON.stringify({ universeId: '2', holder: recipient, amountAttoShares: '21', cumulativeAttoShares: '26' })}::text::jsonb, true)`
+		expect((await sharePositions(connection, 1, '3', { address: recipient })).items).toEqual([expect.objectContaining({ universe_id: '2', yes_atto_shares: '21', recovery_locked: true })])
+		// Before the recovery block nothing is locked.
+		expect((await sharePositions(connection, 1, '2', { address: recipient })).items).toEqual([])
 		const otherBidder = `0x${'4'.repeat(40)}`
 		// BidSettled credits a refund and RefundWithdrawn pays the bidder's whole credit, as the auction contract does.
 		const auctionEvents = [
@@ -99,6 +120,23 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		expect(await escalationPositions(connection, 1, '1', owner)).toEqual([expect.objectContaining({ principal_atto_rep: '200', consumed_block: null, final_resolution: '1' })])
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 2, ${hash}, ${hash}, 2, 'CarryDepositConsumed', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', reason: '0' })}::text::jsonb, true)`
 		expect((await escalationPositions(connection, 1, '2', owner))[0]).toMatchObject({ consumed_block: '2', consumption_reason: '0' })
+		// Ordinary settlement for YES retires the losing INVALID and NO deposits without a per-deposit event.
+		for (const [logIndex, outcome] of [
+			[3, '0'],
+			[4, '2'],
+		] as const)
+			await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 1, ${hash}, ${hash}, ${logIndex}, 'LocalDepositAppended', ${JSON.stringify({ depositor: owner, outcome, parentDepositIndex: String(logIndex), amountAttoRep: '100' })}::text::jsonb, true)`
+		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 3, ${hash}, ${hash}, 5, 'OrdinarySettlementInitialized', ${JSON.stringify({ outcome: '1', winningPrincipalAttoRep: '200', reservedAttoRep: '200' })}::text::jsonb, true)`
+		expect((await escalationPositions(connection, 1, '2', owner)).map((row: Record<string, unknown>) => [row['outcome'], row['retired_block']])).toEqual([
+			['2', null],
+			['0', null],
+			['1', null],
+		])
+		expect((await escalationPositions(connection, 1, '3', owner)).map((row: Record<string, unknown>) => [row['outcome'], row['consumed_block'], row['retired_block']])).toEqual([
+			['2', null, '3'],
+			['0', null, '3'],
+			['1', '2', null],
+		])
 		const claimEvidence = { status: 'available', truncated: false, positions: [{ depositor: owner, kind: 'inherited', status: 'claimable', payout_atto_rep: '123', proof: { leafIndex: '2', nullifierSiblings: [] } }] }
 		await connection`UPDATE entity_state_snapshots SET read_result = read_result || jsonb_build_object('claimEvidence', ${JSON.stringify(claimEvidence)}::text::jsonb) WHERE entity_type = 'escalation'`
 		const payouts = await escalationPayouts(connection, 1, '1', owner)

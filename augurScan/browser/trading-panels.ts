@@ -100,7 +100,7 @@ export const tradingPnlSummary = (item: JsonRecord, _nativeSymbol: string): stri
 export const sharePositionSummary = (position: JsonRecord): string => {
 	const asset = collateralUnit(position)
 	const shares = (key: string, unit: string) => exactUnit(text(position[key]) ?? '0', asset.decimals, unit)
-	return `${shares('invalid_atto_shares', 'INVALID')} · ${shares('yes_atto_shares', 'YES')} · ${shares('no_atto_shares', 'NO')} · ${shares('complete_sets_atto_shares', 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}`
+	return `${shares('invalid_atto_shares', 'INVALID')} · ${shares('yes_atto_shares', 'YES')} · ${shares('no_atto_shares', 'NO')} · ${shares('complete_sets_atto_shares', 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}${position['recovery_locked'] === true ? ' · Recovery-spent source shares locked' : ''}`
 }
 
 /** @internal Exported for presentation unit tests. */

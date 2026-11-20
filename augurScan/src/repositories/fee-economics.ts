@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { latestLedgers } from './capital.ts'
+import { latestLedgerAttempt, latestLedgers } from './capital.ts'
 
 // Fees are accounted per portfolio universe. Configuration and balances come from the tagged `capital-ledger`
 // read (`fees`); totals are sums of the events the settlement book, the portfolio, its services and the capital
@@ -41,8 +41,12 @@ export const feeEconomicsRows = async (sql: SQL, chainId: number, snapshotBlock:
 				GROUP BY 1
 			)
 		SELECT ledger.ledger_address, ledger.read_result->>'portfolio' AS portfolio, ledger.read_result->>'universeId' AS universe_id,
-			ledger.read_result->'fees' AS fees, ledger.read_result->>'feeReadError' AS fee_read_error, ledger.read_result->'collateral' AS collateral,
+			-- A failed ledger read after the latest successful one is a failed fee read: its balances are not reported as current.
+			CASE WHEN attempt.read_status = 'success' THEN ledger.read_result->'fees' END AS fees,
+			CASE WHEN attempt.read_status = 'success' THEN ledger.read_result->>'feeReadError' ELSE COALESCE(attempt.read_failure_reason, 'Capital ledger read failed') END AS fee_read_error,
+			ledger.read_result->'collateral' AS collateral,
 			ledger.block_number::text AS block_number, ledger.block_hash, ledger.block_timestamp,
+			attempt.read_status AS latest_read_status, attempt.block_number::text AS latest_read_block_number, attempt.read_failure_reason AS latest_read_failure_reason,
 			-- Without a known book or services contract these totals have no source and are left out.
 			CASE WHEN identity.settlement_book IS NULL THEN NULL ELSE accrued.total END AS accrued_atto_eth,
 			CASE WHEN identity.settlement_book IS NULL THEN NULL ELSE accrued.events END AS accrual_count,
@@ -51,6 +55,7 @@ export const feeEconomicsRows = async (sql: SQL, chainId: number, snapshotBlock:
 			COALESCE(claimed.eth, '0') AS claimed_atto_eth, COALESCE(claimed.rep, '0') AS claimed_atto_rep, COALESCE(claimed.events, 0) AS claim_count,
 			burned.eth AS burned_atto_eth, burned.rep AS burned_atto_rep, burned.events AS burn_count
 		FROM ledgers ledger
+		${latestLedgerAttempt(sql, chainId, snapshotBlock, 'ledger.ledger_address')}
 		${feeIdentity(sql, chainId, snapshotBlock)}
 		CROSS JOIN LATERAL (
 			SELECT COALESCE(sum((entry.summary_data->>'cashAttoEth')::numeric), 0)::text AS total, count(*)::integer AS events

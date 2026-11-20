@@ -102,6 +102,17 @@ export const sourceProvenance = async (projectRoot = path.resolve(import.meta.di
 	const applicationFiles = [...(await runtimeSourceFiles(projectRoot, await sourceFiles)), 'package.json', '../bun.lock']
 	return {
 		applicationSourceHash: await hashFiles(projectRoot, applicationFiles),
-		projectionSourceHash: await hashFiles(projectRoot, ['src/operations.ts', 'src/projections.ts']),
+		projectionSourceHash: await hashFiles(projectRoot, await projectionSourceFiles(projectRoot)),
 	}
+}
+
+/**
+ * The modules that turn decoded logs into stored projections: the re-export barrel, every implementation module it
+ * re-exports, their database writer, and the operations classifier. The ABI and application hashes cover the decoder.
+ */
+const projectionSourceFiles = async (projectRoot: string): Promise<string[]> => {
+	const implementations = await Array.fromAsync(new Bun.Glob('src/projections/**/*.ts').scan({ cwd: projectRoot, onlyFiles: true }))
+	const candidates = ['src/operations.ts', 'src/projections.ts', 'src/database-projections.ts', ...implementations.map(file => file.replaceAll(path.sep, '/')).sort()]
+	const present = await Promise.all(candidates.map(async file => ((await Bun.file(path.join(projectRoot, file)).exists()) ? file : undefined)))
+	return present.filter(file => file !== undefined)
 }

@@ -68,6 +68,27 @@ describe('network configuration', () => {
 		expect(await new Response(child.stderr).text()).toBe('')
 	})
 
+	const startupConfig = async (settings: Record<string, string>) => {
+		const child = Bun.spawn([process.execPath, '-e', "const { runtimeConfig } = await import('./src/config.ts'); console.log(JSON.stringify([runtimeConfig.apiRateLimitPerMinute, runtimeConfig.port, runtimeConfig.pollIntervalMs]))"], {
+			cwd: projectRoot,
+			env: { ...process.env, API_RATE_LIMIT_PER_MINUTE: '', PORT: '', POLL_INTERVAL_MS: '', ...settings },
+			stdout: 'pipe',
+			stderr: 'pipe',
+		})
+		return { status: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() }
+	}
+
+	test('treats a blank integer setting as its documented default, as Compose does', async () => {
+		expect(await startupConfig({ PORT: ' ' })).toMatchObject({ status: 0, stdout: '[600,3000,12000]\n' })
+		expect(await startupConfig({ API_RATE_LIMIT_PER_MINUTE: '0' })).toMatchObject({ status: 0, stdout: '[0,3000,12000]\n' })
+	})
+
+	test('accepts only valid TCP ports', async () => {
+		expect(await startupConfig({ PORT: '65535' })).toMatchObject({ status: 0, stdout: '[600,65535,12000]\n' })
+		expect((await startupConfig({ PORT: '65536' })).stderr).toContain('PORT must not exceed 65535')
+		expect((await startupConfig({ PORT: '0' })).stderr).toContain('PORT must be a positive safe integer')
+	})
+
 	test('selected-transaction tracing defaults to disabled and accepts an explicit opt-in', async () => {
 		for (const configured of [undefined, '1']) {
 			const environment = { ...process.env }

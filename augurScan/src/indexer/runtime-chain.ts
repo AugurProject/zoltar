@@ -57,17 +57,16 @@ export const confirmCanonicalBlock = async (number: bigint, expectedHash: Hash, 
 	if (observedHash !== expectedHash) throw new ChainContinuityError(`Block ${number} changed while it was being indexed`)
 }
 
-export const findSparseCanonicalAncestor = async (
-	before: bigint,
-	floor: bigint,
-	checkpointAtOrBefore: (blockNumber: bigint) => Promise<{ readonly number: bigint; readonly hash: Hash } | undefined>,
-	lookup: (blockNumber: bigint) => Promise<Hash>,
-): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> => {
+/**
+ * The newest stored canonical block that the remote chain still contains. Every stored anchor is a candidate, even
+ * below the confirmation depth: a block hash commits to its whole ancestry, so the first match bounds the blocks
+ * actually replaced. Without a match the caller replays from the start, which reads far more than this search.
+ */
+export const findSparseCanonicalAncestor = async (before: bigint, checkpointAtOrBefore: (blockNumber: bigint) => Promise<{ readonly number: bigint; readonly hash: Hash } | undefined>, lookup: (blockNumber: bigint) => Promise<Hash>): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> => {
 	let stored = await checkpointAtOrBefore(before)
 	while (stored !== undefined) {
 		if ((await lookup(stored.number)) === stored.hash) return stored
-		if (stored.number <= floor) break
-		stored = await checkpointAtOrBefore(stored.number - 1n)
+		stored = stored.number === 0n ? undefined : await checkpointAtOrBefore(stored.number - 1n)
 	}
 	return undefined
 }
