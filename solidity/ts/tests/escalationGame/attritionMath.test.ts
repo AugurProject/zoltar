@@ -1,9 +1,11 @@
+import { encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import type { WriteClient } from '../../testSupport/simulator/utils/clients'
 import { deployEscalationGame, getActivationTime, readIterativeAttritionCost, readTimeSinceStartFromAttritionCost } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { statoblast_EscalationGame_EscalationGame } from '../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier as verifierArtifact } from '../../types/contractArtifact'
 import { ESCALATION_TIME_LENGTH } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
@@ -16,6 +18,19 @@ describe('Escalation Game: attrition math', () => {
 	beforeEach(() => {
 		mockWindow = fixture.mockWindow
 		client = fixture.client
+	})
+
+	test('#1357 zero and inverted logarithm inputs fail with a bounded readable error', async () => {
+		for (const args of [
+			[0n, 1n],
+			[2n, 1n],
+		]) {
+			await assert.rejects(client.call({ to: getInfraContractAddresses().escalationGameProofVerifier, data: encodeFunctionData({ abi: verifierArtifact.abi, functionName: 'computeLnRatioScaled', args }), gas: 200_000n }), /Invalid logarithm inputs/)
+		}
+	})
+
+	test('#1357 an oversized attrition exponent cannot silently discard high bits', async () => {
+		await assert.rejects(client.call({ to: getInfraContractAddresses().escalationGameProofVerifier, data: encodeFunctionData({ abi: verifierArtifact.abi, functionName: 'computeIterativeAttritionCostAttoRep', args: [1n, maxUint256, 2n * 235n * 693_147n, 1n, 2n] }), gas: 200_000n }), /Attrition exponent too large/)
 	})
 
 	test('computeIterativeAttritionCostAttoRep: edge cases - time 0 and max time', async () => {

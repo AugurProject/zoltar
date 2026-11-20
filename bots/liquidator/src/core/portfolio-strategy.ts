@@ -77,7 +77,7 @@ function paidTakeoverPlan(observation: PortfolioObservation, position: Portfolio
 	const receiver = snapshot.positions.find(position => position.commitment > 0n)
 	const source = portfolioCureOutcome(observation, position)
 	if (source.healthy) return source.removed === 0n ? reject('Cure restores target health without a takeover') : { reason: 'Cure restores target health without a takeover', healingCure: source.removed }
-	if (receiver !== undefined && receiver.batch !== source.batch) return reject('Receiver and target retirement cohorts differ')
+	if (receiver !== undefined && receiver.batch !== 0n && receiver.batch !== source.batch) return reject('Receiver and target retirement cohorts differ')
 	const commitment = source.maximumTakeoverCommitment
 	if (commitment === 0n) return reject('Minimum position needs additional backing or healthy capacity')
 	if (snapshot.ownerCommitmentAttoEth + commitment < snapshot.economics.minimumCommitmentAttoEth) return reject('Receiver commitment would be below the economic minimum')

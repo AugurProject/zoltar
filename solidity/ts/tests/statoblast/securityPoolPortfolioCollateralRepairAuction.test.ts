@@ -1,7 +1,7 @@
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
-import { encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	auctionVaultRuntimeCode,
 	buildPortfolioAuctionBidRequest,
@@ -32,6 +32,56 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	const prepare = () => preparePortfolioCollateralRepairAuction(fixture)
+	test('#1339 equal lots cover a shortfall that is not a multiple of the minimum', async () => {
+		const context = await prepare()
+		const implementation = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'vaultImplementation' })
+		const shortfall = (35n * unit) / 10n
+		const receipt = await context.owner.waitForTransactionReceipt({
+			hash: await context.owner.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [context.owner.account.address, fixture.portfolio, context.child, context.deadline, 1_000n * unit, shortfall, implementation] }) }),
+		})
+		if (!receipt.contractAddress) throw new Error('Auction deployment missing')
+		const target = { abi: auctionArtifact.abi, address: receipt.contractAddress }
+		const lot = await context.owner.readContract({ ...target, functionName: 'lotAttoEth' })
+		const lots = await context.owner.readContract({ ...target, functionName: 'targetLots' })
+		expect(lots * lot).toBe(shortfall)
+		expect(lots).toBe(2n)
+	})
+
+	test('#1331 opening cannot compress the competitive bidding period to seconds', async () => {
+		const context = await prepare()
+		await context.mock.setTime(context.deadline - 600n)
+		await context.report()
+		await context.mock.setTime(context.deadline - 2n)
+		await expect(context.open()).rejects.toThrow('requires one day of bidding')
+	})
+
+	test('#1331 exactly one full day of bidding remains available at the opening boundary', async () => {
+		const context = await prepare()
+		await context.mock.setTime(context.deadline - DAY - 600n)
+		await context.report()
+		await context.mock.setTime(context.deadline - DAY - 1n)
+		await context.open()
+		expect(await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'opened' })).toBe(true)
+	})
+
+	test.each(['target', 'inventory'] as const)('#1371 quote and engine agree at the %s-funded exclusion boundary', async mode => {
+		const context = await prepare()
+		await context.report()
+		await context.open()
+		const target = { abi: auctionArtifact.abi, address: context.auction }
+		const lots = await context.owner.readContract({ ...target, functionName: 'targetLots' })
+		await context.bid(context.owner, mode === 'target' ? lots : 1n, 6n * unit, 10_000n)
+		const snapshot = await loadPortfolioAuctionSnapshot({ client: context.other, portfolio: fixture.portfolio, bidder: context.other.account.address, universeId: context.child })
+		if (snapshot.auction === undefined) throw new Error('Auction snapshot missing')
+		const { repGrid, maximumAdmissibleBidAttoRepPerLot: maximum, inventoryAttoRep } = snapshot.auction
+		const inventoryLimit = inventoryAttoRep / 2n
+		expect(maximum).toBe(mode === 'target' ? 6n * unit - repGrid : inventoryLimit - (inventoryLimit % repGrid))
+		const terms = { lots: 1n, minimumAttoRepPerLot: maximum + repGrid, targetHealthFactorBps: 10_000n }
+		expect(() => quotePortfolioAuctionBid(snapshot, terms)).toThrow('Better funded bids')
+		await expect(context.bid(context.other, 1n, maximum + repGrid, 10_000n)).rejects.toThrow('Better bids already exclude this bid')
+		expect(quotePortfolioAuctionBid(snapshot, { ...terms, minimumAttoRepPerLot: maximum }).bidAttoEth).toBe(snapshot.auction.lotAttoEth)
+		await context.bid(context.other, 1n, maximum, 10_000n)
+	})
 
 	test('all winners immediately back claims at one price before any bid is materialized', async () => {
 		const context = await prepare()
@@ -172,13 +222,41 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [loser.id] })).resolves.toMatchObject({ materialized: false, principal: 0n })
 	})
 
-	test('the opening quote, expired by the deadline, still closes the sale', async () => {
+	test('#1363 a week-old opening quote cannot settle the collateral repair sale', async () => {
+		const context = await prepare()
+		await context.report()
+		await context.open()
+		const before = await collateralBalance(context.other, fixture.portfolio, context.other.account.address)
+		const bid = await context.bid(context.other, 2n)
+		// No report follows the opening one, so no price is valid at the deadline.
+		await context.mock.setTime(context.deadline)
+		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'priceValidUntil' })).toBeLessThan(context.deadline)
+		await context.finalize()
+		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(0n)
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [bid.id, context.other.account.address] }))
+		expect(await collateralBalance(context.other, fixture.portfolio, context.other.account.address)).toBe(before)
+	})
+
+	test('#1363 final-day acceptance cannot rescue an observation eligible before that day', async () => {
 		const context = await prepare()
 		await context.report()
 		await context.open()
 		const bid = await context.bid(context.other, 2n)
-		// No report follows the opening one, so no price is valid at the deadline.
-		await context.mock.setTime(context.deadline)
+		await context.mock.setTime(context.deadline - DAY - 482n)
+		await context.report()
+		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'lastSettlementTimestamp' })).toBe(context.deadline - DAY - 1n)
+		expect((await context.owner.getBlock()).timestamp).toBeGreaterThan(context.deadline - DAY)
+		await context.finalize()
+		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(0n)
+	})
+
+	test('#1363 a final-day quote can close after its short price validity window expires', async () => {
+		const context = await prepare()
+		await context.report()
+		await context.open()
+		const bid = await context.bid(context.other, 2n)
+		await context.mock.setTime(context.deadline - 7_200n)
+		await context.report()
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'priceValidUntil' })).toBeLessThan(context.deadline)
 		await context.finalize()
 		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(2n)

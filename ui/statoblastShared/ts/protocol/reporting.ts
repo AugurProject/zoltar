@@ -393,7 +393,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 	const callParams = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
-		functionName: 'depositWalletRepToEscalationGame',
+		functionName: 'depositWalletRepToEscalationGameWithLead',
 		...getReportReviewText(outcome, reviewAmountAttoRep, triggersFork),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}

@@ -133,7 +133,7 @@ contract SecurityPoolUniformPriceAuction {
 		require(minimumAttoRepPerLot > 0 && minimumAttoRepPerLot % repGrid == 0, 'Auction bid must use the REP price grid');
 		require(minimumAttoRepPerLot <= maximumBidAttoRepPerLot, 'Auction bid exceeds the REP inventory per lot');
 		// Equal limits fill in submission order, so a new bid ranks after every equal one.
-		require(_pricePrefix(minimumAttoRepPerLot, PriceBoundary.Inclusive) < Math.min(targetLots, inventoryAttoRep / minimumAttoRepPerLot), 'Better bids already exclude this bid');
+		require(!_isBidExcluded(minimumAttoRepPerLot), 'Better bids already exclude this bid');
 		require(bidCount < type(uint96).max, 'Auction bid identifiers exhausted');
 		// The controller transfers bidder collateral directly into this engine before registration.
 		require(collateralToken.balanceOf(address(this)) + withdrawnCollateral >= depositedAttoEth + lots * lotAttoEth, 'Auction bid collateral missing');
@@ -165,6 +165,23 @@ contract SecurityPoolUniformPriceAuction {
 		if (result.roundingAttoRep != 0) nodes[root].pendingAttoRep = _amount128(result.roundingAttoRep);
 		finalized = true;
 		emit AuctionFinalized(result.attoRepPerLot, result.filledLots, result.raisedAttoEth, result.soldAttoRep);
+	}
+
+	/// @notice Highest grid-aligned limit that a new bid can enter at this block.
+	/// Inclusive demand gives every existing equal-price bid its submission priority.
+	function maximumAdmissibleBidAttoRepPerLot() external view returns (uint256) {
+		if (!initialized || finalized || block.timestamp < opensAt || block.timestamp >= closesAt) return 0;
+		uint256 low;
+		uint256 high = maximumBidAttoRepPerLot / repGrid;
+		while (low < high) {
+			uint256 middle = low + (high - low + 1) / 2;
+			if (_isBidExcluded(middle * repGrid)) high = middle - 1;
+			else low = middle;
+		}
+		return low * repGrid;
+	}
+	function _isBidExcluded(uint256 minimum) private view returns (bool) {
+		return _pricePrefix(minimum, PriceBoundary.Inclusive) >= Math.min(targetLots, inventoryAttoRep / minimum);
 	}
 
 	/// @notice `floorAttoRepPerLot` is the least REP every winning lot must receive,

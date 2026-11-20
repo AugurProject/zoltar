@@ -35,7 +35,7 @@ describe('child universe transaction presentations', () => {
 		expect(createChildUniverseWarningPresentation(result, 'No', 'Refresh failed')).toMatchObject({ rows: [{ label: 'Outcome', value: 'No' }] })
 	})
 
-	test('fall back to a position when the universe summary is unavailable', () => {
-		expect(createChildUniverseTransactionIntent('zoltar', { outcomeLabel: getOutcomeLabelForIndex(undefined, 2n) })).toMatchObject({ rows: [{ label: 'Outcome', value: 'Outcome 3' }] })
+	test('fall back to the exact outcome ID when the universe summary is unavailable', () => {
+		expect(createChildUniverseTransactionIntent('zoltar', { outcomeLabel: getOutcomeLabelForIndex(undefined, 2n) })).toMatchObject({ rows: [{ label: 'Outcome', value: 'Outcome 2' }] })
 	})
 })

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { capitalUnit as E, useCapitalTestFixture } from './securityPoolCapitalTestFixture'
 
 async function importOwners(fixture: ReturnType<typeof useCapitalTestFixture>, count: number, alternating: boolean, demand: bigint) {
@@ -32,7 +32,7 @@ describe('Statoblast: production capital retirement gas', () => {
 			const ethereum = fixture.getAnvilWindowEthereum()
 			const sender = fixture.client()
 			const baseline = await ethereum.anvilSnapshot()
-			const measurements: { owners: number; checkpoint: bigint; global: bigint; targeted: bigint }[] = []
+			const measurements: { owners: number; checkpoint: bigint; preview: bigint; targeted: bigint }[] = []
 			for (const count of [64, 512]) {
 				if (count === 512) await ethereum.anvilRevert(baseline)
 				await importOwners(fixture, count, alternating, BigInt(count) * 2n * E)
@@ -43,37 +43,26 @@ describe('Statoblast: production capital retirement gas', () => {
 				const checkpointHash = await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'checkpoint' }))
 				const checkpoint = (await sender.waitForTransactionReceipt({ hash: checkpointHash })).gasUsed
 				await ethereum.anvilRevert(snapshot)
-				const globalSnapshot = await ethereum.anvilSnapshot()
 				const before = await sender.readContract({ ...fixture.capital, functionName: 'totals' })
-				const globalHash = await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'serveRetirement', args: [0n] }))
-				const global = (await sender.waitForTransactionReceipt({ hash: globalHash })).gasUsed
+				const claimant = createWriteClient(ethereum, 0x1001n)
+				await ethereum.impersonateAccount(claimant.account.address)
+				await ethereum.setBalance(claimant.account.address, 10n * E)
+				const price = await sender.readContract({ ...fixture.capital, functionName: 'conservativePrice' })
+				const demand = await sender.readContract({ ...fixture.capital, functionName: 'demandAttoEth' })
+				const preview = await sender.estimateContractGas({ ...fixture.commitments, functionName: 'previewRetirement', args: [2n, price, demand] })
+				const targetedHash = await writeContractAndWait(claimant, () => claimant.writeContract({ ...fixture.capital, functionName: 'serveRetirement', args: [2n] }))
+				const targeted = (await sender.waitForTransactionReceipt({ hash: targetedHash })).gasUsed
 				const after = await sender.readContract({ ...fixture.capital, functionName: 'totals' })
 				expect(before[1] - after[1]).toBe(10n * E)
 				expect(after[0]).toBe(before[0])
-				// Current cohort contains ids 2,5,8,...; its strongest key retires.
-				const boundary =
-					BigInt(
-						Array.from({ length: count }, (_, i) => i)
-							.filter(i => i % 3 === 1 && (!alternating || i % 2 === 1))
-							.at(-1) ?? 1,
-					) + 1n
-				const boundaryState = await fixture.position(boundary)
-				expect(boundaryState).toMatchObject({ batch: 0n, commitment: 10n * E, remainingCommitment: 0n })
-				expect(boundaryState.ethFees).toBeGreaterThan(0n)
-				expect(boundaryState.repFees).toBeGreaterThan(0n)
-				expect(boundaryState.maxHealthyPrice).toBe((((boundaryState.rep * 10_000n) / 10_500n) * E) / (10n * E))
-				await ethereum.anvilRevert(globalSnapshot)
-				// Lowest old-cohort key reserves all earlier healthy reductions.
-				const targetedHash = await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'serveRetirement', args: [2n] }))
-				const targeted = (await sender.waitForTransactionReceipt({ hash: targetedHash })).gasUsed
 				expect(await fixture.position(2n)).toMatchObject({ batch: 0n, commitment: 10n * E, remainingCommitment: 0n })
-				for (const gas of [checkpoint, global, targeted]) expect(gas).toBeLessThan(3_000_000n)
-				measurements.push({ owners: count, checkpoint, global, targeted })
+				for (const gas of [checkpoint, preview, targeted]) expect(gas).toBeLessThan(3_000_000n)
+				measurements.push({ owners: count, checkpoint, preview, targeted })
 			}
 			const small = measurements[0]
 			const large = measurements[1]
 			if (small === undefined || large === undefined) throw new Error('Missing production gas populations')
-			for (const operation of ['checkpoint', 'global', 'targeted'] as const) expect(large[operation]).toBeLessThan(small[operation] * 3n + 250_000n)
+			for (const operation of ['checkpoint', 'preview', 'targeted'] as const) expect(large[operation]).toBeLessThan(small[operation] * 3n + 250_000n)
 			if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ productionLedgerGas: measurements, alternating })
 		})
 	}
@@ -124,8 +113,8 @@ describe('Statoblast: production bounded takeover gas', () => {
 				const used = (await buyer.waitForTransactionReceipt({ hash })).gasUsed
 				expect(estimate).toBeGreaterThan(used)
 				// Keeping the source alive requires both source and receiver tree rekeys.
-				// The 512-owner bound includes that additional backing-preserving work.
-				expect(estimate).toBeLessThan(3_750_000n)
+				// The bound also includes allocating the receiver’s immutable FIFO request across at most 65 sum slots.
+				expect(estimate).toBeLessThan(5_500_000n)
 				expect((await fixture.position(id)).rep).toBe(source.rep)
 				expect((await fixture.position(id)).commitment).toBeGreaterThan(0n)
 				const receiver = await fixture.owner(1)

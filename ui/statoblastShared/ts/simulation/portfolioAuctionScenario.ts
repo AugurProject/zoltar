@@ -5,7 +5,6 @@ import {
 	buildPortfolioCapitalSetCommitmentRequest,
 	buildPortfolioCapitalDepositRequest,
 	buildPortfolioCapitalSetHealthRequest,
-	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioPriceApprovalRequest,
 	buildPortfolioPricePreparationRequest,
@@ -110,8 +109,10 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	await sendPortfolioTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }) }, 'Fork the origin universe')
 	await reportStep('Forked the origin universe on the first question')
 	const controller = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController' })
-	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkChoiceRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Choose the Yes branch')
-	await reportStep('Owner chose the Yes branch')
+	// Keep both underwriters unchosen so the deficit is the exact claim total.
+	// Fractional inherited cash can otherwise leave a one-lot auction, where
+	// the first winning bid correctly excludes every later bid at its floor.
+	await reportStep('Kept unchosen backing available for a multi-lot branch auction')
 	await advanceSimulationTime(memoryClient, FORK_MIGRATION_DURATION_SECONDS + 60n)
 	await reportStep('Closed the branch choice window')
 	await sendPortfolioTransaction(ownerClient, buildPortfolioForkStartRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), 'Start the Yes branch')
@@ -146,6 +147,7 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	let snapshot = await auctionFor(owner)
 	const auction = snapshot.auction
 	if (auction === undefined) throw new Error('Expected the opened branch collateral repair auction')
+	if (auction.targetLots <= 2n) throw new Error('Expected room for both the owner and rival auction bids')
 	const minimum = auction.minimumCollateralAttoRepPerLot
 	for (const [account, client] of [
 		[owner, ownerClient],

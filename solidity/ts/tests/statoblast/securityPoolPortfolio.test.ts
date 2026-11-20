@@ -63,10 +63,12 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await expect(deploy({ ...portfolioEconomics, annualFeeBps: 10_001n })).rejects.toThrow('Invalid portfolio economics')
 		// Fee streams end at the funding time plus the vesting duration and must fit the uint48 clock. A longer
 		// duration deployed, then made every fee funding revert: purchases and escalation deposits with it.
-		for (const rewardVestingSeconds of [2n ** 48n - 1n, 10n * 365n * 86_400n + 1n]) await expect(deploy({ ...portfolioEconomics, rewardVestingSeconds })).rejects.toThrow('Invalid portfolio duration')
+		for (const rewardVestingSeconds of [1n, 86_399n, 2n ** 48n - 1n, 10n * 365n * 86_400n + 1n]) await expect(deploy({ ...portfolioEconomics, rewardVestingSeconds })).rejects.toThrow('Invalid portfolio duration')
 		expect(await portfolioCount()).toBe(before)
 		// The longest accepted duration still deploys.
 		await deploy({ ...portfolioEconomics, rewardVestingSeconds: 10n * 365n * 86_400n })
+		await deploy({ ...portfolioEconomics, rewardVestingSeconds: 86_400n })
+		await deploy({ ...portfolioEconomics, rewardVestingSeconds: 86_401n })
 		// A creator can no longer choose module deployers. The constructor still rejects a deployer without code,
 		// which is what stops a factory whose pinned deployers are not all deployed yet from creating a portfolio.
 		const construct = (modules: typeof deployers) => deployContract(fixture.owner(), encodeDeployData({ abi: portfolioArtifact.abi, bytecode: creationCode, args: [infrastructure.securityPoolFactory, modules, origin(10_000_000_000n), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, portfolioEconomics] }))
@@ -179,7 +181,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await balance()).toEqual(before)
 	})
 
-	test('returning complete sets pays traders and retires requested backing without question claims', async () => {
+	test('returning complete sets pays traders and lets providers withdraw their own ready requests', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		await fixture.mint(100n * unit)
 		const id = (await ownerAccount()).positionId
@@ -189,7 +191,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await redeemCompleteSet(fixture.other(), pool.securityPool, shares[0])
 		expect(await demand()).toBe(0n)
 		const index = await fixture.owner().readContract({ ...capital(), functionName: 'commitmentIndex' })
-		expect(await fixture.owner().readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })).toMatchObject({ rep: 0n, commitment: 0n, releasedRep: 1_000n * unit })
+		expect(await fixture.owner().readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })).toMatchObject({ rep: 1_000n * unit, commitment: 100n * unit, remainingCommitment: 0n })
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'withdrawPrincipal', args: [1_000n * unit, fixture.owner().account.address] }))
 		expect((await ownerAccount()).freeAttoRep).toBe(0n)
 	})
@@ -280,6 +282,8 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		const capacity = await fixture.owner().readContract({ ...portfolio(), functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })
 		expect(capacity).toBe(90n * unit - (await demand()))
 		await fixture.mint(10n * unit)
+		expect(await fixture.owner().readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })).toMatchObject({ commitment: 100n * unit, remainingCommitment: 90n * unit })
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'serveRetirement', args: [id] }))
 		expect(await fixture.owner().readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })).toMatchObject({ rep: 1_000n * unit, commitment: 90n * unit, remainingCommitment: 0n, batch: 0n })
 	})
 })

@@ -28,6 +28,15 @@ function metric(container: HTMLElement, text: string) {
 		?.parentElement?.querySelector('.metric-field-value')?.textContent
 }
 
+test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
+	const fixture = await auctionFixture()
+	fixture.values.maximumAdmissibleBidAttoRepPerLot = 3n * unit
+	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
+	expect(view.container.textContent).toContain('No admissible new limit')
+})
+
 test('auction funding controls and bid rows stay in place through reload and failure', async () => {
 	const fixture = await auctionFixture()
 	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)

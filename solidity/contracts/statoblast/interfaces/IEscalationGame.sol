@@ -38,6 +38,9 @@ interface IEscalationGameEvents {
 }
 
 interface IEscalationGameAuthorization {
+	function depositRepOnOutcomeWithLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external;
 	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
+	function depositRepOnOutcomeWithPermitAndLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
 	function depositRepOnOutcomeWithAuthorization(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external;
+	function depositRepOnOutcomeWithAuthorizationAndLead(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external;
 }

@@ -232,3 +232,24 @@ test('an auction disappearing before approval submission invalidates the request
 	state.values['auctions'] = zeroAddress
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow()
 })
+
+test('#1371 excluded limits block collateral approval before a transaction is built', async () => {
+	const state = await setup(fixture => {
+		fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 4n * unit
+	})
+	await terms(state)
+	expect(state.hook.state().quote).toBeUndefined()
+	expect(state.hook.state().fundingReason).toContain('Better funded bids')
+	await expect(state.hook.state().approve(2n * unit)).rejects.toThrow('Better funded bids')
+	expect(state.requests).toHaveLength(0)
+})
+
+test('#1371 a repriced book invalidates collateral approval before submission', async () => {
+	const state = await setup()
+	await terms(state)
+	await act(() => state.hook.state().approve(2n * unit))
+	const request = last(state.requests)
+	state.values['maximumAdmissibleBidAttoRepPerLot'] = 4n * unit
+	if (request.validateBeforeSubmit === undefined) throw new Error('Approval validation missing')
+	await expect(request.validateBeforeSubmit()).rejects.toThrow('Better funded bids')
+})

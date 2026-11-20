@@ -1,15 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import {
-	calculateOracleMinimumWethReportAttoEth,
-	DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-	DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
-	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-	ORACLE_REPORT_GAS,
-	ORACLE_FEE_PERCENTAGE,
-	ORACLE_PROTOCOL_FEE,
-} from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_PROTOCOL_FEE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { deployContract } from '../testSupport/deployContract'
 import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
@@ -90,6 +82,29 @@ describe('Shared portfolio oracle security regressions', () => {
 			method: 'anvil_setNextBlockBaseFeePerGas',
 			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
 		})
+	test('#1252 the minimum public bounty covers settlement and reward collection at the fee allowance', async () => {
+		const callbackGas = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'getSettlementCallbackGasLimit' })
+		const gasBudget = callbackGas + callbackGas / 63n + 310_000n
+		const minimum = await getRequestPriceCostAttoEth(client, priceOracle)
+		assert.ok(minimum >= gasBudget * DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, 'public settlement must have a meaningful gas-funded reward')
+		await requestPrice(client, priceOracle)
+		const id = await getPendingReportId(client, priceOracle)
+		const report = await getOpenOracleReportMeta(client, id)
+		assert.strictEqual(report.settlerRewardAttoEth, minimum)
+		const settler = fixture.other()
+		const credit = async () => {
+			const stored = await client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'tokenHolder', args: [settler.account.address, addressString(0n)] })
+			return stored === 0n ? 0n : stored - 1n
+		}
+		const before = await credit()
+		await mockWindow.advanceTime(481n)
+		await openOracleSettle(settler, id)
+		assert.strictEqual(await credit(), before + minimum, 'the independent settler earns the funded native credit')
+		const recipientBefore = await getETHBalance(client, client.account.address)
+		await writeContractAndWait(settler, () => settler.writeContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'withdrawTo', args: [addressString(0n), minimum, client.account.address] }))
+		assert.strictEqual(await getETHBalance(client, client.account.address), recipientBefore + minimum)
+		assert.strictEqual(await credit(), before)
+	})
 	const requestPriceAtBaseFee = async (repPerEthPrice: bigint, requestEthCost: bigint, baseFeeAttoEthPerGas: bigint) => {
 		const minimum = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [repPerEthPrice] })
 		await setNextBlockBaseFee(baseFeeAttoEthPerGas)
@@ -748,15 +763,14 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, receiver), wethBefore, 'failed direct refund must restore sponsor WETH')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver), repBefore, 'failed direct refund must restore sponsor REP')
 	})
-	test('oracle settlement accepts the exact nonzero basefee cap and defers one attoETH above it until recovery', async () => {
+	test('#1366 oracle settlement accepts the exact basefee cap and defers above it without extending observation freshness', async () => {
 		const requestBaseFeeAttoEthPerGas = 1n * 10n ** 9n
 		const expectedSettlementBaseFeeCap = ((requestBaseFeeAttoEthPerGas + DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) * ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) / 10000n
 		const minimumWethReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
 		})
-		const callbackGasLimit = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'getSettlementCallbackGasLimit' })
-		const requestEthCost = requestBaseFeeAttoEthPerGas * 4n * (callbackGasLimit + ORACLE_REPORT_GAS) + 101n
+		const requestEthCost = 10n ** 18n
 		const proposedRepPerEthPrice = 10n ** 18n
 
 		await wrapWeth(client, minimumWethReport * 2n)
@@ -795,6 +809,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		await mockWindow.advanceTime(480n + 5n * 60n + 1n)
 		const rejectedReportId = await requestAtConfiguredBaseFee()
 		const rejectedReportMeta = await getOpenOracleReportMeta(client, rejectedReportId)
+		const rejectedReportStatus = await getOpenOracleReportStatus(client, rejectedReportId)
 		await mockWindow.advanceTime(BigInt(rejectedReportMeta.settlementTime) + 1n)
 		const rejectedSettlementBaseFee = expectedSettlementBaseFeeCap + 1n
 		await setNextBlockBaseFee(rejectedSettlementBaseFee)
@@ -815,6 +830,10 @@ describe('Shared portfolio oracle security regressions', () => {
 		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: await writeContractAndWait(client, () => client.writeContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'recoverReport', args: [rejectedReportId], gasPrice: expectedSettlementBaseFeeCap })) })
 		assert.ok(findPriceReportedLog(recoveryReceipt.logs) !== undefined, 'recovery at the basefee cap should accept the deferred report')
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'recovery at the basefee cap should validate the price')
+		const eligibility = rejectedReportStatus.reportTimestamp + rejectedReportMeta.settlementTime
+		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'lastSettlementTimestamp' }), eligibility, 'deferred recovery retains the challenged observation eligibility time')
+		const validityWindow = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'priceValidityWindowSeconds' })
+		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'priceValidUntil' }), eligibility + validityWindow, 'recovery cannot create a new freshness window')
 	})
 
 	test('report flags and fixed callback budget match the shared-feed settlement contract', async () => {
@@ -877,7 +896,7 @@ describe('Shared portfolio oracle security regressions', () => {
 	test('the coordinator retains the committed bounty and refunds only the ETH sent above it', async () => {
 		const proposedRepPerEthPrice = await getDefaultInitialReportPrice(client, priceOracle)
 		const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, priceOracle, proposedRepPerEthPrice)
-		const bountyAttoEth = 101n + 5n * 10n ** 15n
+		const bountyAttoEth = (await getRequestPriceCostAttoEth(client, priceOracle)) + 5n * 10n ** 15n
 		const excessAttoEth = 7n * 10n ** 15n
 		const balanceBefore = await getETHBalance(client, client.account.address)
 

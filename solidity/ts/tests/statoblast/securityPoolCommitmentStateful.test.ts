@@ -8,12 +8,11 @@ import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { deployCommitmentIndexHarness } from './securityPoolCommitmentIndexHarness'
 
-type Position = { id: bigint; rep: bigint; commitment: bigint; price: bigint; batch: bigint; remaining: bigint; released: bigint; paid: bigint; eth: bigint; repFees: bigint; paidEth: bigint; paidRep: bigint }
+type Position = { id: bigint; rep: bigint; commitment: bigint; price: bigint; batch: bigint; remaining: bigint; order: bigint; released: bigint; paid: bigint; eth: bigint; repFees: bigint; paidEth: bigint; paidRep: bigint }
 const sum = (positions: Position[], value: (position: Position) => bigint) => positions.reduce((total, position) => total + value(position), 0n)
 const priority = (a: Position, b: Position) => {
-	if (a.batch !== b.batch) return a.batch < b.batch ? -1 : 1
-	if (a.price !== b.price) return a.price > b.price ? -1 : 1
-	return a.id > b.id ? -1 : 1
+	if (a.order < b.order) return -1
+	return a.order > b.order ? 1 : 0
 }
 
 // The oracle is a flat owner list. It has no nodes, rotations, lazy fee tags,
@@ -45,6 +44,7 @@ describe('Statoblast: replayable mixed retirement reference model', () => {
 			const trace: string[] = []
 			let current = 0n
 			let next = 1n
+			let lastOrder = 0n
 			let price = 5n
 			let principal = 0n
 			let fundedEth = 0n
@@ -77,39 +77,19 @@ describe('Statoblast: replayable mixed retirement reference model', () => {
 				}
 			}
 			const serve = (demand: bigint, target?: Position) => {
+				if (target === undefined) return
 				if (target !== undefined) promote()
 				const eligible = sum(healthy(), entry => entry.commitment)
 				if (eligible < demand) return
-				let available = eligible - demand
+				const available = eligible - demand
 				if (target !== undefined) {
 					const ahead = sum(
-						queued().filter(entry => entry.id !== target.id && entry.price >= price && (entry.batch < target.batch || (entry.batch === target.batch && priority(entry, target) < 0))),
+						queued().filter(entry => entry.order < target.order),
 						entry => entry.commitment - entry.remaining,
 					)
 					const reduction = target.commitment - target.remaining
 					if (available >= ahead + (target.price >= price ? reduction : 0n)) reduce(target, reduction)
 					return
-				}
-				for (let group = 0; group < 2; group++) {
-					promote()
-					if (current === 0n) return
-					const cohort = queued().filter(entry => entry.batch === current)
-					const canReleaseUnhealthy =
-						available >=
-						sum(
-							cohort.filter(entry => entry.price >= price),
-							entry => entry.commitment,
-						)
-					for (const entry of cohort) {
-						const reduction = entry.commitment - entry.remaining
-						const amount = canReleaseUnhealthy || available >= reduction ? reduction : available
-						if (amount === 0n) return
-						const boundary = entry.remaining !== 0n || amount < entry.commitment
-						if (entry.price >= price) available -= amount
-						reduce(entry, amount)
-						if (boundary) return
-					}
-					current = 0n
 				}
 			}
 			const check = async () => {
@@ -142,7 +122,7 @@ describe('Statoblast: replayable mixed retirement reference model', () => {
 						const id = BigInt(entries.length + 1)
 						trace.push(`${step}:create(${id},${rep},${commitment},${threshold})`)
 						await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'create', args: [addressString(0x1000n + id), rep, commitment, threshold] }))
-						entries.push({ id, rep, commitment, price: threshold, batch: 0n, remaining: 0n, released: 0n, paid: 0n, eth: 0n, repFees: 0n, paidEth: 0n, paidRep: 0n })
+						entries.push({ id, rep, commitment, price: threshold, batch: 0n, remaining: 0n, order: 0n, released: 0n, paid: 0n, eth: 0n, repFees: 0n, paidEth: 0n, paidRep: 0n })
 						principal += rep
 					} else if (operation === 1) {
 						price = random(12n) + 1n
@@ -153,6 +133,7 @@ describe('Statoblast: replayable mixed retirement reference model', () => {
 						if (entry !== undefined) {
 							entry.remaining = operation === 2 ? entry.commitment / 2n : 0n
 							entry.batch = next
+							entry.order = ++lastOrder
 							trace.push(`${step}:request(${entry.id},${entry.remaining})`)
 							await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'requestPartial', args: [entry.id, entry.remaining] }))
 						}
@@ -161,18 +142,19 @@ describe('Statoblast: replayable mixed retirement reference model', () => {
 						if (entry !== undefined) {
 							entry.remaining = entry.commitment / 3n
 							entry.batch = next
+							entry.order = ++lastOrder
 							trace.push(`${step}:request(${entry.id},${entry.remaining})`)
 							await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'requestPartial', args: [entry.id, entry.remaining] }))
 						}
 					} else if (operation === 5 || operation === 6) {
 						const demand = random(sum(healthy(), entry => entry.commitment) + 2n)
-						const target = operation === 6 ? pick(queued()) : undefined
+						const target = pick(queued())
 						trace.push(`${step}:serve(${price},${demand},${target?.id ?? 0n})`)
 						if (target !== undefined) {
 							const eligible = sum(healthy(), entry => entry.commitment)
 							const spare = eligible > demand ? eligible - demand : 0n
 							const ahead = sum(
-								queued().filter(entry => entry.id !== target.id && entry.price >= price && (entry.batch < target.batch || (entry.batch === target.batch && priority(entry, target) < 0))),
+								queued().filter(entry => entry.order < target.order),
 								entry => entry.commitment - entry.remaining,
 							)
 							const reduction = target.commitment - target.remaining

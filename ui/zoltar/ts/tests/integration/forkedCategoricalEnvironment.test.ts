@@ -5,6 +5,7 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { loadUniverseOutcomePage } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
+import { getOutcomeLabelForIndex } from '@zoltar/ui-zoltar-shared/features/universes/lib/migrationWizard.js'
 
 void describe('forked categorical simulation backend', () => {
 	let backend: SimulationBackend
@@ -57,10 +58,22 @@ void describe('forked categorical simulation backend', () => {
 		const page = await loadUniverseOutcomePage(client, full.zoltarAddress, 0n, 0n)
 		const { exists, ...questionDetails } = full.forkQuestionDetails
 		expect(exists).toBe(true)
-		expect(page.question).toEqual({ ...questionDetails, outcomeLabels: full.childUniverses.map(child => child.outcomeLabel), outcomesComplete: true })
+		expect(page.question).toEqual({ ...questionDetails, outcomeLabels: ['Invalid', ...questionDetails.outcomeLabels], outcomesComplete: true })
 		expect(page.hasNextPage).toBe(false)
 		expect(page.choices.map(choice => [choice.label, choice.universeId, choice.exists])).toEqual(full.childUniverses.map(child => [child.outcomeLabel, child.universeId, child.exists]))
 		expect(page.choices.filter(choice => choice.exists)).toHaveLength(2)
+	}, 60_000)
+
+	void test('#1352 migration confirmations distinguish real onchain multilingual and confusable categorical labels', async () => {
+		const universe = await loadZoltarUniverseSummary(backend.createReadClient(), 0n)
+		if (universe === undefined) throw new Error('Expected categorical universe')
+		expect(universe.forkQuestionDetails?.outcomeLabels).toContain('答え')
+		expect(universe.forkQuestionDetails?.outcomeLabels).toContain('Іnvalid')
+		expect(universe.childUniverses[0]?.outcomeLabel).toBe('Outcome 0: Invalid')
+		for (const child of universe.childUniverses) {
+			expect(child.outcomeLabel.startsWith(`Outcome ${child.outcomeIndex}: `)).toBe(true)
+			expect(getOutcomeLabelForIndex(universe.childUniverses, child.outcomeIndex)).toBe(child.outcomeLabel)
+		}
 	}, 60_000)
 
 	void test('names a deployed child universe by the fork outcome that created it', async () => {

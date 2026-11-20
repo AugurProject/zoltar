@@ -106,7 +106,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('rounds every nonzero universe supply up to a positive fork threshold without overflow', async () => {
-		const universeSupplySlot = formatStorageSlot(getUintMappingStorageSlot(GENESIS_UNIVERSE, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT))
+		const universeSupplySlot = formatStorageSlot(getUintMappingStorageSlot(1n, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT))
 		const divisor = DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		const boundarySupplies = [0n, 1n, divisor - 1n, divisor, divisor + 1n, MAX_UINT256 - (MAX_UINT256 % divisor)]
 		let state = 0x5eedn
@@ -119,7 +119,7 @@ describe('Contract Test Suite', () => {
 				[getZoltarAddress()]: { stateDiff: { [universeSupplySlot]: supply } },
 			})
 			const expected = supply === 0n ? 0n : supply / divisor + (supply % divisor === 0n ? 0n : 1n)
-			assert.strictEqual(await getZoltarForkThreshold(client, GENESIS_UNIVERSE), expected, `ceiling threshold mismatch for supply ${supply.toString()}`)
+			assert.strictEqual(await getZoltarForkThreshold(client, 1n), expected, `ceiling threshold mismatch for supply ${supply.toString()}`)
 		}
 	})
 
@@ -963,6 +963,27 @@ describe('Contract Test Suite', () => {
 		assert.ok(earlyChildSupply > 0n, 'early child supply should remain positive')
 		assert.ok(lateChildSupply > 0n, 'late child supply should remain positive')
 		assert.strictEqual(lateChildSupply, earlyChildSupply, 'child universes from the same fork should share the same theoretical supply snapshot')
+	})
+	test('#1353 genesis tracks external supply until the first fork and then fixes child caps', async () => {
+		const initial = await getUniverseTheoreticalSupplyAttoRep(client, 0n)
+		const externalSupply = initial - 1_000n
+		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: externalSupply } } })
+		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, 0n), externalSupply)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await writeContractAndWait(client, () => client.writeContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'burnRep', args: [0n, 10n] }))
+		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, 0n), externalSupply - 10n)
+		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: externalSupply + 500n } } })
+		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, 0n), externalSupply + 490n)
+		const question = makeQuestion('live genesis supply, fixed child cap')
+		await createQuestion(client, question, ['Yes', 'No'])
+		await forkUniverse(client, 0n, getQuestionId(question, ['Yes', 'No']))
+		await deployChild(client, 0n, 0n)
+		const cap = await getUniverseTheoreticalSupplyAttoRep(client, getChildUniverseId(0n, 0n))
+		const frozen = await getUniverseTheoreticalSupplyAttoRep(client, 0n)
+		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: initial } } })
+		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, 0n), frozen)
+		await deployChild(client, 0n, 1n)
+		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, getChildUniverseId(0n, 1n)), cap)
 	})
 
 	test('genesis fork thresholds decrease after REP is burned into migration balances', async () => {

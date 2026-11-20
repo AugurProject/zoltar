@@ -1,6 +1,6 @@
 import { MUTATING_CONTRACT_SURFACE, type ContractAbiEntryKind } from '../../src/contracts/surface.ts'
 
-type CanonicalMutatingContractExposure = 'static-endpoint' | 'dynamic-endpoint' | 'deployment-helper' | 'delegate-module' | 'fallback-module' | 'migration-proxy'
+type CanonicalMutatingContractExposure = 'static-endpoint' | 'dynamic-endpoint' | 'deployment-helper' | 'delegate-module' | 'fallback-module'
 
 interface CanonicalMutatingContract {
 	artifactSource: `contracts/${string}.sol`
@@ -10,7 +10,7 @@ interface CanonicalMutatingContract {
 
 // This is the canonical runtime code-family boundary for mutating-surface coverage.
 // It contains user-facing protocol endpoints plus deployed factories, workers,
-// migration proxies, and storage-coupled delegate modules. Pure/view-only runtime
+// and storage-coupled delegate modules. Pure/view-only runtime
 // helpers, generic Multicall transport, libraries, interfaces, and test contracts
 // are deliberately outside this economic-operation manifest.
 export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingContract[] = [
@@ -32,7 +32,6 @@ export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingCon
 	{ artifactSource: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol', contract: 'OpenOraclePriceCoordinatorFactory', exposure: 'static-endpoint' },
 	{ artifactSource: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol', contract: 'PriceCoordinatorDeploymentWorker', exposure: 'static-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SecurityPoolForker.sol', contract: 'SecurityPoolForker', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/statoblast/SecurityPoolMigrationProxy.sol', contract: 'SecurityPoolMigrationProxy', exposure: 'migration-proxy' },
 	{ artifactSource: 'contracts/statoblast/factories/EscalationGameFactory.sol', contract: 'EscalationGameFactory', exposure: 'static-endpoint' },
 	{ artifactSource: 'contracts/statoblast/EscalationGame.sol', contract: 'EscalationGame', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/EscalationChallengeEscrow.sol', contract: 'EscalationChallengeEscrow', exposure: 'dynamic-endpoint' },

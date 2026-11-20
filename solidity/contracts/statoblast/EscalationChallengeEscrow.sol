@@ -8,7 +8,7 @@ import { EscalationGame } from './EscalationGame.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 
 /// @notice One immutable collective challenge. Anyone may deploy a round for a live game.
-/// Pending REP is withdrawable and has no reporting rights. Activation creates ordinary
+/// Pending REP is committed until expiry and has no reporting rights. Activation creates ordinary
 /// game deposits owned by the contributors, including their existing fork-carry rights.
 contract EscalationChallengeEscrow {
 	using SafeERC20Ops for IERC20;
@@ -54,6 +54,16 @@ contract EscalationChallengeEscrow {
 		require(amountAttoRep >= startBondAttoRep, 'Below start bond');
 		uint256 roomAttoRep = game.nonDecisionThresholdAttoRep() - game.getOutcomeBalancesAttoRep()[uint8(outcome)];
 		if (contributionsAttoRep[msg.sender] == 0) _insertContributor(amountAttoRep);
+		else {
+			// A top-up requeues the entire pledge; an early dust slot cannot give
+			// newly arriving REP bonus priority over already funded contributors.
+			for (uint256 index; index < 16; index++)
+				if (contributors[index] == msg.sender) {
+					_removeContributor(index);
+					break;
+				}
+			_insertContributor(0);
+		}
 		require(totalPendingAttoRep + amountAttoRep <= roomAttoRep, 'Challenge exceeds room');
 		contributionsAttoRep[msg.sender] += amountAttoRep;
 		totalPendingAttoRep += amountAttoRep;
@@ -65,21 +75,22 @@ contract EscalationChallengeEscrow {
 		}
 		// Every later contribution is at least the start bond and must fit the room, so a
 		// smaller remainder could never be filled. A round that only activates at the exact
-		// threshold would then stay blocked by this freely withdrawable contribution.
+		// threshold must not accept such a pledge.
 		uint256 remainingAttoRep = roomAttoRep - totalPendingAttoRep;
 		require(remainingAttoRep == 0 || remainingAttoRep >= startBondAttoRep, 'Challenge leaves unfillable room');
 	}
 
-	/// @notice Only unactivated contributions can be withdrawn, including after expiry or a fork.
+	/// @notice Unactivated pledges unlock after their consented deadline or a game-invalidating fork.
 	function withdraw() external nonReentrant {
 		require(!activated, 'Challenge activated');
 		uint256 amount = contributionsAttoRep[msg.sender];
 		require(amount != 0, 'No contribution');
+		require(block.timestamp > deadline || !_isGameActive(), 'Contribution locked');
 		delete contributionsAttoRep[msg.sender];
 		totalPendingAttoRep -= amount;
 		for (uint256 index = 0; index < 16; index++) {
 			if (contributors[index] == msg.sender) {
-				delete contributors[index];
+				_removeContributor(index);
 				break;
 			}
 		}
@@ -150,9 +161,15 @@ contract EscalationChallengeEscrow {
 		require(amountAttoRep > amount, 'Challenge contributor limit');
 		delete contributionsAttoRep[refunded];
 		totalPendingAttoRep -= amount;
-		contributors[smallest] = msg.sender;
+		_removeContributor(smallest);
+		contributors[15] = msg.sender;
 		token.safeTransfer(refunded, amount);
 		emit Withdrawn(refunded, amount);
+	}
+
+	function _removeContributor(uint256 index) private {
+		for (; index < 15; index++) contributors[index] = contributors[index + 1];
+		delete contributors[15];
 	}
 
 	function _activate() private {

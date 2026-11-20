@@ -23,6 +23,12 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 	const snapshot = model.snapshot
 	const auction = snapshot?.auction
 	const disabled = parameters.actions.busy !== undefined
+	const noAdmissibleLimit = auction?.opened && !auction.finalized && auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot
+	let displayedAttoRepPerLot: bigint | undefined
+	if (auction?.opened) {
+		if (auction.finalized) displayedAttoRepPerLot = auction.clearing?.attoRepPerLot
+		else displayedAttoRepPerLot = auction.maximumAdmissibleBidAttoRepPerLot
+	}
 	let status = copy.states.unopened
 	if (auction?.opened) status = copy.states.bidding
 	if (snapshot !== undefined && auction !== undefined && snapshot.timestamp >= auction.closesAt) status = copy.states.waiting
@@ -54,8 +60,8 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 				<MetricField label={copy.minimumCollateral} loading={model.loading}>
 					<CurrencyValue value={auction?.opened ? auction.minimumCollateralAttoRepPerLot : undefined} suffix={common.rep} />
 				</MetricField>
-				<MetricField label={copy.clearingRep} loading={model.loading}>
-					<CurrencyValue value={auction?.clearing?.attoRepPerLot} suffix={common.rep} />
+				<MetricField label={auction?.finalized ? copy.clearingRep : copy.maximumAdmissible} loading={model.loading}>
+					{noAdmissibleLimit ? copy.noAdmissibleLimit : <CurrencyValue value={displayedAttoRepPerLot} suffix={common.rep} />}
 				</MetricField>
 			</MetricGrid>
 			<MetricGrid>

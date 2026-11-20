@@ -78,7 +78,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		expect(await collateralBalance(address)).toBe(0n)
 	})
 
-	test('only the bound service can account for questions and receive the fees it settles', async () => {
+	test('only the bound service can account for questions and retrieve its deferred fees once', async () => {
 		const service = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1])
 		await expect(writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'authorizeServices', args: [service.account.address] }))).rejects.toThrow('Only portfolio')
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'authorizeServices', args: [service.account.address] }))
@@ -92,6 +92,13 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		const hash = await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'checkpointUniverse', args: [0n, 5] }))
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		expect(receipt.status).toBe('success')
+		expect(await collateralBalance(service.account.address)).toBe(serviceBefore)
+		expect(await client.readContract({ ...target(), functionName: 'pendingServiceFees' })).toBe(10n)
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'deliverServiceFees' }))).rejects.toThrow('Only settlement services')
+		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'deliverServiceFees' }))
+		expect(await collateralBalance(service.account.address)).toBe(serviceBefore + 10n)
+		expect(await client.readContract({ ...target(), functionName: 'pendingServiceFees' })).toBe(0n)
+		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'deliverServiceFees' }))
 		expect(await collateralBalance(service.account.address)).toBe(serviceBefore + 10n)
 		expect(await collateralBalance(client.account.address)).toBe(rootBefore)
 		const serviceAfter = await collateralBalance(service.account.address)

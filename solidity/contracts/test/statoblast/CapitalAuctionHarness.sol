@@ -60,3 +60,26 @@ contract CapitalAuctionHarness is CapitalLedgerHarness {
 		ledger.creditTimedFees(msg.value);
 	}
 }
+
+/// @dev Controlled fresh quote isolates lot selection from report funding economics.
+contract AuctionLotSizingHarness is CapitalLedgerHarness {
+	uint256 public minimumCommitmentAttoEth = 1;
+	uint256 public conservativePrice = 1e18;
+	uint256 public lastSettlementTimestamp;
+	uint256 public priceValidUntil;
+	uint256 public constant acceptedExposureLimitAttoEth = type(uint256).max;
+	uint256 public constant acceptedRepExposureLimitAttoRep = type(uint256).max;
+	constructor(CapitalLedgerTestComponents components) CapitalLedgerHarness(components) {
+		lastSettlementTimestamp = block.timestamp;
+		priceValidUntil = block.timestamp + 7 days;
+	}
+	function capitalLedger(uint248) external view returns (SecurityPoolCapitalLedger) {
+		return ledger;
+	}
+	function oracleExposure(uint248) external pure returns (uint256) {
+		return 0;
+	}
+	function setMinimum(uint256 minimum) external {
+		minimumCommitmentAttoEth = minimum;
+	}
+}

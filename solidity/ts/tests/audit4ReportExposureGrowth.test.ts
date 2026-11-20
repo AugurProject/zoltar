@@ -31,7 +31,7 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		const acceptedLimit = await sponsor.readContract({ ...feed, functionName: 'acceptedExposureLimitAttoEth' })
 		expect(acceptedLimit).toBeGreaterThan(100n * unit)
 		expect(minimum).toBe(unit / 100n + unit)
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [unit, sponsor.account.address] }) }]
 		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, minimum, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 2_000n, operations }], value: bounty }))
@@ -74,7 +74,7 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'weth' }), address)
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'reputationToken' }), address)
 		const minimum = await sponsor.readContract({ ...feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [unit] })
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...feed, functionName: 'requestPortfolioPrice', args: [unit, minimum + 1n, bounty], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await writeContractAndWait(griefer, () => griefer.writeContract({ ...capital(), functionName: 'setCommitment', args: [100n * unit + 1n] }))

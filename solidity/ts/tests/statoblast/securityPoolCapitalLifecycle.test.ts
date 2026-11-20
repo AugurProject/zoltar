@@ -22,7 +22,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			'function recordSettlementRepair(uint256 demand)',
 			'function beginForkImport()',
 			'function authorize(uint256 commitment,uint256 reportId,bool useReport,uint256 minimumCommitment)',
-			'function importChoice(address owner,(uint256 rep,uint256 commitment,uint96 batch,uint256 remainingCommitment) position,uint256 target)',
+			'function importChoice(address owner,(uint256 rep,uint256 commitment,uint96 batch,uint256 remainingCommitment,uint64 retirementOrder) position,uint256 target)',
 		])
 		const ownerUpdates = [encodeFunctionData({ abi: delegateAbi, functionName: 'setHealthTarget', args: [10_000n] }), encodeFunctionData({ abi: delegateAbi, functionName: 'recordSettlementRepair', args: [0n] })]
 		for (const data of [
@@ -30,7 +30,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			encodeFunctionData({ abi: delegateAbi, functionName: 'acceptPrice', args: [fixture.harness.address, E, 1_000_000] }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'beginForkImport' }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'authorize', args: [E, 0n, false, E / 1_000n] }),
-			encodeFunctionData({ abi: delegateAbi, functionName: 'importChoice', args: [sender.account.address, { rep: 2n * E, commitment: E, batch: 0n, remainingCommitment: 0n }, 10_000n] }),
+			encodeFunctionData({ abi: delegateAbi, functionName: 'importChoice', args: [sender.account.address, { rep: 2n * E, commitment: E, batch: 0n, remainingCommitment: 0n, retirementOrder: 0n }, 10_000n] }),
 		])
 			await expect(sender.call({ to: delegate, data })).rejects.toThrow('Only capital delegatecall')
 		const runtime = await sender.getCode({ address: fixture.capital.address })
@@ -59,6 +59,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 		await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'setDemand', args: [200n * E] }))
 		await writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [0n] }))
 		await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'setDemand', args: [100n * E] }))
+		await writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'serveRetirement', args: [retired] }))
 		expect(await fixture.position(retired)).toMatchObject({ commitment: 0n, releasedRep: 315n * E })
 		expect(await sender.readContract({ ...fixture.capital, functionName: 'retirementCashAttoRep' })).toBe(315n * E)
 		await writeContractAndWait(sender, async () => sender.writeContract({ ...fixture.harness, functionName: 'setFork', args: [(await sender.getBlock()).timestamp] }))
@@ -262,23 +263,17 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 					price = E
 				},
 			)
+			await action('demand release leaves requests for their owners', () => demand(150n * U))
+			const keeperId = (await fixture.owner(2)).positionId
 			await action(
-				'demand release services only older residual frontier',
-				() => demand(250n * U),
+				'later keeper claims only its own reduction while reserving bob’s earlier full exit',
+				() => writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'serveRetirement', args: [keeperId] })),
 				() => {
 					keeper.commitment = 10n * U
 					keeper.remaining = 0n
 					keeper.queued = false
 				},
 			)
-			await action(
-				'global service reaches one newer full-exit boundary',
-				() => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'serveRetirement', args: [0n] })),
-				() => {
-					bob.commitment = 90n * U
-				},
-			)
-			await action('targeted service cannot consume retained demand', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'serveRetirement', args: [bobId] })))
 			await action(
 				'carol requests partial retirement',
 				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [50n * U] })),
@@ -300,6 +295,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			for (let i = 0; i < expected.length; i++) {
 				const owner = await fixture.owner(i)
 				const position = await fixture.position(owner.positionId)
+				const retirementOrder = await sender.readContract({ ...fixture.commitments, functionName: 'retirementOrder', args: [owner.positionId] })
 				let importedBatch = 0n
 				if (position.batch !== 0n) importedBatch = position.batch === current ? 1n : 2n
 				await action(`export choice owner ${i}`, () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'exportChoice', args: [fixture.client(i).account.address] })))
@@ -308,7 +304,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 					sender.writeContract({
 						...childHarness,
 						functionName: 'importChoice',
-						args: [fixture.client(i).account.address, { rep: position.rep, commitment: position.commitment, batch: importedBatch, remainingCommitment: position.remainingCommitment }, owner.targetHealthFactorBps || 10_000n],
+						args: [fixture.client(i).account.address, { rep: position.rep, commitment: position.commitment, batch: importedBatch, remainingCommitment: position.remainingCommitment, retirementOrder }, owner.targetHealthFactorBps || 10_000n],
 					}),
 				)
 			}
@@ -323,9 +319,11 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [owner.positionId] })).toMatchObject({ rep: entry.principal, commitment: entry.commitment, remainingCommitment: entry.remaining, ethFees: 0n, repFees: 0n })
 			}
 			await writeContractAndWait(sender, () => sender.writeContract({ ...childHarness, functionName: 'setDemand', args: [160n * U] }))
+			await writeContractAndWait(fixture.client(1), () => fixture.client(1).writeContract({ abi: capitalArtifact.abi, address: child.ledger, functionName: 'serveRetirement', args: [2n] }))
 			expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [2n] })).toMatchObject({ commitment: 0n, releasedRep: 420n * U })
-			expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [4n] })).toMatchObject({ commitment: 100n * U, remainingCommitment: 50n * U, batch: 2n })
+			expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [4n] })).toMatchObject({ commitment: 100n * U, remainingCommitment: 50n * U, batch: 1n })
 			await writeContractAndWait(sender, () => sender.writeContract({ ...childHarness, functionName: 'setDemand', args: [110n * U] }))
+			await writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ abi: capitalArtifact.abi, address: child.ledger, functionName: 'serveRetirement', args: [4n] }))
 			expect(await sender.readContract({ abi: indexArtifact.abi, address: child.index, functionName: 'accountOf', args: [4n] })).toMatchObject({ commitment: 50n * U, rep: 315n * U, remainingCommitment: 0n, batch: 0n })
 			expect(await sender.readContract({ abi: tokenArtifact.abi, address: child.token, functionName: 'balanceOf', args: [child.ledger] })).toBe(principal)
 			await writeContractAndWait(fixture.client(1), () => fixture.client(1).writeContract({ abi: capitalArtifact.abi, address: child.ledger, functionName: 'withdrawPrincipal', args: [420n * U, fixture.client(1).account.address] }))

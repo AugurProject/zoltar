@@ -241,11 +241,19 @@ contract SharedPoolPriceFeed {
 		return uint32(FEED_SETTLEMENT_GAS_OVERHEAD);
 	}
 
-	/// @notice The report sponsor funds its own transactions; nothing reimburses
-	/// them. A large mandatory public bounty would let unrelated settlers capture
-	/// the sponsor's funding.
-	function getRequestPriceCostAttoEth() public pure returns (uint256) {
-		return REQUEST_BOUNTY_OFFSET_ATTO_ETH;
+	/// @notice Sponsor-funded incentive for independent settlement, including
+	/// callback dispatch, EIP-150 slack, and collecting the public reward.
+	function getRequestPriceCostAttoEth() public view returns (uint256) {
+		return _minimumSettlementBounty(getSettlementCallbackGasLimit());
+	}
+
+	function _minimumSettlementBounty(uint256 callbackGas) private view returns (uint256) {
+		uint256 gasBudget = callbackGas + callbackGas / 63 + 310_000;
+		uint256 feeAllowance = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
+		return
+			Math.mulDiv(gasBudget, 12_000, SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil) * feeAllowance +
+			20_000 * feeAllowance +
+			REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
 
 	/// @notice A registered coordinator authenticates the sponsor and forwards the report's exact token funding.
@@ -293,7 +301,7 @@ contract SharedPoolPriceFeed {
 		require(ISharedPoolPortfolioPriceCheckpoint(portfolio).isPriceReportingOpen(universeId()), 'Portfolio reporting window closed');
 		require(sponsor != address(0), 'Report sponsor zero');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
-		require(bountyAttoEth >= getRequestPriceCostAttoEth(), 'Oracle bounty too small');
+		require(bountyAttoEth >= _minimumSettlementBounty(callbackGasLimit), 'Oracle bounty too small');
 		require(msg.value == bountyAttoEth, 'Incorrect oracle bounty');
 		ReportFundingQuote memory quote = _quoteReportFunding(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 		pendingExposureLimitAttoEth = quote.exposureLimitAttoEth;
@@ -478,11 +486,8 @@ contract SharedPoolPriceFeed {
 		if (amount2 < minimumToken2ReportAttoRep()) return ('Report REP inventory budget insufficient', 0);
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
 		if (priceTimestamp < lastSettlementTimestamp) return ('Report timestamp not newer', 0);
-		if (
-			priceTimestamp == lastSettlementTimestamp &&
-			(amount1 - minimumReportCollateral) * OPEN_INTEREST_DIVIDER <= acceptedExposureLimitAttoEth &&
-			amount2 * OPEN_INTEREST_DIVIDER <= acceptedRepExposureLimitAttoRep
-		) return ('Report adds no newer observation or capacity', 0);
+		// Equal-time observations are independently challenged evidence. Ordering
+		// their settlements must not suppress a sponsor's authorized operation.
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
 		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);
 		if (Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);

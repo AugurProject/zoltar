@@ -30,6 +30,19 @@ describe('Statoblast: targeted retirement preview', () => {
 		address = deployment.index
 		await setBaselineSnapshot()
 	})
+	test('#1326 request order survives a later provider gaining more backing', async () => {
+		const first = await create(50n, 5n, 20n)
+		const second = await create(60n, 6n, 30n)
+		await request(first, 0n)
+		await request(second, 0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'replace', args: [second, 600n, 6n, 300n] }))
+		expect(await preview(first, 10n, 6n)).toMatchObject({ status: 5n, queuedAheadCommitment: 0n })
+		expect(await preview(second, 10n, 6n)).toMatchObject({ queuedAheadCommitment: 5n })
+		await retire(second, 10n, 6n)
+		expect((await account(second)).commitment).toBe(6n)
+		await retire(first, 10n, 6n)
+		expect((await account(first)).commitment).toBe(0n)
+	})
 
 	test('normalizes the first pending cohort without counting active roots as earlier requests', async () => {
 		await create(100n, 10n, 20n)
@@ -45,8 +58,8 @@ describe('Statoblast: targeted retirement preview', () => {
 	test('reports debt, priority and full-reduction shortfalls separately without changing state', async () => {
 		const later = await create(80n, 8n, 20n)
 		const earlier = await create(90n, 9n, 30n)
-		await request(later, 3n)
 		await request(earlier, 5n)
+		await request(later, 3n)
 		expect(await preview(later, 10n, 18n)).toMatchObject({ status: 2n, commitmentReduction: 5n, releasedRep: 0n })
 		expect(await preview(later, 10n, 15n)).toMatchObject({ status: 3n, spareCommitment: 2n, queuedAheadCommitment: 4n })
 		expect(await preview(later, 10n, 12n)).toMatchObject({ status: 4n, spareCommitment: 5n, queuedAheadCommitment: 4n })
@@ -60,8 +73,8 @@ describe('Statoblast: targeted retirement preview', () => {
 	test('unhealthy targets preserve healthy earlier reductions but need no own healthy spare', async () => {
 		const unhealthy = await create(50n, 5n, 5n)
 		const healthy = await create(70n, 7n, 20n)
-		await request(unhealthy, 0n)
 		await request(healthy, 4n)
+		await request(unhealthy, 0n)
 		expect(await preview(unhealthy, 10n, 5n)).toMatchObject({ status: 3n, queuedAheadCommitment: 3n, commitmentReduction: 5n, releasedRep: 50n })
 		expect(await preview(unhealthy, 10n, 4n)).toMatchObject({ status: 5n, spareCommitment: 3n })
 		await retire(unhealthy, 10n, 4n)
@@ -69,14 +82,15 @@ describe('Statoblast: targeted retirement preview', () => {
 		expect(await preview(unhealthy, 10n, 4n)).toMatchObject({ status: 0n, commitmentReduction: 0n, releasedRep: 0n })
 	})
 
-	test('recognizes lazy bulk retirement and unknown or active positions without a mutating claim', async () => {
+	test('recognizes individually completed requests and unknown or active positions without a mutating claim', async () => {
 		const first = await create(50n, 5n, 20n)
 		const second = await create(60n, 6n, 20n)
 		expect((await preview(first, 10n, 0n)).status).toBe(0n)
 		expect((await preview(999n, 10n, 0n)).status).toBe(0n)
 		await request(first, 0n)
 		await request(second, 0n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'retire', args: [10n, 0n] }))
+		await retire(first, 10n, 0n)
+		await retire(second, 10n, 0n)
 		for (const id of [first, second]) expect(await preview(id, 10n, 0n)).toMatchObject({ status: 0n, commitmentReduction: 0n, releasedRep: 0n })
 	})
 

@@ -34,6 +34,7 @@ export async function auctionFixture() {
 		vaultImplementation: auctionVaultImplementation,
 		controller: auctionAddress,
 		maximumBidAttoRepPerLot: 100n * unit,
+		maximumAdmissibleBidAttoRepPerLot: 100n * unit,
 		depositedAttoEth: 2n * unit,
 		securityMultiplierBps: 20_000n,
 		conservativePrice: 2n * unit,

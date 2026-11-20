@@ -129,8 +129,8 @@ describe('personal portfolio capital SDK', () => {
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n }] })
 		expect(() => buildPortfolioCapitalCureRequest({ ...base, positionId: 0n, commitment: 20n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n })).toThrow('Position id')
 	})
-	test('retirement service selects one pending position or explicitly requests bounded global progress', () => {
-		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalServeRetirementRequest(base).data })).toEqual({ functionName: 'serveRetirement', args: [0n] })
+	test('retirement service requires the owner position instead of global processing', () => {
+		expect(() => buildPortfolioCapitalServeRetirementRequest({ ...base, positionId: 0n })).toThrow('Position id')
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalServeRetirementRequest({ ...base, positionId: 9n }).data })).toEqual({ functionName: 'serveRetirement', args: [9n] })
 		expect(() => buildPortfolioCapitalServeRetirementRequest({ ...base, positionId: 1n << 96n })).toThrow('uint96')
 	})

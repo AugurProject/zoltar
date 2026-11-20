@@ -3,7 +3,7 @@ import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui
 import type { ForkQuestionDetails, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { readRequiredMulticall } from './core.js'
-import { getMarketType } from './helpers.js'
+import { formatCategoricalOutcomeLabel, getMarketType } from './helpers.js'
 
 export const UNIVERSE_OUTCOME_PAGE_SIZE = 10n
 
@@ -51,7 +51,7 @@ export async function loadUniverseOutcomePage(client: Pick<ReadClient, 'readCont
 		const childId = childIds[index]
 		const token = tokens[index]
 		if (childId === undefined || token === undefined) throw new Error('Missing child universe response')
-		return { label: outcome.label, universeId: childId, exists: token !== zeroAddress }
+		return { label: question.marketType === 'categorical' ? formatCategoricalOutcomeLabel(outcome.label, outcome.outcomeIndex) : outcome.label, universeId: childId, exists: token !== zeroAddress }
 	})
 	return { choices, hasNextPage, question: pageQuestion }
 }

@@ -1,6 +1,13 @@
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { isObjectRecord, requireArrayOf } from '@zoltar/core-shared/validation/guards'
 import type { MarketType, QuestionData, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as zoltarCopy from '../copy/zoltar.js'
+
+/** Labels are untrusted display text; the immutable outcome ID identifies a fork choice. */
+export function formatCategoricalOutcomeLabel(label: string, outcomeIndex: bigint) {
+	const displayLabel = label.replace(/\p{Bidi_Control}/gu, '').trim()
+	return displayLabel.length === 0 ? zoltarCopy.formatUnnamedOutcome(outcomeIndex) : zoltarCopy.formatIndexedOutcome(displayLabel, outcomeIndex)
+}
 
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 export function bigintToAddress(value: bigint): Address {

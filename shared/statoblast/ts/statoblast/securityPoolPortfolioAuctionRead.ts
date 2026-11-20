@@ -36,6 +36,7 @@ const abi = parseAbi([
 	'function finalized() view returns (bool)',
 	'function initialized() view returns (bool)',
 	'function maximumBidAttoRepPerLot() view returns (uint256)',
+	'function maximumAdmissibleBidAttoRepPerLot() view returns (uint256)',
 	'function depositedAttoEth() view returns (uint256)',
 	'function securityMultiplierBps() view returns (uint256)',
 	'function conservativePrice() view returns (uint256)',
@@ -175,11 +176,12 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 		const vaultImplementation = decodeAddress(implementationValue, 'Vault implementation')
 		const opened = decodeBool(openedValue, 'Invalid auction state.')
 		const finalized = decodeBool(finalizedValue, 'Invalid auction state.')
-		const [engineController, initialized, engineFinalized, maximum, deposited, count, bidCredit] = await Promise.all([
+		const [engineController, initialized, engineFinalized, maximum, admissible, deposited, count, bidCredit] = await Promise.all([
 			read(engine, 'controller'),
 			read(engine, 'initialized'),
 			read(engine, 'finalized'),
 			read(engine, 'maximumBidAttoRepPerLot'),
+			read(engine, 'maximumAdmissibleBidAttoRepPerLot'),
 			read(engine, 'depositedAttoEth'),
 			read(engine, 'bidderBidCount', [bidder]),
 			read(engine, 'refundCreditAttoEth', [bidder]),
@@ -201,6 +203,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 			minimumCollateralAttoRepPerLot: decodeUint(minimumCollateral, 'Minimum collateral per lot'),
 			securityMultiplierBps: decodeUint(multiplier, 'Security multiplier'),
 			maximumBidAttoRepPerLot: decodeUint(maximum, 'Maximum bid REP per lot'),
+			maximumAdmissibleBidAttoRepPerLot: decodeUint(admissible, 'Highest admissible bid REP per lot'),
 			depositedAttoEth: decodeUint(deposited, 'Bid escrow'),
 			refundAttoEth: decodeUint(bidCredit, 'Bid refund'),
 		}

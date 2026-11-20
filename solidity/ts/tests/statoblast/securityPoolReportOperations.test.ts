@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, encodeFunctionData, parseAbi, keccak256, hexToBytes, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, parseAbi, keccak256, hexToBytes, toHex, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -17,6 +17,7 @@ import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-o
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact } from '../../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { buildPortfolioPriceOperationsRequest, loadPortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 
 const batchAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
 
@@ -45,11 +46,40 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		return { sponsor, feed }
 	}
 	const withdraw = (amount: bigint, recipient: `0x${string}`) => ({ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [amount, recipient] }) })
+	test('#1252 the SDK preserves the mined base fee when quoting a settlement bounty', async () => {
+		const { sponsor, feed } = await prepare()
+		const baseFee = 1_000_000_000n
+		await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [toHex(baseFee)] })
+		await fixture.base.mockWindow.request({ method: 'evm_mine', params: [] })
+		const snapshot = await loadPortfolioPriceSnapshot({ client: sponsor, portfolio: fixture.portfolio, owner: sponsor.account.address, universeId: fixture.base.genesisUniverse })
+		const quoted = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth', blockNumber: snapshot.blockNumber, gasPrice: 2n * baseFee })
+		expect(snapshot.observation?.bounty).toBe(quoted)
+		const batch = { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: snapshot.timestamp + 1_000n, operations: [withdraw(1n, sponsor.account.address)] }
+		const request = buildPortfolioPriceOperationsRequest(snapshot, unit, 10n * unit, batch)
+		await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [toHex(baseFee)] })
+		await writeContractAndWait(sponsor, () => sponsor.sendTransaction({ ...request, gasPrice: 2n * baseFee }))
+		expect(await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })).toBeGreaterThan(0n)
+	})
+
+	test('#1252 the SDK funds attached work and the feed rejects an ordinary-only settlement bounty', async () => {
+		const { sponsor, feed } = await prepare()
+		const snapshot = await loadPortfolioPriceSnapshot({ client: sponsor, portfolio: fixture.portfolio, owner: sponsor.account.address, universeId: fixture.base.genesisUniverse })
+		const ordinaryBounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const batch = { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: snapshot.timestamp + 1_000n, operations: [withdraw(1n, sponsor.account.address)] }
+		await expect(sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, ordinaryBounty, batch], value: ordinaryBounty })).rejects.toThrow('Oracle bounty too small')
+		const request = buildPortfolioPriceOperationsRequest(snapshot, unit, 10n * unit, batch)
+		expect(request.value).toBeGreaterThan(ordinaryBounty)
+		await writeContractAndWait(sponsor, () => sponsor.sendTransaction(request))
+		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(sponsor, report)
+		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(1n)
+	})
 
 	const run = async (context: Awaited<ReturnType<typeof prepare>>, operations: { gasLimit: bigint; data: `0x${string}` }[], price = unit, submit?: (data: Hex, value: bigint) => Promise<Hash>, beforeSettlement?: () => Promise<void>) => {
 		const { sponsor, feed } = context
 		const gasLimit = operations.reduce((sum, operation) => sum + operation.gasLimit + 100_000n, 0n)
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const args = [price, 10n * unit, bounty, { gasLimit, minimumPrice: price, maximumPrice: price, deadline: timestamp + 1000n, operations }] as const
 		if (submit === undefined) await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args, value: bounty }))
@@ -71,9 +101,53 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		return attempts
 	}
 
+	test('#1340 equal-time rival settlements cannot suppress a funded sponsor operation', async () => {
+		const { sponsor, feed } = await prepare()
+		const mock = fixture.base.mockWindow
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
+		const nonce = await sponsor.getTransactionCount({ address: sponsor.account.address })
+		const timestamp = (await sponsor.getBlock()).timestamp
+		let first: Hash | undefined
+		let second: Hash | undefined
+		const send = async (data: Hex, nonce: bigint): Promise<Hash> => {
+			const hash = await mock.requestRaw({ method: 'eth_sendTransaction', params: [{ from: sponsor.account.address, to: feed.address, data, value: toHex(bounty), gas: '0x7a1200', nonce: toHex(nonce) }] })
+			if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error('Invalid report transaction hash')
+			return `0x${hash.slice(2)}`
+		}
+		await mock.requestRaw({ method: 'evm_setAutomine', params: [false] })
+		try {
+			first = await send(encodeFunctionData({ ...feed, functionName: 'requestPortfolioPrice', args: [unit, 10n * unit, bounty] }), nonce)
+			second = await send(encodeFunctionData({ abi: batchAbi, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1_000n, operations: [withdraw(unit, sponsor.account.address)] }] }), nonce + 1n)
+			await mock.requestRaw({ method: 'evm_mine', params: [] })
+		} finally {
+			await mock.requestRaw({ method: 'evm_setAutomine', params: [true] })
+		}
+		if (first === undefined || second === undefined) throw new Error('Report request missing')
+		const ids: bigint[] = []
+		let requestBlock: bigint | undefined
+		for (const hash of [first, second]) {
+			const receipt = await sponsor.waitForTransactionReceipt({ hash })
+			expect(receipt.status).toBe('success')
+			if (requestBlock === undefined) requestBlock = receipt.blockNumber
+			else expect(receipt.blockNumber).toBe(requestBlock)
+			for (const log of receipt.logs.filter(log => log.address.toLowerCase() === feed.address.toLowerCase())) {
+				const event = decodeEventLog({ abi: feedArtifact.abi, data: log.data, topics: log.topics })
+				if (event.eventName === 'PriceRequested') ids.push(event.args.reportId)
+			}
+		}
+		const [rival, candidate] = ids
+		if (rival === undefined || candidate === undefined) throw new Error('Requested report ids missing')
+		await mock.advanceTime(481n)
+		await openOracleSettle(sponsor, rival)
+		const before = await sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [sponsor.account.address] })
+		await openOracleSettle(sponsor, candidate)
+		expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [candidate] })).toBe(1n)
+		expect((await sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [sponsor.account.address] }))[0]).toBe(before[0] - unit)
+	})
+
 	test.each([false, true])('#1248 recovery retries fresh callbacks and retires stale ones (stale: %s)', async stale => {
 		const { sponsor, feed } = await prepare()
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		await writeContractAndWait(sponsor, () =>
 			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [withdraw(unit, sponsor.account.address)] }], value: bounty }),
@@ -102,7 +176,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 	test('ordered sponsor withdrawals survive a failed operation and run when someone else settles', async () => {
 		const { sponsor, feed } = await prepare()
 		const operations = [withdraw(unit, sponsor.account.address), withdraw(10_000n * unit, sponsor.account.address), withdraw(2n * unit, sponsor.account.address)]
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 1_800_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
@@ -161,7 +235,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		expect(attempts.every(event => event.success)).toBe(true)
 		expect(attempts.map(event => event.operationIndex)).toEqual(Array.from({ length: 20 }, (_, index) => BigInt(index)))
 		// One more call does not fit, whatever its own limit.
-		const bounty = await context.sponsor.readContract({ ...context.feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await context.sponsor.readContract({ ...context.feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await context.sponsor.getBlock()).timestamp
 		const oversized = { gasLimit: 6_100_001n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [...operations, { gasLimit: 1n, data: operations[0]?.data ?? '0x' }] }
 		await expect(context.sponsor.writeContract({ abi: batchAbi, address: context.feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, oversized], value: bounty })).rejects.toThrow('Callback gas exceeds limit')
@@ -196,7 +270,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const beforeSettlement = async () => {
 			if (mode === 'withdraw') return
 			for (const token of [weth, rep]) await approveToken(owner, token, feed.address)
-			const bounty = await owner.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+			const bounty = 3n * (await owner.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 			await writeContractAndWait(owner, () => owner.writeContract({ ...feed, functionName: 'requestPortfolioPrice', args: [2n * unit, 10n * unit, bounty], value: bounty }))
 			nestedReport = await owner.readContract({ ...feed, functionName: 'pendingReportId' })
 			const state = (await loadOpenOracleEventState(owner, nestedReport)).latest

@@ -214,13 +214,13 @@ export function buildPortfolioCapitalSetCommitmentRequest(parameters: CapitalReq
 	const commitment = decodeUint(parameters.commitment, 'Commitment')
 	return parameters.reportId === undefined ? request(parameters, 'setCommitment', [commitment]) : request(parameters, 'setCommitmentWithReport', [decodeUint(parameters.reportId, 'Report id'), positive(commitment, 'Commitment')])
 }
-export function buildPortfolioCapitalServeRetirementRequest(parameters: CapitalRequest & { positionId?: bigint }) {
-	return request(parameters, 'serveRetirement', [decodeUint(parameters.positionId ?? 0n, 'Position id', 96)])
+export function buildPortfolioCapitalServeRetirementRequest(parameters: CapitalRequest & { positionId: bigint }) {
+	return request(parameters, 'serveRetirement', [positive(decodeUint(parameters.positionId, 'Position id', 96), 'Position id')])
 }
 export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalRequest) {
 	return request(parameters, 'claimEarnings')
 }
-/** @public Keeper takeover: a new receiver commits all idle principal within maximumOwnRep; an existing receiver must share the target cohort. */
+/** @public Keeper takeover: a new receiver commits all idle principal within maximumOwnRep; an existing receiver must be active or share the target cohort. */
 export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint }) {
 	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), decodeUint(parameters.minimumAward, 'Minimum REP award'), decodeUint(parameters.maximumOwnRep, 'Maximum own REP')])
 }

@@ -45,6 +45,27 @@ describe('collective escalation response', () => {
 		return { owner, pool, rep, game, read, amount, deadline, escrow, contribution, activated, withdraw, activate, deposits, balance, deposit }
 	}
 
+	test('#1361 pledges cannot be withdrawn while other contributors can rely on them', async () => {
+		const { owner, contribution, withdraw, deadline, balance } = await prepare()
+		const before = await balance(owner.account.address)
+		await contribution(owner)
+		await expect(withdraw(owner)).rejects.toThrow('Contribution locked')
+		await fixture.base.mockWindow.setTime(deadline + 1n)
+		await withdraw(owner)
+		expect(await balance(owner.account.address)).toBe(before)
+	})
+
+	test('#1362 a top-up cannot reserve bonus priority ahead of an earlier funded pledge', async () => {
+		const { owner, contribution, escrow, read } = await prepare()
+		const other = fixture.other()
+		const bond = await read('startBondAttoRep')
+		await contribution(owner, bond)
+		await contribution(other, bond)
+		await contribution(owner, bond)
+		expect(await owner.readContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'contributors', args: [0n] })).toBe(other.account.address)
+		expect(await owner.readContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'contributors', args: [1n] })).toBe(owner.account.address)
+	})
+
 	test('escrow combines insufficient replies, preserves native owners and pays only them', async () => {
 		const context = await prepare()
 		const { owner, read, contribution, activated, deposits, balance, pool, game, amount, escrow } = context
@@ -114,6 +135,7 @@ describe('collective escalation response', () => {
 		await contribution(fixture.other())
 		expect(await balance(first.account.address)).toBe(bond)
 		expect(await owner.readContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'contributionsAttoRep', args: [first.account.address] })).toBe(0n)
+		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdraw' }))).rejects.toThrow('Contribution locked')
 		const hash = await contribution(owner)
 		expect((await owner.getTransactionReceipt({ hash })).gasUsed).toBeLessThan(16_777_216n)
 		expect(await activated()).toBe(true)
@@ -123,21 +145,19 @@ describe('collective escalation response', () => {
 		expect(records.find(record => record.depositor.toLowerCase() === fixture.other().account.address.toLowerCase())?.amountAttoRep).toBe(amount)
 	})
 
-	test('withdrawal is owner-only, frees funding and remains available after expiry', async () => {
+	test('withdrawal is owner-only and unlocks committed funding after expiry', async () => {
 		const { owner, contribution, withdraw, balance, escrow, activated, deadline, read, activate } = await prepare()
 		const before = await balance(owner.account.address)
 		await contribution(owner)
 		await expect(withdraw(fixture.other())).rejects.toThrow('No contribution')
-		await withdraw(owner)
-		expect(await balance(owner.account.address)).toBe(before)
-		expect(await balance(escrow)).toBe(0n)
-		await contribution(fixture.other())
+		await expect(withdraw(owner)).rejects.toThrow('Contribution locked')
 		expect(await activated()).toBe(false)
 		await expect(activate()).rejects.toThrow('Challenge not funded')
 		await fixture.base.mockWindow.setTime(deadline + 1n)
 		await expect(activate()).rejects.toThrow('Challenge closed')
 		await expect(contribution(owner)).rejects.toThrow('Contribution expired')
-		await withdraw(fixture.other())
+		await withdraw(owner)
+		expect(await balance(owner.account.address)).toBe(before)
 		expect(await balance(escrow)).toBe(0n)
 		expect(await read('getQuestionResolution')).toBe(2n)
 	})
@@ -268,10 +288,8 @@ describe('collective escalation response', () => {
 		await expect(contribution(fixture.other(), gap - bond / 2n)).rejects.toThrow('Challenge leaves unfillable room')
 		await contribution(fixture.other(), gap - bond)
 		expect(await activated()).toBe(false)
-		await withdraw(fixture.other())
-		await contribution(fixture.other(), gap - 2n * bond)
-		await expect(contribution(owner, bond + bond / 2n)).rejects.toThrow('Challenge leaves unfillable room')
-		await contribution(owner, 2n * bond)
+		await expect(withdraw(fixture.other())).rejects.toThrow('Contribution locked')
+		await contribution(owner, bond)
 		expect(await activated()).toBe(true)
 	})
 

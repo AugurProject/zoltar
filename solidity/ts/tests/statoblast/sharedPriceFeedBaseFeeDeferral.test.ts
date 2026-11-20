@@ -65,7 +65,7 @@ describe('Statoblast: shared price feed defers settlements above the report base
 		await wrapWeth(sponsor, reportWeth)
 		await approveToken(sponsor, weth, address)
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'reputationToken' }), address)
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const operations = [{ gasLimit: 500_000, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [unit, sponsor.account.address] }) }]
 		// Requested at a 1 nanoETH per gas base fee with the default 10 nanoETH per gas report priority fee: a 33 nanoETH per gas ceiling.

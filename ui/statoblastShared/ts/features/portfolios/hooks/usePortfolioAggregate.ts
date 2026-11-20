@@ -153,7 +153,14 @@ export function usePortfolioAggregate(
 	const livePositions = snapshot?.positions.filter(position => position.commitment > 0n) ?? []
 	const pendingRetirement = livePositions.find(position => position.batch !== 0n)
 	const claimReason = ownerReason
-	const serveReason = ownerReason ?? inactiveReason ?? (snapshot?.priceValid === false ? 'A new accepted REP price is required.' : undefined)
+	const retirementReadinessReason = () => {
+		if (pendingRetirement === undefined) return 'No pending retirement.'
+		if (snapshot?.priceValid === false) return 'A new accepted REP price is required.'
+		const preview = pendingRetirement.retirementPreview
+		if (preview !== undefined && preview.status !== 'ready') return 'Retirement is not ready.'
+		return undefined
+	}
+	const serveReason = ownerReason ?? inactiveReason ?? retirementReadinessReason()
 	const requireSnapshot = () => {
 		const current = model.snapshot
 		if (current === undefined || accountAddress === undefined || accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase()) throw new Error('Connect the selected owner account.')
@@ -355,17 +362,17 @@ export function usePortfolioAggregate(
 				'servePortfolioRetirement',
 				'Release available retirement',
 				serveReason,
-				selected => ({
-					...buildPortfolioCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement?.id ?? 0n }),
-					reviewDescription:
-						pendingRetirement === undefined
-							? 'Release commitments from the current retirement cohort using spare healthy capacity. Partial progress is possible; no fixed completion date is promised.'
-							: `Attempt to finish your request at ${formatUnits(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. ${pendingRetirement.retirementPreview === undefined ? capitalCopy.retirementPreviewUnavailable : capitalCopy.retirementPreviewStatus[pendingRetirement.retirementPreview.status]}. It completes only when spare healthy capacity covers earlier reserved reductions and your entire remaining reduction. Otherwise your commitment remains unchanged. ${capitalCopy.retirementPreviewHint} Ordinary pool activity can still make partial progress.`,
-				}),
+				selected => {
+					if (pendingRetirement === undefined) throw new Error('No pending retirement.')
+					return {
+						...buildPortfolioCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement.id }),
+						reviewDescription: `Finish your request at ${formatUnits(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. Earlier requested reductions remain reserved even if their owners have not claimed. ${capitalCopy.retirementPreviewHint}`,
+					}
+				},
 				latest => {
 					if (!latest.priceValid) throw new Error('A new accepted REP price is required.')
 					if (latest.forkTime > 0n || latest.frozen || latest.importing) throw new Error('This universe is closed to retirement.')
-					if (pendingRetirement === undefined) return
+					if (pendingRetirement === undefined) throw new Error('No pending retirement.')
 					const current = latest.positions.find(position => position.id === pendingRetirement.id && position.commitment > 0n && position.batch !== 0n)
 					if (current === undefined || current.remainingCommitment !== pendingRetirement.remainingCommitment) throw new Error('Retirement request changed. Review the transaction again.')
 					if (pendingRetirement.retirementPreview?.status === 'ready' && current.retirementPreview?.status !== 'ready') throw new Error('Retirement capacity changed. Refresh the preview and review the transaction again.')

@@ -6,7 +6,7 @@ uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
 uint256 constant SEPOLIA_CHAIN_ID = 11155111;
 uint256 constant SEPOLIA_PRICE_VALID_FOR_SECONDS = 1 hours;
 uint256 constant OPEN_ORACLE_PERCENTAGE_PRECISION = 1e7;
-// Minimum positive public bounty; sponsors and settlers pay their own transaction gas.
+// Positive remainder added to the gas-funded public settlement reward.
 uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;
 uint8 constant OPEN_ORACLE_FLAG_TIME_TYPE = 1 << 0;
 uint8 constant OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1 << 1;

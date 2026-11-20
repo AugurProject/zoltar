@@ -36,6 +36,7 @@ export function portfolioAuctionOpeningReason(snapshot: PortfolioAuctionSnapshot
 	if (auction.finalized) return 'This auction is finalized.'
 	if (auction.opened) return 'This auction is already open.'
 	if (snapshot.timestamp >= auction.closesAt) return 'The auction window has closed.'
+	if (auction.closesAt - snapshot.timestamp < 86_400n) return 'Opening requires at least one day for competitive bidding.'
 	if (snapshot.forkTime !== 0n) return 'This auction universe has forked.'
 	if (auction.targetLots === 0n || auction.inventoryAttoRep === 0n) return 'This branch has no saleable auction lots.'
 	const price = auction.price
@@ -65,7 +66,9 @@ export function quotePortfolioAuctionBid(snapshot: PortfolioAuctionSnapshot, ter
 	const requiredBase = ceilDiv(auction.lotAttoEth * auction.openingConservativePrice, ATTO_UNITS)
 	const requiredSecurity = ceilDiv(requiredBase * auction.securityMultiplierBps, BPS)
 	const requiredPrincipalPerLotAttoRep = uint(ceilDiv(ceilDiv(requiredSecurity * targetHealthFactorBps, BPS), auction.repGrid) * auction.repGrid, 'Required REP per lot')
+	if (auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot) throw new Error('Better funded bids leave no admissible new limit.')
 	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP for the chosen health target.`)
+	if (minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot) throw new Error(auction.maximumAdmissibleBidAttoRepPerLot === 0n ? 'Better funded bids leave no admissible new limit.' : `Better funded bids exclude this limit. Use at most ${formatEther(auction.maximumAdmissibleBidAttoRepPerLot)} REP per lot.`)
 	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
 	uint(auction.depositedAttoEth + bidAttoEth, 'Total auction bid escrow', 128)
 	return {

@@ -49,7 +49,7 @@ export const scopes: Record<PortfolioPriceScope, ScopeCopy> = {
 		releasedRep: 'Released branch REP',
 		formatApprovalReview: (feed, amount, token, collateral) => `Allow branch price feed ${feed} to spend up to ${amount} ${token === 'weth' ? collateral : 'branch REP'} from your wallet. This sets the total allowance; it does not request a price report.`,
 		formatRequestReview: (weth, rep, bounty, collateral) =>
-			`Fund this branch price report with ${weth} ${collateral}, ${rep} branch REP and ${bounty} ETH bounty. Disputes may change the token amounts returned to your wallet. This does not activate the branch. Accepted prices can enable provider fees once the branch is active.`,
+			`Fund this branch price report with ${weth} ${collateral}, ${rep} branch REP and ${bounty} ETH bounty. Whoever settles earns the bounty as withdrawable OpenOracle credit. Disputes may change the token amounts returned to your wallet. This does not activate the branch. Accepted prices can enable provider fees once the branch is active.`,
 	},
 	universe: {
 		title: 'Shared REP price',
@@ -70,7 +70,8 @@ export const scopes: Record<PortfolioPriceScope, ScopeCopy> = {
 		reportLoading: 'Loading this report…',
 		releasedRep: 'Released REP',
 		formatApprovalReview: (feed, amount, token, collateral) => `Allow this universe’s price feed ${feed} to spend up to ${amount} ${token === 'weth' ? collateral : 'REP'} from your wallet. This sets the total allowance; it does not request a price report.`,
-		formatRequestReview: (weth, rep, bounty, collateral) => `Fund this REP price report with ${weth} ${collateral}, ${rep} REP and ${bounty} ETH bounty. Disputes may change the token amounts returned to your wallet. An accepted price renews the shared price for this universe.`,
+		formatRequestReview: (weth, rep, bounty, collateral) =>
+			`Fund this REP price report with ${weth} ${collateral}, ${rep} REP and ${bounty} ETH bounty. Whoever settles earns the bounty as withdrawable OpenOracle credit. Disputes may change the token amounts returned to your wallet. An accepted price renews the shared price for this universe.`,
 	},
 }
 export const prepare = 'Prepare price feed'
@@ -121,3 +122,8 @@ export const busy = 'Wait for the current transaction.'
 export const formatInvertedPriceWarning = (reference: string, collateral: string) => `This looks inverted (${collateral} per REP). Enter REP per ${collateral}; the last accepted price is ${reference}\u00a0REP per ${collateral}.`
 export const formatPriceAboveReferenceWarning = (reference: string, collateral: string) => `More than double the last accepted price of ${reference}\u00a0REP per ${collateral}. Check the price before sending.`
 export const formatPriceBelowReferenceWarning = (reference: string, collateral: string) => `Less than half the last accepted price of ${reference}\u00a0REP per ${collateral}. Check the price before sending.`
+
+export const currentExposure = 'Current exposure'
+export const reportCoverage = 'Report coverage'
+export const growthHeadroom = 'Growth headroom'
+export const coverageWarning = 'Growth beyond this coverage before settlement rejects the price and skips its attached operations.'

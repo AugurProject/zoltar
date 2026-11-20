@@ -73,7 +73,7 @@ export function portfolioObservation(): PortfolioObservation {
 				minimumPurchaseFeeAttoEth: 1n,
 				minimumCommitmentAttoEth: unit,
 				minimumOutcomeRate: 1n,
-				rewardVestingSeconds: 3600n,
+				rewardVestingSeconds: 86_400n,
 			},
 		},
 	}

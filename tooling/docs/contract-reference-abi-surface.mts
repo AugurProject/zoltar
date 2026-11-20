@@ -47,6 +47,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		redeemCompleteSet: ['external(uint256)'],
 		redeemShares: ['external()'],
 		depositWalletRepToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
+		depositWalletRepToEscalationGameWithLead: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		withdrawFromEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256[])'],
 		withdrawForkedEscalationDeposits: ['external(QuestionOutcome,CarriedDepositProof[])'],
 		updateSettlementCollateral: ['public()'],
@@ -59,7 +60,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		setSystemState: ['external(SystemState)'],
 		setShareTokenSupplyAttoShares: ['external(uint256)'],
 		authorizeChildPool: ['external(ISecurityPool)'],
-		receive: ['external payable()'],
 	},
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': {
 		preparePortfolioQuestion: ['external(ISecurityPool,uint248)'],
@@ -114,8 +114,11 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 export const fallbackRoutedEntrypointSignatures: Record<string, Record<string, Record<string, string[]>>> = {
 	'solidity/contracts/statoblast/EscalationGame.sol': {
 		'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol': {
-			depositRepOnOutcomeWithAuthorization: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
-			depositRepOnOutcomeWithPermit: ['external(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
+			depositRepOnOutcomeWithAuthorization: ['public(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
+			depositRepOnOutcomeWithPermit: ['public(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
+			depositRepOnOutcomeWithLead: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
+			depositRepOnOutcomeWithPermitAndLead: ['external(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
+			depositRepOnOutcomeWithAuthorizationAndLead: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
 		},
 	},
 }
@@ -135,7 +138,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/SecurityPool.sol': '829869a2d6d5143d6d375b80af14695aae01cc420dd0264b3b0c0a4660c4f66a',
+	'solidity/contracts/statoblast/SecurityPool.sol': 'd79b7b44239f794e160464e2910e7267f5f9a49bc4f5612db5d61fe67185285c',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '132aa4383180f1ea2384614440c4247328f2256ee16d95ecb0fe0be02f3a05bf',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',

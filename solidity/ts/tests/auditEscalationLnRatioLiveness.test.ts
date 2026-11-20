@@ -1,3 +1,5 @@
+import { formatStorageSlot } from '../testSupport/storage'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../types/contractArtifact'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -5,7 +7,6 @@ import { getSecurityPoolsEscalationGame, withdrawFromEscalationGame } from '../t
 import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
-import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 import { getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -16,7 +17,6 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getTotalPoolHeldAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ESCALATION_TIME_LENGTH = 4_233_600n
 
 describe('Audit PoC: escalation logarithm precision liveness', () => {
@@ -91,11 +91,11 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 		const nonDecisionThresholdAttoRep = reportBond * 2n
 		const trackedSupply = 2n * nonDecisionThresholdAttoRep * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
-		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
+		const genesisSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 		await mockWindow.addStateOverrides({
-			[getZoltarAddress()]: {
+			[getRepTokenAddress(genesisUniverse)]: {
 				stateDiff: {
-					[universeSupplySlot]: trackedSupply,
+					[genesisSupplySlot]: trackedSupply,
 				},
 			},
 		})

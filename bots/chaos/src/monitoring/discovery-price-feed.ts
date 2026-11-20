@@ -13,7 +13,7 @@ export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator
 	const oracleRequestFunding = shared
 		? {
 				...funding,
-				fixedRequestPriceCostAttoEth: requestCost.toString(),
+				settlementBountyMultiplierBps: (await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'maxSettlementBaseFeeMultiplierBps' })).toString(),
 				collateralToken: getAddress(await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'collateralToken' })),
 				minimumReportCollateral: (await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'minimumReportCollateral' })).toString(),
 			}

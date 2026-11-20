@@ -99,7 +99,7 @@ test('stale prices block live-principal withdrawal and authorization while prese
 	expect(hook.state().withdrawReason).toContain('price')
 	await act(() => hook.state().claim())
 	expect(requests).toHaveLength(1)
-	expect(hook.state().serveReason).toContain('price')
+	expect(hook.state().serveReason).toBe('No pending retirement.')
 })
 test('authorizing backed capacity sends zero ETH without a separate funding action', async () => {
 	const { hook, requests } = await setup(capitalSnapshot({ walletAttoEth: 0n }))
@@ -318,28 +318,29 @@ test('approval refresh preserves health and commitment drafts until the concrete
 	expect(hook.state().remainingCommitmentAmount).toBe('0')
 })
 
-test('retirement service targets the owner request without pretending insufficient capacity completed it', async () => {
+test('retirement service stays disabled while the owner request lacks capacity', async () => {
 	const base = capitalSnapshot()
-	const snapshot = { ...base, demandAttoEth: base.healthyCommitmentAttoEth, positions: base.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
-	const { hook, requests, transport } = await setup(snapshot)
-	await act(() => hook.state().serve())
-	const request = requests[0]
-	if (request === undefined) throw new Error('Missing retirement service request')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'serveRetirement', args: [1n] })
-	expect(request.reviewDescription).toContain('your commitment remains unchanged')
-	expect(hook.state().livePositions[0]).toMatchObject({ batch: 1n, commitment: 10n * unit, remainingCommitment: 5n * unit })
-	await request.validateBeforeSubmit?.()
-	transport.setSnapshot(base)
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Retirement request changed')
+	const snapshot = {
+		...base,
+		demandAttoEth: base.healthyCommitmentAttoEth,
+		positions: base.positions.map(position => ({
+			...position,
+			batch: 1n,
+			remainingCommitment: 5n * unit,
+			retirementPreview: { status: 'insufficient-spare' as const, effectiveCurrentBatch: 1n, healthyCommitment: base.healthyCommitmentAttoEth, spareCommitment: 0n, queuedAheadCommitment: 0n, commitmentReduction: 5n * unit, releasedRep: 0n },
+		})),
+	}
+	const { hook, requests } = await setup(snapshot)
+	expect(hook.state().serveReason).toBe('Retirement is not ready.')
+	expect(() => act(() => hook.state().serve())).toThrow(hook.state().serveReason)
+	expect(requests).toHaveLength(0)
 })
 
-test('retirement service without an owner request keeps the bounded global action', async () => {
+test('retirement service without an owner request cannot process other owners', async () => {
 	const { hook, requests } = await setup()
-	await act(() => hook.state().serve())
-	const request = requests[0]
-	if (request === undefined) throw new Error('Missing global retirement service request')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'serveRetirement', args: [0n] })
-	expect(request.reviewDescription).toContain('Partial progress')
+	expect(hook.state().serveReason).toBe('No pending retirement.')
+	expect(() => act(() => hook.state().serve())).toThrow(hook.state().serveReason)
+	expect(requests).toHaveLength(0)
 })
 
 test('a retirement reviewed as ready is stopped if its capacity disappears before submission', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionResult, encodeAbiParameters, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createMulticallStub, createReadContractStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { loadUniverseOutcomePage, loadScalarUniverseOutcome } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
@@ -7,7 +7,7 @@ import { loadUniverseOutcomePage, loadScalarUniverseOutcome } from '@zoltar/ui-z
 const address = getAddress('0x00000000000000000000000000000000000000f1')
 const scalar = { numTicks: 10n ** 25n, displayValueMin: 0n, displayValueMax: 10n ** 43n, answerUnit: 'units' }
 
-function fixture({ labelCount = 2n, scalarQuestion = false, forked = true, binaryPrefix = false } = {}) {
+function fixture({ labelCount = 2n, scalarQuestion = false, forked = true, binaryPrefix = false } = {}, outcomeLabels?: readonly string[]) {
 	const batches: string[][] = []
 	const outcomeIndexes: bigint[] = []
 	const labelReads: (readonly unknown[])[] = []
@@ -16,7 +16,7 @@ function fixture({ labelCount = 2n, scalarQuestion = false, forked = true, binar
 		const result: string[] = []
 		for (let index = start; index < labelCount && index < start + count; index++) {
 			const binaryLabel = index === 0n ? 'Yes' : 'No'
-			result.push(labelCount === 2n || (binaryPrefix && index < 2n) ? binaryLabel : `Outcome ${index + 1n}`)
+			result.push(outcomeLabels?.[Number(index)] ?? (labelCount === 2n || (binaryPrefix && index < 2n) ? binaryLabel : `Outcome ${index + 1n}`))
 		}
 		return result
 	}
@@ -93,6 +93,17 @@ describe('bounded child universe navigation', () => {
 		expect(f.outcomeIndexes).toEqual([0n, 1n, 2n])
 	})
 
+	test('#1352 categorical look-alikes retain multilingual names and distinct outcome IDs', async () => {
+		const malformedLabel = decodeFunctionResult({ abi: parseAbi(['function label() view returns(string)']), functionName: 'label', data: encodeAbiParameters([{ type: 'bytes' }], ['0x496e76616c6964ff']) })
+		if (typeof malformedLabel !== 'string') throw new Error('Label decoder must return a string')
+		const labels = ['Yes', 'YES', 'Іnvalid', 'Invalid\u2061', '答え\u202e', malformedLabel]
+		const f = fixture({ labelCount: BigInt(labels.length) }, labels)
+		const page = await loadUniverseOutcomePage(f.client, address, 0n, 0n)
+		expect(page.choices.map(choice => choice.label)).toEqual(['Outcome 0: Invalid', 'Outcome 1: Yes', 'Outcome 2: YES', 'Outcome 3: Іnvalid', 'Outcome 4: Invalid\u2061', 'Outcome 5: 答え', 'Outcome 6: Invalid�'])
+		expect(page.question?.outcomeLabels).toEqual(['Invalid', ...labels])
+		expect(f.outcomeIndexes).toEqual([0n, 1n, 2n, 3n, 4n, 5n, 6n])
+	})
+
 	test('a third outcome prevents a Yes and No prefix from being classified as binary', async () => {
 		const f = fixture({ labelCount: 3n, binaryPrefix: true })
 		const page = await loadUniverseOutcomePage(f.client, address, 0n, 0n)
@@ -106,19 +117,19 @@ describe('bounded child universe navigation', () => {
 		const f = fixture({ labelCount })
 		const first = await loadUniverseOutcomePage(f.client, address, 0n, 0n)
 		expect(first.choices).toHaveLength(10)
-		expect(first.choices[0]?.label).toBe('Invalid')
-		expect(first.choices[9]?.label).toBe('Outcome 9')
+		expect(first.choices[0]?.label).toBe('Outcome 0: Invalid')
+		expect(first.choices[9]?.label).toBe('Outcome 9: Outcome 9')
 		expect(first.hasNextPage).toBe(true)
 		expect(first.question?.marketType).toBe('categorical')
 		expect(first.question?.outcomesComplete).toBe(false)
-		expect(first.question?.outcomeLabels).toEqual(first.choices.map(choice => choice.label))
+		expect(first.question?.outcomeLabels).toEqual(['Invalid', ...Array.from({ length: 9 }, (_, index) => `Outcome ${index + 1}`)])
 		expect(f.batches.map(batch => batch.length)).toEqual([2, 3, 10, 10])
 		expect(f.labelProbeCounts).toEqual([3n])
 		expect(f.labelReads).toEqual([[0n, 11n]])
 		const next = await loadUniverseOutcomePage(f.client, address, 0n, 10n)
-		expect(next.choices[0]?.label).toBe('Outcome 10')
-		expect(next.choices[9]?.label).toBe('Outcome 19')
-		expect(next.question?.outcomeLabels).toEqual(next.choices.map(choice => choice.label))
+		expect(next.choices[0]?.label).toBe('Outcome 10: Outcome 10')
+		expect(next.choices[9]?.label).toBe('Outcome 19: Outcome 19')
+		expect(next.question?.outcomeLabels).toEqual(Array.from({ length: 10 }, (_, index) => `Outcome ${index + 10}`))
 		expect(next.question?.outcomesComplete).toBe(false)
 		expect(next.question?.description).toBe(first.question?.description)
 		expect(f.labelReads[1]).toEqual([9n, 11n])
@@ -127,7 +138,7 @@ describe('bounded child universe navigation', () => {
 	test('categorical final and empty pages never reinterpret a question as scalar', async () => {
 		const f = fixture({ labelCount: 12n })
 		const last = await loadUniverseOutcomePage(f.client, address, 0n, 10n)
-		expect(last.choices.map(choice => choice.label)).toEqual(['Outcome 10', 'Outcome 11', 'Outcome 12'])
+		expect(last.choices.map(choice => choice.label)).toEqual(['Outcome 10: Outcome 10', 'Outcome 11: Outcome 11', 'Outcome 12: Outcome 12'])
 		expect(last.hasNextPage).toBe(false)
 		expect(last.question?.marketType).toBe('categorical')
 		expect(last.question?.outcomesComplete).toBe(false)

@@ -46,25 +46,25 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0xb874b357c2376232c0eec0feece8538f1d48308077b7454e29506940708b53f3',
-	escalationGameDepositDelegate: '0xb04a308bfd511ca100ae74a2d5e33ce9f729bfc65320f63ea3d03e1f45d987a7',
-	escalationGameFactory: '0x8474b0434cbb295e652d6f22d43f86b7831efe42ac07bd1b9119ce80dc5db9c1',
+	escalationGameDepositDelegate: '0x85d5cc5954aef0ebc611d547182bb9f09edfa2a9311b501d25ca1eb89e07df2a',
+	escalationGameFactory: '0x8810edde24155d1f2344aa92c01637d8f5263dff626330eac587302b8617dbb3',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0xa4c76e3150fd782b9dad5f8dcfd7b107d170f0a56cfd3091f3ceeb8d512995a9',
+	openOraclePriceCoordinatorFactory: '0x51b37b928dfb4c2a34375e43939afc78f8a9cc001f383236075ee399b3de8f3a',
 	priceCoordinatorDeploymentWorker: '0x9f97e2f079558fed174fac4d3b6c31fe50923bae7a832b63a21004fb56ea9b47',
 	securityPoolEventEmitter: '0xd6334e44947bed787f35654d650504061ec1f632f1bf6f7e7370b0e108609e73',
-	securityPoolFactory: '0x20d5c61aa0820c27285be861a6c6cad311c1b8b5e8bef2ee58864b451ae18ec9',
-	securityPoolForker: '0xff24d3dd1d4af34144e5c7d97809c53c3ff4d5f75f3c748290e69acd3e8c5f5b',
-	securityPoolOperationsDelegate: '0x106905e0bf76c09b8496d2ff3883276f5bec3f8b3ac1565064e25f50688a0592',
+	securityPoolFactory: '0x2e6e8a092b20a2bf990d5cb67dde3fe5bbcb2e73c09c6b980c8d7b8416980114',
+	securityPoolForker: '0xd9d44466e743c3599ba92204961bee5f63f9b41ee2899dd82af71333b5314ce8',
+	securityPoolOperationsDelegate: '0xb9303b98d2c084cf52ae17a58a818dd2678a0c29d9c903c819ec445ee808eb3d',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
-	shareTokenFactory: '0x5f0b817633266fa46a86a413fd7d40257bd6925e9c7eed740bfa0becd44350ac',
-	sharedPoolPriceFeedDeploymentWorker: '0x63c13f29cce4a2290dab54a6aac0537de6d14d7c61d6ba1251d17a62a97b1092',
+	shareTokenFactory: '0x1efb5946f2a92ff7fa372bd38bfd0e46b9c8bdec13bf8bf42f6a9ed08bdf4d35',
+	sharedPoolPriceFeedDeploymentWorker: '0x544b35c8d5f92ce273253eada7eef05cc2a1f9cc4b1fb3acc864a0021a55c57a',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x09a357be9635dc37592fd42b1cfa85b2229cf696937dca129b46a7efd77891a7',
-	securityPoolForker: '0x85278c2adf6c90807c4c10021941044ef1ae9ee330092d75bbe7741fe1e6e2d3',
-	shareTokenFactory: '0x18683d24424e09594c965aac7495a49db67552685a1105161e7bb1e687d33646',
+	securityPoolFactory: '0x6ee4d31fafedfd685d2bd0336a4f05e3c784febeeaa91df374939c82fd5f9a7f',
+	securityPoolForker: '0x98d57d5394144a1c85281eadba9299dd2d84ea8aca5d13bfae6f928b32943b5a',
+	shareTokenFactory: '0x223151ecd61568b2620a4c0f724ac89327a92f4ad995200170ac8a46b32f5fe1',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -112,25 +112,25 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0xb874b357c2376232c0eec0feece8538f1d48308077b7454e29506940708b53f3',
-	escalationGameDepositDelegate: '0xb04a308bfd511ca100ae74a2d5e33ce9f729bfc65320f63ea3d03e1f45d987a7',
-	escalationGameFactory: '0x8474b0434cbb295e652d6f22d43f86b7831efe42ac07bd1b9119ce80dc5db9c1',
+	escalationGameDepositDelegate: '0x85d5cc5954aef0ebc611d547182bb9f09edfa2a9311b501d25ca1eb89e07df2a',
+	escalationGameFactory: '0x8810edde24155d1f2344aa92c01637d8f5263dff626330eac587302b8617dbb3',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0x964169fd63f7b44dd82e780d6132aeb12a49963b0dd66f37376dd4515aa13188',
+	openOraclePriceCoordinatorFactory: '0x1df2d2ca8f7afd5490cb933c77ea8c50fbe5bbf9503f5cd2ea02dcba89e70459',
 	priceCoordinatorDeploymentWorker: '0x9f97e2f079558fed174fac4d3b6c31fe50923bae7a832b63a21004fb56ea9b47',
 	securityPoolEventEmitter: '0xd6334e44947bed787f35654d650504061ec1f632f1bf6f7e7370b0e108609e73',
-	securityPoolFactory: '0xb8d89d42de6e2bce8e2df72ca32897842bd13ed7f51b7bf89d03002b12a33235',
-	securityPoolForker: '0x0d8e1fb60e08ac54c37aa1fd5148e48d36f5f1cbdb2c25e85b92047e7e85da6c',
-	securityPoolOperationsDelegate: '0x106905e0bf76c09b8496d2ff3883276f5bec3f8b3ac1565064e25f50688a0592',
+	securityPoolFactory: '0x3b2b228533a8abbf04b0669066f261b335e4f2042c3d50f60b4f2ecc26706b98',
+	securityPoolForker: '0xda86f19043a893c1d8a69878bd5a5b91d4b85e0694990302e4db5dcd20eeb884',
+	securityPoolOperationsDelegate: '0xb9303b98d2c084cf52ae17a58a818dd2678a0c29d9c903c819ec445ee808eb3d',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
-	shareTokenFactory: '0x7d47a49005a78472fe4933fe9b917be222245b301472d9c7388a114e9cadb291',
-	sharedPoolPriceFeedDeploymentWorker: '0x63c13f29cce4a2290dab54a6aac0537de6d14d7c61d6ba1251d17a62a97b1092',
+	shareTokenFactory: '0xa2c4c26ab5e018d2fb4690df44aa790167763ea486a2d51d0731cd5bfd8906da',
+	sharedPoolPriceFeedDeploymentWorker: '0x544b35c8d5f92ce273253eada7eef05cc2a1f9cc4b1fb3acc864a0021a55c57a',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x711e1919051454276a7995f3e997d0cf262a67e1558e1ace64f68db93b4a2148',
-	securityPoolForker: '0x3d8c3191df116d7d2193df6f8f1cce02db98457eb00b7737e10d37c567fcdd48',
-	shareTokenFactory: '0x5b56509b2d9b52bb3ea6ed918ea022a00c3d1470e483b01d45966a3926280cdb',
+	securityPoolFactory: '0xf5384d1d80a7a95612469342f10b9f962ded2ff9b1d336fb9bef0f72a15928ec',
+	securityPoolForker: '0x675da0a64cabf1c3203f85b5cca374b95164899ce5f01303e30a3ccbcb15eacb',
+	shareTokenFactory: '0xb774707a0e4864566012ef7f14d52850bdb263f978a223dad5d625ac9775d7a8',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },

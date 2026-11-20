@@ -11,7 +11,6 @@ import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	ReputationToken_ReputationToken,
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
-	statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy,
 	test_statoblast_FalseReturningERC20_FalseReturningERC20,
 	test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness,
 	test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
@@ -109,50 +108,6 @@ describe('Safe ERC20 Operations', () => {
 			),
 			/SafeERC20Ops token call reverted/,
 		)
-	})
-
-	test('migration proxy constructor rejects false-returning approval tokens', async () => {
-		const falseToken = await deployFalseReturningToken()
-		const dummyZoltar = client.account.address
-		if (dummyZoltar === null) throw new Error('dummy zoltar address missing')
-		const owner = client.account.address
-		if (owner === null) throw new Error('owner address missing')
-		const deploymentData = encodeDeployData({
-			abi: statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi,
-			bytecode: `0x${statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.evm.bytecode.object}`,
-			args: [dummyZoltar, falseToken, 0n, owner],
-		})
-
-		await assert.rejects(
-			writeContractAndWait(client, () => client.sendTransaction({ data: deploymentData })),
-			/SafeERC20Ops token returned false from ERC20 call/,
-		)
-	})
-
-	test('migration proxy rejects every privileged operation from a non-owner', async () => {
-		const reputationToken = await deployContract(
-			client,
-			encodeDeployData({
-				abi: ReputationToken_ReputationToken.abi,
-				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
-				args: [client.account.address],
-			}),
-		)
-		const proxy = await deployContract(
-			client,
-			encodeDeployData({
-				abi: statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi,
-				bytecode: `0x${statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.evm.bytecode.object}`,
-				args: [client.account.address, reputationToken, 0n, zeroAddress],
-			}),
-		)
-		const proxyAbi = statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi
-		const reason = /Only the security pool forker can use this migration proxy/
-
-		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'lockRep', args: [1n] }), reason)
-		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'forkUniverse', args: [1n] }), reason)
-		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'splitToChild', args: [1n, [0n]] }), reason)
-		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'sweepChildRep', args: [client.account.address, reputationToken, 1n] }), reason)
 	})
 
 	test('security pool deployment worker reports constructor failures without revert data', async () => {

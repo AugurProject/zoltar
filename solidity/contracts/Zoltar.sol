@@ -44,6 +44,7 @@ contract Zoltar {
 	uint256 public immutable forkBurnDivisor;
 	IExternalGenesisReputationToken public immutable genesisReputationToken;
 	ZoltarQuestionData public immutable zoltarQuestionData;
+	uint256 private burnedGenesisAttoRep;
 
 	constructor(ZoltarQuestionData _zoltarQuestionData, IExternalGenesisReputationToken _genesisReputationToken, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
@@ -113,6 +114,12 @@ contract Zoltar {
 
 	/// @notice Returns the universe's theoretical REP supply.
 	function getUniverseTheoreticalSupplyAttoRep(uint248 universeId) public view returns (uint256) {
+		if (universeId == 0 && universes[0].forkTime == 0) {
+			uint256 externalSupply = genesisReputationToken.getTotalTheoreticalSupply();
+			require(externalSupply <= Constants.MAX_ATTO_REP, 'Genesis REP exceeds maximum supply');
+			require(externalSupply >= burnedGenesisAttoRep, 'Genesis supply below burned REP');
+			return externalSupply - burnedGenesisAttoRep;
+		}
 		return universeTheoreticalSupplies[universeId];
 	}
 
@@ -123,6 +130,8 @@ contract Zoltar {
 
 	function _forkUniverse(address owner, uint248 universeId, uint256 questionId) private {
 		Universe storage universe = universes[universeId];
+		if (universeId == 0 && universe.forkTime == 0)
+			universeTheoreticalSupplies[0] = getUniverseTheoreticalSupplyAttoRep(0);
 		require(address(universe.reputationToken) != address(0x0), 'Universe REP token missing');
 		require(address(universe.reputationToken).code.length != 0, 'Universe REP token address must contain code');
 		require(universeTheoreticalSupplies[universeId] != 0, 'Universe theoretical REP supply must be non-zero');
@@ -160,6 +169,8 @@ contract Zoltar {
 	function _burnRepFor(address owner, uint248 universeId, uint256 amountAttoRep) private {
 		require(amountAttoRep > 0, 'Burn amount zero');
 		Universe storage universe = universes[universeId];
+		if (universeId == 0 && universe.forkTime == 0)
+			universeTheoreticalSupplies[0] = getUniverseTheoreticalSupplyAttoRep(0);
 		require(address(universe.reputationToken) != address(0x0), 'Universe REP token missing');
 		require(universeTheoreticalSupplies[universeId] >= amountAttoRep, 'Burn exceeds theoretical supply');
 		_burnRep(universe.reputationToken, owner, amountAttoRep);
@@ -171,6 +182,7 @@ contract Zoltar {
 		// Genesis is using REPv2 which we cannot actually burn
 		if (address(reputationToken) == address(genesisReputationToken)) {
 			IERC20(address(reputationToken)).safeTransferFrom(migrator, Constants.BURN_ADDRESS, amountAttoRep);
+			burnedGenesisAttoRep += amountAttoRep;
 		} else {
 			ReputationToken(address(reputationToken)).burn(migrator, amountAttoRep);
 		}

@@ -349,7 +349,6 @@ describe('state projections', () => {
 			['ReportOperationAttempted', { reportId: '7', sponsor: vault, operationIndex: '0', success: true }, 'oracle', 'price-feed', pool.toLowerCase()],
 			['PortfolioDeployed', { portfolio: vault, creator: pool }, 'risk', 'portfolio', vault.toLowerCase()],
 			['PortfolioRegistered', { portfolio: vault, originUniverseId: '0' }, 'risk', 'portfolio', vault.toLowerCase()],
-			['EthReceived', { sender: vault, amountAttoEth: atomic(1n) }, 'risk', 'pool', pool.toLowerCase()],
 			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
 			['BidVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'portfolio-auction', pool.toLowerCase()],
 			['AuctionClosed', { filledLots: '1', raisedAttoEth: atomic(1n), soldAttoRep: atomic(2n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],

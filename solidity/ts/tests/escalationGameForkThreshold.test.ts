@@ -1,5 +1,7 @@
+import { formatStorageSlot } from '../testSupport/storage'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
-import { encodeAbiParameters, encodeDeployData, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
@@ -29,7 +31,6 @@ import {
 } from '../types/contractArtifact'
 
 const DAY = 86400n
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 describe('Escalation Game Fork Threshold Test', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -44,8 +45,8 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let questionId: bigint
 
 	const overrideGenesisTheoreticalSupply = async (totalSupply: bigint) => {
-		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [GENESIS_UNIVERSE, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
-		await mockWindow.addStateOverrides({ [getZoltarAddress()]: { stateDiff: { [universeSupplySlot]: totalSupply } } })
+		const genesisSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
+		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [genesisSupplySlot]: totalSupply } } })
 	}
 
 	beforeEach(async () => {

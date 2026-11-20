@@ -66,6 +66,7 @@ export const migrationCompleteTitle = 'All your REP here is migrated'
 export const migrationCompleteDetail = 'Every child universe has received your full migration balance.'
 export const addChildRepToWalletTitle = 'Add child-universe REP to your wallet'
 export const formatUnnamedOutcome = (position: CopyTemplateValue) => `Outcome ${position}`
+export const formatIndexedOutcome = (label: CopyTemplateValue, index: CopyTemplateValue) => `Outcome ${index}: ${label}`
 export const migrationStepCurrent = 'Current'
 export const migrationForkRequired = 'This universe must fork before REP can be migrated.'
 export const walletRep = 'Wallet REP'

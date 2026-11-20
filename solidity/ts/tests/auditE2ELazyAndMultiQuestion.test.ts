@@ -72,7 +72,8 @@ describe('auditE2E: lazy materialization and a second escalated question keep re
 		expect(supplyA - (await e2e.supply(A))).toBe(0n)
 		const residual = await e2e.gameBalance(child.game)
 		expect(residual).toBe(backing - paid)
-		await e2e.sweep(r6, child.game)
+		if (residual === 0n) await expect(e2e.sweep(r6, child.game)).rejects.toThrow('No sweepable REP')
+		else await e2e.sweep(r6, child.game)
 		expect(await e2e.rep(A, ledger)).toBe(0n)
 		expect(supplyA - (await e2e.supply(A))).toBe(residual)
 		// The grandchildren inherit no reporter escrow for the already final question.

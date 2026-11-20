@@ -196,7 +196,7 @@ export function getSubmittableOutcomeIndexes(childUniverses: readonly ZoltarChil
 
 /** Names an outcome for transaction dialogs, falling back to its position when the universe summary is unavailable. */
 export function getOutcomeLabelForIndex(childUniverses: readonly ZoltarChildUniverseSummary[] | undefined, outcomeIndex: bigint) {
-	return childUniverses?.find(child => child.outcomeIndex === outcomeIndex)?.outcomeLabel ?? zoltarCopy.formatUnnamedOutcome(outcomeIndex + 1n)
+	return childUniverses?.find(child => child.outcomeIndex === outcomeIndex)?.outcomeLabel ?? zoltarCopy.formatUnnamedOutcome(outcomeIndex)
 }
 
 /** Toggles an outcome while keeping the order in which outcomes were picked. */

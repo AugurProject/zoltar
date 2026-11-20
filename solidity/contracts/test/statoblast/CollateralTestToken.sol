@@ -7,6 +7,8 @@ contract CollateralTestToken {
 	string public symbol = 'TEST';
 	uint8 public immutable decimals;
 	uint256 public feeBps;
+	bool public paused;
+	mapping(address => bool) public blocked;
 	uint256 public totalSupply;
 	mapping(address => uint256) public balanceOf;
 	mapping(address => mapping(address => uint256)) public allowance;
@@ -19,6 +21,12 @@ contract CollateralTestToken {
 		balanceOf[to] += amount;
 		totalSupply += amount;
 		emit Transfer(address(0), to, amount);
+	}
+	function setBlocked(address account, bool value) external {
+		blocked[account] = value;
+	}
+	function setPaused(bool value) external {
+		paused = value;
 	}
 	function setFee(uint256 fee) external {
 		require(fee <= 10_000, 'Invalid fee');
@@ -43,6 +51,8 @@ contract CollateralTestToken {
 		return true;
 	}
 	function _transfer(address from, address to, uint256 amount) private {
+		require(!paused, 'Collateral paused');
+		require(!blocked[from] && !blocked[to], 'Collateral account blocked');
 		require(balanceOf[from] >= amount, 'Insufficient collateral');
 		balanceOf[from] -= amount;
 		uint256 received = amount - (amount * feeBps) / 10_000;

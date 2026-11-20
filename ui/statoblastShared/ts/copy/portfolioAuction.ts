@@ -22,7 +22,7 @@ export const inventory = 'REP available for sale'
 export const shortfall = 'Branch collateral shortfall'
 export const lotPrice = 'collateral committed per lot'
 export const lotCount = 'Number of lots'
-export const lotHint = 'Positive whole lots only. Each winning lot becomes one minimum-sized commitment.'
+export const lotHint = 'Positive whole lots only. Each winning lot becomes one commitment at the displayed collateral amount.'
 export const lotsInvalid = 'Enter a positive whole number of lots.'
 export const minimumRep = 'Minimum REP purchased per lot'
 export const priceHint = (grid: bigint | undefined) => `This sets your maximum price. ${grid === undefined ? 'Checking REP price step.' : `Use multiples of ${formatEther(grid)} REP.`}`
@@ -84,3 +84,6 @@ export const busy = 'Wait for the current transaction.'
 export const pages = (start: bigint, count: number, total: bigint) => `${start + (count === 0 ? 0n : 1n)}–${start + BigInt(count)} of ${total} bids`
 export const bidReview = (lots: bigint, bidAttoEth: bigint, minimumAttoRepPerLot: bigint, decimals = 18, symbol = 'collateral') =>
 	`Bid ${formatUnits(bidAttoEth, decimals)} ${symbol} for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP collateral per winning lot. Purchased REP backs the vault’s accepted collateral commitment immediately at closing. If better funded bids rule out this bid, its collateral can be refunded early; otherwise unused collateral refunds after closing.`
+
+export const maximumAdmissible = 'Highest currently admissible limit'
+export const noAdmissibleLimit = 'No admissible new limit'

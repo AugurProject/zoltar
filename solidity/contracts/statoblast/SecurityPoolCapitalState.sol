@@ -24,6 +24,7 @@ abstract contract SecurityPoolCapitalState {
 	uint256 public demandAttoEth;
 	uint256 public totalFreeAttoRep;
 	uint256 public retirementCashAttoRep;
+	uint256 public pendingBurnCash;
 	uint256 public frozenBackingAttoRep;
 	uint256 public frozenCommitmentAttoEth;
 	bool public frozen;
@@ -44,6 +45,7 @@ abstract contract SecurityPoolCapitalState {
 		uint256 commitment;
 		uint96 batch;
 		uint256 remainingCommitment;
+		uint64 retirementOrder;
 	}
 	struct FundingPrice {
 		uint256 floor;

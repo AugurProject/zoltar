@@ -19,8 +19,6 @@ contract SecurityPoolForker {
 		portfolioDelegate = _portfolioDelegate;
 	}
 
-	// A deterministic proxy gives each parent pool a unique caller for Zoltar migration.
-
 	/// @notice Activates fork mode on a pool in a forked universe and locks its REP and unresolved escrow REP into Zoltar migration; callable by anyone.
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external {
 		require(zoltar.getForkTime(securityPool.universeId()) != 0, 'Universe has not forked');

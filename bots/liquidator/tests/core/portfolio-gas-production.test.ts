@@ -178,7 +178,7 @@ describe('atomic unpaid cure and portfolio takeover', () => {
 			await ethereum.setBalance(account.address, 100n * E)
 			const buyer = createWriteClient(ethereum, BigInt(account.address))
 			await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'beginImport' }))
-			await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'importChoice', args: [sender.account.address, { rep: 105n * E, commitment: 100n * E, batch: retainedCommitment === 0n ? 0n : 1n, remainingCommitment: retainedCommitment }, 10_000n] }))
+			await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'importChoice', args: [sender.account.address, { rep: 105n * E, commitment: 100n * E, batch: retainedCommitment === 0n ? 0n : 1n, remainingCommitment: retainedCommitment, retirementOrder: 0n }, 10_000n] }))
 			await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'mint', args: [fixture.capital.address, 105n * E] }))
 			await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'finishImport', args: [90n * E] }))
 			await fixture.price(2n * E)

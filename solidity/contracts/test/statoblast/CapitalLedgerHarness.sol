@@ -140,7 +140,7 @@ contract CapitalLedgerHarness {
 			if (alternating) baseRep = i % 2 == 0 ? 21 ether : 84 ether;
 			uint256 rep = baseRep + i * 1e12;
 			uint96 batch = uint96(i % 3);
-			ledger.importChoice(address(uint160(0x1000 + i)), SecurityPoolCapitalState.ChoicePosition(rep, 20 ether, batch, batch == 0 ? 0 : 10 ether), 10_000);
+			ledger.importChoice(address(uint160(0x1000 + i)), SecurityPoolCapitalState.ChoicePosition(rep, 20 ether, batch, batch == 0 ? 0 : 10 ether, uint64(i + 1)), 10_000);
 			principal += rep;
 		}
 		zoltar.mint(address(ledger), principal);

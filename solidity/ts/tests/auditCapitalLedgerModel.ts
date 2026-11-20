@@ -65,6 +65,7 @@ export type ModelPosition = {
 	k: bigint
 	price: bigint
 	remaining: bigint
+	order: bigint
 	retired: boolean
 	repClaimed: boolean
 	distress: bigint | undefined
@@ -239,8 +240,9 @@ const creditEarnings = (m: Model, eth: bigint, rep: bigint) => {
 export const checkpoint = (m: Model) => {
 	if (m.importing) return
 	const effective = m.forkTime !== 0n ? min(m.now, m.forkTime) : m.now
-	let through = min(effective, m.validUntil)
-	if (m.forkTime !== 0n && m.forkTime < m.validUntil) through = m.now
+	// Prepaid fees belong to the existing backing through stale live time.
+	// A terminal parent without a fresh fork-time price stops at its fork.
+	const through = m.forkTime !== 0n && m.forkTime >= m.validUntil ? effective : m.now
 	let eth = 0n
 	let rep = 0n
 	if (through > m.releasedThrough) [eth, rep] = release(m, through)
@@ -297,7 +299,8 @@ const ledgerReplace = (m: Model, id: bigint, rep: bigint, k: bigint) => {
 const create = (m: Model, owner: number, batch: bigint, rep: bigint, k: bigint, price: bigint, remaining: bigint) => {
 	requireModel(k !== 0n, 'Invalid commitment position')
 	const id = BigInt(m.positions.length + 1)
-	m.positions.push({ id, owner, batch, rep, k, price, remaining, retired: false, repClaimed: false, distress: undefined, ethFees: 0n, repFees: 0n, dust: 0n })
+	const order = batch === 0n ? 0n : m.positions.reduce((last, p) => max(last, p.order), 0n) + 1n
+	m.positions.push({ id, owner, batch, rep, k, price, remaining, order, retired: false, repClaimed: false, distress: undefined, ethFees: 0n, repFees: 0n, dust: 0n })
 	return id
 }
 const promote = (m: Model) => {
@@ -308,70 +311,16 @@ const promote = (m: Model) => {
 	m.nextBatch = ++m.lastBatch
 }
 type Retirement = { rep: bigint; k: bigint; boundary: bigint }
-const retireAll = (m: Model): Retirement => {
-	const result = { rep: 0n, k: 0n, boundary: 0n }
-	const healthy = eligible(m, m.cons)
-	if (healthy < m.demand) return result
-	let spare = healthy - m.demand
-	for (let group = 0; group < 2; group++) {
-		promote(m)
-		if (m.currentBatch === 0n) break
-		const members = cohort(m, m.currentBatch)
-		const total = members.reduce((sum, p) => sum + p.k, 0n)
-		const healthyMembers = members.reduce((sum, p) => sum + (p.price >= m.cons ? p.k : 0n), 0n)
-		// Everything healthier than the healthiest partial request, plus that request's reduction.
-		let limit = total
-		for (let i = members.length - 1; i >= 0; i--) {
-			const member = members[i]
-			if (member === undefined || member.remaining === 0n) continue
-			limit = members.slice(i + 1).reduce((sum, p) => sum + p.k, 0n) + member.k - member.remaining
-			break
-		}
-		const amount = min(spare >= healthyMembers ? total : spare, limit)
-		if (amount === total) {
-			for (const p of members) {
-				result.rep += p.rep
-				p.retired = true
-			}
-			result.k += total
-			spare -= healthyMembers
-			m.currentBatch = 0n
-			continue
-		}
-		if (amount === 0n) break
-		let left = amount
-		for (let i = members.length - 1; i >= 0 && left !== 0n; i--) {
-			const p = members[i]
-			if (p === undefined) throw new Error('Model cohort member missing')
-			if (left >= p.k) {
-				left -= p.k
-				result.rep += p.rep
-				p.retired = true
-			} else {
-				p.k -= left
-				left = 0n
-				result.boundary = p.id
-				if (p.remaining !== 0n && p.k === p.remaining) reinsert(p)
-			}
-		}
-		result.k += amount
-		break
-	}
-	return result
-}
 type Preview = { status: 'NotRetiring' | 'DemandExceedsHealthy' | 'EarlierRequests' | 'InsufficientSpare' | 'Ready'; reduction: bigint }
 const previewRetirement = (m: Model, id: bigint): Preview => {
-	let effective = m.currentBatch
-	if (effective === 0n || cohort(m, effective).length === 0) effective = cohort(m, m.nextBatch).length === 0 ? 0n : m.nextBatch
 	const p = findPosition(m, id)
 	if (p === undefined || !inTree(p) || p.batch === 0n) return { status: 'NotRetiring', reduction: 0n }
 	const reduction = p.k - p.remaining
 	const healthy = eligible(m, m.cons)
 	const spare = healthy > m.demand ? healthy - m.demand : 0n
-	const queued = (members: ModelPosition[]) => members.reduce((sum, q) => sum + (q.price >= m.cons ? q.k - q.remaining : 0n), 0n)
-	const own = cohort(m, p.batch)
-	let ahead = p.price < m.cons ? queued(own) : queued(own.slice(own.findIndex(q => q.id === p.id) + 1))
-	if (effective !== 0n && p.batch !== effective) ahead += queued(cohort(m, effective))
+	const ahead = live(m)
+		.filter(q => q.batch !== 0n && q.order < p.order)
+		.reduce((sum, q) => sum + q.k - q.remaining, 0n)
 	if (healthy < m.demand) return { status: 'DemandExceedsHealthy', reduction }
 	if (spare < ahead) return { status: 'EarlierRequests', reduction }
 	if (p.price >= m.cons && spare - ahead < reduction) return { status: 'InsufficientSpare', reduction }
@@ -397,8 +346,9 @@ const retireOne = (m: Model, id: bigint): Retirement => {
 }
 export const serve = (m: Model, id: bigint) => {
 	requireModel(id === 0n || id !== m.cohortId, 'Materialize an individual auction vault')
-	if (!priceValid(m) || m.frozen || m.forkTime !== 0n) return
-	const result = id === 0n ? retireAll(m) : retireOne(m, id)
+	const pending = findPosition(m, id)
+	if (id === 0n || pending === undefined || !inTree(pending) || pending.batch === 0n || !priceValid(m) || m.frozen || m.forkTime !== 0n) return
+	const result = retireOne(m, id)
 	m.retCash += result.rep
 	if (result.boundary !== 0n) {
 		const boundary = positionOf(m, result.boundary)
@@ -460,7 +410,8 @@ export const collateral = (m: Model, o: number) => {
 	const commitment = (p !== undefined && inTree(p) ? p.k : 0n) + (bid === undefined ? 0n : bid.lots * MINC)
 	if (commitment === 0n) return { principal, commitment, withdrawable: principal }
 	if (m.importing || m.frozen || owner.exported || m.forkTime !== 0n || !priceValid(m) || eligible(m, m.cons) < m.demand) return { principal, commitment, withdrawable }
-	const required = requiredRep(commitment, m.cons, bid === undefined ? targetOf(owner) : bid.health)
+	const withdrawalCommitment = p !== undefined && inTree(p) && p.batch !== 0n && previewRetirement(m, p.id).status === 'Ready' ? commitment - p.k + p.remaining : commitment
+	const required = requiredRep(withdrawalCommitment, m.cons, bid === undefined ? targetOf(owner) : bid.health)
 	if (pledged > required) withdrawable += pledged - required
 	return { principal, commitment, withdrawable }
 }
@@ -531,7 +482,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	const existing = findPosition(m, receiver.positionId)
 	const existingRep = existing === undefined ? 0n : existing.rep
 	const existingK = existing === undefined ? 0n : existing.k
-	if (existing !== undefined) requireModel(existing.batch === sourceBatch, 'Receiver retirement differs')
+	if (existing !== undefined) requireModel(existing.batch === 0n || existing.batch === sourceBatch, 'Receiver retirement differs')
 	const free = receiver.free
 	requireModel(free <= maxOwn, 'Receiver consent exceeded')
 	requireModel(existingRep + award + free >= requiredRep(existingK + k, m.cons, targetOf(receiver)), 'Receiver collateral insufficient')
@@ -559,7 +510,10 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	} else {
 		existing.rep += debit
 		existing.k += k
-		existing.remaining += transferred
+		if (existing.batch !== 0n) {
+			existing.remaining += transferred
+			existing.order = m.positions.reduce((last, q) => max(last, q.order), 0n) + 1n
+		}
 		reinsert(existing)
 	}
 	ledgerReplace(m, receiverId, existingRep + received, existingK + k)
@@ -645,7 +599,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 			if (op.value > m.demand) {
 				requireFresh(m)
 				serve(m, 0n)
-				requireModel(op.value <= eligible(m, m.cons), 'Healthy commitment insufficient')
+				requireModel(op.value <= eligibleActive(m, m.cons), 'Healthy commitment insufficient')
 			}
 			m.demand = op.value
 			serve(m, 0n)
@@ -690,6 +644,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 		}
 		case 'withdraw': {
 			checkpoint(m)
+			serve(m, ownerOf(m, op.o).positionId)
 			requireModel(op.amount > 0n, 'Invalid capital withdrawal')
 			settle(m, op.o)
 			const owner = ownerOf(m, op.o)
@@ -744,13 +699,15 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 				requireModel(p.batch === 0n && p.k !== 0n, 'Position is not active')
 				requireModel(op.value === 0n || (op.value >= MINC && p.k - op.value >= MINC), 'Retirement below economic minimum')
 				p.batch = m.nextBatch
+				p.order = m.positions.reduce((last, q) => max(last, q.order), 0n) + 1n
 				p.remaining = op.value
 			}
-			serve(m, 0n)
+			serve(m, p.id)
 			return undefined
 		}
 		case 'serve':
 			requireOpen(m)
+			requireModel(op.id !== 0n && findPosition(m, op.id)?.owner === op.o, 'Only retirement owner')
 			checkpoint(m)
 			serve(m, op.id)
 			return undefined

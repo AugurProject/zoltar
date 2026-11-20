@@ -29,6 +29,30 @@ const repairAbi = parseAbi(['function topUp(uint248 universeId,uint256 maximumCa
 describe('Statoblast: permissionless settlement repair', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 
+	test('#1330 a donor cannot impose funded demand above the child providers commitment', async () => {
+		const owner = fixture.owner()
+		const other = fixture.other()
+		await fixture.prepare(1_000n * unit, 200n * unit)
+		await fixture.deposit(1_000n * unit, other)
+		await fixture.authorize(200n * unit, other)
+		await fixture.mint(300n * unit, fixture.secondQuestionId)
+		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
+		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
+		const root = { abi: portfolioArtifact.abi, address: fixture.portfolio }
+		const settlement = await owner.readContract({ ...root, functionName: 'settlement' })
+		const capital = await owner.readContract({ ...root, functionName: 'capitalLedger', args: [child] })
+		const exposure = await owner.readContract({ ...root, functionName: 'oracleExposure', args: [child] })
+		const demand = await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'demandAttoEth' })
+		const collateral = await owner.readContract({ ...root, functionName: 'collateralToken' })
+		await approveToken(owner, collateral, settlement)
+		const before = await collateralBalance(owner, fixture.portfolio, owner.account.address)
+		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: repairAbi, address: settlement, functionName: 'topUp', args: [child, 300n * unit] }))).rejects.toThrow('Repair exceeds underwriting commitment')
+		expect(await collateralBalance(owner, fixture.portfolio, owner.account.address)).toBe(before)
+		expect(await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'demandAttoEth' })).toBe(demand)
+		expect(await owner.readContract({ ...root, functionName: 'oracleExposure', args: [child] })).toBe(exposure)
+	})
+
 	test('#1247 a minimum non-chooser cannot leave a supported child permanently in runoff', async () => {
 		const owner = fixture.owner()
 		const other = fixture.other()

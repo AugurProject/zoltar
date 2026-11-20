@@ -38,7 +38,9 @@ const withdrawPrincipalData = (amount: bigint, recipient: Address) => encodeFunc
 // A larger tied book only grows logarithmic tree paths; the bounded-growth check
 // guards the owner, keeper and bidder paths against a history-dependent loop.
 describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	// Keep the deficit in whole collateral units so this benchmark retains a
+	// multi-lot book instead of measuring the fractional-deficit sizing case.
+	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	const reports = new Map<number, Measurement[]>()
 	for (const bookSize of bookSizes) {
 		test(`a ${bookSize}-bid tied book keeps bidding, refunds, vault, fee, retirement, liquidation and fork paths bounded`, async () => {
@@ -107,8 +109,10 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			const winner = await bid('bid: first bid in an empty book', other, 2n, bestPrice)
 			const loser = await bid('bid: later losing bid', other, 1n, losingPrice)
 			const grid = await owner.readContract({ ...auction, functionName: 'repGrid' })
+			const targetLots = await owner.readContract({ ...auction, functionName: 'targetLots' })
+			expect(targetLots).toBeGreaterThan(2n)
 			let lastFiller: Bid | undefined
-			for (let count = 1; count <= bookSize; count++) lastFiller = await bid(count === bookSize ? 'bid: last tied bid in the book' : undefined, filler, 3n, tiedPrice + BigInt(bookSize - count) * grid)
+			for (let count = 1; count <= bookSize; count++) lastFiller = await bid(count === bookSize ? 'bid: last tied bid in the book' : undefined, filler, targetLots, tiedPrice + BigInt(bookSize - count) * grid)
 			if (lastFiller === undefined) throw new Error('Missing tied bids')
 			await revertedGasOf('refund failure: credit a bid that may still win', owner, context.auction, encodeFunctionData({ abi: auctionArtifact.abi, functionName: 'settleRefund', args: [winner.id] }))
 			const earlySnapshot = await snapshot()
@@ -186,13 +190,13 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			await materializedPositionId(partial)
 			await vaultCall('retirement: another winner requests retirement', filler, partial.vault, context.capital, setCommitmentData(0n))
 			await gasOf('retirement: incumbent requests partial retirement', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [100n * unit] }))
-			await materializedPositionId(winner)
+			const retiringWinnerId = await materializedPositionId(winner)
 			await vaultCall('retirement: winner requests retirement after history', other, winner.vault, context.capital, setCommitmentData(0n))
-			await gasOf('retirement: permissionless service after history', stranger, () => stranger.writeContract({ ...capital, functionName: 'serveRetirement', args: [0n] }))
+			await vaultCall('retirement: owner service after history', other, winner.vault, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'serveRetirement', args: [retiringWinnerId] }))
 			await restore(retirementHistory)
 			await materializedPositionId(winner)
 			await vaultCall('retirement: winner requests retirement without history', other, winner.vault, context.capital, setCommitmentData(0n))
-			await gasOf('retirement: permissionless service without history', stranger, () => stranger.writeContract({ ...capital, functionName: 'serveRetirement', args: [0n] }))
+			await vaultCall('retirement: owner service without history', other, winner.vault, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'serveRetirement', args: [retiringWinnerId] }))
 			await restore(finalized)
 
 			// Expired price: claims and checkpoints continue; price-gated operations fail.
@@ -213,14 +217,14 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'transfer', args: [keeper.account.address, 60n * unit] }))
 			await approveToken(keeper, context.token, context.capital)
 			await gasOf('liquidation: keeper deposits principal', keeper, () => keeper.writeContract({ ...capital, functionName: 'depositFor', args: [keeper.account.address, 60n * unit] }))
-			await context.report(5n * unit, 10n * unit)
+			await context.report(20n * unit, 5n * unit)
 			const distressStart = await owner.readContract({ ...capital, functionName: 'liquidationStarted', args: [cohort[1]] })
 			expect(distressStart).toBeGreaterThan(0n)
 			// One hour of uninterrupted distress earns the full award; the price
 			// observation must be refreshed because the feed window is shorter.
 			for (let renewal = 0; renewal < 6; renewal++) {
 				await mock.advanceTime(120n)
-				await context.report(5n * unit, 10n * unit)
+				await context.report(20n * unit, 5n * unit)
 			}
 			expect(await owner.readContract({ ...capital, functionName: 'liquidationStarted', args: [cohort[1]] })).toBe(distressStart)
 			const totalCommitment = (await owner.readContract({ ...capital, functionName: 'totals' }))[1]

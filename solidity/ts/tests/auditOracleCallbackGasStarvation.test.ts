@@ -62,7 +62,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 		const { sponsor, feed } = await prepare()
 		const attacker = fixture.owner()
 		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [unit, sponsor.account.address] }) }]
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
@@ -80,7 +80,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 	test('rejects an operation batch whose callback could not be settled in one transaction', async () => {
 		const { sponsor, feed } = await prepare()
 		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) }]
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		await expect(sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 6_000_001, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty })).rejects.toThrow(
 			'Callback gas exceeds limit',
@@ -94,7 +94,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 	test('rejects operation data too long for the per-operation callback overhead to read back', async () => {
 		const { sponsor, feed } = await prepare()
 		const claimEarnings = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' })
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const request = (data: Hex) =>
 			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [{ gasLimit: 500_000n, data }] }], value: bounty })
@@ -114,7 +114,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 	test('ordinary report: the cheapest settlement that succeeds accepts the price', async () => {
 		const { sponsor, feed } = await prepare()
 		const attacker = fixture.owner()
-		const bounty = await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...feed, functionName: 'requestPortfolioPrice', args: [unit, 10n * unit, bounty], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)

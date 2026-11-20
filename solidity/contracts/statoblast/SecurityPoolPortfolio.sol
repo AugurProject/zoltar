@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { CheckedTimestamp } from './CheckedTimestamp.sol';
+
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolQuestionAdmissionPolicy } from './interfaces/ISecurityPoolQuestionAdmissionPolicy.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
@@ -136,7 +138,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
 		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Portfolio deployer has no code');
 		// A fee stream ends one vesting duration after its funding time and must fit the uint48 clock.
-		require(config.rewardVestingSeconds > 0 && config.rewardVestingSeconds <= MAXIMUM_REWARD_VESTING_SECONDS && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
+		require(config.rewardVestingSeconds >= 1 days && config.rewardVestingSeconds <= MAXIMUM_REWARD_VESTING_SECONDS && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
 		require(origin.reportPriorityFeeAttoEthPerGas > 0, 'Initial priority fee zero');
 		require(origin.securityMultiplierBps >= SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS, 'Multiplier must be at least 10500 BPS');
 		factory = _factory;
@@ -195,8 +197,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 			settlement = deployers.settlement.create(address(this));
 			settlement.initialize(deployers.books.create(address(settlement), minimumOutcomeRate));
 			settlement.authorizeServices(address(services));
-			settlement.registerUniverse(originUniverseId, uint48(block.timestamp));
-			settlement.setFeesEnabled(originUniverseId, false, uint48(block.timestamp));
+			settlement.registerUniverse(originUniverseId, CheckedTimestamp.toUint48(block.timestamp));
+			settlement.setFeesEnabled(originUniverseId, false, CheckedTimestamp.toUint48(block.timestamp));
 			services.registerUniverse(originUniverseId);
 		} else if (setupStage == SETUP_REPORTERS_AND_FORKS) {
 			reporters = deployers.reporters.create(address(this), zoltar);
@@ -212,9 +214,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		}
 		setupStage++;
 		emit SetupAdvanced(setupStage);
-	}
-	receive() external payable {
-		require(msg.sender == address(settlement) || msg.sender == address(services) || msg.sender == forkController || capitalAddresses[msg.sender], 'Unexpected portfolio ETH');
 	}
 	function reporterLedger(uint248) external view returns (address) {
 		return address(reporters);
@@ -430,7 +429,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {
 		capital = deployers.capital.create(capitalImplementation, universeId);
-		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
+		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), CheckedTimestamp.toUint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
 		capitalLedger[universeId] = capital;
 		capitalAddresses[address(capital)] = true;
 		emit UniversePrepared(universeId, address(capital));

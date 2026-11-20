@@ -24,6 +24,7 @@ contract SecurityPoolPortfolioSettlement {
 	address public immutable portfolio;
 	IERC20 public immutable collateralToken;
 	address public services;
+	uint256 public pendingServiceFees;
 	SecurityPoolSettlementBook public ledger;
 	bool private entered;
 
@@ -363,7 +364,16 @@ contract SecurityPoolPortfolioSettlement {
 		(, , cashAttoEth, , ) = ledger.totals(bookId);
 		if (cashAttoEth == 0) return 0;
 		ledger.collectFees(bookId, cashAttoEth);
-		_sendEth(msg.sender == services ? services : portfolio, cashAttoEth);
+		if (msg.sender == services) pendingServiceFees += cashAttoEth;
+		else _sendEth(portfolio, cashAttoEth);
+	}
+
+	/// @notice Deliver previously accounted fees without coupling book progress to transfers.
+	function deliverServiceFees() external nonReentrant {
+		require(msg.sender == services, 'Only settlement services');
+		uint256 amount = pendingServiceFees;
+		pendingServiceFees = 0;
+		_sendEth(services, amount);
 	}
 
 	function _question(address pool) private view returns (QuestionSource memory source) {

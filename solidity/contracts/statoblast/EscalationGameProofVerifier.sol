@@ -32,6 +32,7 @@ contract EscalationGameProofVerifier {
 				++k;
 			}
 		}
+		require(exponentPow2 < 235, 'Attrition exponent too large');
 		expScaled <<= exponentPow2;
 		uint256 cost = (startBondAttoRep * expScaled) / SCALE;
 		return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost;
@@ -132,9 +133,10 @@ contract EscalationGameProofVerifier {
 	}
 
 	function computeLnRatioScaled(uint256 lowValue, uint256 highValue) external pure returns (uint256) {
+		require(lowValue != 0 && highValue >= lowValue, 'Invalid logarithm inputs');
 		uint256 normalizedLow = lowValue;
 		uint256 log2Count = 0;
-		while (highValue >= normalizedLow * 2) {
+		while (normalizedLow <= highValue / 2) {
 			unchecked {
 				normalizedLow *= 2;
 				++log2Count;

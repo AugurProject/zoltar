@@ -145,6 +145,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_depositRepOnOutcome(outcome, maximumDepositAttoRep);
 	}
 
+	function depositRepOnOutcomeWithLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		_depositRepOnOutcome(outcome, maximumDepositAttoRep);
+		_requireLead(outcome);
+	}
+
+	function _requireLead(BinaryOutcomes.BinaryOutcome outcome) private view {
+		require(_strictStakeLeader() == outcome || outcomeState[uint256(outcome)].balanceAttoRep == nonDecisionThresholdAttoRep, 'Deposit does not take the lead');
+	}
+
 	/// @notice Pulls only the caller's REP; beneficiaries acquire native deposits, never caller funds or allowances.
 	function depositRepOnOutcomeForBatch(BinaryOutcomes.BinaryOutcome outcome, address[] calldata beneficiaries, uint256[] calldata amountsAttoRep) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
@@ -175,7 +184,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	}
 
 	/// @notice Game delegatecall target: like `depositRepOnOutcome`, after a permit, falling back to an existing allowance.
-	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
+	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
 		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
@@ -191,16 +200,26 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_recordDeposit(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
 
+	function depositRepOnOutcomeWithPermitAndLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
+		depositRepOnOutcomeWithPermit(outcome, maximumDepositAttoRep, deadline, v, r, s);
+		_requireLead(outcome);
+	}
+
 	/// @notice Game delegatecall target: pulls `owner`'s previewed deposit through an ERC-3009 authorization bound to this operation and records it.
-	function depositRepOnOutcomeWithAuthorization(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+	function depositRepOnOutcomeWithAuthorization(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) public {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
 		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
 		require(pool.universeId() != 0, 'Genesis REP does not support authorization');
-		bytes32 operationHash = keccak256(abi.encode(this.depositRepOnOutcomeWithAuthorization.selector, owner, game.securityPool(), pool.universeId(), pool.questionId(), outcome, maximumDepositAttoRep, depositedAttoRep));
+		bytes32 operationHash = keccak256(abi.encode(msg.sig, owner, game.securityPool(), pool.universeId(), pool.questionId(), outcome, maximumDepositAttoRep, depositedAttoRep));
 		IERC3009Authorization(game.repToken()).receiveWithAuthorization(owner, address(this), depositedAttoRep, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
 		_recordDeposit(owner, outcome, depositedAttoRep, resultingCumulativeAttoRep);
+	}
+
+	function depositRepOnOutcomeWithAuthorizationAndLead(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+		depositRepOnOutcomeWithAuthorization(owner, outcome, maximumDepositAttoRep, validAfter, validBefore, nonce, v, r, s);
+		_requireLead(outcome);
 	}
 
 	function _depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) private {

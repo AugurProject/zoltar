@@ -33,6 +33,8 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 		weth: priceWeth,
 		collateralToken: priceWeth,
 		openOracle: priceOracle,
+		oracleExposure: 100n * unit,
+		minimumReportCollateral: unit,
 		minimumToken1ReportAttoEth: 2n * unit,
 		minimumToken2ReportAttoRep: 0n,
 		getRequestPriceCostAttoEth: 101n,

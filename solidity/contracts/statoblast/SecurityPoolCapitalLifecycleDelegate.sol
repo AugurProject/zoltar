@@ -58,6 +58,8 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(msg.sender == ICapitalSettlementRepairRoot(host.portfolio()).settlement(), 'Only canonical settlement');
 		_requireOpen(host);
 		require(demand >= demandAttoEth, 'Repair cannot remove demand');
+		(, uint256 commitment) = commitmentIndex.totals();
+		require(demand <= commitment, 'Repair exceeds underwriting commitment');
 		demandAttoEth = demand;
 	}
 
@@ -163,7 +165,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
 			uint96 batch;
 			if (position.batch != 0) batch = position.batch == commitmentIndex.currentBatch() ? 1 : 2;
-			choice = ChoicePosition(position.rep, position.commitment, batch, position.remainingCommitment);
+			choice = ChoicePosition(position.rep, position.commitment, batch, position.remainingCommitment, commitmentIndex.retirementOrder(id));
 		}
 		owners[owner].exported = true;
 		target = _target(account);
@@ -180,7 +182,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(account.positionId == 0 && account.freeAttoRep == 0, 'Owner already imported');
 		account.targetHealthFactorBps = target;
 		require(position.commitment != 0 && position.rep != 0, 'Empty fork choice');
-		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(position.rep, position.commitment), position.batch, position.remainingCommitment);
+		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(position.rep, position.commitment), position.batch, position.remainingCommitment, position.retirementOrder);
 		account.positionId = id;
 	}
 	function finishForkImport(uint256 fundedDemand) external onlyDelegateCall {

@@ -33,12 +33,7 @@ afterEach(async () => {
 
 test('keyless discovery scans protocol topology without querying account inventory', async () => {
 	const fake = fakeClient(10n)
-	const snapshot = await discoverEcosystemSnapshot({
-		anchorBlockNumber: 10n,
-		client: fake.client,
-		deployments: snapshotFixture().deployments,
-		wallet: undefined,
-	})
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 	expect(snapshot.universes.length).toBeGreaterThan(0)
 	expect(fake.balanceAddresses).toEqual([])
 	expect(fake.contractReads.some(read => ['balanceOf', 'allowance', 'tokenHolder', 'internalAllowance', 'getMigrationRepBalanceAttoRep'].includes(read.functionName))).toBe(false)
@@ -65,7 +60,7 @@ test('monitors inventory for a known execution address without requiring a signe
 test('discovers live shared exposure despite oversized fresh accepted capacity', async () => {
 	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
-	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: 10n.toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { fixedRequestPriceCostAttoEth: 101n.toString() } })
+	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: 10n.toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { settlementBountyMultiplierBps: '30000' } })
 })
 
 test('authenticates latest and retained candidate escrows at the same discovery block', async () => {
@@ -81,9 +76,9 @@ test('authenticates latest and retained candidate escrows at the same discovery 
 		settlementCallbackGasLimit: '1',
 		targetPriceErrorForDispute: '1000',
 	}
-	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 101n, 1n, 7n, [6n, 9n])
+	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 2_352_113n, 1n, 7n, [6n, 9n])
 	expect(snapshot.reportEscrows).toEqual({ '6': address(86), '7': address(87) })
-	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 101n, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
+	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 2_352_113n, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
 for (const shared of [false, true])
@@ -476,7 +471,6 @@ interface RefundBackfillOverrides {
 	auctionFinalized?: boolean
 	baseFeePerGas?: bigint
 }
-
 function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegistered = false, overrides: RefundBackfillOverrides = {}) {
 	const pool = address(20)
 	const coordinator = address(21)
@@ -573,6 +567,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return 1n
 				case 'acceptedExposureLimitAttoEth':
 				case 'maximumBidAttoRepPerLot':
+				case 'maximumAdmissibleBidAttoRepPerLot':
 					return 1000n
 				case 'refundCreditAttoEth':
 					return pendingRefundAttoEth
@@ -626,8 +621,10 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return 0n
 				case 'isPriceValid':
 					return true
+				case 'maxSettlementBaseFeeMultiplierBps':
+					return 30_000n
 				case 'getRequestPriceCostAttoEth':
-					return overrides.sharedExposure === undefined ? 8n * callBaseFee + 101n : 101n
+					return overrides.sharedExposure === undefined ? 8n * callBaseFee + 101n : 392_002n * (callBaseFee + 1n) * 3n + 101n
 				case 'vaultOperations':
 					return address(70)
 				case 'settlementTime':

@@ -30,7 +30,28 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 	const healthEpoch = (id: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'healthEpoch', args: [id] })
 	const liquidationStarted = async (id: bigint) => BigInt(await client.readContract({ abi: artifact.abi, address, functionName: 'liquidationStarted', args: [id] }))
 	const credit = (price: bigint, eth: bigint, rep: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'credit', args: [price, eth, rep] }))
-	const retire = (price: bigint, demand: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'retire', args: [price, demand] }))
+	// Simulate each owner's independent claim in this accounting-only harness.
+	// The custody-ledger tests separately enforce real owner authorization.
+	const retire = async (price: bigint, demand: bigint) => {
+		const count = await client.readContract({ abi: artifact.abi, address, functionName: 'lastPositionId' })
+		const pending = []
+		for (let id = 1n; id <= count; id++) {
+			const position = await account(id)
+			if (position.batch !== 0n && position.commitment !== 0n) pending.push({ id, order: await client.readContract({ abi: artifact.abi, address, functionName: 'retirementOrder', args: [id] }) })
+		}
+		pending.sort((a, b) => {
+			if (a.order < b.order) return -1
+			return a.order > b.order ? 1 : 0
+		})
+		let hash
+		for (const entry of pending) {
+			const preview = await client.readContract({ abi: artifact.abi, address, functionName: 'previewRetirement', args: [entry.id, price, demand] })
+			if (preview.status === 5n) hash = await retirePosition(entry.id, price, demand)
+		}
+		if (hash !== undefined) return hash
+		const first = pending[0]
+		return first === undefined ? writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'retire', args: [price, demand] })) : retirePosition(first.id, price, demand)
+	}
 	const retirePosition = (id: bigint, price: bigint, demand: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'retirePosition', args: [id, price, demand] }))
 	const claim = (id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'claim', args: [id] }))
 	const split = async (id: bigint, rep: bigint, commitment: bigint, oldPrice: bigint, newPrice: bigint) => {
@@ -87,7 +108,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect(await client.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'paidEthFees', args: [1n] })).toBe(110n)
 	})
 
-	test('retirement closes exact subtrees, retains deferred fees and releases only healthy spare capacity', async () => {
+	test('owner claims retain deferred fees and release only fully reserved healthy reductions, retains deferred fees and releases only healthy spare capacity', async () => {
 		await create(100n, 10n, 30n)
 		await create(200n, 20n, 20n)
 		await create(300n, 30n, 5n)
@@ -96,12 +117,12 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect(await eligible(10n)).toBe(30n)
 		await credit(0n, 120n, 180n)
 		await retire(10n, 25n)
-		expect(await totals()).toEqual([600n, 55n])
-		expect(await eligible(10n)).toBe(25n)
-		expect(await account(1n)).toMatchObject({ rep: 100n, commitment: 5n, releasedRep: 0n, ethFees: 20n, repFees: 30n })
+		expect(await totals()).toEqual([600n, 60n])
+		expect(await eligible(10n)).toBe(30n)
+		expect(await account(1n)).toMatchObject({ rep: 100n, commitment: 10n, releasedRep: 0n, ethFees: 20n, repFees: 30n })
 		await validate()
 		await retire(10n, 26n)
-		expect(await totals()).toEqual([600n, 55n])
+		expect(await totals()).toEqual([600n, 60n])
 		await retire(10n, 0n)
 		expect(await totals()).toEqual([0n, 0n])
 		let rep = 0n
@@ -121,7 +142,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 
 	test('partial owner retirement retains all collateral until its remaining commitment is closed', async () => {
 		const id = await create(99n, 9n, 11n)
-		await request(id)
+		await requestPartial(id, 5n)
 		await credit(11n, 9n, 18n)
 		await retire(11n, 5n)
 		expect(await account(id)).toMatchObject({ rep: 99n, commitment: 5n, releasedRep: 0n, ethFees: 9n, repFees: 18n })
@@ -135,6 +156,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await credit(19n, 10n, 15n)
 		await claim(id)
 		expect(await client.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'paidRep', args: [id] })).toBe(0n)
+		await request(id)
 		await retire(19n, 0n)
 		expect(await account(id)).toMatchObject({ rep: 0n, commitment: 0n, releasedRep: 99n })
 		await claim(id)
@@ -152,7 +174,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await requestPartial(id, 6n)
 		expect(await client.readContract({ abi: artifact.abi, address, functionName: 'eligibleActiveCommitment', args: [20n] })).toBe(6n)
 		await retire(20n, 8n)
-		expect(await account(id)).toMatchObject({ rep: 100n, commitment: 8n, ethFees: 10n, repFees: 20n })
+		expect(await account(id)).toMatchObject({ rep: 100n, commitment: 10n, ethFees: 10n, repFees: 20n })
 		expect((await account(id)).batch).not.toBe(0n)
 		await retire(20n, 0n)
 		expect(await account(id)).toMatchObject({ rep: 100n, commitment: 6n, batch: 0n, releasedRep: 0n })
@@ -164,7 +186,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await validate()
 	})
 
-	test('targeted retirement bulk-closes full exits but services only one partial frontier before newer cohorts', async () => {
+	test('individual claims preserve fees and residual commitments across older and newer cohorts', async () => {
 		await create(100n, 10n, 100n)
 		await create(200n, 20n, 80n)
 		await create(300n, 30n, 60n)
@@ -174,7 +196,8 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await requestPartial(3n, 10n)
 		await request(4n)
 		await credit(0n, 100n, 200n)
-		await retire(10n, 0n)
+		await retirePosition(1n, 10n, 0n)
+		await retirePosition(2n, 10n, 0n)
 		expect(await account(1n)).toMatchObject({ commitment: 0n, releasedRep: 100n, ethFees: 10n, repFees: 20n })
 		expect(await account(2n)).toMatchObject({ batch: 0n, commitment: 12n, rep: 200n, ethFees: 20n, repFees: 40n })
 		expect(await account(3n)).toMatchObject({ commitment: 30n, rep: 300n })
@@ -184,11 +207,12 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await request(5n)
 		const newerBatch = (await account(5n)).batch
 		expect(newerBatch).not.toBe((await account(3n)).batch)
-		await retire(10n, 0n)
+		await retirePosition(3n, 10n, 0n)
 		expect(await account(3n)).toMatchObject({ batch: 0n, commitment: 10n, rep: 300n, ethFees: 30n, repFees: 60n })
 		expect(await account(5n)).toMatchObject({ batch: newerBatch, commitment: 10n })
 		await validate()
-		await retire(10n, 0n)
+		await retirePosition(4n, 10n, 0n)
+		await retirePosition(5n, 10n, 0n)
 		expect(await account(4n)).toMatchObject({ commitment: 0n, releasedRep: 400n, ethFees: 40n, repFees: 80n })
 		expect(await account(5n)).toMatchObject({ commitment: 0n, releasedRep: 100n })
 		expect(await totals()).toEqual([500n, 22n])
@@ -287,10 +311,10 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		const partialExit = await split(source, 30n, 3n, 20n, 20n)
 		expect(await account(source)).toMatchObject({ batch: 0n, commitment: 5n, remainingCommitment: 0n, ethFees: 100n, repFees: 200n })
 		expect(await account(partialExit)).toMatchObject({ batch, commitment: 3n, remainingCommitment: 1n, ethFees: 0n, repFees: 0n })
-		await retire(20n, 0n)
+		await retirePosition(partialExit, 20n, 0n)
 		expect(await account(partialExit)).toMatchObject({ batch: 0n, commitment: 1n, remainingCommitment: 0n })
 		expect(await account(fullExit)).toMatchObject({ batch, commitment: 2n })
-		await retire(20n, 0n)
+		await retirePosition(fullExit, 20n, 0n)
 		expect(await account(fullExit)).toMatchObject({ commitment: 0n, releasedRep: 20n })
 		expect(await totals()).toEqual([80n, 6n])
 		await validate()
@@ -300,7 +324,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		for (let i = 0n; i < count; i += 8n) await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'createPartial', args: [8n, 100n, 20n, 10n, 10n] }))
 		await credit(10n, count * 20n, count * 40n)
 		expect(await client.readContract({ abi: artifact.abi, address, functionName: 'eligibleActiveCommitment', args: [10n] })).toBe(count * 10n)
-		const hash = await retire(10n, 0n)
+		const hash = await retirePosition(count, 10n, 0n)
 		const gas = (await client.waitForTransactionReceipt({ hash })).gasUsed
 		expect(gas).toBeLessThan(1_500_000n)
 		expect(await totals()).toEqual([count * 100n, count * 20n - 10n])
@@ -370,7 +394,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await retirePosition(2n, 1_000n, 8n)
 		expect(await account(2n)).toMatchObject({ commitment: 10n })
 		await retire(1_000n, 8n)
-		expect(await account(2n)).toMatchObject({ commitment: 6n })
+		expect(await account(2n)).toMatchObject({ commitment: 10n })
 		await retirePosition(2n, 1_000n, 2n)
 		expect(await account(2n)).toMatchObject({ commitment: 0n, releasedRep: 19n })
 		expect(await totals()).toEqual([20n, 2n])
@@ -456,7 +480,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await request(2n)
 		await retire(10n, 15n)
 		const originalBatch = (await account(1n)).batch
-		await expect(replace(1n, 100n, 10n, 30n)).rejects.toThrow('Closed retirement commitment cannot increase')
+		await expect(replace(1n, 100n, 11n, 30n)).rejects.toThrow('Closed retirement commitment cannot increase')
 		await create(500n, 5n, 100n)
 		await request(3n)
 		expect((await account(3n)).batch).not.toBe(originalBatch)
@@ -468,8 +492,8 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect((await account(receiver)).batch).toBe(originalBatch)
 		await create(500n, 5n, 100n)
 		await retire(10n, 15n)
-		expect(await account(receiver)).toMatchObject({ commitment: 0n, releasedRep: 50n })
-		expect(await account(2n)).toMatchObject({ commitment: 5n })
+		expect(await account(receiver)).toMatchObject({ commitment: 5n })
+		expect(await account(2n)).toMatchObject({ commitment: 0n, releasedRep: 50n })
 		expect(await account(3n)).toMatchObject({ commitment: 5n })
 	})
 
@@ -478,10 +502,11 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await create(amount, amount, 100n)
 		await request(1n)
 		await credit(100n, 101n, 103n)
-		await retire(100n, 1n)
+		await retire(100n, 0n)
 		for (let i = 0; i < 12; i++) {
 			const id = await create(amount, amount, 100n)
-			await request(id)
+			if (i === 0) await requestPartial(id, 1n)
+			else await request(id)
 			await retire(100n, 1n)
 		}
 		expect(await totals()).toEqual([amount, 1n])
@@ -503,7 +528,10 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect(await account(1n)).toMatchObject({ rep: 50n, commitment: 5n, ethFees: 100n, repFees: 200n, batch })
 		expect(await account(2n)).toMatchObject({ rep: 250n, commitment: 25n, ethFees: 200n, repFees: 400n, batch })
 		await create(100n, 10n, 20n)
-		await expect(writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'transferTo', args: [1n, 3n, 50n, 5n, 20n, 20n] }))).rejects.toThrow('Commitment cohorts differ')
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'transferTo', args: [1n, 3n, 50n, 5n, 20n, 20n] }))
+		expect(await account(3n)).toMatchObject({ rep: 150n, commitment: 15n, batch: 0n, remainingCommitment: 0n, ethFees: 0n, repFees: 0n })
+		// Active commitment may never gain priority by entering a closed receiver cohort.
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'transferTo', args: [3n, 2n, 50n, 5n, 20n, 20n] }))).rejects.toThrow('Commitment cohorts differ')
 	})
 
 	test('fee budget conservation survives point changes, rekeys and retirement with one-base-unit rounding', async () => {
@@ -532,12 +560,12 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect([accountedEth, accountedRep]).toEqual([fundedEth, fundedRep])
 	})
 
-	test('equal-health positions use bounded unique keys and whole-cohort retirement stays constant cost', async () => {
+	test('equal-health positions retain exact claims with bounded individual retirement gas', async () => {
 		for (let i = 0; i < 8; i++) await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'createIdentical', args: [8n, 3n, 2n, 10n, true] }))
 		expect(await eligible(10n)).toBe(128n)
 		await credit(10n, 127n, 129n)
 		const hash = await retire(10n, 0n)
-		expect((await client.waitForTransactionReceipt({ hash })).gasUsed).toBeLessThan(250_000n)
+		expect((await client.waitForTransactionReceipt({ hash })).gasUsed).toBeLessThan(1_500_000n)
 		let rep = 0n
 		let eth = 0n
 		let repFees = 0n
@@ -633,7 +661,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ composedThreeRegistryGas: gas })
 	})
 
-	test('bulk retirement uses balanced joins and preserves all detached claims', async () => {
+	test('successive FIFO owner claims preserve balanced health trees and all detached entitlements', async () => {
 		for (let i = 0; i < 128; i += 8) await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'createSparse', args: [BigInt(i), 8n, true] }))
 		await credit(0n, 129n, 131n)
 		await observe(0n)
@@ -647,7 +675,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 			expect(await totals()).toEqual([remaining * 10n, remaining])
 			await observe(0n)
 			epoch++
-			for (let id = 1n; id <= remaining; id++) epochs.set(id, epoch)
+			for (let id = 129n - remaining; id <= 128n; id++) epochs.set(id, epoch)
 		}
 		let feesEth = 0n
 		let feesRep = 0n
@@ -662,7 +690,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 			feesEth += state.ethFees
 			feesRep += state.repFees
 			releasedRep += state.releasedRep
-			expect(state.commitment).toBe(id === 1n ? 1n : 0n)
+			expect(state.commitment).toBe(id === 128n ? 1n : 0n)
 		}
 		expect([feesEth, feesRep, releasedRep]).toEqual([129n, 131n, 1270n])
 	})
@@ -877,10 +905,10 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'sealImports' }))
 		expect(await account(1n)).toMatchObject({ batch: 1n, commitment: 10n, remainingCommitment: 6n })
 		expect(await account(2n)).toMatchObject({ batch: 2n, commitment: 10n, remainingCommitment: 4n })
-		await retire(20n, 0n)
+		await retirePosition(1n, 20n, 0n)
 		expect(await account(1n)).toMatchObject({ batch: 0n, commitment: 6n, remainingCommitment: 0n })
 		expect(await account(2n)).toMatchObject({ batch: 2n, commitment: 10n, remainingCommitment: 4n })
-		await retire(20n, 0n)
+		await retirePosition(2n, 20n, 0n)
 		expect(await account(2n)).toMatchObject({ batch: 0n, commitment: 4n, remainingCommitment: 0n })
 		expect(await totals()).toEqual([200n, 10n])
 		await validate()

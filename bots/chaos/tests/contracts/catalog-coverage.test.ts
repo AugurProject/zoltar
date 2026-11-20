@@ -119,7 +119,6 @@ const expectedCanonicalManifest = [
 	'OpenOraclePriceCoordinatorFactory:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
 	'PriceCoordinatorDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
 	'SecurityPoolForker:contracts/statoblast/SecurityPoolForker.sol:static-endpoint',
-	'SecurityPoolMigrationProxy:contracts/statoblast/SecurityPoolMigrationProxy.sol:migration-proxy',
 	'EscalationGameFactory:contracts/statoblast/factories/EscalationGameFactory.sol:static-endpoint',
 	'EscalationGame:contracts/statoblast/EscalationGame.sol:dynamic-endpoint',
 	'EscalationChallengeEscrow:contracts/statoblast/EscalationChallengeEscrow.sol:dynamic-endpoint',
@@ -365,7 +364,7 @@ describe('contract operation classification', () => {
 	})
 
 	test('keeps deployment helpers, direct delegates, orphan factories, and migration proxies out of random work', () => {
-		const helperContracts = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.filter(entry => entry.exposure === 'deployment-helper' || entry.exposure === 'fallback-module' || entry.exposure === 'migration-proxy').map(entry => entry.contract))
+		const helperContracts = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.filter(entry => entry.exposure === 'deployment-helper' || entry.exposure === 'fallback-module').map(entry => entry.contract))
 		const directDelegateContracts = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.filter(entry => entry.exposure === 'delegate-module').map(entry => entry.contract))
 		const orphanFactoryContracts = new Set(['EscalationGameFactory', 'OpenOraclePriceCoordinatorFactory', 'ShareTokenFactory', 'UniformPriceDualCapBatchAuctionFactory'])
 		for (const entry of MUTATING_CONTRACT_SURFACE) {
@@ -395,10 +394,10 @@ describe('contract operation classification', () => {
 	})
 
 	test('classifies canonical receive and fallback entry points by ABI kind', () => {
-		expect(classifiedMethod('SecurityPoolPortfolioForkCoordinator', 'receive', 'receive')).toMatchObject({ abiEntryKind: 'receive', classification: 'excluded-dangerous' })
+		expect(classifiedMethod('SecurityPoolPortfolioForkCoordinator', 'receive', 'receive')).toBeUndefined()
 		const wethDeposit = classifiedMethod('WETH9', 'deposit')
 		expect(classifiedMethod('WETH9', 'receive', 'receive')).toMatchObject({ abiEntryKind: 'receive', classification: wethDeposit?.classification, operationId: wethDeposit?.operationId })
-		expect(classifiedMethod('SecurityPool', 'receive', 'receive')).toMatchObject({ abiEntryKind: 'receive', classification: 'role-restricted' })
+		expect(classifiedMethod('SecurityPool', 'receive', 'receive')).toBeUndefined()
 		expect(classifiedMethod('TwoWayConstantProductRouter', 'receive', 'receive')).toMatchObject({ abiEntryKind: 'receive', classification: 'role-restricted' })
 		expect(classifiedMethod('EscalationGame', 'fallback', 'fallback')).toMatchObject({ abiEntryKind: 'fallback', classification: 'role-restricted' })
 	})
@@ -565,4 +564,8 @@ describe('contract operation classification', () => {
 			}
 		}
 	})
+})
+
+test('#1356 canonical runtime catalog excludes the unused migration proxy', () => {
+	expect(CANONICAL_MUTATING_CONTRACT_MANIFEST.some(entry => entry.contract === 'SecurityPoolMigrationProxy')).toBe(false)
 })

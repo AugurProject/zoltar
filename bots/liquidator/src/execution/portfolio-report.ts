@@ -18,13 +18,13 @@ type ReportContext = { observation: PortfolioObservation; totalPrincipal: bigint
 
 export function assertPortfolioReportFunding(current: ReportContext, settings: OperatorSettings) {
 	if (current.price === undefined || current.price.observation === undefined) throw new PortfolioOpportunityExpired('Missing report funding quote')
-	const funding = quotePortfolioPriceFunding(current.price, current.observation.snapshot.acceptedPrice)
+	if (current.baseFeePerGas === undefined || current.reportPlans === undefined) throw new PortfolioOpportunityExpired('Missing report settlement gas quote')
+	const operationsGas = BigInt(current.reportPlans.length * (settings.portfolioPolicy.reportOperationGasLimit + 100_000))
+	const callbackGas = PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS + operationsGas
+	if (callbackGas > MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS) throw new PortfolioOpportunityExpired('Report operations exceed the feed callback gas limit')
+	const funding = quotePortfolioPriceFunding(current.price, current.observation.snapshot.acceptedPrice, 0n, operationsGas)
 	const reportRisk = funding.weth + (funding.rep * 10n ** 18n + funding.price - 1n) / funding.price
 	if (reportRisk > settings.portfolioPolicy.maximumReportFundingAttoEth) throw new PortfolioOpportunityExpired('Report funding exceeds configured loss budget')
-	if (current.baseFeePerGas === undefined || current.reportPlans === undefined) throw new PortfolioOpportunityExpired('Missing report settlement gas quote')
-	const callbackGas = PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS + BigInt(current.reportPlans.length * (settings.portfolioPolicy.reportOperationGasLimit + 100_000))
-	// The feed rejects a larger callback. The strategy sizes batches under this cap; one that still exceeds it is never funded.
-	if (callbackGas > MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS) throw new PortfolioOpportunityExpired('Report operations exceed the feed callback gas limit')
 	const settlementGas = callbackGas + callbackGas / 63n + 350_000n
 	if (maximumFeePerGas(current.baseFeePerGas) * paddedTransactionGas(settlementGas) > settings.strategy.maximumGasCostAttoEth) throw new PortfolioOpportunityExpired('Report settlement exceeds transaction gas budget')
 
@@ -89,7 +89,7 @@ export async function executePortfolioReportRequest(wallet: Wallet, settings: Op
 		assertPortfolioPlanStillAllowed(plan, latest.plan, 'takeover')
 		assertPortfolioReportPlansStillAllowed(current.reportPlans, latest.reportPlans, 'takeover')
 		const nextFunding = assertPortfolioReportFunding(latest, settings)
-		if (latest.observation.acceptedPriceEpoch !== observation.acceptedPriceEpoch || nextFunding.price !== funding.price || nextFunding.weth > funding.weth || nextFunding.rep > funding.rep) throw new PortfolioOpportunityExpired('Report quote changed before signing')
+		if (latest.observation.acceptedPriceEpoch !== observation.acceptedPriceEpoch || nextFunding.price !== funding.price || nextFunding.weth > funding.weth || nextFunding.rep > funding.rep || nextFunding.bounty !== funding.bounty) throw new PortfolioOpportunityExpired('Report quote changed before signing')
 	}
 	await submit(
 		wallet,

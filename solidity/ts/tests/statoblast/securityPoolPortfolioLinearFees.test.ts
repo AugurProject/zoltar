@@ -127,6 +127,17 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect((await loadPortfolioCapitalSnapshot({ client, owner, portfolio: fixture.portfolio })).accruedFeesAttoEth).toBe(0n)
 	})
 
+	test('#1332 prepaid purchase rewards remain earned by the existing backing after price expiry', async () => {
+		await fixture.prepare()
+		const cash = 100n * unit
+		const [fee, premium] = await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, cash] })
+		await fixture.mint(cash)
+		await fixture.base.mockWindow.advanceTime(2n * 86_400n)
+		await checkpoint()
+		const owner = await loadPortfolioCapitalSnapshot({ client: fixture.owner(), owner: fixture.owner().account.address, portfolio: fixture.portfolio })
+		expect(owner.accruedFeesAttoEth).toBeGreaterThanOrEqual(fee - premium - 1n)
+	})
+
 	test('new deposits do not capture old earnings and stale time stops charging outcome holders', async () => {
 		await fixture.prepare()
 		await fixture.mint(100n * unit)
