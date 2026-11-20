@@ -27,7 +27,6 @@ describe('Statoblast: reporting lead bounds', () => {
 		await protectedDeposit(121n * unit)
 		const after = await owner.readContract({ ...game, functionName: 'getOutcomeBalancesAttoRep' })
 		expect(after[2]).toBeGreaterThan(after[1])
-		expect(await owner.readContract({ ...game, functionName: 'responseRestartedUntil' })).toBeGreaterThan(0n)
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), game.address)
 		const directAbi = parseAbi(['function depositRepOnOutcomeWithLead(uint8 outcome,uint256 maximumDepositAttoRep)'])
 		const direct = (outcome: number, amount: bigint) => writeContractAndWait(owner, () => owner.writeContract({ abi: directAbi, address: game.address, functionName: 'depositRepOnOutcomeWithLead', args: [outcome, amount] }))

@@ -100,8 +100,8 @@
 								<td>Outcome evidence and escalation funding — A04, A10</td>
 								<td>
 									<ul>
-										<li><a href="../reference/glossary.html#escalation-game">Escalation Game</a> deadline: <code>getEscalationGameEndDate()</code>; a change of leader moves it to at least three days after that deposit</li>
-										<li>Balance a correcting outcome must reach once <a href="../reference/glossary.html#required-support">required support</a> exceeds <a href="../reference/glossary.html#binding-capital">binding capital</a>: <code>totalCostAttoRep()</code></li>
+										<li><a href="../reference/glossary.html#escalation-game">Escalation Game</a> deadline: <code>getEscalationGameEndDate()</code>; it moves later only when a deposit raises <a href="../reference/glossary.html#binding-capital">binding capital</a>, so a correction must land before it</li>
+										<li><a href="../reference/glossary.html#required-support">Required support</a>, which closes the game once it exceeds binding capital while one outcome strictly leads: <code>totalCostAttoRep()</code></li>
 										<li>Outcome funding: <code>getOutcomeBalancesAttoRep()</code> and <code>getBindingCapitalAttoRep()</code>, or augurScan <code>/operations/escalations</code></li>
 										<li>REP available to fund a correction: wallet REP <code>balanceOf</code> of each ready account (escalation deposits come from wallet REP, not from capital-ledger deposits)</li>
 										<li>Outcome evidence: where each source publishes (off-chain)</li>

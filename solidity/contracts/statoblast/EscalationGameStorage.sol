@@ -62,10 +62,6 @@ abstract contract EscalationGameStorage {
 	// Ordinary deposits irrevocably release the minimum outcome balance. Reporter
 	// principal remains nominal because only one outcome can claim in each child.
 	uint256 public creditedSurplusAttoRep;
-	// A deposit that takes the lead restarts the response period. The attrition
-	// curve alone cannot guarantee one: a challenger resting just below the leader
-	// pushes the curve deadline to the leader's own stake, then flips at that second.
-	uint256 public responseRestartedUntil;
 	// Winning claims scale by the universe's fork threshold as it stood when the game
 	// last changed: every accepted deposit and a continuation's resume record it. REP
 	// burned once the game can no longer change, including each claim's own haircut,
@@ -84,19 +80,13 @@ abstract contract EscalationGameStorage {
 	}
 
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
-		// A provisional leader cannot close a guaranteed response period: the one
-		// an unresolved continuation starts with, or one restarted by a change of
-		// leader. Equality remains open, matching finality.
+		// The game is open while the curve is at or below the median. A provisional
+		// leader closes it, except during the fixed response period a resumed
+		// continuation starts with. Equality remains open, matching finality.
 		if (provisionalResolution == BinaryOutcomes.BinaryOutcome.None) return true;
-		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None || (forkContinuation && forkResumedAt == 0))
+		if (!forkContinuation || forkResumedAt == 0 || fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None)
 			return false;
-		return block.timestamp <= _responseEnd();
-	}
-
-	/// @dev Last second of the current guaranteed response period, or zero when none applies.
-	function _responseEnd() internal view returns (uint256 end) {
-		if (forkContinuation) end = forkResumedAt + ACTIVATION_DELAY;
-		if (responseRestartedUntil > end) end = responseRestartedUntil;
+		return block.timestamp <= forkResumedAt + ACTIVATION_DELAY;
 	}
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {

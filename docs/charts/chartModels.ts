@@ -56,20 +56,21 @@ export function computeCanonicalEscalationDeadlineDays(startBondRep: number, non
 	return ESCALATION_ACTIVATION_DELAY_DAYS + Number.parseInt(elapsedSeconds.toString(), 10) / 86_400
 }
 
-/** A deposit that takes the lead restarts the three-day response period from the day it is made. */
-export function computeCanonicalEscalationDeadlineAfterDepositDays(input: { bindingCapitalRep: number; depositDay: number; nonDecisionThresholdRep: number; startBondRep: number; takesLead: boolean }) {
-	const curveDeadlineDays = computeCanonicalEscalationDeadlineDays(input.startBondRep, input.nonDecisionThresholdRep, input.bindingCapitalRep)
-	return input.takesLead ? Math.max(curveDeadlineDays, input.depositDay + ESCALATION_ACTIVATION_DELAY_DAYS) : curveDeadlineDays
-}
-
-/** Projects a deposit made `elapsedDays` after the game opened; `belowRequiredSupport` marks a rejection by the curve alone. */
+/**
+ * Projects a deposit made `elapsedDays` after the first report. The game is closed, as in the
+ * contract, once the curve has passed the median and one outcome strictly leads; while it is
+ * open any deposit of at least the start bond is accepted.
+ */
 export function projectDocumentationEscalationDeposit(input: { amountRep: number; balances: EscalationBalanceTuple; elapsedDays: number; nonDecisionThresholdRep: number; outcome: EscalationOutcomeKey; startBondRep: number }) {
 	const startBondAttoRep = toAttoRep(input.startBondRep)
 	const nonDecisionThresholdAttoRep = toAttoRep(input.nonDecisionThresholdRep)
-	const deposit = { amountAttoRep: toAttoRep(input.amountRep), balancesAttoRep: input.balances, nonDecisionThresholdAttoRep, outcome: input.outcome, startBondAttoRep }
-	const curveAttoRep = computeEscalationCurveAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, BigInt(Math.round((input.elapsedDays - ESCALATION_ACTIVATION_DELAY_DAYS) * 86_400)))
-	const projection = projectEscalationDeposit({ ...deposit, curveAttoRep })
-	return { belowRequiredSupport: projection === undefined && projectEscalationDeposit(deposit) !== undefined, projection }
+	const elapsedSeconds = BigInt(Math.round((input.elapsedDays - ESCALATION_ACTIVATION_DELAY_DAYS) * 86_400))
+	const curveAttoRep = elapsedSeconds <= 0n ? 0n : computeEscalationCurveAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedSeconds)
+	const maxBalanceAttoRep = input.balances.reduce((largest, balance) => (balance > largest ? balance : largest), 0n)
+	const tiedLeaders = maxBalanceAttoRep > 0n && input.balances.filter(balance => balance === maxBalanceAttoRep).length >= 2
+	const gameClosed = input.balances.filter(balance => balance >= curveAttoRep).length < 2 && !tiedLeaders
+	if (gameClosed) return { gameClosed, projection: undefined }
+	return { gameClosed, projection: projectEscalationDeposit({ amountAttoRep: toAttoRep(input.amountRep), balancesAttoRep: input.balances, nonDecisionThresholdAttoRep, outcome: input.outcome, startBondAttoRep }) }
 }
 
 export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; repeatDeposit: boolean; startBond: number; yesBalance: number }) {

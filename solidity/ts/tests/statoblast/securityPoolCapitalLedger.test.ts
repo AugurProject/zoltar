@@ -283,13 +283,11 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBeGreaterThan(0n)
 		await demand(100n * E - minimumK)
 		await setCommitment(alice, 100n * E - minimumK)
-		// The deficit is far below the minimum, so the floor removes exactly one minimum commitment.
-		expect((await position(id)).commitment).toBe(100n * E - minimumK)
-		expect((await position(id)).rep).toBe(105n * E)
-		expect((await position(id)).batch).toBe(0n)
+		// The deficit is far below the minimum, so the owner's reduction queues instead of cutting a whole minimum (#1449).
+		expect(await position(id)).toMatchObject({ commitment: 100n * E, remainingCommitment: 100n * E - minimumK, rep: 105n * E })
 		expect((await account(keeper)).feesAttoRep).toBe(0n)
 		await setCommitment(alice, 100n * E - minimumK)
-		expect((await position(id)).commitment).toBe(100n * E - minimumK)
+		expect(await position(id)).toMatchObject({ commitment: 100n * E, remainingCommitment: 100n * E - minimumK })
 		expect((await account(keeper)).feesAttoRep).toBe(0n)
 	})
 
@@ -651,6 +649,29 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(alice)).freeAttoRep).toBe(0n)
 	})
 
+	test('a partial reduction queues instead of cutting a whole minimum when the deficit is below the minimum (#1449)', async () => {
+		const minimum = E / 1_000n
+		const commitment = 2n * minimum
+		const required = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'requiredRep', args: [commitment, 10_000n] })
+		await deposit(alice, required)
+		const id = await authorize(alice, commitment)
+		// Healthy positions cover demand up to price 2; a healthy exit leaves no healthy spare and queues.
+		await deposit(bob, 210n * E)
+		await authorize(bob, 100n * E)
+		await deposit(keeper, (21n * E) / 10n)
+		const queued = await authorize(keeper, E)
+		await demand((1005n * E) / 10n)
+		await price((101n * E) / 100n)
+		await setCommitment(keeper, 0n)
+		expect((await position(queued)).remainingCommitment).toBe(0n)
+		expect((await position(queued)).commitment).toBeGreaterThan(0n)
+
+		await setCommitment(alice, minimum)
+
+		expect(await position(id)).toMatchObject({ rep: required, commitment, remainingCommitment: minimum })
+		expect((await account(alice)).freeAttoRep).toBe(0n)
+	})
+
 	test('an extreme adverse price releases principal only through retirement when demand is zero', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
@@ -688,17 +709,39 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
 	})
 
-	test('a higher transaction gas price changes neither the cure removal nor any account fees', async () => {
+	test('a higher transaction gas price changes neither the cure outcome nor any account fees', async () => {
 		const minimumK = E / 1_000n
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E - minimumK)
 		await price(E + 1n)
 		await setCommitment(alice, 100n * E - minimumK, 2_000_000_000n)
-		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 100n * E - minimumK })
+		// The deficit is below the minimum, so the reduction queues instead of cutting (#1449).
+		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 100n * E, remainingCommitment: 100n * E - minimumK })
 		expect((await account(keeper)).feesAttoRep).toBe(0n)
 		expect((await account(bob)).feesAttoRep).toBe(0n)
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
+	})
+
+	test('a higher transaction gas price changes neither a whole-minimum cure cut nor any account fees', async () => {
+		const minimumK = E / 1_000n
+		await deposit(alice, 105n * E)
+		const id = await authorize(alice, 100n * E)
+		await demand(100n * E - minimumK)
+		// The deficit is about ten minimums, so the owner's reduction is cut rather than queued.
+		await price(E + E / 10_000n)
+		const baseline = await getAnvilWindowEthereum().anvilSnapshot()
+		const outcomes = []
+		for (const gasPrice of [undefined, 2_000_000_000n]) {
+			await setCommitment(alice, 100n * E - minimumK, gasPrice)
+			outcomes.push({ position: await position(id), keeper: await account(keeper), bob: await account(bob) })
+			if (gasPrice === undefined) await getAnvilWindowEthereum().anvilRevert(baseline)
+		}
+		expect(outcomes[0]?.position).toMatchObject({ rep: 105n * E, commitment: 100n * E - minimumK, batch: 0n })
+		expect(outcomes[1]).toEqual(outcomes[0])
+		expect(outcomes[1]?.keeper.feesAttoRep).toBe(0n)
+		expect(outcomes[1]?.keeper.feesAttoEth).toBe(0n)
+		expect(outcomes[1]?.bob.feesAttoRep).toBe(0n)
 	})
 
 	test('a fresh price after a gap allows repair without any historical execution award (#1325)', async () => {

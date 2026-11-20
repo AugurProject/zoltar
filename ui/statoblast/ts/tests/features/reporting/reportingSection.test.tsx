@@ -1790,7 +1790,6 @@ describe('ReportingSection', () => {
 			{ balance: rep(yes), key: 'yes', label: 'Yes' },
 			{ balance: rep(no), key: 'no', label: 'No' },
 		] as const
-		// Before activation the curve does not raise the required support above the start bond.
 		const reportingDetails = createDynamicReportingDetails({ activationTime: 10_000n, sides: sides.map(side => ({ ...side, deposits: [], importedUserDeposits: [], userDeposits: side.key === 'yes' && yes > 0n ? [createDeposit()] : [] })) })
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails, reportingForm: createReportingForm({ reportAmount, selectedOutcome: 'yes' }) })))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -2747,7 +2746,7 @@ describe('ReportingSection', () => {
 			}
 			expect(status?.classList.contains('notice')).toBe(false)
 			expect(status?.querySelector('strong:not(.notice-title)')?.textContent).toBe(winning ? 'You’re leading on Yes.' : 'You’re behind on Yes.')
-			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. Any new report can extend the response window (up to 7 weeks after the game starts).`)
+			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. A report that raises the middle of the three balances can extend the response window (up to 7 weeks after the game starts).`)
 			expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
 			if (!winning) {
 				const input = document.getElementById('reporting-contribution-amount')

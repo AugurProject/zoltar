@@ -90,7 +90,6 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 				return { balance: [1n, 14n, 3n][args[0]] ?? 0n }
 			}
 			if (request.functionName === 'getEscalationGameEndDate') return 150n
-			if (request.functionName === 'responseRestartedUntil') return 0n
 			if (request.functionName === 'getQuestionOutcome') return 3
 			if (request.functionName === 'getForkTime') return 0n
 			if (request.functionName === 'getEarliestForkTime') return 4321n
@@ -136,14 +135,6 @@ describe('reporting protocol client', () => {
 		expect((await loadReportingDetails(client, securityPoolAddress, undefined)).forkThresholdAttoRep).toBe(100n)
 	})
 
-	test('loadReportingDetails reads the response period restarted by a change of leader', async () => {
-		const base = createActiveReportingClient(() => [])
-		const client = { ...base, readContract: createReadContractStub(async request => (request.functionName === 'responseRestartedUntil' ? 140n : base.readContract(request))) }
-		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
-		if (details.status !== 'active') throw new Error('Expected active reporting details')
-		expect(details.responseRestartedUntil).toBe(140n)
-	})
-
 	test('loads the earliest Zoltar fork time for an active escalation game', async () => {
 		const details = await loadReportingDetails(
 			createActiveReportingClient(() => []),
@@ -163,7 +154,6 @@ describe('reporting protocol client', () => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
 					if (request.functionName === 'getEscalationGameEndDate') return 1000n
-					if (request.functionName === 'responseRestartedUntil') return 0n
 					if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
 					if (request.functionName === 'forkContinuation') return false
 					if (request.functionName === 'repToken') return repTokenAddress
@@ -207,7 +197,6 @@ describe('reporting protocol client', () => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
 					if (request.functionName === 'getEscalationGameEndDate') return 1000n
-					if (request.functionName === 'responseRestartedUntil') return 0n
 					if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
 					if (request.functionName === 'forkContinuation') return false
 					throw new Error(`Unexpected read: ${request.functionName}`)
@@ -233,7 +222,6 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'universeId') return 9n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'getEscalationGameEndDate') return 1000n
-				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
 				if (request.functionName === 'forkContinuation') return false
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -267,7 +255,6 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'universeId') return 9n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'getEscalationGameEndDate') return 1000n
-				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
 				if (request.functionName === 'forkContinuation') return false
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -314,7 +301,6 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'forkResumedAt') return 100n
 				if (request.functionName === 'forkElapsedAtStart') return 0n
 				if (request.functionName === 'getEscalationGameEndDate') return 1000n
-				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'forkContinuation') return true
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -363,7 +349,6 @@ describe('reporting protocol client', () => {
 					throw new Error(`Unexpected outcome state index: ${args[0].toString()}`)
 				}
 				if (request.functionName === 'getEscalationGameEndDate') return 150n
-				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 0n
 				if (request.functionName === 'getEarliestForkTime') return 0n
@@ -431,7 +416,6 @@ describe('reporting protocol client', () => {
 					throw new Error(`Unexpected outcome state index: ${args[0].toString()}`)
 				}
 				if (request.functionName === 'getEscalationGameEndDate') return 150n
-				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'getEarliestForkTime') return 0n
@@ -498,7 +482,6 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getBindingCapitalAttoRep') return 11n
 				if (request.functionName === 'getOutcomeState') return { balance: 1n }
 				if (request.functionName === 'getEscalationGameEndDate') return 150n
-				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'getEarliestForkTime') return 0n
@@ -552,7 +535,6 @@ describe('reporting protocol client', () => {
 					throw new Error(`Unexpected outcome state index: ${args[0].toString()}`)
 				}
 				if (request.functionName === 'getEscalationGameEndDate') return 99n
-				if (request.functionName === 'responseRestartedUntil') return 0n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 120n
 				if (request.functionName === 'getEarliestForkTime') return 0n
@@ -1253,7 +1235,6 @@ for (const remaining of [0n, 1n, 60n, 61n]) {
 				if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getEscalationGameEndDate') return 1000n
-				if (request.functionName === 'responseRestartedUntil') return 0n
 				throw new Error(`Unexpected read: ${request.functionName}`)
 			},
 		)

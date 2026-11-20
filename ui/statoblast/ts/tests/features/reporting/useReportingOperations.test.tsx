@@ -403,7 +403,6 @@ describe('useReportingOperations', () => {
 			contributionFunding: 'wallet',
 			nonDecisionThresholdAttoRep: 275_000n * ATTO_REP,
 			sides: [side('invalid', 0n), side('yes', bond), side('no', 0n)],
-			// Before activation the curve does not raise the required support above the start bond.
 			activationTime: 10_000n,
 			startBondAttoRep: bond,
 			viewerPoolHeldVaultRepBackingAttoRep: 0n,

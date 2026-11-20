@@ -147,7 +147,9 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 
 	test('a cure never removes more than spare capacity and leaves each residual fully backed', async () => {
 		await activate(2n * LOT)
-		await setPrice(3n * ATTO_ETH_PER_ETH)
+		// At price 4 the first lot's deficit is a whole minimum, so the owner's reduction is cured
+		// rather than queued; a smaller deficit would queue (#1449).
+		await setPrice(4n * ATTO_ETH_PER_ETH)
 		await materialize(1n)
 		const firstId = (await owner(first.account.address)).positionId
 		await setCommitment(first, LOT)

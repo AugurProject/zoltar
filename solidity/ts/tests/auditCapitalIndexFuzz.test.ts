@@ -258,7 +258,7 @@ const apply = (m: Model, op: Operation) => {
 			}
 			const total = live(m).reduce((sum, q) => sum + q.k, 0n)
 			const spare = total > op.demand ? total - op.demand : 0n
-			if (op.ownerExit && p.k - supported < op.minimum) return
+			if ((op.ownerExit || op.target !== 0n) && p.k - supported < op.minimum) return
 			let removed = min(p.k - op.target, min(max(p.k - supported, op.minimum), spare))
 			if (removed < op.minimum && removed !== p.k) removed = 0n
 			const rest = p.k - op.target - removed

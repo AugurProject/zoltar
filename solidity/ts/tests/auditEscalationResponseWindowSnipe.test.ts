@@ -17,13 +17,11 @@ import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenA
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
-// Audit regression: in a carried game deposits stay open for the whole 3-day response
-// window, even after the attrition curve has passed every outcome balance. A flip in the
-// window's last second used to finalize one second later, because the curve was already
-// above the new median and so could not delay the deadline. A deposit made after the curve
-// passed the median must now meet the curve, and a changed provisional result restarts the
-// response period.
-describe('audit: a carried game cannot be flipped without time to respond', () => {
+// A resumed carried game keeps deposits open for its whole fixed 3-day response window,
+// even after the attrition curve has passed every outcome balance. Any deposit of at least
+// the start bond is accepted inside the window, and a change of leader does not restart it:
+// the deadline is the later of the window and the rebased curve crossing of the median.
+describe('a carried game: fixed response window on the pure curve', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	const YES = 1
 	const NO = 2
@@ -67,7 +65,7 @@ describe('audit: a carried game cannot be flipped without time to respond', () =
 		return { pool, game: await gameFor(pool), universe: child, forkTime }
 	}
 
-	test('a flip in the last second of the response window must meet the curve and restarts the window', async () => {
+	test('a below-curve flip inside the fixed response window is accepted and restarts nothing', async () => {
 		const attacker = fixture.owner()
 		const honest = fixture.other()
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
@@ -89,40 +87,23 @@ describe('audit: a carried game cannot be flipped without time to respond', () =
 		expect((await readGame(child.game, 'totalCostAttoRep')) <= 100n * unit).toBe(true)
 		expect(await readGame(child.game, 'getEscalationGameEndDate')).toBe(windowEnd)
 
-		// The honest reporter migrates REP into the child so that it can answer there.
-		await approveToken(honest, getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
-		await addRepToMigrationBalance(honest, fixture.base.genesisUniverse, 1_000n * unit)
-		await splitMigrationRep(honest, fixture.base.genesisUniverse, 1_000n * unit, [1n])
 		await approveToken(attacker, getRepTokenAddress(child.universe), child.pool)
-		await approveToken(honest, getRepTokenAddress(child.universe), child.pool)
-		// One second before the window closes Yes is still the provisional winner.
+		// One second before the window closes Yes is still the provisional winner and the
+		// curve is far above both balances.
 		await fixture.base.mockWindow.setTime(windowEnd - 1n)
-		expect(await latestBlockTimestamp()).toBe(windowEnd - 1n)
 		expect(await readGame(child.game, 'getQuestionResolution')).toBe(BigInt(YES))
+		expect((await readGame(child.game, 'totalCostAttoRep')) > 106n * unit).toBe(true)
 
-		// Last second of the window: 6 REP would flip the leader (106 > 105), but the curve
-		// is far above that, so support below it no longer reopens the result.
-		await expect(attacker.simulateContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'depositWalletRepToEscalationGame', args: [NO, 6n * unit] })).rejects.toThrow('Invalid deposit preview')
+		// Last second of the window: 6 REP flips the leader (106 > 105) although it stays below the curve.
 		await landNextTransactionAt(windowEnd)
-
-		// Meeting the curve is accepted, and the changed result restarts the response period.
-		await depositRaw(attacker, child.pool, NO, 120n * unit)
-		const flippedAt = await latestBlockTimestamp()
-		expect(flippedAt).toBe(windowEnd)
-		expect((await readGame(child.game, 'totalCostAttoRep')) <= 220n * unit).toBe(true)
+		await depositRaw(attacker, child.pool, NO, 6n * unit)
+		expect(await latestBlockTimestamp()).toBe(windowEnd)
 		expect(await readGame(child.game, 'getQuestionResolution')).toBe(BigInt(NO))
-		expect(await readGame(child.game, 'getEscalationGameEndDate')).toBe(flippedAt + 3n * DAY)
+		// The flip restarts no response period: the window is the deadline.
+		expect(await readGame(child.game, 'getEscalationGameEndDate')).toBe(windowEnd)
 
-		// The old window has passed, No is not final, and Yes can still answer.
-		await fixture.base.mockWindow.setTime(windowEnd + DAY)
-		expect(await readGame(child.game, 'getFinalQuestionResolution')).toBe(3n)
-		const cost = await readGame(child.game, 'totalCostAttoRep')
-		await expect(honest.simulateContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, 116n * unit] })).rejects.toThrow('Invalid deposit preview')
-		await depositRaw(honest, child.pool, YES, cost)
-		expect((await readGame(child.game, 'getEscalationGameEndDate')) >= flippedAt + 3n * DAY).toBe(true)
-
-		// Without a further answer Yes wins once the restarted period and the curve have passed.
-		await fixture.base.mockWindow.setTime((await readGame(child.game, 'getEscalationGameEndDate')) + 1n)
-		expect(await readGame(child.game, 'getFinalQuestionResolution')).toBe(BigInt(YES))
+		await fixture.base.mockWindow.setTime(windowEnd + 1n)
+		await expect(honest.simulateContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, 1_000n * unit] })).rejects.toThrow('Invalid deposit preview')
+		expect(await readGame(child.game, 'getFinalQuestionResolution')).toBe(BigInt(NO))
 	})
 })

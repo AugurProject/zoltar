@@ -9,16 +9,7 @@ import { DAY } from '../testSupport/simulator/utils/constants'
 import { getActivationTime, getBalances, getEscalationGameDeposits, readCarryTotal } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
-import {
-	computeEscalationCurveAttoRep,
-	computeEscalationFinalityElapsed,
-	ESCALATION_ACTIVATION_DELAY,
-	ESCALATION_TIME_LENGTH,
-	getWinningEscalationDepositClaimAmount,
-	getWinningImportedEscalationDepositClaimAmount,
-	projectEscalationDeposit,
-	projectEscalationEndTime,
-} from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import { computeEscalationCurveAttoRep, computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit, projectEscalationEndTime } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import { requireContractAddress } from './escalationGame/carryHelpers'
 import { useEscalationGameFixture } from './escalationGame/fixture'
 
@@ -206,48 +197,38 @@ describe('Escalation math parity', () => {
 		assert.strictEqual(await readEscalationEndDate(escalationGame), expectedEndTime, 'shared projected end time should match the contract after the same deposit')
 	})
 
-	test('shared projection matches the restarted response period and the support required past the median', async () => {
+	test('shared projection matches the curve deadline after a change of leader and a below-curve deposit', async () => {
 		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 6n * reportBond)
 		const activationTime = await getActivationTime(client, escalationGame)
-		const readResponseRestartedUntil = async () => await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'responseRestartedUntil', args: [] })
-		const project = (balances: Awaited<ReturnType<typeof getBalances>>, outcome: 'invalid' | 'no', amountAttoRep: bigint, curveAttoRep = 0n) =>
-			projectEscalationDeposit({ amountAttoRep, balancesAttoRep: [balances.invalid, balances.yes, balances.no], curveAttoRep, nonDecisionThresholdAttoRep, outcome, startBondAttoRep: reportBond })
+		const project = (balances: Awaited<ReturnType<typeof getBalances>>, outcome: 'invalid' | 'no', amountAttoRep: bigint) => projectEscalationDeposit({ amountAttoRep, balancesAttoRep: [balances.invalid, balances.yes, balances.no], nonDecisionThresholdAttoRep, outcome, startBondAttoRep: reportBond })
 
 		// No takes the lead shortly before the curve deadline its own stake set.
 		await mockWindow.setTime((await readEscalationEndDate(escalationGame)) - 100n)
 		const leadProjection = project(await getBalances(client, escalationGame), 'no', 4n * reportBond)
-		assert.ok(leadProjection?.takesLead, 'shared projection should mark the change of leader')
+		assert.ok(leadProjection !== undefined)
 		if (leadProjection === undefined) return
-		assert.strictEqual(await readResponseRestartedUntil(), 0n)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 4n * reportBond)
-		const responseRestartedUntil = await readResponseRestartedUntil()
-		const leadTimestamp = responseRestartedUntil - ESCALATION_ACTIVATION_DELAY
-		const projectedEndTime = projectEscalationEndTime({ activationTime, nonDecisionThresholdAttoRep, projection: leadProjection, responseRestartedUntil: 0n, startBondAttoRep: reportBond, timestamp: leadTimestamp })
-		assert.strictEqual(projectedEndTime, responseRestartedUntil, 'the restarted response period should outlast the new curve deadline')
+		const projectedEndTime = projectEscalationEndTime({ activationTime, balancesAttoRep: leadProjection.projectedBalancesAttoRep, nonDecisionThresholdAttoRep, startBondAttoRep: reportBond })
+		assert.strictEqual(projectedEndTime, activationTime + computeEscalationFinalityElapsed(reportBond, nonDecisionThresholdAttoRep, 9n * reportBond), 'the deadline is the curve crossing of the new median')
 		assert.strictEqual(await readEscalationEndDate(escalationGame), projectedEndTime, 'shared projected end time should match the contract after a change of leader')
 
-		// Inside the response period the curve passes the new median, and support must meet it.
-		const curveDeadline = activationTime + computeEscalationFinalityElapsed(reportBond, nonDecisionThresholdAttoRep, 9n * reportBond)
-		await mockWindow.setTime(curveDeadline + 60n)
+		// Before that deadline a start-bond deposit far below the curve is accepted.
+		await mockWindow.setTime(projectedEndTime - 60n)
 		const balances = await getBalances(client, escalationGame)
-		const curveAtResponseEnd = computeEscalationCurveAttoRep(reportBond, nonDecisionThresholdAttoRep, responseRestartedUntil - activationTime)
-		assert.ok(curveAtResponseEnd > 9n * reportBond && curveAtResponseEnd < 10n * reportBond - reportBond / 10n)
-		assert.strictEqual(project(balances, 'invalid', 8n * reportBond, 9n * reportBond + 1n), undefined, 'shared projection should reject support below the curve')
+		assert.ok(computeEscalationCurveAttoRep(reportBond, nonDecisionThresholdAttoRep, projectedEndTime - 60n - activationTime) > 2n * reportBond)
+		const smallProjection = project(balances, 'invalid', reportBond)
+		assert.ok(smallProjection !== undefined, 'shared projection should accept a start-bond deposit while the game is open')
+		const [acceptedAmount, resultingCumulativeAmount] = await readPreviewDepositOnOutcome(escalationGame, QuestionOutcome.Invalid, reportBond)
+		assert.strictEqual(acceptedAmount, smallProjection?.acceptedAmountAttoRep)
+		assert.strictEqual(resultingCumulativeAmount, smallProjection?.projectedBalancesAttoRep[0])
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
+		assert.strictEqual(await readEscalationEndDate(escalationGame), projectEscalationEndTime({ activationTime, balancesAttoRep: [reportBond, balances.yes, balances.no], nonDecisionThresholdAttoRep, startBondAttoRep: reportBond }))
+
+		// Once the curve passes the median the game accepts no deposit.
+		await mockWindow.setTime(projectedEndTime + 1n)
 		await assert.rejects(readPreviewDepositOnOutcome(escalationGame, QuestionOutcome.Invalid, 8n * reportBond), /Invalid deposit preview/)
-		const meetingAmount = 10n * reportBond - reportBond / 10n
-		const meetingProjection = project(balances, 'invalid', meetingAmount, curveAtResponseEnd)
-		assert.ok(meetingProjection !== undefined && !meetingProjection.takesLead, 'shared projection should accept support that meets the curve')
-		const [acceptedAmount, resultingCumulativeAmount] = await readPreviewDepositOnOutcome(escalationGame, QuestionOutcome.Invalid, meetingAmount)
-		assert.strictEqual(acceptedAmount, meetingProjection?.acceptedAmountAttoRep)
-		assert.strictEqual(resultingCumulativeAmount, meetingProjection?.projectedBalancesAttoRep[0])
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, meetingAmount)
-		assert.strictEqual(
-			await readEscalationEndDate(escalationGame),
-			projectEscalationEndTime({ activationTime, nonDecisionThresholdAttoRep, projection: { projectedBalancesAttoRep: [meetingAmount, balances.yes, balances.no], takesLead: false }, responseRestartedUntil, startBondAttoRep: reportBond, timestamp: curveDeadline + 60n }),
-			'support that does not take the lead should keep the restarted period or the later curve deadline',
-		)
 	})
 
 	test('shared winning-withdrawal math matches claimDepositForWinning', async () => {

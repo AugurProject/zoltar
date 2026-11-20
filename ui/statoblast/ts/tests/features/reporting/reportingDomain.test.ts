@@ -1,4 +1,4 @@
-import { computeEscalationBindingCapitalAttoRep, computeEscalationFinalityElapsed } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import { computeEscalationFinalityElapsed } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import { getReportingMaxContribution } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingMaxContribution.js'
 import { getDisplayedLeadingEscalationOutcome, hasReportingOpened } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
@@ -504,64 +504,45 @@ describe('deposit deadline preview', () => {
 		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline, extension: deadline - details.escalationEndTime, reachesNonDecision: false })
 	})
 
-	test('respects the fresh response window for resumed games', () => {
+	test('keeps the fixed response window of a resumed game and restarts nothing on a change of leader', () => {
 		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 4000000n, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
-		// The resumed curve is already past the median, so support must meet it; the leader adding support leaves the fresh window in force.
-		expect(previewReportingDeadline(details, 'no', rep(10n))).toBeUndefined()
-		expect(previewReportingDeadline(details, 'no', rep(90n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
-		// A change of leader restarts the response period from the report.
-		expect(previewReportingDeadline(details, 'yes', rep(90n))).toEqual({ deadline: details.currentTime + 3n * 86400n, extension: details.currentTime - 100n, reachesNonDecision: false })
+		// The resumed curve is already past the median, yet any start-bond report is accepted inside the window.
+		expect(previewReportingDeadline(details, 'no', rep(10n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
+		expect(previewReportingDeadline(details, 'yes', rep(90n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
 	})
-	test('restarts the response period when a report takes the lead and keeps an earlier restart otherwise', () => {
-		const details = createResponsePeriodDetails()
-		const leadAmount = requiredSupport(details) - rep(5n)
-		const restarted = details.currentTime + 3n * 86400n
-		expect(previewReportingDeadline(details, 'yes', leadAmount)).toEqual({ deadline: restarted, extension: restarted - details.escalationEndTime, reachesNonDecision: false })
-		expect(previewReportingDeadline(details, 'no', requiredSupport(details) - rep(8n))).toEqual({ deadline: details.escalationEndTime, extension: 0n, reachesNonDecision: false })
+	test('a report taking the lead projects the curve crossing of the new median, with no restart', () => {
+		const details = createLateDetails({ sides: [side('invalid', rep(1n)), side('yes', rep(5n)), side('no', rep(6n))] })
+		const elapsed = (amount: bigint) => computeEscalationFinalityElapsed(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, amount)
+		// Yes 5 -> 9 overtakes No 6; the median becomes No's 6 REP, and nothing restarts a three-day period.
+		const deadline = details.activationTime + elapsed(rep(6n))
+		expect(previewReportingDeadline(details, 'yes', rep(4n))).toEqual({ deadline, extension: deadline - details.escalationEndTime, reachesNonDecision: false })
+		expect(deadline).toBeLessThan(details.currentTime + 3n * 86400n)
 	})
 })
 
-/** The curve has passed the median and No strictly leads inside a response period restarted by a change of leader. */
-function createResponsePeriodDetails(overrides: Partial<ActiveReportingDetails> = {}) {
+/** Ten seconds before the curve passes the 5 REP median (by default No leads Yes 8 to 5). */
+function createLateDetails(overrides: Partial<ActiveReportingDetails> = {}) {
 	const base = createReportingDetails()
-	const currentTime = base.activationTime + computeEscalationFinalityElapsed(base.startBondAttoRep, base.nonDecisionThresholdAttoRep, rep(20n))
-	return createReportingDetails({ currentTime, escalationEndTime: currentTime + 1000n, responseRestartedUntil: currentTime + 1000n, ...overrides })
+	const escalationEndTime = base.activationTime + computeEscalationFinalityElapsed(base.startBondAttoRep, base.nonDecisionThresholdAttoRep, rep(5n))
+	return createReportingDetails({ currentTime: escalationEndTime - 10n, escalationEndTime, ...overrides })
 }
 
-/** The UI reads the rising curve one submission reserve ahead. */
-function requiredSupport(details: ActiveReportingDetails) {
-	return computeEscalationBindingCapitalAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, details.currentTime + 60n - details.activationTime)
-}
-
-describe('support required after the curve passes the median', () => {
-	test('rejects a report that leaves its side below the required support and accepts one that meets it', () => {
-		const details = createResponsePeriodDetails()
-		const required = requiredSupport(details)
-		expect(required).toBeGreaterThan(rep(20n))
-		const rejected = previewReportingContribution(details, 'yes', required - rep(5n) - 1n)
-		expect(rejected.actualDepositAmount).toBeUndefined()
-		expect(rejected.reason).toContain('must reach the current required support')
-		expect(previewReportingContribution(details, 'yes', required - rep(5n))).toEqual({ actualDepositAmount: required - rep(5n), reason: undefined, tieAdjusted: false })
-		// The rule binds the leader too.
-		expect(previewReportingContribution(details, 'no', rep(3n)).reason).toContain('must reach the current required support')
-		expect(previewReportingDeadline(details, 'yes', rep(10n))).toBeUndefined()
+describe('reports late in the game', () => {
+	test('accepts any report of at least the start bond while the game is open, whatever the curve', () => {
+		const details = createLateDetails()
+		expect(previewReportingContribution(details, 'invalid', rep(3n))).toEqual({ actualDepositAmount: rep(3n), reason: undefined, tieAdjusted: false })
+		expect(previewReportingContribution(details, 'no', rep(3n))).toEqual({ actualDepositAmount: rep(3n), reason: undefined, tieAdjusted: false })
+		expect(previewReportingContribution(details, 'invalid', rep(3n) - 1n).actualDepositAmount).toBeUndefined()
 	})
-	test('accepts any amount while the curve is at or below the median or the leaders tie', () => {
-		expect(previewReportingContribution(createReportingDetails(), 'yes', rep(4n))).toEqual({ actualDepositAmount: rep(4n), reason: undefined, tieAdjusted: false })
-		const tied = createResponsePeriodDetails({ sides: [side('invalid', rep(1n)), side('yes', rep(8n)), side('no', rep(8n))] })
-		expect(previewReportingContribution(tied, 'invalid', rep(3n))).toEqual({ actualDepositAmount: rep(3n), reason: undefined, tieAdjusted: false })
+	test('the lead preset is the smallest amount that leads, at least the start bond', () => {
+		const details = createLateDetails()
+		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({ amountAttoRep: rep(3n) + 1n, reason: undefined })
+		expect(getReportingMinimumOutcomeChangeContribution(details, 'invalid')).toEqual({ amountAttoRep: rep(7n) + 1n, reason: undefined })
 	})
-	test('raises the lead preset to the required support', () => {
-		const details = createResponsePeriodDetails()
-		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({ amountAttoRep: requiredSupport(details) - rep(5n), reason: undefined })
-		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({ amountAttoRep: requiredSupport(details) - rep(5n), reason: undefined })
-	})
-	test('Max is unavailable when the funding source cannot reach the required support', () => {
-		const details = createResponsePeriodDetails()
+	test('Max follows the funding source', () => {
+		const details = createLateDetails()
 		const base = { details, forkConfirmed: false, selectedOutcome: 'yes', usesWalletFunding: true } as const
-		expect(getReportingMaxContribution({ ...base, availableReportingRep: rep(10n) }).amountAttoRep).toBeUndefined()
-		expect(getReportingMaxContribution({ ...base, availableReportingRep: rep(10n) }).reason).toContain('must reach the current required support')
-		expect(getReportingMaxContribution({ ...base, availableReportingRep: rep(40n) })).toEqual({ amountAttoRep: rep(40n), reason: undefined, stopsBelowFork: false })
+		expect(getReportingMaxContribution({ ...base, availableReportingRep: rep(10n) })).toEqual({ amountAttoRep: rep(10n), reason: undefined, stopsBelowFork: false })
 	})
 })
 

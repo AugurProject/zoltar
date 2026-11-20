@@ -75,7 +75,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		depositRepOnOutcome: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		depositRepOnOutcomeWithLead: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		depositRepOnOutcomeWithAuthorizationAndLead: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
-		depositRepOnOutcomeForBatch: ['external(BinaryOutcomes.BinaryOutcome,address[],uint256[])'],
 		recordDepositFromSecurityPool: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
 	},
 	'solidity/contracts/statoblast/EscalationGameSettlement.sol': {
@@ -132,7 +131,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
 	'solidity/contracts/Zoltar.sol': '7820943e20dcb5ea796e2c00af55219042cb772133f0844c8d79dcd2ae30c938',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
-	'solidity/contracts/statoblast/EscalationGame.sol': 'b52817a6a335c93dcc3056b2be4c5196f163ebe588a16c9afca7cfbb2b79c7a2',
+	'solidity/contracts/statoblast/EscalationGame.sol': '318f27df64ff36dbeaf147d822f83175b5753025b95bc8439e22c121974bd1c4',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': '7a09d1ce16324a2165c74fa4548c45410fd1177fb66929adee8732a572a90301',
 	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': '995cac2d2b605782625d4d84126569bb3a13c6f37b17a91c9d2c3badba80df38',

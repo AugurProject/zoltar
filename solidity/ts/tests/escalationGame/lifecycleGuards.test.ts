@@ -44,7 +44,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 		client = fixture.client
 	})
 
-	test('a start-bond lead flip at activation guarantees a fresh response period', async () => {
+	test('a start-bond lead flip at activation buys no response period beyond the curve', async () => {
 		const { escalationGameAddress: game, testSecurityPoolAddress: pool } = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaTestSecurityPool(pool, client.account.address, QuestionOutcome.Yes, reportBond)
 		const activation = await getActivationTime(client, game)
@@ -52,18 +52,16 @@ describe('Escalation Game: lifecycle and guards', () => {
 		await mockWindow.setTime(activation - 1n)
 		await depositOnOutcomeViaTestSecurityPool(pool, client.account.address, QuestionOutcome.No, 2n * reportBond)
 		assert.strictEqual((await client.getBlock()).timestamp, activation)
-		assert.strictEqual(await readEscalationGameEndDate(client, game), activation + FRESH_FORK_RESPONSE_PERIOD)
-		const beforeResponse = await mockWindow.anvilSnapshot()
+		// The deadline is the curve crossing of the median (Yes's start bond), not a fresh response period.
+		const end = await readEscalationGameEndDate(client, game)
+		const median = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getBindingCapitalAttoRep' })
+		const curveAt = (elapsed: bigint) => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'computeIterativeAttritionCostAttoRep', args: [elapsed] })
+		assert.ok((await curveAt(end - activation)) <= median)
+		assert.ok((await curveAt(end - activation + 1n)) > median)
+		assert.ok(end < activation + FRESH_FORK_RESPONSE_PERIOD)
 		const finalResolution = () => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' })
-		await mockWindow.setTime(activation + FRESH_FORK_RESPONSE_PERIOD)
-		assert.strictEqual(await finalResolution(), BigInt(QuestionOutcome.None))
-		await mockWindow.advanceTime(1n)
+		await mockWindow.setTime(end + 1n)
 		assert.strictEqual(await finalResolution(), BigInt(QuestionOutcome.No))
-		await mockWindow.anvilRevert(beforeResponse)
-		await mockWindow.setTime(activation + 1n)
-		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' }), BigInt(QuestionOutcome.None))
-		await depositOnOutcomeViaTestSecurityPool(pool, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
-		assert.ok((await readEscalationGameEndDate(client, game)) >= (await client.getBlock()).timestamp + FRESH_FORK_RESPONSE_PERIOD)
 	})
 
 	test('can start a game', async () => {

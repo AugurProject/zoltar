@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { Window } from 'happy-dom'
 import { concatHex, encodeAbiParameters, getAddress, keccak256 } from '../../shared/core/ts/evm/ethereum'
-import { computeCanonicalEscalationDeadlineAfterDepositDays, computeCanonicalEscalationDeadlineDays, projectDocumentationEscalationDeposit } from '../../docs/charts/chartModels'
+import { computeCanonicalEscalationDeadlineDays, projectDocumentationEscalationDeposit } from '../../docs/charts/chartModels'
 
 // Worked examples in the reference pages, recomputed from the contract rules they illustrate.
 
@@ -49,12 +49,14 @@ export async function checkMmrConformanceVector(): Promise<void> {
 	}
 }
 
-/** Checks the escalation simulator against the contract's response-period and required-support deposit rules. */
+/** Checks the escalation simulator against the contract's pure-curve deposit rule and deadline. */
 export function checkEscalationResponseExamples(): void {
-	const lateEscalationDeposit = (amountRep: number) => projectDocumentationEscalationDeposit({ amountRep, balances: [0n, 3n * 10n ** 18n, 2n * 10n ** 18n], elapsedDays: 40, nonDecisionThresholdRep: 10, outcome: 'no', startBondRep: 1 })
-	assert.equal(lateEscalationDeposit(3).belowRequiredSupport, true, 'escalation simulator should reject support that stays below a curve that has passed the median')
-	assert.equal(lateEscalationDeposit(4).projection?.takesLead, true, 'escalation simulator should accept support that meets the curve and mark the change of leader')
-	assert.equal(projectDocumentationEscalationDeposit({ amountRep: 3, balances: [0n, 3n * 10n ** 18n, 2n * 10n ** 18n], elapsedDays: 10, nonDecisionThresholdRep: 10, outcome: 'no', startBondRep: 1 }).projection?.takesLead, true, 'escalation simulator should accept any deposit while the curve is below the median')
-	assert.equal(computeCanonicalEscalationDeadlineAfterDepositDays({ bindingCapitalRep: 3, depositDay: 40, nonDecisionThresholdRep: 10, startBondRep: 1, takesLead: true }), 43, 'a change of leader should leave three days to respond')
-	assert.equal(computeCanonicalEscalationDeadlineAfterDepositDays({ bindingCapitalRep: 3, depositDay: 40, nonDecisionThresholdRep: 10, startBondRep: 1, takesLead: false }), computeCanonicalEscalationDeadlineDays(1, 10, 3), 'a deposit that does not take the lead should keep the curve deadline')
+	const rep = (amount: bigint) => amount * 10n ** 18n
+	const deposit = (amountRep: number, elapsedDays: number) => projectDocumentationEscalationDeposit({ amountRep, balances: [0n, rep(3n), rep(2n)], elapsedDays, nonDecisionThresholdRep: 10, outcome: 'invalid', startBondRep: 1 })
+	const openDay = computeCanonicalEscalationDeadlineDays(1, 10, 2)
+	assert.equal(deposit(1, openDay - 1).projection?.acceptedAmountAttoRep, rep(1n), 'escalation simulator should accept a start-bond deposit below the curve while the game is open')
+	assert.equal(deposit(1, openDay + 1).gameClosed, true, 'escalation simulator should close the game once the curve passes the median and one outcome leads')
+	assert.equal(deposit(1, openDay + 1).projection, undefined, 'escalation simulator should reject every deposit once the game is closed')
+	assert.ok(computeCanonicalEscalationDeadlineDays(1, 10, 3) > openDay, 'raising the median should move the curve deadline later')
+	assert.ok(computeCanonicalEscalationDeadlineDays(1, 10, 9.9) <= 52, 'no curve deadline should pass activation plus the escalation interval')
 }

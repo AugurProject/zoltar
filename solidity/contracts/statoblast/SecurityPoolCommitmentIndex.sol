@@ -293,6 +293,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// the economic minimum: a smaller rest is cut at once when spare allows, and
 	/// otherwise grows to that minimum. `ownerExit` waives this for an owner
 	/// leaving entirely, whose rest is queued for retirement whatever its size.
+	/// An owner's own reduction (`ownerExit` or a nonzero target) whose deficit is
+	/// below the minimum cuts nothing and queues instead; only a takeover cures it.
 	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target, bool ownerExit) external onlyCapitalLedger operational returns (Cure memory result) {
 		Account memory account = accountOf(id);
 		require(account.owner != address(0) && account.commitment > target, 'Position is not live');
@@ -307,8 +309,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		// `supported` rounds down, so the deficit rounds up and removing it leaves
 		// a residual that the remaining REP fully backs.
 		uint256 reduction = account.commitment - supported;
-		// Preserve supported commitment when a full exit queues for retirement.
-		if (ownerExit && reduction < minimumCommitment) return result;
+		// Preserve supported commitment when an owner's reduction queues for retirement (#1364, #1449).
+		if ((ownerExit || target != 0) && reduction < minimumCommitment) {
+			return result;
+		}
 		uint256 removed = Math.min(account.commitment - target, Math.min(Math.max(reduction, minimumCommitment), spare));
 		if (removed < minimumCommitment && removed != account.commitment) removed = 0;
 		// A rest above the target must be at least the minimum: it is either queued

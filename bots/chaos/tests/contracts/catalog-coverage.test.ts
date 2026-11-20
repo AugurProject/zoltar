@@ -121,7 +121,6 @@ const expectedCanonicalManifest = [
 	'SecurityPoolForker:contracts/statoblast/SecurityPoolForker.sol:static-endpoint',
 	'EscalationGameFactory:contracts/statoblast/factories/EscalationGameFactory.sol:static-endpoint',
 	'EscalationGame:contracts/statoblast/EscalationGame.sol:dynamic-endpoint',
-	'EscalationChallengeEscrow:contracts/statoblast/EscalationChallengeEscrow.sol:dynamic-endpoint',
 	'EscalationGameClaimDelegate:contracts/statoblast/EscalationGameClaimDelegate.sol:fallback-module',
 	'EscalationGameDepositDelegate:contracts/statoblast/EscalationGameDepositDelegate.sol:delegate-module',
 	'ShareTokenFactory:contracts/statoblast/factories/ShareTokenFactory.sol:static-endpoint',
