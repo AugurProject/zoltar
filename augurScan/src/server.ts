@@ -2,7 +2,8 @@ import path from 'node:path'
 import { handleApi } from './api.ts'
 import { runtimeConfig } from './config.ts'
 import { readIndexerHealth, ScannerDatabase } from './database.ts'
-import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, liveStreamResponse, metricRoute, requestRateLimitGuard, SECURITY_HEADERS, staticAssetResponse, staticContentType, withSecurityHeaders } from './http.ts'
+import { createHealthRoutes } from './health.ts'
+import { clientKey, createFixedWindowRateLimiter, createRequestMetrics, liveStreamResponse, metricRoute, requestRateLimitGuard, SECURITY_HEADERS, staticAssetResponse, staticContentType, withSecurityHeaders } from './http.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { createLiveBus } from './live.ts'
 import { installConsoleTimestamps } from './logging.ts'
@@ -14,10 +15,17 @@ installConsoleTimestamps()
 const { database, indexerRunId, networks } = await initializeProcessContext(false)
 const API_DATABASE_CONNECTIONS = 10
 const healthDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2)
+// Readiness has its own connection so slow /health/indexers or /metrics queries cannot hold it.
+const readinessDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 1)
 const apiDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, API_DATABASE_CONNECTIONS, 1)
 const liveDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2, 1)
 
-const bus = createLiveBus(liveDatabase, undefined, runtimeConfig.liveBackpressureTimeoutMs)
+const bus = createLiveBus(liveDatabase, {
+	maxClients: runtimeConfig.liveMaxClients,
+	maxClientsPerKey: runtimeConfig.liveMaxClientsPerClient,
+	maxLifetimeMs: runtimeConfig.liveMaxStreamLifetimeMs,
+	backpressureTimeoutMs: runtimeConfig.liveBackpressureTimeoutMs,
+})
 let prunePromise: Promise<void> | undefined
 const pruneLiveEvents = (): Promise<void> => {
 	prunePromise ??= database
@@ -35,10 +43,14 @@ const publicRoot = path.resolve(import.meta.dir, '../public')
 const securityHeaders = SECURITY_HEADERS
 
 const API_TRANSACTION_TIMEOUT_MS = 8_000
-const HEALTH_CONCURRENCY_LIMIT = 2
 const freshnessThresholdMs = Math.max(runtimeConfig.pollIntervalMs * 4, 45_000)
 const apiRequest = createConcurrencyGate(API_DATABASE_CONNECTIONS, () => Response.json({ error: 'Server is busy; retry shortly' }, { status: 503, headers: { ...securityHeaders, 'retry-after': '2' } }))
-const healthCheck = createConcurrencyGate(HEALTH_CONCURRENCY_LIMIT, () => Response.json({ status: 'busy' }, { status: 503, headers: { ...securityHeaders, 'retry-after': '2' } }))
+const healthRoutes = createHealthRoutes({
+	checkReadiness: async () => await readinessDatabase.read(async sql => await sql`SELECT 1`, 3_000),
+	readIndexerHealth: async () => await healthDatabase.read(async sql => await readIndexerHealth(sql, transaction => healthDatabase.auditIntegrity(transaction), freshnessThresholdMs), 3_000),
+	networks,
+	securityHeaders,
+})
 const apiRateLimit = createFixedWindowRateLimiter(runtimeConfig.apiRateLimitPerMinute, 60_000)
 const requestMetrics = createRequestMetrics()
 
@@ -81,20 +93,9 @@ const server = Bun.serve({
 			return withSecurityHeaders(response, securityHeaders)
 		}
 		if (url.pathname === '/health/live') return respond(Response.json({ status: 'ok' }))
-		if (url.pathname === '/health/ready') {
-			return respond(
-				await healthCheck(async () => {
-					try {
-						await healthDatabase.read(async sql => await sql`SELECT 1`, 3_000)
-						return Response.json({ status: 'ready' })
-					} catch (error) {
-						console.error(`augurScan readiness check failed (${error instanceof Error ? error.name : typeof error})`)
-						return Response.json({ status: 'not-ready' }, { status: 503 })
-					}
-				}),
-			)
-		}
-		const rateLimitResponse = requestRateLimitGuard(url.pathname, server.requestIP(request)?.address ?? 'unknown', apiRateLimit, securityHeaders)
+		if (url.pathname === '/health/ready') return respond(await healthRoutes.ready())
+		const client = clientKey(server.requestIP(request)?.address, request.headers, runtimeConfig)
+		const rateLimitResponse = requestRateLimitGuard(url.pathname, client, apiRateLimit, securityHeaders)
 		if (rateLimitResponse !== undefined) {
 			requestMetrics.recordRateLimitRejection()
 			return respond(rateLimitResponse)
@@ -111,29 +112,12 @@ const server = Bun.serve({
 				return respond(Response.json({ error: 'Metrics unavailable' }, { status: 503, headers: securityHeaders }))
 			}
 		}
-		if (url.pathname === '/health/indexers') {
-			return respond(
-				await healthCheck(async () => {
-					try {
-						const snapshot = await healthDatabase.read(async sql => await readIndexerHealth(sql, transaction => healthDatabase.auditIntegrity(transaction), freshnessThresholdMs), 3_000)
-						return Response.json(snapshot, { status: snapshot.status === 'healthy' ? 200 : 503 })
-					} catch (error) {
-						console.error(`augurScan indexer health check failed (${error instanceof Error ? error.name : typeof error})`)
-						return indexerHealthUnavailableResponse(
-							networks.map(network => ({
-								networkId: network.id,
-								state: 'unknown',
-							})),
-						)
-					}
-				}),
-			)
-		}
+		if (url.pathname === '/health/indexers') return respond(await healthRoutes.indexers())
 		if (url.pathname === '/api/v1/stream') {
 			const header = request.headers.get('last-event-id')
 			const parsedEventId = header !== null && /^\d+$/.test(header) ? Number(header) : undefined
 			const lastEventId = parsedEventId !== undefined && Number.isSafeInteger(parsedEventId) ? parsedEventId : undefined
-			const stream = bus.stream(lastEventId)
+			const stream = bus.stream(lastEventId, client)
 			if (stream === undefined) return respond(Response.json({ error: 'Live stream capacity reached; retry shortly' }, { status: 503, headers: { ...securityHeaders, 'retry-after': '2' } }))
 			return respond(liveStreamResponse(stream, request, server, securityHeaders))
 		}
@@ -179,6 +163,7 @@ const shutdown = (): Promise<void> => {
 		await liveDatabase.close()
 		await apiDatabase.close()
 		await healthDatabase.close()
+		await readinessDatabase.close()
 		await database.close()
 	})()
 	return shutdownPromise

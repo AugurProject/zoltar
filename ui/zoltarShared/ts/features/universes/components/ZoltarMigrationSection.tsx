@@ -27,7 +27,10 @@ import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-co
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
-import { deriveMigrationWizard, formatOutcomeList, migrationWizardStepIds, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardStepId } from '../lib/migrationWizard.js'
+import { escapeOnChainText } from '@zoltar/ui-core-shared/lib/onChainText.js'
+import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
+import { OutcomeIdentity } from '@zoltar/ui-core-shared/components/OutcomeIdentity.js'
+import { deriveMigrationWizard, formatMigrationOutcomeText, formatOutcomeList, migrationWizardStepIds, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardStepId } from '../lib/migrationWizard.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -322,7 +325,20 @@ export function ZoltarMigrationSection({
 			case 'review':
 				return (
 					<>
-						<p className='migration-review-summary'>{amount === undefined ? undefined : zoltarCopy.formatMigrationSummary(formatCurrencyBalance(amount), selectedOutcomeNames)}</p>
+						{amount === undefined ? undefined : (
+							<div className='migration-review-summary'>
+								<p>{zoltarCopy.formatMigrationSummary(formatCurrencyBalance(amount))}</p>
+								{/* One row per child universe, its isolated label followed by its index and ID, so a comma or override in a label cannot fake another outcome. */}
+								<ul className='migration-review-outcomes'>
+									{wizard.selectedOutcomes.map(outcome => (
+										<li key={outcome.outcomeIndex.toString()}>
+											<OnChainText text={outcome.label} />
+											<OutcomeIdentity label={outcome.label} outcomeIndex={outcome.outcomeIndex} universeId={outcome.universeId} />
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
 						<TransactionReview
 							variant='inline'
 							primary={[
@@ -397,8 +413,8 @@ export function ZoltarMigrationSection({
 								const child = rootUniverse?.childUniverses.find(candidate => candidate.universeId === outcome.universeId)
 								if (child === undefined) return undefined
 								return (
-									<MetricField key={outcome.universeId.toString()} label={outcome.label}>
-										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${outcome.label} ${child.reputationTokenSymbol ?? commonCopy.rep}`} />
+									<MetricField key={outcome.universeId.toString()} label={formatMigrationOutcomeText(outcome)}>
+										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${escapeOnChainText(outcome.label)} ${child.reputationTokenSymbol ?? commonCopy.rep}`} />
 									</MetricField>
 								)
 							})}

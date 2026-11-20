@@ -826,6 +826,30 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		expect(outcome.failure).toBeUndefined()
 	})
 
+	test('#1463 a cure that would cut the whole commitment of a REP-backed position removes nothing (seed 120000)', async () => {
+		baseline = ''
+		const trace: Operation[] = [
+			{ c: 'create', rep: 138n, k: 34n, price: 1n },
+			{ c: 'replace', id: 1n, rep: 10n, k: 10n, price: 8n, recover: false },
+			{ c: 'create', rep: 573773600000000001n, k: 71721700000000000n, price: 11n },
+			{ c: 'cure', id: 1n, price: 5n * WAD, multiplier: 20_000n, minimum: 5n, demand: 2853080884168020n, target: 0n, ownerExit: false },
+		]
+		const outcome = await run(1, trace.length, trace)
+		expect(outcome.failure).toBeUndefined()
+	})
+
+	test('#1463 an owner exit with a sub-minimum deficit keeps its commitment', async () => {
+		baseline = ''
+		// Supported commitment is 9 of 10; the deficit of 1 is below the minimum of 2 and spare would allow a cut.
+		const trace: Operation[] = [
+			{ c: 'create', rep: 18n * WAD, k: 10n, price: 2n * WAD },
+			{ c: 'create', rep: 1000n * WAD, k: 100n, price: 2n * WAD },
+			{ c: 'cure', id: 1n, price: 2n * 10n ** 36n, multiplier: 10_000n, minimum: 2n, demand: 0n, target: 0n, ownerExit: true },
+		]
+		const outcome = await run(1, trace.length, trace)
+		expect(outcome.failure).toBeUndefined()
+	})
+
 	test('random index operations keep every aggregate, cohort, fee, clock and preview equal to the reference model', async () => {
 		// The shared fixture reverts to its own snapshot before each test, which consumes ours.
 		baseline = ''

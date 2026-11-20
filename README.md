@@ -114,9 +114,9 @@ The UI also supports a walletless browser-local simulation mode for manual QA.
 After completing [Setup](#setup):
 
 1. Start your app with its serve command from [Common Commands](#common-commands).
-1. Open `http://localhost:4153/?simulate=1`, `http://localhost:12347/?simulate=1`, or `http://localhost:4163/?simulate=1`
+1. Open `http://localhost:4153/?simulate=1`, `http://localhost:12347/?simulate=1`, `http://localhost:4163/?simulate=1`, or `http://localhost:4143/?simulate=1`
 
-While a dev server is running, `UI_DEV_SERVER_URL=http://localhost:4153 bun run ui:browser-smoke:zoltar`, `UI_DEV_SERVER_URL=http://localhost:12347 bun run ui:browser-smoke:statoblast`, or `UI_DEV_SERVER_URL=http://localhost:4163 bun run ui:browser-smoke:trading` opens the app in headless Chromium and fails if it does not mount cleanly.
+While a dev server is running, `UI_DEV_SERVER_URL=http://localhost:4153 bun run ui:browser-smoke:zoltar`, `UI_DEV_SERVER_URL=http://localhost:12347 bun run ui:browser-smoke:statoblast`, `UI_DEV_SERVER_URL=http://localhost:4163 bun run ui:browser-smoke:trading`, or `UI_DEV_SERVER_URL=http://localhost:4143 bun run ui:browser-smoke:openoracle` opens the app in headless Chromium and fails if it does not mount cleanly. Set `CHROMIUM_PATH` to use a Chromium executable that is not on `PATH`; the smoke check and `ui:layout-scan` both honor it.
 
 `bun run ui:layout-scan -- --app <apps>` builds and serves the named apps (one or more, comma separated; `--app` is required), then walks every route, view tab, disclosure, and dialog launcher it can reach in each simulation scenario at five viewport sizes, and reports content that is cut off, runs off the screen, overlaps, or is squeezed. Each finding explains the measured problem, the likely cause and fix, the source files involved, and links a highlighted screenshot; `--help` lists the options for narrowing the scan or scanning a running server.
 

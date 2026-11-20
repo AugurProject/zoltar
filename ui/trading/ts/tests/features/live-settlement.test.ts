@@ -96,11 +96,11 @@ describe('live settlement contract encoding', () => {
 	] as const) {
 		test(`keeps ${side} directional exit encoding distinct from redemption`, () => {
 			const pair = `0x${'66'.repeat(20)}` as Address
-			const transfer = receiveBasedExitArguments({ ...market, pair }, side, 10n, 23n, 9n, account, 421n)
+			const transfer = receiveBasedExitArguments({ ...market, pair }, side, 10n, 23n, 9n, account, 421n, 5n)
 			expect(transfer.ids).toEqual([1792n, 1792n | BigInt(outcome)])
 			expect(transfer.amounts).toEqual([10n, 23n])
 			const request = decodeReceiveRequest(transfer.data)
-			expect(request).toEqual([2n, 0n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, BigInt(outcome), 10n, 23n, 9n, account, account, 421n, 0n])
+			expect(request).toEqual([2n, 0n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, BigInt(outcome), 10n, 23n, 9n, account, account, 421n, 5n])
 		})
 	}
 

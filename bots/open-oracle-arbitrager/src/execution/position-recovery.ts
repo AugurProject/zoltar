@@ -117,23 +117,62 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		throw new Error('Executor hedge event does not match the durable position')
 	}
 	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.hedgeWeth), hedgeExecution.hedgeAmountAttoWeth)
+	// The entry stays provisional, holding its risk slot and withholding its history record, until finalizeEntryAfterFinalityWithQuorum proves the receipt block canonical.
 	const confirmedPosition = {
 		...position,
 		actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
+		entryReceiptBlockHash: executorReceipt.blockHash,
+		entryReceiptBlockNumber: executorReceipt.blockNumber.toString(),
 		entryTransactionHash: executorReceipt.transactionHash,
 		gasExpenditures,
 		hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenDecimals),
 		hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountAttoWeth),
 		hedgedProfitBeforeGasEth: decimalSignedEth(actualProfitBeforeGas),
-		status: 'open' as const,
+		historyOutbox: undefined,
+		status: 'open-pending-finality' as const,
 	} satisfies PositionRecord
+	return { position: confirmedPosition, receipts }
+}
+
+/** Returns a provisional entry to `pending-entry`, removing the receipt gas so the normal entry recovery or expiry path re-derives it. */
+function rollbackProvisionalEntry(position: PositionRecord): PositionRecord {
+	const entryHashes = new Set(position.entryTransactionHashes.map(hash => hash.toLowerCase()))
+	const provisionalGas = position.gasExpenditures.filter(expenditure => entryHashes.has(expenditure.transactionHash.toLowerCase())).reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
+	const recordedEntryGas = parseDecimalWeth(position.actualEntryGasCostEth)
+	if (provisionalGas > recordedEntryGas) throw new Error('Provisional entry gas exceeds the recorded entry total')
 	return {
-		position: {
-			...confirmedPosition,
-			historyOutbox: executionRecordForConfirmedPosition(confirmedPosition, executorReceipt.blockNumber, executorReceipt.transactionHash),
-		},
-		receipts,
+		...position,
+		actualEntryGasCostEth: decimalWeth(recordedEntryGas - provisionalGas),
+		entryReceiptBlockHash: undefined,
+		entryReceiptBlockNumber: undefined,
+		gasExpenditures: position.gasExpenditures.filter(expenditure => !entryHashes.has(expenditure.transactionHash.toLowerCase())),
+		historyOutbox: undefined,
+		status: 'pending-entry',
 	}
+}
+
+/**
+ * Promotes an `open-pending-finality` entry to `open`, with its history record, once the same receipt block has twelve
+ * canonical descendants under the read quorum. An entry whose receipt disappeared or moved to another block returns to
+ * `pending-entry`, where the normal recovery path re-derives it or expires it after proving non-inclusion.
+ */
+export async function finalizeEntryAfterFinalityWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint): Promise<PositionRecord> {
+	if (position.status !== 'open-pending-finality') return position
+	if (position.entryReceiptBlockNumber === undefined || position.entryReceiptBlockHash === undefined) throw new Error('Pending entry finality evidence is incomplete')
+	const receiptBlockNumber = BigInt(position.entryReceiptBlockNumber)
+	if (!attemptHasFinality(currentBlockNumber, receiptBlockNumber)) return position
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+	const receipts = await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `pending entry finality ${position.reportId}`, position.entryTransactionHashes, config.rpcQuorum)
+	const executorReceipt = receipts.at(-1)
+	if (receipts.some(receipt => receipt === undefined) || executorReceipt === undefined) {
+		// Absence is accepted only from readers that already serve the receipt block's finality descendant.
+		await fixedBlockHashWithQuorum(readClients, config, `reorged entry ${position.reportId} finality descendant`, receiptBlockNumber + REORG_OVERLAP_BLOCKS)
+		return rollbackProvisionalEntry(position)
+	}
+	if (executorReceipt.blockNumber !== receiptBlockNumber || executorReceipt.blockHash.toLowerCase() !== position.entryReceiptBlockHash.toLowerCase()) return rollbackProvisionalEntry(position)
+	if (!(await confirmCanonicalReceiptFinality(readClients, endpoints, `entry ${position.reportId}`, { blockHash: position.entryReceiptBlockHash, blockNumber: receiptBlockNumber }, REORG_OVERLAP_BLOCKS, currentBlockNumber, config.rpcQuorum))) return position
+	const finalized = { ...position, entryReceiptBlockHash: undefined, entryReceiptBlockNumber: undefined, status: 'open' as const } satisfies PositionRecord
+	return { ...finalized, historyOutbox: executionRecordForConfirmedPosition(finalized, receiptBlockNumber, executorReceipt.transactionHash) }
 }
 
 export async function expireEntryWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint, expiredAt: string) {

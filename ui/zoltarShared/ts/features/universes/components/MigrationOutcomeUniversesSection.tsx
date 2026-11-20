@@ -16,6 +16,10 @@ import { OutcomeUniverseList } from '@zoltar/ui-core-shared/components/OutcomeUn
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import type { MigrationWizardOutcome } from '../lib/migrationWizard.js'
+import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
+import { escapeOnChainText } from '@zoltar/ui-core-shared/lib/onChainText.js'
+import { formatLabelWithIdentity } from '@zoltar/ui-core-shared/lib/outcomeIdentity.js'
+import { OutcomeIdentity } from '@zoltar/ui-core-shared/components/OutcomeIdentity.js'
 
 type MigrationOutcomeUniversesSectionProps = {
 	deploymentDisabledReason: (outcome: Pick<MigrationWizardOutcome, 'exists'>) => string | undefined
@@ -71,8 +75,9 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 						{outcomes
 							.filter(outcome => outcome.selected)
 							.map(outcome => (
-								<button key={outcome.outcomeIndex.toString()} type='button' className='secondary' disabled={disabled} onClick={() => onToggleOutcomeIndex(outcome.outcomeIndex)} aria-label={zoltarCopy.formatRemoveOutcome(outcome.label)}>
-									{outcome.label} <span aria-hidden='true'>{transactionCopy.closeSymbol}</span>
+								<button key={outcome.outcomeIndex.toString()} type='button' className='secondary' disabled={disabled} onClick={() => onToggleOutcomeIndex(outcome.outcomeIndex)} aria-label={zoltarCopy.formatRemoveOutcome(formatLabelWithIdentity(outcome.label, outcome.outcomeIndex, outcome.universeId))}>
+									<OnChainText text={outcome.label} />
+									<OutcomeIdentity label={outcome.label} outcomeIndex={outcome.outcomeIndex} universeId={outcome.universeId} /> <span aria-hidden='true'>{transactionCopy.closeSymbol}</span>
 								</button>
 							))}
 					</div>
@@ -109,14 +114,14 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 					return {
 						actions: outcome.exists ? (
 							<UniverseLink href={browser === undefined ? undefined : buildRouteHref(browser.routeHash, writeUniverseQueryParam(browser.search, outcome.universeId))} className='button-link secondary-link' universeId={outcome.universeId}>
-								{universeCopy.formatOpenChildUniverse(outcome.label)}
+								{universeCopy.formatOpenChildUniverse(escapeOnChainText(outcome.label))}
 							</UniverseLink>
 						) : (
 							<TransactionActionButton
 								tone='secondary'
 								showDisabledReason={false}
 								disabledReasonElementId={showSharedDeploymentReason && !deployingThisOutcome ? sharedDeploymentReasonId : undefined}
-								idleLabel={zoltarCopy.formatDeployChildUniverse(outcome.label)}
+								idleLabel={zoltarCopy.formatDeployChildUniverse(escapeOnChainText(outcome.label))}
 								pendingLabel={marketCopy.deployingUniverse}
 								pending={deployingThisOutcome}
 								onClick={() => onDeployChildUniverse(outcome.outcomeIndex)}
@@ -137,6 +142,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 						exists: outcome.exists,
 						key: outcome.universeId.toString(),
 						label: outcome.label,
+						identity: { outcomeIndex: outcome.outcomeIndex, universeId: outcome.universeId },
 						onSelect: () => onToggleOutcomeIndex(outcome.outcomeIndex),
 						selected: outcome.selected,
 					}

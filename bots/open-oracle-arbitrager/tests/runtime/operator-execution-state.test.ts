@@ -13,8 +13,9 @@ import { validateDeploymentSettings } from '#config/deployment-settings'
 import { loadConfiguration, runnableOperatorSettings } from '#config/configuration'
 import type { OperatorState } from '#state/operator-state'
 import { emptyPendingOperatorUpdates } from '../../src/runtime/pending-operator-updates.ts'
-import { applyQueuedExecutionSettings, recordScanDecision, resetReportScanState } from '../../src/runtime/operator-execution-state.ts'
+import { applyQueuedExecutionSettings, positionLedgerExecutionReady, recordScanDecision, resetReportScanState } from '../../src/runtime/operator-execution-state.ts'
 import { operatorStateFixture } from '../support/operator-state.ts'
+import { executionIntentFixture, openPositionFixture } from '../support/position-record.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -68,6 +69,16 @@ test('logs a decision entry for priced reports only; skipped reports already log
 		windowUnit: 'blocks',
 	})
 	expect(state.operationLog).toMatchObject([{ category: 'decision', details: 'direction=sell-rep estimatedProfitEth=-0.1', level: 'info', message: 'Decision: unprofitable', reportId: '12' }])
+})
+
+test('an entry pending finality or rolled back after a reorg does not hold the execution gate closed', () => {
+	const pendingFinality = openPositionFixture({ entryReceiptBlockHash: `0x${'aa'.repeat(32)}`, entryReceiptBlockNumber: '100', executionIntent: executionIntentFixture(), status: 'open-pending-finality' })
+	expect(positionLedgerExecutionReady([pendingFinality], undefined)).toBe(true)
+	const rolledBack = openPositionFixture({ actualEntryGasCostEth: '0', gasExpenditures: [], status: 'pending-entry' })
+	expect(positionLedgerExecutionReady([rolledBack], undefined)).toBe(true)
+	const finalized = openPositionFixture({ executionIntent: executionIntentFixture(), historyOutbox: { ...executionIntentFixture(), actualGasCostEth: '0.001', blockNumber: '100', executedAt: '2026-01-01T00:00:00.000Z', trackedNetProfitEth: '0.099', transactionHash: `0x${'11'.repeat(32)}` } })
+	expect(positionLedgerExecutionReady([pendingFinality, finalized], undefined)).toBe(false)
+	expect(positionLedgerExecutionReady([pendingFinality], 'Position 7 lifecycle requires attention')).toBe(false)
 })
 
 test('applies queued settlement settings at the scan boundary and clears the queue entry', async () => {

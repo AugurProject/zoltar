@@ -26,13 +26,11 @@ test('explicit portfolio selections are bounded, unique and independent of unive
 	expect(() => parsePortfolioPolicy({ maximumPrincipalRep: '2', maximumTotalPrincipalRep: '1' })).toThrow('total')
 })
 
-test('automatic report sponsorship is opt-in and its loss budget survives settings round trips', () => {
-	const disabled = parseSettings(example)
-	expect(disabled.portfolioPolicy.maximumReportFundingAttoEth).toBe(0n)
-	const configured = parseSettings({ ...example, portfolioPolicy: { ...example.portfolioPolicy, maximumReportFundingEth: '0.25' } })
-	expect(configured.portfolioPolicy.maximumReportFundingAttoEth).toBe(250_000_000_000_000_000n)
-	expect(parseSettings(serializedSettings(configured))).toEqual(configured)
-	expect(() => parsePortfolioPolicy({ maximumReportFundingEth: '-1' })).toThrow()
+test('settings have no automatic report sponsorship and reject its former fields', () => {
+	expect(Object.keys(serializedSettings(parseSettings(example)).portfolioPolicy)).not.toContain('maximumReportFundingEth')
+	for (const field of ['maximumReportFundingEth', 'reportOperationGasLimit', 'reportOperationsGasLimit']) {
+		expect(() => parseSettings({ ...example, portfolioPolicy: { ...example.portfolioPolicy, [field]: field === 'maximumReportFundingEth' ? '0.25' : 3_000_000 } })).toThrow(`unsupported field ${field}`)
+	}
 })
 
 test('repair income horizons are bounded and survive settings round trips', () => {

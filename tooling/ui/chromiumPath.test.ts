@@ -17,6 +17,7 @@ const getAvailablePort = async (): Promise<number> => {
 test('Chromium discovery is shell-independent and accepts Windows executable paths', () => {
 	const attemptedCommands: string[] = []
 	const chromiumPath = getChromiumPath({
+		environment: {},
 		which: commandName => {
 			attemptedCommands.push(commandName)
 			return commandName === 'google-chrome' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : null
@@ -28,7 +29,17 @@ test('Chromium discovery is shell-independent and accepts Windows executable pat
 })
 
 test('Chromium discovery returns undefined when no candidate is on PATH', () => {
-	expect(getChromiumPath({ platform: 'linux', which: () => null })).toBeUndefined()
+	expect(getChromiumPath({ environment: {}, platform: 'linux', which: () => null })).toBeUndefined()
+})
+
+test('an explicitly configured CHROMIUM_PATH is used even when discovery finds nothing or another browser', () => {
+	expect(getChromiumPath({ environment: { CHROMIUM_PATH: '/opt/custom/chromium' }, platform: 'linux', which: () => null })).toBe('/opt/custom/chromium')
+	expect(getChromiumPath({ environment: { CHROMIUM_PATH: '/opt/custom/chromium' }, which: name => (name === 'google-chrome' ? '/usr/bin/google-chrome' : null) })).toBe('/opt/custom/chromium')
+})
+
+test('a blank CHROMIUM_PATH counts as unset', () => {
+	expect(getChromiumPath({ environment: { CHROMIUM_PATH: '' }, which: name => (name === 'chromium' ? '/usr/bin/chromium' : null) })).toBe('/usr/bin/chromium')
+	expect(getChromiumPath({ environment: { CHROMIUM_PATH: '  ' }, platform: 'linux', which: () => null })).toBeUndefined()
 })
 
 test('Chromium discovery finds standard Windows browser installations outside PATH', () => {
@@ -99,6 +110,6 @@ test('Chromium test lock is released when an owning process exits', async () => 
 })
 
 test('Chromium discovery prefers the native Chrome binary when both Chrome and Chromium are installed', () => {
-	expect(getChromiumPath({ which: name => (['chromium', 'google-chrome'].includes(name) ? `/usr/bin/${name}` : null) })).toBe('/usr/bin/google-chrome')
-	expect(getChromiumPath({ which: name => (name === 'chromium' ? '/usr/bin/chromium' : null) })).toBe('/usr/bin/chromium')
+	expect(getChromiumPath({ environment: {}, which: name => (['chromium', 'google-chrome'].includes(name) ? `/usr/bin/${name}` : null) })).toBe('/usr/bin/google-chrome')
+	expect(getChromiumPath({ environment: {}, which: name => (name === 'chromium' ? '/usr/bin/chromium' : null) })).toBe('/usr/bin/chromium')
 })

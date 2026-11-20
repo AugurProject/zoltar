@@ -7,7 +7,7 @@ import { getAmountInputErrorMessage, validateAmountInput } from '@zoltar/ui-core
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, formatOutcomeQuantity } from '../../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, attoSharesToRecoveryAttoRep, collateralAttoEthToAttoShares, formatOutcomeQuantity } from '../../lib/shareValue.js'
 import type { TradeSettings } from '../../lib/tradeSettings.js'
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage } from '../../protocol/tradeQuote.js'
@@ -57,6 +57,9 @@ type SellEstimate = Readonly<{
 	maximumLongShares: bigint
 	receiveAttoEth: bigint
 	minimumAttoEth: bigint
+	/** Recovery REP a fork-child pool pays beside collateral for the burned complete sets; zero elsewhere. */
+	receiveAttoRep: bigint
+	minimumAttoRep: bigint
 	impactBps: bigint
 }>
 
@@ -118,11 +121,13 @@ function estimateSell(market: LiveMarket, side: Side, requestedShares: bigint, s
 	if (completeSets === 0n) return { estimate: undefined, problem: ticketCopy.amountTooSmall }
 	const quote = quoteExitPosition(side, completeSets, market)
 	const receiveAttoEth = attoSharesToCollateralAttoEth(completeSets, market)
-	if (receiveAttoEth === 0n) return { estimate: undefined, problem: ticketCopy.amountTooSmall }
+	const receiveAttoRep = attoSharesToRecoveryAttoRep(completeSets, market)
+	// The router refuses a redemption that pays neither collateral nor REP.
+	if (receiveAttoEth === 0n && receiveAttoRep === 0n) return { estimate: undefined, problem: ticketCopy.amountTooSmall }
 	const allowed = minimum(maximumAfterSlippage(quote.totalLongShares, slippageBps), requestedShares)
 	const maximumLongShares = longBalance === undefined ? allowed : minimum(allowed, longBalance)
 	return {
-		estimate: { kind: 'exit', side, requestedShares, quote, maximumLongShares, receiveAttoEth, minimumAttoEth: minimumAfterSlippage(receiveAttoEth, slippageBps), impactBps: sellImpactBps(side, quote, market) },
+		estimate: { kind: 'exit', side, requestedShares, quote, maximumLongShares, receiveAttoEth, minimumAttoEth: minimumAfterSlippage(receiveAttoEth, slippageBps), receiveAttoRep, minimumAttoRep: minimumAfterSlippage(receiveAttoRep, slippageBps), impactBps: sellImpactBps(side, quote, market) },
 		problem: undefined,
 	}
 }
@@ -417,7 +422,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 export type TradeTicketModel = ReturnType<typeof tradeTicketModel>
 
 /** The authoritative simulation may price differently from the local estimate; beyond the slippage bound, stop and show the new price. */
-export function authoritativeQuoteMoved(estimate: TradeEstimate, authoritativeLongShares: bigint, authoritativeAttoEthOut?: bigint) {
+export function authoritativeQuoteMoved(estimate: TradeEstimate, authoritativeLongShares: bigint, authoritativeAttoEthOut?: bigint, authoritativeAttoRepOut?: bigint) {
 	if (estimate.kind === 'entry') return authoritativeLongShares < estimate.minimumLongShares
-	return authoritativeLongShares > estimate.maximumLongShares || (authoritativeAttoEthOut !== undefined && authoritativeAttoEthOut < estimate.minimumAttoEth)
+	return authoritativeLongShares > estimate.maximumLongShares || (authoritativeAttoEthOut !== undefined && authoritativeAttoEthOut < estimate.minimumAttoEth) || (authoritativeAttoRepOut !== undefined && authoritativeAttoRepOut < estimate.minimumAttoRep)
 }

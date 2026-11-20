@@ -7,6 +7,11 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
+import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
+import { OutcomeIdentity } from '@zoltar/ui-core-shared/components/OutcomeIdentity.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioSharedFork, type PortfolioSharedForkParameters } from '../hooks/usePortfolioSharedFork.js'
 import { PortfolioPriceReport } from './PortfolioPriceReport.js'
@@ -35,7 +40,18 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 			</MetricGrid>
 			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
 			{state?.forkTime === 0n ? <UserMessage detail={copy.noFork} /> : undefined}
-			{model.outcome?.outcomeLabel === undefined ? undefined : <UserMessage detail={copy.questionOutcome(model.outcome.questionTitle, model.outcome.outcomeLabel)} />}
+			{model.outcome?.outcomeLabel === undefined ? undefined : (
+				<UserMessage
+					detail={
+						<>
+							<OnChainText text={model.outcome.questionTitle} />
+							{copy.questionOutcomeSeparator}
+							<OnChainText text={model.outcome.outcomeLabel} />
+							{branch === undefined ? undefined : <OutcomeIdentity label={model.outcome.outcomeLabel} outcomeIndex={branch.outcomeIndex} />}
+						</>
+					}
+				/>
+			)}
 			<MetricGrid>
 				<MetricField label={copy.choiceDeadline} loading={model.loading}>
 					{state === undefined || state.choiceDeadline === 0n ? undefined : formatTimestamp(state.choiceDeadline)}
@@ -44,7 +60,10 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 					{state === undefined || state.activationDeadline === 0n ? undefined : formatTimestamp(state.activationDeadline)}
 				</MetricField>
 				<MetricField label={copy.child} loading={model.loading}>
-					{branch?.universeId.toString()}
+					{branch === undefined ? undefined : <IdentifierValue abbreviated value={formatUniverseIdHex(branch.universeId)} />}
+				</MetricField>
+				<MetricField label={copy.forkQuestionId} loading={model.loading}>
+					{model.outcome === undefined ? undefined : <IdentifierValue abbreviated value={formatQuestionIdHex(model.outcome.questionId)} />}
 				</MetricField>
 				<MetricField label={copy.state} loading={model.loading}>
 					{branchState}

@@ -10,9 +10,9 @@ import { executePortfolioTakeover } from '../../src/execution/portfolio-executor
 import { portfolioSettings } from '../support/portfolio-observation.ts'
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
-describe('liquidator sponsored report integration', () => {
+describe('liquidator stale price integration', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
-	test('#1253 the production executor does not spend report funding on a stale takeover award', async () => {
+	test('#1253 #1461 the production executor neither funds a takeover nor sponsors a report on a stale price', async () => {
 		await fixture.prepare(700n * unit, 100n * unit)
 		await fixture.mint(100n * unit)
 		await fixture.refreshPrice(fixture.base.questionId, 4n * unit)
@@ -28,7 +28,6 @@ describe('liquidator sponsored report integration', () => {
 		const scope = { address: fixture.portfolio, universeId: fixture.base.genesisUniverse, nextPositionId: 1n, sweepEnd: 0n }
 		settings.selectedPortfolios = [scope]
 		settings.approvedUniverses = [scope.universeId]
-		settings.portfolioPolicy.maximumReportFundingAttoEth = 10n * unit
 		settings.portfolioPolicy.maximumOwnFundingAttoRep = 2000n * unit
 		settings.portfolioPolicy.maximumPrincipalAttoRep = 20_000n * unit
 		settings.portfolioPolicy.maximumTotalPrincipalAttoRep = 30_000n * unit
@@ -40,8 +39,7 @@ describe('liquidator sponsored report integration', () => {
 			const target = observation.positions.find(position => position.owner === fixture.owner().account.address)
 			if (target === undefined) throw new Error('Source missing')
 			expect(observation.snapshot.priceValid).toBe(false)
-			await expect(executePortfolioTakeover(wallet, settings, state, pool, observation, target.id, async () => true)).rejects.toThrow('A fresh report is required before projecting repair income')
-			expect(state.sponsoredReports ?? []).toHaveLength(0)
+			await expect(executePortfolioTakeover(wallet, settings, state, pool, observation, target.id, async () => true)).rejects.toThrow('Portfolio capital is inactive or its price has expired')
 			expect(state.pendingTransactions).toHaveLength(0)
 			expect(state.activities.some(activity => activity.status === 'confirmed')).toBe(false)
 			const after = await observe()

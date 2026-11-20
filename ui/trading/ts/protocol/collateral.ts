@@ -4,6 +4,7 @@ import type { Address, PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { collateralPresentation } from '@zoltar/ui-statoblast-shared/protocol/collateral.js'
+import { tokenDisplayLabel } from '@zoltar/ui-core-shared/lib/tokenLabel.js'
 
 export type TradingCollateral = Readonly<{ token: Address; symbol: string; decimals: number; native: boolean }>
 export type CollateralMarket = Readonly<{ collateral?: TradingCollateral | undefined }>
@@ -29,6 +30,7 @@ export async function loadTradingCollateralAsset(client: Pick<PublicClient, 'rea
 	const [symbolResult, decimalsResult] = await Promise.allSettled([client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'symbol', blockNumber }), client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'decimals', blockNumber })])
 	const units = decimalsResult.status === 'fulfilled' ? Number(decimalsResult.value) : undefined
 	if (units === undefined || !Number.isInteger(units) || units < 0 || units > 255) return { token, symbol: 'Collateral base units', decimals: 0, native: false }
-	const symbol = symbolResult.status === 'fulfilled' && symbolResult.value.trim() !== '' ? symbolResult.value : 'Collateral'
+	// Only the profile's WETH and USDC are identified by address; any other token's self-reported symbol carries its address (#1462).
+	const symbol = tokenDisplayLabel({ address: token, symbol: symbolResult.status === 'fulfilled' ? symbolResult.value : undefined, verified: false })
 	return { token, symbol, decimals: units, native: false }
 }

@@ -34,6 +34,10 @@ export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string
 export const formatReportPriceUnit = (token1Symbol: string, token2Symbol: string) => `${token2Symbol} per ${token1Symbol}`
 export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · report #${reportId}`
 export const createAnother = 'Create another'
+export const formatTokenDecimalsInvalid = (tokenAddress: CopyTemplateValue) => `Token metadata for ${tokenAddress} returned invalid decimals`
+export const formatWethMetadataInvalid = (tokenAddress: CopyTemplateValue) => `WETH metadata is invalid for ${tokenAddress}`
+export const formatReportTokenMetadataUnavailable = (reportId: CopyTemplateValue, reason: CopyTemplateValue) => `OpenOracle report #${reportId} is unavailable. ${reason}.`
+export const settlementGasExceedsTransactionCap = 'This report’s settlement callback needs more gas than one transaction allows, so it cannot be settled from this app.'
 export const reportCreated = 'Report created'
 export const createStandaloneReport = 'Create standalone OpenOracle report'
 export const creating = 'Creating…'

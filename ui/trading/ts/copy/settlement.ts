@@ -79,7 +79,7 @@ export function formatWinningRedemptionGuidance(outcome: 'INVALID' | 'YES' | 'NO
 export const settlementTransaction = 'Settlement transaction'
 export const transactionFailed = 'Settlement transaction failed.'
 export const estimateHeading = 'Redemption estimate'
-export { minimumReceived, youReceiveEstimate as youReceive } from './tradeTicket.js'
+export { minimumReceived, recoveryRep, youReceiveEstimate as youReceive } from './tradeTicket.js'
 export const redeemCompleteSetsAction = 'Redeem complete sets'
 
 export function migrationAction(count: number) {
@@ -89,6 +89,5 @@ export function migrationAction(count: number) {
 export const zeroRedemptionReason = 'Complete-set redemption would return no collateral or REP.'
 export const completeSetsToRedeem = 'Complete sets to redeem'
 export const sets = 'sets'
-export const recoveryRep = 'Recovery REP'
 
 export const estimateNote = `Estimate from the current collateral rate. ${recheckedBeforeWallet}`

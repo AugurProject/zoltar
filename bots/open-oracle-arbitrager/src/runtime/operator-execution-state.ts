@@ -3,7 +3,7 @@ import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { clearWalletDerivedState, recordOperation, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
-import type { ExclusiveProcessLock } from '#state/position-store'
+import type { ExclusiveProcessLock, PositionRecord } from '#state/position-store'
 import type { PendingOperatorUpdates } from './pending-operator-updates.ts'
 
 function clearMarketEvidenceForSourceChange(state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }) {
@@ -20,6 +20,14 @@ function applyLookbackBlockSetting(config: { logLookbackBlocks: bigint }, nextLo
 	const changed = config.logLookbackBlocks !== nextLookbackBlocks
 	config.logLookbackBlocks = nextLookbackBlocks
 	return changed
+}
+
+/**
+ * The position ledger's execution gate: no failure recorded this scan and every final entry's history record is durable.
+ * An `open-pending-finality` entry withholds its record rather than carrying an outbox, so it does not block execution.
+ */
+export function positionLedgerExecutionReady(positions: readonly Pick<PositionRecord, 'historyOutbox'>[], nextError: string | undefined) {
+	return nextError === undefined && positions.every(position => position.historyOutbox === undefined)
 }
 
 /** A skipped report already logged its gate during inspection; only priced reports add a profit-and-inventory decision entry. */

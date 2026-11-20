@@ -22,6 +22,7 @@ These two rules apply to every read and every receipt the bot acts on. The other
 
 **Finality rule.** A receipt, or the proven absence of one, is final only after 12 canonical descendants, when the read quorum serves the same block hash at that depth. Until then:
 
+- a successful entry remains `open-pending-finality`, keeps its risk slot, starts no lifecycle or replacement-credit transaction, and withholds its execution-history record. If the receipt disappears or moves to another block, the bot removes the provisional entry gas and returns the record to `pending-entry`, where normal recovery re-derives a re-included receipt or expires an absent one;
 - a successful lifecycle remains `closed-pending-finality`, keeps its risk slot, contributes no realized profit, and is reopened if the receipt disappears in a reorganization;
 - a missing receipt remains pending rather than expired;
 - insufficient, lagging, or inconsistent evidence fails closed under the [recovery runbook](./RECOVERY.md#recovery-required-runbook).
@@ -200,13 +201,13 @@ The transaction tracker records each submitted executor call as `submitting`, `p
 
 ## Profit and history semantics
 
-Successful dispute submissions are appended to `runtime.historyFile`. New profiles automatically receive chain-named history, price, and position paths.
+Successful dispute submissions are appended to `runtime.historyFile` once the entry receipt is final under the [finality rule](#read-agreement-and-finality); because the file is append-only, an entry still `open-pending-finality` has no record yet. New profiles automatically receive chain-named history, price, and position paths.
 
 The history file is created with owner-only permissions when possible and is ignored by Git at its default path. Each record contains the report, pool, direction, total executor-funded inventory, confirmed executor transaction hash, block, actual transaction gas, modeled net profit, profit before gas, and tracked net profit in ETH. Both modes submit one parent-bound executor transaction per entry. Private submissions provide no allowed reverting hashes, so a compliant relay/builder omits a reverting call. An unincluded transaction consumes no on-chain gas. Public execution records the same single executor transaction and its actual gas through the durable position and history accounting.
 
 Execution startup verifies that the history destination is writable. If persistence later fails after a confirmed dispute, the record remains visible in memory, further execution is blocked, and the bot retries the queued write on later polls. An append is acknowledged only after the file and parent directory have been synchronized. A malformed or torn non-empty JSONL record stops startup with its line number instead of being silently omitted from revenue or gas totals.
 
-Before submission, the position journal also records the immutable execution intent plus the signer nonce and submission block. Live confirmation and confirmation recovered after a restart both use that intent to commit the confirmed position and its complete history record together through a durable outbox. The bot then appends the record to JSONL idempotently and clears the outbox with another synchronized position write. A crash before, during, or immediately after confirmation or the append therefore replays the missing history operation on restart without losing or duplicating the confirmed revenue record.
+Before submission, the position journal also records the immutable execution intent plus the signer nonce and submission block. Live confirmation and confirmation recovered after a restart both use that intent to commit the confirmed position as `open-pending-finality`. When that entry becomes final, the bot commits the `open` position and its complete history record together through a durable outbox, and writes the record in the same scan, so a pending entry does not hold the position-ledger execution gate closed; it still counts against the position and capital limits. The bot then appends the record to JSONL idempotently and clears the outbox with another synchronized position write. A crash before, during, or immediately after confirmation or the append therefore replays the missing history operation on restart without losing or duplicating the confirmed revenue record.
 
 Position profit is tracked in ETH using the exact 1 WETH = 1 ETH unwrap relationship:
 

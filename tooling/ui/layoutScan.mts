@@ -70,12 +70,16 @@ function formatViewport(viewport: Viewport) {
 	return `${viewport.width.toString()}x${viewport.height.toString()}`
 }
 
-function parseViewports(value: string | undefined): readonly Viewport[] {
+export function parseViewports(value: string | undefined): readonly Viewport[] {
 	if (value === undefined) return DEFAULT_VIEWPORTS
 	return value.split(',').map(entry => {
 		const match = /^(\d+)x(\d+)$/.exec(entry.trim())
 		if (match?.[1] === undefined || match[2] === undefined) throw new Error(`Invalid viewport '${entry}'; expected WIDTHxHEIGHT.\n\n${usage()}`)
-		return { width: Number(match[1]), height: Number(match[2]) }
+		const width = Number(match[1])
+		const height = Number(match[2])
+		// Chromium cannot render a zero-size viewport, and the report would name a viewport that was never tested.
+		if (width < 1 || height < 1) throw new Error(`Invalid viewport '${entry}'; dimensions must be positive.\n\n${usage()}`)
+		return { width, height }
 	})
 }
 
@@ -483,7 +487,7 @@ async function main() {
 	const failOn = parseSeverity(values['fail-on'], '--fail-on')
 	const maxStates = Number(values['max-states'] ?? '12')
 	if (!Number.isInteger(maxStates) || maxStates < 1) throw new Error('--max-states must be a positive integer')
-	const chromiumPath = process.env['CHROMIUM_PATH'] ?? getChromiumPath()
+	const chromiumPath = getChromiumPath()
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the layout scan. Install Chromium or set CHROMIUM_PATH.')
 
 	await fs.rm(path.join(outDir, 'screenshots'), { recursive: true, force: true })

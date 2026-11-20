@@ -123,7 +123,7 @@ test('a consumed nonce without a receipt remains tracked and never falls back to
 		f.control.nonce = 1n
 		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('nonce was consumed')
 		expect((await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions[0]?.hash).toBe(f.intent.hash)
-		expect(f.requests).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionCount'])
+		expect(f.requests).toEqual(['eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getTransactionCount'])
 	} finally {
 		await f.close()
 	}

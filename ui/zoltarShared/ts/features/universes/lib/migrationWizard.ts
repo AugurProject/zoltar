@@ -2,6 +2,8 @@ import * as zoltarCopy from '../../../copy/zoltar.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { escapeOnChainText } from '@zoltar/ui-core-shared/lib/onChainText.js'
+import { formatLabelWithIdentity } from '@zoltar/ui-core-shared/lib/outcomeIdentity.js'
 
 export const migrationWizardStepIds = ['outcomes', 'amount', 'approve', 'review'] as const
 export type MigrationWizardStepId = (typeof migrationWizardStepIds)[number]
@@ -90,8 +92,19 @@ function getReusableMigrationBalance(outcomes: readonly Pick<MigrationWizardOutc
 	return reusable ?? 0n
 }
 
-export function formatOutcomeList(outcomes: readonly Pick<MigrationWizardOutcome, 'label'>[]) {
-	return outcomes.map(outcome => outcome.label).join(', ')
+type IdentifiedOutcome = Pick<MigrationWizardOutcome, 'label' | 'outcomeIndex' | 'universeId'>
+
+/**
+ * One outcome as plain text for dialogs and accessible names: its escaped on-chain label, then its immutable index (unless the
+ * label already names it) and short child universe ID, so labels that render alike (#1477) still read differently.
+ */
+export function formatMigrationOutcomeText(outcome: IdentifiedOutcome) {
+	return formatLabelWithIdentity(outcome.label, outcome.outcomeIndex, outcome.universeId)
+}
+
+/** Compact list of selected outcomes, each followed by its index unless the label already names it, for the wizard's step summary. */
+export function formatOutcomeList(outcomes: readonly Pick<MigrationWizardOutcome, 'label' | 'outcomeIndex'>[]) {
+	return outcomes.map(outcome => formatLabelWithIdentity(outcome.label, outcome.outcomeIndex, undefined)).join(', ')
 }
 
 function deriveAmountStep(input: MigrationWizardInput, hasSelection: boolean, amountAttoRep: bigint | undefined, reusable: bigint | undefined, walletRepToBurn: bigint | undefined, maxAmount: bigint | undefined): Omit<MigrationWizardStep, 'id'> {
@@ -197,6 +210,13 @@ export function getSubmittableOutcomeIndexes(childUniverses: readonly ZoltarChil
 /** Names an outcome for transaction dialogs, falling back to its position when the universe summary is unavailable. */
 export function getOutcomeLabelForIndex(childUniverses: readonly ZoltarChildUniverseSummary[] | undefined, outcomeIndex: bigint) {
 	return childUniverses?.find(child => child.outcomeIndex === outcomeIndex)?.outcomeLabel ?? zoltarCopy.formatUnnamedOutcome(outcomeIndex)
+}
+
+/** Names an outcome with its index and child universe for transaction dialogs, falling back to its position when the universe summary is unavailable. */
+export function getMigrationOutcomeTextForIndex(childUniverses: readonly ZoltarChildUniverseSummary[] | undefined, outcomeIndex: bigint) {
+	const child = childUniverses?.find(candidate => candidate.outcomeIndex === outcomeIndex)
+	if (child === undefined) return escapeOnChainText(zoltarCopy.formatUnnamedOutcome(outcomeIndex))
+	return formatMigrationOutcomeText({ label: child.outcomeLabel, outcomeIndex: child.outcomeIndex, universeId: child.universeId })
 }
 
 /** Toggles an outcome while keeping the order in which outcomes were picked. */

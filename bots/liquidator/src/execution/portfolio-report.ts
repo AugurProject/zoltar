@@ -1,117 +1,16 @@
-import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { OperatorSettings } from '#config/settings'
 import type { RuntimeState } from '#state/operator-state'
 import type { PortfolioObservation } from '#monitoring/portfolio-monitor'
-import { samePortfolioTarget } from '#monitoring/portfolio-auction'
-import type { PortfolioReportTakeover } from '#core/portfolio-report-strategy'
-import type { PortfolioTakeover } from '#core/portfolio-strategy'
-import { sharedPoolPriceFeedAbi, openOracleAbi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { sharedPoolPriceFeedAbi, openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
 import { encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS, PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS, buildPortfolioPriceOperationsRequest, buildPortfolioPriceApprovalRequest, buildPortfolioPriceWrapRequest, quotePortfolioPriceFunding, type PortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import { PortfolioOpportunityExpired, assertPortfolioPlanStillAllowed } from './portfolio-executor.ts'
+import { PortfolioOpportunityExpired } from './portfolio-executor.ts'
 import { readPortfolioExecutionSnapshot } from './portfolio-execution-snapshot.ts'
 import { submitCall } from './submit-call.ts'
 
 type Wallet = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
-type ReportContext = { observation: PortfolioObservation; totalPrincipal: bigint; plan: PortfolioTakeover; reportPlans?: PortfolioReportTakeover[] | undefined; price?: PortfolioPriceSnapshot | undefined; baseFeePerGas?: bigint | undefined }
 
-export function assertPortfolioReportFunding(current: ReportContext, settings: OperatorSettings) {
-	if (current.price === undefined || current.price.observation === undefined) throw new PortfolioOpportunityExpired('Missing report funding quote')
-	if (current.baseFeePerGas === undefined || current.reportPlans === undefined) throw new PortfolioOpportunityExpired('Missing report settlement gas quote')
-	const operationsGas = BigInt(current.reportPlans.length * (settings.portfolioPolicy.reportOperationGasLimit + 100_000))
-	const callbackGas = PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS + operationsGas
-	if (callbackGas > MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS) throw new PortfolioOpportunityExpired('Report operations exceed the feed callback gas limit')
-	const funding = quotePortfolioPriceFunding(current.price, current.observation.snapshot.acceptedPrice, 0n, operationsGas)
-	const reportRisk = funding.weth + (funding.rep * 10n ** 18n + funding.price - 1n) / funding.price
-	if (reportRisk > settings.portfolioPolicy.maximumReportFundingAttoEth) throw new PortfolioOpportunityExpired('Report funding exceeds configured loss budget')
-	const settlementGas = callbackGas + callbackGas / 63n + 350_000n
-	if (maximumFeePerGas(current.baseFeePerGas) * paddedTransactionGas(settlementGas) > settings.strategy.maximumGasCostAttoEth) throw new PortfolioOpportunityExpired('Report settlement exceeds transaction gas budget')
-
-	if (current.observation.walletRep < funding.rep + current.plan.ownFunding + settings.strategy.walletAttoRepReserve) throw new PortfolioOpportunityExpired('Report would consume wallet REP reserve')
-	if (current.observation.walletAttoEth < funding.requiredEth + settings.strategy.maximumGasCostAttoEth * 5n + settings.portfolioPolicy.walletReserveAttoEth) throw new PortfolioOpportunityExpired('Report would consume wallet ETH reserve')
-	const reservedRep = funding.rep + (funding.weth * funding.price + 10n ** 18n - 1n) / 10n ** 18n
-	if ((current.observation.managedPrincipalAttoRep ?? current.observation.snapshot.ownerPrincipalAttoRep) + reservedRep + current.plan.ownFunding > settings.portfolioPolicy.maximumPrincipalAttoRep || current.totalPrincipal + reservedRep + current.plan.ownFunding > settings.portfolioPolicy.maximumTotalPrincipalAttoRep)
-		throw new PortfolioOpportunityExpired('Report collateral exceeds managed principal limits')
-	return funding
-}
-
-export function assertPortfolioReportPlansStillAllowed(original: PortfolioReportTakeover[] | undefined, current: PortfolioReportTakeover[] | undefined, action: 'approval' | 'principal' | 'takeover') {
-	if (original === undefined || current === undefined || original.length !== current.length) throw new PortfolioOpportunityExpired('Report operations changed before signing')
-	for (const [index, item] of original.entries()) {
-		const latest = current[index]
-		if (latest === undefined || !samePortfolioTarget(item.target, latest.target)) throw new PortfolioOpportunityExpired('Report targets changed before signing')
-		assertPortfolioPlanStillAllowed(item.plan, latest.plan, action)
-	}
-}
-
-/** Approval, wrap and report creation are separate durable transactions, each revalidated. */
-export async function executePortfolioReportRequest(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, current: ReportContext, refresh: () => Promise<ReportContext>, submit = submitCall) {
-	const funding = assertPortfolioReportFunding(current, settings)
-	const price = current.price
-	if (price?.observation === undefined) throw new PortfolioOpportunityExpired('Missing report state')
-	const { plan, observation } = current
-	let request
-	let label
-	let reportSponsorship
-	if (price.observation.repAllowanceAttoRep < funding.rep) {
-		request = buildPortfolioPriceApprovalRequest(price, 'rep', funding.rep)
-		label = 'Approve bounded takeover report REP'
-	} else if (price.observation.wethAllowanceAttoEth < funding.weth) {
-		request = buildPortfolioPriceApprovalRequest(price, 'weth', funding.weth)
-		label = 'Approve bounded takeover report WETH'
-	} else if (funding.wrap > 0n) {
-		request = buildPortfolioPriceWrapRequest(price, funding.wrap)
-		label = 'Wrap bounded takeover report ETH'
-	} else {
-		const plans = current.reportPlans
-		if (plans === undefined || plans.length === 0) throw new PortfolioOpportunityExpired('Missing report batch plan')
-		const operations = plans.map(item => {
-			// An unpaid cure carries its own zero consent: it asks for no award and can acquire nothing.
-			const consent = item.plan.unpaidCure ? item.plan : plan
-			const bounds = { maximumOwnerPrincipal: consent.maximumOwnerPrincipal, maximumOwnerCommitment: consent.maximumOwnerCommitment, expectedTargetHealthFactorBps: settings.portfolioPolicy.targetHealthFactorBps, expectedAcceptedPriceEpoch: 0n, expectedSourceBatch: item.plan.expectedSourceBatch }
-			// Every attempt may consume the remaining prefunded balance. A failed
-			// predecessor leaves that balance available; no call adds new funding.
-			const ownRep = consent.maximumOwnRep
-			const data =
-				typeof item.target === 'bigint'
-					? encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverWithBounds', args: [item.target, item.plan.commitment, item.plan.minimumAward, ownRep, bounds] })
-					: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [item.target.bidId, item.plan.commitment, item.plan.minimumAward, ownRep, bounds] })
-			return { gasLimit: BigInt(settings.portfolioPolicy.reportOperationGasLimit), data }
-		})
-		const batch = { gasLimit: BigInt(operations.length * (settings.portfolioPolicy.reportOperationGasLimit + 100_000)), minimumPrice: funding.price, maximumPrice: funding.price, deadline: price.timestamp + price.observation.settlementSeconds + 300n, operations }
-		request = buildPortfolioPriceOperationsRequest(price, funding.price, funding.weth, batch)
-		label = 'Sponsor report with ordered bounded takeovers'
-		reportSponsorship = { feed: observation.snapshot.priceFeed, fundingKey: `${observation.snapshot.capitalLedger.toLowerCase()}:${observation.snapshot.owner.toLowerCase()}` }
-	}
-	const revalidate = async () => {
-		const latest = await refresh()
-		assertPortfolioPlanStillAllowed(plan, latest.plan, 'takeover')
-		assertPortfolioReportPlansStillAllowed(current.reportPlans, latest.reportPlans, 'takeover')
-		const nextFunding = assertPortfolioReportFunding(latest, settings)
-		if (latest.observation.acceptedPriceEpoch !== observation.acceptedPriceEpoch || nextFunding.price !== funding.price || nextFunding.weth > funding.weth || nextFunding.rep > funding.rep || nextFunding.bounty !== funding.bounty) throw new PortfolioOpportunityExpired('Report quote changed before signing')
-	}
-	await submit(
-		wallet,
-		settings,
-		state,
-		pool,
-		{
-			...request,
-			reportSponsorship,
-			gas: 'estimate',
-			label,
-			preSubmit: revalidate,
-			revalidateSimulationRevert: revalidate,
-			gasBudgetExceeded: () => {
-				throw new PortfolioOpportunityExpired('Sponsored report settlement exceeds gas budget; retry later')
-			},
-		},
-		'liquidation',
-	)
-}
-
-/** Discover and settle the sponsor's pending report after a restart or independent renewal. */
+/** Discover and settle a pending operations report sponsored by the operator wallet, such as one created by hand. */
 export async function executePendingPortfolioReport(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, target: PortfolioObservation, submit = submitCall, readers?: Parameters<typeof readPortfolioExecutionSnapshot>[6]): Promise<'none' | 'waiting' | 'submitted'> {
 	if (target.pendingOperationReport === undefined) return 'none'
 	const refresh = () =>

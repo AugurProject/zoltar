@@ -8,7 +8,7 @@ import { logEvent } from '@zoltar/bot-shared/infrastructure/log-event'
 import { requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { discardDexMarketObservations, requireCanonicalDexEvidence } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
-import { flushHistoryOutboxes, readEndpoints, type OperatorContext, type OperatorRuntime, type ScanBlock, type ScanPass } from './operator-runtime.ts'
+import { readEndpoints, type OperatorContext, type OperatorRuntime, type ScanBlock, type ScanPass } from './operator-runtime.ts'
 import type { ReconciledSettlementJournal } from './settlement-stage.ts'
 
 /**
@@ -43,7 +43,7 @@ export async function runDisputeStage(runtime: OperatorRuntime, context: Operato
 	try {
 		const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
 		if (metadata === undefined) throw new Error('Token metadata is unavailable')
-		const record = await executeDispute(
+		await executeDispute(
 			runtime.client,
 			runtime.readClients,
 			wallet,
@@ -63,16 +63,8 @@ export async function runDisputeStage(runtime: OperatorRuntime, context: Operato
 			context.persistPosition,
 			archivedUtcDayGasSpentWeth(runtime.positionJournal.archived, dateFromBlockTimestamp(block.timestamp)) + reconciledSettlements.gasSpentAttoEthOnUtcDay(dateFromBlockTimestamp(block.timestamp)),
 		)
+		// The confirmed entry waits as `open-pending-finality`; position maintenance writes its history record once final.
 		selected.opportunity.decision = 'submitted'
-		if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
-		try {
-			await flushHistoryOutboxes(runtime, context)
-		} catch (error) {
-			if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-			const message = `Confirmed dispute ${record.transactionHash} is visible but history persistence failed: ${errorMessage(error)}`
-			scan.nextError = message
-			logEvent('arbitrager', 'historyPersistenceFailed', { error: message }, 'error')
-		}
 	} catch (error) {
 		if (shutdown?.isRequested()) return 'shutdown'
 		if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error

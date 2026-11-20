@@ -489,6 +489,8 @@ describe('live market refresh', () => {
 					slippageBps: 50n,
 					maximumLongShares: 2n * completeSets,
 					minimumEth: 1n,
+					expectedAttoRep: 0n,
+					minimumAttoRep: 0n,
 					result: { completeSetShares: completeSets, longSharesSwapped: completeSets, totalLongShares: 2n * completeSets, invalidInsurance: completeSets, ethOut: 10n ** 15n, feeAmount: 1n },
 				}
 			},

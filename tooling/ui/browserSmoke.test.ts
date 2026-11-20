@@ -53,6 +53,14 @@ test('an explicit route-ready marker overrides stale bootstrap copy outside the 
 	expect(isBrowserSmokeReady(routeReadyState, 'Augur Statoblast', undefined, viewport)).toBe(false)
 })
 
+test('a blank route-ready marker is ignored, so a bootstrapping page is not ready', () => {
+	const bootstrappingState = { ...mountedState, body: 'Augur Statoblast\nBOOTSTRAPPING' }
+	for (const readyText of ['', '  ']) {
+		expect(isBrowserSmokeReady(bootstrappingState, 'Augur Statoblast', readyText, viewport)).toBe(false)
+		expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', readyText, viewport)).toBe(true)
+	}
+})
+
 test('browser smoke readiness requires the exact requested CSS viewport', () => {
 	expect(isBrowserSmokeReady({ ...mountedState, width: 500 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 	expect(isBrowserSmokeReady({ ...mountedState, height: 701 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
@@ -102,6 +110,19 @@ test('browser commands bound a stalled DevTools response', async () => {
 })
 
 const listBrowserProfiles = async (profileParentPath: string) => (await readdir(profileParentPath)).filter(entry => entry.startsWith('zoltar-browser-smoke-'))
+
+test('the browser smoke entry point launches an explicitly configured CHROMIUM_PATH', async () => {
+	const configuredPath = join(tmpdir(), `configured-chromium-${crypto.randomUUID()}`)
+	const previous = process.env['CHROMIUM_PATH']
+	process.env['CHROMIUM_PATH'] = configuredPath
+	try {
+		// Launching the configured (missing) executable fails; discovery would have reported no Chromium or launched another one.
+		await expect(runBrowserSmoke('zoltar', 'http://127.0.0.1:9', { mountTimeoutMilliseconds: 1_000 })).rejects.toThrow(/launch Chromium|ENOENT/)
+	} finally {
+		if (previous === undefined) delete process.env['CHROMIUM_PATH']
+		else process.env['CHROMIUM_PATH'] = previous
+	}
+})
 
 test('browser launch failure removes the temporary profile', async () => {
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-launch-failure-'))

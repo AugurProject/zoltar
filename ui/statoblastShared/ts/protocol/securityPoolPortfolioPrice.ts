@@ -76,7 +76,8 @@ export function buildPortfolioPriceSettlement(snapshot: PortfolioPriceSnapshot, 
 		account: snapshot.owner,
 		to: snapshot.observation.openOracle,
 		value: 0n,
-		gas: getOpenOracleSettleGasLimit(report.state.latest.game),
+		// loadPortfolioPriceReport proved the callback is this registered feed's escrow for the report.
+		gas: getOpenOracleSettleGasLimit(report.state.latest.game, true),
 		data: encodeFunctionData({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, functionName: 'settle', args: [report.reportId, getOpenOracleGameTuple(report.state.latest.game), getOpenOracleHelperTuple(report.state.latest.helper)] }),
 	}
 }

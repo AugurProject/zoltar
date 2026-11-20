@@ -1,6 +1,5 @@
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types="bun-types" />
-
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -74,6 +73,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 	return {
 		callbackContract: zeroAddress,
 		callbackGasLimit: 0,
+		trustedSettlementCallback: false,
 		currentAmount1: 100n,
 		currentAmount2: 25n,
 		currentBlockNumber: 10n,

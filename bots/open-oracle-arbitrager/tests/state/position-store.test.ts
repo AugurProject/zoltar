@@ -235,6 +235,28 @@ describe('durable OpenOracle position journal', () => {
 		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
 	})
 
+	test('round-trips an entry pending finality and rejects it with history or without its receipt block', async () => {
+		const path = await journalPath()
+		const position = openPositionFixture({
+			entryReceiptBlockHash: `0x${'aa'.repeat(32)}`,
+			entryReceiptBlockNumber: '100',
+			entrySubmissionBlockNumber: '99',
+			entrySubmissionMode: 'private',
+			entryTransactionNonce: '8',
+			executionIntent: executionIntentFixture(),
+			status: 'open-pending-finality',
+		})
+		await savePositionJournal(path, [position], 1)
+		expect(await loadPositionJournal(path, 1)).toEqual([position])
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, entryReceiptBlockHash: undefined }], version: 2 }), { mode: 0o600 })
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('entry receipt finality fields are incomplete')
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, status: 'open' }], version: 2 }), { mode: 0o600 })
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('entry receipt finality evidence has an invalid status')
+		const historyOutbox = { ...executionIntentFixture(), actualGasCostEth: '0.001', blockNumber: '100', executedAt: '2026-01-01T00:00:00.000Z', trackedNetProfitEth: '0.099', transactionHash: `0x${'11'.repeat(32)}` }
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, historyOutbox }], version: 2 }), { mode: 0o600 })
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending entry finality cannot carry history')
+	})
+
 	test('round-trips the confirmed-history outbox until its synced append is acknowledged', async () => {
 		const path = await journalPath()
 		const executionIntent = executionIntentFixture()

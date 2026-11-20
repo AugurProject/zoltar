@@ -10,7 +10,7 @@ function marketUniverseIdentity(market: Pick<LiveMarket, 'universeId' | 'originU
 }
 
 /** Identity metrics for a SecurityPool; render inside a `DataGrid`. */
-export function SecurityPoolIdentityFields({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
+export function SecurityPoolIdentityFields({ market }: { market: Pick<LiveMarket, 'collateral' | 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
 	const scope = shareBalanceScope(market)
 	const identity = marketUniverseIdentity(market)
 	return (
@@ -21,6 +21,7 @@ export function SecurityPoolIdentityFields({ market }: { market: Pick<LiveMarket
 			<MetricField label={identityCopy.shareTokenAddress}>
 				<AddressValue address={scope.shareToken} />
 			</MetricField>
+			<MetricField label={identityCopy.collateralTokenAddress}>{market.collateral === undefined ? identityCopy.unavailable : <AddressValue address={market.collateral.token} />}</MetricField>
 			<MetricField label={identityCopy.currentUniverseId}>{identity.currentUniverseId.toString()}</MetricField>
 			<MetricField label={identityCopy.originUniverseId}>{identity.originUniverseId?.toString() ?? identityCopy.unavailable}</MetricField>
 			<MetricField label={identityCopy.questionId}>

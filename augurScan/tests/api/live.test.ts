@@ -4,8 +4,8 @@ import { liveStreamResponse } from '../../src/http.ts'
 import { createLiveBus, type LiveBus } from '../../src/live.ts'
 
 const decoder = new TextDecoder()
-const streamFrom = (bus: LiveBus, lastEventId?: number): ReadableStream<Uint8Array> => {
-	const stream = bus.stream(lastEventId)
+const streamFrom = (bus: LiveBus, lastEventId?: number, clientKey = 'client'): ReadableStream<Uint8Array> => {
+	const stream = bus.stream(lastEventId, clientKey)
 	if (stream === undefined) throw new Error('Expected live stream capacity')
 	return stream
 }
@@ -163,9 +163,9 @@ test('delivers the current cursor cohort without waiting for a replaying client'
 })
 
 test('bounds stream admission and releases capacity when a reader disconnects', async () => {
-	const bus = createLiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, 1)
+	const bus = createLiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, { maxClients: 1 })
 	const first = streamFrom(bus, 0)
-	expect(bus.stream(0)).toBeUndefined()
+	expect(bus.stream(0, 'client')).toBeUndefined()
 	await first.cancel()
 	const replacement = streamFrom(bus, 0)
 	await replacement.cancel()
@@ -174,11 +174,11 @@ test('bounds stream admission and releases capacity when a reader disconnects', 
 
 test('evicts a client that remains backpressured and releases its admission slot', async () => {
 	let now = 1_000
-	const bus = createLiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, 1, 50, () => now)
+	const bus = createLiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, { maxClients: 1, backpressureTimeoutMs: 50, now: () => now })
 	const stalled = streamFrom(bus, 0)
 	await Promise.resolve()
 	bus.heartbeat()
-	expect(bus.stream(0)).toBeUndefined()
+	expect(bus.stream(0, 'client')).toBeUndefined()
 
 	now += 51
 	await bus.poll()
@@ -208,4 +208,40 @@ test('coalesces cursor initialization for concurrent new streams', async () => {
 	await Promise.all([first.read(), second.read()])
 	expect(latestQueries).toBe(1)
 	await bus.close()
+})
+
+test('caps concurrent streams per client while admitting other clients', async () => {
+	const bus = createLiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, { maxClients: 4, maxClientsPerKey: 2 })
+	const first = streamFrom(bus, 0, 'client-a')
+	const second = streamFrom(bus, 0, 'client-a')
+	expect(bus.stream(0, 'client-a')).toBeUndefined()
+	const other = streamFrom(bus, 0, 'client-b')
+	await first.cancel()
+	const replacement = streamFrom(bus, 0, 'client-a')
+	expect(bus.stream(0, 'client-a')).toBeUndefined()
+	await Promise.all([second.cancel(), other.cancel(), replacement.cancel()])
+	await bus.close()
+})
+
+test('closes a stream past its maximum lifetime and releases its global and per-client slots', async () => {
+	let now = 1_000
+	const bus = createLiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, { maxClients: 1, maxClientsPerKey: 1, maxLifetimeMs: 100, now: () => now })
+	const reader = streamFrom(bus, 0, 'client-a').getReader()
+	expect(decoder.decode((await reader.read()).value)).toContain('connected')
+	now += 100
+	bus.heartbeat()
+	expect(decoder.decode((await reader.read()).value)).toBe(': heartbeat\n\n')
+	expect(bus.stream(0, 'client-b')).toBeUndefined()
+
+	now += 1
+	bus.heartbeat()
+	expect(await reader.read()).toEqual({ done: true, value: undefined })
+	const replacement = streamFrom(bus, 0, 'client-a')
+	await replacement.cancel()
+	await bus.close()
+})
+
+test('rejects invalid live admission limits', () => {
+	const store = { latestEventId: async () => 0, eventsAfter: async () => [] }
+	for (const options of [{ maxClients: 0 }, { maxClientsPerKey: 0 }, { maxLifetimeMs: 0 }, { backpressureTimeoutMs: 1.5 }]) expect(() => createLiveBus(store, options)).toThrow('positive safe integer')
 })

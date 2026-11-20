@@ -22,7 +22,13 @@ type BrowserSmokeState = {
 	width: number
 }
 
-export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: string, readyText: string | undefined, viewport: { readonly height: number; readonly width: number }) {
+/** A blank `UI_BROWSER_READY_TEXT` is no route marker: it would match every page, including a bootstrapping one. */
+export function parseReadyText(value: string | undefined) {
+	return value === undefined || value.trim() === '' ? undefined : value
+}
+
+export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: string, configuredReadyText: string | undefined, viewport: { readonly height: number; readonly width: number }) {
+	const readyText = parseReadyText(configuredReadyText)
 	const normalizedBody = state.body.toLocaleLowerCase()
 	const includesText = (text: string) => normalizedBody.includes(text.toLocaleLowerCase())
 	const explicitReadyStateReached = readyText !== undefined && includesText(readyText)
@@ -138,7 +144,7 @@ export type DevToolsSession = Awaited<ReturnType<typeof createDevToolsSession>>
 
 /** Opens `pageUrl` at `viewport` in a fresh Chromium session with the Runtime and Page domains enabled, runs `run`, and closes the browser. */
 export async function withBrowserPage<TValue>(pageUrl: string, viewport: ChromiumViewport, run: (session: DevToolsSession) => Promise<TValue>, evaluationDefaults: WaitForOptions = {}): Promise<TValue> {
-	const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? getChromiumPath() ?? '/usr/bin/chromium', pageUrl, viewport, { evaluationDefaults })
+	const session = await createDevToolsSession(getChromiumPath() ?? '/usr/bin/chromium', pageUrl, viewport, { evaluationDefaults })
 	try {
 		await session.send('Runtime.enable')
 		await session.send('Page.enable')
@@ -167,7 +173,7 @@ async function runBrowserSmokeUnlocked(appId: UiAppId, baseUrl: string, options:
 		const { send, issues } = session
 		const applicationTitles: Record<UiAppId, string> = { openoracle: 'OpenOracle', statoblast: 'Augur Statoblast', trading: 'Statoblast Trading', zoltar: 'Zoltar' }
 		const applicationTitle = applicationTitles[appId]
-		const readyText = process.env['UI_BROWSER_READY_TEXT']
+		const readyText = parseReadyText(process.env['UI_BROWSER_READY_TEXT'])
 		await send('Runtime.enable')
 		await send('Page.enable')
 		await send('Network.enable')

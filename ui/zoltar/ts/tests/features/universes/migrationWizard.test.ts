@@ -4,7 +4,8 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { deriveMigrationWizard, getOutcomeLabelForIndex, getSubmittableOutcomeIndexes, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardInput } from '@zoltar/ui-zoltar-shared/features/universes/lib/migrationWizard.js'
+import { deriveMigrationWizard, formatMigrationOutcomeText, formatOutcomeList, getMigrationOutcomeTextForIndex, getOutcomeLabelForIndex, getSubmittableOutcomeIndexes, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardInput } from '@zoltar/ui-zoltar-shared/features/universes/lib/migrationWizard.js'
+import { formatShortUniverseId } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 
 const ATTO_REP_PER_REP = 10n ** 18n
 const CHILD_REP = '0x00000000000000000000000000000000000000b2' as const
@@ -159,6 +160,39 @@ describe('migration wizard helpers', () => {
 
 	test('getSubmittableOutcomeIndexes drops outcomes that are not in the universe', () => {
 		expect(getSubmittableOutcomeIndexes(childUniverses, [2n, 7n, 1n])).toEqual([2n, 1n])
+	})
+
+	test('#1477: look-alike, invisible and bidi-override labels stay distinct and carry their index and child universe', () => {
+		const labels = ['Yes', 'Y\u0435s', 'Yes\u2063', '\u202EseY']
+		const spoofed = labels.map((label, position) => ({ ...child(BigInt(position + 1), label, true), universeId: (1n << 200n) + BigInt(position + 1) * 0x1111n }))
+		const wizard = deriveMigrationWizard(input({ childUniverses: spoofed, selectedOutcomeIndexes: [2n, 4n] }))
+		const rows = wizard.outcomes.map(formatMigrationOutcomeText)
+		expect(new Set(rows).size).toBe(labels.length)
+		for (const [position, row] of rows.entries()) {
+			const outcome = spoofed[position]
+			if (outcome === undefined) throw new Error('Missing spoofed outcome')
+			// Label first, then the index and child universe, the same order as the cards.
+			expect(row).toEndWith(` #${outcome.outcomeIndex.toString()} · ${formatShortUniverseId(outcome.universeId)}`)
+			expect(row).toContain(formatShortUniverseId(outcome.universeId))
+			// Invisible and direction-changing characters are shown, never passed through to the page.
+			expect(row).not.toMatch(/[\u2063\u202E]/u)
+		}
+		expect(rows[2]).toContain('\\u{2063}')
+		expect(rows[3]).toContain('\\u{202E}seY')
+		// The review lists each selected child universe with its own index and ID, so a comma in a label cannot add an outcome.
+		expect(wizard.selectedOutcomes.map(formatMigrationOutcomeText)).toEqual([rows[1], rows[3]])
+		expect(formatOutcomeList(wizard.selectedOutcomes)).toBe('Y\u0435s #2, \\u{202E}seY #4')
+		expect(getMigrationOutcomeTextForIndex(spoofed, 3n)).toBe(rows[2])
+		expect(getMigrationOutcomeTextForIndex(undefined, 3n)).toBe('Outcome 3')
+		const comma = deriveMigrationWizard(input({ childUniverses: [child(6n, 'No, Yes', true)], selectedOutcomeIndexes: [6n] }))
+		expect(formatOutcomeList(comma.selectedOutcomes)).toBe('No, Yes #6')
+	})
+
+	test('#1477: a categorical label built from its own index does not repeat it, but a mismatched one does', () => {
+		const categorical = [child(1n, 'Outcome 1: Alpha', true), child(2n, 'Outcome 2', true), child(3n, 'Outcome 1: Beta', true), child(4n, 'Outcome 40', true)]
+		const wizard = deriveMigrationWizard(input({ childUniverses: categorical, selectedOutcomeIndexes: [1n, 2n, 3n, 4n] }))
+		expect(wizard.outcomes.map(formatMigrationOutcomeText)).toEqual(['Outcome 1: Alpha · 0x65', 'Outcome 2 · 0x66', 'Outcome 1: Beta #3 · 0x67', 'Outcome 40 #4 · 0x68'])
+		expect(formatOutcomeList(wizard.selectedOutcomes)).toBe('Outcome 1: Alpha, Outcome 2, Outcome 1: Beta #3, Outcome 40 #4')
 	})
 
 	test('getOutcomeLabelForIndex names outcomes and falls back to a position', () => {

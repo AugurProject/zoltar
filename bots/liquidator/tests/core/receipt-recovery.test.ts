@@ -6,6 +6,8 @@ import { createWalletClient, defineChain, privateKeyToAccount, type TransactionR
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { parseSettings } from '#config/settings'
 import { finalizedReceiptWithQuorum, recoverPendingTransactions } from '#execution/recovery'
+import { TransactionAwaitingCanonicalFinality, requireFinalizedTransactionReceipt } from '#execution/execution-safety'
+import { settleInterruptedCycle } from '../../src/runtime/scan-cycle.ts'
 
 import { initialRuntimeState, loadDurableState, saveDurableState } from '#state/operator-state'
 import { portfolioReceiptIntent } from './portfolio-receipt-fixture.ts'
@@ -185,3 +187,50 @@ for (const nonce of [0, 1]) {
 		})
 	})
 }
+
+/** A read endpoint whose head is one block short of the receipt block, so it has not seen the receipt yet. */
+function laggingRpcServer() {
+	return Bun.serve({
+		hostname: '127.0.0.1',
+		port: 0,
+		async fetch(request) {
+			const payload = await request.json()
+			if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) throw new Error('Expected a JSON-RPC request object')
+			const id = Reflect.get(payload, 'id')
+			const method = Reflect.get(payload, 'method')
+			if (method === 'eth_getTransactionReceipt') return Response.json({ id, jsonrpc: '2.0', result: null })
+			if (method === 'eth_blockNumber') return Response.json({ id, jsonrpc: '2.0', result: '0x63' })
+			if (method === 'eth_getTransactionCount') return Response.json({ id, jsonrpc: '2.0', result: '0x0' })
+			throw new Error(`Unexpected JSON-RPC method ${String(method)}`)
+		},
+	})
+}
+
+test('#1455 a read endpoint lagging behind the receipt block leaves the transaction awaiting finality instead of pausing', async () => {
+	const { intent } = await portfolioReceiptIntent()
+	const primary = rpcServer(true)
+	const secondary = laggingRpcServer()
+	const directory = await mkdtemp(join(tmpdir(), 'receipt-lagging-'))
+	try {
+		if (primary.port === undefined || secondary.port === undefined) throw new Error('Receipt recovery RPCs did not expose ports')
+		const { settings, wallet } = await recoveryContext(primary.port, secondary.port)
+		settings.runtime.stateFile = join(directory, 'state.json')
+		const result = await finalizedReceiptWithQuorum(settings, wallet, transactionHash)
+		expect(result).toEqual({ observed: true, receipt: undefined })
+		let failure: unknown
+		try {
+			requireFinalizedTransactionReceipt('Take over portfolio position 1', transactionHash, result)
+		} catch (error) {
+			failure = error
+		}
+		expect(failure).toBeInstanceOf(TransactionAwaitingCanonicalFinality)
+		const state = initialRuntimeState(false, intent.sender, settings.network.chainId)
+		expect(await settleInterruptedCycle({ settings }, { state, shutdown: { isRequested: () => false } }, failure)).toBeDefined()
+		expect(state.paused).toBe(false)
+		expect(state.status).toBe('running')
+	} finally {
+		primary.stop(true)
+		secondary.stop(true)
+		await rm(directory, { recursive: true, force: true })
+	}
+})

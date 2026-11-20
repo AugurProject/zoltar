@@ -6,6 +6,9 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOutcomePicker.js'
+import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
+import { OutcomeIdentity } from '@zoltar/ui-core-shared/components/OutcomeIdentity.js'
+import { escapeOnChainText } from '@zoltar/ui-core-shared/lib/onChainText.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
@@ -19,9 +22,12 @@ export type ForkTargetOption = Readonly<{
 	 * be removed.
 	 */
 	disabledReason?: string | undefined
+	/** Untrusted on-chain text; the row shows it bidi-isolated and escaped beside `outcomeIndex` and `universeId`. */
 	label: string
 	outcomeIndex: bigint
 	status: Readonly<{ label: string; tone: 'ok' | 'warning' }>
+	/** The child universe this target migrates into, when known; shown in short form so look-alike labels stay distinct. */
+	universeId?: bigint | undefined
 }>
 
 /** A target with a reason is unavailable to add; one already selected stays removable so a stale selection never gets stuck. */
@@ -69,7 +75,12 @@ function renderTargetRow(target: ForkTargetOption, selected: boolean, disabled: 
 		),
 		disabled: disabled || isTargetBlocked(target, selected),
 		key: target.outcomeIndex.toString(),
-		label: target.label,
+		label: (
+			<>
+				<OnChainText text={target.label} />
+				<OutcomeIdentity label={target.label} outcomeIndex={target.outcomeIndex} universeId={target.universeId} />
+			</>
+		),
 		onSelect: () => onToggle(target.outcomeIndex),
 		selected,
 	}
@@ -146,14 +157,17 @@ function ScalarTargets({
 								disabled={disabled || blocked}
 								onClick={() => blocked || onToggle(target.outcomeIndex)}
 							>
-								{target.label}
+								<OnChainText text={target.label} />
+								<OutcomeIdentity label={target.label} outcomeIndex={target.outcomeIndex} universeId={target.universeId} />
 							</button>
 						)
 					})}
 				</div>
 			)}
 			{/* A disabled shortcut cannot show a tooltip on touch, so each one's reason is listed as text it references. */}
-			{blockedShortcuts.map(target => (target.disabledReason === undefined ? undefined : <UserMessage key={target.outcomeIndex.toString()} placement='field' id={getTargetReasonId(`${idPrefix}-shortcut`, target)} detail={forkTargetCopy.formatTargetUnavailable(target.label, target.disabledReason)} />))}
+			{blockedShortcuts.map(target =>
+				target.disabledReason === undefined ? undefined : <UserMessage key={target.outcomeIndex.toString()} placement='field' id={getTargetReasonId(`${idPrefix}-shortcut`, target)} detail={forkTargetCopy.formatTargetUnavailable(escapeOnChainText(target.label), target.disabledReason)} />,
+			)}
 		</div>
 	)
 }

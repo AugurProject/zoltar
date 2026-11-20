@@ -5,6 +5,7 @@ import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '../copy/market.js'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
+import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
@@ -104,10 +105,20 @@ export function createChildUniverseWarningPresentation(result: ZoltarChildUniver
 	return withWarning(createChildUniverseSuccessPresentation(result, outcomeLabel), message)
 }
 
+/** `outcomeLabels` name each outcome with its index and child universe ID; each one is listed on its own isolated line. */
 type ZoltarMigrationTransactionContext = { amount?: string | undefined; outcomeLabels?: readonly string[] | undefined; universeId?: bigint | undefined }
 
 function formatOutcomeLabels(outcomeLabels: readonly string[]) {
-	return outcomeLabels.length === 0 ? commonCopy.none : outcomeLabels.join(', ')
+	if (outcomeLabels.length === 0) return commonCopy.none
+	return (
+		<ul className='transaction-outcome-list'>
+			{outcomeLabels.map(label => (
+				<li key={label}>
+					<OnChainText text={label} />
+				</li>
+			))}
+		</ul>
+	)
 }
 
 function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionContext | undefined) {

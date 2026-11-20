@@ -36,12 +36,20 @@ Every setting is an environment variable. The Compose column names the service t
 | `PORT` | `3000` | `app`, fixed to `3000` | Port the web app listens on. |
 | `AUGURSCAN_PORT` | `3000` | host port of `app` | Host port that Compose publishes. Compose only. |
 | `API_RATE_LIMIT_PER_MINUTE` | `600` | `app` | Per-client API limit. `0` disables the limit when a trusted upstream enforces it. |
+| `TRUSTED_PROXY_ADDRESSES` | unset | `app` | Comma-separated addresses or CIDR ranges of reverse proxies whose `X-Forwarded-For` header is trusted for the per-client key. Unset trusts no proxy. |
 | `LIVE_BACKPRESSURE_TIMEOUT_MS` | `60000` | `app` | How long a live-stream client may make no write progress before its slot is closed and released. |
+| `LIVE_MAX_CLIENTS` | `256` | `app` | Concurrent live streams across all clients. |
+| `LIVE_MAX_CLIENTS_PER_CLIENT` | `16` | `app` | Concurrent live streams per client. |
+| `LIVE_MAX_STREAM_LIFETIME_MS` | `1800000` | `app` | Age at which a live stream is closed and its slot released. The browser reconnects and replays missed events. |
 | `DISABLE_INDEXER` | unset | `indexer` (`0`); fixed to `1` on `app` | `1` starts the indexer process without indexing. See below. |
 
 `DISABLE_INDEXER` affects only the indexer process (`src/indexer-process.ts`). The web app (`src/server.ts`) never indexes, whatever the value. A process that runs without indexing still needs write access: it initializes or migrates the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
 
 The website and API do not require authentication. API requests share one per-client quota; non-API routes do not consume quota and remain available when it is exhausted.
+
+A client is an IPv4 address or an IPv6 /64 network, and the live-stream per-client limit uses the same key. The app sees only the address of the connection it receives, so behind a reverse proxy or load balancer every user shares the proxy's quota until `TRUSTED_PROXY_ADDRESSES` lists that proxy. For a request from a listed proxy, the app uses the right-most `X-Forwarded-For` entry that is not itself a listed proxy and ignores entries to its left, which the client can forge. Configure the proxy to append the connecting address to `X-Forwarded-For`, and list only proxies that do.
+
+`/health/ready` and `/health/indexers` admit two concurrent requests each, and readiness has its own database connection, so slow indexer-health requests cannot make readiness report busy.
 
 The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 

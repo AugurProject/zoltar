@@ -21,5 +21,5 @@ export async function loadPortfolioForkOutcome(client: Pick<ReadClient, 'readCon
 		const labels = await client.readContract({ address: questionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'getOutcomeLabels', args: [forkQuestionId, outcomeIndex - 1n, 1n], blockNumber })
 		outcomeLabel = labels[0]
 	}
-	return { questionTitle, outcomeLabel }
+	return { questionId: forkQuestionId, questionTitle, outcomeLabel }
 }
