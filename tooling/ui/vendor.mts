@@ -170,7 +170,15 @@ export async function clearVendorOutput(vendorOutputPath = getVendorOutputPath()
 	await fs.rm(vendorOutputPath, { recursive: true, force: true })
 }
 
+/** The vendor CLI takes only the app ID (or UI_APP); artifacts follow the app, so any extra argument is an obsolete or mistyped option. */
+export function assertVendorCommandArguments(args: readonly string[]) {
+	if (args.length > 1) throw new Error(`The vendor build accepts only an app ID; unexpected argument(s): ${args.slice(1).join(' ')}`)
+	const [first] = args
+	if (first?.startsWith('-') === true) throw new Error(`The vendor build accepts only an app ID; unexpected option: ${first}`)
+}
+
 if (import.meta.main) {
+	assertVendorCommandArguments(process.argv.slice(2))
 	vendor().catch(error => {
 		console.error(error)
 		process.exit(1)
