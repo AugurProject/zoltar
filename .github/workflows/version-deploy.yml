@@ -85,12 +85,7 @@ jobs:
             -f tag_name="${GITHUB_REF_NAME}" \
             --jq '.body')
 
-          # Only the marked block is generated. A rerun replaces that block and
-          # keeps every operator-added line outside it.
-          GENERATED_START='<!-- zoltar-release-generated:start -->'
-          GENERATED_END='<!-- zoltar-release-generated:end -->'
-          cat > generated-release-notes.md <<EOF
-          ${GENERATED_START}
+          cat > release-notes.md <<EOF
           ## IPFS applications
 
           The versioned publisher image contains the exact static files represented by these per-application content identifiers:
@@ -101,23 +96,11 @@ jobs:
           - [OpenOracle — ipfs://${OPENORACLE_IPFS_CID}/](ipfs://${OPENORACLE_IPFS_CID}/)
 
           ${GENERATED_NOTES}
-          ${GENERATED_END}
           EOF
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release view "${GITHUB_REF_NAME}" --json body --jq '.body' | tr -d '\r' > existing-release-notes.md
-            if grep -qxF "${GENERATED_START}" existing-release-notes.md && grep -qxF "${GENERATED_END}" existing-release-notes.md; then
-              awk -v start="${GENERATED_START}" -v end="${GENERATED_END}" -v generated=generated-release-notes.md '
-                $0 == start { while ((getline line < generated) > 0) print line; skipping = 1; next }
-                skipping && $0 == end { skipping = 0; next }
-                !skipping { print }
-              ' existing-release-notes.md > release-notes.md
-            else
-              { cat generated-release-notes.md; echo; cat existing-release-notes.md; } > release-notes.md
-            fi
             gh release edit "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md --latest=false
           else
-            cp generated-release-notes.md release-notes.md
             gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md --latest=false --verify-tag
           fi
 
