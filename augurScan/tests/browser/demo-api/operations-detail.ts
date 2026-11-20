@@ -227,6 +227,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 					eth_volume_7d_atto_eth: '21700000000000000000',
 					eth_trade_count: 41,
 					eth_trade_count_24h: 5,
+					collateral: { symbol: 'WETH', decimals: 18 },
 				},
 				activity: {
 					items: demoTradingActivity(operations.asOf),

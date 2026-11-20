@@ -1,10 +1,11 @@
 import type { ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
 import { capitalPositionCard, capitalPositionPath } from './capital-presentation.ts'
-import { exactUnit } from './format.ts'
+import { exactUnit, tokenDecimals } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import { canonicalOperationsPath } from './routes.ts'
 import { retainedPaginationAvailable } from './refresh-presentation.ts'
-import { renderRichListTable } from './rich-list-table.ts'
+import { RICH_LIST_MAX_OFFSET, richListContinuationAvailable } from '../src/rich-list-limits.ts'
+import { renderRichListTable, richListWalletBalances } from './rich-list-table.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
 
 export interface RichListPageDeps {
@@ -24,8 +25,6 @@ export interface RichListPageDeps {
 	readonly openAccountTransactions: (item: RichListRecord) => Promise<boolean>
 	readonly canonicalRefreshRequired: boolean
 }
-
-const richBalance = (value: string | number | undefined, symbol: string) => exactUnit(value ?? '0', 18, symbol)
 
 // The canonical detail path on the card's chain; the demo flag is kept so the link survives a reload.
 const capitalPositionHref = (ledger: string, owner: string, chainId: string, demo: boolean): string => `${canonicalOperationsPath(capitalPositionPath(ledger, owner))}?chainId=${encodeURIComponent(chainId)}${demo ? '&demo=1' : ''}`
@@ -70,13 +69,12 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		identity.append(richFieldLabel('Address'), addressLink)
 		const identityMeta = item.label ? item.address : undefined
 		if (identityMeta) identity.append(element('span', '', identityMeta))
-		const hasNative = Number(item.sampled_native_count) > 0
 		const repComplete = Number(item.sampled_rep_token_count) >= Number(item.rep_token_count)
-		const wethComplete = Number(item.sampled_weth_token_count) >= Number(item.weth_token_count)
 		const repTokens = Array.isArray(item.rep_balances) ? item.rep_balances : []
 		const itemNativeSymbol = nativeSymbol(item.chain_id)
 		const wallet = element('div', 'rich-wallet')
-		wallet.append(richFieldLabel(`${itemNativeSymbol} / WETH`), element('strong', '', hasNative ? richBalance(item.native_balance, itemNativeSymbol) : `${itemNativeSymbol} pending`), element('span', '', wethComplete ? richBalance(item.weth_balance, 'WETH') : `${richBalance(item.weth_balance, 'WETH')} · partial`))
+		const walletBalances = richListWalletBalances(item, itemNativeSymbol)
+		wallet.append(richFieldLabel(`${itemNativeSymbol} / WETH`), element('strong', '', walletBalances.native), element('span', '', walletBalances.weth))
 		const transactions = element('button', 'rich-count rich-transactions')
 		transactions.type = 'button'
 		transactions.dataset['dialogInvoker'] = `rich-list:${itemKey}`
@@ -90,7 +88,6 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		rep.append(richFieldLabel('REP tokens'))
 		if (repTokens.length === 0) rep.append(element('strong', '', 'REP pending'))
 		for (const token of repTokens) {
-			const decimals = Number.isInteger(Number(token.decimals)) && Number(token.decimals) >= 0 && Number(token.decimals) <= 255 ? Number(token.decimals) : 18
 			const tokenLine = element('span', 'rich-rep-token')
 			const tokenIdentity = element('span')
 			tokenIdentity.append(
@@ -101,7 +98,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 				}),
 			)
 			if (token.universeId !== null && token.universeId !== undefined) tokenIdentity.append(document.createTextNode(` · universe ${shortIdentifier(token.universeId)}`))
-			tokenLine.append(element('strong', '', exactUnit(token.balance, decimals, token.symbol ?? 'REP')), tokenIdentity)
+			tokenLine.append(element('strong', '', exactUnit(token.balance, tokenDecimals(token.decimals), token.symbol ?? 'REP')), tokenIdentity)
 			rep.append(tokenLine)
 		}
 		if (!repComplete) rep.append(element('span', '', `${number(item.sampled_rep_token_count)} of ${number(item.rep_token_count)} REP tokens sampled`))
@@ -143,6 +140,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		focusedDetails?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
 	}
 	rows.setAttribute('aria-busy', 'false')
-	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses`
-	$('#richlist-more').hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalRefreshRequired)
+	const paginationEnded = richListItems.length < richListTotal && !richListContinuationAvailable(richListItems.length, richListTotal)
+	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses${paginationEnded ? ` · paging stops after offset ${number(RICH_LIST_MAX_OFFSET)}` : ''}`
+	$('#richlist-more').hidden = !retainedPaginationAvailable(richListContinuationAvailable(richListItems.length, richListTotal), canonicalRefreshRequired)
 }

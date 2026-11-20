@@ -4,7 +4,7 @@ import type { EntityHistory, QuestionRecord, StateCatalog, StateEntity, StateTab
 import { exactUnit, utcDateTime } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
-import { questionDateLabel, questionStatus } from './question-time.ts'
+import { questionAnswerType, questionDateLabel, questionStartLabel, questionStatus } from './question-time.ts'
 import type { createStateComponents } from './state-components.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -51,7 +51,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 		resolutionPanel.append(row)
 	}
 	if (history.pools.length === 0) resolutionPanel.append(element('p', 'data-note', 'No linked pool resolution evidence is available.'))
-	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
+	const kind = questionAnswerType(question)
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(questionIdHex(question.question_id), 10, 8)}`, `${kind} · Time window ${questionStatus(question)}`))
 	const canonicalQuestionRoute = location.pathname.startsWith('/question/')
@@ -91,7 +91,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	const timeline = element('div', 'timeline')
 	for (const [label, value] of [
 		['Created', utcDateTime(question.created_timestamp)],
-		['Starts', questionDateLabel(question.start_time)],
+		['Starts', questionStartLabel(question.start_time)],
 		['Ends', questionDateLabel(question.end_time)],
 	] as const)
 		timeline.append(element('div', 'timeline-step', `${label} · ${value}`))

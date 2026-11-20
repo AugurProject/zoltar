@@ -6,7 +6,7 @@ import { invalidateStateRequestVersions, isStateTab, abortActivityRequests } fro
 import type { ScannerViews } from './app-views.ts'
 import { renderExplorerPage } from './explorer-page.ts'
 import { richListSort } from './rich-list-page.ts'
-import { classifyRoute, routeDataContext, routeTitle, type ScannerRoute } from './routes.ts'
+import { classifyRoute, routeDataContext, routeTitle, sectionLinkTarget, systemRouteIdentity, type ScannerRoute } from './routes.ts'
 
 const routeContextKey = (context: ScannerContext): string => routeDataContext(context.selectedChainId(), new URL(location.href))
 
@@ -14,7 +14,8 @@ const systemRouteSelection = (context: ScannerContext): { tab: StateTab; entity?
 	const parts = location.pathname.split('/').filter(Boolean)
 	const mapping: Record<string, StateTab> = { question: 'questions', universe: 'universes' }
 	const tab = mapping[parts[0] ?? '']
-	if (tab !== undefined && parts.length === 2) return { tab, entity: `${context.selectedChainId()}:${decodeURIComponent(parts[1] ?? '')}` }
+	const identity = systemRouteIdentity(parts[1] ?? '')
+	if (tab !== undefined && parts.length === 2 && identity !== undefined) return { tab, entity: `${context.selectedChainId()}:${identity}` }
 	const requested = context.state.pageUrl.searchParams.get('tab')
 	return { tab: isStateTab(requested) ? requested : 'pools', entity: context.state.pageUrl.searchParams.get('entity') ?? undefined }
 }
@@ -72,6 +73,14 @@ const routeSections: ReadonlyArray<readonly [ScannerRoute, string]> = [
 	['not-found', '#not-found'],
 ]
 
+/** Points each operations section link at what a click opens, so a link opened in a new tab keeps the current section's historical block. */
+export const syncSectionLinks = (): void => {
+	for (const link of document.querySelectorAll<HTMLAnchorElement>('.operations-nav a')) {
+		const destination = sectionLinkTarget(new URL(link.href), new URL(location.href)).href
+		if (link.href !== destination) link.href = destination
+	}
+}
+
 export const syncVisibleRoute = (context: ScannerContext): void => {
 	const { state } = context
 	if (location.pathname === '/address' && /^0x[0-9a-fA-F]{40}$/.test(state.pageUrl.searchParams.get('address') ?? '')) {
@@ -98,6 +107,7 @@ export const syncVisibleRoute = (context: ScannerContext): void => {
 		if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
 		else link.removeAttribute('aria-current')
 	}
+	syncSectionLinks()
 	const { operationsRouteSelect } = context.elements
 	if ([...operationsRouteSelect.options].some(option => option.value === location.pathname)) operationsRouteSelect.value = location.pathname
 }
