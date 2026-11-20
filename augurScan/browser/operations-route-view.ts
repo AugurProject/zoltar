@@ -150,7 +150,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			else if (eventName === 'Sync') summary = `${exactUnit(String(data['yesReserve'] ?? '0'), shareDecimals, 'YES')} · ${exactUnit(String(data['noReserve'] ?? '0'), shareDecimals, 'NO')} reserves`
 			else if (eventName === 'Transfer') summary = `${exactUnit(String(data['value'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['from'] ?? ''))} → ${shortIdentifier(String(data['to'] ?? ''))}`
 			else if (eventName === 'Approval') summary = `${exactUnit(String(data['value'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['owner'] ?? ''))} approved ${shortIdentifier(String(data['spender'] ?? ''))}`
-			else if (eventName.startsWith('Liquidity')) summary = `${exactUnit(String(data['yesAmount'] ?? '0'), shareDecimals, 'YES')} · ${exactUnit(String(data['noAmount'] ?? '0'), shareDecimals, 'NO')} ·${exactUnit(String(data['liquidity'] ?? '0'), 18, 'LP shares')}`
+			else if (eventName.startsWith('Liquidity')) summary = `${exactUnit(String(data['yesAmount'] ?? '0'), shareDecimals, 'YES')} · ${exactUnit(String(data['noAmount'] ?? '0'), shareDecimals, 'NO')} · ${exactUnit(String(data['liquidity'] ?? '0'), 18, 'LP shares')}`
 			const row = operationRow(eventName, summary, String(data['provider'] ?? data['sender'] ?? item['tx_hash'] ?? ''), item['block_number'])
 			row.append(rawEvidence(item))
 			return row

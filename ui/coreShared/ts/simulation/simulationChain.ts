@@ -1,7 +1,7 @@
 import { callHandlerOpts, ethCallProcedure, executeCall, handleTransactionCreation, type CallParams } from '@tevm/actions'
 import { createCommon } from '@tevm/common'
 import { createMemoryClient } from '@tevm/memory-client'
-import { isHex, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, isAddress, isHex, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { NetworkProfile } from '../wallet/networkProfile.js'
 import { exportSimulationChainHistory, restoreSimulationChainHistory } from './chainHistory.js'
 import { getSimulationNode, mineLockedSimulationTransaction, withSimulationLock, type SimulationNode, type SimulationVm, type TevmLikeClient } from './clock.js'
@@ -236,8 +236,30 @@ export async function createSimulationChain(profile: Pick<NetworkProfile, 'chain
 		throw createRpcError({ code: -32000, message: `Simulation state at block ${blockNumber.toString()} is unavailable: this simulation keeps the blocks and receipts at that height but not their state, as after restoring a saved state` })
 	}
 
+	/**
+	 * tevm keys each retained block state by checksummed address and answers an account missing from it with a fork
+	 * error. Once the state root is known to exist, such an account holds nothing at that height. The head is read
+	 * as the latest state under the lock, so a block mined during the read cannot move a pinned answer.
+	 */
+	const getBalance = async (parameters: SimulationProviderRequest, address: string, selector: string) =>
+		await withSimulationLock(memoryClient, async () => {
+			const checksummed = getAddress(address)
+			const blockTag = toHex(BigInt(selector))
+			if (await servesLatestBlock(blockTag)) return await requestRaw({ method: 'eth_getBalance', params: [checksummed, 'latest'] })
+			try {
+				return await requestRaw({ ...parameters, params: [checksummed, blockTag] })
+			} catch (error) {
+				if (error instanceof Error && /No fork url set/u.test(`${error.message} ${'details' in error ? String(error.details) : ''}`)) return toHex(0n)
+				throw error
+			}
+		})
+
 	const request: SimulationChain['request'] = async parameters => {
 		await requireStateAtRequestedBlock(parameters)
+		if (parameters.method === 'eth_getBalance' && Array.isArray(parameters.params)) {
+			const [address, blockTag] = parameters.params
+			if (typeof address === 'string' && isAddress(address) && typeof blockTag === 'string' && isHex(blockTag)) return await getBalance(parameters, address, blockTag)
+		}
 		if (parameters.method === 'eth_getTransactionReceipt') {
 			const hash = parseReceiptHash(parameters.params)
 			if (hash !== undefined) return receipts.get(hash.toLowerCase()) ?? null

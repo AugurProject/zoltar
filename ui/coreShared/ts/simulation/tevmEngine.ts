@@ -198,16 +198,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 			if (typeof request !== 'object' || request === null) throw new Error('Simulation transaction payload was invalid')
 			return await sendTransactionInternal(normalizeRpcTransactionRequest(request as Record<string, unknown>))
 		}
-		if (parameters.method === 'eth_getBalance') return await chain.request(await readBalanceAtHead(parameters))
 		return await chain.request(parameters)
-	}
-	// The local chain cannot read an account it never touched at an explicit block and asks for a fork instead; at the head that is the latest state.
-	const readBalanceAtHead = async (parameters: RequestArguments): Promise<RequestArguments> => {
-		const params = Array.isArray(parameters.params) ? parameters.params : []
-		const [address, blockTag] = params
-		if (typeof blockTag !== 'string' || !blockTag.startsWith('0x')) return parameters
-		const head = await chain.request({ method: 'eth_blockNumber' })
-		return typeof head === 'string' && BigInt(head) === BigInt(blockTag) ? { method: 'eth_getBalance', params: [address, 'latest'] } : parameters
 	}
 	const requestFromOutside = async (parameters: RequestArguments) => {
 		await awaitSeeding()

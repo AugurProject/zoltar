@@ -79,6 +79,19 @@ describe('simulation engine prepared states', () => {
 		expect(await engine.request({ method: 'eth_getBalance', params: [engine.getState().selectedAccount, head] })).toBe(await engine.request({ method: 'eth_getBalance', params: [engine.getState().selectedAccount, 'latest'] }))
 	})
 
+	test('reads native balances at an older block for untouched accounts and either address case', async () => {
+		const engine = await createBaselineEngine()
+		await engine.bootstrap()
+		const account = engine.getState().selectedAccount
+		const pinned = await engine.request({ method: 'eth_blockNumber', params: [] })
+		const balanceAtPinned = await engine.request({ method: 'eth_getBalance', params: [account, 'latest'] })
+		await engine.advanceTime(900n)
+		expect(await engine.request({ method: 'eth_blockNumber', params: [] })).not.toBe(pinned)
+		expect(await engine.request({ method: 'eth_getBalance', params: ['0x00000000000000000000000000000000000abcde', pinned] })).toBe('0x0')
+		expect(await engine.request({ method: 'eth_getBalance', params: [account.toLowerCase(), pinned] })).toBe(balanceAtPinned)
+		expect(await engine.request({ method: 'eth_getBalance', params: [getAddress(account), pinned] })).toBe(balanceAtPinned)
+	}, 60_000)
+
 	test('a state saved without block history still restores at its clock', async () => {
 		const engine = await createBaselineEngine()
 		await engine.bootstrap()

@@ -118,6 +118,7 @@ async function reconcileReorg(state: NetworkIndexerState): Promise<void> {
 		checkpoint.number - 1n,
 		blockNumber => state.database.canonicalCheckpointAtOrBefore(state.network.chainId, blockNumber, requireLease(state)),
 		async blockNumber => (await getBlockHeader(state.providers, blockNumber)).hash,
+		state.signal,
 	)
 	if (ancestor !== undefined) {
 		await assertLease(state)

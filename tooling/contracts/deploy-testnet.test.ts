@@ -268,11 +268,11 @@ describe('testnet deployment inputs', () => {
 describe('testnet deployment transaction authorization', () => {
 	const account = privateKeyToAccount(TEST_PRIVATE_KEY)
 
-	function wallet(overrides: Partial<Pick<WriteClient, 'call' | 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>> = {}) {
+	function wallet(overrides: Partial<Pick<WriteClient, 'call' | 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>> = {}, baseFeePerGas = 10n) {
 		return {
 			call: async () => ({ data: undefined }),
 			estimateGas: async () => 100_000n,
-			getBlock: async () => ({ baseFeePerGas: 10n }) as never,
+			getBlock: async () => ({ baseFeePerGas }) as never,
 			getGasPrice: async () => 20n,
 			getTransactionCount: async () => 7n,
 			sendTransaction: async () => FIRST_HASH,
@@ -308,14 +308,16 @@ describe('testnet deployment transaction authorization', () => {
 	test('signs a positive fee cap on a zero-fee development node', async () => {
 		let signed: string | undefined
 		const send = createBudgetedTransactionSender(
-			wallet({
-				getBlock: async () => ({ baseFeePerGas: 0n }) as never,
-				getGasPrice: async () => 0n,
-				sendTransaction: async request => {
-					signed = await account.signTransaction({ chainId: 11_155_111, gas: request.gas, maxFeePerGas: request.maxFeePerGas, maxPriorityFeePerGas: request.maxPriorityFeePerGas, nonce: request.nonce, to: request.to ?? undefined })
-					return FIRST_HASH
+			wallet(
+				{
+					getGasPrice: async () => 0n,
+					sendTransaction: async request => {
+						signed = await account.signTransaction({ chainId: 11_155_111, gas: request.gas, maxFeePerGas: request.maxFeePerGas, maxPriorityFeePerGas: request.maxPriorityFeePerGas, nonce: request.nonce, to: request.to ?? undefined })
+						return FIRST_HASH
+					},
 				},
-			}),
+				0n,
+			),
 			account,
 			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000n },
 		)
