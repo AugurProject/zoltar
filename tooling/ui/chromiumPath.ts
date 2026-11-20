@@ -32,6 +32,9 @@ export const getChromiumPath = ({
 	readonly platform?: NodeJS.Platform
 	readonly which?: (commandName: string) => string | null
 } = {}): string | undefined => {
+	// An explicitly configured executable wins over discovery; an empty value counts as unset.
+	const configuredPath = environment['CHROMIUM_PATH']?.trim()
+	if (configuredPath !== undefined && configuredPath !== '') return configuredPath
 	for (const commandName of CHROMIUM_COMMAND_NAMES) {
 		const commandPath = which(commandName)
 		if (commandPath !== null) return commandPath

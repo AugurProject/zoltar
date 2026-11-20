@@ -101,6 +101,49 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		return attempts
 	}
 
+	test('#1466 retirements queued while the price is stale do not starve a sponsor operation funded at 1.25x its estimate', async () => {
+		// A bystander, the sponsor's 100 ETH position on 400 REP, and two 3 ETH positions that queue retirements.
+		await fixture.prepare(20_000n * unit, 200n * unit)
+		const owner = fixture.owner()
+		const sponsor = fixture.other()
+		const attackers = [TEST_ADDRESSES[2], TEST_ADDRESSES[3]].map(address => createWriteClient(fixture.base.mockWindow, address))
+		const rep = await owner.readContract({ ...capital(), functionName: 'repToken' })
+		for (const [client, amount] of [[sponsor, 3400n * unit], ...attackers.map(attacker => [attacker, 100n * unit] as const)] as const) {
+			await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: rep, functionName: 'transfer', args: [client.account.address, amount] }))
+		}
+		await fixture.deposit(400n * unit, sponsor)
+		await fixture.authorize(100n * unit, sponsor)
+		for (const attacker of attackers) {
+			await fixture.deposit(100n * unit, attacker)
+			await fixture.authorize(3n * unit, attacker)
+		}
+		await fixture.mint(100n * unit)
+		await fixture.base.mockWindow.advanceTime(3601n)
+		const feed = { abi: feedArtifact.abi, address: await sponsor.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] }) }
+		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'weth' }), feed.address)
+		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'reputationToken' }), feed.address)
+		const deposit = { ...capital(), functionName: 'depositFor', args: [sponsor.account.address, 3000n * unit] } as const
+		const benign = await sponsor.estimateContractGas({ ...deposit, account: sponsor.account })
+		const index = { abi: indexArtifact.abi, address: await owner.readContract({ ...capital(), functionName: 'commitmentIndex' }) }
+		const positionOf = async (client: typeof owner) => (await owner.readContract({ ...capital(), functionName: 'ownerAccount', args: [client.account.address] })).positionId
+		const expectQueued = async () => {
+			for (const attacker of attackers) expect((await owner.readContract({ ...index, functionName: 'accountOf', args: [await positionOf(attacker)] })).batch).not.toBe(0n)
+		}
+		const queueRetirements = async () => {
+			await fixture.authorize(0n, attackers[0])
+			await fixture.authorize(unit, attackers[1])
+			await expectQueued()
+		}
+		const operations = [{ gasLimit: (benign * 125n) / 100n, data: encodeFunctionData(deposit) }]
+		// The report moves the price to 1.5, which the sponsor's position still backs. At the issue's price of 4 the
+		// position is liquidating, and a deposit is refused whatever its gas, so it cannot undo the adverse condition.
+		expect((await run({ sponsor, feed }, operations, (3n * unit) / 2n, undefined, queueRetirements)).map(event => event.success)).toEqual([true])
+		// Each owner's retirement is served only by that owner's own operations, so none of it ran in the sponsor's call.
+		await expectQueued()
+		expect((await owner.readContract({ ...capital(), functionName: 'ownerCollateral', args: [sponsor.account.address] }))[0]).toBe(3400n * unit)
+		expect(await owner.readContract({ ...index, functionName: 'liquidationStarted', args: [await positionOf(sponsor)] })).toBe(0n)
+	})
+
 	test('#1340 equal-time rival settlements cannot suppress a funded sponsor operation', async () => {
 		const { sponsor, feed } = await prepare()
 		const mock = fixture.base.mockWindow

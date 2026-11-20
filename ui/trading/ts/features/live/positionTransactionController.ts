@@ -23,13 +23,14 @@ function priceMovedDetail(estimate: TradeEstimate, authoritativeLongShares: bigi
 
 /**
  * The wallet is held to the bounds the ticket displayed, not to fresh slippage around the chain's price: the
- * minimum received and the most shares sold are the estimate's, which the chain result already satisfies.
+ * minimum received (collateral and any recovery REP) and the most shares sold are the estimate's, which the chain result
+ * already satisfies.
  */
 function withApprovedBounds(quote: Quote, estimate: TradeEstimate): Quote {
 	if (quote.kind === 'entry' && estimate.kind === 'entry') return { ...quote, value: { ...quote.value, minimumLongShares: estimate.minimumLongShares } }
 	if (quote.kind === 'exit' && estimate.kind === 'exit') {
 		const maximumLongShares = estimate.maximumLongShares < quote.value.longBalance ? estimate.maximumLongShares : quote.value.longBalance
-		return { ...quote, value: { ...quote.value, maximumLongShares, minimumEth: estimate.minimumAttoEth } }
+		return { ...quote, value: { ...quote.value, maximumLongShares, minimumEth: estimate.minimumAttoEth, minimumAttoRep: estimate.minimumAttoRep } }
 	}
 	return quote
 }
@@ -83,7 +84,7 @@ export function createPositionTransactionController({
 					estimate.kind === 'entry'
 						? { ...quoteContext, kind: 'entry', value: await withReadTimeout(services.simulateEntry(walletClient, configuration, market, account, side, estimate.payAttoEth, validityMinutes, slippageBps)) }
 						: { ...quoteContext, kind: 'exit', value: await withReadTimeout(services.simulateExit(walletClient, configuration, market, account, side, estimate.quote.completeSetShares, validityMinutes, slippageBps)) }
-				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined)) {
+				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined, quote.kind === 'exit' ? quote.value.expectedAttoRep : undefined)) {
 					const detail = priceMovedDetail(estimate, quote.value.result.totalLongShares, quote.value.market)
 					// Reload the reserves before the ticket unlocks, so the estimate on screen shows the price the chain now quotes
 					// and pressing again cannot reuse the old one. A refresh that failed, timed out, or was held or superseded left the

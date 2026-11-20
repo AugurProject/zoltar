@@ -9,10 +9,20 @@ import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/modul
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { Fragment, h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
+
+/** Each outcome is listed with its index and child universe ID on its own isolated line (#1477). */
+function renderedOutcomeLines(entry: unknown) {
+	if (typeof entry !== 'object' || entry === null || !('rows' in entry) || !Array.isArray(entry.rows)) throw new Error('Transaction entry has no rows')
+	const outcomes: unknown = entry.rows.find((row: unknown) => typeof row === 'object' && row !== null && 'label' in row && row.label === 'Outcomes')
+	if (typeof outcomes !== 'object' || outcomes === null || !('value' in outcomes)) throw new Error('Transaction entry has no outcomes row')
+	const container = document.createElement('div')
+	render(h(Fragment, null, outcomes.value), container)
+	return Array.from(container.querySelectorAll('li bdi')).map(line => line.textContent)
+}
 
 type UseZoltarMigration = typeof import('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js')['useZoltarMigration']
 type UseZoltarMigrationState = ReturnType<UseZoltarMigration>
@@ -158,8 +168,9 @@ describe('useZoltarMigration', () => {
 		})
 
 		expect(migrateInternalRepInZoltar.mock.calls[0]?.[3]).toEqual([2n, 1n])
-		expect(requested).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes', value: 'No, Yes' }], submittedTitle: 'Migrating REP' }])
-		expect(presented).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes', value: 'No, Yes' }], title: 'REP migrated' }])
+		expect(requested).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes' }], submittedTitle: 'Migrating REP' }])
+		expect(presented).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes' }], title: 'REP migrated' }])
+		for (const entry of [...requested, ...presented]) expect(renderedOutcomeLines(entry)).toEqual(['No #2 · 0x3', 'Yes #1 · 0x2'])
 		expect(state().zoltarMigrationForm).toEqual({ amount: '', outcomeIndexes: [2n, 1n] })
 	})
 

@@ -46,6 +46,8 @@ export const preparing = 'Preparing source question…'
 export const recover = 'Recover source cash'
 export const recovering = 'Recovering source cash…'
 
-export const questionOutcome = (question: string, outcome: string) => `${question} — ${outcome}`
+/** Separates the fork question's title from the branch outcome label; each side is rendered as isolated on-chain text. */
+export const questionOutcomeSeparator = ' — '
+export const forkQuestionId = 'Fork question ID'
 export const busy = 'Another portfolio action is pending.'
 export const branchStates = { choose: 'Choose an outcome', unprepared: 'Not prepared', chosen: 'Capital prepared', waiting: 'Awaiting activation', active: 'Active' }

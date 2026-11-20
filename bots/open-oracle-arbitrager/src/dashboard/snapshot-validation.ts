@@ -265,7 +265,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 			lifecycleSettlerRewardEth: optional(stringValue),
 			openedAt: stringValue,
 			realizedNetProfitEth: optional(stringValue),
-			status: oneOf('closed', 'closed-pending-finality', 'expired-not-included', 'open', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'),
+			status: oneOf('closed', 'closed-pending-finality', 'expired-not-included', 'open', 'open-pending-finality', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'),
 			withdrawnToken: stringValue,
 			withdrawnWeth: stringValue,
 			hasLifecycleTransactions: booleanValue,

@@ -4,6 +4,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getOpenOracleSettlementSafetyGuard } from './openOracleSettlementSafety.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
+import { isFeedAuthenticatedReportEscrow } from './openOracleSettlement.js'
 import { reportAlreadySettled } from '../copy/openOracle.js'
 
 // Keep seconds and block clocks separate; neither reserve guarantees arbitrary inclusion delays.
@@ -17,11 +18,12 @@ export function getOpenOracleDisputeSubmissionTimingGuard(timing: { currentClock
 	return hasSubmissionWindow(timing.currentClock, timing.reportTimestamp + timing.settlementTime, getOpenOracleDisputeSubmissionReserve(timing.timeType)) ? undefined : 'Dispute window ends too soon. Wait to settle this report.'
 }
 
-export async function requireOpenOracleDisputeSubmissionWindow(client: Pick<ReadClient, 'readContract' | 'getBlock'>, address: Address, reportId: bigint) {
+export async function requireOpenOracleDisputeSubmissionWindow(client: Pick<ReadClient, 'readContract' | 'getBlock' | 'multicall'>, address: Address, reportId: bigint) {
 	const [state, block] = await Promise.all([loadOpenOracleStoredState(client, address, reportId), client.getBlock()])
 	if (state.settled) throw new Error(reportAlreadySettled)
 	const timeType = hasOpenOracleFlag(state.latest.game, OPEN_ORACLE_FLAG_TIME_TYPE)
-	const safetyGuard = getOpenOracleSettlementSafetyGuard({ ...state.latest.game, timeType })
+	const trustedSettlementCallback = await isFeedAuthenticatedReportEscrow(client, address, state.latest.game.callbackContract, reportId)
+	const safetyGuard = getOpenOracleSettlementSafetyGuard({ ...state.latest.game, timeType, trustedSettlementCallback })
 	if (safetyGuard !== undefined) throw new Error(safetyGuard)
 	const currentClock = timeType ? block.timestamp : block.number
 	if (currentClock === undefined) throw new Error('Could not read the current dispute clock. Retry before sending.')

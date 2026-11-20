@@ -16,6 +16,7 @@ export {
 	discoverPublicReplacementWithQuorum,
 	executionRecordForConfirmedPosition,
 	expireEntryWithQuorum,
+	finalizeEntryAfterFinalityWithQuorum,
 	finalizeLifecycleAfterFinalityWithQuorum,
 	processPositionLifecycle,
 	reconcileExpiredAttemptsWithQuorum,

@@ -60,22 +60,7 @@ export type OperatorSettings = {
 const ROOT_KEYS = ['approvedUniverses', 'centralizedMarkets', 'childMarketConfigurations', 'connectivity', 'network', 'networkConfigured', 'paused', 'portfolioInstructions', 'portfolioPolicy', 'privateKey', 'runtime', 'selectedPortfolios', 'strategy', 'submission', 'version']
 const RUNTIME_KEYS = ['execute', 'once', 'pollMilliseconds', 'stateFile', 'ui', 'uiHost', 'uiPort']
 const STRATEGY_KEYS = ['maximumGasCostEth', 'walletReserveRep']
-const PORTFOLIO_POLICY_KEYS = [
-	'takeoverIncomeHorizonSeconds',
-	'allowFundedTakeovers',
-	'maximumCommitmentEth',
-	'maximumOwnFundingRep',
-	'maximumPositionsPerScan',
-	'maximumPrincipalRep',
-	'maximumReportFundingEth',
-	'maximumTotalPrincipalRep',
-	'minimumNetRewardEth',
-	'reportOperationGasLimit',
-	'reportOperationsGasLimit',
-	'stalledRetirementSeconds',
-	'targetHealthFactorBps',
-	'walletReserveEth',
-]
+const PORTFOLIO_POLICY_KEYS = ['takeoverIncomeHorizonSeconds', 'allowFundedTakeovers', 'maximumCommitmentEth', 'maximumOwnFundingRep', 'maximumPositionsPerScan', 'maximumPrincipalRep', 'maximumTotalPrincipalRep', 'minimumNetRewardEth', 'stalledRetirementSeconds', 'targetHealthFactorBps', 'walletReserveEth']
 
 /** Settings removed with standalone pools. An operator file may still carry them; they are ignored and dropped on the next save. */
 const REMOVED_ROOT_KEYS = ['deployment', 'desiredPools', 'selectedPools']

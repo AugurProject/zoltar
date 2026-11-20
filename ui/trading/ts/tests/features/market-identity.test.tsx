@@ -28,3 +28,21 @@ test('makes every displayed pool and share token address independently copyable 
 	}
 	expect(rendered.container.querySelector('a button, a [role=button], button a, button button, button [role=button], a a, [role=button] a')).toBeNull()
 })
+
+test('#1462 shows the collateral token address so a counterfeit-collateral market is distinguishable', async () => {
+	const pool: Address = `0x${'12'.repeat(20)}`
+	const shareToken: Address = `0x${'34'.repeat(20)}`
+	const collateralToken: Address = `0x${'56'.repeat(20)}`
+	const rendered = await renderIntoDocument(<SecurityPoolIdentityFields market={{ pool, shareToken, universeId: 1n, originUniverseId: 1n, questionId: 1n, collateral: { token: collateralToken, symbol: 'USDC (0x565656…565656)', decimals: 6, native: false } }} />)
+	cleanup = rendered.cleanup
+	expect(rendered.container.textContent).toContain('Collateral token address')
+	expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${collateralToken}"]`)).not.toBeNull()
+	expect(rendered.container.querySelector(`[role="button"][aria-label="Copy address ${collateralToken}"]`)).not.toBeNull()
+})
+
+test('marks the collateral token address unavailable when the collateral did not load', async () => {
+	const rendered = await renderIntoDocument(<SecurityPoolIdentityFields market={{ pool: zeroAddress, shareToken: zeroAddress, universeId: 1n, originUniverseId: 1n, questionId: 1n }} />)
+	cleanup = rendered.cleanup
+	expect(rendered.container.textContent).toContain('Collateral token address')
+	expect(rendered.container.textContent).toContain('Unavailable')
+})

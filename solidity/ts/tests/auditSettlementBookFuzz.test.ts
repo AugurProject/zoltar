@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact } from '../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -19,7 +19,10 @@ const FIRST_SEED = Number(process.env['AUDIT_FUZZ_FIRST_SEED'] ?? '1')
 // Seeds 7016 and 7027 reach a recovery REP requirement above the 2^128 bound (#1320) with
 // unrounded fee-stream ends, so they always run at fee end granularity 1.
 const PRECISION_BOUND_SEEDS = [7016, 7027]
-const REGRESSION_SEEDS = process.env['AUDIT_FUZZ_SEEDS'] === undefined ? PRECISION_BOUND_SEEDS : []
+// Seeds 9100038 and 51312 (#1463, minimum outcome rate 1 attoETH) erode a question with a fee stream until the next mint
+// exceeds the settlement principal bound.
+const PRINCIPAL_BOUND_SEEDS = [9100038, 51312]
+const REGRESSION_SEEDS = process.env['AUDIT_FUZZ_SEEDS'] === undefined ? [...PRECISION_BOUND_SEEDS, ...PRINCIPAL_BOUND_SEEDS] : []
 const STEPS = Number(process.env['AUDIT_FUZZ_STEPS'] ?? '150')
 const SHRINK_MS = Number(process.env['AUDIT_FUZZ_SHRINK_MS'] ?? '60000')
 const QUESTIONS = [1, 2, 3, 4, 5, 6] as const
@@ -64,7 +67,8 @@ type Op =
 	| { k: 'child'; b: number; cash: bigint; rec: bigint }
 const show = (value: unknown) => JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? `${item}n` : item))
 
-type ModelQuestion = { units: bigint; supply: bigint; finalAfter: number; rate: bigint; feeEnd: number; frozen: number }
+// principal mirrors feePrincipalAttoEth: claim weights at mint, scaled down by redemptions, untouched by fees.
+type ModelQuestion = { units: bigint; supply: bigint; principal: bigint; finalAfter: number; rate: bigint; feeEnd: number; frozen: number }
 type ModelBook = {
 	remainder: bigint
 	targetNumerator: bigint
@@ -93,7 +97,7 @@ type ModelFrozen = { cash: bigint; units: bigint; source: number; rec: bigint }
 type Model = { books: Map<number, ModelBook>; frozen: Map<number, ModelFrozen>; minimum: bigint; granularity: bigint }
 const FEE_END_LIMIT = 1n << 33n
 
-const emptyQuestion = (): ModelQuestion => ({ units: 0n, supply: 0n, finalAfter: 0, rate: 0n, feeEnd: 0, frozen: 0 })
+const emptyQuestion = (): ModelQuestion => ({ units: 0n, supply: 0n, principal: 0n, finalAfter: 0, rate: 0n, feeEnd: 0, frozen: 0 })
 const questionOf = (book: ModelBook, id: number) => {
 	let state = book.questions.get(id)
 	if (state === undefined) {
@@ -126,6 +130,12 @@ const clearEmpty = (book: ModelBook) => {
 		book.targetDenominator = 1n
 	}
 }
+const initialModel = (minimum: bigint, granularity: bigint): Model => ({
+	minimum,
+	granularity,
+	frozen: new Map(),
+	books: new Map([[1, { cash: 0n, units: 0n, remainder: 0n, targetNumerator: 1n, targetDenominator: 1n, feeCash: 0n, ts: START, offset: 0, isSealed: false, enabled: true, minimumFinalAfter: 0, rec: 0n, depth: 0, children: 0, questions: new Map(), cashIn: 0n, cashPaid: 0n, feesAccrued: 0n, recIn: 0n, recPaid: 0n }]]),
+})
 const cloneModel = (model: Model): Model => ({
 	minimum: model.minimum,
 	granularity: model.granularity,
@@ -205,9 +215,13 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 				shares = (added * state.supply) / state.units
 			}
 			if (shares === 0n) return reject('no shares')
+			// A fee-eroded question mints many shares per weight, so its principal can outgrow the bound.
+			const principal = state.principal + (state.supply === 0n ? added : ceilDiv(state.principal * shares, state.supply))
+			if (principal >= UNIT_BOUND) return reject('principal precision bound')
 			if (book.units + added >= UNIT_BOUND || book.cash + op.cash >= UNIT_BOUND) return reject('precision bound')
 			state.units += added
 			state.supply += shares
+			state.principal = principal
 			book.cash += op.cash
 			book.units += added
 			book.cashIn += op.cash
@@ -243,6 +257,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			// A payout is bounded by its own active or frozen book's cash custody.
 			if (cash > availableCash) throw new Error(`MODEL: redemption pays ${cash} beyond its book's ${availableCash} cash`)
 			state.units -= burned
+			state.principal = (state.principal * (state.supply - op.shares)) / state.supply
 			state.rate = (state.rate * (state.supply - op.shares)) / state.supply
 			state.supply -= op.shares
 			book.cashPaid += cash
@@ -459,7 +474,7 @@ const drainOps = (model: Model): Op[] => {
 }
 
 describe('audit fuzz: settlement book ETH accounting against an eager reference model', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let client: WriteClient
 	let ethereum: AnvilWindowEthereum
 	let blockStart = 0
@@ -469,6 +484,13 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		ethereum = getAnvilWindowEthereum()
 		await setupTestAccounts(ethereum)
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
+		await ethereum.advanceTime(50_000_000n)
+		blockStart = Number((await client.getBlock()).timestamp)
+		await setBaselineSnapshot()
+	})
+	// Each test starts from the shared baseline; lifecycles revert to this per-test snapshot.
+	beforeEach(async () => {
+		baseline = await ethereum.anvilSnapshot()
 	})
 
 	// Runs one lifecycle. `source` yields the next operations given the model; returns the failure text or undefined.
@@ -499,14 +521,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 			throw new Error('no receipt')
 		}
 		await transact(encodeFunctionData({ abi: artifact.abi, functionName: 'createBook', args: [START] }))
-		let model: Model = {
-			minimum,
-			granularity,
-			frozen: new Map(),
-			books: new Map([
-				[1, { cash: 0n, units: 0n, remainder: 0n, targetNumerator: 1n, targetDenominator: 1n, feeCash: 0n, ts: START, offset: 0, isSealed: false, enabled: true, minimumFinalAfter: 0, rec: 0n, depth: 0, children: 0, questions: new Map(), cashIn: 0n, cashPaid: 0n, feesAccrued: 0n, recIn: 0n, recPaid: 0n }],
-			]),
-		}
+		let model = initialModel(minimum, granularity)
 		const history: string[] = []
 
 		const send = async (op: Op): Promise<{ reverted: string | undefined; returned?: readonly [bigint, bigint, bigint] }> => {
@@ -585,6 +600,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 				const label = `${where} q${id}`
 				if (state.units !== want.units) return `${label}: units ${state.units} != model ${want.units} (book units ${chain.units})`
 				if (state.outcomeSupplyAttoShares !== want.supply) return `${label}: supply ${state.outcomeSupplyAttoShares} != model ${want.supply}`
+				if (state.feePrincipalAttoEth !== want.principal) return `${label}: principal ${state.feePrincipalAttoEth} != model ${want.principal}`
 				if (Number(state.finalAfter) !== want.finalAfter) return `${label}: finalAfter ${state.finalAfter} != model ${want.finalAfter}`
 				if (state.feeRateAttoEthPerSecond !== want.rate) return `${label}: rate ${state.feeRateAttoEthPerSecond} != model ${want.rate}`
 				if (want.rate !== 0n && Number(state.feeEnd) !== want.feeEnd) return `${label}: feeEnd ${state.feeEnd} != model ${want.feeEnd}`
@@ -759,10 +775,32 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 		return `seed ${seed} (minimum rate ${minimum}, fee end granularity ${granularity}): ${failure}\n--- shrunk to ${best.length} operations ---\n${best.map(show).join('\n')}\n--- shrunk failure ---\n${bestFailure}`
 	}
 
+	test('#1463 mints into a fee-eroded question revert at the settlement principal bound', async () => {
+		// Shrunk traces of seeds 9100038 and 51312 at minimum outcome rate 1 attoETH and fee end granularity 1.
+		const traces: Op[][] = [
+			[
+				{ k: 'mint', b: 1, q: 1, cash: 1000000000000000981n, ts: 606844 },
+				{ k: 'fee', b: 1, q: 1, rate: 1000000000000000979000000000n, end: 21386461, ts: 1386461 },
+				{ k: 'mint', b: 1, q: 1, cash: 1000000000000000954n, ts: 1386525 },
+			],
+			[
+				{ k: 'mint', b: 1, q: 1, cash: 1000000000000000968n, ts: 1042812 },
+				{ k: 'mint', b: 1, q: 1, cash: 300000000000000000191n, ts: 1302018 },
+				{ k: 'fee', b: 1, q: 1, rate: 6020000000000000017140000000n, end: 21302022, ts: 1302022 },
+				{ k: 'mint', b: 1, q: 1, cash: 1000000000000000804n, ts: 1906977 },
+			],
+		]
+		for (const trace of traces) {
+			// The model predicts the final mint's revert; the chain replay must agree with every step.
+			const model = initialModel(1n, 1n)
+			const outcomes = trace.map(op => apply(model, op, 0))
+			expect(outcomes.at(-1)).toEqual({ ok: false, why: 'principal precision bound' })
+			expect(outcomes.slice(0, -1).every(outcome => outcome.ok)).toBe(true)
+			expect(await run(1n, 1n, (_model, index) => (index < trace.length ? trace.slice(index, index + 1) : undefined), undefined)).toBeUndefined()
+		}
+	})
+
 	test('random lifecycles match the reference model exactly', async () => {
-		await getAnvilWindowEthereum().advanceTime(50_000_000n)
-		blockStart = Number((await client.getBlock()).timestamp)
-		baseline = await ethereum.anvilSnapshot()
 		const failures: string[] = []
 		const seeds = [...Array.from({ length: SEEDS }, (_, offset) => FIRST_SEED + offset), ...REGRESSION_SEEDS]
 		for (const seed of seeds) {

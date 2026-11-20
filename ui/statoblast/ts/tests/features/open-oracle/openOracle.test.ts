@@ -83,6 +83,7 @@ function createOpenOracleLifecycleReport(
 	return {
 		callbackContract: zeroAddress,
 		callbackGasLimit: 0,
+		trustedSettlementCallback: false,
 		currentBlockNumber: 0n,
 		currentReporter: getAddress(addressString(TEST_ADDRESSES[1])),
 		currentTime: 0n,
@@ -100,6 +101,7 @@ function createDisputeSubmissionPreviewReport() {
 	return {
 		callbackContract: zeroAddress,
 		callbackGasLimit: 0,
+		trustedSettlementCallback: false,
 		currentAmount1: 100n,
 		currentAmount2: 50n,
 		currentBlockNumber: 0n,

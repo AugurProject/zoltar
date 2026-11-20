@@ -20,7 +20,7 @@ import { resetAfterFinalityAnchorReorg, selectScanHead, validateStartupOrRefresh
 import { waitBeforeNextScan } from './scan-wait.ts'
 import { acquireScanSignerOperation } from './signer-operations.ts'
 
-/** Confirmed disputes whose history write failed on an earlier scan are retried before any new work. */
+/** Writes pending history records: retries earlier failures before any new work, and releases entries finalized during position maintenance. */
 async function retryHistoryOutboxes(runtime: OperatorRuntime, context: OperatorContext, scan: ScanPass) {
 	if (!runtime.positions.some(position => position.historyOutbox !== undefined)) return
 	try {
@@ -45,6 +45,7 @@ async function scanConfiguredNetwork(runtime: OperatorRuntime, context: Operator
 	if (await resetAfterFinalityAnchorReorg(runtime, context, block.number)) return 'deferred'
 	const positionResult = await maintainPositions(runtime, context, scan, block.number)
 	if (positionResult !== undefined) return positionResult
+	await retryHistoryOutboxes(runtime, context, scan)
 	const discovery = await discoverReports(runtime, context, scan, block)
 	if (discovery.kind === 'head-unchanged') {
 		scanReport.update({ status: 'waiting' })

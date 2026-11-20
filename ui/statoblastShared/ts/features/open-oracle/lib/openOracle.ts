@@ -7,7 +7,7 @@ import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
 import { getDecimalSeparatorError, parseDecimalInput, parseDecimalInputResult, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ensureSentence, formatWriteErrorMessage, getErrorDetail, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getOpenOracleSettlementSafetyGuard } from '../../../protocol/openOracleSettlementSafety.js'
+import { getOpenOracleSettlementGasLimit, getOpenOracleSettlementSafetyGuard } from '../../../protocol/openOracleSettlementSafety.js'
 import { getOpenOracleDisputeSubmissionReserve, getOpenOracleDisputeSubmissionTimingGuard } from '../../../protocol/openOracleDisputeTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
@@ -328,7 +328,7 @@ export function getOpenOracleReportProgressTone(progress: OpenOracleReportProgre
 	}
 }
 export function getOpenOracleSelectedReportActionMode(
-	report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType' | 'callbackContract' | 'callbackGasLimit'>,
+	report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType' | 'callbackContract' | 'callbackGasLimit' | 'trustedSettlementCallback'>,
 ): OpenOracleSelectedReportActionMode {
 	const status = getOpenOracleReportStatus(report)
 	switch (status) {
@@ -361,7 +361,9 @@ function formatOpenOracleLifecycleRemaining(remaining: bigint, timeType: boolean
 	if (timeType) return formatDuration(remaining)
 	return `${remaining.toString()} block${remaining === 1n ? '' : 's'}`
 }
-export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType' | 'callbackContract' | 'callbackGasLimit'>): OpenOracleReportActionAvailability {
+export function getOpenOracleDisputeAvailability(
+	report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType' | 'callbackContract' | 'callbackGasLimit' | 'trustedSettlementCallback'>,
+): OpenOracleReportActionAvailability {
 	const closed = getClosedOpenOracleReportAvailability(report)
 	if (closed !== undefined) return closed
 	const safetyGuard = getOpenOracleSettlementSafetyGuard(report)
@@ -415,9 +417,13 @@ export function getOpenOracleSettleRemaining(report: Pick<OpenOracleReportDetail
 	return report.reportTimestamp + report.settlementTime - getOpenOracleLifecycleClockValue(report)
 }
 
-export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
+export function getOpenOracleSettleAvailability(
+	report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType' | 'callbackContract' | 'callbackGasLimit' | 'trustedSettlementCallback'>,
+): OpenOracleReportActionAvailability {
 	const closed = getClosedOpenOracleReportAvailability(report)
 	if (closed !== undefined) return closed
+	const gasRefusal = getOpenOracleSettlementGasLimit(report, report.trustedSettlementCallback).refusal
+	if (gasRefusal !== undefined) return { canAct: false, message: gasRefusal }
 	const remaining = getOpenOracleSettleRemaining(report)
 	if (remaining > 0n) {
 		return {

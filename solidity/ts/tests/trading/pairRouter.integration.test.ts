@@ -1,4 +1,4 @@
-import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/protocol/authorization.js'
+import { encodeReceiveBasedRedeemRequest, receiveBasedExitArguments } from '../../../../ui/trading/ts/protocol/authorization.js'
 import { estimateLiquidity, type LiquidityPreview } from '../../../../ui/trading/ts/features/live/liquidityEstimate.js'
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deployContract } from '../../testSupport/deployContract'
@@ -133,6 +133,29 @@ describe('factory, pair, and router integration', () => {
 			expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [router] })).toBe(11n)
 		})
 	}
+
+	test('#1445: a sell built by receiveBasedExitArguments enforces the quoted recovery REP minimum', async () => {
+		await initialize()
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 10n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [7n, false, true] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPortfolio', args: [pool, pool] }))
+		const rep = await client.readContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'repToken' })
+		const repAbi = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
+		const recipient = `0x${TEST_ADDRESSES[1].toString(16).padStart(40, '0')}` as const
+		const [swapInput] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'quoteExactOutput', args: [true, rate] })
+		const maximumLongShares = rate + swapInput
+		const transfer = receiveBasedExitArguments({ shareToken: token, pool, pair, universeId: universe, questionId: question }, 'YES', rate, maximumLongShares, 1n, recipient, 10n ** 12n, 7n)
+		const exit = () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, router, transfer.ids, transfer.amounts, transfer.data] })
+		const beforeShares = await shareBalances(account)
+		// The pool's recovery REP per complete set drops between the quote and the signed submission.
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [6n, false, true] }))
+		await expect(exit()).rejects.toThrow('Minimum REP output')
+		expect(await shareBalances(account)).toEqual(beforeShares)
+		expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [7n, false, true] }))
+		await writeContractAndWait(client, exit)
+		expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(7n)
+	})
 
 	test('direct canonical deployment initializes ERC-20 identity from the inherited constructor', async () => {
 		const directPair = await deploy(pairArtifact, [account, pool, 30n, account])

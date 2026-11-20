@@ -205,7 +205,7 @@ describe('ZoltarMigrationSection', () => {
 		expect(queries.queryByText(props.zoltarUniverseError)).toBeNull()
 	})
 
-	test('starts on outcome selection with outcome names, destination status, and no raw ids', async () => {
+	test('starts on outcome selection with outcome names, their index and child universe, and destination status', async () => {
 		const updates: Partial<ZoltarMigrationFormState>[] = []
 		const deployed: bigint[] = []
 		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ universeBrowserHref: '#/pools/universes?universe=1', onDeployChildUniverse: outcomeIndex => deployed.push(outcomeIndex), onZoltarMigrationFormChange: update => updates.push(update) })))
@@ -214,7 +214,8 @@ describe('ZoltarMigrationSection', () => {
 
 		expect(getCurrentStepTitle()).toBe('Select outcomes')
 		expect(document.body.textContent).toContain('Not deployed')
-		expect(document.body.textContent).not.toContain('0x2')
+		// Each card names its immutable outcome index and short child universe ID beside the label (#1477).
+		expect(Array.from(document.querySelectorAll('.migration-outcome-row .outcome-identity')).map(identity => identity.textContent)).toEqual(['#1 · 0x2', '#2 · 0x3'])
 		expect(document.body.textContent).not.toContain('Split REP')
 		expect(document.body.textContent).not.toContain('prepared REP')
 		expect(queries.getByRole('link', { name: 'Open Yes universe' }).getAttribute('href')).toBe('#/pools/universes?universe=2')
@@ -223,6 +224,19 @@ describe('ZoltarMigrationSection', () => {
 		expect(updates).toEqual([{ outcomeIndexes: [1n, 2n] }])
 		queries.getByRole('button', { name: 'Deploy No universe' }).click()
 		expect(deployed).toEqual([2n])
+	})
+
+	test('#1477: isolates and escapes look-alike outcome labels on cards and selected chips', async () => {
+		const labels = ['Yes', 'Y\u0435s', 'Yes\u2063', '\u202EseY']
+		const childUniverses = labels.map((outcomeLabel, position) => ({ ...yesChild, outcomeIndex: BigInt(position + 1), outcomeLabel, universeId: BigInt(position + 10) }))
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ childUniverses }), zoltarMigrationForm: createForm({ outcomeIndexes: [4n] }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const cards = Array.from(document.querySelectorAll('.migration-outcome-row .migration-outcome-label'))
+		expect(cards.map(card => card.querySelector('bdi.on-chain-text')?.textContent)).toEqual(['Yes', 'Y\u0435s', 'Yes\\u{2063}', '\\u{202E}seY'])
+		expect(cards.map(card => card.querySelector('.outcome-identity')?.textContent)).toEqual(['#1 · 0xa', '#2 · 0xb', '#3 · 0xc', '#4 · 0xd'])
+		expect(document.body.textContent).not.toMatch(/[\u2063\u202E]/u)
+		const chip = within(document.body).getByRole('button', { name: 'Remove \\u{202E}seY #4 · 0xd' })
+		expect(chip.querySelector('bdi.on-chain-text')?.textContent).toBe('\\u{202E}seY')
 	})
 
 	test('explains that migrating deploys missing universes and gives disabled Deploy buttons one shared reason', async () => {
@@ -253,7 +267,8 @@ describe('ZoltarMigrationSection', () => {
 		expect(deployments).toEqual([getScalarOutcomeIndex(question, 0n)])
 		await act(() => fireEvent.input(q.getByLabelText('Scalar value'), { target: { value: '100' } }))
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(1)
-		q.getByRole('button', { name: '100 °C' }).click()
+		// A scalar outcome's packed index is not shown; its child universe ID identifies it.
+		q.getByRole('button', { name: '100 °C · 0x2' }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [maxIndex] }])
 		expect(q.getByRole('link', { name: 'Open 100 °C universe' }).getAttribute('href')).toBe(getUniverseLinkHref(child.universeId))
 		await act(() => fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '101' } }))
@@ -292,10 +307,10 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(10)
 		await act(() => q.getByRole('button', { name: 'Next page' }).click())
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(2)
-		q.getByRole('button', { name: 'Option 11' }).click()
+		q.getByRole('button', { name: 'Option 11 #11 · 0xc' }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [1n, 11n] }])
 		await act(() => q.getByRole('button', { name: 'Previous page' }).click())
-		expect(q.getByRole('button', { name: 'Option 1' }).getAttribute('aria-pressed')).toBe('true')
+		expect(q.getByRole('button', { name: 'Option 1 #1 · 0x2' }).getAttribute('aria-pressed')).toBe('true')
 	})
 
 	test('keeps scalar selections visible and removable after moving the picker', async () => {
@@ -308,13 +323,13 @@ describe('ZoltarMigrationSection', () => {
 		const q = within(document.body)
 		await act(() => fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '10' } }))
 		await act(() => fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '1' } }))
-		expect(q.getByRole('button', { name: 'Remove 50 °C' })).toBeTruthy()
+		expect(q.getByRole('button', { name: 'Remove 50 °C · 0x2' })).toBeTruthy()
 		expect(q.getByRole('button', { name: 'Deploy 5 °C universe' })).toBeTruthy()
 		expect(q.getByText('Not deployed')).toBeTruthy()
-		q.getByRole('button', { name: 'Remove 50 °C' }).click()
+		q.getByRole('button', { name: 'Remove 50 °C · 0x2' }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [] }])
 		await act(() => render(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }), zoltarMigrationForm: createForm({ outcomeIndexes: [] }) })), rendered.container))
-		expect(q.queryByRole('button', { name: 'Remove 50 °C' })).toBeNull()
+		expect(q.queryByRole('button', { name: 'Remove 50 °C · 0x2' })).toBeNull()
 	})
 
 	test('keeps selections from other categorical pages visible and removable', async () => {
@@ -323,13 +338,13 @@ describe('ZoltarMigrationSection', () => {
 		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ childUniverses: children }), zoltarMigrationForm: createForm({ outcomeIndexes: [1n, 11n] }), onZoltarMigrationFormChange: update => updates.push(update) })))
 		cleanupRenderedComponent = rendered.cleanup
 		const q = within(document.body)
-		expect(q.getByRole('button', { name: 'Remove Option 11' })).toBeTruthy()
+		expect(q.getByRole('button', { name: 'Remove Option 11 #11 · 0xc' })).toBeTruthy()
 		await act(() => q.getByRole('button', { name: 'Next page' }).click())
-		q.getByRole('button', { name: 'Remove Option 1' }).click()
+		q.getByRole('button', { name: 'Remove Option 1 #1 · 0x2' }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [11n] }])
 		await act(() => render(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ childUniverses: children }), zoltarMigrationForm: createForm({ outcomeIndexes: [11n] }) })), rendered.container))
-		expect(q.queryByRole('button', { name: 'Remove Option 1' })).toBeNull()
-		expect(q.getByRole('button', { name: 'Remove Option 11' })).toBeTruthy()
+		expect(q.queryByRole('button', { name: 'Remove Option 1 #1 · 0x2' })).toBeNull()
+		expect(q.getByRole('button', { name: 'Remove Option 11 #11 · 0xc' })).toBeTruthy()
 	})
 
 	test('enables Continue when the first outcome selection reaches the form', async () => {
@@ -341,7 +356,7 @@ describe('ZoltarMigrationSection', () => {
 		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
 		cleanupRenderedComponent = rendered.cleanup
 		expectTransactionButtonDisabled(document.body, 'Continue', 'Select at least one outcome.')
-		await act(() => within(document.body).getByRole('button', { name: 'Yes' }).click())
+		await act(() => within(document.body).getByRole('button', { name: 'Yes #1 · 0x2' }).click())
 		expectTransactionButtonEnabled(document.body, 'Continue')
 		await act(() => within(document.body).getByRole('button', { name: 'Continue' }).click())
 		expect(getCurrentStepTitle()).toBe('Amount')
@@ -443,7 +458,13 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		await openStep('Review')
-		expect(document.body.querySelector('.migration-review-summary')?.textContent).toBe('Migrate 10 REP to: No, Yes')
+		const summary = document.body.querySelector('.migration-review-summary')
+		expect(summary?.querySelector('p')?.textContent).toBe('Migrate 10 REP to:')
+		// One isolated row per child universe, in pick order, so a comma inside a label cannot read as another outcome.
+		expect(Array.from(summary?.querySelectorAll('li') ?? []).map(row => row.textContent)).toEqual(['No #2 · 0x3', 'Yes #1 · 0x2'])
+		// The label is isolated and the identity sits in its own unbreakable tag, so a narrow screen never splits the universe ID.
+		expect(Array.from(summary?.querySelectorAll('li bdi.on-chain-text') ?? []).map(label => label.textContent)).toEqual(['No', 'Yes'])
+		expect(Array.from(summary?.querySelectorAll('li .outcome-identity') ?? []).map(identity => identity.textContent)).toEqual(['#2 · 0x3', '#1 · 0x2'])
 		expect(document.body.textContent).toContain('Burned REP cannot be returned to this universe.')
 		expect(document.body.textContent).not.toContain('Outcome index')
 		expectTransactionButtonEnabled(document.body, 'Migrate REP')

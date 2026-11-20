@@ -1,6 +1,5 @@
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types="bun-types" />
-
 import { signal } from '@preact/signals'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
@@ -134,6 +133,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 	return {
 		callbackContract: zeroAddress,
 		callbackGasLimit: 0,
+		trustedSettlementCallback: false,
 		currentBlockNumber: 0n,
 		currentAmount1: 0n,
 		currentAmount2: 0n,

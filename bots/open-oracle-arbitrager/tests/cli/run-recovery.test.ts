@@ -8,6 +8,7 @@ import {
 	discoverPublicReplacementWithQuorum,
 	executionRecordForConfirmedPosition,
 	expireEntryWithQuorum,
+	finalizeEntryAfterFinalityWithQuorum,
 	finalizeLifecycleAfterFinalityWithQuorum,
 	immediateReplacementAmounts,
 	lifecycleExecutionFromLogs,
@@ -226,6 +227,38 @@ function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly
 	return executorEventReceiptClients(topics, data, blockNumber, headBlockNumbers, offlineFinalityIndexes)
 }
 
+/** Clients whose successful private entry receipt carries the executor's report-7 hedge event. */
+function entryReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined) {
+	const topics = encodeEventTopics({
+		abi: openOracleArbitrageExecutorAbi,
+		eventName: 'HedgeAndDisputeExecuted',
+		args: { account: getAddress('0x0000000000000000000000000000000000000002'), reportId: 7n },
+	})
+	if (topics.some(topic => topic === null)) throw new Error('Entry event topics are incomplete')
+	const data = encodeAbiParameters(
+		[
+			{ name: 'boughtToken2', type: 'bool' },
+			{ name: 'hedgeAmountToken2', type: 'uint256' },
+			{ name: 'hedgeAmountAttoWeth', type: 'uint256' },
+			{ name: 'contribution1', type: 'uint256' },
+			{ name: 'contribution2', type: 'uint256' },
+		],
+		[false, 2n * 10n ** 18n, 10n ** 18n, 0n, 0n],
+	)
+	const log = {
+		address: executor,
+		blockHash: `0x${'aa'.repeat(32)}`,
+		blockNumber: `0x${blockNumber.toString(16)}`,
+		data,
+		logIndex: '0x0',
+		removed: false,
+		topics,
+		transactionHash,
+		transactionIndex: '0x0',
+	}
+	return receiptClients(blockNumber, 'success', [log], transactionHash, headBlockNumbers ?? [blockNumber + 12n, blockNumber + 12n])
+}
+
 function replacementCreditReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined) {
 	const account = getAddress('0x0000000000000000000000000000000000000002')
 	const topics = encodeEventTopics({
@@ -419,6 +452,59 @@ describe('entry crash recovery', () => {
 		const recovered = await recoverPendingEntryWithQuorum(successfulMismatchedIntentClients(), recoveryConfiguration, position, 18)
 		expect(recovered.position.status).toBe('recovery-required')
 		expect(recovered.position.actualEntryGasCostEth).toBe('0.000021')
+	})
+
+	test('keeps a quorum-confirmed entry pending finality without releasing its history record', async () => {
+		const provisional = (await recoverPendingEntryWithQuorum(entryReceiptClients(), recoveryConfiguration, pendingEntryPosition(), 18)).position
+		expect(provisional.status).toBe('open-pending-finality')
+		expect(provisional.entryReceiptBlockHash).toBe(`0x${'aa'.repeat(32)}`)
+		expect(provisional.entryReceiptBlockNumber).toBe('100')
+		expect(provisional.actualEntryGasCostEth).toBe('0.000021')
+		expect(provisional.historyOutbox).toBeUndefined()
+		const beforeFinality = await finalizeEntryAfterFinalityWithQuorum(missingReceiptClients(), recoveryConfiguration, provisional, 111n)
+		expect(beforeFinality).toBe(provisional)
+	})
+
+	test('rolls a reorged-out entry back to pending and expires it without recording history', async () => {
+		const provisional = (await recoverPendingEntryWithQuorum(entryReceiptClients(), recoveryConfiguration, pendingEntryPosition(), 18)).position
+		const rolledBack = await finalizeEntryAfterFinalityWithQuorum(missingReceiptClients(), recoveryConfiguration, provisional, 112n)
+		expect(rolledBack.status).toBe('pending-entry')
+		expect(rolledBack.actualEntryGasCostEth).toBe('0')
+		expect(rolledBack.gasExpenditures).toEqual([])
+		expect(rolledBack.historyOutbox).toBeUndefined()
+		expect(rolledBack.entryReceiptBlockHash).toBeUndefined()
+		expect(rolledBack.entryReceiptBlockNumber).toBeUndefined()
+		const expired = await expireEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, rolledBack, 112n, '2026-07-24T00:02:00.000Z')
+		expect(expired.status).toBe('expired-not-included')
+		expect(expired.capitalAtRiskWeth).toBe('0')
+		expect(expired.historyOutbox).toBeUndefined()
+		expect(expired.expiredTransactionAttempts).toEqual([{ kind: 'entry', nonce: '8', targetBlockNumber: '100', transactionHash }])
+	})
+
+	test('keeps a pending entry when its readers have not served the finality descendant', async () => {
+		const provisional = (await recoverPendingEntryWithQuorum(entryReceiptClients(), recoveryConfiguration, pendingEntryPosition(), 18)).position
+		await expect(finalizeEntryAfterFinalityWithQuorum(missingReceiptClients(undefined, [112n, 100n]), { ...recoveryConfiguration, rpcQuorum: 2 as const }, provisional, 112n)).rejects.toThrow('requires at least')
+	})
+
+	test('re-derives an entry whose receipt moved to another block instead of finalizing stale evidence', async () => {
+		const provisional = (await recoverPendingEntryWithQuorum(entryReceiptClients(), recoveryConfiguration, pendingEntryPosition(), 18)).position
+		const rolledBack = await finalizeEntryAfterFinalityWithQuorum(entryReceiptClients(101n), recoveryConfiguration, provisional, 113n)
+		expect(rolledBack.status).toBe('pending-entry')
+		expect(rolledBack.actualEntryGasCostEth).toBe('0')
+		expect(rolledBack.historyOutbox).toBeUndefined()
+	})
+
+	test('opens an entry and releases its history record once after twelve canonical descendants', async () => {
+		const clients = entryReceiptClients()
+		const provisional = (await recoverPendingEntryWithQuorum(clients, recoveryConfiguration, pendingEntryPosition(), 18)).position
+		const finalized = await finalizeEntryAfterFinalityWithQuorum(clients, recoveryConfiguration, provisional, 112n)
+		expect(finalized.status).toBe('open')
+		expect(finalized.entryReceiptBlockHash).toBeUndefined()
+		expect(finalized.entryReceiptBlockNumber).toBeUndefined()
+		expect(finalized.historyOutbox).toEqual(executionRecordForConfirmedPosition(provisional, 100n, transactionHash))
+		const repeated = await finalizeEntryAfterFinalityWithQuorum(clients, recoveryConfiguration, { ...finalized, historyOutbox: undefined }, 113n)
+		expect(repeated.historyOutbox).toBeUndefined()
+		expect(repeated.status).toBe('open')
 	})
 
 	test('keeps a successful public replacement with different calldata in recovery after accounting gas', async () => {

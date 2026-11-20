@@ -159,6 +159,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 				| 'multiplier'
 				| 'callbackContract'
 				| 'callbackGasLimit'
+				| 'trustedSettlementCallback'
 				| 'protocolFee'
 				| 'reportTimestamp'
 				| 'settlementTime'

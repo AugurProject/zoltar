@@ -8,19 +8,44 @@ type LiveEventStore = {
 type Client = {
 	readonly controller: ReadableStreamDefaultController<Uint8Array>
 	readonly release: () => void
+	readonly admittedAt: number
 	cursor: number
 	backpressuredAt?: number | undefined
+}
+
+type LiveBusOptions = {
+	/** Concurrent streams across every client. */
+	readonly maxClients?: number
+	/** Concurrent streams for one client key, so one client cannot hold every slot. */
+	readonly maxClientsPerKey?: number
+	/** Age after which a stream is closed; the browser reconnects with Last-Event-ID and replay covers the gap. */
+	readonly maxLifetimeMs?: number
+	/** How long a client may make no write progress before its stream is closed. */
+	readonly backpressureTimeoutMs?: number
+	readonly now?: () => number
 }
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 const EVENT_POLL_INTERVAL_MS = 1_000
 const MAX_CURSOR_COHORTS_PER_POLL = 4
 const DEFAULT_MAX_LIVE_CLIENTS = 256
-const DEFAULT_BACKPRESSURE_TIMEOUT_MS = 60_000
+const DEFAULT_MAX_LIVE_CLIENTS_PER_KEY = 16
+const DEFAULT_MAX_LIVE_STREAM_LIFETIME_MS = 30 * 60 * 1_000
+const DEFAULT_LIVE_BACKPRESSURE_TIMEOUT_MS = 60_000
 
-export const createLiveBus = (store: LiveEventStore, maxClients = DEFAULT_MAX_LIVE_CLIENTS, backpressureTimeoutMs = DEFAULT_BACKPRESSURE_TIMEOUT_MS, now: () => number = Date.now) => {
-	if (!Number.isSafeInteger(backpressureTimeoutMs) || backpressureTimeoutMs <= 0) throw new Error('Live stream backpressure timeout must be a positive safe integer')
+const requirePositiveSafeInteger = (value: number, label: string): number => {
+	if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive safe integer`)
+	return value
+}
+
+export const createLiveBus = (store: LiveEventStore, options: LiveBusOptions = {}) => {
+	const maxClients = requirePositiveSafeInteger(options.maxClients ?? DEFAULT_MAX_LIVE_CLIENTS, 'Live stream client limit')
+	const maxClientsPerKey = requirePositiveSafeInteger(options.maxClientsPerKey ?? DEFAULT_MAX_LIVE_CLIENTS_PER_KEY, 'Live stream per-client limit')
+	const maxLifetimeMs = requirePositiveSafeInteger(options.maxLifetimeMs ?? DEFAULT_MAX_LIVE_STREAM_LIFETIME_MS, 'Live stream maximum lifetime')
+	const backpressureTimeoutMs = requirePositiveSafeInteger(options.backpressureTimeoutMs ?? DEFAULT_LIVE_BACKPRESSURE_TIMEOUT_MS, 'Live stream backpressure timeout')
+	const now = options.now ?? Date.now
 	const clients = new Set<Client>()
+	const streamsPerKey = new Map<string, number>()
 	const encoder = new TextEncoder()
 	let pollPromise: Promise<void> | undefined
 	let latestCursorPromise: Promise<number> | undefined
@@ -57,12 +82,15 @@ export const createLiveBus = (store: LiveEventStore, maxClients = DEFAULT_MAX_LI
 	const evictStaleClients = (): void => {
 		const current = now()
 		for (const client of clients) {
-			if (client.controller.desiredSize === null || client.controller.desiredSize > 0) {
-				client.backpressuredAt = undefined
-				continue
+			const expired = current - client.admittedAt > maxLifetimeMs
+			if (!expired) {
+				if (client.controller.desiredSize === null || client.controller.desiredSize > 0) {
+					client.backpressuredAt = undefined
+					continue
+				}
+				client.backpressuredAt ??= current
+				if (current - client.backpressuredAt <= backpressureTimeoutMs) continue
 			}
-			client.backpressuredAt ??= current
-			if (current - client.backpressuredAt <= backpressureTimeoutMs) continue
 			try {
 				client.controller.close()
 			} catch (error) {
@@ -131,15 +159,21 @@ export const createLiveBus = (store: LiveEventStore, maxClients = DEFAULT_MAX_LI
 	const pollTimer = setInterval(() => void poll(), EVENT_POLL_INTERVAL_MS)
 	const heartbeatTimer = setInterval(heartbeat, HEARTBEAT_INTERVAL_MS)
 
-	const stream = (lastEventId?: number): ReadableStream<Uint8Array> | undefined => {
-		if (closed || admittedClients >= maxClients) return undefined
+	const stream = (lastEventId: number | undefined, clientKey: string): ReadableStream<Uint8Array> | undefined => {
+		const keyStreams = streamsPerKey.get(clientKey) ?? 0
+		if (closed || admittedClients >= maxClients || keyStreams >= maxClientsPerKey) return undefined
 		admittedClients++
+		streamsPerKey.set(clientKey, keyStreams + 1)
+		const admittedAt = now()
 		let client: Client | undefined
 		let released = false
 		const release = (): void => {
 			if (released) return
 			released = true
 			admittedClients--
+			const remaining = (streamsPerKey.get(clientKey) ?? 1) - 1
+			if (remaining > 0) streamsPerKey.set(clientKey, remaining)
+			else streamsPerKey.delete(clientKey)
 			if (client !== undefined) clients.delete(client)
 		}
 		return new ReadableStream({
@@ -152,7 +186,7 @@ export const createLiveBus = (store: LiveEventStore, maxClients = DEFAULT_MAX_LI
 						release()
 						return
 					}
-					client = { controller, cursor, release }
+					client = { admittedAt, controller, cursor, release }
 					clients.add(client)
 					controller.enqueue(encoder.encode('retry: 5000\n: connected\n\n'))
 					await poll()

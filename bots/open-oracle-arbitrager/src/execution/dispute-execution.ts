@@ -40,14 +40,13 @@ import {
 	transactionReceiptsWithQuorum,
 	waitForTargetBlock,
 } from '#execution/execution-orchestration'
-import { executionRecordForConfirmedPosition, recoverPendingEntryWithQuorum } from '#execution/position-lifecycle'
+import { recoverPendingEntryWithQuorum } from '#execution/position-lifecycle'
 import { confirmedGasExpenditures, currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, hedgeExecutionFromLogs, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
 import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitConfiguredSignedBundle, type SubmissionTargetResult } from '#execution/transaction-submission'
 import { receiptGasCost, submitContractTransaction, trackedActivity, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import { formatTokenAmount } from '#monitoring/market-monitor'
 import { executionReadQuorum, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
 import { decimalSignedEth, decimalWeth } from '#state/operator-state'
-import type { ExecutionRecord } from '#state/execution-record'
 import type { PositionRecord } from '#state/position-store'
 import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
@@ -77,7 +76,7 @@ export async function executeDispute(
 	track: TrackTransaction,
 	persistPosition: (position: PositionRecord) => Promise<void>,
 	archivedDailyGasSpentAttoWeth = 0n,
-): Promise<ExecutionRecord> {
+): Promise<PositionRecord> {
 	const account = wallet.account
 	const executor = config.executor
 	if (account === undefined || account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Execution requires a local transaction and relay signer')
@@ -262,6 +261,7 @@ export async function executeDispute(
 	let actualGasCost: bigint
 	let entryGasExpenditures: PositionRecord['gasExpenditures'] = []
 	let receiptBlockNumber: bigint
+	let receiptBlockHash: Hex
 	let executionHash = executionSigned.hash
 	let executionLogs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[] = []
 	let quorumConfirmedPosition: PositionRecord | undefined
@@ -346,6 +346,7 @@ export async function executeDispute(
 			throw new Error(`Public dispute was replaced by a transaction without the expected executor event: ${receipt.transactionHash}`)
 		}
 		receiptBlockNumber = receipt.blockNumber
+		receiptBlockHash = receipt.blockHash
 		executionHash = receipt.transactionHash
 		executionLogs = receipt.logs
 		const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(refreshedQuote.profitBeforeGasAttoWeth, actualGasCost))
@@ -481,6 +482,7 @@ export async function executeDispute(
 		const executorReceipt = confirmedReceipts.at(-1)
 		if (executorReceipt === undefined) throw new Error('Executor receipt is missing from the bundle')
 		receiptBlockNumber = executorReceipt.blockNumber
+		receiptBlockHash = executorReceipt.blockHash
 		executionHash = executorReceipt.transactionHash
 		executionLogs = executorReceipt.logs
 		const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(refreshedQuote.profitBeforeGasAttoWeth, actualGasCost))
@@ -498,18 +500,20 @@ export async function executeDispute(
 		confirmedPosition = {
 			...stagedPosition,
 			actualEntryGasCostEth: decimalWeth(actualGasCost),
+			entryReceiptBlockHash: receiptBlockHash,
+			entryReceiptBlockNumber: receiptBlockNumber.toString(),
 			entryTransactionHash: executionHash,
 			entryTransactionHashes: [executionHash],
 			gasExpenditures: entryGasExpenditures,
 			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenMetadata.decimals),
 			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountAttoWeth),
 			hedgedProfitBeforeGasEth: decimalSignedEth(hedgedProfitBeforeGas),
-			status: 'open',
+			status: 'open-pending-finality',
 		}
 	}
 	if (confirmedPosition === undefined) throw new Error('Confirmed position accounting is unavailable')
-	const record = executionRecordForConfirmedPosition(confirmedPosition, receiptBlockNumber, executionHash)
-	await persistPosition({ ...confirmedPosition, historyOutbox: record })
+	// The entry holds its risk slot as `open-pending-finality`; position maintenance releases its history record once the receipt block is final.
+	await persistPosition(confirmedPosition)
 	console.log(`report=${report.helper.reportId.toString()} dispute=${executionHash}`)
-	return record
+	return confirmedPosition
 }

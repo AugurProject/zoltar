@@ -1,10 +1,13 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getOutcomeLabelForIndex } from '@zoltar/ui-zoltar-shared/features/universes/lib/migrationWizard.js'
+import { Fragment, h, render } from 'preact'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getMigrationOutcomeTextForIndex, getOutcomeLabelForIndex } from '@zoltar/ui-zoltar-shared/features/universes/lib/migrationWizard.js'
 import { createChildUniverseSuccessPresentation, createChildUniverseTransactionIntent, createChildUniverseWarningPresentation, createZoltarForkTransactionIntent, createZoltarMigrationTransactionIntent } from '@zoltar/ui-zoltar-shared/features/zoltarTransactionPresentations.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { transactionScopesOverlap, universeTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 
@@ -37,5 +40,21 @@ describe('child universe transaction presentations', () => {
 
 	test('fall back to the exact outcome ID when the universe summary is unavailable', () => {
 		expect(createChildUniverseTransactionIntent('zoltar', { outcomeLabel: getOutcomeLabelForIndex(undefined, 2n) })).toMatchObject({ rows: [{ label: 'Outcome', value: 'Outcome 2' }] })
+	})
+})
+
+describe('REP migration transaction dialog', () => {
+	installDomTestLifecycle()
+
+	test('#1477: the migration dialog lists each outcome with its index and child universe on its own isolated line', () => {
+		const children = [
+			{ exists: true, forkTime: 1n, outcomeIndex: 2n, outcomeLabel: 'Y\u0435s', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n },
+			{ exists: true, forkTime: 1n, outcomeIndex: 6n, outcomeLabel: 'No, Yes\u202E', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 7n },
+		]
+		const outcomeLabels = [2n, 6n].map(outcomeIndex => getMigrationOutcomeTextForIndex(children, outcomeIndex))
+		const outcomes = createZoltarMigrationTransactionIntent({ amount: '5', outcomeLabels, universeId: 1n }).rows?.find(row => row.label === 'Outcomes')
+		const container = document.createElement('div')
+		render(h(Fragment, null, outcomes?.value), container)
+		expect(Array.from(container.querySelectorAll('li bdi')).map(line => line.textContent)).toEqual(['Y\u0435s #2 · 0x3', 'No, Yes\\u{202E} #6 · 0x7'])
 	})
 })

@@ -1,4 +1,5 @@
-import { conservativeOpenOracleSettlementGas } from './openOracleSettlementSafety.js'
+import { getOpenOracleSettlementGasLimit } from './openOracleSettlementSafety.js'
+import { loadOpenOracleTokenMetadata, type OpenOracleTokenMetadata } from './openOracleTokenMetadata.js'
 import { wrapWeth } from './wethFunding.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import { bigintToSafeNumber, toEventSelector, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
@@ -12,10 +13,10 @@ import { statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleWithdrawableBalances, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
 import { getProtocolPageOffset, hasTimestampAndNumber } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
-import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { type WriteContractClient, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getOpenOracleAddress } from './deploymentHelpers.js'
 import { loadOpenOracleStoredState, isOpenOracleStateUnavailable } from './openOracleState.js'
-import { getOpenOraclePriceSettlement, loadCoordinatorPriceValidUntilTimestamp } from './openOracleSettlement.js'
+import { getOpenOraclePriceSettlement, isFeedAuthenticatedReportEscrow, loadCoordinatorPriceValidUntilTimestamp } from './openOracleSettlement.js'
 import * as openOracleCopy from '../copy/openOracle.js'
 import { requireBigintValue } from './decoders.js'
 import { requireOpenOracleDisputeSubmissionWindow } from './openOracleDisputeTiming.js'
@@ -46,15 +47,10 @@ function getOpenOracleDisputeSwapToken(game: Pick<OpenOracleStatePreimage['game'
 		: game.token1
 }
 
-function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: unknown, symbolValue: unknown) {
-	let decimals: number | undefined
-	if (typeof decimalsValue === 'bigint') decimals = bigintToSafeNumber(decimalsValue, 'Token decimals')
-	if (typeof decimalsValue === 'number') decimals = decimalsValue
-	const symbol = String(symbolValue).trim()
-	if (decimals === undefined || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error(`Token metadata for ${tokenAddress} returned invalid decimals`)
-	if (symbol === '') throw new Error(`Token metadata for ${tokenAddress} returned an empty symbol`)
-	if (sameAddress(tokenAddress, getWethAddress()) && (decimals !== 18 || symbol !== 'WETH')) throw new Error(`WETH metadata is invalid for ${tokenAddress}`)
-	return { decimals, symbol }
+function requireOpenOracleTokenMetadata(metadata: ReadonlyMap<string, OpenOracleTokenMetadata>, token: Address) {
+	const result = metadata.get(token.toLowerCase())
+	if (result === undefined) throw new Error('Unexpected oracle token metadata response')
+	return result
 }
 
 // Quote tokens per base token (token2 per token1), for example REP per WETH for Statoblast price reports.
@@ -62,9 +58,14 @@ export function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decim
 	return amount1 === 0n ? 0n : (amount2 * 10n ** (BigInt(OPEN_ORACLE_PRICE_UNITS) + BigInt(decimals1))) / (amount1 * 10n ** BigInt(decimals2))
 }
 
-/** Budgets both callback execution and caller-side return-data processing. */
-export function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'], 'callbackContract' | 'callbackGasLimit'>) {
-	return conservativeOpenOracleSettlementGas(game)
+/**
+ * Budgets callback execution and, unless the callback is a feed-authenticated report escrow,
+ * caller-side return-data processing. Throws instead of requesting more than one transaction may use.
+ */
+export function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'], 'callbackContract' | 'callbackGasLimit'>, trustedCallback: boolean) {
+	const limit = getOpenOracleSettlementGasLimit(game, trustedCallback)
+	if (limit.refusal !== undefined) throw new Error(limit.refusal)
+	return limit.gas
 }
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleReportDetails> {
@@ -85,34 +86,11 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	const { game } = storedState.latest
 	const expectedStateHash = hashOpenOracleStatePreimage(storedState.latest)
 	if (stateHash.toLowerCase() !== expectedStateHash.toLowerCase()) throw new Error(`OpenOracle report #${reportId.toString()} stored state does not match its onchain state hash.`)
-	const [token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await readRequiredMulticall(client, [
-		{
-			abi: ABIS.mainnet.erc20,
-			functionName: 'decimals',
-			address: game.token1,
-			args: [],
-		},
-		{
-			abi: ABIS.mainnet.erc20,
-			functionName: 'decimals',
-			address: game.token2,
-			args: [],
-		},
-		{
-			abi: ABIS.mainnet.erc20,
-			functionName: 'symbol',
-			address: game.token1,
-			args: [],
-		},
-		{
-			abi: ABIS.mainnet.erc20,
-			functionName: 'symbol',
-			address: game.token2,
-			args: [],
-		},
-	])
-	const token1Metadata = normalizeOpenOracleTokenMetadata(game.token1, token1Decimals, token1Symbol)
-	const token2Metadata = normalizeOpenOracleTokenMetadata(game.token2, token2Decimals, token2Symbol)
+	const [tokenMetadata, trustedSettlementCallback] = await Promise.all([loadOpenOracleTokenMetadata(client, [game.token1, game.token2]), isFeedAuthenticatedReportEscrow(client, openOracleAddress, game.callbackContract, reportId)])
+	const token1Metadata = requireOpenOracleTokenMetadata(tokenMetadata, game.token1)
+	const token2Metadata = requireOpenOracleTokenMetadata(tokenMetadata, game.token2)
+	if (token1Metadata.status === 'failure') throw new Error(token1Metadata.message)
+	if (token2Metadata.status === 'failure') throw new Error(token2Metadata.message)
 	return {
 		reportId,
 		openOracleAddress,
@@ -141,6 +119,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		isDistributed: storedState.settled,
 		stateHash,
 		callbackContract: game.callbackContract,
+		trustedSettlementCallback,
 		numReports: storedState.reportCount,
 		callbackGasLimit: bigintToSafeNumber(game.callbackGasLimit, 'Callback gas limit'),
 		protocolFeeRecipient: game.protocolFeeRecipient,
@@ -150,8 +129,8 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		lastReportOppoTime: game.lastReportOppoTime,
 		token1Decimals: token1Metadata.decimals,
 		token2Decimals: token2Metadata.decimals,
-		token1Symbol: token1Metadata.symbol,
-		token2Symbol: token2Metadata.symbol,
+		token1Symbol: token1Metadata.label,
+		token2Symbol: token2Metadata.label,
 	}
 }
 /** A browse summary that also carries the report's lifecycle timing, so browsing can show whether it is ready to settle. */
@@ -203,57 +182,31 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			}
 		}),
 	)
-	unavailableReports.sort((a, b) => (a.reportId > b.reportId ? -1 : 1))
-	const supportedReportIds = reportIds.filter(reportId => storedStates.has(reportId))
-	const tokenAddresses = new Set<Address>()
-	for (const reportId of supportedReportIds) {
+	const storedReportIds = reportIds.filter(reportId => storedStates.has(reportId))
+	const tokenAddresses: Address[] = []
+	for (const reportId of storedReportIds) {
 		const state = storedStates.get(reportId)
 		if (state === undefined) throw new Error(openOracleCopy.formatReportMissing(reportId.toString()))
-		tokenAddresses.add(state.latest.game.token1)
-		tokenAddresses.add(state.latest.game.token2)
+		tokenAddresses.push(state.latest.game.token1, state.latest.game.token2)
 	}
-	const uniqueTokenAddresses = [...tokenAddresses]
-	const tokenMetadata = new Map<
-		Address,
-		{
-			decimals: number
-			symbol: string
-		}
-	>()
-	if (uniqueTokenAddresses.length > 0) {
-		const tokenDecimals = await readRequiredMulticall(
-			client,
-			uniqueTokenAddresses.map(tokenAddress => ({
-				abi: ABIS.mainnet.erc20,
-				functionName: 'decimals',
-				address: tokenAddress,
-				args: [],
-			})),
-		)
-		const tokenSymbols = await readRequiredMulticall(
-			client,
-			uniqueTokenAddresses.map(tokenAddress => ({
-				abi: ABIS.mainnet.erc20,
-				functionName: 'symbol',
-				address: tokenAddress,
-				args: [],
-			})),
-		)
-		for (const [index, tokenAddress] of uniqueTokenAddresses.entries()) {
-			const decimals = tokenDecimals[index]
-			const symbol = tokenSymbols[index]
-			if (decimals === undefined || symbol === undefined) throw new Error('Unexpected token metadata response')
-			tokenMetadata.set(tokenAddress, normalizeOpenOracleTokenMetadata(tokenAddress, decimals, symbol))
-		}
-	}
-	const reports = supportedReportIds.map(reportId => {
+	// A token with unusable metadata makes only its own reports unavailable, never the whole page.
+	const tokenMetadata = await loadOpenOracleTokenMetadata(client, tokenAddresses)
+	const reports: OpenOracleReportTimedSummary[] = []
+	for (const reportId of storedReportIds) {
 		const state = storedStates.get(reportId)
 		if (state === undefined) throw new Error('Unexpected oracle report summary response')
 		const game = state.latest.game
-		const token1Metadata = tokenMetadata.get(game.token1)
-		const token2Metadata = tokenMetadata.get(game.token2)
-		if (token1Metadata === undefined || token2Metadata === undefined) throw new Error('Unexpected oracle token metadata response')
-		return {
+		const token1Metadata = requireOpenOracleTokenMetadata(tokenMetadata, game.token1)
+		const token2Metadata = requireOpenOracleTokenMetadata(tokenMetadata, game.token2)
+		if (token1Metadata.status === 'failure') {
+			unavailableReports.push({ reportId, message: openOracleCopy.formatReportTokenMetadataUnavailable(reportId.toString(), token1Metadata.message) })
+			continue
+		}
+		if (token2Metadata.status === 'failure') {
+			unavailableReports.push({ reportId, message: openOracleCopy.formatReportTokenMetadataUnavailable(reportId.toString(), token2Metadata.message) })
+			continue
+		}
+		reports.push({
 			currentAmount1: game.currentAmount1,
 			currentAmount2: game.currentAmount2,
 			currentReporter: game.currentReporter,
@@ -271,10 +224,11 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			token2: game.token2,
 			token1Decimals: token1Metadata.decimals,
 			token2Decimals: token2Metadata.decimals,
-			token1Symbol: token1Metadata.symbol,
-			token2Symbol: token2Metadata.symbol,
-		} satisfies OpenOracleReportTimedSummary
-	})
+			token1Symbol: token1Metadata.label,
+			token2Symbol: token2Metadata.label,
+		})
+	}
+	unavailableReports.sort((a, b) => (a.reportId > b.reportId ? -1 : 1))
 	return {
 		nextReportId,
 		pageIndex,
@@ -510,12 +464,14 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 	const reviewedBlock = coordinatorPriceValidUntilTimestamp === undefined ? undefined : await client.getBlock?.()
 	const reviewedPriceExpired = coordinatorPriceValidUntilTimestamp !== undefined && reviewedBlock !== undefined && reviewedBlock.timestamp >= coordinatorPriceValidUntilTimestamp
 	const reviewedStateHash = hashOpenOracleStatePreimage(resolvedPreimage)
+	// Without a multicall-capable client the callback stays untrusted, which only raises the budget or refuses.
+	const trustedCallback = client.multicall === undefined ? false : await isFeedAuthenticatedReportEscrow({ multicall: client.multicall }, openOracleAddress, resolvedPreimage.game.callbackContract, reportId)
 	const callParams = {
 		address: openOracleAddress,
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		...(reviewedPriceExpired ? { reviewDescription: openOracleCopy.staleSettlementWarning } : {}),
-		gas: getOpenOracleSettleGasLimit(resolvedPreimage.game),
+		gas: getOpenOracleSettleGasLimit(resolvedPreimage.game, trustedCallback),
 		args: [reportId, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper)],
 	}
 	client.onTransactionPlan?.([

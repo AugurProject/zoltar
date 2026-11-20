@@ -1347,9 +1347,9 @@ describe('liquidator go-live settings', () => {
 		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ allowFundedTakeovers: true, maximumPrincipalRep: '5', maximumTotalPrincipalRep: '10', maximumCommitmentEth: '2', maximumOwnFundingRep: '3' }) })])
 	})
 
-	test('keeps saved report sponsorship settings that the policy form does not edit', async () => {
+	test('keeps saved policy settings that the policy form does not edit', async () => {
 		const saved = mainnetConfiguration()
-		saved.portfolioPolicy = { ...saved.portfolioPolicy, maximumReportFundingEth: '0.05', reportOperationGasLimit: 2_000_000, reportOperationsGasLimit: 5_000_000 }
+		saved.portfolioPolicy = { ...saved.portfolioPolicy, takeoverIncomeHorizonSeconds: 86_400 }
 		const page = await dashboard(saved, state())
 		const form = page.window.document.getElementById('strategy-form')
 		const input = form?.querySelector('[name="minimumNetRewardEth"]')
@@ -1361,11 +1361,11 @@ describe('liquidator go-live settings', () => {
 			await Bun.sleep(10)
 			review = page.window.document.querySelector('.operator-confirm-dialog')
 		}
-		expect(review?.textContent).not.toContain('Report')
+		expect(review?.textContent).not.toContain('horizon')
 		expect(review?.textContent).not.toContain('Enabled')
 		await page.confirmOperatorAction()
 		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
-		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ minimumNetRewardEth: '0.123', maximumReportFundingEth: '0.05', reportOperationGasLimit: 2_000_000, reportOperationsGasLimit: 5_000_000 }) })])
+		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ minimumNetRewardEth: '0.123', takeoverIncomeHorizonSeconds: 86_400 }) })])
 	})
 
 	test('rejects an amount with more than 18 decimal places before opening strategy review', async () => {

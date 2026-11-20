@@ -52,6 +52,7 @@ void describe('OpenOracle report browse cache', () => {
 			...report,
 			callbackContract: zeroAddress,
 			callbackGasLimit: 0,
+			trustedSettlementCallback: false,
 			currentBlockNumber: 5n,
 			currentTime: 200n,
 			disputeDelay: 60n,

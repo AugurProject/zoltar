@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { portfolioCureOutcome } from '../../src/core/portfolio-cure-state.ts'
-import { portfolioTakeoverPlan } from '../../src/core/portfolio-strategy.ts'
+import { SIGNED_TRANSACTION_SLOT_SECONDS, portfolioTakeoverPlan } from '../../src/core/portfolio-strategy.ts'
+import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/execution/transaction-submission'
 import { assertPortfolioPlanStillAllowed } from '../../src/execution/portfolio-executor.ts'
 import { portfolioObservation, portfolioSettings, unit } from '../support/portfolio-observation.ts'
 
@@ -50,6 +51,18 @@ test('unapproved, deselected, stale, forked and independent-price failures canno
 		expect(evaluate(observation).plan).toBeUndefined()
 	}
 	expect(evaluate(portfolioObservation(), portfolioSettings(), 0n, false).plan).toBeUndefined()
+})
+
+test('#1472 a takeover is planned only while the accepted price outlives the signed transaction validity window', () => {
+	const horizon = DEFAULT_TRANSACTION_VALIDITY_BLOCKS * SIGNED_TRANSACTION_SLOT_SECONDS
+	for (const offset of [1n, horizon]) {
+		const observation = portfolioObservation()
+		observation.snapshot.timestamp = observation.snapshot.priceValidUntil - offset
+		expect(evaluate(observation).reason).toBe('Accepted price expires before the signed transaction validity window ends')
+	}
+	const observation = portfolioObservation()
+	observation.snapshot.timestamp = observation.snapshot.priceValidUntil - horizon - 1n
+	expect(evaluate(observation).plan).toBeDefined()
 })
 
 test('receiver cohort and exact health consent are required; dust spare capacity cannot block takeover', () => {

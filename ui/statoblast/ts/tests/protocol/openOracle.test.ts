@@ -1,11 +1,12 @@
-import { getOpenOracleDisputeAvailability } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { formatOpenOracleReportPriceUnit, getOpenOracleDisputeAvailability } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeAbiParameters, encodeEventTopics, parseAbiParameters, decodeFunctionData, parseAbi, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { createOpenOracleReportInstance, disputeOracleReport, getOpenOracleSettleGasLimit, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { loadCoordinatorPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/openOracleSettlement.js'
@@ -13,6 +14,7 @@ import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_openOrac
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { asWriteClient, createMulticallStub, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { formatReportBrowseTitle } from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { getOpenOracleDisputeSwapTokenKey } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -146,7 +148,7 @@ describe('openOracle protocol client', () => {
 		preimage.game.currentAmount2 = 3000n * 10n ** 6n
 		const client = createMockLoaderClient({
 			getBlock: async () => ({ number: 1n, timestamp: 2n }),
-			multicall: async () => [18n, 6n, 'ONE', 'TWO'],
+			multicall: createOpenOracleMulticall({ tokens: { [token1Address]: { decimals: 18n, symbol: 'ONE' }, [token2Address]: { decimals: 6n, symbol: 'TWO' } } }),
 			readContract: async request => readStoredOracleFixture(request.functionName, preimage),
 		})
 		const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
@@ -157,7 +159,7 @@ describe('openOracle protocol client', () => {
 		const preimage = createOpenOraclePreimage()
 		const client = createMockLoaderClient({
 			getBlock: async () => ({ number: 1n, timestamp: 2n }),
-			multicall: async () => [18n, 18n, 'ONE', 'TWO'],
+			multicall: createOpenOracleMulticall({ tokens: defaultTokenFixtures }),
 			readContract: async request => readStoredOracleFixture(request.functionName, preimage),
 		})
 		const defaultReport = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
@@ -177,7 +179,7 @@ describe('openOracle protocol client', () => {
 			getLogs: async () => {
 				throw new Error('Log access unavailable')
 			},
-			multicall: async () => [18n, 18n, 'ONE', 'TWO'],
+			multicall: createOpenOracleMulticall({ tokens: defaultTokenFixtures }),
 			readContract: async request => {
 				switch (request.functionName) {
 					case 'storedGame':
@@ -216,7 +218,7 @@ describe('openOracle protocol client', () => {
 			getLogs: async () => {
 				throw new Error('Log access unavailable')
 			},
-			multicall: async request => (getContractFunctionName(request.contracts[0]) === 'decimals' ? [18n, 18n] : ['ONE', 'TWO']),
+			multicall: createOpenOracleMulticall({ tokens: defaultTokenFixtures }),
 			readContract: async request => {
 				if (request.functionName === 'nextReportId') return 3n
 				const reportId = request.args?.[0]
@@ -248,14 +250,7 @@ describe('openOracle protocol client', () => {
 			getLogs: async () => {
 				throw new Error('Log access unavailable')
 			},
-			multicall: async request => {
-				const contracts = request.contracts
-				const firstContract = contracts[0]
-				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'decimals') return [18n, 18n]
-				if (functionName === 'symbol') return ['REP', 'WETH']
-				throw new Error(`Unexpected multicall contract: ${functionName}`)
-			},
+			multicall: createOpenOracleMulticall({ tokens: defaultTokenFixtures }),
 			readContract: async request => {
 				if (request.functionName === 'nextReportId') return 2n
 				return readStoredOracleFixture(request.functionName, disputed)
@@ -278,11 +273,7 @@ describe('openOracle protocol client', () => {
 			getLogs: async () => {
 				throw new Error('Log access unavailable')
 			},
-			multicall: async request => {
-				const firstFunctionName = getContractFunctionName(request.contracts[0])
-				if (firstFunctionName === 'decimals') return [256n, 18n, 'REP', 'TOK']
-				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
-			},
+			multicall: createOpenOracleMulticall({ tokens: { [token1Address]: { decimals: 256n, symbol: 'REP' }, [token2Address]: { decimals: 18n, symbol: 'TOK' } } }),
 			readContract: async request => {
 				if (request.functionName === 'oracleGame') return hashOpenOracleStatePreimage(preimage)
 				return readStoredOracleFixture(request.functionName, preimage)
@@ -292,30 +283,12 @@ describe('openOracle protocol client', () => {
 		await expect(loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)).rejects.toThrow(`Token metadata for ${token1Address} returned invalid decimals`)
 	})
 
-	test.each([
-		{ error: `Token metadata for ${token1Address} returned an empty symbol`, name: 'empty token symbols', symbols: [' ', 'TOK'], token2IsWeth: false },
-		{ error: `WETH metadata is invalid for ${wethAddress}`, name: 'mismatched configured WETH metadata', symbols: ['REP', 'ETH'], token2IsWeth: true },
-	])('loadOpenOracleReportSummaries rejects $name', async ({ error, symbols, token2IsWeth }) => {
+	// Configured WETH must still report WETH metadata; a summary page lists such a report as unavailable instead (#1481).
+	test('loadOpenOracleReportDetails rejects mismatched configured WETH metadata', async () => {
 		const preimage = createOpenOraclePreimage()
-		if (token2IsWeth) preimage.game.token2 = wethAddress
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(0n),
-			getLogs: async () => {
-				throw new Error('Log access unavailable')
-			},
-			multicall: async request => {
-				const firstFunctionName = getContractFunctionName(request.contracts[0])
-				if (firstFunctionName === 'decimals') return [18n, 18n]
-				if (firstFunctionName === 'symbol') return symbols
-				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
-			},
-			readContract: async request => {
-				if (request.functionName === 'nextReportId') return 2n
-				return readStoredOracleFixture(request.functionName, preimage)
-			},
-		})
-
-		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(error)
+		preimage.game.token2 = wethAddress
+		const client = createReportClient(preimage, createOpenOracleMulticall({ tokens: { [token1Address]: { decimals: 18n, symbol: 'REP' }, [wethAddress]: { decimals: 18n, symbol: 'ETH' } } }))
+		await expect(loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)).rejects.toThrow(`WETH metadata is invalid for ${wethAddress}`)
 	})
 
 	for (const association of ['verified', 'different oracle', 'different coordinator', 'generic callback'] as const) {
@@ -327,7 +300,7 @@ describe('openOracle protocol client', () => {
 				readContract: async request => readStoredOracleFixture(request.functionName, preimage),
 				multicall: async request => {
 					const first = getContractFunctionName(request.contracts[0])
-					if (first === 'decimals') return [18n, 18n, 'ONE', 'TWO']
+					if (first === 'decimals' || first === 'feed') return await createOpenOracleMulticall({ tokens: defaultTokenFixtures })(request)
 					if (first === 'openOracle')
 						return association === 'generic callback'
 							? [
@@ -497,7 +470,7 @@ describe('openOracle protocol client', () => {
 	})
 
 	test('settleOracleReport raises the gas limit to cover a large settlement callback', async () => {
-		const callbackGasLimit = 10_000_000n
+		const callbackGasLimit = 7_000_000n
 		const preimage = createOpenOraclePreimage(7n)
 		preimage.game.callbackContract = getAddress('0x00000000000000000000000000000000000000f9')
 		preimage.game.callbackGasLimit = callbackGasLimit
@@ -509,6 +482,14 @@ describe('openOracle protocol client', () => {
 		await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
 		// EIP-150 forwards at most 63/64 of the remaining gas, and settle requires callbackGasLimit / 63 to remain afterwards.
 		expect(capturedGas ?? 0n).toBeGreaterThan((callbackGasLimit * 64n) / 63n + callbackGasLimit / 63n)
+		// An untrusted callback may also spend its budget on return data, but no request may exceed one transaction's gas cap.
+		expect(capturedGas ?? 0n).toBeGreaterThanOrEqual(2n * callbackGasLimit)
+		expect(capturedGas ?? 0n).toBeLessThanOrEqual(16_777_216n)
+
+		capturedGas = undefined
+		preimage.game.callbackGasLimit = 10_000_000n
+		await expect(settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)).rejects.toThrow('more gas than one transaction allows')
+		expect(capturedGas).toBeUndefined()
 
 		preimage.game.callbackGasLimit = 1_000n
 		await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
@@ -665,8 +646,202 @@ for (const scenario of ['callback gas', 'return bomb', 'settlement duration'] as
 	})
 
 test('#1456: unsafe settlement disables dispute availability with a reason', () => {
-	const report = { callbackContract: vaultAddress, callbackGasLimit: 9_000_000, currentBlockNumber: 10n, currentReporter: initialReporter, currentTime: 200n, disputeDelay: 0n, isDistributed: false, reportTimestamp: 100n, settlementTime: 1000n, timeType: true }
+	const report = { callbackContract: vaultAddress, callbackGasLimit: 9_000_000, trustedSettlementCallback: false, currentBlockNumber: 10n, currentReporter: initialReporter, currentTime: 200n, disputeDelay: 0n, isDistributed: false, reportTimestamp: 100n, settlementTime: 1000n, timeType: true }
 	expect(getOpenOracleDisputeAvailability(report)).toMatchObject({ canAct: false, message: expect.stringContaining('settlement gas') })
 	expect(getOpenOracleDisputeAvailability({ ...report, callbackGasLimit: 100_000 }).canAct).toBe(true)
 	expect(getOpenOracleDisputeAvailability({ ...report, callbackContract: zeroAddress, settlementTime: 2n ** 48n - 1n })).toMatchObject({ canAct: false, message: expect.stringContaining('settlement duration') })
+})
+
+const feedEscrowAddress = getAddress('0x00000000000000000000000000000000000000e5')
+const sharedFeedAddress = getAddress('0x00000000000000000000000000000000000000f5')
+const feedPortfolioAddress = getAddress('0x00000000000000000000000000000000000000a5')
+const childRepAddress = getAddress('0x00000000000000000000000000000000000000b5')
+
+type TokenFixture = { decimals?: bigint; symbol?: string; universeId?: bigint }
+const defaultTokenFixtures: Record<Address, TokenFixture> = { [token1Address]: { decimals: 18n, symbol: 'ONE' }, [token2Address]: { decimals: 18n, symbol: 'TWO' } }
+
+function getContractAddress(contract: unknown) {
+	if (typeof contract !== 'object' || contract === null || !('address' in contract) || typeof contract.address !== 'string') throw new Error('Unexpected multicall contract')
+	return getAddress(contract.address)
+}
+
+function getContractArgs(contract: unknown) {
+	if (typeof contract !== 'object' || contract === null || !('args' in contract) || !Array.isArray(contract.args)) return []
+	return contract.args
+}
+
+const success = (result: unknown) => ({ status: 'success', result })
+const failure = () => ({ status: 'failure', error: new Error('execution reverted') })
+
+/** Answers the allow-failure reads the OpenOracle loaders make: token metadata, Zoltar REP identity and feed escrow authentication. */
+function createOpenOracleMulticall({ tokens, universeTokens = {}, escrow }: { tokens: Record<Address, TokenFixture>; universeTokens?: Record<string, Address>; escrow?: { registered: boolean; candidate: Address } }) {
+	return async (request: { contracts: readonly unknown[] }) => {
+		const first = getContractFunctionName(request.contracts[0])
+		if (first === 'decimals')
+			return request.contracts.map(contract => {
+				const functionName = getContractFunctionName(contract)
+				if (functionName !== 'decimals' && functionName !== 'symbol' && functionName !== 'universeId') throw new Error(`Unexpected token read ${functionName}`)
+				const value = tokens[getContractAddress(contract)]?.[functionName]
+				return value === undefined ? failure() : success(value)
+			})
+		if (first === 'universes')
+			return request.contracts.map(contract => {
+				const universeId = getContractArgs(contract)[0]
+				const token = typeof universeId === 'bigint' ? universeTokens[universeId.toString()] : undefined
+				return token === undefined ? success([0n, 0n, 0n, zeroAddress, 0n]) : success([0n, 0n, 0n, token, 0n])
+			})
+		if (first === 'openOracle') return [failure(), failure()]
+		if (first === 'feed') return escrow === undefined ? [failure()] : [success(sharedFeedAddress)]
+		if (first === 'reportCandidates') {
+			if (escrow === undefined) throw new Error('Unexpected feed read')
+			return [success([escrow.candidate, initialReporter, alternateSecurityPoolAddress, 0n]), success(getInfraContractAddresses().securityPoolFactory), success(feedPortfolioAddress), success(0n), success(getOpenOracleAddress())]
+		}
+		if (first === 'sharedPriceFeeds') return [success(escrow?.registered === true ? sharedFeedAddress : zeroAddress)]
+		throw new Error(`Unexpected multicall ${first}`)
+	}
+}
+
+function createReportClient(preimage: OpenOracleStatePreimage, multicall: ReturnType<typeof createOpenOracleMulticall>) {
+	return createMockLoaderClient({ getBlock: async () => ({ number: 2n, timestamp: 200n }), multicall, readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
+}
+
+describe('#1444 OpenOracle token identity', () => {
+	test.each([
+		{ claimed: 'REP', token: 'token2' as const },
+		{ claimed: 'WETH', token: 'token1' as const },
+	])('a non-canonical token claiming $claimed is labelled with its address', async ({ claimed, token }) => {
+		const preimage = createOpenOraclePreimage()
+		const tokens = { [token1Address]: { decimals: 18n, symbol: token === 'token1' ? claimed : 'ONE' }, [token2Address]: { decimals: 18n, symbol: token === 'token2' ? claimed : 'TWO' } }
+		const report = await loadOpenOracleReportDetails(createReportClient(preimage, createOpenOracleMulticall({ tokens })), getOpenOracleAddress(), 1n)
+		const label = token === 'token1' ? report.token1Symbol : report.token2Symbol
+		expect(label).not.toBe(claimed)
+		expect(label).toBe(`${claimed} (${token === 'token1' ? '0x000000…0000D1' : '0x000000…0000D2'})`)
+		expect(formatOpenOracleReportPriceUnit(report)).toContain(`${claimed} (0x000000`)
+		expect(formatReportBrowseTitle(report.token1Symbol, report.token2Symbol, '1')).not.toContain(`${claimed} /`)
+	})
+
+	test('configured WETH and Zoltar-registered REP tokens keep their bare symbols', async () => {
+		const preimage = createOpenOraclePreimage()
+		preimage.game.token1 = wethAddress
+		preimage.game.token2 = getGenesisReputationTokenAddress()
+		const tokens = { [wethAddress]: { decimals: 18n, symbol: 'WETH' }, [getGenesisReputationTokenAddress()]: { decimals: 18n, symbol: 'REP' } }
+		const genesis = await loadOpenOracleReportDetails(createReportClient(preimage, createOpenOracleMulticall({ tokens })), getOpenOracleAddress(), 1n)
+		expect([genesis.token1Symbol, genesis.token2Symbol]).toEqual(['WETH', 'REP'])
+
+		preimage.game.token2 = childRepAddress
+		const childTokens = { ...tokens, [childRepAddress]: { decimals: 18n, symbol: 'REP', universeId: 5n } }
+		const child = await loadOpenOracleReportDetails(createReportClient(preimage, createOpenOracleMulticall({ tokens: childTokens, universeTokens: { '5': childRepAddress } })), getOpenOracleAddress(), 1n)
+		expect(child.token2Symbol).toBe('REP')
+		// A token that claims a universe Zoltar maps to another REP token stays unverified.
+		const impostor = await loadOpenOracleReportDetails(createReportClient(preimage, createOpenOracleMulticall({ tokens: childTokens, universeTokens: { '5': token2Address } })), getOpenOracleAddress(), 1n)
+		expect(impostor.token2Symbol).toBe('REP (0x000000…0000b5)')
+	})
+})
+
+describe('#1481 OpenOracle reports with unusable token metadata', () => {
+	test.each([
+		{ name: 'an empty symbol', symbol: ' ' },
+		{ name: 'a reverting symbol', symbol: undefined },
+	])('loadOpenOracleReportDetails resolves a token with $name using an address label', async ({ symbol }) => {
+		const preimage = createOpenOraclePreimage()
+		const tokens = { [token1Address]: { decimals: 18n, ...(symbol === undefined ? {} : { symbol }) }, [token2Address]: { decimals: 18n, symbol: 'TWO' } }
+		const report = await loadOpenOracleReportDetails(createReportClient(preimage, createOpenOracleMulticall({ tokens })), getOpenOracleAddress(), 1n)
+		expect(report.token1Symbol).toBe('Token 0x000000…0000D1')
+		expect(report.token1Decimals).toBe(18)
+	})
+
+	test('loadOpenOracleReportSummaries keeps good rows and lists reports with unusable token metadata as unavailable', async () => {
+		const badDecimalsToken = getAddress('0x00000000000000000000000000000000000000d3')
+		const noSymbolToken = getAddress('0x00000000000000000000000000000000000000d4')
+		const reportTokens: Record<string, [Address, Address]> = { '1': [token1Address, token2Address], '2': [token1Address, noSymbolToken], '3': [badDecimalsToken, token2Address], '4': [wethAddress, token2Address] }
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: createOpenOracleMulticall({
+				tokens: {
+					[token1Address]: { decimals: 18n, symbol: 'ONE' },
+					[token2Address]: { decimals: 18n, symbol: 'TWO' },
+					[noSymbolToken]: { decimals: 18n },
+					[badDecimalsToken]: { decimals: 256n, symbol: 'BAD' },
+					[wethAddress]: { decimals: 18n, symbol: 'ETH' },
+				},
+			}),
+			readContract: async request => {
+				if (request.functionName === 'nextReportId') return 5n
+				const reportId = request.args?.[0]
+				if (typeof reportId !== 'bigint') throw new Error('Missing report id')
+				const preimage = createOpenOraclePreimage(reportId)
+				const pair = reportTokens[reportId.toString()]
+				if (pair === undefined) throw new Error('Unexpected report id')
+				;[preimage.game.token1, preimage.game.token2] = pair
+				return readStoredOracleFixture(request.functionName, preimage)
+			},
+		})
+		const page = await loadOpenOracleReportSummaries(client, 0, 10)
+		expect(page.reports.map(report => [report.reportId, report.token1Symbol, report.token2Symbol])).toEqual([
+			[2n, 'ONE (0x000000…0000D1)', 'Token 0x000000…0000D4'],
+			[1n, 'ONE (0x000000…0000D1)', 'TWO (0x000000…0000D2)'],
+		])
+		expect(page.unavailableReports).toEqual([
+			{ reportId: 4n, message: `OpenOracle report #4 is unavailable. WETH metadata is invalid for ${wethAddress}.` },
+			{ reportId: 3n, message: `OpenOracle report #3 is unavailable. Token metadata for ${badDecimalsToken} returned invalid decimals.` },
+		])
+	})
+})
+
+describe('settlement gas for feed-authenticated escrow callbacks', () => {
+	function createEscrowPreimage(callbackGasLimit: bigint) {
+		const preimage = createDisputePreimage(true)
+		preimage.game.callbackContract = feedEscrowAddress
+		preimage.game.callbackGasLimit = callbackGasLimit
+		return preimage
+	}
+	const tokens = { [token1Address]: { decimals: 18n, symbol: 'ONE' }, [token2Address]: { decimals: 18n, symbol: 'TWO' } }
+	const transactionGasCap = 16_777_216n
+
+	test('a registered feed escrow with a 10M callback is disputable while an untrusted 9M callback is not', async () => {
+		const trusted = await loadOpenOracleReportDetails(createReportClient(createEscrowPreimage(10_000_000n), createOpenOracleMulticall({ tokens, escrow: { registered: true, candidate: feedEscrowAddress } })), getOpenOracleAddress(), 1n)
+		expect(trusted.trustedSettlementCallback).toBe(true)
+		expect(getOpenOracleDisputeAvailability(trusted)).toEqual({ canAct: true, message: undefined })
+		for (const escrow of [{ registered: false, candidate: feedEscrowAddress }, { registered: true, candidate: vaultAddress }, undefined]) {
+			const untrusted = await loadOpenOracleReportDetails(createReportClient(createEscrowPreimage(9_000_000n), createOpenOracleMulticall({ tokens, ...(escrow === undefined ? {} : { escrow }) })), getOpenOracleAddress(), 1n)
+			expect(untrusted.trustedSettlementCallback).toBe(false)
+			expect(getOpenOracleDisputeAvailability(untrusted)).toMatchObject({ canAct: false, message: expect.stringContaining('settlement gas') })
+		}
+	})
+
+	test('disputes and settles a registered feed escrow report within the transaction gas cap', async () => {
+		const callbackGasLimit = 10_000_000n
+		const preimage = createEscrowPreimage(callbackGasLimit)
+		const sentGas: Array<bigint | undefined> = []
+		const writer = createMockWriteClient(
+			request => sentGas.push(request.gas),
+			async request => readStoredOracleFixture(request.functionName, preimage),
+		)
+		const reader = createReportClient(preimage, createOpenOracleMulticall({ tokens, escrow: { registered: true, candidate: feedEscrowAddress } }))
+		const wallet = createOfflineReporterWallet()
+		const client = { ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account }
+		await disputeOracleReport(client, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))
+		expect(sentGas).toHaveLength(1)
+		await settleOracleReport(client, getOpenOracleAddress(), 1n, preimage)
+		const settleGas = sentGas[1] ?? 0n
+		expect(settleGas).toBeGreaterThan((callbackGasLimit * 64n) / 63n + callbackGasLimit / 63n)
+		expect(settleGas).toBeLessThanOrEqual(transactionGasCap)
+	})
+
+	test('refuses to request settle gas above the transaction cap for an untrusted callback', async () => {
+		const preimage = createEscrowPreimage(9_000_000n)
+		let sent = 0
+		const writer = createMockWriteClient(() => sent++)
+		const reader = createReportClient(preimage, createOpenOracleMulticall({ tokens, escrow: { registered: false, candidate: feedEscrowAddress } }))
+		await expect(settleOracleReport({ ...asWriteClient(writer), ...reader }, getOpenOracleAddress(), 1n, preimage)).rejects.toThrow('more gas than one transaction allows')
+		expect(sent).toBe(0)
+	})
+
+	test('trusted escrow settlement budgets EIP-150 forwarding without a return-data allowance', () => {
+		const game = { callbackContract: feedEscrowAddress, callbackGasLimit: 10_000_000n }
+		const trustedGas = getOpenOracleSettleGasLimit(game, true)
+		expect(trustedGas).toBeGreaterThan((10_000_000n * 64n) / 63n + 10_000_000n / 63n)
+		expect(trustedGas).toBeLessThanOrEqual(transactionGasCap)
+		expect(() => getOpenOracleSettleGasLimit(game, false)).toThrow('more gas than one transaction allows')
+	})
 })

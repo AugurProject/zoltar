@@ -208,15 +208,15 @@ export function buildPortfolioPriceWrapRequest(snapshot: PortfolioPriceSnapshot,
 }
 
 /** Gas the feed's own settlement callback needs; the sponsor's operation gas is added to it. */
-export const PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS = 4_000_000n
+const PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS = 4_000_000n
 /** The feed caps a report's whole callback gas so every report settles in one transaction. */
-export const MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS = 10_000_000n
+const MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS = 10_000_000n
 
 /** @public Calldata and gas allowance for an external sponsor operation. */
 export type PortfolioReportOperation = { gasLimit: bigint; data: Hex }
 export type PortfolioReportOperations = { gasLimit: bigint; minimumPrice: bigint; maximumPrice: bigint; deadline: bigint; operations: readonly PortfolioReportOperation[] }
 
-/** Existing ledger entrypoints encoded in sponsor order, with no fixed count cap. */
+/** @public Existing ledger entrypoints encoded in sponsor order, with no fixed count cap. */
 export function buildPortfolioPriceOperationsRequest(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWethAttoEth: bigint, batch: PortfolioReportOperations) {
 	const request = buildPortfolioPriceRequest(snapshot, proposedRepPerEth, requestedWethAttoEth)
 	const funding = quotePortfolioPriceFunding(snapshot, proposedRepPerEth, requestedWethAttoEth, batch.gasLimit)

@@ -37,8 +37,11 @@ export function resolvePortfolioReceipt(
 
 export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, hash: Hex, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
 	const readers = recoveryReaders(settings, wallet, pool)
-	const receipt = await observeReceiptWithQuorum(readers.clients, hash, settings.connectivity.rpcQuorum)
-	if (receipt === undefined) return { observed: false as const, receipt: undefined }
+	const observation = await observeReceiptWithQuorum(readers.clients, hash, settings.connectivity.rpcQuorum)
+	if (observation.status === 'missing') return { observed: false as const, receipt: undefined }
+	// A reader that has not imported the receipt block yet: observed, but not agreed until it catches up.
+	if (observation.status === 'pending') return { observed: true as const, receipt: undefined }
+	const { receipt } = observation
 	if (
 		!(await confirmCanonicalReceiptFinality(
 			readers.clients.map(reader => reader.client),

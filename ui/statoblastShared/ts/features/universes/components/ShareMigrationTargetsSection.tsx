@@ -19,8 +19,8 @@ type ShareMigrationTargetsSectionProps = {
 	selectedOutcomeIndexes: bigint[]
 }
 
-function childTargetOption(child: Pick<ZoltarChildUniverseSummary, 'exists' | 'outcomeIndex' | 'outcomeLabel'>): ForkTargetOption {
-	return { label: child.outcomeLabel, outcomeIndex: child.outcomeIndex, status: child.exists ? { label: tradingCopy.childDeployed, tone: 'ok' } : { label: tradingCopy.childNotDeployed, tone: 'warning' } }
+function childTargetOption(child: Pick<ZoltarChildUniverseSummary, 'exists' | 'outcomeIndex' | 'outcomeLabel' | 'universeId'>): ForkTargetOption {
+	return { label: child.outcomeLabel, outcomeIndex: child.outcomeIndex, universeId: child.universeId, status: child.exists ? { label: tradingCopy.childDeployed, tone: 'ok' } : { label: tradingCopy.childNotDeployed, tone: 'warning' } }
 }
 
 function scalarTargetOption(childUniverseByOutcomeIndex: ReadonlyMap<string, ZoltarChildUniverseSummary>, scalarQuestion: MarketDetails, outcomeIndex: bigint): ForkTargetOption {

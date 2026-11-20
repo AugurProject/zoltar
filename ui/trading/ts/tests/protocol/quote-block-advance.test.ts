@@ -317,6 +317,34 @@ describe('submitting a quote after the chain advances', () => {
 		expect(submitted.args).toEqual([pair, 10n, 1n, 9n, account, 2n + 7n * 60n])
 	})
 
+	test('#1445: a sale signs the quoted recovery REP floor and refuses a lower refreshed REP output', async () => {
+		const signedMinimumRep = (data: Hex | undefined) => {
+			if (data === undefined) throw new Error('Missing share transfer')
+			const transfer = decodeFunctionData({ abi: shareTokenAbi, data })
+			if (transfer.functionName !== 'safeBatchTransferFrom') throw new Error('Expected a share batch transfer')
+			// The receive request is a static tuple whose final word is the minimum REP output.
+			return BigInt(`0x${transfer.args[4].slice(-64)}`)
+		}
+		const recovery = { ...market, settlementRecoveryAttoRep: 1_000n }
+		const { chain, client } = createAdvancingChain()
+		chain.feeMarket = recovery
+		const quote = await simulateExit(client, configuration, recovery, account, 'YES', 10n, 7n, 100n)
+		expect(quote.expectedAttoRep).toBe(100n)
+		expect(quote.minimumAttoRep).toBe(99n)
+		chain.feeMarket = { ...recovery, settlementRecoveryAttoRep: 980n }
+		await expect(submitFreshExit(client, configuration, account, quote, write)).rejects.toThrow('approved minimum REP output')
+		chain.feeMarket = recovery
+		const lowerBeforeBroadcast = async <T>(send: () => Promise<T>) => {
+			chain.feeMarket = { ...recovery, settlementRecoveryAttoRep: 980n }
+			return await send()
+		}
+		await expect(submitFreshExit(client, configuration, account, quote, lowerBeforeBroadcast)).rejects.toThrow('approved minimum REP output')
+		expect(chain.sends).toHaveLength(0)
+		chain.feeMarket = { ...recovery, settlementRecoveryAttoRep: 1_010n }
+		expect(await submitFreshExit(client, configuration, account, quote, write)).toBe(transactionHash)
+		expect(signedMinimumRep(chain.sends[0])).toBe(99n)
+	})
+
 	test('rejects a later-block quote that falls below the approved minimum without broadcasting', async () => {
 		const { chain, client } = createAdvancingChain()
 		const entry = await simulateEntry(client, configuration, market, account, 'YES', 10n, 7n, 500n)

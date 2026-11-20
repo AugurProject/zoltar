@@ -2,6 +2,7 @@ import path from 'node:path'
 import { getUniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { assertAbiCoverage } from './abi-catalog.ts'
 import { blockExplorerUrl, getAddress, isAddress } from './ethereum.ts'
+import { parseTrustedProxies } from './http.ts'
 import { parseManifestValue } from './manifest.ts'
 import type { ManifestContract, NetworkConfig } from './types.ts'
 
@@ -160,7 +161,12 @@ export const runtimeConfig = {
 	traceSelectedTransactions: process.env['TRACE_SELECTED_TRANSACTIONS'] === '1',
 	disableIndexer: process.env['DISABLE_INDEXER'] === '1',
 	apiRateLimitPerMinute: requirePositiveInteger(process.env['API_RATE_LIMIT_PER_MINUTE'] ?? '600', 'API_RATE_LIMIT_PER_MINUTE', true),
+	/** Proxies whose X-Forwarded-For is trusted for the per-client rate-limit and live-stream key; empty trusts none. */
+	trustedProxies: parseTrustedProxies(process.env['TRUSTED_PROXY_ADDRESSES'] ?? ''),
 	liveBackpressureTimeoutMs: requirePositiveInteger(process.env['LIVE_BACKPRESSURE_TIMEOUT_MS'] ?? '60000', 'LIVE_BACKPRESSURE_TIMEOUT_MS'),
+	liveMaxClients: requirePositiveInteger(process.env['LIVE_MAX_CLIENTS'] ?? '256', 'LIVE_MAX_CLIENTS'),
+	liveMaxClientsPerClient: requirePositiveInteger(process.env['LIVE_MAX_CLIENTS_PER_CLIENT'] ?? '16', 'LIVE_MAX_CLIENTS_PER_CLIENT'),
+	liveMaxStreamLifetimeMs: requirePositiveInteger(process.env['LIVE_MAX_STREAM_LIFETIME_MS'] ?? '1800000', 'LIVE_MAX_STREAM_LIFETIME_MS'),
 	/** Raw lagging-report block interval override; `scanBlockTimeMs` validates it and applies per-chain defaults. */
 	scanBlockTimeMsOverride: process.env['SCAN_BLOCK_TIME_MS'],
 }

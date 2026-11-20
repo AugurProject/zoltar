@@ -139,8 +139,7 @@ export {
 /** @public Schemas for external clients that attach owner operations to price reports. */
 export type { PortfolioReportOperation, PortfolioReportOperations } from './securityPoolPortfolioPrice.js'
 export {
-	MAXIMUM_PORTFOLIO_REPORT_CALLBACK_GAS,
-	PORTFOLIO_REPORT_SETTLEMENT_CALLBACK_GAS,
+	/** @public Price-report sponsorship with attached owner operations, for external clients. */
 	buildPortfolioPriceOperationsRequest,
 	loadPortfolioPriceSnapshot,
 	quotePortfolioPriceFunding,

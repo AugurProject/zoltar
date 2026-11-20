@@ -1,4 +1,3 @@
-import { parseReportSponsorship } from './sponsored-reports.ts'
 import { parseInstructionIdentity, parseFundingEffect } from './portfolio-instructions.ts'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -95,7 +94,6 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 		maxBlockNumber: BigInt(maxBlockNumber),
 		mode,
 		nonce: parsedNonce,
-		reportSponsorship: parseReportSponsorship(Reflect.get(intent, 'reportSponsorship')),
 		reportOperations: parseReportOperations(Reflect.get(intent, 'reportOperations')),
 		portfolioFunding: parseFundingEffect(Reflect.get(intent, 'portfolioFunding')),
 		portfolioInstruction: parseInstructionIdentity(Reflect.get(intent, 'portfolioInstruction')),

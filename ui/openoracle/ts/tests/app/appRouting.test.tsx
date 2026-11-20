@@ -30,6 +30,7 @@ let deploymentMissing = false
 const settledReport: OpenOracleReportDetails = {
 	callbackContract: zeroAddress,
 	callbackGasLimit: 0,
+	trustedSettlementCallback: false,
 	currentAmount1: 100n,
 	currentAmount2: 25n,
 	currentBlockNumber: 10n,

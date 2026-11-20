@@ -1,8 +1,7 @@
 import { expect, test } from 'bun:test'
-import { sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
+import { securityPoolCapitalLedgerAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 import { encodeEventTopics } from '@zoltar/core-shared/evm/ethereum'
-import { registerSponsoredReplacement } from '#execution/sponsored-report-receipt'
-import { encodeAbiParameters, getAddress, parseTransaction, toHex } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, type Address, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -26,6 +25,23 @@ test('takeover expiry requires consistent final receipt-block evidence (#1372)',
 	await expect(explainTakeoverReceiptExpiry(intent, receipt, [...updatedReaders, { client: unchanged.client, endpoint: 'https://other.example' }], 2)).rejects.toThrow('RPC disagreement')
 	await expect(explainTakeoverReceiptExpiry(intent, { ...receipt, blockHash: `0x${'fe'.repeat(32)}` }, updatedReaders, 1)).rejects.toThrow('receipt block changed')
 	expect(await explainTakeoverReceiptExpiry(intent, { ...receipt, gasUsed: 1_000_000n }, updatedReaders, 1)).toBeUndefined()
+})
+
+test('#1472 a takeover reverted by a stale price or an inactive universe at inclusion is an expected expiry', async () => {
+	const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
+	receipt.status = 'reverted'
+	receipt.blockNumber = 123n
+	const fresh = portfolioClient({ acceptedPriceEpoch: 2n })
+	receipt.blockHash = fresh.observation.snapshot.blockHash
+	const explain = async (overrides: Record<string, unknown>) => explainTakeoverReceiptExpiry(intent, receipt, [{ client: portfolioClient({ acceptedPriceEpoch: 2n, ...overrides }).client, endpoint: 'https://read.example' }], 1)
+	const timestamp = fresh.observation.snapshot.timestamp
+	expect(await explain({})).toBeUndefined()
+	expect(await explain({ priceValidUntil: timestamp + 1n })).toBeUndefined()
+	expect(await explain({ priceValidUntil: timestamp })).toBe('Capital price stale')
+	expect(await explain({ priceValidUntil: timestamp - 1n })).toBe('Capital price stale')
+	expect(await explain({ frozen: true })).toBe('Capital universe inactive')
+	expect(await explain({ importing: true })).toBe('Capital universe inactive')
+	expect(await explain({ getForkTime: 1n })).toBe('Capital universe inactive')
 })
 
 test('a finalized takeover whose terms expired is recorded as failed and retires its intent (#1372)', async () => {
@@ -160,7 +176,7 @@ for (const results of [[true, true], [false, true], [false, false], []]) {
 	})
 }
 
-test('a settlement above the report base-fee ceiling is recorded as deferred and keeps the report tracked for recovery', async () => {
+test('a settlement above the report base-fee ceiling is recorded as deferred', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'report-deferred-'))
 	try {
 		const path = join(directory, 'state.json')
@@ -177,86 +193,61 @@ test('a settlement above the report base-fee ceiling is recorded as deferred and
 				data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [34n * 10n ** 9n, 33n * 10n ** 9n]),
 			},
 		]
-		const report = { feed, reportId: 7n, sponsor: intent.sender, fundingKey: `${feed.toLowerCase()}:${intent.sender.toLowerCase()}`, createdBlock: 1n, nextBlock: 1n }
-		const state = { ...initialRuntimeState(false, intent.sender, 1), sponsoredReports: [report] }
+		const state = initialRuntimeState(false, intent.sender, 1)
 		state.pendingTransactions.push(intent)
 		await saveDurableState(path, state)
 		await resolveFinalizedReceipt(path, state, intent, receipt)
 		const saved = await loadDurableState(path, 1)
 		expect(saved.activities[0]?.status).toBe('info')
 		expect(saved.activities[0]?.message).toContain('settled above the report base-fee ceiling')
-		expect(saved.sponsoredReports).toEqual([report])
-	} finally {
-		await rm(directory, { recursive: true, force: true })
-	}
-})
-
-test('consumed report funding and its tracking record resolve atomically across write failures and restart', async () => {
-	const directory = await mkdtemp(join(tmpdir(), 'report-funding-transition-'))
-	try {
-		const { intent, receipt } = await portfolioReceiptIntent()
-		const feed = getAddress('0x0000000000000000000000000000000000000040')
-		const fundingKey = `${feed.toLowerCase()}:${intent.sender.toLowerCase()}`
-		intent.reportOperations = { feed, reportId: 7n }
-		receipt.logs = [
-			{ address: feed, blockHash: receipt.blockHash, blockNumber: receipt.blockNumber, topics: encodeEventTopics({ abi: sharedPoolPriceFeedAbi, eventName: 'PriceReported', args: { reportId: 7n } }).filter(topic => topic !== null), data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [1n, 1n]) },
-			{
-				address: feed,
-				blockHash: receipt.blockHash,
-				blockNumber: receipt.blockNumber,
-				topics: encodeEventTopics({ abi: sharedPoolPriceFeedAbi, eventName: 'ReportOperationAttempted', args: { reportId: 7n, sponsor: intent.sender, operationIndex: 0n } }).filter(topic => topic !== null),
-				data: encodeAbiParameters([{ type: 'bool' }], [true]),
-			},
-		]
-		const state = initialRuntimeState(false, intent.sender, 1)
-		state.pendingTransactions.push(intent)
-		state.portfolioFunding = { [fundingKey]: { amount: 100n, target: 3n } }
-		state.sponsoredReports = [{ feed, fundingKey, sponsor: intent.sender, reportId: 7n, createdBlock: 1n, nextBlock: 1n }]
-		const path = join(directory, 'state.json')
-		await saveDurableState(path, state)
-		const blocker = join(directory, 'blocker')
-		await writeFile(blocker, '')
-		await expect(resolveFinalizedReceipt(join(blocker, 'state.json'), state, intent, receipt)).rejects.toThrow()
-		expect(state.portfolioFunding[fundingKey]?.amount).toBe(100n)
-		expect(state.sponsoredReports).toHaveLength(1)
-		expect(state.pendingTransactions).toHaveLength(1)
-		expect(state.activities).toHaveLength(0)
-		const restarted = await loadDurableState(path, 1)
-		state.sponsoredReports = restarted.sponsoredReports
-		state.portfolioFunding = restarted.portfolioFunding
-		state.pendingTransactions = restarted.pendingTransactions
-		await resolveFinalizedReceipt(path, state, intent, receipt)
-		await resolveFinalizedReceipt(path, state, intent, receipt)
-		const saved = await loadDurableState(path, 1)
-		expect(saved.sponsoredReports).toHaveLength(0)
-		expect(saved.portfolioFunding).toEqual({})
 		expect(saved.pendingTransactions).toHaveLength(0)
-		expect(saved.activities).toHaveLength(1)
 	} finally {
 		await rm(directory, { recursive: true, force: true })
 	}
 })
 
-test('equivalent fee replacements inherit report tracking; cancellations and changed economic calls do not', async () => {
-	const { intent, receipt } = await portfolioReceiptIntent()
-	const feed = getAddress('0x0000000000000000000000000000000000000040')
-	const fundingKey = `${feed.toLowerCase()}:${intent.sender.toLowerCase()}`
-	intent.reportSponsorship = { feed, fundingKey }
-	receipt.logs = [{ address: feed, blockHash: receipt.blockHash, blockNumber: receipt.blockNumber, topics: encodeEventTopics({ abi: sharedPoolPriceFeedAbi, eventName: 'ReportFundingAssigned', args: { reportId: 7n, coordinator: feed, sponsor: intent.sender } }).filter(topic => topic !== null), data: '0x' }]
-	const original = parseTransaction(intent.serializedTransaction)
-	const sameCall = { to: original.to, input: original.data ?? '0x', value: original.value ?? 0n }
-	for (const changed of [
-		{ ...sameCall, to: intent.sender },
-		{ ...sameCall, input: toHex('') },
-		{ ...sameCall, value: sameCall.value + 1n },
-	]) {
-		const state = initialRuntimeState(false, intent.sender, 1)
-		registerSponsoredReplacement(state, intent, receipt, changed)
-		expect(state.sponsoredReports ?? []).toHaveLength(0)
+function takenOverLog(receipt: TransactionReceipt, ledger: Address, sourceId: bigint) {
+	return {
+		address: ledger,
+		blockHash: receipt.blockHash,
+		blockNumber: receipt.blockNumber,
+		topics: encodeEventTopics({ abi: securityPoolCapitalLedgerAbi, eventName: 'CommitmentTakenOver', args: { sourceId, receiverId: 9n } }).filter(topic => topic !== null),
+		data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [10n, 0n]),
 	}
-	const state = initialRuntimeState(false, intent.sender, 1)
-	registerSponsoredReplacement(state, intent, { ...receipt, status: 'reverted' }, sameCall)
-	expect(state.sponsoredReports ?? []).toHaveLength(0)
-	registerSponsoredReplacement(state, intent, receipt, sameCall)
-	expect(state.sponsoredReports).toEqual([{ feed, fundingKey, sponsor: intent.sender, reportId: 7n, createdBlock: receipt.blockNumber, nextBlock: receipt.blockNumber }])
+}
+
+async function resolveConsumedTakeover(logs: (receipt: TransactionReceipt, ledger: Address) => TransactionReceipt['logs']) {
+	const directory = await mkdtemp(join(tmpdir(), 'takeover-consume-'))
+	try {
+		const path = join(directory, 'state.json')
+		const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
+		const ledger = receipt.to
+		if (ledger === null || ledger === undefined) throw new Error('Missing ledger')
+		const fundingKey = `${ledger.toLowerCase()}:${intent.sender.toLowerCase()}`
+		intent.portfolioFunding = { key: fundingKey, operation: 'consume', amount: 0n }
+		receipt.logs = logs(receipt, ledger)
+		const state = initialRuntimeState(false, intent.sender, 1)
+		state.portfolioFunding = { [fundingKey]: { amount: 500n, target: 1n } }
+		state.pendingTransactions.push(intent)
+		await saveDurableState(path, state)
+		await resolveFinalizedReceipt(path, state, intent, receipt)
+		return { saved: await loadDurableState(path, 1), fundingKey }
+	} finally {
+		await rm(directory, { recursive: true, force: true })
+	}
+}
+
+test('#1473 a successful takeover that the in-call cure healed keeps its funding journal and is not booked as completed', async () => {
+	for (const logs of [() => [], (receipt: TransactionReceipt, ledger: Address) => [takenOverLog(receipt, ledger, 2n)], (receipt: TransactionReceipt) => [takenOverLog(receipt, getAddress('0x0000000000000000000000000000000000000041'), 1n)]]) {
+		const { saved, fundingKey } = await resolveConsumedTakeover(logs)
+		expect(saved.portfolioFunding).toEqual({ [fundingKey]: { amount: 500n, target: 1n } })
+		expect(saved.pendingTransactions).toHaveLength(0)
+		expect(saved.activities[0]).toMatchObject({ status: 'info', message: 'Take over portfolio position 1: takeover cured target; no position acquired' })
+	}
+})
+
+test('#1473 a successful takeover that acquired the target consumes its funding journal', async () => {
+	const { saved } = await resolveConsumedTakeover((receipt, ledger) => [takenOverLog(receipt, ledger, 1n)])
+	expect(saved.portfolioFunding).toEqual({})
+	expect(saved.activities[0]).toMatchObject({ status: 'confirmed', message: 'Take over portfolio position 1: completed' })
 })

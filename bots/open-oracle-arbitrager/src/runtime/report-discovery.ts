@@ -10,6 +10,7 @@ import { cursorForHeadScan, fetchLogsWithAdaptiveRanges, initialCursor, latestLo
 import { clearOrphanedDexEvidenceForHeadReplacement } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { MAX_LOG_SCAN_RANGE, readEndpoints, type OperatorContext, type OperatorRuntime, type ScanBlock, type ScanPass } from './operator-runtime.ts'
+import { positionLedgerExecutionReady } from './operator-execution-state.ts'
 
 /** The scan either has nothing new at this head, or proceeds to evaluate the discovered reports. */
 type ReportDiscovery = { kind: 'head-unchanged' } | { discoversReportsFromCoordinators: boolean; executionReady: boolean; kind: 'scan' }
@@ -88,7 +89,7 @@ export async function discoverReports(runtime: OperatorRuntime, context: Operato
 	runtime.reportWorkCursor = work.cursor
 	config.coordinatorAddresses = runtime.coordinatorPolicies.map(policy => policy.coordinator)
 	fixedState.deployment = { ...fixedState.deployment, coordinatorAddresses: config.coordinatorAddresses }
-	const executionReady = runtime.positions.every(position => position.historyOutbox === undefined) && scan.nextError === undefined
+	const executionReady = positionLedgerExecutionReady(runtime.positions, scan.nextError)
 	const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
 	if (discoversReportsFromCoordinators) {
 		const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(runtime.readClients, config, blockNumber, runtime.coordinatorPolicies) : await pendingCoordinatorReports(runtime.client, config, blockNumber, runtime.coordinatorPolicies)

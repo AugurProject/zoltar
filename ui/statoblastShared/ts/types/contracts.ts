@@ -102,6 +102,8 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 	stateHash: Hex
 	callbackContract: Address
 	callbackGasLimit: number
+	/** True only when the callback is the escrow a factory-registered shared price feed opened for this report, so settlement needs no return-data gas allowance. */
+	trustedSettlementCallback: boolean
 	protocolFeeRecipient: Address
 	trackDisputes: boolean
 	/** OpenOracle FLAG_FEES_ONLY_AT_HALT: disputes pay no fees until the current base amount reaches escalationHalt. */

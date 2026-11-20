@@ -1,6 +1,6 @@
 import { collateralAsset, formatCollateralAmount } from '../protocol/collateral.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { formatScaledPercentage, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatScaledPercentage, formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -134,6 +134,8 @@ export function TradeEstimatePanel({
 			: [
 					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS, 'nearest', market) },
 					{ label: ticketCopy.youReceiveEstimate, value: formatEstimateEth(estimate.receiveAttoEth, market) },
+					// A fork-child pool also pays recovery REP for the burned complete sets; the wallet signs its minimum too.
+					...(estimate.receiveAttoRep === 0n ? [] : [{ label: ticketCopy.recoveryRep, value: formatValueWithUnit(formatRoundedUnits(estimate.receiveAttoRep, 18, ESTIMATE_DIGITS), commonCopy.rep) }]),
 				]
 	const average = averagePriceBps(estimate.kind === 'entry' ? estimate.payAttoEth : estimate.receiveAttoEth, quote.totalLongShares, market)
 	const holdingAfter = holdingAfterTrade(estimate, balances)
@@ -158,6 +160,7 @@ export function TradeEstimatePanel({
 					{ label: ticketCopy.averagePrice, value: average === undefined ? commonCopy.metricUnavailablePlaceholder : formatScaledPercentage(average, 2) },
 					...(estimate.kind === 'entry' ? [{ label: ticketCopy.formatProfitIfResolves(side), value: formatProfit(buyReturn(estimate, market), market) }] : []),
 					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down', market) : formatCollateralAmount(estimate.minimumAttoEth, market, ESTIMATE_DIGITS, 'down') },
+					...(estimate.kind === 'exit' && estimate.receiveAttoRep !== 0n ? [{ label: ticketCopy.minimumRecoveryRep, value: formatValueWithUnit(formatTrimmedUnits(estimate.minimumAttoRep, 18, ESTIMATE_DIGITS), commonCopy.rep) }] : []),
 					// The most shares the wallet signs over for a sale; the router refunds what the trade does not use.
 					...(estimate.kind === 'exit' ? [{ label: ticketCopy.maximumSold, value: formatOutcomeQuantity(estimate.maximumLongShares, side, ESTIMATE_DIGITS, 'nearest', market) }] : []),
 					// A sale spends Invalid shares, so what it uses stays in view; the Invalid a buy adds is a detail.

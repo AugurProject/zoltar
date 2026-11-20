@@ -93,6 +93,40 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 	return getOracleManagerPriceValidUntilTimestamp(game.reportTimestamp + game.settlementTime, chainId)
 }
 
+/**
+ * True only when `callbackContract` is the escrow that a shared price feed registered in the
+ * configured SecurityPoolFactory opened for this report on this OpenOracle. That escrow's code
+ * is known and returns no data, so settlement needs no return-data allowance for it. Any read
+ * that fails or disagrees leaves the callback untrusted.
+ */
+export async function isFeedAuthenticatedReportEscrow(client: Pick<ReadClient, 'multicall'>, openOracleAddress: Address, callbackContract: Address, reportId: bigint) {
+	if (callbackContract === zeroAddress) return false
+	const feed = (await readOptionalMulticall(client, [{ address: callbackContract, abi: reportEscrowAbi, functionName: 'feed' }])).at(0)
+	if (feed?.status !== 'success' || feed.result === zeroAddress) return false
+	const feedAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
+	const [candidate, factory, portfolio, universe, feedOracle] = await readOptionalMulticall(client, [
+		{ address: feed.result, abi: feedAbi, functionName: 'reportCandidates', args: [reportId] },
+		{ address: feed.result, abi: feedAbi, functionName: 'securityPoolFactory' },
+		{ address: feed.result, abi: feedAbi, functionName: 'portfolio' },
+		{ address: feed.result, abi: feedAbi, functionName: 'universeId' },
+		{ address: feed.result, abi: feedAbi, functionName: 'openOracle' },
+	])
+	if (
+		candidate?.status !== 'success' ||
+		!sameAddress(candidate.result[0], callbackContract) ||
+		factory?.status !== 'success' ||
+		!sameAddress(factory.result, getInfraContractAddresses().securityPoolFactory) ||
+		portfolio?.status !== 'success' ||
+		portfolio.result === zeroAddress ||
+		universe?.status !== 'success' ||
+		feedOracle?.status !== 'success' ||
+		!sameAddress(feedOracle.result, openOracleAddress)
+	)
+		return false
+	const registeredFeed = (await readOptionalMulticall(client, [{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [portfolio.result, universe.result] }])).at(0)
+	return registeredFeed?.status === 'success' && sameAddress(registeredFeed.result, feed.result)
+}
+
 export function getOpenOraclePriceSettlement(receipt: Partial<Pick<TransactionReceipt, 'logs'>>, callbackContract: Address, reportId: bigint): OpenOraclePriceSettlement | undefined {
 	if (callbackContract === zeroAddress) return undefined
 	let priceSource = callbackContract

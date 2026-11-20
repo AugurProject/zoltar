@@ -30,7 +30,7 @@ function notFound() {
 	return error
 }
 
-const reader = (lookup: () => Promise<TransactionReceipt>) => ({ getTransactionReceipt: lookup })
+const reader = (lookup: () => Promise<TransactionReceipt>, head = 7n) => ({ getTransactionReceipt: lookup, getBlockNumber: async () => head })
 
 describe('receipt quorum', () => {
 	test('recognizes every receipt-not-found shape the bots encounter', () => {
@@ -70,12 +70,40 @@ describe('receipt quorum', () => {
 			{ client: reader(async () => receipt(7n)), endpoint: 'first' },
 			{ client: reader(async () => receipt(7n)), endpoint: 'second' },
 		]
-		expect(await observeReceiptWithQuorum(found, hash, 2)).toEqual(receipt(7n))
+		expect(await observeReceiptWithQuorum(found, hash, 2)).toEqual({ status: 'found', receipt: receipt(7n) })
 		const missing = found.map(({ endpoint }) => ({ client: reader(async () => Promise.reject(notFound())), endpoint }))
-		expect(await observeReceiptWithQuorum(missing, hash, 2)).toBeUndefined()
+		expect(await observeReceiptWithQuorum(missing, hash, 2)).toEqual({ status: 'missing' })
 		const disagreeing = [found[0], missing[1]].flatMap(entry => (entry === undefined ? [] : [entry]))
 		await expect(observeReceiptWithQuorum(disagreeing, hash, 2)).rejects.toThrow('RPC disagreement for receipt')
+		const aheadAndMissing = [found[0], { client: reader(async () => Promise.reject(notFound()), 9n), endpoint: 'second' }].flatMap(entry => (entry === undefined ? [] : [entry]))
+		await expect(observeReceiptWithQuorum(aheadAndMissing, hash, 2)).rejects.toThrow('RPC disagreement for receipt')
 		const unavailable = [found[0], { client: reader(async () => Promise.reject(new Error('connection refused'))), endpoint: 'second' }].flatMap(entry => (entry === undefined ? [] : [entry]))
 		await expect(observeReceiptWithQuorum(unavailable, hash, 2)).rejects.toBeInstanceOf(ConnectivityDegradedError)
+	})
+
+	test('#1455 a reader whose head has not reached the receipt block leaves the receipt pending instead of disagreeing', async () => {
+		const found = { client: reader(async () => receipt(7n)), endpoint: 'first' }
+		const lagging = { client: reader(async () => Promise.reject(notFound()), 6n), endpoint: 'second' }
+		expect(await observeReceiptWithQuorum([found, lagging], hash, 2)).toEqual({ status: 'pending' })
+		const atHead = { client: reader(async () => Promise.reject(notFound()), 7n), endpoint: 'third' }
+		await expect(observeReceiptWithQuorum([found, lagging, atHead], hash, 2)).rejects.toThrow('RPC disagreement for receipt')
+		const headUnavailable = { client: { getTransactionReceipt: async () => Promise.reject(notFound()), getBlockNumber: async () => Promise.reject(new Error('connection refused')) }, endpoint: 'fourth' }
+		await expect(observeReceiptWithQuorum([found, headUnavailable], hash, 2)).rejects.toThrow('RPC disagreement for receipt')
+	})
+
+	test('#1455 a reader that imports the receipt block during its lookup still counts as lagging', async () => {
+		const found = { client: reader(async () => receipt(7n)), endpoint: 'first' }
+		let head = 6n
+		const catchingUp = {
+			client: {
+				getBlockNumber: async () => head,
+				getTransactionReceipt: async () => {
+					head = 7n
+					return Promise.reject(notFound())
+				},
+			},
+			endpoint: 'second',
+		}
+		expect(await observeReceiptWithQuorum([found, catchingUp], hash, 2)).toEqual({ status: 'pending' })
 	})
 })

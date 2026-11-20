@@ -18,6 +18,7 @@ import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-statoblast-shared
 import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 import { latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, simulateWithDeadline, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
+import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import { receiveBasedExitArguments, shareOperationRouter, shareTokenAbi } from './authorization.js'
 import { largestMigratedShares, loadForkMigrationContext } from './forks.js'
 
@@ -471,7 +472,7 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 		blockNumber,
 		blockHash,
 		deadline,
-		result: { simulation, longBalance, maximumLongShares },
+		result: { simulation, longBalance, maximumLongShares, expectedAttoRep },
 	} = await simulateWithDeadline(
 		client,
 		expiry,
@@ -488,10 +489,12 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 			const slippageMaximum = maximumAfterSlippage(totalLongShares, slippageBps)
 			const maximumLongShares = slippageMaximum < longBalance ? slippageMaximum : longBalance
 			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
-			const transfer = receiveBasedExitArguments(market, side, completeSets, maximumLongShares, minimumEth, account, deadline)
+			// A fork-child pool pays recovery REP beside collateral for each burned complete set (#1445).
+			const expectedAttoRep = attoSharesToRecoveryAttoRep(completeSets, feeMarket)
+			const transfer = receiveBasedExitArguments(market, side, completeSets, maximumLongShares, minimumEth, account, deadline, minimumAfterSlippage(expectedAttoRep, slippageBps))
 			const simulation = await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data], blockNumber: block.blockNumber })
 			void simulation
-			return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, longBalance, maximumLongShares }
+			return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, longBalance, maximumLongShares, expectedAttoRep }
 		},
 		(block, deadline) => submissionDeadline(client, market, 'exit', block, deadline),
 	)
@@ -507,6 +510,8 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 		longBalance,
 		maximumLongShares,
 		minimumEth: minimumAfterSlippage(simulation.result.ethOut, slippageBps),
+		expectedAttoRep,
+		minimumAttoRep: minimumAfterSlippage(expectedAttoRep, slippageBps),
 	}
 }
 
@@ -522,12 +527,14 @@ export async function submitFreshExit(client: WalletClient, configuration: Deplo
 	if (refreshed.longBalance < quote.maximumLongShares) throw new Error('Your Yes or No balance no longer covers this sale; try again')
 	const maximumLongShares = retainApprovedMaximum(quote.maximumLongShares, refreshed.result.totalLongShares, 'long shares')
 	const minimumEth = retainApprovedMinimum(quote.minimumEth, refreshed.result.ethOut, 'ETH output')
-	const block = await latestBlockIdentity(client)
-	const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
-	const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.completeSets, minimumEth, quote.deadline)
-	if (feeBlocker !== undefined) throw new Error(feeBlocker)
-	const transfer = receiveBasedExitArguments(quote.market, quote.side, quote.completeSets, maximumLongShares, minimumEth, account, quote.deadline)
+	const minimumRep = retainApprovedMinimum(quote.minimumAttoRep, refreshed.expectedAttoRep, 'REP output')
+	const transfer = receiveBasedExitArguments(quote.market, quote.side, quote.completeSets, maximumLongShares, minimumEth, account, quote.deadline, minimumRep)
 	return await guardedWrite(async () => {
+		const block = await latestBlockIdentity(client)
+		const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
+		retainApprovedMinimum(minimumRep, attoSharesToRecoveryAttoRep(quote.completeSets, feeMarket), 'REP output')
+		const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.completeSets, minimumEth, quote.deadline)
+		if (feeBlocker !== undefined) throw new Error(feeBlocker)
 		await requireFreshSubmissionWindow(client, quote.market, 'exit', quote.deadline)
 		return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data] })
 	})
