@@ -21,6 +21,9 @@ describe('explicit portfolio instruction lifecycle', () => {
 		await context.report()
 		await context.open()
 		const { account, reader: client, scope, settings, wallet } = repairAuctionKeeper(fixture, context)
+		const auctionTerms = await loadPortfolioAuctionSnapshot({ client, portfolio: fixture.portfolio, universeId: context.child, bidder: account.address })
+		if (auctionTerms.auction === undefined) throw new Error('Missing open auction')
+		const bidCollateral = 2n * auctionTerms.auction.lotAttoEth
 		await context.mock.setBalance(account.address, 100n * unit)
 		await wallet.sendTransaction({ to: settings.deployment.weth, value: 10n * unit })
 		settings.portfolioPolicy.maximumPrincipalAttoRep = 1_000_000n * unit
@@ -29,7 +32,7 @@ describe('explicit portfolio instruction lifecycle', () => {
 		settings.strategy.maximumGasCostAttoEth = unit
 		const { pool, state, stop } = await serveMockChainRpc(context.mock, settings, account.address, scope)
 		const base = { portfolio: fixture.portfolio, universeId: context.child }
-		const bid = { ...base, id: 'one-bid', action: 'auction-bid' as const, lots: 2n, minimumAttoRepPerLot: 5n * unit, targetHealthFactorBps: 10_000n, maximumValueAttoEth: 10n * unit }
+		const bid = { ...base, id: 'one-bid', action: 'auction-bid' as const, lots: 2n, minimumAttoRepPerLot: 20n * unit, targetHealthFactorBps: 10_000n, maximumValueAttoEth: 10n * unit }
 		try {
 			const lowBid = { ...bid, id: 'losing-bid', minimumAttoRepPerLot: 100n * unit }
 			await expect(executePortfolioInstruction(wallet, settings, state, pool, { ...lowBid, maximumValueAttoEth: unit }, async () => true)).rejects.toThrow('exceeds collateral or commitment limits')
@@ -39,13 +42,13 @@ describe('explicit portfolio instruction lifecycle', () => {
 			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'allowance', args: [account.address, context.auction] })).toBe(0n)
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, lowBid, async () => true)).toBe(true)
 			expect(state.completedPortfolioInstructions?.[lowBid.id]).toBeUndefined()
-			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'allowance', args: [account.address, context.auction] })).toBe(2n * unit)
+			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'allowance', args: [account.address, context.auction] })).toBe(bidCollateral)
 
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, lowBid, async () => true)).toBe(true)
 			const lowAuction = await loadPortfolioAuctionSnapshot({ client, portfolio: fixture.portfolio, universeId: context.child, bidder: account.address })
 			const loser = lowAuction.auction?.bids[0]
 			if (loser === undefined) throw new Error('Missing losing bid')
-			await context.bid(context.owner, 5n, 10n * unit)
+			await context.bid(context.owner, 5n, 40n * unit)
 			const beforeRefund = await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })
 			const refund = { ...base, id: 'early-refund', action: 'auction-refund' as const, bidId: loser.id }
 			settings.strategy.maximumGasCostAttoEth = 1n
@@ -58,7 +61,7 @@ describe('explicit portfolio instruction lifecycle', () => {
 			if (refundHash === undefined) throw new Error('Missing refund transaction')
 			const receipt = await client.getTransactionReceipt({ hash: refundHash })
 			if (receipt.effectiveGasPrice === undefined) throw new Error('Missing refund gas price')
-			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })).toBe(beforeRefund + 2n * unit)
+			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })).toBe(beforeRefund + bidCollateral)
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, refund, async () => true)).toBe(false)
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, bid, async () => true)).toBe(true)
 			expect(state.completedPortfolioInstructions?.[bid.id]).toBeUndefined()
