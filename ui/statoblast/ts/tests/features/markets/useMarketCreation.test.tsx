@@ -294,24 +294,24 @@ describe('useMarketCreation', () => {
 			answerUnit: 'degrees C',
 			categoricalOutcomes: ['Yes', 'No'],
 			description: 'Official station reading',
-			endTime: '2026-08-02T00:00:00.000Z',
+			endTime: '2026-08-02T00:00',
 			marketType: 'scalar',
 			scalarIncrement: '0.1',
 			scalarMax: '60',
 			scalarMin: '-20',
-			startTime: '2026-08-01T00:00:00.000Z',
+			startTime: '2026-08-01T00:00',
 			title: 'Maximum temperature',
 		}
 		const categoricalDraft: MarketFormState = {
 			answerUnit: '',
 			categoricalOutcomes: ['Alpha', 'Beta', 'Gamma'],
 			description: 'Published final result',
-			endTime: '2026-09-02T00:00:00.000Z',
+			endTime: '2026-09-02T00:00',
 			marketType: 'categorical',
 			scalarIncrement: '1',
 			scalarMax: '100',
 			scalarMin: '0',
-			startTime: '2026-09-01T00:00:00.000Z',
+			startTime: '2026-09-01T00:00',
 			title: 'Which team wins?',
 		}
 		await hook.setForm(scalarDraft)

@@ -4,13 +4,14 @@ import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getLocalEntityScope, useRememberOpenedEntity } from '../hooks/useLocalEntities.js'
-import { createDownloadedEntityStore, readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite } from '../lib/localEntityStore.js'
+import { clearSessionLocalEntities, createDownloadedEntityStore, getFavoritesStorageKey, readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite } from '../lib/localEntityStore.js'
+import { buildLocalBrowseEntries } from '../lib/localEntityBrowse.js'
 import { decodeStoredValue } from '../lib/storedValueReader.js'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '../wallet/networkProfile.js'
-import { createFakeBackend } from './testUtils/fakeBackend.js'
+import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 type Summary = { title: string }
 const store = createDownloadedEntityStore((value: unknown) => decodeStoredValue(value, (read): Summary => ({ title: read.string('title') })))
@@ -87,5 +88,32 @@ void describe('useRememberOpenedEntity', () => {
 			render(<OpenedEntity data={refreshed} id='0xAA' />, rendered.container)
 		})
 		expect(readFavoriteEntries(scope).map(entry => entry.id)).toEqual(['0xaa'])
+	})
+
+	void test('lists a newly opened favorite even when every cached summary already belongs to a favorite', async () => {
+		const scope = getLocalEntityScope('statoblast', 'pool')
+		const cached = Array.from({ length: 200 }, (_, index) => ({ id: `0x${index.toString(16)}`, data: { title: `Pool ${index}` } }))
+		store.record(scope, cached, 1)
+		for (const [index, item] of cached.entries()) setEntityFavorite(scope, item.id, true, index)
+
+		const opened = { title: 'Pool 201' }
+		lifecycle.trackRendered(await renderIntoDocument(<OpenedEntity data={opened} id='0xNEW' />))
+
+		const directory = buildLocalBrowseEntries(store.read(scope), readFavoriteEntries(scope), 'favorites')
+		expect(directory[0]?.id).toBe('0xnew')
+		expect(directory[0]?.data).toEqual(opened)
+	})
+
+	void test('keeps simulation favorites with their chain instead of carrying them into the next simulation', async () => {
+		installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		const scope = getLocalEntityScope('statoblast', 'pool')
+		lifecycle.trackRendered(await renderIntoDocument(<OpenedEntity data={{ title: 'Simulated pool' }} id='0x1' />))
+		expect(readFavoriteEntries(scope).map(entry => entry.id)).toEqual(['0x1'])
+		expect(window.localStorage.getItem(getFavoritesStorageKey(scope))).toBeNull()
+
+		clearSessionLocalEntities()
+
+		expect(readFavoriteEntries(scope)).toEqual([])
+		expect(store.read(scope)).toEqual([])
 	})
 })

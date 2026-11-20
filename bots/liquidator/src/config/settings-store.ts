@@ -28,13 +28,17 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 	return await writeRevisionedFile(path, contents, { conflict: () => new Error('Configuration changed on disk; reload before saving'), expectedRevision })
 }
 
-async function loadSettingsProfile(path: string, network: NetworkName) {
+async function loadStoredSettingsProfile(path: string, network: NetworkName) {
 	return await loadSettings(networkProfilePath(path, network))
-		.then(value => value.settings)
+		.then(({ revision, settings }) => ({ revision, settings }))
 		.catch(error => {
 			if (error instanceof Error && error.message.startsWith('Missing liquidator configuration')) return undefined
 			throw error
 		})
+}
+
+async function loadSettingsProfile(path: string, network: NetworkName) {
+	return (await loadStoredSettingsProfile(path, network))?.settings
 }
 
 async function assertSettingsProfileCandidates(path: string, candidates: readonly ProfileCandidate<OperatorSettings>[]) {
@@ -86,12 +90,12 @@ export async function switchSettingsNetworkProfile(path: string, network: Networ
 			}
 		},
 		current,
-		loadProfile: network => loadSettingsProfile(path, network),
+		loadProfile: network => loadStoredSettingsProfile(path, network),
 		network,
 		networkOf: settingsNetwork,
 		preflight,
 		saveActive: (settings, expectedRevision) => saveSettings(path, settings, expectedRevision),
-		saveProfile: (network, settings) => saveSettings(networkProfilePath(path, network), settings),
+		saveProfile: (network, settings, expectedRevision) => saveSettings(networkProfilePath(path, network), settings, expectedRevision),
 	})
 	return { path, ...switched }
 }

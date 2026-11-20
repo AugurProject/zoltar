@@ -27,14 +27,42 @@ const NETWORK_IDS_BY_CHAIN_ID: Readonly<Record<number, 'mainnet' | 'sepolia'>> =
 	11_155_111: 'sepolia',
 }
 
-export function parseRequestedChainIds(argv: readonly string[]): number[] {
+const VERIFY_CONTRACTS_HELP = `Submit deployed Zoltar contract sources to Etherscan, Blockscout, and Sourcify
+
+  bun run verify:contracts -- [--chain-id=<chain ID>]...
+
+  --chain-id=<id>, --chain-id <id>  Verify one chain; repeat for more. Defaults to Mainnet and Sepolia.
+  --help, -h                        Print this help without submitting anything.
+
+Set ETHERSCAN_API_KEY to include Etherscan; Blockscout and Sourcify need no key.`
+
+type VerificationRequest = { kind: 'help' } | { kind: 'verify'; chainIds: number[] }
+
+function parseChainIdValue(value: string | undefined) {
+	if (value === undefined || value.startsWith('-')) throw new Error('--chain-id requires a chain ID value')
+	if (!/^[1-9]\d*$/.test(value)) throw new Error(`--chain-id must be a canonical positive decimal integer, received ${value}`)
+	const chainId = Number(value)
+	if (!Number.isSafeInteger(chainId)) throw new Error(`--chain-id must be a safe integer, received ${value}`)
+	return chainId
+}
+
+export function parseVerificationRequest(argv: readonly string[]): VerificationRequest {
+	if (argv.includes('--help') || argv.includes('-h')) return { kind: 'help' }
 	const prefix = '--chain-id='
-	const values = argv.filter(argument => argument.startsWith(prefix)).map(argument => argument.slice(prefix.length))
-	if (values.length === 0) return Object.keys(NETWORK_IDS_BY_CHAIN_ID).map(Number)
-	return values.map(value => {
-		if (!/^[1-9]\d*$/.test(value)) throw new Error(`--chain-id must be a canonical positive decimal integer, received ${value}`)
-		return Number(value)
-	})
+	const chainIds: number[] = []
+	for (let index = 0; index < argv.length; index += 1) {
+		const argument = argv[index]
+		if (argument === undefined) continue
+		if (argument === '--chain-id') {
+			index += 1
+			chainIds.push(parseChainIdValue(argv[index]))
+		} else if (argument.startsWith(prefix)) {
+			chainIds.push(parseChainIdValue(argument.slice(prefix.length)))
+		} else {
+			throw new Error(`Unknown argument ${argument}. Run with --help for usage.`)
+		}
+	}
+	return { kind: 'verify', chainIds: chainIds.length === 0 ? Object.keys(NETWORK_IDS_BY_CHAIN_ID).map(Number) : chainIds }
 }
 
 export function createArtifactLookup(rawArtifact: unknown): ArtifactLookup {
@@ -111,7 +139,12 @@ export async function main(
 	environment: Readonly<Record<string, string | undefined>> = process.env,
 	dependencies: { fetchFn: ExplorerFetch; sleep: (milliseconds: number) => Promise<void> } = { fetchFn: fetch, sleep: milliseconds => Bun.sleep(milliseconds) },
 ): Promise<number> {
-	const chainIds = parseRequestedChainIds(argv)
+	const request = parseVerificationRequest(argv)
+	if (request.kind === 'help') {
+		console.log(VERIFY_CONTRACTS_HELP)
+		return 0
+	}
+	const { chainIds } = request
 	const artifactLookup = await loadArtifactLookup()
 	let failures = 0
 	for (const chainId of chainIds) {

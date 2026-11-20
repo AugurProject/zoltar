@@ -249,6 +249,22 @@ test('preserves multiple archives and requires an explicit ID to choose between 
 	expect((await loadDurableState(current.runtime.stateFile, current.network.chainId)).retirement.status).toBe('inactive')
 })
 
+test('lists healthy archives beside a damaged archive and never reports a missing journal as inactive', async () => {
+	const healthy = await archivedFixture()
+	await writeFile(`${healthy.path}.retired-${'ff'.repeat(32)}.json`, '{"truncated":', { mode: 0o600 })
+	const listed = await listDeploymentArchives(healthy.path)
+	expect(listed.map(archive => [archive.id, archive.status])).toEqual([
+		[healthy.id, 'inactive'],
+		['ff'.repeat(32), 'unverified'],
+	])
+	await prepareArchivedRetirement(healthy.id, { acquireLocks: noLocks, path: healthy.path })
+	const journal = await readFile(healthy.stateFile)
+	await rm(healthy.stateFile)
+	expect((await listDeploymentArchives(healthy.path)).find(archive => archive.id === healthy.id)?.error).toBeDefined()
+	await writeFile(healthy.stateFile, journal, { mode: 0o600 })
+	expect((await listDeploymentArchives(healthy.path)).find(archive => archive.id === healthy.id)).toMatchObject({ status: 'requested' })
+})
+
 async function completedArchive(residuals = false) {
 	const fixture = await archivedFixture()
 	const state = await loadDurableState(fixture.stateFile, fixture.settings.network.chainId)

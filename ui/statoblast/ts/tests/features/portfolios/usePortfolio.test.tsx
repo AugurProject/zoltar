@@ -63,6 +63,25 @@ test('permissionless question growth is paged independently of the owner’s sin
 	expect(source.reads.filter(read => read.name === 'getQuestions').every(read => read.args?.[1] === 64n)).toBe(true)
 	expect(source.reads.some(read => read.name === 'getLogs')).toBe(false)
 })
+test('a failed account read for another owner keeps the active portfolio setup', async () => {
+	const source = capitalClient()
+	let failBalance = false
+	const client = source.client.extend(() => ({
+		getBalance: async () => {
+			if (failBalance) throw new Error('No fork url set')
+			return 0n
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	expect(hook.state().setup?.stage).toBe(4)
+	failBalance = true
+	await act(() => hook.state().load())
+	await waitFor(() => expect(hook.state().error).toContain('No fork url set'))
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().setup?.stage).toBe(4)
+})
 const unchangedInputs = [
 	{ name: 'portfolio', repeat: (model: ReturnType<typeof usePortfolio>) => model.setManagerInput(model.managerInput) },
 	{ name: 'owner', repeat: (model: ReturnType<typeof usePortfolio>) => model.setOwnerInput(model.ownerInput) },

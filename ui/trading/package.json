@@ -23,7 +23,7 @@
 		"@zoltar/zoltar-shared": "workspace:1.0.0"
 	},
 	"scripts": {
-		"generate": "bun ../../tooling/contracts/build-app-contracts.mts trading && bun ../../tooling/repo/build-shared.mts trading && bun ../../tooling/ui/vendor.mts trading --scoped-artifacts",
+		"generate": "bun ../../tooling/contracts/build-app-contracts.mts trading && bun ../../tooling/repo/build-shared.mts trading && bun ../../tooling/ui/vendor.mts trading",
 		"vendor": "bun ../../tooling/ui/vendor.mts trading",
 		"build:workers": "bun ../../tooling/ui/workers.mts trading",
 		"build:tests": "bun ../../tooling/ui/tests.mts trading",

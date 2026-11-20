@@ -717,6 +717,69 @@ ${command}`,
 		}
 	})
 
+	test('rerunning a release refreshes generated notes and keeps operator notes', async () => {
+		const jobs = workflowJobs(await readWorkflow(versionDeployWorkflowPath))
+		const step = workflowSteps(jobs['deploy']).find(step => step['name'] === 'Create or update GitHub release')
+		const command = step?.['run']
+		if (typeof command !== 'string') throw new Error('Missing release command')
+		const replay = (existingBody: string | undefined, cid: string) => {
+			const result = spawnSync(
+				'bash',
+				[
+					'-e',
+					'-o',
+					'pipefail',
+					'-c',
+					`
+ workdir=$(mktemp -d)
+ trap 'rm -rf "$workdir"' EXIT
+ cd "$workdir"
+ gh() {
+     case "$1 $2" in
+         'api --method') echo 'Generated changelog' ;;
+         'release view')
+             [ -n "\${EXISTING_BODY+set}" ] || return 1
+             if [ "$4" = '--json' ]; then printf '%s' "$EXISTING_BODY"; fi ;;
+         'release edit'|'release create') cat "$7" ;;
+         *) return 1 ;;
+     esac
+ }
+ ${command}
+ `,
+				],
+				{
+					encoding: 'utf8',
+					env: {
+						...(existingBody === undefined ? {} : { EXISTING_BODY: existingBody }),
+						GITHUB_REF_NAME: 'v12',
+						GITHUB_REPOSITORY: 'example/repo',
+						OPENORACLE_IPFS_CID: `${cid}d`,
+						PATH: process.env['PATH'] ?? '',
+						STATOBLAST_IPFS_CID: `${cid}b`,
+						TRADING_IPFS_CID: `${cid}c`,
+						ZOLTAR_IPFS_CID: `${cid}a`,
+					},
+				},
+			)
+			expect(result.stderr).toBe('')
+			expect(result.status).toBe(0)
+			return result.stdout
+		}
+		const created = replay(undefined, 'bafyfirst')
+		expect(created).toContain('ipfs://bafyfirsta/')
+		expect(created).toContain('Generated changelog')
+		const operatorNote = '`?simulate=1` is a browser-local sandbox.'
+		const edited = `${created.trimEnd()}\r\n\r\n${operatorNote}\r\n`
+		const rerun = replay(edited, 'bafysecond')
+		expect(rerun).toContain(operatorNote)
+		expect(rerun).toContain('ipfs://bafyseconda/')
+		expect(rerun).not.toContain('bafyfirst')
+		expect(rerun.match(/## IPFS applications/g)).toHaveLength(1)
+		const unmarked = replay(operatorNote, 'bafythird')
+		expect(unmarked).toContain(operatorNote)
+		expect(unmarked).toContain('ipfs://bafythirda/')
+	})
+
 	test('release reads and validates each app CID from the publisher image', async () => {
 		const jobs = workflowJobs(await readWorkflow(versionDeployWorkflowPath))
 		const step = workflowSteps(jobs['deploy']).find(step => step['name'] === 'Read content identifiers')

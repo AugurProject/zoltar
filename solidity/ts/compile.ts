@@ -343,6 +343,8 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 	})
 	if (new Set(contracts.map(contract => contract.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
 	const typescriptString = contracts.map(contract => `export const ${contract.contractName} = ${JSON.stringify(contract.contractData, null, 4)} as const`).join('\r\n\r\n')
+	// Image builds copy only compiler inputs, so the generated types/ directory may not exist yet.
+	await fs.mkdir(path.dirname(CONTRACT_PATH_APP), { recursive: true })
 	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
 }
 

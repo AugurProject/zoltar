@@ -11,6 +11,7 @@ import {
 	getZoltarDeploymentStatusOracleStepAddresses,
 	getZoltarDeploymentStepConstructorArguments,
 	loadDeploymentStatusOracleMaskAtAddress,
+	loadDeploymentStatusSnapshotFromCode,
 	withExpectedDeploymentRuntimeCodeHashes,
 } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import {
@@ -337,13 +338,8 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 		return buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	}
 	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-	const proxyStep = steps.find(step => step.id === 'proxyDeployer')
-	if (oracleStep === undefined || proxyStep === undefined) throw new Error('Deployment plan is missing required verification steps')
-	if (!assertDeploymentStepRuntimeCode(oracleStep, oracleCode)) {
-		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-		const proxyDeployerDeployed = assertDeploymentStepRuntimeCode(proxyStep, proxyDeployerCode)
-		return buildDeploymentStatusSnapshot(steps, proxyDeployerDeployed ? 1n : 0n, false)
-	}
+	if (oracleStep === undefined) throw new Error('Deployment plan is missing its deployment status oracle step')
+	if (!assertDeploymentStepRuntimeCode(oracleStep, oracleCode)) return await loadDeploymentStatusSnapshotFromCode(client, steps)
 	const snapshot = buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	// The oracle mask only says a step was recorded; a step whose address holds no code is reported as not deployed.
 	const deploymentStatuses = await Promise.all(

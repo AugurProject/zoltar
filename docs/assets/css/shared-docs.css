@@ -4161,7 +4161,7 @@ body.paper-zoltar .footer-note {
 		font-weight: 700;
 	}
 
-	body.docs-shell-page :is(#deployment-mask-input, #deployment-mask-network) {
+	body.docs-shell-page :is(#deployment-mask-input, #deployment-mask-network, #deployment-mask-oracle) {
 		box-sizing: border-box;
 		width: 100%;
 		min-height: 2.75rem;

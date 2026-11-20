@@ -16,11 +16,11 @@ Log availability is discovered separately. If an `eth_getLogs` request reports p
 
 ### Runtime settings
 
-Every setting is an environment variable. The Compose column names the service that receives it; Compose substitutes the value from the host shell or `.env`, and falls back to the default shown.
+Every setting is an environment variable. The Compose column names the service that receives it; Compose substitutes the value from the host shell or `.env`, and falls back to the default shown. An unset or empty numeric setting selects its default under Compose and direct startup alike.
 
 | Variable | Default | Compose service | Effect |
 | --- | --- | --- | --- |
-| `NETWORKS` | every network in `config/networks.json` (`mainnet,sepolia`) | `app`, `indexer` | Comma-separated enabled networks. An unknown id stops startup. |
+| `NETWORKS` | every network in `config/networks.json` (`mainnet,sepolia`) | `app`, `indexer` | Comma-separated enabled networks. An unknown id stops startup. A disabled network's retained history stays in the database and is reachable by its chain id, but it leaves unfiltered search and `/health/indexers`. |
 | `MAINNET_RPC_URL`, `SEPOLIA_RPC_URL` | `https://mainnet.gateway.tenderly.co`, `https://sepolia.gateway.tenderly.co` | `indexer` | Ordered comma-separated HTTP(S) provider pool. |
 | `MAINNET_START_BLOCK`, `SEPOLIA_START_BLOCK` | `0` | `indexer` | Lower bound for deployment discovery. A manifest deployment block must not precede it. |
 | `MAINNET_AMM_FACTORY_ADDRESS`, `SEPOLIA_AMM_FACTORY_ADDRESS` | unset | `indexer` | Adds an Augur AMM factory as a tracked contract when the manifest does not already list that address. |
@@ -33,7 +33,7 @@ Every setting is an environment variable. The Compose column names the service t
 | `POSTGRES_URL` | `postgres://augurscan:augurscan@localhost:5432/augurscan`; in Compose, the bundled `postgres` service | `app`, `indexer` | Connects directly to PostgreSQL or through a session-mode pooler. |
 | `POSTGRES_PASSWORD` | `augurscan-local` | `postgres`, and the default `POSTGRES_URL` | Password of the bundled database. Compose only. |
 | `POSTGRES_MAX_WAL_SIZE` | `8GB` | `postgres` | Soft `max_wal_size` budget of the bundled database during backfill; leave disk headroom above it. Apply a change with `docker compose up -d postgres`. Compose only. |
-| `PORT` | `3000` | `app`, fixed to `3000` | Port the web app listens on. |
+| `PORT` | `3000` | `app`, fixed to `3000` | TCP port (1–65535) the web app listens on. The image health check probes the same port. |
 | `AUGURSCAN_PORT` | `3000` | host port of `app` | Host port that Compose publishes. Compose only. |
 | `API_RATE_LIMIT_PER_MINUTE` | `600` | `app` | Per-client API limit. `0` disables the limit when a trusted upstream enforces it. |
 | `TRUSTED_PROXY_ADDRESSES` | unset | `app` | Comma-separated addresses or CIDR ranges of reverse proxies whose `X-Forwarded-For` header is trusted for the per-client key. Unset trusts no proxy. |
@@ -282,7 +282,7 @@ if test "$AUGURSCAN_DATABASE_MODE" = bundled; then
 fi
 ```
 
-Export one dataset at a time from Bash. Supported datasets are `logs`, `reorgs`, and `timeline`. Logs and timeline accept `canonical`, `orphaned`, or `all`; reorganization exports require `all` because replacements have no canonical classification. The [API reference](API_REFERENCE.md#evidence-and-export) owns the full filter contract. The continuation cursor belongs to the response header, not the NDJSON body.
+Export one dataset at a time from Bash, each into its own directory. The script claims an empty `AUGURSCAN_EXPORT_DIRECTORY` before it starts the isolated app and refuses one that is not empty or that another attempt has claimed, so concurrent exports cannot publish into each other's pages. Supported datasets are `logs`, `reorgs`, and `timeline`. Logs and timeline accept `canonical`, `orphaned`, or `all`; reorganization exports require `all` because replacements have no canonical classification. The [API reference](API_REFERENCE.md#evidence-and-export) owns the full filter contract. The continuation cursor belongs to the response header, not the NDJSON body.
 
 ```bash
 export AUGURSCAN_EXPORT_DATASET=logs

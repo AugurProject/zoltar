@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { executePortfolioAutomation, executeQueuedPortfolioInstructions } from '../../src/runtime/scan-execution.ts'
 import { PortfolioOpportunityExpired } from '../../src/execution/portfolio-executor.ts'
+import { portfolioInstructionKind } from '../../src/execution/portfolio-instructions.ts'
 import type { PortfolioInstruction } from '../../src/config/portfolio-instructions.ts'
 import { createWalletClient, createRpcEndpointPool, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
@@ -69,4 +70,13 @@ test('queued instructions stop at the first submission and rethrow unexpected fa
 			throw new Error('Pending recovery or dry-run mode blocks portfolio instructions')
 		}),
 	).rejects.toThrow('Pending recovery')
+})
+
+test('journals each portfolio instruction by its effect on funds', () => {
+	expect(portfolioInstructionKind('vault-health')).toBe('configuration')
+	expect(portfolioInstructionKind('vault-earnings')).toBe('fees')
+	expect(portfolioInstructionKind('vault-withdraw')).toBe('withdrawal')
+	expect(portfolioInstructionKind('vault-deposit')).toBe('deposit')
+	expect(portfolioInstructionKind('auction-bid')).toBe('deposit')
+	expect(portfolioInstructionKind('vault-fork-choice')).toBe('migration')
 })

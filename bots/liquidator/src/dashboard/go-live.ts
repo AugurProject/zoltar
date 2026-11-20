@@ -1,4 +1,5 @@
 import { quorumRpcRow, relayDeliveryRow, renderExecutionMode, signerRow, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
+import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 import type { Configuration, Snapshot } from './api-validation.ts'
 
 const NETWORK_LABELS = { mainnet: 'Ethereum mainnet', sepolia: 'Sepolia' } as const
@@ -17,6 +18,16 @@ function canonicalContractsRow(snapshot: Snapshot): ReadinessRow {
 }
 
 /**
+ * Live execution refuses an active signer that differs from the key saved in the operator file.
+ * @internal Exported for readiness unit tests.
+ */
+export function executionSignerRow(wallet: string | undefined, savedSigner: string | undefined): ReadinessRow {
+	const row = signerRow(wallet, 'Set one under Execution signer')
+	if (wallet === undefined || savedSigner === undefined || savedSigner.toLowerCase() === wallet.toLowerCase()) return row
+	return { ...row, detail: `Saved key ${shorten(savedSigner)} differs from the active signer; save or remove it`, ready: false }
+}
+
+/**
  * The prerequisites the liquidator enforces before it signs: the operator file rejects live mode without a signer or
  * the quorum RPCs, the scan loop waits for the canonical contracts, and delivery needs a relay in private mode. Pools,
  * universes, and market evidence only decide what can be liquidated, so they are advisory.
@@ -26,7 +37,7 @@ function readinessRows(snapshot: Snapshot, configuration: Configuration): Readin
 	let marketDetail = 'No market sources configured'
 	if (consensus !== undefined) marketDetail = consensus.reliable ? 'Reliable' : 'Guarded · unavailable'
 	return [
-		signerRow(snapshot.wallet, 'Set one under Execution signer'),
+		executionSignerRow(snapshot.wallet, configuration.savedSigner),
 		networkRow(configuration),
 		quorumRpcRow(configuration.connectivity?.quorumRpcUrls.length ?? 0, configuration.connectivity?.rpcQuorum),
 		canonicalContractsRow(snapshot),

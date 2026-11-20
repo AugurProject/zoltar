@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import { latestAuctionCollateral } from './auction-collateral.ts'
+import { latestLedgers } from './capital.ts'
 import { literalContainsPattern } from './like-pattern.ts'
 
 export type TimelineFilters = {
@@ -40,6 +41,7 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 				OR timeline.summary_data::text ILIKE ${query === undefined ? '' : literalContainsPattern(query)})
 	`
 	const rows = await sql`
+			WITH ${latestLedgers(sql, chainId, asOfBlock)}
 			SELECT timeline.*, block.timestamp AS block_timestamp,
 				CASE WHEN timeline.canonical THEN 'canonical'
 					WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
@@ -51,7 +53,14 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 				invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
 				invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at,
 				-- Auction amounts are in the auction's collateral token, which its tagged reads sample.
-				CASE WHEN timeline.entity_type = 'auction' THEN ${latestAuctionCollateral(sql, chainId, asOfBlock, sql`timeline.entity_identity`)} END AS collateral
+				CASE WHEN timeline.entity_type = 'auction' THEN ${latestAuctionCollateral(sql, chainId, asOfBlock, sql`timeline.entity_identity`)}
+				-- Portfolio amounts are in the portfolio's collateral token, which its capital ledgers' tagged reads sample.
+				-- Each of these identities starts with the ledger, portfolio, services or settlement-book address.
+				WHEN timeline.entity_type IN ('vault', 'capital-position', 'portfolio', 'portfolio-services', 'settlement-book') THEN (
+					SELECT ledger.read_result->'collateral' FROM ledgers ledger
+					WHERE ledger.read_result->'collateral' IS NOT NULL AND lower(split_part(timeline.entity_identity, ':', 1)) IN (
+						ledger.ledger_address, lower(ledger.read_result->>'portfolio'), lower(ledger.read_result->'fees'->>'services'), lower(ledger.read_result->'fees'->>'settlementBook'))
+					LIMIT 1) END AS collateral
 			FROM (SELECT timeline.* FROM protocol_timeline_entries timeline ${timelineFilter()}
 			 AND (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash, timeline.entity_type, timeline.entity_identity) <
 			 (${cursor.block}::bigint, ${cursor.log}::integer, ${cursor.tx}, ${cursor.blockHash}, ${cursor.entityType}, ${cursor.identity})
@@ -128,11 +137,13 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 			? await sql`SELECT
 				(SELECT count(DISTINCT (chain_id, pool_address)) FROM pools WHERE canonical)::integer AS pools,
 				(SELECT count(DISTINCT (chain_id, question_id)) FROM questions WHERE canonical)::integer AS questions,
-				(SELECT count(DISTINCT (chain_id, universe_id)) FROM universe_events WHERE canonical)::integer AS universes`
+				-- A universe is listed from its initialization or deployment, so only those identities are counted; a parent
+				-- that partial coverage knows only from a later event is neither listed nor counted.
+				(SELECT count(DISTINCT (chain_id, universe_id)) FROM universe_events WHERE canonical AND event_name IN ('UniverseInitialized', 'DeployChild'))::integer AS universes`
 			: await sql`SELECT
 				(SELECT count(DISTINCT pool_address) FROM pools WHERE chain_id = ${chainId} AND canonical)::integer AS pools,
 				(SELECT count(DISTINCT question_id) FROM questions WHERE chain_id = ${chainId} AND canonical)::integer AS questions,
-				(SELECT count(DISTINCT universe_id) FROM universe_events WHERE chain_id = ${chainId} AND canonical)::integer AS universes`
+				(SELECT count(DISTINCT universe_id) FROM universe_events WHERE chain_id = ${chainId} AND canonical AND event_name IN ('UniverseInitialized', 'DeployChild'))::integer AS universes`
 	const questions =
 		chainId === undefined
 			? await sql`SELECT q.*, q.start_time::text AS start_time, q.end_time::text AS end_time, n.id AS network_id,
@@ -168,9 +179,12 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 			), fork AS (
 				SELECT DISTINCT ON (chain_id, universe_id) chain_id, universe_id, fork_question_id, fork_time, forker_address, fork_threshold_atto_rep, migration_rep_balance_atto_rep FROM universe_events WHERE canonical AND event_name = 'UniverseForked' ORDER BY chain_id, universe_id, block_number DESC, log_index DESC
 			) SELECT i.*, n.id AS network_id, s.theoretical_supply_atto_rep, s.supply_block, f.fork_question_id AS active_fork_question_id, f.fork_time AS active_fork_time, f.forker_address, f.fork_threshold_atto_rep, f.migration_rep_balance_atto_rep,
+				-- A child universe records the fork question of the parent fork that created it.
+				COALESCE(parent_fork.fork_question_id, CASE WHEN i.event_name = 'UniverseInitialized' AND i.universe_id <> i.parent_universe_id THEN i.fork_question_id END) AS inherited_fork_question_id,
 				(SELECT count(*) FROM identity child WHERE child.chain_id = i.chain_id AND child.parent_universe_id = i.universe_id AND child.universe_id <> i.universe_id) AS child_count,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = i.chain_id AND p.universe_id = i.universe_id AND p.canonical) AS pool_count
-				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id) WHERE (${search ?? null}::text IS NULL OR i.universe_id::text ILIKE ${search ?? ''}) ORDER BY i.chain_id, i.block_number, i.universe_id LIMIT ${queryLimit} OFFSET ${offset}`
+				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id)
+				LEFT JOIN fork parent_fork ON parent_fork.chain_id = i.chain_id AND parent_fork.universe_id = i.parent_universe_id AND i.universe_id <> i.parent_universe_id WHERE (${search ?? null}::text IS NULL OR i.universe_id::text ILIKE ${search ?? ''}) ORDER BY i.chain_id, i.block_number, i.universe_id LIMIT ${queryLimit} OFFSET ${offset}`
 			: await sql`WITH identity AS (
 				SELECT DISTINCT ON (chain_id, universe_id) * FROM universe_events WHERE canonical AND event_name IN ('UniverseInitialized', 'DeployChild') AND chain_id = ${chainId} ORDER BY chain_id, universe_id, block_number, log_index
 			), latest_supply AS (
@@ -178,9 +192,12 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 			), fork AS (
 				SELECT DISTINCT ON (chain_id, universe_id) chain_id, universe_id, fork_question_id, fork_time, forker_address, fork_threshold_atto_rep, migration_rep_balance_atto_rep FROM universe_events WHERE canonical AND event_name = 'UniverseForked' AND chain_id = ${chainId} ORDER BY chain_id, universe_id, block_number DESC, log_index DESC
 			) SELECT i.*, n.id AS network_id, s.theoretical_supply_atto_rep, s.supply_block, f.fork_question_id AS active_fork_question_id, f.fork_time AS active_fork_time, f.forker_address, f.fork_threshold_atto_rep, f.migration_rep_balance_atto_rep,
+				-- A child universe records the fork question of the parent fork that created it.
+				COALESCE(parent_fork.fork_question_id, CASE WHEN i.event_name = 'UniverseInitialized' AND i.universe_id <> i.parent_universe_id THEN i.fork_question_id END) AS inherited_fork_question_id,
 				(SELECT count(*) FROM identity child WHERE child.chain_id = i.chain_id AND child.parent_universe_id = i.universe_id AND child.universe_id <> i.universe_id) AS child_count,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = i.chain_id AND p.universe_id = i.universe_id AND p.canonical) AS pool_count
-				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id) WHERE (${search ?? null}::text IS NULL OR i.universe_id::text ILIKE ${search ?? ''}) ORDER BY i.chain_id, i.block_number, i.universe_id LIMIT ${queryLimit} OFFSET ${offset}`
+				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id)
+				LEFT JOIN fork parent_fork ON parent_fork.chain_id = i.chain_id AND parent_fork.universe_id = i.parent_universe_id AND i.universe_id <> i.parent_universe_id WHERE (${search ?? null}::text IS NULL OR i.universe_id::text ILIKE ${search ?? ''}) ORDER BY i.chain_id, i.block_number, i.universe_id LIMIT ${queryLimit} OFFSET ${offset}`
 	const returnedPools: Array<Record<string, unknown>> = pools.slice(0, queryLimit - 1)
 	const poolAddresses = returnedPools.map(pool => String(pool['pool_address']))
 	const pagePoolKeys = new Set(returnedPools.map(pool => `${pool['chain_id']}:${pool['pool_address']}`))

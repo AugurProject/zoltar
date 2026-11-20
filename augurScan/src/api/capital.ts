@@ -73,10 +73,12 @@ export const capitalDetailResponse = async (sql: SQL, parts: readonly string[], 
 		capitalPositionHistoryRows(sql, { chainId, ledger, owner, snapshotBlock, limit: 251 }),
 		capitalOwnerEventRows(sql, { chainId, ledger, owner, snapshotBlock, page: { block: page.cursor?.[9] ?? snapshotBlock, log: page.cursor?.[11] ?? 2_147_483_647, tx: page.cursor?.[10] ?? `0x${'f'.repeat(64)}`, limit: page.queryLimit } }),
 	])
-	const row = positions[0]
+	const ledgerRow = ledgers[0]
+	// An owner that a capital ledger's events name keeps its indexed history before its first balance sample.
+	const unsampled = ledgerRow !== undefined && (events.length > 0 || page.cursor !== undefined)
+	const row = positions[0] ?? (unsampled ? { ledger_address: ledger, owner_address: owner, read_status: 'unsampled', read_failure_reason: 'No tagged capital read has sampled this position yet' } : undefined)
 	if (row === undefined) return json({ error: 'Capital position not found' }, 404)
 	const position = capitalPosition(row)
-	const ledgerRow = ledgers[0]
 	return json({
 		chainId,
 		asOf,

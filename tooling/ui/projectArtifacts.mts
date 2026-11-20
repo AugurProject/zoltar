@@ -111,8 +111,17 @@ export async function copyProjectArtifacts(options: ProjectArtifactOptions = {},
 	await fs.writeFile(artifactPaths.tradingContractArtifactOutputPath, `// Generated from solidity/artifacts/Contracts.json by tooling/ui/projectArtifacts.mts. Do not edit.\nexport const tradingContracts = ${JSON.stringify(tradingContracts)} as const\n`)
 }
 
+/**
+ * The canonical Solidity build (`generate:ui-contract-artifact`) writes every UI contract export it advertises,
+ * including the Trading runtime artifact that Trading-facing Solidity tests typecheck against.
+ * App vendor builds call copyProjectArtifacts with their own narrower scope instead.
+ */
+export async function generateCanonicalProjectArtifacts(artifactPaths = defaultProjectArtifactPaths) {
+	await copyProjectArtifacts({ includeTrading: true }, artifactPaths)
+}
+
 if (import.meta.main) {
-	copyProjectArtifacts().catch(error => {
+	generateCanonicalProjectArtifacts().catch(error => {
 		console.error(error)
 		process.exit(1)
 	})

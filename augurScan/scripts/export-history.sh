@@ -92,6 +92,12 @@ augurscan_export_history() {
 	mkdir -p "$AUGURSCAN_EXPORT_DIRECTORY"
 	AUGURSCAN_EXPORT_DIRECTORY=$(cd "$AUGURSCAN_EXPORT_DIRECTORY" && pwd -P)
 	export AUGURSCAN_EXPORT_DIRECTORY
+	# One attempt owns a directory. mkdir is atomic, so of two concurrent exports exactly one claims it, and a page
+	# can never be renamed into another attempt's page directory.
+	test -z "$(ls -A "$AUGURSCAN_EXPORT_DIRECTORY")" && mkdir "$AUGURSCAN_EXPORT_DIRECTORY/.export-attempt" 2>/dev/null || {
+		echo "Refusing to export into $AUGURSCAN_EXPORT_DIRECTORY: it is not empty or another export attempt owns it. Use a new export directory." >&2
+		return 1
+	}
 	AUGURSCAN_EXPORT_CONTAINER=${AUGURSCAN_EXPORT_CONTAINER:-"augurscan-export-$$"}
 	AUGURSCAN_EXPORT_URL="http://localhost:$AUGURSCAN_EXPORT_PORT"
 	export AUGURSCAN_EXPORT_CONTAINER AUGURSCAN_EXPORT_URL

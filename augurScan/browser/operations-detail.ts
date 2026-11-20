@@ -13,7 +13,7 @@ import { exactUnit } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import { renderCandleContent } from './operations-candles.ts'
 import type { createOperationsComponents } from './operations-components.ts'
-import { tradingActivityPanel, tradingVolumeRows } from './trading-panels.ts'
+import { sharePositionSummary, tradingActivityPanel, tradingVolumeRows } from './trading-panels.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -229,13 +229,15 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		const tradingSummary = isPlainRecord(data['summary']) ? data['summary'] : {}
 		const twap24h = isPlainRecord(data['twap24h']) ? data['twap24h'] : {}
 		const twap7d = isPlainRecord(data['twap7d']) ? data['twap7d'] : {}
+		// Outcome shares use the market collateral's precision; LP tokens always use 18 decimals.
+		const shareDecimals = collateralUnit(tradingSummary).decimals
 		addPanel(
 			'overview',
 			operationsPanel(
 				'Trading summary',
 				[
-					operationRow('24-hour activity', `${operationCounted(tradingSummary['swaps_24h'], 'swap')} · ${exactUnit(String(tradingSummary['input_volume_24h'] ?? '0'), 18, 'input shares')} · ${exactUnit(String(tradingSummary['fees_24h'] ?? '0'), 18, 'fee shares')}`, undefined, undefined),
-					operationRow('Seven-day activity', `${operationCounted(tradingSummary['swaps_7d'], 'swap')} · ${exactUnit(String(tradingSummary['input_volume_7d'] ?? '0'), 18, 'input shares')} · ${exactUnit(String(tradingSummary['fees_7d'] ?? '0'), 18, 'fee shares')}`, undefined, undefined),
+					operationRow('24-hour activity', `${operationCounted(tradingSummary['swaps_24h'], 'swap')} · ${exactUnit(String(tradingSummary['input_volume_24h'] ?? '0'), shareDecimals, 'input shares')} · ${exactUnit(String(tradingSummary['fees_24h'] ?? '0'), shareDecimals, 'fee shares')}`, undefined, undefined),
+					operationRow('Seven-day activity', `${operationCounted(tradingSummary['swaps_7d'], 'swap')} · ${exactUnit(String(tradingSummary['input_volume_7d'] ?? '0'), shareDecimals, 'input shares')} · ${exactUnit(String(tradingSummary['fees_7d'] ?? '0'), shareDecimals, 'fee shares')}`, undefined, undefined),
 					operationRow('24-hour TWAP', `${String(twap24h['state'] ?? 'Unavailable')} · ${operationRatio(twap24h['numerator'], twap24h['denominator'])} NO per YES · ${operationNumber(twap24h['coverageSeconds'])} covered seconds`, 'NO per YES', undefined),
 					operationRow('Seven-day TWAP', `${String(twap7d['state'] ?? 'Unavailable')} · ${operationRatio(twap7d['numerator'], twap7d['denominator'])} NO per YES · ${operationNumber(twap7d['coverageSeconds'])} covered seconds`, 'NO per YES', undefined),
 				],
@@ -268,15 +270,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			'overview',
 			operationsPanel(
 				'Market share holders',
-				operationRecords(shares['items']).map(position =>
-					operationRow(
-						String(position['address']),
-						`${exactUnit(String(position['invalid_atto_shares']), 18, 'INVALID')} · ${exactUnit(String(position['yes_atto_shares']), 18, 'YES')} · ${exactUnit(String(position['no_atto_shares']), 18, 'NO')} · ${exactUnit(String(position['complete_sets_atto_shares']), 18, 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}`,
-						undefined,
-						undefined,
-						operationsHref(`/address/${position['address']}`),
-					),
-				),
+				operationRecords(shares['items']).map(position => operationRow(String(position['address']), sharePositionSummary(position), undefined, undefined, operationsHref(`/address/${position['address']}`))),
 				'No indexed share holders.',
 				{ label: `${String(shares['basis'] ?? 'Indexed transfer history')}${shares['truncated'] === true ? ' First 250 holders shown.' : ''}` },
 			),
@@ -511,7 +505,12 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	if (operationsDetailEvidencePanelVisible(route.kind, evidenceItems.length, evidenceHasMore, renderContext.focusLoadMore)) {
 		const evidenceTitles: Partial<Record<OperationsDetailRoute['kind'], string>> = { report: 'Report rounds', capital: 'Capital and liquidation events' }
 		// A take-over or cure names positions of one universe ledger; the chain does not tie it to a question pool.
-		const evidencePanel = operationsPanel(evidenceTitles[route.kind] ?? 'Lifecycle timeline', detailEvidenceRowsFor(route.kind, evidenceItems, auctionCollateral), 'No canonical evidence is available.', route.kind === 'capital' ? { label: 'Attributed to this owner and universe, not to a question pool' } : undefined)
+		const evidencePanel = operationsPanel(
+			evidenceTitles[route.kind] ?? 'Lifecycle timeline',
+			detailEvidenceRowsFor(route.kind, evidenceItems, route.kind === 'trading' ? collateralUnit(isPlainRecord(data['summary']) ? data['summary'] : {}) : auctionCollateral),
+			'No canonical evidence is available.',
+			route.kind === 'capital' ? { label: 'Attributed to this owner and universe, not to a question pool' } : undefined,
+		)
 		if (evidenceHasMore) {
 			const loadMore = document.createElement('button')
 			loadMore.type = 'button'

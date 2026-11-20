@@ -53,6 +53,45 @@ describe('simulation engine prepared states', () => {
 		expect(await restored.request({ method: 'eth_getTransactionReceipt', params: [firstLog.transactionHash] })).toMatchObject({ status: '0x1', transactionHash: firstLog.transactionHash })
 	}, 60_000)
 
+	test('a restored save reports missing historical state instead of absent code at its restored heights', async () => {
+		const engine = await createBaselineEngine()
+		await engine.bootstrap()
+		const repAddress = engine.getProfile().genesisRepTokenAddress
+		const account = engine.getState().selectedAccount
+		const historicalBlock = '0x3'
+		const historicalCode = await engine.request({ method: 'eth_getCode', params: [repAddress, historicalBlock] })
+		expect(historicalCode).not.toBe('0x')
+
+		const restored = await createSimulationEngine({ dependencies, initialization: { envelope: parseSavedSimulationStateEnvelope(await engine.exportState('history check')), kind: 'saved-state', stateId: 'history-check' } })
+		await restored.bootstrap()
+
+		expect(await restored.request({ method: 'eth_getBlockByNumber', params: [historicalBlock, false] })).toMatchObject({ number: historicalBlock })
+		await expect(restored.request({ method: 'eth_getCode', params: [repAddress, historicalBlock] })).rejects.toThrow('Simulation state at block 3 is unavailable')
+		await expect(restored.request({ method: 'eth_getBalance', params: [account, historicalBlock] })).rejects.toThrow('Simulation state at block 3 is unavailable')
+		expect(await restored.request({ method: 'eth_getCode', params: [repAddress, 'latest'] })).toBe(await engine.request({ method: 'eth_getCode', params: [repAddress, 'latest'] }))
+	}, 60_000)
+
+	test('reads the native balance of an untouched account at the current block', async () => {
+		const engine = await createBaselineEngine()
+		const untouched = '0x00000000000000000000000000000000000abcde'
+		const head = await engine.request({ method: 'eth_blockNumber', params: [] })
+		expect(await engine.request({ method: 'eth_getBalance', params: [untouched, head] })).toBe('0x0')
+		expect(await engine.request({ method: 'eth_getBalance', params: [engine.getState().selectedAccount, head] })).toBe(await engine.request({ method: 'eth_getBalance', params: [engine.getState().selectedAccount, 'latest'] }))
+	})
+
+	test('reads native balances at an older block for untouched accounts and either address case', async () => {
+		const engine = await createBaselineEngine()
+		await engine.bootstrap()
+		const account = engine.getState().selectedAccount
+		const pinned = await engine.request({ method: 'eth_blockNumber', params: [] })
+		const balanceAtPinned = await engine.request({ method: 'eth_getBalance', params: [account, 'latest'] })
+		await engine.advanceTime(900n)
+		expect(await engine.request({ method: 'eth_blockNumber', params: [] })).not.toBe(pinned)
+		expect(await engine.request({ method: 'eth_getBalance', params: ['0x00000000000000000000000000000000000abcde', pinned] })).toBe('0x0')
+		expect(await engine.request({ method: 'eth_getBalance', params: [account.toLowerCase(), pinned] })).toBe(balanceAtPinned)
+		expect(await engine.request({ method: 'eth_getBalance', params: [getAddress(account), pinned] })).toBe(balanceAtPinned)
+	}, 60_000)
+
 	test('a state saved without block history still restores at its clock', async () => {
 		const engine = await createBaselineEngine()
 		await engine.bootstrap()

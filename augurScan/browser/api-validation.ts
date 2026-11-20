@@ -338,4 +338,4 @@ export const isQuestionStateEntityValue = (value: unknown): boolean =>
 export const isUniverseStateEntityValue = (value: unknown): boolean =>
 	isPlainRecord(value) &&
 	hasStringFields(value, ['chain_id', 'network_id', 'universe_id', 'parent_universe_id', 'forking_outcome_index', 'reputation_token_address', 'theoretical_supply_atto_rep', 'child_count', 'pool_count']) &&
-	hasOptionalNullableStringFields(value, ['active_fork_question_id', 'active_fork_time', 'forker_address', 'fork_threshold_atto_rep', 'migration_rep_balance_atto_rep'])
+	hasOptionalNullableStringFields(value, ['inherited_fork_question_id', 'active_fork_question_id', 'active_fork_time', 'forker_address', 'fork_threshold_atto_rep', 'migration_rep_balance_atto_rep'])

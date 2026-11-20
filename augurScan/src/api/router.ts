@@ -20,7 +20,7 @@ import { stateCatalog, timelineCatalogResponse, timelineResponse } from './timel
 import { tradingCatalogResponse } from './trading-catalog.ts'
 import { tradingDetailResponse } from './trading-detail.ts'
 
-export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs = 48_000): Promise<Response | undefined> => {
+export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs = 48_000, enabledChainIds?: readonly number[]): Promise<Response | undefined> => {
 	const startedAt = performance.now()
 	const url = new URL(request.url)
 	if (request.method !== 'GET') return json({ error: 'Read-only API' }, 405)
@@ -36,7 +36,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 			return json({ items: rows.map((row: Record<string, unknown>) => decodedJsonColumns(row, actionJsonColumns)) })
 		}
 		if (url.pathname === '/api/v1/logs') return await listLogs(sql, url)
-		if (url.pathname === '/api/v1/search') return await searchResponse(sql, url)
+		if (url.pathname === '/api/v1/search') return await searchResponse(sql, url, enabledChainIds)
 		if (url.pathname.startsWith('/api/v1/transactions/')) return await transactionResponse(sql, url.pathname.slice('/api/v1/transactions/'.length).split('/'))
 		if (url.pathname.startsWith('/api/v1/blocks/')) return await blockResponse(sql, url.pathname.slice('/api/v1/blocks/'.length).split('/'))
 		if (url.pathname.startsWith('/api/v1/logs/')) return await logDetail(sql, url.pathname.slice('/api/v1/logs/'.length).split('/'), url)

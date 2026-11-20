@@ -370,19 +370,23 @@ export function getSavedSimulationStateStorageSummary(storage?: Storage) {
 	}
 }
 
+/**
+ * Replaces the stored records, first backing up the raw value when it holds anything the snapshot could not read, so
+ * cleanup, a new save and a delete all keep a recoverable copy of damaged saves instead of silently overwriting them.
+ */
+function replaceSavedStateStorageRecords(snapshot: SavedSimulationStateStorageSnapshot, records: readonly SavedSimulationStateRecord[], storage: Storage) {
+	const damaged = snapshot.hasMalformedStorageValue || snapshot.droppedRecordCount > 0
+	if (damaged && snapshot.rawValue !== null && snapshot.rawValue.trim() !== '') writeCorruptedSavedStateStorageBackup(snapshot.rawValue, storage)
+	writeSavedStateStorageRecords(records, storage)
+}
+
 export function removeCorruptedSavedSimulationStates(storage?: Storage) {
 	const storageReference = getStorage(storage)
 	const snapshot = getSavedSimulationStateStorageSnapshot(storageReference)
-	if (snapshot.hasMalformedStorageValue) {
-		if (snapshot.rawValue !== null && snapshot.rawValue.trim() !== '') {
-			writeCorruptedSavedStateStorageBackup(snapshot.rawValue, storageReference)
-		}
-		writeSavedStateStorageRecords([], storageReference)
-		return 1
-	}
-	if (snapshot.droppedRecordCount === 0) return 0
-	writeSavedStateStorageRecords(snapshot.records, storageReference)
-	return snapshot.droppedRecordCount
+	const removedCount = snapshot.hasMalformedStorageValue ? 1 : snapshot.droppedRecordCount
+	if (removedCount === 0) return 0
+	replaceSavedStateStorageRecords(snapshot, snapshot.records, storageReference)
+	return removedCount
 }
 
 function getSavedSimulationStateRecord(stateId: string, storage?: Storage) {
@@ -402,7 +406,9 @@ export function persistSavedSimulationState(serialized: string, storage?: Storag
 		name: normalizeSavedStateName(parsedEnvelope.name),
 	}
 	const normalizedSerialized = serializeSavedSimulationStateEnvelope(envelope)
-	const currentRecords = getSavedSimulationStateStorageSnapshot(storage).records
+	const storageReference = getStorage(storage)
+	const snapshot = getSavedSimulationStateStorageSnapshot(storageReference)
+	const currentRecords = snapshot.records
 	const persistedAt = new Date().toISOString()
 	const id = createSavedStateRecordId({
 		existingIds: new Set(currentRecords.map(record => record.id)),
@@ -420,14 +426,15 @@ export function persistSavedSimulationState(serialized: string, storage?: Storag
 		},
 		envelope.genesisOutcome ?? 'yes',
 	)
-	writeSavedStateStorageRecords([...currentRecords, nextRecord], storage)
+	replaceSavedStateStorageRecords(snapshot, [...currentRecords, nextRecord], storageReference)
 	return nextRecord
 }
 
 export function deleteSavedSimulationState(stateId: string, storage?: Storage) {
-	const currentRecords = getSavedSimulationStateStorageSnapshot(storage).records
-	const nextRecords = currentRecords.filter(record => record.id !== stateId)
-	if (nextRecords.length === currentRecords.length) return false
-	writeSavedStateStorageRecords(nextRecords, storage)
+	const storageReference = getStorage(storage)
+	const snapshot = getSavedSimulationStateStorageSnapshot(storageReference)
+	const nextRecords = snapshot.records.filter(record => record.id !== stateId)
+	if (nextRecords.length === snapshot.records.length) return false
+	replaceSavedStateStorageRecords(snapshot, nextRecords, storageReference)
 	return true
 }

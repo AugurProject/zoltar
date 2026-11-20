@@ -1,8 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { parseCoreDeploymentManifest, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from '../../trading/deploy/manifest'
+import { parseCoreDeploymentManifest, parseTradingFeeBps, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from '../../trading/deploy/manifest'
 
 describe('trading deployment manifest validation', () => {
+	test('defaults only an unset trading fee and rejects an empty or malformed one', () => {
+		expect(parseTradingFeeBps(undefined)).toBe(30n)
+		expect(parseTradingFeeBps('0')).toBe(0n)
+		expect(parseTradingFeeBps('9999')).toBe(9_999n)
+		for (const value of ['', ' ', '10000', '-1', '1.5', '0x1e', '030']) expect(() => parseTradingFeeBps(value)).toThrow('TRADING_FEE_BPS must be a whole number from 0 to 9999')
+	})
+
 	test('requires the core manifest and RPC to identify the same chain', () => {
 		const parsed = parseCoreDeploymentManifest({ network: { chainId: 31_337 }, contracts: { SecurityPoolFactory: { address: `0x${'12'.repeat(20)}` } } })
 		expect(parsed.chainId).toBe(31_337n)

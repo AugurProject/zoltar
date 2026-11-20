@@ -19,7 +19,9 @@ const deprecatedContractArtifactRelativePaths = ['solidity/types/contractArtifac
 
 const requiredContractArtifactRelativePaths = ['solidity/artifacts/Contracts.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/statoblastShared/ts/contractArtifact.ts', 'ui/coreShared/ts/abis.ts']
 const requiredOutputs = requiredContractArtifactRelativePaths.map(relativePath => path.join(repositoryRoot, relativePath))
-const freshnessInputs = [path.join(repositoryRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'tooling', 'ui', 'projectArtifacts.mts')]
+// Project ownership (solidity/ts/contractProjects.ts) decides which contracts each generated export contains, so it is a producer input.
+const freshnessInputRelativePaths = ['bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/ts/contractProjects.ts', 'tooling/ui/projectArtifacts.mts']
+const freshnessInputs = freshnessInputRelativePaths.map(relativePath => path.join(repositoryRoot, relativePath))
 const sharedFreshnessInputs = [path.join(repositoryRoot, 'shared/tsconfig.base.json'), path.join(repositoryRoot, 'shared/tsconfig.strict.json'), ...sharedPackages.flatMap(entry => [path.join(repositoryRoot, entry.path, 'package.json'), path.join(repositoryRoot, entry.path, 'tsconfig.json')])]
 const unexpectedSharedSourceOutputSuffixes = ['.js', '.js.map', '.d.ts', '.d.ts.map']
 const sharedTypeScriptSourceSuffixes = ['.ts', '.tsx', '.mts', '.cts']
@@ -132,6 +134,11 @@ async function runBunScript(args: string[], label: string): Promise<void> {
 
 export async function getRequiredSharedOutputRelativePaths(): Promise<string[]> {
 	return [...new Set([...(await getSharedPackageGeneratedOutputs(repositoryRoot)), ...sharedBrowserArtifactRelativePaths])]
+}
+
+/** Files other than solidity/contracts/** whose contents decide whether local contract artifacts are current. */
+export function getContractFreshnessInputRelativePaths(): string[] {
+	return [...freshnessInputRelativePaths]
 }
 
 export function getRequiredContractArtifactRelativePaths(): string[] {

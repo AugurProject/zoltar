@@ -57,19 +57,53 @@ export const confirmCanonicalBlock = async (number: bigint, expectedHash: Hash, 
 	if (observedHash !== expectedHash) throw new ChainContinuityError(`Block ${number} changed while it was being indexed`)
 }
 
-export const findSparseCanonicalAncestor = async (
-	before: bigint,
-	floor: bigint,
-	checkpointAtOrBefore: (blockNumber: bigint) => Promise<{ readonly number: bigint; readonly hash: Hash } | undefined>,
-	lookup: (blockNumber: bigint) => Promise<Hash>,
-): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> => {
-	let stored = await checkpointAtOrBefore(before)
-	while (stored !== undefined) {
-		if ((await lookup(stored.number)) === stored.hash) return stored
-		if (stored.number <= floor) break
-		stored = await checkpointAtOrBefore(stored.number - 1n)
+type StoredBlock = { readonly number: bigint; readonly hash: Hash }
+
+/**
+ * The newest stored canonical block that the remote chain still contains. Every stored anchor is a candidate, even
+ * below the confirmation depth: a block hash commits to its whole ancestry, so the first match bounds the blocks
+ * actually replaced. Because of that commitment, "the remote chain still has stored block N" holds for every stored
+ * block up to the answer and for none above it, so the search steps back by doubling offsets until a stored block
+ * matches and then bisects between that match and the nearest mismatch: O(log n) header reads, not one per stored block.
+ */
+export const findSparseCanonicalAncestor = async (before: bigint, checkpointAtOrBefore: (blockNumber: bigint) => Promise<StoredBlock | undefined>, lookup: (blockNumber: bigint) => Promise<Hash>, signal?: AbortSignal): Promise<StoredBlock | undefined> => {
+	const matches = async (stored: StoredBlock): Promise<boolean> => {
+		signal?.throwIfAborted()
+		return (await lookup(stored.number)) === stored.hash
 	}
-	return undefined
+	const newest = await checkpointAtOrBefore(before)
+	if (newest === undefined || (await matches(newest))) return newest
+	let mismatch = newest
+	let best: StoredBlock | undefined
+	// The nearest stored block at or before the last target is the match, so none lies in (best, low].
+	let low = 0n
+	for (let step = 1n; best === undefined; step *= 2n) {
+		if (mismatch.number === 0n) return undefined
+		const target = mismatch.number > step ? mismatch.number - step : 0n
+		const candidate = await checkpointAtOrBefore(target)
+		if (candidate === undefined) return undefined
+		if (await matches(candidate)) {
+			best = candidate
+			low = target
+		} else {
+			mismatch = candidate
+		}
+	}
+	// Invariant: best matches, mismatch does not, and no unexamined stored block lies in (best, low].
+	let high = mismatch.number
+	while (high - low > 1n) {
+		const middle = (low + high) / 2n
+		const candidate = await checkpointAtOrBefore(middle)
+		if (candidate === undefined || candidate.number <= best.number) {
+			low = middle
+		} else if (await matches(candidate)) {
+			best = candidate
+			low = middle
+		} else {
+			high = candidate.number
+		}
+	}
+	return best
 }
 
 export const commitSparseCanonicalBatch = async (anchors: readonly { readonly number: bigint; readonly hash: Hash }[], lookup: (blockNumber: bigint) => Promise<Hash>, commit: (validateBeforeCommit: () => Promise<void>) => Promise<void>): Promise<void> => {

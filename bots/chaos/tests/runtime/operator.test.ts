@@ -317,12 +317,14 @@ describe('chaos operator runtime', () => {
 		if (firstPool === undefined) throw new Error('Topology fixture requires one pool')
 		const summary = runtimeTopologySummary({
 			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
-			executionReady: false,
+			historyComplete: false,
 			snapshot,
 			topologyCache: topologyCacheWithVaults(firstPool.address, []),
 		})
 		expect(summary.anchor).toEqual({ blockNumber: 77n, timestamp: 1n })
 		expect(summary.complete).toBeFalse()
+		// A keyless operator whose history caught up reports complete discovery, so readiness does not call it stale.
+		expect(runtimeTopologySummary({ anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n }, historyComplete: true, snapshot, topologyCache: topologyCacheWithVaults(firstPool.address, []) }).complete).toBeTrue()
 		expect(summary.universes).toHaveLength(snapshot.universes.length)
 		expect(summary.pools[0]).toEqual({
 			address: firstPool.address,

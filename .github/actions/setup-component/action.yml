@@ -24,6 +24,5 @@ runs:
 
     - name: Install local dependency inputs
       shell: bash
-      run: |
-        bun ./tooling/repo/run-project-tasks.mts setup repository
-        bun ./tooling/repo/run-project-tasks.mts setup --project-path "${{ inputs.directory }}" --dependencies
+      # One plan, so the root workspace install shared by the repository and the component closure runs once.
+      run: bun ./tooling/repo/run-project-tasks.mts setup repository --project-path "${{ inputs.directory }}" --dependencies

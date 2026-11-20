@@ -49,6 +49,7 @@ const knownOwners = (sql: SQL, chainId: number, snapshotBlock: string) => sql`
 		UNION
 		SELECT resolved.read_result->>'ledger', resolved.read_result->>'owner' FROM entity_state_snapshots resolved
 		WHERE resolved.chain_id = ${chainId} AND resolved.entity_type = 'capital-position' AND resolved.canonical AND resolved.read_status = 'success'
+			AND resolved.block_number <= ${snapshotBlock}
 	)`
 
 export type CapitalPositionFilter = {
@@ -95,16 +96,41 @@ export const capitalPositionRows = async (sql: SQL, filter: CapitalPositionFilte
 	`
 }
 
-/** Every capital ledger with its latest read (accepted price, aggregate principal and commitment, universe) and the number of its known owners. */
+/**
+ * A registered contract existed at the snapshot block: its discovery (or, for a manifest entry, its deployment) is
+ * at or before it. A contract with neither boundary recorded is kept. `contract` names the joined contracts row.
+ */
+const contractExistedAt = (sql: SQL, snapshotBlock: string) => sql`COALESCE(contract.discovery_block, contract.deployment_block, 0) <= ${snapshotBlock}`
+
+/**
+ * `LEFT JOIN LATERAL` giving the latest read attempt of a ledger at the snapshot block whatever its outcome, as
+ * `attempt`. A failed sample after the latest successful one stays visible instead of the earlier values standing in
+ * for current ones. `ledgerColumn` is a trusted column expression of the calling query, never request input.
+ */
+export const latestLedgerAttempt = (sql: SQL, chainId: number, snapshotBlock: string, ledgerColumn: string) => sql`
+	LEFT JOIN LATERAL (
+		SELECT state.read_status, state.block_number, state.read_failure_reason FROM entity_state_snapshots state
+		JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
+		WHERE state.chain_id = ${chainId} AND state.entity_type = 'capital-ledger' AND state.entity_identity = ${sql.unsafe(ledgerColumn)}
+			AND state.canonical AND state.block_number <= ${snapshotBlock}
+		ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
+	) attempt ON true`
+
+/**
+ * Every capital ledger that existed at the snapshot block with its latest successful read (accepted price, aggregate
+ * principal and commitment, universe), the outcome of its latest read attempt, and the number of its known owners.
+ */
 export const capitalLedgerRows = async (sql: SQL, chainId: number, snapshotBlock: string, ledger?: string) =>
 	await sql`
 		WITH ${latestLedgers(sql, chainId, snapshotBlock)}, ${knownOwners(sql, chainId, snapshotBlock)},
 			owner_counts AS (SELECT ledger_address, count(*)::integer AS owner_count FROM owners GROUP BY ledger_address)
 		SELECT contract.address AS ledger_address, ledger.read_result, ledger.block_number::text AS block_number, ledger.block_hash, ledger.block_timestamp,
-			COALESCE(counted.owner_count, 0) AS owner_count
+			COALESCE(counted.owner_count, 0) AS owner_count,
+			attempt.read_status AS latest_read_status, attempt.block_number::text AS latest_read_block_number, attempt.read_failure_reason AS latest_read_failure_reason
 		FROM contracts contract LEFT JOIN ledgers ledger ON ledger.ledger_address = contract.address
 		LEFT JOIN owner_counts counted ON counted.ledger_address = contract.address
-		WHERE contract.chain_id = ${chainId} AND contract.canonical AND contract.kind = 'securityPoolCapitalLedger'
+		${latestLedgerAttempt(sql, chainId, snapshotBlock, 'contract.address')}
+		WHERE contract.chain_id = ${chainId} AND contract.canonical AND contract.kind = 'securityPoolCapitalLedger' AND ${contractExistedAt(sql, snapshotBlock)}
 			AND (${ledger ?? null}::text IS NULL OR contract.address = ${ledger ?? null})
 		ORDER BY contract.address LIMIT 250
 	`

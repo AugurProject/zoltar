@@ -1,6 +1,6 @@
 import { callTraceRows } from '../../browser/call-trace.ts'
 import { expect, test } from 'bun:test'
-import { semanticFields, semanticSummary, timelineEntityPath } from '../../browser/semantic-evidence.ts'
+import { semanticFields, semanticSummary, timelineEntityPath, timelineTransitionSummary } from '../../browser/semantic-evidence.ts'
 
 test('renders exact lifecycle amounts, counterparties and outcomes without rounding', () => {
 	expect(semanticSummary({ event_data: { badDebtAttoEth: String(1000000000000000001n), outcome: '3', receiver: '0x1111111111111111111111111111111111111111' } }, 'ETH')).toContain('1.000000000000000001 ETH')
@@ -23,6 +23,14 @@ test('formats auction collateral amounts, including nested clearing, with the co
 		['Lot', '2,500,000 collateral units'],
 		['Clearing', 'Raised: 7 collateral units'],
 	])
+})
+
+test('timeline portfolio premiums use the portfolio collateral token, never native ETH', () => {
+	const premium = { entity_type: 'portfolio-services', summary_data: { universeId: '0', amountAttoEth: '14247' } }
+	expect(timelineTransitionSummary({ ...premium, collateral: { symbol: 'USDC', decimals: 6 } }, 'ETH')).toBe('Universe Id: 0 · Amount: 0.014247 USDC')
+	expect(timelineTransitionSummary(premium, 'ETH')).toBe('Universe Id: 0 · Amount: 14,247 collateral units')
+	// Entities outside a portfolio keep the chain's native unit.
+	expect(timelineTransitionSummary({ entity_type: 'pool', summary_data: { amountAttoEth: String(10n ** 18n) } }, 'ETH')).toBe('Amount: 1 ETH')
 })
 
 test('timeline targets link only entities that have a detail page', () => {

@@ -20,28 +20,38 @@ export function deploymentArchivePath(activePath: string, id: string) {
 	return `${root}.retired-${id}.json`
 }
 
-export async function dashboardDeploymentArchives(activePath: string) {
-	const root = archiveRoot(activePath)
+/** Loads an archive's configuration and recovery journal, rejecting a journal that does not belong to that configuration. */
+export async function loadVerifiedDeploymentArchive(path: string) {
+	const loaded = await loadSettings(path)
+	const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
+	if (state.profileId !== executionProfileId(loaded.settings)) throw new Error('Deployment archive profile mismatch')
+	assertDurableStateFactories(loaded.settings, state)
+	if (!isPristineBootstrapState(state)) assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)
+	const configuredSigner = signerAddress(loaded.settings)
+	if (configuredSigner !== undefined && state.signerAddress !== undefined && configuredSigner.toLowerCase() !== state.signerAddress.toLowerCase()) throw new Error('Deployment archive signer mismatch')
+	return { loaded, state }
+}
+
+/** The retired archive IDs stored beside `root`, sorted. */
+export async function deploymentArchiveIds(root: string) {
 	const prefix = `${basename(root)}.retired-`
-	const ids = (await readdir(dirname(root)))
+	return (await readdir(dirname(root)))
 		.flatMap(entry => {
 			if (!entry.startsWith(prefix) || !entry.endsWith('.json')) return []
 			const id = entry.slice(prefix.length, -5)
 			return /^[a-f0-9]{64}$/.test(id) ? [id] : []
 		})
 		.sort()
+}
+
+export async function dashboardDeploymentArchives(activePath: string) {
+	const ids = await deploymentArchiveIds(archiveRoot(activePath))
 	return await Promise.all(
 		['current', ...ids].map(async id => {
 			const path = deploymentArchivePath(activePath, id)
 			const active = resolve(path) === resolve(activePath)
 			try {
-				const loaded = await loadSettings(path)
-				const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
-				if (state.profileId !== executionProfileId(loaded.settings)) throw new Error('Deployment archive profile mismatch')
-				assertDurableStateFactories(loaded.settings, state)
-				if (!isPristineBootstrapState(state)) assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)
-				const configuredSigner = signerAddress(loaded.settings)
-				if (configuredSigner !== undefined && state.signerAddress !== undefined && configuredSigner.toLowerCase() !== state.signerAddress.toLowerCase()) throw new Error('Deployment archive signer mismatch')
+				const { loaded, state } = await loadVerifiedDeploymentArchive(path)
 				return {
 					active,
 					id,

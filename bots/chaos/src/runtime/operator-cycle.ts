@@ -408,7 +408,8 @@ async function runCyclePhases(operator: OperatorState, cycle: OperatorCycle, dep
 	const completed = await scanCanonicalState(operator, cycle, deps, expectedProfileId)
 	if (completed === 'deferred') return 'deferred'
 	if (!completed.scan.executionReady) {
-		operator.backfillIncomplete = true
+		// A keyless operator whose history has caught up is idle, not backfilling.
+		operator.backfillIncomplete = !completed.scan.historyComplete
 		return settings.runtime.once
 	}
 	// Submission evidence is refreshed in every mode so the go-live checklist can be satisfied before arming.

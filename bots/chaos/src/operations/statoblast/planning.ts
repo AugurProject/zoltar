@@ -37,8 +37,6 @@ export const ERC20_TRANSFER_SIGNATURE = 'Transfer(address,address,uint256)'
 
 export const ERC20_TRANSFER_ABI = 'event Transfer(address indexed from, address indexed to, uint256 value)'
 
-;('event VaultMigrationCheckpoint(address indexed parentPool, address indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentUnderwritingLimitAttoEth, uint256 resultingChildRepBackingUnits, uint256 resultingChildUnderwritingLimitAttoEth, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalUnderwritingLimitAttoEth, uint256 resultingChildTotalUnderwritingLimitAttoEth, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth)')
-
 export const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 
 export const compareDecimalStrings = (left: string, right: string) => compareBigint(BigInt(left), BigInt(right))

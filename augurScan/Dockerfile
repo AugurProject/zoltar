@@ -38,6 +38,7 @@ RUN bun run --cwd shared/statoblast build
 WORKDIR /workspace/augurScan
 COPY augurScan/browser ./browser
 COPY augurScan/src/collateral.ts ./src/collateral.ts
+COPY augurScan/src/rich-list-limits.ts ./src/rich-list-limits.ts
 COPY augurScan/src/timeline-search.ts ./src/timeline-search.ts
 COPY augurScan/scripts/build-browser.ts ./scripts/build-browser.ts
 COPY augurScan/public ./public
@@ -86,5 +87,5 @@ COPY shared/statoblast/ts/statoblast/liquidation.ts ./shared/statoblast/ts/stato
 RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan
 USER bun
 EXPOSE 3000
-HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 CMD ["bun", "-e", "const r=await fetch('http://127.0.0.1:3000/health/ready');if(!r.ok)process.exit(1)"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 CMD ["bun", "-e", "const p=process.env.PORT?.trim()||'3000';const r=await fetch('http://127.0.0.1:'+p+'/health/ready');if(!r.ok)process.exit(1)"]
 CMD ["bun", "augurScan/src/server.ts"]

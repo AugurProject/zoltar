@@ -4,12 +4,12 @@ import { semanticSummary } from './semantic-evidence.ts'
 import type { AccountTransaction, ArgumentDefinition, LiveChangeOptions, LoadOptions, ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
 import { operationRecords } from './api-validation.ts'
 import { capitalPositionCard, capitalPositionPath } from './capital-presentation.ts'
-import { exactUnit } from './format.ts'
+import { exactUnit, tokenDecimals } from './format.ts'
 import { forkParticipationUniverse } from './operations-presentation.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioPage } from './portfolio-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
-import { tradingPnlPanel } from './trading-panels.ts'
+import { sharePositionSummary, tradingPnlPanel } from './trading-panels.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -35,6 +35,17 @@ export interface AddressProfileDeps {
 	readonly applyLiveChanges: (container: ParentNode, previous: ReadonlyMap<string, string>, options?: LiveChangeOptions) => unknown
 	readonly loadAddressProfile: (options?: LoadOptions) => Promise<boolean>
 }
+
+/**
+ * The address's WETH then REP token balances. The API lists the two apart, so each falls back to its own symbol, and to
+ * the 18 decimals the rich-list ranking assumes, when token metadata is missing.
+ * @internal Exported for presentation unit tests.
+ */
+export const addressTokenBalances = (item: Pick<RichListRecord, 'weth_balances' | 'rep_balances'>) =>
+	[...(item.weth_balances ?? []).map(token => ({ token, fallbackSymbol: 'WETH' })), ...(item.rep_balances ?? []).map(token => ({ token, fallbackSymbol: 'REP' }))].map(({ token, fallbackSymbol }) => ({
+		token,
+		amount: exactUnit(token.balance, tokenDecimals(token.decimals), token.symbol ?? fallbackSymbol),
+	}))
 
 export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], { live = false, portfolioFocusKind }: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) => {
 	const { lookup: $, liveSnapshot, nativeSymbol, element, isDemo, setLiveRecord, number, protocolAddressLink, operationsPanel, operationRow, operationCounted, operationsHref, openAccountTransactions, internalEvidenceLink, time, decodedArgumentsTable, applyLiveChanges, loadAddressProfile } = deps
@@ -78,11 +89,10 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const nativeCard = element('div', 'rich-token')
 	nativeCard.append(element('strong', '', item.native_balance_detail ? exactUnit(item.native_balance_detail.balance, 18, itemNativeSymbol) : `${itemNativeSymbol} pending`), element('span', '', item.native_balance_detail ? `Block #${number(item.native_balance_detail.blockNumber)}` : 'No balance snapshot yet'))
 	balanceGrid.append(nativeCard)
-	for (const token of [...(item.weth_balances ?? []), ...(item.rep_balances ?? [])]) {
-		const decimals = Number.isInteger(Number(token.decimals)) && Number(token.decimals) >= 0 && Number(token.decimals) <= 255 ? Number(token.decimals) : 18
+	for (const { token, amount } of addressTokenBalances(item)) {
 		const card = element('div', 'rich-token')
 		card.append(
-			element('strong', '', exactUnit(token.balance, decimals, token.symbol ?? 'REP')),
+			element('strong', '', amount),
 			element('span', '', `${token.universeId === undefined || token.universeId === null ? 'Token' : `Universe ${shortIdentifier(token.universeId)}`} · block #${number(token.blockNumber)}`),
 			protocolAddressLink(token.address, {
 				knownLabel: token.contractLabel,
@@ -130,6 +140,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		(item.escalation_positions ?? []).slice(0, 250).map(position => {
 			let state = 'Unconsumed losing principal'
 			if (position['consumed_block'] != null) state = `Consumed at block ${position['consumed_block']} (${['winning claim', 'losing settlement', 'export', 'direct parent claim'][Number(position['consumption_reason'])] ?? 'unknown consumption reason'})`
+			else if (position['retired_block'] != null) state = `Losing principal retired by settlement at block ${position['retired_block']}`
 			else if (position['final_resolution'] == null || position['final_resolution'] === '3') state = 'Pending resolution'
 			else if (position['final_resolution'] === position['outcome']) state = 'Unconsumed winning principal; see tagged payout evidence'
 			return operationRow(`Deposit ${position['deposit_index']}`, `${exactUnit(String(position['principal_atto_rep']), 18, 'REP')} principal · ${state}`, String(position['game_address']), position['resolution_block'], operationsHref(`/escalation/${position['game_address']}`))
@@ -167,14 +178,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const shares = item.share_positions ?? {}
 	const sharePanel = operationsPanel(
 		'Share positions',
-		operationRecords(shares['items']).map(position =>
-			operationRow(
-				`Universe ${String(position['universe_id'])}`,
-				`${exactUnit(String(position['invalid_atto_shares']), 18, 'INVALID')} · ${exactUnit(String(position['yes_atto_shares']), 18, 'YES')} · ${exactUnit(String(position['no_atto_shares']), 18, 'NO')} · ${exactUnit(String(position['complete_sets_atto_shares']), 18, 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}`,
-				String(position['token']),
-				undefined,
-			),
-		),
+		operationRecords(shares['items']).map(position => operationRow(`Universe ${String(position['universe_id'])}`, sharePositionSummary(position), String(position['token']), undefined)),
 		'No indexed share positions.',
 		{ label: `${String(shares['basis'] ?? 'Indexed transfer history')}${shares['truncated'] === true ? ' First 250 positions shown.' : ''}` },
 	)

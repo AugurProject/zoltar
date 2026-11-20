@@ -227,6 +227,8 @@ export type UniverseRecord =
 			forking_outcome_index: string
 			reputation_token_address: string
 			theoretical_supply_atto_rep: string
+			/** The parent fork question recorded for a child universe. */
+			inherited_fork_question_id?: string | null
 			active_fork_question_id: string
 			active_fork_time: string
 			forker_address: string
@@ -243,6 +245,7 @@ export type UniverseRecord =
 			forking_outcome_index: string
 			reputation_token_address: string
 			theoretical_supply_atto_rep: string
+			inherited_fork_question_id?: string | null
 			active_fork_question_id: null
 			active_fork_time: null
 			child_count: string

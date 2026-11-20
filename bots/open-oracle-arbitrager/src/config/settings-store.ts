@@ -421,12 +421,12 @@ export async function switchOperatorNetworkProfile(path: string, network: Networ
 			}
 		},
 		current,
-		loadProfile: network => loadOperatorSettings(networkProfilePath(path, network)),
+		loadProfile: network => loadOperatorSettingsWithRevision(networkProfilePath(path, network)),
 		network,
 		networkOf: operatorNetwork,
 		preflight,
 		saveActive: (settings, expectedRevision) => saveOperatorSettings(path, settings, undefined, expectedRevision),
-		saveProfile: (network, settings) => saveOperatorSettings(networkProfilePath(path, network), settings),
+		saveProfile: (network, settings, expectedRevision) => saveOperatorSettings(networkProfilePath(path, network), settings, undefined, expectedRevision),
 	})
 }
 

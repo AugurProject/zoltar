@@ -32,10 +32,14 @@ function validateManifest(manifest) {
   const tracked = steps.filter((step) => step.id !== "deploymentStatusOracle");
   if (tracked.length === 0 || tracked.length > 256)
     throw new TypeError("Deployment manifest must contain between 1 and 256 tracked steps");
+  if (!tracked.some((step) => step.id === ZOLTAR_ORACLE_LAST_STEP_ID))
+    throw new TypeError(`Deployment manifest must contain a ${ZOLTAR_ORACLE_LAST_STEP_ID} step`);
   return tracked;
 }
+var ZOLTAR_ORACLE_LAST_STEP_ID = "zoltar";
 var decoder = requiredElement(document, "#deployment-mask-decoder", HTMLDetailsElement);
 var networkSelect = requiredElement(decoder, "[data-deployment-mask-network]", HTMLSelectElement);
+var oracleSelect = requiredElement(decoder, "[data-deployment-mask-oracle]", HTMLSelectElement);
 var maskInput = requiredElement(decoder, '[data-tool-input="deploymentMask"]', HTMLInputElement);
 var maskSummary = requiredElement(decoder, "[data-deployment-mask-summary]", HTMLOutputElement);
 var maskGuidance = requiredElement(decoder, "[data-deployment-mask-guidance]", HTMLElement);
@@ -50,12 +54,21 @@ var loading = false;
 function selectedNetworkId() {
   return networkSelect.value === "sepolia" ? "sepolia" : "mainnet";
 }
+function isZoltarOracleSelected() {
+  return oracleSelect.value === "zoltar";
+}
+function oracleSteps(steps) {
+  if (!isZoltarOracleSelected())
+    return steps;
+  return steps.slice(0, steps.findIndex((step) => step.id === ZOLTAR_ORACLE_LAST_STEP_ID) + 1);
+}
 function setToolUnavailable(unavailable) {
   if (unavailable)
     decoder.dataset["toolUnavailable"] = "true";
   else
     delete decoder.dataset["toolUnavailable"];
   maskInput.disabled = unavailable;
+  oracleSelect.disabled = unavailable;
   for (const button of bitGrid.querySelectorAll("button"))
     button.disabled = unavailable;
   decoder.dispatchEvent(new CustomEvent("docs:tool-availability"));
@@ -185,10 +198,18 @@ function updateDecoder() {
     return;
   }
   maskInput.removeAttribute("aria-invalid");
+  const trackedSteps = oracleSteps(steps);
   const deployedSteps = [];
   for (const [bit, step] of steps.entries()) {
     const isSet = (mask & 1n << BigInt(bit)) !== 0n;
     const statusCell = network.body.querySelector(`[data-deployment-bit-status="${bit}"]`);
+    if (bit >= trackedSteps.length) {
+      if (statusCell instanceof HTMLTableCellElement) {
+        statusCell.textContent = "Not tracked · Zoltar-only oracle";
+        delete statusCell.dataset["maskState"];
+      }
+      continue;
+    }
     if (statusCell instanceof HTMLTableCellElement) {
       statusCell.textContent = isSet ? "Set · code present" : "Clear · no code";
       statusCell.dataset["maskState"] = isSet ? "set" : "clear";
@@ -202,9 +223,9 @@ function updateDecoder() {
     if (isSet)
       deployedSteps.push(step.label);
   }
-  const unknownBits = mask >> BigInt(steps.length);
-  const scope = `${network.label}: `;
-  maskSummary.value = deployedSteps.length === 0 ? `${scope}0 of ${steps.length} tracked steps have set bits.` : `${scope}${deployedSteps.length} of ${steps.length} tracked steps have set bits: ${deployedSteps.join(", ")}.`;
+  const unknownBits = mask >> BigInt(trackedSteps.length);
+  const scope = `${network.label}${isZoltarOracleSelected() ? " Zoltar-only oracle" : ""}: `;
+  maskSummary.value = deployedSteps.length === 0 ? `${scope}0 of ${trackedSteps.length} tracked steps have set bits.` : `${scope}${deployedSteps.length} of ${trackedSteps.length} tracked steps have set bits: ${deployedSteps.join(", ")}.`;
   maskGuidance.textContent = unknownBits === 0n ? "No bits are set above the tracked manifest range." : `Additional untracked high bits are set (shifted value ${unknownBits.toString(16).toUpperCase()} hex). Verify the constructor event before interpreting them.`;
   decoder.dataset["widgetState"] = unknownBits === 0n ? "safe" : "warning";
 }
@@ -224,7 +245,7 @@ function applySelectedNetwork() {
     decoder.dataset["widgetState"] = "unsafe";
     return;
   }
-  renderBitGrid(network.steps);
+  renderBitGrid(oracleSteps(network.steps));
   retryButton.hidden = networkIds.every((networkId) => networks[networkId].steps !== undefined);
   retryButton.disabled = false;
   setToolUnavailable(false);
@@ -246,6 +267,7 @@ async function loadMappings() {
   applySelectedNetwork();
 }
 networkSelect.addEventListener("change", applySelectedNetwork);
+oracleSelect.addEventListener("change", applySelectedNetwork);
 maskInput.addEventListener("input", updateDecoder);
 retryButton.addEventListener("click", () => {
   if (!loading)

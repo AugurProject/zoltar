@@ -1,6 +1,6 @@
 import { auctionFixture } from '../support/portfolio-fixtures.ts'
 import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
-import { availableHistoryExecutionReady } from '../../src/runtime/scan-readiness.ts'
+import { availableHistoryExecutionReady, canonicalScanReadiness } from '../../src/runtime/scan-readiness.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { describe, expect, test } from 'bun:test'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
@@ -49,6 +49,30 @@ test('execution waits for the retained range and discovery, without requiring th
 	delete index.availableStartBlock
 	expect(availableHistoryExecutionReady(index, 11185999n, true, false)).toBeFalse()
 	expect(availableHistoryExecutionReady(index, 11185999n, true, true)).toBeTrue()
+})
+
+test('a keyless scan at the anchor has complete history without being executable', () => {
+	const index: ChaosProtocolIndex = {
+		schemaVersion: 4,
+		chainId: 1,
+		openOracle: wallet,
+		zoltar: wallet,
+		securityPoolForker: wallet,
+		wallet,
+		startBlock: '0',
+		cursor: { blockNumber: '132', blockHash: zeroHash },
+		reports: [],
+		auctionBids: {},
+		auctionRefunds: {},
+		escalationDeposits: [],
+		migrationRepSplits: [],
+		childRepSplits: [],
+	}
+	const keyless = { anchorBlockNumber: 132n, carryProofsComplete: false, discoveryComplete: true, index, wallet: undefined }
+	expect(canonicalScanReadiness(keyless)).toEqual({ executionReady: false, historyComplete: true })
+	expect(canonicalScanReadiness({ ...keyless, anchorBlockNumber: 133n })).toEqual({ executionReady: false, historyComplete: false })
+	expect(canonicalScanReadiness({ ...keyless, wallet })).toEqual({ executionReady: false, historyComplete: false })
+	expect(canonicalScanReadiness({ ...keyless, carryProofsComplete: true, wallet })).toEqual({ executionReady: true, historyComplete: true })
 })
 
 const wallet = getAddress('0x0000000000000000000000000000000000000001')

@@ -156,7 +156,7 @@ The Compose prefix runs the command against the container's state volume. Append
 | Accept residuals | `--accept-residuals "$target_id" --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR $target_id"` | See below. |
 | Register a V3 position | `--register-v3-position '<json>' --confirm "REGISTER V3 profile:id"` | See below. |
 
-A drain request accepts three optional flags: `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>` (an integer from `0` through `10000`), and `--exit-after-completion`.
+A drain request accepts three optional flags: `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>` or `--exit-unmatched-shares <maximum-loss-bps>` (an integer from `0` through `10000`), and `--exit-after-completion`. Any other or repeated argument rejects the request without saving it.
 
 For example, with direct Bun:
 

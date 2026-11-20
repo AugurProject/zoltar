@@ -30,12 +30,14 @@ export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL)
 	const indexedThroughBlock = network['indexed_block'] === null ? undefined : String(network['indexed_block'])
 	const requestedFromBlock = url.searchParams.has('fromBlock') ? fromBlock : indexedFromBlock
 	const requestedToBlock = url.searchParams.has('toBlock') ? toBlock : indexedThroughBlock
+	// An omitted toBlock means the indexed head, so a fromBlock beyond it is the same empty range as an explicit one.
+	if (url.searchParams.has('fromBlock') && requestedToBlock !== undefined && BigInt(requestedFromBlock) > BigInt(requestedToBlock)) throw new ApiRequestError(url.searchParams.has('toBlock') ? 'fromBlock must not exceed toBlock' : 'fromBlock must not exceed the indexed head')
 	const historyIdentity = JSON.stringify({ type, identity: parts.slice(2).map(part => part.toLowerCase()), fromBlock, toBlock, indexedFromBlock })
 	const page = offsetPage(url, chainId, 'state-history', historyIdentity)
 	if (page.identity !== historyIdentity) throw new ApiRequestError('cursor does not match filters')
 	if (page.cursor !== undefined && !snapshotBoundaryMatches(page.cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	const offset = page.offset
-	const rangeCovered = indexedThroughBlock !== undefined && requestedToBlock !== undefined && BigInt(requestedFromBlock) >= BigInt(indexedFromBlock) && BigInt(requestedToBlock) <= BigInt(indexedThroughBlock)
+	const rangeCovered = indexedThroughBlock !== undefined && requestedToBlock !== undefined && BigInt(requestedFromBlock) <= BigInt(requestedToBlock) && BigInt(requestedFromBlock) >= BigInt(indexedFromBlock) && BigInt(requestedToBlock) <= BigInt(indexedThroughBlock)
 	const coverage = (truncated: boolean, series: Record<string, number>) => ({
 		requestedFromBlock,
 		requestedToBlock: requestedToBlock ?? toBlock,

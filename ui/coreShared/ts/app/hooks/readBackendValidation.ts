@@ -1,5 +1,5 @@
 import type { ChainBackend, ReadBackendIssue, ReadBackendStatus } from '../../wallet/chainBackend.js'
-import { formatTimestampWithRelative } from '../../lib/formatters.js'
+import { formatBlockTimestampWithRelative } from '../../lib/formatters.js'
 export type ChainClock = {
 	currentBlockNumber: bigint | undefined
 	currentTimestamp: bigint | undefined
@@ -53,7 +53,7 @@ export async function validateConfiguredReadBackend(backend: ChainBackend): Prom
 	if (backend.profile.id !== 'simulation' && blockTimestamp !== undefined && currentUnixSeconds > blockTimestamp + READ_BACKEND_STALE_BLOCK_SECONDS) {
 		return {
 			readBackendIssue: 'stale',
-			readBackendMessage: `Configured read RPC is out of date. Its latest block is from ${formatTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`,
+			readBackendMessage: `Configured read RPC is out of date. Its latest block is from ${formatBlockTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`,
 			validated: true,
 		}
 	}

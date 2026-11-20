@@ -7,6 +7,7 @@ import { startDashboardServer } from '#dashboard/dashboard-server'
 import { loadPoolCatalog } from '#monitoring/pool-catalog'
 import { operatorSnapshot } from '#state/operator-state'
 import { setApprovedUniverses, setMarketConfiguration, setNetworkConnectivity, setSelectedPortfolios, setStrategy, setSupportedPortfolio, switchNetworkProfile } from './configuration-handlers.ts'
+import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { persistSettings, signerWalletFor, type LiquidatorDeps, type LiquidatorRuntime } from './liquidator-runtime.ts'
 import { testMarketSources } from './market-source-test.ts'
 import { reconcileTransaction } from './transaction-reconciliation-handler.ts'
@@ -33,7 +34,7 @@ export function startLiquidatorDashboard(runtime: LiquidatorRuntime, deps: Liqui
 	const goLiveControls = goLiveControlsFor(runtime, deps)
 	if (!runtime.settings.runtime.ui) return undefined
 	return startDashboardServer(runtime.settings.runtime.uiPort, {
-		getConfiguration: () => serializedSettings(runtime.settings, true),
+		getConfiguration: () => ({ ...serializedSettings(runtime.settings, true), savedSigner: runtime.settings.privateKey === undefined ? undefined : privateKeyToAccount(runtime.settings.privateKey).address }),
 		getPoolCatalog: (page, address, scope) => loadPoolCatalog(runtime.client, runtime.settings.deployment.securityPoolFactory, runtime.settings.network.chainId, page, address, scope === 'monitored' ? state.pools.map(pool => pool.address) : undefined, deps.poolDeploymentDates),
 		getState: () => {
 			state.rpcEndpointHealth = runtime.readPool.snapshot()

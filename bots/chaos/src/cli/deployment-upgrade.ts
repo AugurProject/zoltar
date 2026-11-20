@@ -2,16 +2,18 @@
 
 import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks, runBotMain } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createHash, randomUUID } from 'node:crypto'
-import { lstat, readdir } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
+import { lstat } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { canonicalDeployment } from '../config/canonical-deployment.ts'
 import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../config/deployment-state.ts'
 import { executionProfileId } from '../config/execution-profile.ts'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
+import { deploymentArchiveIds, loadVerifiedDeploymentArchive } from '../runtime/deployment-archives.ts'
 import { retirementReplacementTargetId, RetirementCompletionPendingError, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
@@ -75,18 +77,21 @@ async function archiveDeployment(path: string, settings: OperatorSettings) {
 	return id
 }
 
+type ListedDeploymentArchive = { error?: undefined; id: string; profileId: string; stateFile: string; status: string } | { error: string; id: string; status: 'unverified' }
+
+/** Lists every archive; one that cannot be verified is reported on its own line instead of hiding the others. */
 export async function listDeploymentArchives(path?: string) {
 	const loaded = await loadSettings(path)
-	const prefix = `${basename(loaded.path)}.retired-`
-	const archives: { id: string; profileId: string; stateFile: string; status: string }[] = []
-	for (const entry of (await readdir(dirname(loaded.path))).sort()) {
-		if (!entry.startsWith(prefix) || !entry.endsWith('.json')) continue
-		const id = entry.slice(prefix.length, -5)
-		const archived = await loadSettings(archivePath(loaded.path, id))
-		const state = await loadDurableState(archived.settings.runtime.stateFile, archived.settings.network.chainId)
-		archives.push({ id, profileId: executionProfileId(archived.settings), stateFile: archived.settings.runtime.stateFile, status: state.retirement.status })
-	}
-	return archives
+	return await Promise.all(
+		(await deploymentArchiveIds(loaded.path)).map(async (id): Promise<ListedDeploymentArchive> => {
+			try {
+				const archived = await loadVerifiedDeploymentArchive(archivePath(loaded.path, id))
+				return { id, profileId: executionProfileId(archived.loaded.settings), stateFile: archived.loaded.settings.runtime.stateFile, status: archived.state.retirement.status }
+			} catch (error) {
+				return { error: errorMessage(error), id, status: 'unverified' }
+			}
+		}),
+	)
 }
 
 function isUnoperatedSignerlessState(state: Awaited<ReturnType<typeof loadDurableState>>) {
@@ -220,7 +225,7 @@ async function main() {
 	if (command === 'archives') {
 		const archives = await listDeploymentArchives()
 		if (archives.length === 0) console.log('No archived deployments. Run start.bat to select the latest contracts and archive an older deployment.')
-		for (const archive of archives) console.log(`${archive.id}  ${archive.status}  ${archive.profileId}  ${archive.stateFile}`)
+		for (const archive of archives) console.log(archive.error === undefined ? `${archive.id}  ${archive.status}  ${archive.profileId}  ${archive.stateFile}` : `${archive.id}  ${archive.status}  ${archive.error}`)
 		return
 	}
 	if (command === 'status') {

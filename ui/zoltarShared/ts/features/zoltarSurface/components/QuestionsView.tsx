@@ -53,8 +53,8 @@ export function QuestionsView({ currentTimestamp, forkHandoff, loadingZoltarQues
 		loadPage: pageIndex => onLoadZoltarQuestionPage(pageIndex, QUESTION_PAGE_SIZE),
 		pageSize: QUESTION_PAGE_SIZE,
 		receivedPage,
-		// After a scan, block refreshes of the last scanned page keep its cached questions current.
-		refreshedItems: zoltarQuestionPage?.questions,
+		// After a scan, block refreshes of the last scanned page keep its cached questions current, including removals.
+		refreshedPage: receivedPage,
 		store: questionDownloadStore,
 		toDownloadedItem: question => ({ data: question, id: question.questionId }),
 	})

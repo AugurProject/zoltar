@@ -145,7 +145,7 @@ The source-admission table explains whether each configured source is admitted o
 bun run smoke:markets -- http://127.0.0.1:4183
 ```
 
-It exits unsuccessfully if any configured source cannot produce a usable observation and exercises the saved CCXT adapters, RPC connection, chain, pair addresses, and WETH deployment.
+For a password-protected dashboard, set `ZOLTAR_BOT_DASHBOARD_PASSWORD` to the dashboard password in the command's environment; the check then sends the same Basic credentials as the browser. It exits unsuccessfully if any configured source cannot produce a usable observation and exercises the saved CCXT adapters, RPC connection, chain, pair addresses, and WETH deployment.
 
 Run that smoke check before enabling execution and after changing an adapter.
 
@@ -179,7 +179,7 @@ The operator file is `version: 2`. A key is required unless the Default column g
 | Key | Type | Range | Default | Example | Effect |
 | --- | --- | --- | --- | --- | --- |
 | `execute` | boolean | — | required | `false` | Startup execution mode; `false` is dry-run. |
-| `once` | boolean | — | required | `false` | Runs one cycle and exits. |
+| `once` | boolean | — | required | `false` | Runs one cycle and exits. It exits with an error when the chain and RPC endpoints are not saved, and exits successfully after reporting an undeployed system. |
 | `ui` | boolean | — | required | `true` | Serves the dashboard. |
 | `uiHost` | string | `127.0.0.1` or `0.0.0.0` | required | `127.0.0.1` | Dashboard bind address. See [dashboard access](../README.md#dashboard-access). |
 | `uiPort` | number | 1–65,535 | required | `4183` | Dashboard port. |

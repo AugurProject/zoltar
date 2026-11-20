@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { parseTimestampInput, tryParseTimestampInput } from '../forms/formInputs.js'
+import { formatLocalDateTimeInput, parseTimestampInput, tryParseTimestampInput } from '../forms/formInputs.js'
 
 describe('timestamp form inputs', () => {
 	let originalTimeZone: string | undefined
@@ -21,6 +21,15 @@ describe('timestamp form inputs', () => {
 		expect(tryParseTimestampInput('2027-03-14T02:30')).toBeUndefined()
 		expect(tryParseTimestampInput('2027-03-14T03:30')).toBe(1_805_009_400n)
 		expect(() => parseTimestampInput('2027-03-14T02:30', 'Start time')).toThrow('Start time is invalid')
+	})
+
+	test('formats an instant as the datetime-local value that parses back to it', () => {
+		expect(formatLocalDateTimeInput(1_805_009_400n)).toBe('2027-03-14T03:30')
+		expect(formatLocalDateTimeInput(1_805_009_415n)).toBe('2027-03-14T03:30:15')
+		for (const value of ['2027-06-02T12:00', '2027-11-07T01:30', '2027-03-14T03:30:15']) {
+			const timestamp = tryParseTimestampInput(value)
+			expect(timestamp === undefined ? undefined : formatLocalDateTimeInput(timestamp)).toBe(value)
+		}
 	})
 
 	test('keeps the repeated autumn hour, seconds, raw Unix timestamps and absolute instants', () => {

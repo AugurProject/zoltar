@@ -87,7 +87,7 @@
 										<li><a href="../reference/glossary.html#theoretical-rep-supply">Theoretical REP supply</a>: Zoltar <code>getUniverseTheoreticalSupplyAttoRep(universeId)</code></li>
 										<li>Pool <a href="../reference/glossary.html#open-interest">open interest</a>: pool <code>settlementCollateralAttoEth()</code></li>
 										<li>REP deposited as underwriting capital: portfolio <code>capitalLedger(universeId)</code>, then the <code>rep</code> value from that ledger's <code>totals()</code></li>
-										<li>Cached REP price in portfolio collateral: coordinator <code>lastPrice</code></li>
+										<li>Cached REP price: coordinator <code>lastPrice</code>, the accepted report's REP base units × 10<sup>18</sup> ÷ its collateral base units. It counts REP per unit of portfolio collateral, so invert it before valuing REP in collateral</li>
 										<li>REP depth and price impact: arbitrager Uniswap venue quotes</li>
 										<li>Pool and vault risk: augurScan <code>/operations/risk</code></li>
 										<li>REP discounted cash flow: off-chain valuation (no on-chain read)</li>

@@ -26,9 +26,18 @@ export const parseOperationsDetailRoute = (pathname: string): OperationsDetailRo
 	return undefined
 }
 
+/**
+ * A question or universe ID from its route segment as the decimal the catalog API requires.
+ * Accepts the decimal form and the 0x-prefixed uint256 hex form the detail pages display; undefined for anything else.
+ */
+export const systemRouteIdentity = (segment: string): string | undefined => {
+	if (/^[0-9]{1,78}$/.test(segment)) return BigInt(segment) < 2n ** 256n ? BigInt(segment).toString() : undefined
+	return /^0x[0-9a-fA-F]{1,64}$/.test(segment) ? BigInt(segment).toString() : undefined
+}
+
 export const classifyRoute = (pathname: string): ScannerRoute => {
 	if (pathname === '/') return 'activity'
-	if (pathname === '/system' || new RegExp(`^/(question|universe)/(${address}|[0-9]{1,78})$`).test(pathname)) return 'system'
+	if (pathname === '/system' || (/^\/(question|universe)\/[^/]+$/.test(pathname) && systemRouteIdentity(pathname.split('/')[2] ?? '') !== undefined)) return 'system'
 	if (pathname === '/operations' || (pathname.startsWith('/operations/') && ((operationsSections.has(pathname.split('/')[2] ?? '') && pathname.split('/').length === 3) || parseOperationsDetailRoute(pathname) !== undefined)) || parseOperationsDetailRoute(pathname) !== undefined) return 'operations'
 	if (pathname === '/contracts') return 'contracts'
 	if (pathname === '/richlist') return 'richlist'
@@ -87,6 +96,17 @@ export const navigationTarget = (linkUrl: URL, currentUrl: URL): URL => {
 		if (preferenceRoute !== undefined && preferenceRoute !== target.pathname) continue
 		if (!target.searchParams.has(name) && !routeScopedParameters.includes(name)) target.searchParams.set(name, value)
 	}
+	return target
+}
+
+/**
+ * The destination of a section link (the desktop tabs and the narrow-screen picker): the section already shown keeps the
+ * current view, including a historical `atBlock`, and any other section is a fresh {@link navigationTarget}.
+ */
+export const sectionLinkTarget = (linkUrl: URL, currentUrl: URL): URL => {
+	if (linkUrl.pathname !== currentUrl.pathname) return navigationTarget(linkUrl, currentUrl)
+	const target = new URL(currentUrl)
+	target.hash = ''
 	return target
 }
 

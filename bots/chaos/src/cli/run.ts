@@ -39,20 +39,40 @@ export function parseRunCommand(args: readonly string[]): RunCommand {
 		return { confirmation, json, kind: 'register-v3-position' }
 	}
 	if (args[0] !== '--drain' || args[1] === undefined) throw new Error('Supported commands are --drain, --cancel-drain, --accept-residuals, --register-v3-position, and --retirement-status')
-	const lossArgument = args.find(argument => argument.startsWith('--exit-unmatched-shares='))
-	const maximumExitLossBps = lossArgument === undefined ? 0 : Number(lossArgument.slice('--exit-unmatched-shares='.length))
-	if (!Number.isSafeInteger(maximumExitLossBps) || maximumExitLossBps < 0 || maximumExitLossBps > 10_000) throw new Error('Unmatched-share loss must be an integer from 0 through 10000 bps')
+	const options = parseDrainOptions(args.slice(2))
 	const recipient = getAddress(args[1])
 	if (recipient.toLowerCase() === zeroAddress) throw new Error('Retirement recipient must not be the zero address')
-	return {
-		confirmation,
-		exitAfterCompletion: args.includes('--exit-after-completion'),
-		exitUnmatchedShares: lossArgument !== undefined,
-		kind: 'request-drain',
-		maximumExitLossBps,
-		migrateExistingClaims: args.includes('--migrate-existing-claims'),
-		recipient,
+	return { confirmation, kind: 'request-drain', recipient, ...options }
+}
+
+const EXIT_UNMATCHED_SHARES = '--exit-unmatched-shares'
+
+/** Parses every drain argument after the recipient; an unknown or repeated option is rejected rather than ignored. */
+function parseDrainOptions(args: readonly string[]) {
+	let confirmed = false
+	let exitAfterCompletion = false
+	let migrateExistingClaims = false
+	let lossText: string | undefined
+	for (let index = 0; index < args.length; index++) {
+		const argument = args[index]
+		if (argument === '--confirm' && !confirmed) {
+			confirmed = true
+			index++
+		} else if (argument === '--exit-after-completion' && !exitAfterCompletion) {
+			exitAfterCompletion = true
+		} else if (argument === '--migrate-existing-claims' && !migrateExistingClaims) {
+			migrateExistingClaims = true
+		} else if ((argument === EXIT_UNMATCHED_SHARES || argument?.startsWith(`${EXIT_UNMATCHED_SHARES}=`) === true) && lossText === undefined) {
+			lossText = argument === EXIT_UNMATCHED_SHARES ? args[++index] : argument.slice(EXIT_UNMATCHED_SHARES.length + 1)
+			if (lossText === undefined) throw new Error(`${EXIT_UNMATCHED_SHARES} requires a maximum loss in bps`)
+		} else {
+			throw new Error(`Unsupported or repeated drain argument: ${argument ?? ''}`)
+		}
 	}
+	let maximumExitLossBps = 0
+	if (lossText !== undefined) maximumExitLossBps = /^\d+$/.test(lossText) ? Number(lossText) : Number.NaN
+	if (!Number.isSafeInteger(maximumExitLossBps) || maximumExitLossBps < 0 || maximumExitLossBps > 10_000) throw new Error('Unmatched-share loss must be an integer from 0 through 10000 bps')
+	return { exitAfterCompletion, exitUnmatchedShares: lossText !== undefined, maximumExitLossBps, migrateExistingClaims }
 }
 
 async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'operator' }>, loaded: Pick<LoadedConfiguration, 'path' | 'revision' | 'settings'>) {

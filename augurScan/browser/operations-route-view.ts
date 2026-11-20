@@ -137,18 +137,20 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			return row
 		})
 
-	const tradingEvidenceRows = (items: readonly JsonRecord[]) =>
+	const tradingEvidenceRows = (items: readonly JsonRecord[], collateral?: CollateralUnit) =>
 		items.map(item => {
 			const eventName = String(item['event_name'] ?? 'AMM event')
 			const data = isPlainRecord(item['event_data']) ? item['event_data'] : {}
 			const analytics = isPlainRecord(item['analytics']) ? item['analytics'] : {}
+			// Outcome shares use the market collateral's precision (raw units when unsampled); LP shares always use 18 decimals.
+			const shareDecimals = collateral?.decimals ?? 0
 			let summary = semanticSummary(item, nativeSymbolFor(requiredChainId()))
 			if (eventName === 'Swap')
-				summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), 18, String(analytics['baseAsset'] ?? 'shares'))} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), 18, String(analytics['quoteAsset'] ?? 'shares'))} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), 18, 'shares')} fee${isPlainRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%')} impact` : ''}`
-			else if (eventName === 'Sync') summary = `${exactUnit(String(data['yesReserve'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noReserve'] ?? '0'), 18, 'NO')} reserves`
+				summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), shareDecimals, String(analytics['baseAsset'] ?? 'shares'))} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), shareDecimals, String(analytics['quoteAsset'] ?? 'shares'))} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), shareDecimals, 'shares')} fee${isPlainRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%')} impact` : ''}`
+			else if (eventName === 'Sync') summary = `${exactUnit(String(data['yesReserve'] ?? '0'), shareDecimals, 'YES')} · ${exactUnit(String(data['noReserve'] ?? '0'), shareDecimals, 'NO')} reserves`
 			else if (eventName === 'Transfer') summary = `${exactUnit(String(data['value'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['from'] ?? ''))} → ${shortIdentifier(String(data['to'] ?? ''))}`
 			else if (eventName === 'Approval') summary = `${exactUnit(String(data['value'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['owner'] ?? ''))} approved ${shortIdentifier(String(data['spender'] ?? ''))}`
-			else if (eventName.startsWith('Liquidity')) summary = `${exactUnit(String(data['yesAmount'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noAmount'] ?? '0'), 18, 'NO')} · ${exactUnit(String(data['liquidity'] ?? '0'), 18, 'LP shares')}`
+			else if (eventName.startsWith('Liquidity')) summary = `${exactUnit(String(data['yesAmount'] ?? '0'), shareDecimals, 'YES')} · ${exactUnit(String(data['noAmount'] ?? '0'), shareDecimals, 'NO')} · ${exactUnit(String(data['liquidity'] ?? '0'), 18, 'LP shares')}`
 			const row = operationRow(eventName, summary, String(data['provider'] ?? data['sender'] ?? item['tx_hash'] ?? ''), item['block_number'])
 			row.append(rawEvidence(item))
 			return row
@@ -192,7 +194,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		})
 
 	const detailEvidenceRowsFor = (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[], collateral?: CollateralUnit) => {
-		if (kind === 'trading') return tradingEvidenceRows(items)
+		if (kind === 'trading') return tradingEvidenceRows(items, collateral)
 		if (kind === 'capital') return capitalEvidenceRows(items)
 		return kind === 'report' ? reportEvidenceRows(items) : detailEvidenceRows(items, collateral)
 	}

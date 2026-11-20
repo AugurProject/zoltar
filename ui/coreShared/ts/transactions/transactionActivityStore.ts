@@ -109,6 +109,39 @@ function update(change: (entries: readonly TransactionActivityEntry[]) => readon
 	scheduleActivityExpiry()
 }
 
+/**
+ * Another open view of the same account changed the stored list. Its settled rows replace pending copies here, and a
+ * transaction it stopped tracking is released in this view too, so its action locks and stop control clear without a reload.
+ * The merged list is not written back: this view's next change stores it.
+ */
+function syncStoredTransactionActivity() {
+	const current = transactionActivity.peek()
+	if (current.storageKey === undefined) return
+	const entries = mergeStoredTransactionActivity(current.entries, readStored(current.storageKey))
+	if (entries === current.entries) return
+	transactionActivity.value = { ...current, entries }
+	scheduleActivityExpiry()
+	for (const previous of current.entries) {
+		if (previous.status !== 'pending') continue
+		const next = entries.find(entry => entry.hash === previous.hash)
+		if (next === undefined || next.status !== 'failed' || next.failureKind !== 'dropped') continue
+		watchedHashes.delete(previous.hash)
+		announceTransactionTrackingStopped(previous.hash)
+	}
+}
+
+// The window the listener is on; a replaced document (as in tests) gets its own.
+let storageListenerWindow: Window | undefined
+
+function installStorageListener() {
+	if (typeof window === 'undefined' || storageListenerWindow === window) return
+	storageListenerWindow = window
+	window.addEventListener('storage', event => {
+		const storageKey = transactionActivity.peek().storageKey
+		if (storageKey !== undefined && (event.key === null || event.key === storageKey)) syncStoredTransactionActivity()
+	})
+}
+
 /** Test isolation: the list and its watch bookkeeping are module state shared by every rendered app. */
 export function resetTransactionActivityForTesting() {
 	clearTimeout(expiryTimer)
@@ -128,6 +161,7 @@ export function markTransactionActivityOutcomesSeen() {
  * Selects whose activity the list shows. The browser simulation resets on reload, so its activity stays in memory.
  */
 export function setTransactionActivityOwner(account: Address | undefined) {
+	installStorageListener()
 	const backendId = getActiveBackend().id
 	const chainId = getActiveNetworkProfile().chain.id
 	const storageKey = account === undefined || backendId === 'simulation' ? undefined : getTransactionActivityStorageKey({ account, backendId, chainId })

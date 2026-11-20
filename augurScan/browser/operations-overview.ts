@@ -1,5 +1,5 @@
 import { collateralUnit } from '../src/collateral.ts'
-import { semanticSummary, timelineEntityPath } from './semantic-evidence.ts'
+import { timelineEntityPath, timelineTransitionSummary } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { NetworkRecord, OperationsCatalogSection, OperationsRenderContext, PagedOperationsCatalogSection } from './browser-types.ts'
 import { operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
@@ -196,8 +196,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			...timelineOccurrenceFields(item),
 			['Evidence status code', rawEvidenceStatus],
 			['Invalidation reason code', item['invalidation_reason']],
-			// Auction amounts are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
-			['Transition', semanticSummary(item, nativeSymbol, item['entity_type'] === 'auction' ? collateralUnit(item) : undefined)],
+			['Transition', timelineTransitionSummary(item, nativeSymbol)],
 			['Related entities', Array.isArray(item['related_entities']) ? item['related_entities'].join(' · ') : undefined],
 		])
 		const path = timelineEntityPath(item)
@@ -276,7 +275,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 				}),
 				operationsPanel('Capital ledgers', capitalLedgerRows, 'No capital ledger is indexed.'),
 				operationsPanel('Liquidation feed', liquidationRows, 'No take-over, cure or report operation matches this view.', { label: 'Latest 25 · attributed to universe and owner, not to a question pool' }),
-				operationsPanel('Fee economics', feeRows, 'No capital ledger is indexed.'),
+				operationsPanel('Fee economics', feeRows, 'No capital ledger has been read yet.'),
 				operationsPanel('Question fee streams', feeStreamRows, 'No question fee stream has been set.', { label: 'Latest 25 changes' }),
 				riskPoolPanel,
 			],
@@ -357,7 +356,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationsPanel('Active escalations', activeEscalationRows, `No active escalation games among ${number(escalations.length)} shown.`),
 		operationsPanel('Active auctions', activeAuctionRows, `No active auctions among ${number(auctions.length)} shown.`),
 		operationsPanel('Capital positions at risk', atRiskCapitalRows.slice(0, 5), `No capital position at risk among ${number(capitalPositions.length)} shown.`),
-		operationsPanel('Fee economics', feeRows, 'No capital ledger is indexed.'),
+		operationsPanel('Fee economics', feeRows, 'No capital ledger has been read yet.'),
 		operationsPanel('Pool risk', poolRiskRows, 'No risk snapshots are available.'),
 		operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
 		operationsPanel('REP prices', [operationRow('Capital ledgers', 'See the accepted REP price for each ledger.', undefined, undefined, operationsHref('/operations/risk'))], ''),

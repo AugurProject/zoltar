@@ -70,7 +70,7 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 	const submissionBlock = Reflect.get(intent, 'submissionBlock')
 	if (!isHash32(hash) || !isSerializedTransaction(serializedTransaction)) throw new Error('Pending transaction intent has invalid transaction hex')
 	if (keccak256(serializedTransaction).toLowerCase() !== hash.toLowerCase()) throw new Error('Pending transaction intent hash does not match its serialized transaction')
-	if (typeof label !== 'string' || (kind !== 'deployment' && kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
+	if (typeof label !== 'string' || (kind !== 'configuration' && kind !== 'deployment' && kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
 	if (mode !== 'private' && mode !== 'public') throw new Error('Pending transaction intent has invalid mode')
 	if (typeof nonce !== 'string' || typeof maxBlockNumber !== 'string' || typeof submissionBlock !== 'string') throw new Error('Pending transaction intent has invalid numeric metadata')
 	if (typeof sender !== 'string') throw new Error('Pending transaction intent is missing sender')
