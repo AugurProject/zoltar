@@ -17,12 +17,14 @@ function canonicalContractsRow(snapshot: Snapshot): ReadinessRow {
 	return { detail: `Verified at block ${snapshot.lastScannedBlock}`, label: 'Canonical contracts', ready: true }
 }
 
-/** Live execution refuses an active signer that differs from the key saved in the operator file. */
-function executionSignerRow(snapshot: Snapshot, configuration: Configuration): ReadinessRow {
-	const row = signerRow(snapshot.wallet, 'Set one under Execution signer')
-	const saved = configuration.savedSigner
-	if (snapshot.wallet === undefined || saved === undefined || saved.toLowerCase() === snapshot.wallet.toLowerCase()) return row
-	return { ...row, detail: `Saved key ${shorten(saved)} differs from the active signer; save or remove it`, ready: false }
+/**
+ * Live execution refuses an active signer that differs from the key saved in the operator file.
+ * @internal Exported for readiness unit tests.
+ */
+export function executionSignerRow(wallet: string | undefined, savedSigner: string | undefined): ReadinessRow {
+	const row = signerRow(wallet, 'Set one under Execution signer')
+	if (wallet === undefined || savedSigner === undefined || savedSigner.toLowerCase() === wallet.toLowerCase()) return row
+	return { ...row, detail: `Saved key ${shorten(savedSigner)} differs from the active signer; save or remove it`, ready: false }
 }
 
 /**
@@ -35,7 +37,7 @@ function readinessRows(snapshot: Snapshot, configuration: Configuration): Readin
 	let marketDetail = 'No market sources configured'
 	if (consensus !== undefined) marketDetail = consensus.reliable ? 'Reliable' : 'Guarded · unavailable'
 	return [
-		executionSignerRow(snapshot, configuration),
+		executionSignerRow(snapshot.wallet, configuration.savedSigner),
 		networkRow(configuration),
 		quorumRpcRow(configuration.connectivity?.quorumRpcUrls.length ?? 0, configuration.connectivity?.rpcQuorum),
 		canonicalContractsRow(snapshot),
