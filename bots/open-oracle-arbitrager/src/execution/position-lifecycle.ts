@@ -15,7 +15,7 @@ import {
 	lifecycleWithdrawalMismatch,
 	waitForTargetBlock,
 } from '#execution/execution-orchestration'
-import { discoverPublicReplacementWithQuorum, expireEntryWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum, tokenDecimalsFromSnapshot } from '#execution/position-recovery'
+import { discoverPublicReplacementWithQuorum, expireEntryWithQuorum, finalizeEntryAfterFinalityWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum, tokenDecimalsFromSnapshot } from '#execution/position-recovery'
 import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
 import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfiguredSignedBundle } from '#execution/transaction-submission'
 import { submitContractTransaction, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
@@ -30,6 +30,7 @@ export {
 	discoverPublicReplacementWithQuorum,
 	executionRecordForConfirmedPosition,
 	expireEntryWithQuorum,
+	finalizeEntryAfterFinalityWithQuorum,
 	finalizeLifecycleAfterFinalityWithQuorum,
 	reconcileExpiredAttemptsWithQuorum,
 	recoverPendingEntryWithQuorum,
@@ -60,13 +61,19 @@ export async function processPositionLifecycle(
 		if (finalized.status === 'open') return 'progressed' as const
 		return 'waiting' as const
 	}
+	let activePosition = position
+	if (activePosition.status === 'open-pending-finality') {
+		// An entry that is not final must never reach lifecycle or replacement handling: its block may still be reorged out.
+		activePosition = await finalizeEntryAfterFinalityWithQuorum(readClients, config, activePosition, blockNumber)
+		if (activePosition !== position) await persistPosition(activePosition)
+		if (activePosition.status === 'open-pending-finality') return 'waiting' as const
+	}
 	const id = BigInt(position.reportId)
 	const storedSnapshot = await storedReportWithQuorum(readClients, config, id, blockNumber)
 	const report = storedSnapshot.report
 	const game = report.game
 	const balancesBefore = await lifecycleBalancesWithQuorum(readClients, config, account.address, position.token, blockNumber)
 	if (balancesBefore.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle state reads use different canonical blocks')
-	let activePosition = position
 	if (activePosition.entrySubmissionMode === 'public' || activePosition.lifecycleSubmissionMode === 'public') {
 		let pendingKind: 'entry' | 'lifecycle' | undefined
 		if (activePosition.actualEntryGasCostEth === '0' && activePosition.entrySubmissionMode === 'public') pendingKind = 'entry'
@@ -95,6 +102,7 @@ export async function processPositionLifecycle(
 			throw new Error(`Pending position ${activePosition.reportId} entry receipt could not be recovered: ${errorMessage(error)}`)
 		}
 	}
+	if (activePosition.status === 'open-pending-finality') return 'waiting' as const
 	if (activePosition.status === 'closed' || activePosition.status === 'expired-not-included') return 'processed' as const
 	if (activePosition.status === 'replaced') return 'processed' as const
 	if (activePosition.status === 'recovery-required' && (activePosition.expiredTransactionAttempts?.length ?? 0) !== 0) {

@@ -63,7 +63,7 @@ describe('ForkTargetPicker', () => {
 			)
 		).cleanup
 
-		const shortcut = within(document.body).getByRole('button', { name: '5 USD' })
+		const shortcut = within(document.body).getByRole('button', { name: '5 USD #6' })
 		expect(shortcut.hasAttribute('disabled')).toBe(true)
 		expect(describedText(shortcut)).toBe(`5 USD: ${MIGRATED}`)
 		fireEvent.click(shortcut)

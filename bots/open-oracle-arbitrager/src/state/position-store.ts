@@ -41,6 +41,9 @@ export type PositionRecord = {
 	capitalAtRiskWeth: string
 	closedAt: string | undefined
 	direction: 'buy-rep' | 'sell-rep'
+	/** Canonical block of the entry receipt while the entry waits for finality (`open-pending-finality` only). */
+	entryReceiptBlockHash?: Hex | undefined
+	entryReceiptBlockNumber?: string | undefined
 	entrySubmissionBlockNumber?: string | undefined
 	entrySubmissionMode?: 'private' | 'public' | undefined
 	entryTransactionIntent?: DurableTransactionIntent | undefined
@@ -86,7 +89,7 @@ export type PositionRecord = {
 	replacementCreditAmount?: string | undefined
 	replacementCreditToken?: Address | undefined
 	reportId: string
-	status: 'closed' | 'closed-pending-finality' | 'expired-not-included' | 'open' | 'pending-entry' | 'recovery-required' | 'replaced' | 'settled' | 'withdrawing'
+	status: 'closed' | 'closed-pending-finality' | 'expired-not-included' | 'open' | 'open-pending-finality' | 'pending-entry' | 'recovery-required' | 'replaced' | 'settled' | 'withdrawing'
 	token: Address
 	tokenSymbol: string
 	withdrawnToken: string
@@ -227,7 +230,7 @@ function parsePosition(value: unknown): PositionRecord {
 	const account = getAddress(record['account'])
 	if (typeof record['reportId'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['reportId'])) throw new Error('Position journal report id is invalid')
 	if (record['direction'] !== 'buy-rep' && record['direction'] !== 'sell-rep') throw new Error('Position journal direction is invalid')
-	if (!['closed', 'closed-pending-finality', 'expired-not-included', 'open', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'].includes(String(record['status']))) throw new Error('Position journal status is invalid')
+	if (!['closed', 'closed-pending-finality', 'expired-not-included', 'open', 'open-pending-finality', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'].includes(String(record['status']))) throw new Error('Position journal status is invalid')
 	if (typeof record['entryTransactionHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(record['entryTransactionHash'])) throw new Error('Position journal transaction hash is invalid')
 	const entryTransactionHashes = record['entryTransactionHashes']
 	if (!Array.isArray(entryTransactionHashes) || entryTransactionHashes.length === 0 || entryTransactionHashes.some(hash => typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash))) {
@@ -306,6 +309,11 @@ function parsePosition(value: unknown): PositionRecord {
 		throw new Error('Position journal pending lifecycle finality evidence is incomplete')
 	}
 	if (record['status'] !== 'closed-pending-finality' && lifecycleReceiptBlockNumber !== undefined) throw new Error('Position journal lifecycle receipt finality evidence has an invalid status')
+	const entryReceiptBlockNumber = optionalIntegerField(record, 'entryReceiptBlockNumber')
+	const entryReceiptBlockHash = record['entryReceiptBlockHash']
+	if (entryReceiptBlockHash !== undefined && (typeof entryReceiptBlockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(entryReceiptBlockHash))) throw new Error('Position journal entry receipt block hash is invalid')
+	if ((entryReceiptBlockNumber === undefined) !== (entryReceiptBlockHash === undefined)) throw new Error('Position journal entry receipt finality fields are incomplete')
+	if ((record['status'] === 'open-pending-finality') !== (entryReceiptBlockNumber !== undefined)) throw new Error('Position journal entry receipt finality evidence has an invalid status')
 	const lifecycleTransactionHashes = record['lifecycleTransactionHashes']
 	if (!Array.isArray(lifecycleTransactionHashes) || lifecycleTransactionHashes.some(hash => typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash))) {
 		throw new Error('Position journal lifecycle transaction hashes are invalid')
@@ -354,6 +362,9 @@ function parsePosition(value: unknown): PositionRecord {
 	) {
 		throw new Error('Position journal pending lifecycle finality recovery journal is incomplete')
 	}
+	if (record['status'] === 'open-pending-finality' && (historyOutbox !== undefined || lifecycleTransactionHashes.length !== 0 || record['closedAt'] !== undefined || record['realizedNetProfitEth'] !== undefined)) {
+		throw new Error('Position journal pending entry finality cannot carry history, lifecycle, or closing evidence')
+	}
 	if (record['closedAt'] !== undefined && (typeof record['closedAt'] !== 'string' || !Number.isFinite(Date.parse(record['closedAt'])))) throw new Error('Position journal closedAt is invalid')
 	if (typeof record['tokenSymbol'] !== 'string' || record['tokenSymbol'].trim() === '') throw new Error('Position journal token symbol is invalid')
 	const manualReconciliation = parseManualReconciliation(record['manualReconciliation'])
@@ -368,6 +379,8 @@ function parsePosition(value: unknown): PositionRecord {
 		capitalAtRiskWeth: decimalField(record, 'capitalAtRiskWeth'),
 		closedAt: record['closedAt'],
 		direction: record['direction'],
+		...(entryReceiptBlockHash === undefined ? {} : { entryReceiptBlockHash: hash32(entryReceiptBlockHash, 'Position journal entry receipt block hash') }),
+		...(entryReceiptBlockNumber === undefined ? {} : { entryReceiptBlockNumber }),
 		entrySubmissionBlockNumber,
 		entrySubmissionMode: record['entrySubmissionMode'],
 		...(entryTransactionIntent === undefined ? {} : { entryTransactionIntent }),

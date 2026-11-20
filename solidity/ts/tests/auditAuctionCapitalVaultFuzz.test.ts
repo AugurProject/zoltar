@@ -43,6 +43,7 @@ const randomBits = (bits: number) => {
 	for (let index = 0; index < bits; index += 16) value = (value << 16n) | BigInt(below(65536))
 	return value & ((1n << BigInt(bits)) - 1n)
 }
+const PINNED_SCENARIOS = 4
 const LOT = 10n ** 15n
 const UNIT = 10n ** 18n
 const GRID = 21n
@@ -184,13 +185,13 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 		expect(await materialized(second)).toBe(false)
 	})
 
-	test('C: random cohorts materialize in any order with fee credits, price changes, attacks and takeovers', async () => {
-		const started = Date.now()
+	// Runs randomized cohort scenarios from the current seed while `more` allows another one.
+	const runCohorts = async (more: (scenarios: number) => boolean) => {
 		let scenarios = 0
 		const bidders = clients.slice(1, 6)
 		const keeper = clients[6]
 		if (keeper === undefined) throw new Error('Keeper client missing')
-		while (Date.now() - started < SECONDS * 1000) {
+		while (more(scenarios)) {
 			const saved = await snapshot()
 			scenarios++
 			let credits = 0
@@ -291,7 +292,8 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 					await setPrice(10n * UNIT)
 					await getAnvilWindowEthereum().advanceTime(3601n)
 					const principal = bid.lots * repPerLot
-					const deposit = 4n * principal
+					// The keeper takes over at most the bid's commitment at its own 100% target, so it funds that requirement.
+					const deposit = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requiredRep', args: [bid.lots * LOT, 10_000n] })
 					await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [keeper.account.address, deposit] }))
 					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, deposit] }))
 					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [keeper.account.address, deposit] }))
@@ -299,7 +301,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 					const bounds = { maximumOwnerPrincipal: 100n * principal, maximumOwnerCommitment: bid.lots * LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }
 					const outcome = await reasonOf(() => writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [bid.id, bid.lots * LOT, 0n, keeperDeposit, bounds] })))
 					if (outcome !== 'no revert') {
-						expect(outcome.includes('Position requires additional backing') || outcome.includes('Receiver commitment below minimum')).toBe(true)
+						if (!outcome.includes('Position requires additional backing') && !outcome.includes('Receiver commitment below minimum')) throw new Error(`keeper takeover reverted unexpectedly: ${outcome}: ${context()}`)
 						await check('minimum repair remains atomic')
 						continue
 					}
@@ -331,5 +333,16 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 			}
 			await revert(saved)
 		}
+	}
+
+	test('C: random cohorts materialize in any order with fee credits, price changes, attacks and takeovers', async () => {
+		const started = Date.now()
+		await runCohorts(() => Date.now() - started < SECONDS * 1000)
+	})
+
+	test('C: pinned seed 2 funds every keeper takeover from the receiver requirement (#1463)', async () => {
+		// Seed 2 reaches a takeover at ten times the price in its fourth scenario; four times the principal under-funded it.
+		seed = 2
+		await runCohorts(scenarios => scenarios < PINNED_SCENARIOS)
 	})
 })

@@ -284,7 +284,8 @@ describe('funded execution orchestration', () => {
 
 	test('does not promote a gas-only private revert into confirmed execution history', () => {
 		expect(privateEntryRecoveryIsConfirmed({ status: 'closed' })).toBe(false)
-		expect(privateEntryRecoveryIsConfirmed({ status: 'open' })).toBe(true)
+		expect(privateEntryRecoveryIsConfirmed({ status: 'open-pending-finality' })).toBe(true)
+		expect(privateEntryRecoveryIsConfirmed({ status: 'recovery-required' })).toBe(false)
 	})
 
 	test('quorum-authenticates the calldata and destination of a public replacement', async () => {

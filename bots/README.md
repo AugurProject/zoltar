@@ -134,7 +134,9 @@ The observer uses CCXT's public unified `fetchTicker` and `fetchOrderBook` APIs;
 - `repMarket` is a unified `REP/QUOTE` market.
 - `ethMarket` must be exactly `ETH/<REP quote>` when REP is not quoted in ETH, and must be absent or `null` for a direct `REP/ETH` book.
 
-Only configure symbols verified on that venue. The example names illustrate the schema and do not assert that a venue currently lists REP. Operators must also verify that each configured ticker represents the declared REP contract.
+Only configure symbols verified on that venue. The example names illustrate the schema and do not assert that a venue currently lists REP, or that its `REP` book settles the token the bot prices. Operators must also verify that each configured ticker represents the declared REP contract.
+
+The declared REP contract is the selected network's genesis REP. On the Ethereum mainnet deployment that is the Augur fork child token `0xCf6A0A7826fa124B7705d6f3c675eAD76f1e540D` (`REPv2_Yes_1`), not REPv2 `0x221657776846890989a759BA2973e427DfF5C9bB`. The schema identifies the asset by ticker only, so a `REP` market that settles REPv2 would be recorded as evidence for the child token. Do not configure exchange tickers that settle REPv2 as REP sources.
 
 The bot converts each venue into REP per ETH, sums executable bid and ask depth inside `depthBps`, and uses the median of fresh venue prices. An estimate is reliable only with `minimumSourceCount` independent exchanges, the minimum two-sided depth, and no more than `maximumVenueDispersionBps` disagreement.
 

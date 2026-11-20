@@ -26,8 +26,8 @@ function toggleTarget(selectedTargets: readonly ForkTarget[], target: ForkTarget
  * universe that already holds the selected share's whole balance says so and cannot be selected, because migrating there again moves nothing.
  */
 function toTargetOption(target: ForkTarget, sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined): ForkTargetOption {
-	if (targetMigrationComplete(target, sourceOutcome, sourceBalance)) return { disabledReason: forkCopy.alreadyMigratedTargetReason, label: target.label, outcomeIndex: target.outcomeIndex, status: { label: forkCopy.migrated, tone: 'ok' } }
-	return { label: target.label, outcomeIndex: target.outcomeIndex, status: target.canonicalPool === undefined ? { label: forkCopy.childPoolMissing, tone: 'warning' } : { label: forkCopy.childPoolReady, tone: 'ok' } }
+	if (targetMigrationComplete(target, sourceOutcome, sourceBalance)) return { disabledReason: forkCopy.alreadyMigratedTargetReason, label: target.label, outcomeIndex: target.outcomeIndex, universeId: target.universeId, status: { label: forkCopy.migrated, tone: 'ok' } }
+	return { label: target.label, outcomeIndex: target.outcomeIndex, universeId: target.universeId, status: target.canonicalPool === undefined ? { label: forkCopy.childPoolMissing, tone: 'warning' } : { label: forkCopy.childPoolReady, tone: 'ok' } }
 }
 
 export function ForkMigrationTargets({

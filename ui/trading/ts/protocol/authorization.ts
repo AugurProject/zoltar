@@ -12,10 +12,29 @@ export function shareOperationRouter(configuration: DeploymentConfiguration) {
 	return configuration.router
 }
 
-function encodeReceiveBasedExitRequest(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint): Hex {
+function encodeReceiveBasedExitRequest(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint, minimumRepAttoRep: bigint): Hex {
 	if (market.pair === undefined) throw new Error('The trading pool is unavailable')
 	const invalidTokenId = market.universeId << 8n
-	return encodeReceiveRequest([RECEIVE_REQUEST_VERSION, 0, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, side === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, recipient, deadline, 0n])
+	return encodeReceiveRequest([
+		RECEIVE_REQUEST_VERSION,
+		0,
+		market.shareToken,
+		market.pool,
+		market.pair,
+		market.universeId,
+		market.questionId,
+		invalidTokenId,
+		invalidTokenId | 1n,
+		invalidTokenId | 2n,
+		side === 'YES' ? 1 : 2,
+		completeSetShares,
+		maximumLongShares,
+		minimumEthAttoEth,
+		recipient,
+		recipient,
+		deadline,
+		minimumRepAttoRep,
+	])
 }
 
 export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeSetShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint, minimumRepAttoRep = 0n): Hex {
@@ -43,11 +62,12 @@ export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeS
 	])
 }
 
-export function receiveBasedExitArguments(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint) {
+/** The signed REP floor covers the recovery REP a fork-child pool pays per burned complete set. */
+export function receiveBasedExitArguments(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint, minimumRepAttoRep: bigint) {
 	const invalidTokenId = market.universeId << 8n
 	return {
 		ids: [invalidTokenId, invalidTokenId | (side === 'YES' ? 1n : 2n)],
 		amounts: [completeSetShares, maximumLongShares],
-		data: encodeReceiveBasedExitRequest(market, side, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, deadline),
+		data: encodeReceiveBasedExitRequest(market, side, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, deadline, minimumRepAttoRep),
 	}
 }

@@ -14,7 +14,7 @@ function positiveInteger(name: string) {
 }
 
 if (process.argv.includes('--help')) {
-	console.log(`Scan a Statoblast portfolio once for funded final questions.
+	console.log(`Settlement finalizer: scan a Statoblast portfolio once for funded final questions.
 Set SETTLEMENT_RPC_URL, SETTLEMENT_CHAIN_ID, SETTLEMENT_PORTFOLIO and
 SETTLEMENT_MINIMUM_CASH (raw collateral units).
 

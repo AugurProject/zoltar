@@ -1286,6 +1286,27 @@ describe('audit fuzz: capital ledger against a naive reference model', () => {
 		return current
 	}
 
+	test('#1463 an owner exit with a sub-minimum deficit keeps its supported commitment and queues it', async () => {
+		// The shared fixture reverts to its own snapshot before each test, which consumes ours.
+		baseline = ''
+		const commitment = 10n * MINC
+		const until = genesis + 30n * DAY
+		// A 5% price rise leaves owner 0 about half the economic minimum short. Demand leaves one minimum of
+		// spare that a cut could use, and keeps the queued exit from being served at once.
+		const trace: Operation[] = [
+			{ c: 'price', price: WAD, until },
+			{ c: 'deposit', o: 0, amount: requiredRep(commitment, WAD, 10_000n) },
+			{ c: 'commit', o: 0, value: commitment },
+			{ c: 'deposit', o: 1, amount: 2n * requiredRep(100n * MINC, WAD, 10_000n) },
+			{ c: 'commit', o: 1, value: 100n * MINC },
+			{ c: 'demand', value: 109n * MINC },
+			{ c: 'price', price: (WAD * 105n) / 100n, until },
+			{ c: 'commit', o: 0, value: 0n },
+		]
+		const outcome = await run(1, trace.length, trace)
+		expect(outcome.failure?.issues).toBeUndefined()
+	})
+
 	test('random operation sequences keep the ledger equal to the reference model and every invariant intact', async () => {
 		// The shared fixture reverts to its own snapshot before each test, which consumes ours.
 		baseline = ''

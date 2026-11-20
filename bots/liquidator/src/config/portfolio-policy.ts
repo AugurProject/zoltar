@@ -5,9 +5,6 @@ export type PortfolioSelection = { address: Address; universeId: bigint }
 export type PortfolioPolicy = {
 	allowFundedTakeovers: boolean
 	takeoverIncomeHorizonSeconds: number
-	maximumReportFundingAttoEth: bigint
-	reportOperationsGasLimit: number
-	reportOperationGasLimit: number
 	maximumPositionsPerScan: number
 	maximumPrincipalAttoRep: bigint
 	maximumTotalPrincipalAttoRep: bigint
@@ -39,9 +36,6 @@ export function parsePortfolioPolicy(value: unknown): PortfolioPolicy {
 	const amount = (key: string, fallback: string) => parseDecimalAmount(policy[key] ?? fallback, `portfolioPolicy.${key}`)
 	const parsed = {
 		takeoverIncomeHorizonSeconds: integer(policy['takeoverIncomeHorizonSeconds'] ?? 0, 'portfolioPolicy.takeoverIncomeHorizonSeconds', 0, 31_536_000),
-		maximumReportFundingAttoEth: amount('maximumReportFundingEth', '0'),
-		reportOperationsGasLimit: integer(policy['reportOperationsGasLimit'] ?? 3_100_000, 'portfolioPolicy.reportOperationsGasLimit', 1, 4_290_967_295),
-		reportOperationGasLimit: integer(policy['reportOperationGasLimit'] ?? 3_000_000, 'portfolioPolicy.reportOperationGasLimit', 1, 4_290_867_295),
 		allowFundedTakeovers: policy['allowFundedTakeovers'] === undefined ? false : boolean(policy['allowFundedTakeovers'], 'portfolioPolicy.allowFundedTakeovers'),
 		maximumPositionsPerScan: integer(policy['maximumPositionsPerScan'] ?? 32, 'portfolioPolicy.maximumPositionsPerScan', 1, 256),
 		maximumPrincipalAttoRep: amount('maximumPrincipalRep', '0'),
@@ -53,7 +47,6 @@ export function parsePortfolioPolicy(value: unknown): PortfolioPolicy {
 		targetHealthFactorBps: BigInt(integer(policy['targetHealthFactorBps'] ?? 15_000, 'portfolioPolicy.targetHealthFactorBps', 10_001, 1_000_000)),
 		stalledRetirementSeconds: integer(policy['stalledRetirementSeconds'] ?? 3600, 'portfolioPolicy.stalledRetirementSeconds', 1, 31_536_000),
 	}
-	if (parsed.reportOperationGasLimit + 100_000 > parsed.reportOperationsGasLimit) throw new Error('Report operation exceeds total gas budget')
 	if (parsed.maximumPrincipalAttoRep > parsed.maximumTotalPrincipalAttoRep) throw new Error('Portfolio principal limit exceeds total portfolio principal limit')
 	if (parsed.allowFundedTakeovers && (parsed.maximumPrincipalAttoRep === 0n || parsed.maximumCommitmentAttoEth === 0n)) throw new Error('Funded portfolio takeovers require positive principal and commitment limits')
 	return parsed
@@ -63,9 +56,6 @@ export function serializePortfolioPolicy(policy: PortfolioPolicy) {
 	return {
 		allowFundedTakeovers: policy.allowFundedTakeovers,
 		takeoverIncomeHorizonSeconds: policy.takeoverIncomeHorizonSeconds,
-		maximumReportFundingEth: formatDecimalAmount(policy.maximumReportFundingAttoEth),
-		reportOperationsGasLimit: policy.reportOperationsGasLimit,
-		reportOperationGasLimit: policy.reportOperationGasLimit,
 		maximumPositionsPerScan: policy.maximumPositionsPerScan,
 		maximumPrincipalRep: formatDecimalAmount(policy.maximumPrincipalAttoRep),
 		maximumTotalPrincipalRep: formatDecimalAmount(policy.maximumTotalPrincipalAttoRep),

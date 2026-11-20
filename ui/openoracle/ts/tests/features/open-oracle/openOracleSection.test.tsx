@@ -130,6 +130,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 	return {
 		callbackContract: zeroAddress,
 		callbackGasLimit: 0,
+		trustedSettlementCallback: false,
 		currentBlockNumber: 0n,
 		currentAmount1: 0n,
 		currentAmount2: 0n,

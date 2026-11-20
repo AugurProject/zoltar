@@ -80,7 +80,7 @@ const expectSerializedLiveEvents = async ({ postgresUrl, database }: LifecycleCo
 			return await database.eventsAfter(id)
 		},
 	})
-	const liveStream = liveBus.stream()
+	const liveStream = liveBus.stream(undefined, 'integration')
 	if (liveStream === undefined) throw new Error('Expected live stream capacity')
 	const liveReader = liveStream.getReader()
 	await liveReader.read()

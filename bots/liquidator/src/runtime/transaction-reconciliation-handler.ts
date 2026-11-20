@@ -1,4 +1,3 @@
-import { registerSponsoredReplacement } from '#execution/sponsored-report-receipt'
 import { PRIVATE_INTENT_FINALITY_BLOCKS } from '#core/cycle-control'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
 import { canonicalBlockHash } from '#monitoring/operator-chain'
@@ -57,8 +56,7 @@ export function reconcileTransaction(runtime: Pick<LiquidatorRuntime, 'settings'
 			},
 			replacement: async () => replacementEvidence,
 		})
-		const reconciledState = { ...state, sponsoredReports: [...(state.sponsoredReports ?? [])] }
-		if (replacementEvidence !== undefined) registerSponsoredReplacement(reconciledState, intent, replacementEvidence.receipt, replacementEvidence.transaction)
+		const reconciledState = { ...state }
 		await commitReconciledIntent(runtime.settings.runtime.stateFile, reconciledState, intent.hash, {
 			details: `original=${intent.hash} replacement=${replacement.hash} nonce=${intent.nonce.toString()} replacementStatus=${replacement.status}`,
 			hash: replacement.hash,
@@ -66,7 +64,6 @@ export function reconcileTransaction(runtime: Pick<LiquidatorRuntime, 'settings'
 			message: `Finalized replacement reconciled: ${intent.label}`,
 			status: 'confirmed',
 		})
-		state.sponsoredReports = reconciledState.sponsoredReports
 		state.activities = reconciledState.activities
 		state.pendingTransactions = reconciledState.pendingTransactions
 		return { intentHash: intent.hash, replacementHash: replacement.hash, replacementStatus: replacement.status }

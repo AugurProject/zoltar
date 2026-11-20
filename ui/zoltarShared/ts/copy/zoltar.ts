@@ -57,7 +57,7 @@ export const migrationApprovalLoading = 'Loading your REP approval…'
 export const formatMigrationApprovalRequired = (amount: CopyTemplateValue) => `Approve ${amount}\u00a0REP to continue.`
 export const migrationApprovalActionLabel = 'migrating REP'
 
-export const formatMigrationSummary = (amount: CopyTemplateValue, outcomes: CopyTemplateValue) => `Migrate ${amount}\u00a0REP to: ${outcomes}`
+export const formatMigrationSummary = (amount: CopyTemplateValue) => `Migrate ${amount}\u00a0REP to:`
 export const migrationIrreversible = 'Burned REP cannot be returned to this universe.'
 export const migrationMintsPerOutcome = 'Every selected child universe mints the full amount to your wallet.'
 export const migratingRepPending = 'Migrating REP…'
@@ -65,8 +65,7 @@ export const migrationReviewRequired = 'Migrate from the Review step.'
 export const migrationCompleteTitle = 'All your REP here is migrated'
 export const migrationCompleteDetail = 'Every child universe has received your full migration balance.'
 export const addChildRepToWalletTitle = 'Add child-universe REP to your wallet'
-export const formatUnnamedOutcome = (position: CopyTemplateValue) => `Outcome ${position}`
-export const formatIndexedOutcome = (label: CopyTemplateValue, index: CopyTemplateValue) => `Outcome ${index}: ${label}`
+export { formatIndexedOutcome, formatUnnamedOutcome } from '@zoltar/ui-core-shared/copy/universes.js'
 export const migrationStepCurrent = 'Current'
 export const migrationForkRequired = 'This universe must fork before REP can be migrated.'
 export const walletRep = 'Wallet REP'

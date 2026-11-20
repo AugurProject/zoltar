@@ -34,9 +34,19 @@ describe('trade ticket states', () => {
 		url: 'http://localhost/#/market',
 	})
 
-	async function renderTicket(ticket: PositionTicket, options: Readonly<{ nowSeconds?: bigint; holdings?: TicketBalances; onOpenSettlement?: () => void; onSettingsChange?: (settings: TradeSettings) => void }> = {}) {
+	async function renderTicket(ticket: PositionTicket, options: Readonly<{ nowSeconds?: bigint; holdings?: TicketBalances; market?: typeof market; onOpenSettlement?: () => void; onSettingsChange?: (settings: TradeSettings) => void }> = {}) {
 		const rendered = await renderIntoDocument(
-			<LivePositionControls market={market} nowSeconds={options.nowSeconds ?? 1n} settings={DEFAULT_TRADE_SETTINGS} onSettingsChange={options.onSettingsChange} ticket={ticket} wallet={connectedWallet} holdings={options.holdings ?? readyHoldings} externallyLocked={false} onOpenSettlement={options.onOpenSettlement} />,
+			<LivePositionControls
+				market={options.market ?? market}
+				nowSeconds={options.nowSeconds ?? 1n}
+				settings={DEFAULT_TRADE_SETTINGS}
+				onSettingsChange={options.onSettingsChange}
+				ticket={ticket}
+				wallet={connectedWallet}
+				holdings={options.holdings ?? readyHoldings}
+				externallyLocked={false}
+				onOpenSettlement={options.onOpenSettlement}
+			/>,
 		)
 		cleanup = rendered.cleanup
 		return rendered.container
@@ -197,6 +207,17 @@ describe('trade ticket states', () => {
 		const explanation = short.querySelector('.trade-invalid-coverage')?.textContent ?? ''
 		expect(explanation).toContain('This sale needs')
 		expect(explanation).not.toContain('ETH if')
+	})
+
+	test('#1445: a fork-child sale shows the recovery REP it pays and the REP minimum it signs', async () => {
+		const holdings: TicketBalances = { ...readyHoldings, balances: readyHoldings.balances === undefined ? undefined : { ...readyHoldings.balances, yes: 3n * eth, invalid: eth } }
+		const plain = await renderTicket(positionTicket({ mode: 'exit', amount: '0.5' }), { holdings })
+		expect(plain.querySelector('.trade-estimate')?.textContent).not.toContain('Recovery REP')
+		await cleanup?.()
+		const recovered = { ...market, settlementRecoveryAttoRep: 2n * market.shareTokenSupplyAttoShares }
+		const container = await renderTicket(positionTicket({ mode: 'exit', amount: '0.5' }), { holdings, market: recovered })
+		expect(container.querySelector('.trade-estimate')?.textContent).toContain('Recovery REP')
+		expect(container.querySelector('.transaction-review-details')?.textContent).toContain('Minimum recovery REP')
 	})
 
 	test('a buy waits for an unknown wallet ETH balance', async () => {

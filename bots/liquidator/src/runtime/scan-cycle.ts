@@ -1,4 +1,3 @@
-import { reconcileSponsoredReports } from '#execution/sponsored-report-recovery'
 import { PortfolioOpportunityExpired } from '#execution/portfolio-executor'
 import { sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { loadManagedPortfolioObservations, managedPortfolioScopes } from '#monitoring/portfolio-monitor'
@@ -85,7 +84,6 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 	}
 	state.portfolios = primary.portfolios
 	state.portfolioScopes = primary.portfolios.map(portfolio => portfolio.nextScope)
-	if (runtime.wallet !== undefined) await reconcileSponsoredReports(runtime.wallet, runtime.settings, state, runtime.readPool)
 	state.universes = primary.universes
 	state.walletRepByToken = primary.walletRepByToken
 	const rootUniverse = state.universes.find(universe => universe.parentId === undefined)

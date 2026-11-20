@@ -26,6 +26,10 @@ const SEEDS = Number(process.env['AUDIT_FUZZ_SEEDS'] ?? '4')
 const FIRST_SEED = Number(process.env['AUDIT_FUZZ_FIRST_SEED'] ?? '1')
 const STEPS = Number(process.env['AUDIT_FUZZ_STEPS'] ?? '100')
 const SHRINK_MS = Number(process.env['AUDIT_FUZZ_SHRINK_MS'] ?? '60000')
+// Seed 51108 at 170 steps (#1463) needs a second drain pass: its first freeze matures a forked question into an unplanned final claim.
+const REGRESSION_SEEDS = process.env['AUDIT_FUZZ_SEEDS'] === undefined ? [{ seed: 51108, steps: 170 }] : []
+// A drain pass can seal a universe and create final claims, so drains repeat until nothing is withdrawable.
+const MAX_DRAIN_PASSES = 6
 const RESPONSE = 259_200
 const DAY = 86_400
 const QUESTION_SLOTS = [0, 1, 2, 3, 4] as const // slots 0 and 1 are real Zoltar questions
@@ -368,6 +372,34 @@ const drainOps = (model: Model): Op[] => {
 	return ops
 }
 
+// After the generated steps, drain repeatedly, then require that no REP stays locked anywhere.
+const drainThenCheck = (steps: (model: Model, index: number, threshold: bigint) => Op[] | undefined) => {
+	let draining = false
+	let passes = 0
+	return (model: Model, index: number, threshold: bigint): Op[] | undefined => {
+		if (!draining) {
+			const ops = steps(model, index, threshold)
+			if (ops !== undefined) return ops
+			draining = true
+		}
+		const ops = drainOps(model)
+		if (ops.length !== 0) {
+			if (passes >= MAX_DRAIN_PASSES) throw new Error(`DRAIN DID NOT CONVERGE: ${ops.length} withdrawal operations remain after ${passes} passes`)
+			passes++
+			return ops
+		}
+		for (const [path, book] of model.books) {
+			if (book.final !== 0n) throw new Error(`LOCKED REP: universe '${path}' retains final ${book.final} after the drain`)
+			if (!book.isSealed && !model.forkTime.has(path) && book.live !== 0n) throw new Error(`LOCKED REP: universe '${path}' retains live ${book.live} after the drain`)
+		}
+		return undefined
+	}
+}
+
+// Shrinking keeps a candidate only when it fails the same way, not with an unrelated harness error.
+const FAILURE_CLASSES = ['LOCKED REP', 'DRAIN DID NOT CONVERGE', 'UNEXPECTED REVERT', 'UNEXPECTED SUCCESS', 'INVARIANT', 'CUSTODY'] as const
+const failureClass = (failure: string) => FAILURE_CLASSES.find(name => failure.includes(name)) ?? failure.split('\n')[0]?.split(' at ')[0]?.replace(/\d+/g, 'N')
+
 describe('audit fuzz: reporter ledger against an explicit per-question reference model', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let client: WriteClient
@@ -599,24 +631,23 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 		return undefined
 	}
 
-	const runSeed = async (seed: number): Promise<string | undefined> => {
+	const runSeed = async (seed: number, steps: number): Promise<string | undefined> => {
 		const random = makeRandom(seed)
 		const recorded: Op[] = []
-		let drained = false
-		const failure = await run((model, index, threshold) => {
-			if (index < STEPS) return generate(model, random, index, threshold)
-			if (drained) {
-				for (const [path, book] of model.books) {
-					if (book.final !== 0n) throw new Error(`LOCKED REP: universe '${path}' retains final ${book.final} after the drain`)
-					if (!book.isSealed && !model.forkTime.has(path) && book.live !== 0n) throw new Error(`LOCKED REP: universe '${path}' retains live ${book.live} after the drain`)
-				}
-				return undefined
-			}
-			drained = true
-			return drainOps(model)
-		}, recorded).catch(error => String(error instanceof Error ? error.message : error))
+		const failure = await run(
+			drainThenCheck((model, index, threshold) => (index < steps ? generate(model, random, index, threshold) : undefined)),
+			recorded,
+		).catch(error => String(error instanceof Error ? error.message : error))
 		if (failure === undefined) return undefined
-		const replay = (ops: Op[]) => run((_model, index) => (index < ops.length ? ops.slice(index, index + 1) : undefined), undefined).catch(error => String(error instanceof Error ? error.message : error))
+		const wanted = failureClass(failure)
+		// A replay ends with the same drain and locked-REP check as the full run.
+		const replay = async (ops: Op[]) => {
+			const result = await run(
+				drainThenCheck((_model, index) => (index < ops.length ? ops.slice(index, index + 1) : undefined)),
+				undefined,
+			).catch(error => String(error instanceof Error ? error.message : error))
+			return result !== undefined && failureClass(result) === wanted ? result : undefined
+		}
 		let best = recorded
 		let bestFailure = failure
 		const deadline = Date.now() + SHRINK_MS
@@ -648,8 +679,9 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 		baseTime = Number((await client.getBlock()).timestamp) + 10
 		baseline = await ethereum.anvilSnapshot()
 		const failures: string[] = []
-		for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
-			const failure = await runSeed(seed)
+		const runs = [...Array.from({ length: SEEDS }, (_, offset) => ({ seed: FIRST_SEED + offset, steps: STEPS })), ...REGRESSION_SEEDS]
+		for (const { seed, steps } of runs) {
+			const failure = await runSeed(seed, steps)
 			if (failure !== undefined) {
 				failures.push(failure)
 				console.log(failure)

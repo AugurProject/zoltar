@@ -1,4 +1,3 @@
-import type { SponsoredReport } from './sponsored-reports.ts'
 import type { PortfolioFunding } from './portfolio-instructions.ts'
 import type { PortfolioObservation, PortfolioScope } from '#monitoring/portfolio-monitor'
 import type { Address, Hex, RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
@@ -7,7 +6,6 @@ import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zolta
 import type { Activity, PendingTransactionIntent, PoolObservation, UniverseObservation } from './operator-state.ts'
 
 export type RuntimeState = {
-	sponsoredReports?: SponsoredReport[] | undefined
 	portfolioFunding?: Record<string, PortfolioFunding> | undefined
 	completedPortfolioInstructions?: Record<string, string> | undefined
 	lastExpiredTakeoverBlock?: bigint | undefined

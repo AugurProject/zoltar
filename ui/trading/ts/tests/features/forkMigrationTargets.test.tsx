@@ -101,7 +101,12 @@ describe('fork migration target selection', () => {
 		expect(rendered.container.textContent).toContain('-50 °C')
 		expect(rendered.container.textContent).toContain('50 °C')
 		expect(rendered.container.textContent).not.toContain(getScalarOutcomeIndex(context, 50n).toString())
-		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .migration-outcome-label')).map(target => target.textContent)).toEqual(['-50 °C', '-25 °C', '0 °C', '25 °C', '50 °C', 'Invalid'])
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .migration-outcome-label .on-chain-text')).map(target => target.textContent)).toEqual(['-50 °C', '-25 °C', '0 °C', '25 °C', '50 °C', 'Invalid'])
+		// Each target names its child universe; only Invalid's small index is shown, never a packed scalar index (#1477).
+		const identities = Array.from(rendered.container.querySelectorAll('.fork-target-selection .migration-outcome-label .outcome-identity')).map(identity => identity.textContent ?? '')
+		expect(identities).toHaveLength(6)
+		for (const identity of identities.slice(0, 5)) expect(identity).toMatch(/^· 0x[0-9a-f]{6}…[0-9a-f]{4}$/)
+		expect(identities[5]).toMatch(/^#0 · 0x[0-9a-f]{6}…[0-9a-f]{4}$/)
 	})
 
 	test('rejects a human value beyond the range without selecting another outcome', async () => {

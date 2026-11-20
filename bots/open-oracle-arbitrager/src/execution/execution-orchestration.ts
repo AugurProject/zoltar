@@ -102,8 +102,9 @@ export function attemptHasFinality(currentBlockNumber: bigint, targetBlockNumber
 	return currentBlockNumber >= targetBlockNumber + ATTEMPT_FINALITY_BLOCKS
 }
 
+/** A recovered private entry is confirmed once its executor event matches; it stays `open-pending-finality` until its receipt block is final. */
 export function privateEntryRecoveryIsConfirmed(position: Pick<PositionRecord, 'status'>) {
-	return position.status === 'open'
+	return position.status === 'open-pending-finality'
 }
 
 export function recoveredTransactionIntentMismatch(expected: DurableTransactionIntent | undefined, actual: { data: Hex; from: Address; nonce: bigint; to?: Address | null | undefined; value: bigint }, account: Address, nonce: string | undefined) {

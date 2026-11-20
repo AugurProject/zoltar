@@ -1802,6 +1802,27 @@ a.transaction-hash-link {
 	overflow-wrap: anywhere;
 }
 
+/* Untrusted on-chain text keeps its direction to itself, so a right-to-left label cannot reorder the text around it. */
+.on-chain-text {
+	unicode-bidi: isolate;
+}
+
+/* Several outcomes in one transaction row each take their own line instead of a comma list a label could imitate. */
+.transaction-outcome-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* The outcome index and child universe ID beside an outcome label tell look-alike labels apart. */
+.outcome-identity {
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 400;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
 .migration-outcome-copy {
 	display: grid;
 	gap: 0.35rem;

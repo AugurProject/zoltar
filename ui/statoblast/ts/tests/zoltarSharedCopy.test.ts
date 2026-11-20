@@ -18,7 +18,7 @@ test('dynamic value and unit copy uses nonbreaking separators', () => {
 	expect(zoltarCopy.formatUseAllRep('12')).toBe('Use all 12\u00a0REP')
 	expect(zoltarCopy.formatMigrationAmountExceeded('12')).toContain('12\u00a0REP')
 	expect(zoltarCopy.formatMigrationApprovalRequired('12')).toContain('12\u00a0REP')
-	expect(zoltarCopy.formatMigrationSummary('12', 'Yes, No')).toBe('Migrate 12\u00a0REP to: Yes, No')
+	expect(zoltarCopy.formatMigrationSummary('12')).toBe('Migrate 12\u00a0REP to:')
 })
 
 test('transaction actions and pending labels use sentence case independently of titles', () => {

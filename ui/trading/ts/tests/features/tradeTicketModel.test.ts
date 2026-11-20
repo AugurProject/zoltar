@@ -7,8 +7,8 @@ import { getDecimalSeparatorError } from '@zoltar/ui-core-shared/forms/decimal.j
 import { authoritativeQuoteMoved, buyReturn, holdingAfterTrade, poolFeeAttoEth, roundDownShortcut, ticketInputsAfterSelection, tradeTicketModel, type TicketInputs, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
-import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
-import { formatOutcomeQuantity } from '../../lib/shareValue.js'
+import { MINIMUM_SLIPPAGE_BPS, minimumAfterSlippage } from '../../protocol/tradeQuote.js'
+import { attoSharesToRecoveryAttoRep, formatOutcomeQuantity } from '../../lib/shareValue.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
 import * as availabilityCopy from '../../copy/availability.js'
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
@@ -383,4 +383,26 @@ test('recovery REP blocks cash-only buys without blocking share sales', () => {
 	const sell = tradeTicketModel({ ...ready, market: recovered, mode: 'exit', amount: '0.01' })
 	expect(sell.availability.disabled).toBe(false)
 	expect(sell.estimate?.kind).toBe('exit')
+})
+
+test('#1445: a sale quotes its recovery REP and bounds it by slippage', () => {
+	const recovered = { ...market, settlementRecoveryAttoRep: 3n * market.shareTokenSupplyAttoShares }
+	const sell = ticketEstimateFor(recovered, 'exit', '2', balances)
+	if (sell.kind !== 'exit') throw new Error('Expected a sale estimate')
+	expect(sell.receiveAttoRep).toBe(attoSharesToRecoveryAttoRep(sell.quote.completeSetShares, recovered))
+	expect(sell.receiveAttoRep).toBe(3n * sell.quote.completeSetShares)
+	expect(sell.minimumAttoRep).toBe(minimumAfterSlippage(sell.receiveAttoRep, DEFAULT_TRADE_SETTINGS.slippageBps))
+	// A chain quote whose REP falls below the displayed minimum stops the submission like a lower ETH output does.
+	expect(authoritativeQuoteMoved(sell, sell.quote.totalLongShares, sell.receiveAttoEth, sell.minimumAttoRep)).toBeFalse()
+	expect(authoritativeQuoteMoved(sell, sell.quote.totalLongShares, sell.receiveAttoEth, sell.minimumAttoRep - 1n)).toBeTrue()
+	// Without recovery REP, the sale signs no REP floor.
+	const plain = ticketEstimateFor(market, 'exit', '2', balances)
+	expect(plain.kind === 'exit' ? plain.minimumAttoRep : undefined).toBe(0n)
+})
+
+test('#1445: a REP-only recovery sale is not refused as too small when it pays no collateral', () => {
+	const repOnly = { ...market, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: market.shareTokenSupplyAttoShares }
+	const sell = tradeTicketModel({ ...ready, market: repOnly, mode: 'exit', amount: '2' })
+	expect(sell.estimateProblem).toBeUndefined()
+	expect(sell.estimate?.kind === 'exit' ? sell.estimate.receiveAttoRep : undefined).toBeGreaterThan(0n)
 })

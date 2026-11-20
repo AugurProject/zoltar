@@ -38,6 +38,7 @@ function positionFailureOutcome(context: OperatorContext, scan: ScanPass, error:
 }
 
 function lifecycleOperationSummary(result: 'processed' | 'progressed', reportId: string, updatedPosition: PositionRecord | undefined) {
+	if (updatedPosition?.status === 'expired-not-included') return { message: 'Entry expired without inclusion', reason: `Report ${reportId} entry is absent from the canonical chain after finality; its signed attempt remains monitored for late inclusion` }
 	if (updatedPosition?.status === 'replaced') return { message: 'Replacement credit claimed', reason: `Report ${reportId} credit is final; the one-sided inventory remains risk-consuming until reconciled` }
 	if (result === 'processed') return { message: 'Position lifecycle completed', reason: `Report ${reportId} was settled and withdrawn` }
 	return { message: 'Position lifecycle advanced', reason: `Report ${reportId} completed one durable public lifecycle transaction` }

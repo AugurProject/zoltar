@@ -91,7 +91,7 @@ All routes use `GET`. Limits, cursors, and consistency boundaries for every page
 
 ## Access control and rate limits
 
-The website and API do not require authentication. API routes have a process-local per-client limit controlled by `API_RATE_LIMIT_PER_MINUTE`, which defaults to 600 and returns `429` with `Retry-After` when exceeded. Set it to `0` only when an upstream limiter is authoritative.
+The website and API do not require authentication. API routes have a process-local per-client limit controlled by `API_RATE_LIMIT_PER_MINUTE`, which defaults to 600 and returns `429` with `Retry-After` when exceeded. Set it to `0` only when an upstream limiter is authoritative. A client is an IPv4 address or an IPv6 /64 network. Behind a reverse proxy, every user shares the proxy's quota unless `TRUSTED_PROXY_ADDRESSES` lists it; see [Operations](OPERATIONS.md).
 
 ## Health and metrics
 
@@ -157,7 +157,7 @@ The route returns `404` for retained orphaned evidence.
 
 ### `GET /api/v1/stream`
 
-Durable commit, reorg, and status notifications with seven-day `Last-Event-ID` replay. A stream cursor older than seven days receives a reset event so the client reloads current state. A client that remains backpressured longer than `LIVE_BACKPRESSURE_TIMEOUT_MS` (60 seconds by default) is closed by polling or heartbeat maintenance so it cannot permanently occupy a stream slot.
+Durable commit, reorg, and status notifications with seven-day `Last-Event-ID` replay. A stream cursor older than seven days receives a reset event so the client reloads current state. The server admits `LIVE_MAX_CLIENTS` streams (256 by default), at most `LIVE_MAX_CLIENTS_PER_CLIENT` (16) per rate-limit client, and returns `503` with `Retry-After` when either limit is reached. Polling or heartbeat maintenance closes a stream once it is older than `LIVE_MAX_STREAM_LIFETIME_MS` (30 minutes) or has stayed backpressured longer than `LIVE_BACKPRESSURE_TIMEOUT_MS` (60 seconds); the browser reconnects with `Last-Event-ID` and receives the events it missed.
 
 ## Operations
 

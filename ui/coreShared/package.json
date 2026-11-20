@@ -554,6 +554,14 @@
 			"bun": "./ts/components/OutcomeSelectionList.tsx",
 			"default": "./js/components/OutcomeSelectionList.js"
 		},
+		"./components/OnChainText.js": {
+			"bun": "./ts/components/OnChainText.tsx",
+			"default": "./js/components/OnChainText.js"
+		},
+		"./components/OutcomeIdentity.js": {
+			"bun": "./ts/components/OutcomeIdentity.tsx",
+			"default": "./js/components/OutcomeIdentity.js"
+		},
 		"./components/PaginationControls.js": {
 			"bun": "./ts/components/PaginationControls.tsx",
 			"default": "./js/components/PaginationControls.js"
@@ -694,6 +702,10 @@
 			"bun": "./ts/copy/transactionReview.ts",
 			"default": "./js/copy/transactionReview.js"
 		},
+		"./copy/tokens.js": {
+			"bun": "./ts/copy/tokens.ts",
+			"default": "./js/copy/tokens.js"
+		},
 		"./copy/types.js": {
 			"bun": "./ts/copy/types.ts",
 			"default": "./js/copy/types.js"
@@ -829,6 +841,18 @@
 		"./lib/time.js": {
 			"bun": "./ts/lib/time.ts",
 			"default": "./js/lib/time.js"
+		},
+		"./lib/tokenLabel.js": {
+			"bun": "./ts/lib/tokenLabel.ts",
+			"default": "./js/lib/tokenLabel.js"
+		},
+		"./lib/onChainText.js": {
+			"bun": "./ts/lib/onChainText.ts",
+			"default": "./js/lib/onChainText.js"
+		},
+		"./lib/outcomeIdentity.js": {
+			"bun": "./ts/lib/outcomeIdentity.ts",
+			"default": "./js/lib/outcomeIdentity.js"
 		},
 		"./lib/userCopy.js": {
 			"bun": "./ts/lib/userCopy.ts",

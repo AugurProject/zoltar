@@ -13,7 +13,7 @@ import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionF
 import { createZoltarMigrationSuccessPresentation, createZoltarMigrationTransactionIntent, createZoltarMigrationWarningPresentation } from '../../zoltarTransactionPresentations.js'
 import { requireWallet } from '@zoltar/ui-core-shared/wallet/requireWalletConnection.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWallet.js'
-import { exceedsMigrationChildDeploymentLimit, getOutcomeLabelForIndex, getSubmittableOutcomeIndexes } from '../lib/migrationWizard.js'
+import { exceedsMigrationChildDeploymentLimit, getMigrationOutcomeTextForIndex, getSubmittableOutcomeIndexes } from '../lib/migrationWizard.js'
 import { getDefaultZoltarMigrationFormState } from '../../../lib/formDefaults.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
@@ -92,7 +92,7 @@ export function useZoltarMigration({
 			zoltarMigrationFeedback.value = createPendingActionFeedback('splitMigrationRep', transactionCopy.migratingRep)
 			zoltarMigrationResult.value = undefined
 			const submittedForm = zoltarMigrationForm.value
-			let outcomeLabels = submittedForm.outcomeIndexes.map(outcomeIndex => getOutcomeLabelForIndex(zoltarUniverse?.childUniverses, outcomeIndex))
+			let outcomeLabels = submittedForm.outcomeIndexes.map(outcomeIndex => getMigrationOutcomeTextForIndex(zoltarUniverse?.childUniverses, outcomeIndex))
 
 			try {
 				await assertActiveWallet(accountAddress)
@@ -113,7 +113,7 @@ export function useZoltarMigration({
 				if (outcomeIndexes.length === 0 || outcomeIndexes.length !== submittedForm.outcomeIndexes.length) throw new Error('Select the outcomes again before migrating: the selection no longer matches this universe.')
 				const selectedChildren = universe.childUniverses.filter(child => outcomeIndexes.includes(child.outcomeIndex))
 				if (exceedsMigrationChildDeploymentLimit(selectedChildren)) throw new Error(zoltarCopy.migrationChildDeploymentLimit)
-				outcomeLabels = outcomeIndexes.map(outcomeIndex => getOutcomeLabelForIndex(universe.childUniverses, outcomeIndex))
+				outcomeLabels = outcomeIndexes.map(outcomeIndex => getMigrationOutcomeTextForIndex(universe.childUniverses, outcomeIndex))
 				const result = await migrateInternalRepInZoltar(createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes, preparationAttoRep)
 				if (!environmentGuard.isCurrent()) return
 				zoltarMigrationResult.value = result

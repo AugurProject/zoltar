@@ -10,17 +10,17 @@ import { scanSettlementFinalizations } from '../../src/monitoring/settlement-fin
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 import { portfolioSettings } from '../support/portfolio-observation.ts'
 
-describe('portfolio settlement finalization keeper', () => {
+describe('portfolio settlement finalizer', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 
 	test('only selects funded claims past the strict deadline and releases demand permissionlessly', async () => {
 		const owner = fixture.owner()
-		const keeper = fixture.other()
+		const finalizer = fixture.other()
 		const { genesisUniverse, mockWindow, questionData, questionId } = fixture.base
 		const pool = fixture.poolFor(questionId).securityPool
 		const scan = async (minimum: bigint) => {
 			const matches = []
-			for await (const candidate of scanSettlementFinalizations(keeper, fixture.portfolio, minimum)) matches.push(candidate)
+			for await (const candidate of scanSettlementFinalizations(finalizer, fixture.portfolio, minimum)) matches.push(candidate)
 			return matches
 		}
 		await fixture.prepare()
@@ -38,7 +38,7 @@ describe('portfolio settlement finalization keeper', () => {
 		expect(await scan(10n * unit + 1n)).toEqual([])
 		expect(await scan(10n * unit)).toEqual([{ pool, universeId: genesisUniverse, questionId, cash: 10n * unit }])
 		const capital = { abi: securityPoolCapitalLedgerAbi, address: fixture.capitalLedger, functionName: 'demandAttoEth' as const }
-		expect(await keeper.readContract(capital)).toBe(30n * unit)
+		expect(await finalizer.readContract(capital)).toBe(30n * unit)
 		const privateKey = `0x${'03'.repeat(32)}` as const
 		const account = privateKeyToAccount(privateKey)
 		await mockWindow.setBalance(account.address, unit)
@@ -47,7 +47,7 @@ describe('portfolio settlement finalization keeper', () => {
 		const rpc = await serveMockChainRpc(mockWindow, settings, account.address, scope)
 		try {
 			const script = fileURLToPath(new URL('../../src/cli/finalize-settlement.ts', import.meta.url))
-			const chainId = await keeper.getChainId()
+			const chainId = await finalizer.getChainId()
 			const run = async (maximumGas: string) => {
 				const process = Bun.spawn([Bun.argv[0] ?? 'bun', script], {
 					env: {
@@ -64,13 +64,13 @@ describe('portfolio settlement finalization keeper', () => {
 					stderr: 'pipe',
 				})
 				const [status, output, errors] = await Promise.all([process.exited, new Response(process.stdout).text(), new Response(process.stderr).text()])
-				if (status !== 0) throw new Error(`Settlement keeper exited with ${status}: ${errors}`)
+				if (status !== 0) throw new Error(`Settlement finalizer exited with ${status}: ${errors}`)
 				return output
 			}
 			expect(await run('1')).not.toContain('Submitted settlement finalization')
-			expect(await keeper.readContract(capital)).toBe(30n * unit)
+			expect(await finalizer.readContract(capital)).toBe(30n * unit)
 			expect(await run('2000000')).toContain('Submitted settlement finalization')
-			expect(await keeper.readContract(capital)).toBe(20n * unit)
+			expect(await finalizer.readContract(capital)).toBe(20n * unit)
 			expect(await scan(1n)).toEqual([])
 		} finally {
 			await rpc.stop()

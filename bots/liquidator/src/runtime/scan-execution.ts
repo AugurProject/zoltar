@@ -1,10 +1,10 @@
-import { portfolioReportTakeoverPlan } from '#core/portfolio-report-strategy'
 import { executePendingPortfolioReport } from '#execution/portfolio-report'
 import { totalManagedPrincipalAttoRep } from '#core/portfolio-exposure'
 import { executeUnusedPortfolioFunding, unusedPortfolioFunding } from '#execution/portfolio-unused-funding'
 import { executePortfolioInstruction } from '#execution/portfolio-instructions'
 import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
-import { executePortfolioTakeover } from '#execution/portfolio-executor'
+import { PortfolioOpportunityExpired, executePortfolioTakeover } from '#execution/portfolio-executor'
+import type { PortfolioInstruction } from '#config/portfolio-instructions'
 import { executePortfolioEarnings } from '#execution/portfolio-earnings'
 import { portfolioEarningsCoverGas } from '#core/portfolio-earnings'
 import { portfolioTarget } from '#monitoring/portfolio-auction'
@@ -34,10 +34,10 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 	}
 	const canonicalHash = (blockNumber: bigint) => canonicalBlockHash(runtime.settings, blockNumber, runtime.readPool)
 	const requireDexEvidence: Parameters<typeof canonicalMarketPriceAllowsExecution>[4] = (configuration, estimate) => requireCurrentDexEvidence(runtime, configuration, estimate)
-	for (const instruction of runtime.settings.portfolioInstructions ?? []) {
-		const executed = await executePortfolioInstruction(activeWallet, runtime.settings, state, runtime.readPool, instruction, current => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence))
-		if (executed) return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
-	}
+	const instructionExecuted = await executeQueuedPortfolioInstructions(state, runtime.settings.portfolioInstructions ?? [], instruction =>
+		executePortfolioInstruction(activeWallet, runtime.settings, state, runtime.readPool, instruction, current => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence)),
+	)
+	if (instructionExecuted) return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	if (
 		await executePortfolioAutomation(runtime, state, current =>
 			canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence, !current.snapshot.priceValid || current.snapshot.timestamp >= current.snapshot.priceValidUntil),
@@ -47,6 +47,22 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 		return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	}
 	return undefined
+}
+
+/**
+ * @internal Runs queued instructions in order and stops at the first submission. An instruction whose
+ * opportunity has expired stays queued without blocking later instructions or automation.
+ */
+export async function executeQueuedPortfolioInstructions(state: RuntimeState, instructions: readonly PortfolioInstruction[], execute: (instruction: PortfolioInstruction) => Promise<boolean>) {
+	for (const instruction of instructions) {
+		try {
+			if (await execute(instruction)) return true
+		} catch (error) {
+			if (!(error instanceof PortfolioOpportunityExpired) || state.pendingTransactions.length !== 0) throw error
+			recordActivity(state, { kind: 'liquidation', status: 'info', message: `Portfolio instruction ${instruction.id} deferred; retry next cycle`, details: error.message })
+		}
+	}
+	return false
 }
 
 /** @internal Waiting candidates reserve only their own portfolio; a submission ends the cycle. */
@@ -64,8 +80,7 @@ export async function executePortfolioAutomation(
 		for (const portfolio of state.portfolios) {
 			const pending = await execution.pendingReport(activeWallet, runtime.settings, state, runtime.readPool, portfolio)
 			if (pending === 'submitted') return true
-			const fundingKey = `${portfolio.snapshot.capitalLedger.toLowerCase()}:${portfolio.snapshot.owner.toLowerCase()}`
-			if (pending === 'waiting' || state.sponsoredReports?.some(report => report.fundingKey === fundingKey)) {
+			if (pending === 'waiting') {
 				waiting.add(portfolio)
 				continue
 			}
@@ -77,9 +92,7 @@ export async function executePortfolioAutomation(
 			}
 			for (const position of portfolio.positions) {
 				const marketAllowed = marketPriceAllowsExecution(price, runtime.settings, state, !portfolio.snapshot.priceValid || portfolio.snapshot.timestamp >= portfolio.snapshot.priceValidUntil)
-				const direct = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketAllowed)
-				const result = direct.plan === undefined ? portfolioReportTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketAllowed) : direct
-				if (result.plan === undefined) continue
+				if (portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketAllowed).plan === undefined) continue
 				await execution.takeover(activeWallet, runtime.settings, state, runtime.readPool, portfolio, portfolioTarget(position), priceAllowed)
 				return true
 			}
@@ -100,8 +113,7 @@ export function runDryRunStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) 
 	for (const portfolio of state.portfolios) {
 		for (const position of portfolio.positions) {
 			const marketAllowed = marketPriceAllowsExecution({ repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }, runtime.settings, state, !portfolio.snapshot.priceValid || portfolio.snapshot.timestamp >= portfolio.snapshot.priceValidUntil)
-			const direct = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketAllowed)
-			const result = direct.plan === undefined ? portfolioReportTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketAllowed) : direct
+			const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketAllowed)
 			if (result.plan === undefined) continue
 			const label = position.auctionTarget === undefined ? `position=${position.id}` : `auction=${position.auctionTarget.auction} bid=${position.auctionTarget.bidId}`
 			const key = `portfolio:${portfolio.snapshot.capitalLedger}:${label}:${position.commitment}:${portfolio.acceptedPriceEpoch}`

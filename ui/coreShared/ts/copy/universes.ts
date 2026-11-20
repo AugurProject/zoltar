@@ -22,6 +22,14 @@ export const designatedReporter = 'Designated reporter'
 export const categories = 'Categories'
 export const tags = 'Tags'
 export const formatOpenChildUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`
+/** On-chain outcome labels can look alike; the immutable outcome index and child universe ID tell them apart. */
+export const formatOutcomeIndex = (index: CopyTemplateValue) => `#${index}`
+/** Names a categorical outcome by its immutable index; outcome labels built from it already identify that index. */
+export const formatUnnamedOutcome = (index: CopyTemplateValue) => `Outcome ${index}`
+export const formatIndexedOutcome = (label: CopyTemplateValue, index: CopyTemplateValue) => `${formatUnnamedOutcome(index)}: ${label}`
+export const formatOutcomeWithUniverse = (outcome: CopyTemplateValue, shortUniverseId: CopyTemplateValue) => `${outcome} · ${shortUniverseId}`
+export const formatOutcomeUniverse = (shortUniverseId: CopyTemplateValue) => `· ${shortUniverseId}`
+export const formatOutcomeWithIdentity = (label: CopyTemplateValue, identity: CopyTemplateValue) => `${label} ${identity}`
 export const openOutcomeArrowTail = ' →'
 
 export const formatSwitcherContextRootLabel = (rootLabel: CopyTemplateValue) => `${rootLabel} ·`
