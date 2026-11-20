@@ -67,6 +67,8 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	requestPrice: { title: 'Request new price', completedTitle: priceRequested, description: 'Fund and start an oracle price report using your approved REP and WETH.' },
 	approve: { title: 'Approve token spending', completedTitle: 'Token spending approved', description: 'Authorize the listed spending limit; tokens stay in your wallet.' },
 	depositRepOnOutcome: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
+	depositRepOnOutcomeWithLead: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
+	depositWalletRepToEscalationGameWithLead: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	depositWalletRepToEscalationGame: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	withdrawFromEscalationGame: { title: settleEscalationDeposits, completedTitle: escalationDepositsSettled, description: 'Settle the selected deposits after resolution.' },
 	settle: { title: 'Settle report', completedTitle: 'Report settled', description: 'Settle the completed oracle report.' },

@@ -377,7 +377,14 @@ contract SharedPoolPriceFeed {
 		require(reports[reportId].outcome == REPORT_PENDING, 'Report already completed');
 		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2);
 		bool accepted = bytes(reason).length == 0;
-		if (accepted && block.basefee > candidate.maxSettlementBaseFee) {
+		bool canonicalOperations =
+			!accepted &&
+				operationBatches[reportId].operations.length != 0 &&
+				lastPrice != 0 &&
+				_isFreshPriceTimestamp(lastSettlementTimestamp) &&
+				(keccak256(bytes(reason)) == keccak256('Report uneconomic') ||
+					keccak256(bytes(reason)) == keccak256('Report timestamp not newer'));
+		if ((accepted || canonicalOperations) && block.basefee > candidate.maxSettlementBaseFee) {
 			emit PriceReportDeferred(reportId, block.basefee, candidate.maxSettlementBaseFee);
 			return false;
 		}
@@ -398,8 +405,12 @@ contract SharedPoolPriceFeed {
 			ISharedPoolPortfolioPriceCheckpoint(portfolio).onSharedPriceAccepted(universeId(), nextPrice, uint48(priceTimestamp + validForSeconds));
 			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 			_executeReportOperations(reportId, candidate.sponsor);
-		} else
+		} else {
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
+			// Rejection grants no price authority. Independently secured canonical
+			// prices can still satisfy the sponsor's signed operation bounds.
+			if (canonicalOperations) _executeReportOperations(reportId, candidate.sponsor);
+		}
 		processingReport = false;
 		return true;
 	}
@@ -453,7 +464,8 @@ contract SharedPoolPriceFeed {
 
 	/// @notice Complete a settled report whose callback failed or whose settlement block
 	/// exceeded its base-fee ceiling, using the amounts and observation timestamp OpenOracle stored.
-	/// Expired or superseded observations retire normally; fresh candidates retain
+	/// Expired observations retire normally; fresh canonical prices may still serve
+	/// superseded candidates’ bounded operations. Fresh candidates retain
 	/// their original sponsor operations and cannot be killed by callback starvation
 	/// or by a third party settling them in a high-base-fee block.
 	function recoverReport(uint256 reportId) public {

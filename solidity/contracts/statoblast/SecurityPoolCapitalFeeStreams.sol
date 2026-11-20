@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { CheckedTimestamp } from './CheckedTimestamp.sol';
+import { CheckedCast } from '../CheckedCast.sol';
 
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 
@@ -99,7 +99,7 @@ contract SecurityPoolCapitalFeeStreams {
 	function checkpoint(uint48 eligibleThrough) external onlyCapitalLedger returns (uint256 ethAmount, uint256 repAmount) {
 		if (eligibleThrough > releasedThrough) (ethAmount, repAmount) = release(eligibleThrough);
 		if (block.timestamp > releasedThrough) {
-			(uint256 staleEth, uint256 staleRep) = release(CheckedTimestamp.toUint48(block.timestamp));
+			(uint256 staleEth, uint256 staleRep) = release(CheckedCast.toUint48(block.timestamp));
 			deferredEth += staleEth;
 			deferredRep += staleRep;
 		}

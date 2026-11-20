@@ -192,6 +192,8 @@ test('titles transaction status from the prepared transaction labels instead of 
 
 for (const [functionName, title, args] of [
 	['depositWalletRepToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
+	['depositRepOnOutcomeWithLead', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
+	['depositWalletRepToEscalationGameWithLead', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['depositRepOnOutcome', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
 	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
@@ -201,7 +203,7 @@ for (const [functionName, title, args] of [
 	test(`uses explicit reporting copy for ${functionName}`, async () => {
 		const step = await sendPreparedTransaction({ functionName, contractAddress: account, args })
 		expect(step?.title).toBe(title)
-		if (functionName === 'depositWalletRepToEscalationGame' || functionName === 'depositRepOnOutcome') expect(step?.paidFrom).toBe('Wallet REP')
+		if (functionName === 'depositWalletRepToEscalationGame' || functionName === 'depositRepOnOutcome' || functionName === 'depositRepOnOutcomeWithLead' || functionName === 'depositWalletRepToEscalationGameWithLead') expect(step?.paidFrom).toBe('Wallet REP')
 	})
 }
 

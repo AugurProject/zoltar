@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { CheckedTimestamp } from './CheckedTimestamp.sol';
+import { CheckedCast } from '../CheckedCast.sol';
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
@@ -240,13 +240,13 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Record which existing live positions are healthy at a fresh price.
 	/// @dev Epochs distinguish recovery and relapse even within the same block.
 	function restartLiquidationClock() external onlyCapitalLedger {
-		distressRestart = CheckedTimestamp.toUint48(block.timestamp);
+		distressRestart = CheckedCast.toUint48(block.timestamp);
 	}
 
 	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
-		observationTimes[epoch] = CheckedTimestamp.toUint48(block.timestamp);
+		observationTimes[epoch] = CheckedCast.toUint48(block.timestamp);
 		observedPrice = price;
 		_observeHealthy(roots[0], price, epoch);
 		if (currentBatch != 0) _observeHealthy(roots[currentBatch], price, epoch);
@@ -277,7 +277,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			cursor = node.parent;
 		}
 		if (epoch == healthObservationEpoch) return 0;
-		return CheckedTimestamp.toUint48(Math.max(observationTimes[epoch + 1], distressRestart));
+		return CheckedCast.toUint48(Math.max(observationTimes[epoch + 1], distressRestart));
 	}
 
 	/// @dev The controller calls only after an actual healthy mutation at a fresh

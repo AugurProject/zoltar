@@ -102,7 +102,7 @@ export type Model = {
 	releasedThrough: bigint
 	fundedEth: bigint
 	fundedRep: bigint
-	burnedEth: bigint
+	unassignedEth: bigint
 	burnedRep: bigint
 	creditEvents: bigint
 	cohortId: bigint
@@ -145,7 +145,7 @@ export const newModel = (now: bigint, releasedThrough: bigint, wallet: bigint, g
 	releasedThrough,
 	fundedEth: 0n,
 	fundedRep: 0n,
-	burnedEth: 0n,
+	unassignedEth: 0n,
 	burnedRep: 0n,
 	creditEvents: 0n,
 	cohortId: 0n,
@@ -215,7 +215,7 @@ const release = (m: Model, until: bigint) => {
 	return [afterEth - beforeEth, afterRep - beforeRep] as const
 }
 const burn = (m: Model, eth: bigint, rep: bigint) => {
-	m.burnedEth += eth
+	m.unassignedEth += eth
 	m.burnedRep += rep
 }
 const creditEarnings = (m: Model, eth: bigint, rep: bigint) => {

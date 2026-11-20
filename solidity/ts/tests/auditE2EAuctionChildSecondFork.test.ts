@@ -265,7 +265,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(await e2e.rep(C, context.capital)).toBe(0n)
 	})
 
-	test('an undersubscribed auction sells the whole inventory and its rounding credit survives the second fork', async () => {
+	test('an undersubscribed auction retains unpriced inventory while funded winners survive a second fork', async () => {
 		const { base } = fixture
 		const U0 = base.genesisUniverse
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
@@ -280,18 +280,18 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		await context.report(unit)
 		await context.open()
 		for (const bidder of [b3, b4]) await wrapWeth(bidder, 20n * unit)
-		// Three of five lots are funded: the raise limit is not reached, so the whole inventory is sold.
+		// Three of five lots are funded: each buys the marginal price and the rest remains with claims.
 		const first = await context.bid(b3, 1n, 4n * unit)
 		const second = await context.bid(b4, 2n, 6n * unit)
 		await context.closingQuote(unit)
 		await context.finalize()
 		const [repPerLot, filledLots, , sold, rounding] = await owner.readContract({ ...engine, functionName: 'clearing' })
 		expect(filledLots).toBe(3n)
-		expect(sold).toBe(1_000n * unit)
+		expect(sold).toBe(3n * repPerLot)
 		expect(rounding).toBe(sold - 3n * repPerLot)
-		expect(rounding).toBeGreaterThan(0n)
+		expect(rounding).toBe(0n)
 		expect(await e2e.rep(C, context.capital)).toBe(1_000n * unit + sold)
-		expect(await e2e.rep(C, settlement)).toBe(0n)
+		expect(await e2e.rep(C, settlement)).toBe(1_000n * unit - sold)
 		// b3 materializes before the fork, b4 only afterwards.
 		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeAuctionBid', args: [first.id] }))
 		await e2e.migrateWalletRep(forker, U0, 700_000n * unit, [YES])
@@ -307,7 +307,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		await execute(b3, first.vault, coordinator.address, choice)
 		const G1 = await e2e.activateBranch(C, YES)
 		const capitalG1 = await e2e.capital(G1)
-		// Every pledged lot moved to the chosen branch; only the rounding credit is left in the forked child.
+		// Every purchased lot moved to the chosen branch; unsold REP remains reserved for claims.
 		expect(await e2e.rep(G1, capitalG1)).toBe(backing)
 		expect(await e2e.rep(C, context.capital)).toBe(rounding)
 		const claim = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' })
@@ -320,7 +320,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 			await execute(bidder, bid.vault, context.capital, claim)
 			earned.push((await e2e.rep(C, bidder.account.address)) - before)
 		}
-		// The indivisible remainder belongs to the winners, lot for lot, and nothing else is stranded.
+		// Retained inventory creates no winner earning, and no winner REP is stranded.
 		expect((earned[0] ?? 0n) + (earned[1] ?? 0n) + (await e2e.rep(C, context.capital))).toBe(rounding)
 		expect(await e2e.rep(C, context.capital)).toBeLessThanOrEqual(1n)
 	})

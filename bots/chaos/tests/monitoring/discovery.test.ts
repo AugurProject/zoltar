@@ -76,9 +76,9 @@ test('authenticates latest and retained candidate escrows at the same discovery 
 		settlementCallbackGasLimit: '1',
 		targetPriceErrorForDispute: '1000',
 	}
-	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 2_352_113n, 1n, 7n, [6n, 9n])
+	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 1n, 7n, [6n, 9n])
 	expect(snapshot.reportEscrows).toEqual({ '6': address(86), '7': address(87) })
-	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 2_352_113n, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
+	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
 for (const shared of [false, true])
@@ -752,7 +752,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(snapshot.pools).toHaveLength(1)
 		expect(snapshot.pools[0]).toMatchObject({
 			minimumToken1ReportAttoEth: (10_001n * (1n + baseFeePerGas)).toString(),
-			requestPriceCostAttoEth: (8n * baseFeePerGas + 101n).toString(),
+			requestPriceCostAttoEth: (200_001n * (baseFeePerGas + 1n) + 101n).toString(),
 		})
 	})
 

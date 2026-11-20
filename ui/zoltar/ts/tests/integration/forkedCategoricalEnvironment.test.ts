@@ -64,11 +64,11 @@ void describe('forked categorical simulation backend', () => {
 		expect(page.choices.filter(choice => choice.exists)).toHaveLength(2)
 	}, 60_000)
 
-	void test('#1352 migration confirmations distinguish real onchain multilingual and confusable categorical labels', async () => {
+	void test('#1352 migration confirmations distinguish each canonical categorical outcome by its onchain index', async () => {
 		const universe = await loadZoltarUniverseSummary(backend.createReadClient(), 0n)
 		if (universe === undefined) throw new Error('Expected categorical universe')
-		expect(universe.forkQuestionDetails?.outcomeLabels).toContain('答え')
-		expect(universe.forkQuestionDetails?.outcomeLabels).toContain('Іnvalid')
+		expect(universe.forkQuestionDetails?.outcomeLabels).toContain('Alpha')
+		expect(universe.forkQuestionDetails?.outcomeLabels).toContain('Beta')
 		expect(universe.childUniverses[0]?.outcomeLabel).toBe('Outcome 0: Invalid')
 		for (const child of universe.childUniverses) {
 			expect(child.outcomeLabel.startsWith(`Outcome ${child.outcomeIndex}: `)).toBe(true)

@@ -80,6 +80,7 @@ function getCategoricalOutcomeLabels(form: MarketFormState) {
 	// Every question already has an Invalid outcome, so a user-named one would be a second, indistinguishable Invalid.
 	if (outcomeLabels.some(label => normalizeReservedOutcomeLabel(label) === 'invalid')) throw new Error(marketCopy.invalidOutcomeReservedError)
 	if (outcomeLabels.some(label => normalizeReservedOutcomeLabel(label) === 'malformed')) throw new Error(marketCopy.malformedOutcomeReservedError)
+	if (outcomeLabels.some(label => label.length > 64 || !/^[!-~]+(?: [!-~]+)*$/.test(label))) throw new Error(marketCopy.categoricalOutcomeLabelFormatError)
 	// Labels that differ only in case read as the same outcome.
 	if (new Set(outcomeLabels.map(normalizeCaseInsensitiveText)).size !== outcomeLabels.length) throw new Error('Outcomes must be unique.')
 	const sortedOutcomeLabels = sortStringArrayByKeccak(outcomeLabels)

@@ -809,6 +809,23 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		return current
 	}
 
+	test('#1255 transfers into active capital discard acquired retirement requests in the reference model', async () => {
+		baseline = ''
+		const trace: Operation[] = [
+			{ c: 'create', rep: 100n, k: 10n, price: 10n },
+			{ c: 'create', rep: 100n, k: 10n, price: 10n },
+			{ c: 'request', id: 1n, remaining: 4n, minimum: 1n },
+			{ c: 'transfer', from: 1n, to: 2n, rep: 70n, k: 7n, oldPrice: 10n, newPrice: 10n },
+			{ c: 'create', rep: 100n, k: 10n, price: 10n },
+			{ c: 'request', id: 3n, remaining: 3n, minimum: 1n },
+			{ c: 'transfer', from: 3n, to: 2n, rep: 20n, k: 2n, oldPrice: 10n, newPrice: 10n },
+			{ c: 'transfer', from: 2n, to: 3n, rep: 10n, k: 1n, oldPrice: 10n, newPrice: 10n },
+			{ c: 'transfer', from: 3n, to: 2n, rep: 80n, k: 8n, oldPrice: 10n, newPrice: 10n },
+		]
+		const outcome = await run(1, trace.length, trace)
+		expect(outcome.failure).toBeUndefined()
+	})
+
 	test('random index operations keep every aggregate, cohort, fee, clock and preview equal to the reference model', async () => {
 		// The shared fixture reverts to its own snapshot before each test, which consumes ours.
 		baseline = ''

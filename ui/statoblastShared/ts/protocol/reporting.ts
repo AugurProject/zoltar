@@ -373,7 +373,7 @@ function getReportReviewText(outcome: ReportingOutcomeKey, amountAttoRep: bigint
 	}
 }
 
-export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep, contributionFunding?: 'vault' | 'wallet', triggersFork = false) {
+export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep, contributionFunding?: 'vault' | 'wallet', triggersFork = false, requireLead = false) {
 	const [universeId, escalationGameAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
@@ -414,7 +414,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 				if (currentGame !== zeroAddress) {
 					const [endTime, acceptedDeposit] = await Promise.all([
 						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' }),
-						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep] }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: requireLead ? 'previewLeadingDepositOnOutcome' : 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep] }),
 					])
 					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
 					const block = await client.getBlock()

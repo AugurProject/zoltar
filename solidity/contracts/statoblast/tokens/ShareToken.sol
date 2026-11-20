@@ -91,22 +91,15 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function getUniverseId(uint256 id) internal pure returns (uint248 universeId) {
-		assembly {
-			universeId := shr(8, and(id, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00))
-		}
+		return uint248(id >> 8);
 	}
 
 	function getChildId(uint256 originalId, uint248 newUniverse) internal pure returns (uint256 newId) {
-		assembly {
-			newId := or(
-				and(originalId, 0xFF),
-				shl(8, and(newUniverse, 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))
-			)
-		}
+		return (uint256(newUniverse) << 8) | uint8(originalId);
 	}
 
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 amountAttoShares) external {
-		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to mint complete sets');
+		require(authorized[msg.sender], 'ShareToken caller is not authorized to mint complete sets');
 		require(amountAttoShares > 0, 'Exchange rate undefined');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
@@ -120,7 +113,7 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 amountAttoShares) external {
-		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn complete sets');
+		require(authorized[msg.sender], 'ShareToken caller is not authorized to burn complete sets');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
@@ -133,7 +126,7 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function burnTokenIdAndGetRemainingSupply(uint256 _tokenId, address _owner) external returns (uint256 balanceAttoShares, uint256 remainingSupplyAttoShares) {
-		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn this token id');
+		require(authorized[msg.sender], 'ShareToken caller is not authorized to burn this token id');
 		balanceAttoShares = balanceOf(_owner, _tokenId);
 		_burn(_owner, _tokenId, balanceAttoShares);
 		remainingSupplyAttoShares = totalSupply(_tokenId);

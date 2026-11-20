@@ -57,12 +57,9 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 			emit EscalationGameSet(escalationGame);
 		}
 		require(!escalationGame.forkContinuation() || (portfolioCustody != address(0) && escalationGame.forkResumedAt() != 0), 'Fork game');
-		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = escalationGame.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
-		if (requireLead) {
-			uint256[3] memory balances = escalationGame.getOutcomeBalancesAttoRep();
-			for (uint256 i; i < 3; i++)
-				require(i == uint256(outcome) || resultingCumulativeAttoRep > balances[i] || resultingCumulativeAttoRep == escalationGame.nonDecisionThresholdAttoRep(), 'Deposit does not take the lead');
-		}
+		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = requireLead
+			? escalationGame.previewLeadingDepositOnOutcome(outcome, maximumDepositAttoRep)
+			: escalationGame.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
 		// Wallet funding enters dispute escrow directly and never acquires pool backing or capacity.
 		IERC20(pool.repToken()).safeTransferFrom(msg.sender, address(escalationGame), depositedAttoRep);
 		escalationGame.recordDepositFromSecurityPool(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);

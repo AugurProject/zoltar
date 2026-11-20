@@ -19,6 +19,24 @@ describe('Statoblast: takeover owner consent bounds', () => {
 		const epoch = await fixture.client().readContract({ ...fixture.capital, functionName: 'acceptedPriceEpoch' })
 		return { source, bounds: { maximumOwnerPrincipal: 500n * E, maximumOwnerCommitment: receiverCommitment + 50n * E, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: epoch, expectedSourceBatch: 0n } }
 	}
+	test('#1255 an active keeper repairs a target that queued retirement before becoming distressed', async () => {
+		await fixture.fundOwners()
+		await fixture.deposit(0, 105n * E)
+		await fixture.deposit(1, 500n * E)
+		const source = await fixture.authorize(0, 100n * E)
+		const receiver = await fixture.authorize(1, 100n * E)
+		await writeContractAndWait(fixture.client(), () => fixture.client().writeContract({ ...fixture.harness, functionName: 'setDemand', args: [200n * E] }))
+		await writeContractAndWait(fixture.client(), () => fixture.client().writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [0n] }))
+		const queued = await fixture.position(source)
+		expect(queued.batch).not.toBe(0n)
+		await fixture.price(2n * E)
+		await fixture.getAnvilWindowEthereum().advanceTime(3601n)
+		const buyer = fixture.client(1)
+		await writeContractAndWait(buyer, () => buyer.writeContract({ ...fixture.capital, functionName: 'takeOver', args: [source, 50n * E, 0n, 0n] }))
+		expect(await fixture.position(receiver)).toMatchObject({ rep: 500n * E, commitment: 150n * E, batch: 0n, remainingCommitment: 0n })
+		expect(await fixture.position(source)).toMatchObject({ rep: 105n * E, commitment: 50n * E, batch: queued.batch })
+	})
+
 	test('a bounded takeover accepts the exact final principal and commitment consent', async () => {
 		const { source, bounds } = await prepare()
 		const buyer = fixture.client(1)

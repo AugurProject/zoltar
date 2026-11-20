@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -42,32 +43,41 @@ describe('Statoblast: preparation premium ownership', () => {
 		const root = createWriteClient(mock, BigInt(fixture.portfolio))
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptPrice', args: [unit, Number(deadline + 780n)] }))
 		const servicesCashBefore = await collateralBalance(owner, fixture.portfolio, services)
+		const settlement = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const settlementFeesBefore = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'pendingServiceFees' })
 		const premiumBefore = (await owner.readContract({ abi: premiumArtifact.abi, address: premium, functionName: 'totals', args: [child] }))[0]
 		expect(premiumBefore).toBeGreaterThan(0n)
 		await mock.setTime(activation)
 		const finalize = async () => {
 			const burnedBefore = await burnedCollateralBalance(owner, fixture.portfolio)
+			const queuedBefore = await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'pendingBurnCash', args: [child] })
 			const hash = await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
-			const burns = await receiptBurns(owner, hash)
-			// Every ownerless amount the activation reports is actually sent to the burn address.
-			expect(await burnedCollateralBalance(owner, fixture.portfolio)).toBe(burnedBefore + burns.totalEth)
-			const preparation = burns.service.filter(entry => entry.universeId === child).reduce((total, entry) => total + entry.amount, 0n)
-			return { burns, preparation }
+			expect((await receiptBurns(owner, hash)).totalEth).toBe(0n)
+			expect(await burnedCollateralBalance(owner, fixture.portfolio)).toBe(burnedBefore)
+			const finalizedPortfolioTime = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'portfolioTime', args: [child] })
+			const queued = await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'pendingBurnCash', args: [child] })
+			const preparation = queued - queuedBefore
+			const flush = await writeContractAndWait(owner, () => owner.writeContract({ abi: servicesArtifact.abi, address: services, functionName: 'flushBurn', args: [child] }))
+			const burns = await receiptBurns(owner, flush)
+			expect(burns.serviceEth).toBe(queued)
+			expect(await burnedCollateralBalance(owner, fixture.portfolio)).toBe(burnedBefore + queued)
+			return { burns, preparation, finalizedPortfolioTime }
 		}
+
 		const checkpoint = () => writeContractAndWait(owner, () => owner.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'checkpoint' }))
 		const fees = async () => {
 			const position = (await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [owner.account.address] })).positionId
 			return (await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [position] })).ethFees
 		}
 		const servicesCash = () => collateralBalance(owner, fixture.portfolio, services)
-		return { owner, mock, child, forks, capital, services, premium, servicesCashBefore, servicesCash, premiumBefore, finalize, checkpoint, fees }
+		return { owner, mock, child, forks, capital, services, premium, servicesCashBefore, settlementFeesBefore, servicesCash, premiumBefore, finalize, checkpoint, fees }
 	}
 
 	test('late activation cannot backdate reporting premiums into the preparation interval', async () => {
 		const context = await prepare(300n)
-		const { preparation } = await context.finalize()
+		const { preparation, finalizedPortfolioTime } = await context.finalize()
 		const [activationCash, , activationTime] = await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] })
-		expect(activationTime).toBe(await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'portfolioTime', args: [context.child] }))
+		expect(activationTime).toBe(finalizedPortfolioTime)
 		expect(await context.fees()).toBe(0n)
 		await context.checkpoint()
 		const remaining = (await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] }))[0]
@@ -85,10 +95,45 @@ describe('Statoblast: preparation premium ownership', () => {
 		const context = await prepare(4n * DAY)
 		const { preparation } = await context.finalize()
 		expect(preparation).toBe(context.premiumBefore)
-		expect(await context.servicesCash()).toBe(context.servicesCashBefore - context.premiumBefore)
+		expect(await context.servicesCash()).toBe(context.servicesCashBefore + context.settlementFeesBefore - context.premiumBefore)
 		await context.checkpoint()
 		expect(await context.fees()).toBe(0n)
 		expect((await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] }))[0]).toBe(0n)
+	})
+
+	test('#1332 earned reporting premium remains assigned to old capital during a stale-price retirement request', async () => {
+		const context = await prepare(300n)
+		await context.finalize()
+		const capital = { abi: capitalArtifact.abi, address: context.capital }
+		const services = { abi: servicesArtifact.abi, address: context.services }
+		const premium = { abi: premiumArtifact.abi, address: context.premium }
+		const expiry = await context.owner.readContract({ ...capital, functionName: 'priceValidUntil' })
+		await context.mock.setTime(expiry)
+		await context.checkpoint()
+		const [cashBefore] = await context.owner.readContract({ ...premium, functionName: 'totals', args: [context.child] })
+		const ownerBefore = await context.owner.readContract({ ...capital, functionName: 'ownerAccount', args: [context.owner.account.address] })
+		const feesBefore = ownerBefore.feesAttoEth + (await context.fees())
+		const pendingBefore = await context.owner.readContract({ ...services, functionName: 'pendingCapitalCash', args: [context.capital] })
+		const burnBefore = await context.owner.readContract({ ...services, functionName: 'pendingBurnCash', args: [context.child] })
+		const custodyBefore = await context.servicesCash()
+		await context.mock.advanceTime(300n)
+		expect(await context.owner.readContract({ ...capital, functionName: 'isPriceValid' })).toBe(false)
+		// Retirement requests checkpoint all earned income before changing the old position's state.
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ ...capital, functionName: 'setCommitment', args: [0n] }))
+		const [cashAfter] = await context.owner.readContract({ ...premium, functionName: 'totals', args: [context.child] })
+		const earned = cashBefore - cashAfter
+		expect(earned).toBeGreaterThan(0n)
+		const ownerAfter = await context.owner.readContract({ ...capital, functionName: 'ownerAccount', args: [context.owner.account.address] })
+		expect(ownerAfter.feesAttoEth + (await context.fees())).toBe(feesBefore + earned)
+		expect(await context.owner.readContract({ ...services, functionName: 'pendingCapitalCash', args: [context.capital] })).toBe(pendingBefore + earned)
+		expect(await context.owner.readContract({ ...services, functionName: 'pendingBurnCash', args: [context.child] })).toBe(burnBefore)
+		expect(await context.servicesCash()).toBe(custodyBefore)
+		await context.checkpoint()
+		const [cashAfterNextCheckpoint] = await context.owner.readContract({ ...premium, functionName: 'totals', args: [context.child] })
+		const totalEarned = cashBefore - cashAfterNextCheckpoint
+		expect((await context.owner.readContract({ ...capital, functionName: 'ownerAccount', args: [context.owner.account.address] })).feesAttoEth + (await context.fees())).toBe(feesBefore + totalEarned)
+		expect(await context.owner.readContract({ ...services, functionName: 'pendingCapitalCash', args: [context.capital] })).toBe(pendingBefore + totalEarned)
+		expect(await context.owner.readContract({ ...services, functionName: 'pendingBurnCash', args: [context.child] })).toBe(burnBefore)
 	})
 
 	test('preparation checkpoints require the fork controller and cannot divert active earnings', async () => {

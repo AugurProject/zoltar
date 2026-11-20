@@ -142,6 +142,21 @@ describe('portfolio collateral repair auction SDK', () => {
 		expect(quote).not.toHaveProperty('executionReserveAttoEth')
 		expect(source.calls.some(call => ['refundCreditAttoRep', 'minimumExecutionReservePerLot', 'bidReservePerLotAttoEth'].includes(call.functionName))).toBe(false)
 	})
+	test('#1371 rejects an excluded bid before asking for collateral approval', async () => {
+		const snapshot = await load(fixture())
+		if (snapshot.auction === undefined) throw new Error('Auction snapshot missing')
+		const blocked = { ...snapshot, collateralAllowance: 0n, auction: { ...snapshot.auction, maximumAdmissibleBidAttoRepPerLot: (49n * unit) / 10n } }
+		expect(() => quotePortfolioAuctionBid(blocked, bidTerms)).toThrow('Better funded bids exclude this limit')
+		expect(() => buildPortfolioAuctionBidRequest(blocked, bidTerms)).toThrow('Better funded bids exclude this limit')
+	})
+
+	test('#1371 explains when no new bid can meet the book and backing limits', async () => {
+		const snapshot = await load(fixture())
+		if (snapshot.auction === undefined) throw new Error('Auction snapshot missing')
+		const full = { ...snapshot, auction: { ...snapshot.auction, maximumAdmissibleBidAttoRepPerLot: 0n } }
+		expect(() => quotePortfolioAuctionBid(full, bidTerms)).toThrow('Better funded bids leave no admissible new limit')
+	})
+
 	test('authenticates canonical modules and each bidder vault at one block without enumerating other bidders', async () => {
 		const source = fixture({ bidderBidCount: 1_000_000n })
 		const snapshot = await load(source, 123n, 2)

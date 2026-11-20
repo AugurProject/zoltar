@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import {
 	EXCESS_REWARD_WINDOW_DIVISOR,
@@ -144,8 +145,13 @@ contract EscalationGameProofVerifier {
 		}
 
 		uint256 diff = highValue - normalizedLow;
-		uint256 sum = highValue + normalizedLow;
-		uint256 z = (diff * SCALE) / sum;
+		uint256 sum;
+		if (highValue > type(uint256).max - normalizedLow) {
+			// Scale both sides before summing a full-width ratio.
+			diff /= 2;
+			sum = highValue / 2 + normalizedLow / 2;
+		} else sum = highValue + normalizedLow;
+		uint256 z = Math.mulDiv(diff, SCALE, sum);
 		if (z == 0) return log2Count * LN2_SCALED;
 		return log2Count * LN2_SCALED + 2 * _computeAtanhScaled(z);
 	}

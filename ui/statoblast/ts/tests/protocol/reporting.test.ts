@@ -181,6 +181,24 @@ describe('reporting protocol client', () => {
 		expect(previews[1]?.args).toEqual([1, 7n])
 	})
 
+	test('#1328 a reply can require the reviewed outcome to lead', async () => {
+		const previews: TransactionRequestPreview[] = []
+		const client = asWriteClient(
+			createMockWriteClient(
+				() => undefined,
+				async request => {
+					if (request.functionName === 'universeId') return 9n
+					if (request.functionName === 'escalationGame') return zeroAddress
+					throw new Error(`Unexpected read: ${request.functionName}`)
+				},
+			),
+		)
+		client.onTransactionPrepared = preview => previews.push(preview)
+		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'wallet', false, true)
+		expect(previews[0]?.functionName).toBe('depositWalletRepToEscalationGameWithLead')
+		expect(previews[0]?.args).toEqual([1, 7n])
+	})
+
 	test.each([zeroAddress, escalationGameAddress])('rejects removed vault funding for an ordinary game (%s)', async gameAddress => {
 		const client = asWriteClient(
 			createMockWriteClient(

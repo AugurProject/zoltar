@@ -31,6 +31,12 @@ function createQuestionForm(overrides: Partial<MarketFormState> = {}): MarketFor
 	}
 }
 
+test.each(['Invalid\u2061', 'Іnvalid', 'Yes\u034f', 'A  B', 'A'.repeat(65)])('#1352 rejects unsupported categorical label %s before encoding', label => {
+	const form = createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Other', label] })
+	expect(() => createQuestionParameters(form)).toThrow('Use 1–64 printable ASCII characters with single spaces between words for each outcome.')
+	expect(validateMarketForm(form).isValid).toBe(false)
+})
+
 test('question creation validates scalar bounds, categorical identities and time boundaries before encoding', () => {
 	for (const overrides of [
 		{ title: '', endTime: '' },

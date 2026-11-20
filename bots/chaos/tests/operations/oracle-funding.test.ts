@@ -30,7 +30,7 @@ function requestPriceSnapshot(projectedSettlementCollateralAttoEth?: bigint) {
 	pool.oraclePriceValid = false
 	pool.oracleRequestFunding = { ...simpleCoordinatorFunding }
 	pool.minimumToken1ReportAttoEth = '6'
-	pool.requestPriceCostAttoEth = '121'
+	pool.requestPriceCostAttoEth = '400105'
 	if (projectedSettlementCollateralAttoEth !== undefined) pool.projectedSettlementCollateralAttoEth = projectedSettlementCollateralAttoEth.toString()
 	pool.settlementCollateralAttoEth = '100'
 	return { pool, snapshot }
@@ -108,12 +108,12 @@ describe('oracle request funding bounds', () => {
 			baseFeePerGas: '1',
 			coordinator: simpleCoordinatorFunding,
 			minimumToken1ReportAttoEth: 6n.toString(),
-			requestPriceCostAttoEth: 121n.toString(),
+			requestPriceCostAttoEth: 400_105n.toString(),
 			settlementCollateralAttoEth: 100n.toString(),
 		}
 		expect(() => assertAnchoredOracleRequestFunding(observation)).not.toThrow()
 		expect(() => assertAnchoredOracleRequestFunding({ ...observation, minimumToken1ReportAttoEth: 5n.toString() })).toThrow('minimum oracle report does not match')
-		expect(() => assertAnchoredOracleRequestFunding({ ...observation, requestPriceCostAttoEth: 122n.toString() })).toThrow('request-price cost does not match')
+		expect(() => assertAnchoredOracleRequestFunding({ ...observation, requestPriceCostAttoEth: 400_106n.toString() })).toThrow('request-price cost does not match')
 	})
 
 	test('derives a base-fee-independent envelope from cumulative operation caps', () => {
@@ -127,30 +127,30 @@ describe('oracle request funding bounds', () => {
 			settlementCollateralCeilingAttoEth: 0n.toString(),
 		})
 		expect(envelope).toEqual({
-			maximumBaseFeePerGas: '43478260869560',
-			maximumEscalationHaltAttoEth: 130_434_782_608_683n.toString(),
-			maximumInitialAttoRep: 130_434_782_608_683n.toString(),
-			maximumInitialAttoWeth: '130434782608683',
-			maximumRequestPriceCostAttoEth: 869_565_217_391_301n.toString(),
+			maximumBaseFeePerGas: '4999875002',
+			maximumEscalationHaltAttoEth: 14_999_625_009n.toString(),
+			maximumInitialAttoRep: 14_999_625_009n.toString(),
+			maximumInitialAttoWeth: '14999625009',
+			maximumRequestPriceCostAttoEth: 999_985_000_350_107n.toString(),
 		})
 	})
 
 	test('includes the collateral ceiling and validates a persisted envelope against current state', () => {
 		const envelope = oracleRequestFundingEnvelope({
 			coordinator: simpleCoordinatorFunding,
-			maximumEthPrincipalAttoEth: 1_000n.toString(),
-			maximumNativePrincipalAttoEth: 1_000n.toString(),
-			maximumRepPrincipalAttoRep: 1_000n.toString(),
-			maximumWethPrincipalAttoEth: 1_000n.toString(),
+			maximumEthPrincipalAttoEth: 1_000_000n.toString(),
+			maximumNativePrincipalAttoEth: 1_000_000n.toString(),
+			maximumRepPrincipalAttoRep: 1_000_000n.toString(),
+			maximumWethPrincipalAttoEth: 1_000_000n.toString(),
 			proposedRepPerEthPrice: (10n ** 18n).toString(),
 			settlementCollateralCeilingAttoEth: 50_000n.toString(),
 		})
 		expect(envelope).toEqual({
-			maximumBaseFeePerGas: '19',
+			maximumBaseFeePerGas: '3',
 			maximumEscalationHaltAttoEth: 503n.toString(),
 			maximumInitialAttoRep: 503n.toString(),
 			maximumInitialAttoWeth: '503',
-			maximumRequestPriceCostAttoEth: 481n.toString(),
+			maximumRequestPriceCostAttoEth: 800_109n.toString(),
 		})
 		expect(() =>
 			assertOracleRequestFundingEnvelope({
@@ -174,10 +174,10 @@ describe('oracle request funding bounds', () => {
 		expect(() =>
 			oracleRequestFundingEnvelope({
 				coordinator: simpleCoordinatorFunding,
-				maximumEthPrincipalAttoEth: 126n.toString(),
-				maximumNativePrincipalAttoEth: 126n.toString(),
+				maximumEthPrincipalAttoEth: 400_110n.toString(),
+				maximumNativePrincipalAttoEth: 400_110n.toString(),
 				maximumRepPrincipalAttoRep: 6n.toString(),
-				maximumWethPrincipalAttoEth: 126n.toString(),
+				maximumWethPrincipalAttoEth: 400_110n.toString(),
 				proposedRepPerEthPrice: (10n ** 18n).toString(),
 				settlementCollateralCeilingAttoEth: 0n.toString(),
 			}),
@@ -185,10 +185,10 @@ describe('oracle request funding bounds', () => {
 		expect(
 			oracleRequestFundingEnvelope({
 				coordinator: simpleCoordinatorFunding,
-				maximumEthPrincipalAttoEth: 127n.toString(),
-				maximumNativePrincipalAttoEth: 127n.toString(),
+				maximumEthPrincipalAttoEth: 400_111n.toString(),
+				maximumNativePrincipalAttoEth: 400_111n.toString(),
 				maximumRepPrincipalAttoRep: 6n.toString(),
-				maximumWethPrincipalAttoEth: 127n.toString(),
+				maximumWethPrincipalAttoEth: 400_111n.toString(),
 				proposedRepPerEthPrice: (10n ** 18n).toString(),
 				settlementCollateralCeilingAttoEth: 0n.toString(),
 			}).maximumBaseFeePerGas,
@@ -197,7 +197,7 @@ describe('oracle request funding bounds', () => {
 
 	test('rejects immutable funding inputs that the coordinator constructor forbids', () => {
 		const uint128Maximum = (1n << 128n) - 1n
-		const observation = { baseFeePerGas: '1', minimumToken1ReportAttoEth: 6n.toString(), requestPriceCostAttoEth: 121n.toString(), settlementCollateralAttoEth: 100n.toString() }
+		const observation = { baseFeePerGas: '1', minimumToken1ReportAttoEth: 6n.toString(), requestPriceCostAttoEth: 400_105n.toString(), settlementCollateralAttoEth: 100n.toString() }
 		expect(() => assertAnchoredOracleRequestFunding({ ...observation, coordinator: { ...simpleCoordinatorFunding, targetPriceErrorForDispute: '10000000' } })).toThrow('targetPriceErrorForDispute must be below OpenOracle precision')
 		expect(() =>
 			oracleRequestFundingEnvelope({
@@ -227,29 +227,29 @@ describe('oracle request funding bounds', () => {
 		if (request === undefined) throw new Error('Request-price step missing')
 		const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: request.data })
 		expect(decoded.functionName).toBe('requestPrice')
-		expect(decoded.args[1]).toBe(130_434_782_608_683n)
-		expect(request.value).toBe('869565217391301')
+		expect(decoded.args[1]).toBe(14_999_625_009n)
+		expect(request.value).toBe('999985000350107')
 		expect(plan.lastValidBlockNumber).toBeUndefined()
-		expect(plan.terminalSubmission).toEqual({ kind: 'private-next-block', maximumFeePerGas: '43478260869560' })
+		expect(plan.terminalSubmission).toEqual({ kind: 'private-next-block', maximumFeePerGas: '4999875002' })
 		expect(plan.metadata).toMatchObject({
-			maximumBaseFeePerGas: '43478260869560',
-			maximumInitialAttoRep: 130_434_782_608_683n.toString(),
-			maximumInitialAttoWeth: '130434782608683',
-			maximumRequestPriceCostAttoEth: 869_565_217_391_301n.toString(),
+			maximumBaseFeePerGas: '4999875002',
+			maximumInitialAttoRep: 14_999_625_009n.toString(),
+			maximumInitialAttoWeth: '14999625009',
+			maximumRequestPriceCostAttoEth: 999_985_000_350_107n.toString(),
 			preparedAtBlock: snapshot.anchor.blockNumber,
-			settlementCollateralCeilingAttoEth: 13_043_478_260_868_000n.toString(),
+			settlementCollateralCeilingAttoEth: 1_499_962_500_600n.toString(),
 		})
 		expect(request.walletAssetDebits).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ amount: '869565217391301', asset: 'ETH', kind: 'native' }),
-				expect.objectContaining({ amount: '130434782608683', asset: snapshot.deployments.weth, category: 'weth', kind: 'erc20' }),
-				expect.objectContaining({ amount: '130434782608683', asset: pool.repToken, category: 'rep', kind: 'erc20' }),
+				expect.objectContaining({ amount: '999985000350107', asset: 'ETH', kind: 'native' }),
+				expect.objectContaining({ amount: '14999625009', asset: snapshot.deployments.weth, category: 'weth', kind: 'erc20' }),
+				expect.objectContaining({ amount: '14999625009', asset: pool.repToken, category: 'rep', kind: 'erc20' }),
 			]),
 		)
 		expect(request.evidence).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ emitter: snapshot.deployments.weth, equals: '130434782608683', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.coordinator }, kind: 'decoded-event-field' }),
-				expect.objectContaining({ emitter: pool.repToken, equals: '130434782608683', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.coordinator }, kind: 'decoded-event-field' }),
+				expect.objectContaining({ emitter: snapshot.deployments.weth, equals: '14999625009', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.coordinator }, kind: 'decoded-event-field' }),
+				expect.objectContaining({ emitter: pool.repToken, equals: '14999625009', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.coordinator }, kind: 'decoded-event-field' }),
 			]),
 		)
 		expect(request.evidence.some(item => item.kind === 'storage-postcondition' && item.functionName === 'allowance')).toBe(false)
@@ -268,15 +268,15 @@ describe('oracle request funding bounds', () => {
 		const weth = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase())
 		const rep = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === pool.repToken.toLowerCase())
 		if (weth === undefined || rep === undefined) throw new Error('Funding inventory missing')
-		weth.balance = (10n ** 12n).toString()
-		rep.balance = (10n ** 18n + 10n ** 12n).toString()
+		weth.balance = (10n ** 10n).toString()
+		rep.balance = (10n ** 18n + 10n ** 10n).toString()
 
 		const plan = requestPricePlan(snapshot)
 		expect(plan).toBeDefined()
-		// The report ratio at a 50% target error is 3:1, which rounds the 10^12 inventory down by one.
-		expect(plan?.metadata['maximumInitialAttoWeth']).toBe((10n ** 12n - 1n).toString())
-		expect(plan?.metadata['maximumInitialAttoRep']).toBe((10n ** 12n - 1n).toString())
-		expect(plan?.metadata['maximumBaseFeePerGas']).toBe('333333333332')
+		// The report ratio at a 50% target error is 3:1, which rounds the 10^10 inventory down by one.
+		expect(plan?.metadata['maximumInitialAttoWeth']).toBe((10n ** 10n - 1n).toString())
+		expect(plan?.metadata['maximumInitialAttoRep']).toBe((10n ** 10n - 1n).toString())
+		expect(plan?.metadata['maximumBaseFeePerGas']).toBe('3333333332')
 	})
 
 	test('reuses a persisted envelope after approval finality and cleans up when it becomes unsafe', () => {

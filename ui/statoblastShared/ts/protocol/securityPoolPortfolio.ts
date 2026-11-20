@@ -294,7 +294,7 @@ export function portfolioReadClient(client: ReadClient): PortfolioReadClient {
 		getBlock: async parameters => {
 			const block = await client.getBlock(parameters)
 			if (block.number === undefined || block.hash === undefined) throw new Error('Portfolio snapshot requires a mined block.')
-			return { number: block.number, hash: block.hash, timestamp: block.timestamp }
+			return { number: block.number, hash: block.hash, timestamp: block.timestamp, baseFeePerGas: block.baseFeePerGas }
 		},
 	}
 }

@@ -103,7 +103,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				questionId: '77',
 				questionOutcome: 3,
 				repToken: rep,
-				requestPriceCostAttoEth: 121n.toString(),
+				requestPriceCostAttoEth: 400_105n.toString(),
 				projectedSettlementCollateralAttoEth: (10n ** 18n).toString(),
 				settlementCollateralAttoEth: (10n ** 18n).toString(),
 				shareTokenSupplyAttoShares: (10n ** 36n).toString(),

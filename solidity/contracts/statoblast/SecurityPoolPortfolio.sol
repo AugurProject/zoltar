@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { CheckedTimestamp } from './CheckedTimestamp.sol';
+import { CheckedCast } from '../CheckedCast.sol';
 
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolQuestionAdmissionPolicy } from './interfaces/ISecurityPoolQuestionAdmissionPolicy.sol';
@@ -197,8 +197,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 			settlement = deployers.settlement.create(address(this));
 			settlement.initialize(deployers.books.create(address(settlement), minimumOutcomeRate));
 			settlement.authorizeServices(address(services));
-			settlement.registerUniverse(originUniverseId, CheckedTimestamp.toUint48(block.timestamp));
-			settlement.setFeesEnabled(originUniverseId, false, CheckedTimestamp.toUint48(block.timestamp));
+			settlement.registerUniverse(originUniverseId, CheckedCast.toUint48(block.timestamp));
+			settlement.setFeesEnabled(originUniverseId, false, CheckedCast.toUint48(block.timestamp));
 			services.registerUniverse(originUniverseId);
 		} else if (setupStage == SETUP_REPORTERS_AND_FORKS) {
 			reporters = deployers.reporters.create(address(this), zoltar);
@@ -429,7 +429,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {
 		capital = deployers.capital.create(capitalImplementation, universeId);
-		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), CheckedTimestamp.toUint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
+		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), CheckedCast.toUint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
 		capitalLedger[universeId] = capital;
 		capitalAddresses[address(capital)] = true;
 		emit UniversePrepared(universeId, address(capital));

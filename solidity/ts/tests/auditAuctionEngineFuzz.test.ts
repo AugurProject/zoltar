@@ -85,10 +85,10 @@ function modelClearing(config: Config, bids: readonly ModelBid[], maximum: bigin
 	const demand = BigInt(lotPrice.filter(price => price === marginal).length)
 	const marginalFill = filled - fullBefore
 	const reached = filled === maximum
-	const unrounded = reached ? maxOf(marginal, floor) : config.inventory / filled
+	const unrounded = maxOf(marginal, floor)
 	const attoRepPerLot = unrounded - (unrounded % config.grid)
 	const principal = filled * attoRepPerLot
-	const sold = reached ? principal : config.inventory
+	const sold = principal
 	// Price-time priority: equal limits fill in submission (id) order.
 	let cumulative = 0n
 	for (const bid of order) {
@@ -113,7 +113,7 @@ function specViolations(config: Config, bids: readonly ModelBid[], maximum: bigi
 	if (result.filledLots !== 0n) {
 		if (result.attoRepPerLot < floor) problems.push('clearing REP per lot is below the floor')
 		if (result.raiseLimitReached !== (result.filledLots === maximum)) problems.push('raise limit flag wrong')
-		if (!result.raiseLimitReached && result.soldAttoRep !== config.inventory) problems.push('weak demand must sell all inventory')
+		if (result.roundingAttoRep !== 0n) problems.push('clearing must sell only grid-priced principal')
 		if (!result.raiseLimitReached && result.roundingAttoRep >= result.filledLots * config.grid + config.grid) problems.push('weak demand rounding exceeds one grid step per lot')
 	} else if (result.soldAttoRep !== 0n || result.attoRepPerLot !== 0n) problems.push('empty clearing sells REP')
 	// Maximality: one more lot is over the limit, beyond demand, or unaffordable.

@@ -123,6 +123,16 @@ describe('Question Data', () => {
 		await assert.rejects(createQuestion(client, question, sortStringArrayByKeccak(['Yes', label])), /Reserved protocol outcome label/)
 	})
 
+	test.each(['Invalid\u2061', 'Іnvalid', 'Yes\u034f', ' ', '\u200b', 'A  B', 'A'.repeat(65)])('#1352 rejects ambiguous categorical label %s', async label => {
+		const question = await futureQuestion({ title: `Ambiguous label ${label}` })
+		await assert.rejects(createQuestion(client, question, sortStringArrayByKeccak(['No', label])), /Outcome label must use 1-64 printable ASCII characters with single interior spaces/)
+	})
+
+	test('#1352 rejects case-folded duplicates even when their raw hashes differ', async () => {
+		const question = await futureQuestion({ title: 'Duplicate categorical labels' })
+		await assert.rejects(createQuestion(client, question, sortStringArrayByKeccak(['Yes', 'YES', 'No'])), /Outcome labels must be unique ignoring case/)
+	})
+
 	test.each([
 		{ name: 'negative fractional scalar labels retain their sign', min: -10n, max: 0n, ticks: 3n, tick: 1n, label: '-0.000000000000000007' },
 		{ name: 'sub-unit scalar labels retain leading fractional zeroes', min: 0n, max: 10n, ticks: 10n, tick: 1n, label: '0.000000000000000001' },
@@ -439,9 +449,9 @@ describe('Question Data', () => {
 	test('createQuestion rejects duplicate outcome options', async () => {
 		const question = await futureQuestion({ title: 'Test Duplicates', description: 'Testing uniqueness' })
 		// Duplicate entries: ['Yes', 'Yes']
-		await assert.rejects(createQuestion(client, question, ['Yes', 'Yes']), { message: /outcome option hashes must be provided in descending sorted order/i })
+		await assert.rejects(createQuestion(client, question, ['Yes', 'Yes']), { message: /Outcome labels must be unique ignoring case/i })
 		// Duplicate entries with more options
-		await assert.rejects(createQuestion(client, question, ['Yes', 'No', 'Yes']), { message: /outcome option hashes must be provided in descending sorted order/i })
+		await assert.rejects(createQuestion(client, question, ['Yes', 'No', 'Yes']), { message: /Outcome labels must be unique ignoring case/i })
 	})
 
 	test('createQuestion rejects questions whose end time is before the start time', async () => {
