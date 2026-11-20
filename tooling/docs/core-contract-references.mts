@@ -56,7 +56,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'Question ID not already created; end time is on or after start time. Scalar questions use no labels, require display maximum greater than minimum, and positive ticks. Categorical questions reject the reserved names Invalid and Malformed after ASCII case folding and ignoring whitespace and common invisible formatting characters (`Reserved protocol outcome label`), and require nonempty labels whose `keccak256(abi.encode(label))` values are strictly descending.',
+					'Question ID not already created; end time is on or after start time. Scalar questions use no labels, require display maximum greater than minimum, and positive ticks. Categorical labels use 1–64 printable ASCII characters with single interior spaces, must be unique ignoring ASCII case, and cannot use the reserved protocol names Invalid or Malformed (`Reserved protocol outcome label`). Their `keccak256(abi.encode(label))` values are strictly descending.',
 				signals: '`QuestionCreated`',
 			},
 		],

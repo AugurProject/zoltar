@@ -55,6 +55,15 @@ contract EscalationGame is EscalationGameSettlement {
 		require(acceptedAmountAttoRep != 0 && (provisional == BinaryOutcomes.BinaryOutcome.None || resultingCumulativeAmountAttoRep >= totalCostAttoRep()), 'Invalid deposit preview');
 	}
 
+	/// @notice Quote a reply that must lead, or complete the non-decision threshold.
+	function previewLeadingDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external view returns (uint256 accepted, uint256 cumulative) {
+		(accepted, cumulative) = this.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		for (uint8 index = 0; index < 3; index++) {
+			if (index != uint8(outcome))
+				require(cumulative > outcomeState[index].balanceAttoRep || cumulative == nonDecisionThresholdAttoRep, 'Deposit does not lead');
+		}
+	}
+
 	function recordDepositFromSecurityPool(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeAttoRep) external returns (uint256 parentDepositIndex) {
 		require(msg.sender == address(securityPool), 'Only pool');
 		bytes memory returnData = _delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.recordDeposit, (depositor, outcome, amountAttoRep, expectedCumulativeAttoRep)));
@@ -63,6 +72,15 @@ contract EscalationGame is EscalationGameSettlement {
 
 	function depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.depositRepOnOutcome, (outcome, maximumDepositAttoRep)));
+	}
+
+	/// @notice Refuse to turn a quoted reply into trailing support after transaction reordering.
+	function depositRepOnOutcomeWithLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.depositRepOnOutcomeWithLead, (outcome, maximumDepositAttoRep)));
+	}
+
+	function depositRepOnOutcomeWithAuthorizationAndLead(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 signatureS) external {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorizationAndLead, (depositor, outcome, maximumDepositAttoRep, validAfter, validBefore, nonce, v, r, signatureS)));
 	}
 
 	/// @notice Caller-funded atomic report with separate native claim ownership for up to sixteen contributors.

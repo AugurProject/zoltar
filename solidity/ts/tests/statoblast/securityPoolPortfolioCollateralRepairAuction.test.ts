@@ -259,7 +259,9 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await context.report()
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'priceValidUntil' })).toBeLessThan(context.deadline)
 		await context.finalize()
-		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(2n)
+		const fill = await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })
+		expect(fill.filledLots).toBe(2n)
+		expect(fill.refundAttoEth).toBe(0n)
 	})
 
 	test('a closing price the inventory cannot back fills nothing and refunds bid ETH', async () => {

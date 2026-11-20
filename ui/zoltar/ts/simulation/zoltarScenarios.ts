@@ -38,7 +38,7 @@ export function getZoltarScenarioDescription(scenario: ZoltarScenario) {
 }
 
 function createForkedCategoricalQuestion(currentTimestamp: bigint): { marketType: 'categorical'; outcomeLabels: string[]; questionData: QuestionData } {
-	const outcomeLabels = sortStringArrayByKeccak(['Yes', 'YES', 'Іnvalid', 'Invalid\u2061', '答え'])
+	const outcomeLabels = sortStringArrayByKeccak(['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'])
 
 	return {
 		marketType: 'categorical',

@@ -58,7 +58,7 @@ describe('Statoblast REP authorization entry points', () => {
 		await assert.rejects(client.writeContract({ ...signed, functionName: 'depositRepOnOutcomeWithAuthorization', args }), /invalid signer|reverted/i)
 		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [2, maximum] }))
 		const balance = await client.readContract({ ...token, functionName: 'balanceOf', args: [signer] })
-		await assert.rejects(client.writeContract({ ...signed, functionName: 'depositRepOnOutcomeWithAuthorizationAndLead', args }), /Deposit does not take the lead/)
+		await assert.rejects(client.writeContract({ ...signed, functionName: 'depositRepOnOutcomeWithAuthorizationAndLead', args }), /Deposit does not lead/)
 		assert.strictEqual(await client.readContract({ ...token, functionName: 'authorizationState', args: [signer, boundNonce] }), false)
 		assert.strictEqual(await client.readContract({ ...token, functionName: 'balanceOf', args: [signer] }), balance)
 		// The same operation becomes valid after the signer funds enough additional support.

@@ -11,6 +11,7 @@ interface IEscalationGameDepositContext {
 	function getEscalationGameEndDate() external view returns (uint256);
 	function hasReachedNonDecision() external view returns (bool);
 	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep);
+	function previewLeadingDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep);
 	function repToken() external view returns (address);
 	function securityPool() external view returns (address);
 	function getBindingCapitalAttoRep() external view returns (uint256);

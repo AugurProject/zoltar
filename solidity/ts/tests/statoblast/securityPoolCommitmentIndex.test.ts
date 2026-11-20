@@ -515,6 +515,30 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect((await client.waitForTransactionReceipt({ hash })).gasUsed).toBeLessThan(500_000n)
 	})
 
+	test('#1326 a top-up reprioritizes full exits within the same cohort', async () => {
+		await create(100n, 10n, 10n)
+		await create(200n, 10n, 20n, owner(2))
+		await create(300n, 10n, 30n, owner(3))
+		await request(1n)
+		await request(2n)
+		expect((await account(1n)).batch).toBe((await account(2n)).batch)
+		await replace(1n, 400n, 10n, 40n)
+		await retire(1n, 20n)
+		expect(await account(1n)).toMatchObject({ commitment: 0n, releasedRep: 400n })
+		expect(await account(2n)).toMatchObject({ commitment: 10n, rep: 200n })
+		await validate()
+	})
+
+	test('#1255 active takeover receivers accept a queued source without inheriting its retirement', async () => {
+		await create(100n, 10n, 20n)
+		await create(200n, 20n, 20n, owner(2))
+		await request(1n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'transferTo', args: [1n, 2n, 50n, 5n, 20n, 20n] }))
+		expect(await account(1n)).toMatchObject({ rep: 50n, commitment: 5n })
+		expect(await account(2n)).toMatchObject({ rep: 250n, commitment: 25n, batch: 0n, remainingCommitment: 0n })
+		expect(await totals()).toEqual([300n, 30n])
+	})
+
 	test('existing takeover recipients retain cohort and each original fee entitlement', async () => {
 		await create(100n, 10n, 20n)
 		await create(200n, 20n, 20n, owner(2))

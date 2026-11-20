@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { CheckedTimestamp } from './CheckedTimestamp.sol';
-
 import {
 	ICapitalFeeStreams,
 	ICapitalPriceExposure,
 	ICapitalLedgerAccounting
 } from './interfaces/ICapitalAccounting.sol';
+import { CheckedCast } from '../CheckedCast.sol';
 import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
@@ -153,7 +152,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		uint256 forkTimestamp = zoltar.getForkTime(universeId());
 		if (forkTimestamp != 0) timestamp = Math.min(timestamp, forkTimestamp);
 		require(timestamp <= type(uint48).max, 'Capital clock exhausted');
-		return CheckedTimestamp.toUint48(timestamp);
+		return uint48(timestamp);
 	}
 	function totals() external view returns (uint256 rep, uint256 commitment, uint256 healthy) {
 		(rep, commitment) = commitmentIndex.totals();
@@ -333,23 +332,16 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		if (checkpointing) return;
 		checkpointing = true;
 		uint48 effective = effectiveTime();
-		uint48 through = CheckedTimestamp.toUint48(Math.min(effective, priceValidUntil));
+		uint48 through = uint48(Math.min(effective, priceValidUntil));
 		// The canonical book pauses cash-funded fees at stale-price boundaries.
 		ICapitalLedgerAccounting(portfolio).checkpointCapitalFees(universeId(), through);
 		// Prepaid rewards keep their original vesting dates after a fork. Their
 		// old commitments and eligibility are immutable, and parent earnings stay
 		// separately claimable even after the owner has selected a child.
-		// Every mutation checkpoints before changing eligibility, so prepaid income
-		// remains owned by the last accepted backing even while its price is stale.
-		uint48 rewardThrough =
-			effective < block.timestamp && effective >= priceValidUntil
-				? effective
-				: CheckedTimestamp.toUint48(block.timestamp);
-		_checkpointStream(feeStreams, rewardThrough);
-		if (services != address(0)) {
-			try ICapitalFeeDelivery(services).deliverCapitalFees(address(this)) {} catch {}
-		}
-		try this.deliverUnassignedCash() {} catch {}
+		if (effective < block.timestamp && effective < priceValidUntil) through = CheckedCast.toUint48(block.timestamp);
+		// Prepaid income belongs to the commitments at the last accepted price.
+		// Every weight mutation checkpoints first, including during a price lapse.
+		_checkpointStream(feeStreams, acceptedPrice == 0 ? through : CheckedCast.toUint48(block.timestamp));
 		checkpointing = false;
 	}
 	function _checkpointStream(ICapitalFeeStreams streams, uint48 through) private {
@@ -364,26 +356,27 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		(uint256 unassignedEth, uint256 unassignedRep) = commitmentIndex.creditProportionalFees(acceptedPrice == 0 ? 0 : conservativePrice, ethAmount, repAmount);
 		_serviceIncome(unassignedEth, unassignedRep);
 	}
-	/// @dev Income belonging to ineligible backing can never become a
+	/// @dev Income belonging to unhealthy or stale intervals can never become a
 	/// new provider's jackpot, and no shared pot exists to receive it. Burn it.
 	function _serviceIncome(uint256 ethAmount, uint256 repAmount) private {
 		if (ethAmount == 0 && repAmount == 0) return;
 		if (repAmount != 0) zoltar.burnRep(universeId(), repAmount);
 		pendingBurnCash += ethAmount;
 		if (repAmount != 0) emit UnassignedFeesBurned(0, repAmount);
-		try this.deliverUnassignedCash() {} catch {}
 	}
 
-	/// @notice A blocked collateral burn is retriable independently of ledger progress.
-	function deliverUnassignedCash() external {
+	/// @notice Flush quarantined collateral independently of REP operations.
+	function flushBurn() external nonReentrant {
 		uint256 amount = pendingBurnCash;
 		pendingBurnCash = 0;
 		_sendEth(Constants.BURN_ADDRESS, amount);
 		if (amount != 0) emit UnassignedFeesBurned(amount, 0);
 	}
-	/// @dev Services retains funded custody until delivery succeeds; ownership is final now.
+
+	/// @dev Services retain custody until an earnings or burn payout needs cash.
 	function creditDeferredTimedFees(uint256 cash) external {
 		require(msg.sender == services, 'Only capital services');
+		pendingServiceCash += cash;
 		_creditEarnings(cash, 0);
 	}
 
@@ -475,7 +468,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		SecurityPoolCommitmentIndex.Account memory existing;
 		if (receiverId != 0) {
 			existing = commitmentIndex.accountOf(receiverId);
-			require(existing.batch == 0 || existing.batch == source.batch, 'Receiver retirement differs');
+			require(existing.batch == source.batch || existing.batch == 0, 'Receiver retirement differs');
 		}
 		// Any previously idle receiver principal joins its one live position.
 		uint256 receiverFreePrincipalAttoRep = receiver.freeAttoRep;
@@ -509,8 +502,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			receiverCommitmentAttoEth = existing.commitment + commitment;
 			commitmentIndex.transferTo(id, receiverId, 0, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth));
 		}
-		// A queued receiver retains its cohort. An active receiver voluntarily
-		// keeps the acquired commitment active and gains no retirement priority.
+		// Balanced transfer preserved a closed cohort's commitment. This replacement only
+		// adjusts collateral and therefore cannot refill that cohort.
 		_replace(receiverId, receiverPrincipalAttoRep, receiverCommitmentAttoEth);
 	}
 
@@ -553,8 +546,4 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		commitmentIndex.replace(id, rep, commitment, maxPrice);
 		_clearHealthyLiquidation(id, commitment, maxPrice);
 	}
-}
-
-interface ICapitalFeeDelivery {
-	function deliverCapitalFees(address capital) external;
 }

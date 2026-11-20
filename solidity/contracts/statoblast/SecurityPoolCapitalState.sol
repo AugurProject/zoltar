@@ -22,9 +22,10 @@ abstract contract SecurityPoolCapitalState {
 	uint256 public acceptedPriceEpoch;
 	uint48 public priceValidUntil;
 	uint256 public demandAttoEth;
+	uint256 public pendingServiceCash;
+	uint256 public pendingBurnCash;
 	uint256 public totalFreeAttoRep;
 	uint256 public retirementCashAttoRep;
-	uint256 public pendingBurnCash;
 	uint256 public frozenBackingAttoRep;
 	uint256 public frozenCommitmentAttoEth;
 	bool public frozen;
@@ -114,10 +115,18 @@ abstract contract SecurityPoolCapitalState {
 	}
 	function _sendEth(address recipient, uint256 amount) internal {
 		if (amount == 0) return;
+		if (pendingServiceCash != 0) {
+			pendingServiceCash = 0;
+			ICapitalServiceCash(services).withdrawCapitalCash();
+		}
 		Collateral.send(ICollateralConfig(ICapitalPortfolio(address(this)).portfolio()).collateralToken(), recipient, amount);
 	}
 }
 
 interface ICapitalPortfolio {
 	function portfolio() external view returns (address);
+}
+
+interface ICapitalServiceCash {
+	function withdrawCapitalCash() external;
 }

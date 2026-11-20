@@ -10,7 +10,9 @@ import { distressedSecondWinner, repairAuctionKeeper, repairAuctionTerms, prepar
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
 describe('portfolio operator funded auction capital integration', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1000n })
+	// 1,971 bps makes per-second fees on whole ETH exact (year * 10,000 / 1,971 = 160,000,000),
+	// preserving multiple equal lots while retaining profitable holding-fee income.
+	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1971n })
 	test('a keeper authenticates lazy winners and acquires a distressed winner with bounded gas', async () => {
 		const context = await prepareKeeperCollateralRepairAuction(fixture)
 		await context.report()

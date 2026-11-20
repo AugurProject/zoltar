@@ -39,6 +39,7 @@ await assertCoordinatorParameterTableValues(openOracleIntegration, priceCoordina
 assertEscalationGameBytecodeDocs()
 assertSolidityFunctionReader()
 await assertProductionSolidityInventory()
+await assertAuctionClearingFormula()
 
 async function assertNoNarrativeDocumentationSnapshots(): Promise<void> {
 	const validatorPaths = ['tooling/docs/check-docs-examples.mts', 'tooling/docs/check-docs-example-ownership.mts', 'tooling/docs/check-docs-reference-values.mts']
@@ -252,4 +253,12 @@ function assertSolidityFunctionReader(): void {
 		'function fixture(',
 	)
 	assert.throws(() => assertCallOrder(commentedCallBody, 'firstCall()', 'secondCall()', 'commented calls must not satisfy order checks'))
+}
+
+async function assertAuctionClearingFormula(): Promise<void> {
+	const inventory = await readFile('docs/reference/contract-inventory.html', 'utf8')
+	const engine = await readFile('solidity/contracts/statoblast/SecurityPoolUniformPriceAuction.sol', 'utf8')
+	assert.match(inventory, /data-source="q = max\(m, f\)"/, 'Auction reference must identify its uniform clearing formula')
+	assert.match(engine, /result\.attoRepPerLot = Math\.max\(marginal, floorAttoRepPerLot\);/, 'Reference clearing formula must match the engine')
+	assert.match(engine, /result\.soldAttoRep = principal;/, 'Only grid-priced principal is sold')
 }

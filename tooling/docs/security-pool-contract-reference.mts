@@ -210,9 +210,9 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`depositWalletRepToEscalationGameWithLead(outcome, maximumDepositAttoRep)`',
 			caller: 'Any reporter',
-			effect: 'Performs the ordinary wallet deposit only if it leaves the chosen outcome strictly leading, or fills its non-decision threshold. The reporting UI uses this protected form.',
+			effect: 'Performs the ordinary wallet deposit only if it leaves the chosen outcome strictly leading, or fills its non-decision threshold. The reporting UI uses this protected form when the caller requests a leading result.',
 			declarations: [{ name: 'depositWalletRepToEscalationGameWithLead' }],
-			preconditions: 'Ordinary wallet reporting prerequisites; the resulting outcome balance exceeds every other balance or fills its threshold (`Deposit does not take the lead`). An opposing top-up that invalidates this condition causes the whole transaction to revert.',
+			preconditions: 'Ordinary wallet reporting prerequisites; the resulting outcome balance exceeds every other balance or fills its threshold (`Deposit does not lead`). An opposing top-up that invalidates this condition causes the whole transaction to revert.',
 			signals: 'The ordinary wallet deposit signals; none survive a failed lead condition.',
 		},
 		{

@@ -1,5 +1,6 @@
+import { loadPortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress, encodeFunctionData, isHex, createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
@@ -24,6 +25,63 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const feed = () => fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+
+	test('#1252 the public settlement bounty covers its callback gas at the configured priority fee', async () => {
+		await fixture.prepare()
+		const owner = fixture.owner()
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		const bounty = await owner.readContract({ ...target, functionName: 'getRequestPriceCostAttoEth' })
+		const gas = await owner.readContract({ ...target, functionName: 'getSettlementCallbackGasLimit' })
+		const priority = await owner.readContract({ ...target, functionName: 'initialReportPriorityFeeAttoEthPerGas' })
+		expect(bounty).toBeGreaterThanOrEqual(gas * priority)
+	})
+
+	test('#1252 a public RPC client quotes the actual nonzero block base fee', async () => {
+		await fixture.prepare()
+		await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x7'] })
+		await fixture.base.mockWindow.request({ method: 'evm_mine', params: [] })
+		const client = createPublicClient({ transport: custom(fixture.base.mockWindow) })
+		const snapshot = await loadPortfolioPriceSnapshot({ client, portfolio: fixture.portfolio, owner: fixture.owner().account.address, universeId: fixture.base.genesisUniverse })
+		const priority = await client.readContract({ abi: feedArtifact.abi, address: snapshot.feed, functionName: 'initialReportPriorityFeeAttoEthPerGas' })
+		const authoritative = await fixture.owner().readContract({ abi: feedArtifact.abi, address: snapshot.feed, functionName: 'getRequestPriceCostAttoEth', gasPrice: 7n, account: fixture.owner().account.address })
+		expect(snapshot.observation?.bounty).toBe(authoritative)
+		expect(authoritative).toBe(15_804_573n * (7n + priority) + 101n)
+	})
+
+	test('#1340 independent same-block reports can both settle', async () => {
+		await fixture.prepare()
+		const owner = fixture.owner()
+		const other = fixture.other()
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		const bounty = await owner.readContract({ ...target, functionName: 'getRequestPriceCostAttoEth' })
+		const token = await owner.readContract({ ...target, functionName: 'weth' })
+		const rep = await owner.readContract({ ...target, functionName: 'reputationToken' })
+		for (const sponsor of [owner, other]) {
+			await wrapWeth(sponsor, 200n * unit)
+			await approveToken(sponsor, token, target.address)
+			await approveToken(sponsor, rep, target.address)
+		}
+		const data = encodeFunctionData({ ...target, functionName: 'requestPortfolioPrice', args: [unit, 100n * unit, bounty] })
+		const hashes: Hash[] = []
+		await fixture.base.mockWindow.requestRaw({ method: 'evm_setAutomine', params: [false] })
+		try {
+			for (const sponsor of [owner, other]) {
+				const hash = await fixture.base.mockWindow.requestRaw({ method: 'eth_sendTransaction', params: [{ from: sponsor.account.address, to: target.address, data, value: `0x${bounty.toString(16)}`, gas: '0x7a1200' }] })
+				if (typeof hash !== 'string' || !isHex(hash) || hash.length !== 66) throw new Error('Missing report transaction hash')
+				hashes.push(`0x${hash.slice(2)}`)
+			}
+			await fixture.base.mockWindow.requestRaw({ method: 'evm_mine', params: [] })
+		} finally {
+			await fixture.base.mockWindow.requestRaw({ method: 'evm_setAutomine', params: [true] })
+		}
+		for (const hash of hashes) expect((await owner.getTransactionReceipt({ hash })).status).toBe('success')
+		const second = await owner.readContract({ ...target, functionName: 'pendingReportId' })
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, second)
+		await openOracleSettle(owner, second - 1n)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [second] })).toBe(1n)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [second - 1n] })).toBe(1n)
+	})
 
 	test('a question coordinator respects the sponsor’s signed collateral budget (#1351)', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)

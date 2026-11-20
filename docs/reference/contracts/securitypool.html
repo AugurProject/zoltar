@@ -93,8 +93,8 @@
 						<tr>
 							<td><code>depositWalletRepToEscalationGameWithLead(outcome, maximumDepositAttoRep)</code><wbr /></td>
 							<td>Any reporter</td>
-							<td>Ordinary wallet reporting prerequisites; the resulting outcome balance exceeds every other balance or fills its threshold (<code>Deposit does not take the lead</code>). An opposing top-up that invalidates this condition causes the whole transaction to revert.</td>
-							<td>Performs the ordinary wallet deposit only if it leaves the chosen outcome strictly leading, or fills its non-decision threshold. The reporting UI uses this protected form.</td>
+							<td>Ordinary wallet reporting prerequisites; the resulting outcome balance exceeds every other balance or fills its threshold (<code>Deposit does not lead</code>). An opposing top-up that invalidates this condition causes the whole transaction to revert.</td>
+							<td>Performs the ordinary wallet deposit only if it leaves the chosen outcome strictly leading, or fills its non-decision threshold. The reporting UI uses this protected form when the caller requests a leading result.</td>
 							<td>The ordinary wallet deposit signals; none survive a failed lead condition.</td>
 						</tr>
 						<tr>

@@ -39,9 +39,14 @@ contract ZoltarQuestionData {
 			require(questionData.numTicks > 0, 'Scalar question numTicks must be positive');
 		} else {
 			uint256 previous = type(uint256).max;
+			bytes32[] memory normalizedHashes = new bytes32[](outcomeOptions.length);
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
 				require(bytes(outcomeOptions[index]).length > 0, 'Outcome option label must not be an empty string');
 				require(!_isReservedOutcomeLabel(bytes(outcomeOptions[index])), 'Reserved protocol outcome label');
+				bytes32 normalizedHash = _validatedOutcomeLabelHash(bytes(outcomeOptions[index]));
+				for (uint256 previousIndex; previousIndex < index; previousIndex++)
+					require(normalizedHashes[previousIndex] != normalizedHash, 'Outcome labels must be unique ignoring case');
+				normalizedHashes[index] = normalizedHash;
 				uint256 iHash = uint256(keccak256(abi.encode(outcomeOptions[index])));
 				require(iHash < previous, 'Outcome option hashes must be provided in descending sorted order');
 				previous = iHash;
@@ -54,6 +59,17 @@ contract ZoltarQuestionData {
 		emit QuestionCreated(questionId, questionCreatedTimestamp[questionId], questionData, outcomeOptions);
 
 		return questionId;
+	}
+
+	/// @dev An allow-list bounds validation and excludes invisible, malformed and confusable Unicode.
+	function _validatedOutcomeLabelHash(bytes memory label) private pure returns (bytes32) {
+		require(label.length != 0 && label.length <= 64, 'Outcome label must use 1-64 printable ASCII characters with single interior spaces');
+		for (uint256 i; i < label.length; i++) {
+			uint8 character = uint8(label[i]);
+			require(character >= 0x20 && character <= 0x7e && (character != 0x20 || (i != 0 && i + 1 < label.length && label[i - 1] != 0x20)), 'Outcome label must use 1-64 printable ASCII characters with single interior spaces');
+			if (character >= 65 && character <= 90) label[i] = bytes1(character + 32);
+		}
+		return keccak256(label);
 	}
 
 	function _isReservedOutcomeLabel(bytes memory label) private pure returns (bool) {

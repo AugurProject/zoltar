@@ -140,3 +140,30 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	expect(claim.disabled).toBe(true)
 	expect(view.container.textContent).toContain('No refund credit remains to withdraw.')
 })
+
+test.each([
+	{ maximumAcceptableBid: (49n * unit) / 10n, reason: 'Better funded bids exclude this limit' },
+	{ maximumAcceptableBid: 0n, reason: 'Better funded bids leave no admissible new limit' },
+])('#1371 excluded bids show $reason without an allowance-read failure', async ({ maximumAcceptableBid, reason }) => {
+	const fixture = await auctionFixture()
+	// The default 120% health target requires 4.8 REP per lot.
+	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = maximumAcceptableBid
+	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
+	await act(() => {
+		for (const [name, value] of [
+			['Number of lots', '2'],
+			['Minimum REP purchased per lot', '5'],
+		] as const) {
+			const input = field(view.container, name)
+			input.value = value
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+		}
+	})
+	await waitFor(() => expect(view.container.textContent).toContain(reason))
+	expect(button(view.container, 'Approve WETH').disabled).toBe(true)
+	expect(button(view.container, 'Submit funded bid').disabled).toBe(true)
+	expect(view.container.textContent).not.toContain('Unable to verify WETH approval')
+	expect(view.container.textContent).not.toContain('Retry loading the approval status')
+})

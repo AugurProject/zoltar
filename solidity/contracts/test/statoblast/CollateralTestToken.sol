@@ -22,15 +22,15 @@ contract CollateralTestToken {
 		totalSupply += amount;
 		emit Transfer(address(0), to, amount);
 	}
-	function setBlocked(address account, bool value) external {
-		blocked[account] = value;
+	function setFee(uint256 fee) external {
+		require(fee <= 10_000, 'Invalid fee');
+		feeBps = fee;
 	}
 	function setPaused(bool value) external {
 		paused = value;
 	}
-	function setFee(uint256 fee) external {
-		require(fee <= 10_000, 'Invalid fee');
-		feeBps = fee;
+	function setBlocked(address account, bool value) external {
+		blocked[account] = value;
 	}
 	function approve(address spender, uint256 amount) external returns (bool) {
 		allowance[msg.sender][spender] = amount;

@@ -146,7 +146,11 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		const hash = await redeemCompleteSet(fixture.other(), native.securityPool, shares[0])
 		expect((await fixture.owner().readContract({ ...services, functionName: 'questionPremium', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))[1]).toBe(0n)
 		// The cancelled premium has no recorded payer and is burned rather than kept by services.
-		const cancelled = (await receiptBurns(fixture.owner(), hash)).service.filter(entry => entry.universeId === fixture.base.genesisUniverse).reduce((total, entry) => total + entry.amount, 0n)
+		expect((await receiptBurns(fixture.owner(), hash)).serviceEth).toBe(0n)
+		const cancelled = await fixture.owner().readContract({ ...services, functionName: 'pendingBurnCash', args: [fixture.base.genesisUniverse] })
+		expect(await burnedCollateralBalance(fixture.owner(), fixture.portfolio)).toBe(burnedBefore)
+		const flush = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...services, functionName: 'flushBurn', args: [fixture.base.genesisUniverse] }))
+		expect((await receiptBurns(fixture.owner(), flush)).serviceEth).toBe(cancelled)
 		expect(cancelled).toBeGreaterThan(0n)
 		expect(cancelled).toBeLessThanOrEqual(premiumCash)
 		expect((await burnedCollateralBalance(fixture.owner(), fixture.portfolio)) - burnedBefore).toBeGreaterThanOrEqual(cancelled)
@@ -166,15 +170,20 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		expect((await questionState()).feeRateAttoEthPerSecond).toBe(0n)
 		const burnedBefore = await burnedCollateralBalance(fixture.owner(), fixture.portfolio)
 		const servicesCashBefore = await collateralBalance(fixture.owner(), fixture.portfolio, services.address)
+		const settlement = await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const pendingSettlementFees = await fixture.owner().readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'pendingServiceFees' })
 		await mature(game)
 		const hash = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'checkpoint' }))
 		expect((await fixture.owner().readContract({ ...services, functionName: 'questionPremium', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))[1]).toBe(0n)
-		const burns = await receiptBurns(fixture.owner(), hash)
-		const unused = burns.service.filter(entry => entry.universeId === fixture.base.genesisUniverse).reduce((total, entry) => total + entry.amount, 0n)
+		expect((await receiptBurns(fixture.owner(), hash)).serviceEth).toBe(0n)
+		const unused = await fixture.owner().readContract({ ...services, functionName: 'pendingBurnCash', args: [fixture.base.genesisUniverse] })
+		expect(await burnedCollateralBalance(fixture.owner(), fixture.portfolio)).toBe(burnedBefore)
+		const flush = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...services, functionName: 'flushBurn', args: [fixture.base.genesisUniverse] }))
+		const burns = await receiptBurns(fixture.owner(), flush)
 		expect(unused).toBeGreaterThan(0n)
 		expect(await burnedCollateralBalance(fixture.owner(), fixture.portfolio)).toBe(burnedBefore + burns.totalEth)
-		// Services keep none of the unearned premium: it was either paid to capital or burned.
-		expect(await collateralBalance(fixture.owner(), fixture.portfolio, services.address)).toBeLessThanOrEqual(servicesCashBefore - unused)
+		// The flush collects pending settlement fees but cannot consume already assigned capital income.
+		expect(await collateralBalance(fixture.owner(), fixture.portfolio, services.address)).toBe(servicesCashBefore + pendingSettlementFees - unused)
 	})
 
 	test('a minimum-size newcomer cannot collect a large finalized question premium tail', async () => {

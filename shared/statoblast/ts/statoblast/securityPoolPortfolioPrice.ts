@@ -1,3 +1,4 @@
+import { calculateOracleSettlementBountyAttoEth } from '../initialReport/oracleInitialReport.js'
 import { encodeFunctionData, isHex, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 import { decodeAddress, decodeBool, decodeUint } from './securityPoolPortfolioDecoding.js'
@@ -26,7 +27,9 @@ const abi = parseAbi([
 	'function minimumReportCollateral() view returns (uint256)',
 	'function minimumToken1ReportAttoEth() view returns (uint256)',
 	'function minimumToken2ReportAttoRep() view returns (uint256)',
-	'function getRequestPriceCostAttoEth() view returns (uint256)',
+	'function initialReportPriorityFeeAttoEthPerGas() view returns (uint256)',
+	'function getSettlementCallbackGasLimit() view returns (uint32)',
+	'function maxSettlementBaseFeeMultiplierBps() view returns (uint256)',
 	'function lastPrice() view returns (uint256)',
 	'function lastSettlementTimestamp() view returns (uint256)',
 	'function priceValidityWindowSeconds() view returns (uint256)',
@@ -104,12 +107,14 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 		const weth = decodeAddress(wethValue, 'Collateral')
 		const wrappedNative = decodeAddress(await read(feed, 'weth'), 'Wrapped native token')
 		const openOracle = decodeAddress(oracleValue, 'OpenOracle')
-		const [exposure, reportCollateral, minimum, minimumRep, bounty, price, settled, validity, settlement, pending, wethBalanceAttoEth, repBalanceAttoRep, wethAllowanceAttoEth, repAllowanceAttoRep] = await Promise.all([
+		const [exposure, reportCollateral, minimum, minimumRep, priority, callbackGas, multiplier, price, settled, validity, settlement, pending, wethBalanceAttoEth, repBalanceAttoRep, wethAllowanceAttoEth, repAllowanceAttoRep] = await Promise.all([
 			read(portfolio, 'oracleExposure', [universeId]),
 			read(feed, 'minimumReportCollateral'),
 			reportingOpen ? read(feed, 'minimumToken1ReportAttoEth') : undefined,
 			reportingOpen ? read(feed, 'minimumToken2ReportAttoRep') : undefined,
-			read(feed, 'getRequestPriceCostAttoEth'),
+			read(feed, 'initialReportPriorityFeeAttoEthPerGas'),
+			read(feed, 'getSettlementCallbackGasLimit'),
+			read(feed, 'maxSettlementBaseFeeMultiplierBps'),
 			read(feed, 'lastPrice'),
 			read(feed, 'lastSettlementTimestamp'),
 			read(feed, 'priceValidityWindowSeconds'),
@@ -120,6 +125,18 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 			read(weth, 'allowance', [owner, feed]),
 			read(repToken, 'allowance', [owner, feed]),
 		])
+		// Fee-priced eth_call can fail for an unfunded caller. Derive the exact
+		// contract quote from immutable settings and the pinned block instead.
+		const bounty = decodeUint(
+			calculateOracleSettlementBountyAttoEth({
+				maxSettlementBaseFeeMultiplierBps: decodeUint(multiplier, 'Settlement fee multiplier'),
+				settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement callback gas', 32),
+				baseFeePerGas: decodeUint(block.baseFeePerGas ?? 0n, 'Block base fee'),
+				initialReportPriorityFeeAttoEthPerGas: decodeUint(priority, 'Report priority fee'),
+			}),
+			'Settlement bounty',
+			96,
+		)
 		observation = {
 			wrappedNative,
 			currentExposureAttoEth: decodeUint(exposure, 'Current exposure'),
@@ -157,8 +174,8 @@ export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, pro
 	decodeUint(requestedWeth, 'Requested WETH', 128)
 	const inventoryWeth = (observation.minimumRepAttoRep * 10n ** 18n + price - 1n) / price
 	const required = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
-	// The feed judges the report against exposure at settlement. Its minimum already covers ordinary growth within
-	// the accepted limit; the margin covers growth that a newer acceptance or a funded growth proof can still authorize.
+	// The feed judges the report against exposure at settlement. Its minimum covers
+	// current exposure; the margin tolerates small growth while independently accepted reports can secure later operations.
 	const suggested = requestedWeth === 0n ? required + required / PORTFOLIO_REPORT_FUNDING_HEADROOM_DIVISOR : requestedWeth
 	const weth = decodeUint(suggested > required ? suggested : required, 'Initial WETH report', 128)
 	const rep = decodeUint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)

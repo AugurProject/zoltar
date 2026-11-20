@@ -124,6 +124,22 @@ contract SecurityPoolUniformPriceAuction {
 		emit AuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
 	}
 
+	/// @notice Largest grid limit at which a new bid can still enter the book.
+	/// Equal-price bids already funded rank first. Zero means no new lot fits.
+	function maximumAcceptableBidAttoRepPerLot() external view returns (uint256) {
+		if (!initialized || finalized || block.timestamp >= closesAt) return 0;
+		uint256 low;
+		uint256 high = maximumBidAttoRepPerLot / repGrid;
+		while (low < high) {
+			uint256 middle = low + (high - low + 1) / 2;
+			uint256 limit = middle * repGrid;
+			if (_pricePrefix(limit, PriceBoundary.Inclusive) < Math.min(targetLots, inventoryAttoRep / limit))
+				low = middle;
+			else high = middle - 1;
+		}
+		return low * repGrid;
+	}
+
 	function submitBid(address bidder, address vault, uint256 targetHealthBps, uint256 lots, uint256 minimumAttoRepPerLot) external onlyController returns (uint256 bidId) {
 		require(initialized && !finalized, 'Auction is not accepting bids');
 		require(block.timestamp >= opensAt && block.timestamp < closesAt, 'Auction bidding window is closed');
@@ -201,12 +217,11 @@ contract SecurityPoolUniformPriceAuction {
 		result.marginalDemandLots = _pricePrefix(marginal, PriceBoundary.Inclusive) - result.fullBeforeLots;
 		result.marginalFillLots = result.filledLots - result.fullBeforeLots;
 		result.raiseLimitReached = result.filledLots == maximumFilledLots;
-		result.attoRepPerLot =
-			result.raiseLimitReached ? Math.max(marginal, floorAttoRepPerLot) : inventoryAttoRep / result.filledLots;
+		result.attoRepPerLot = Math.max(marginal, floorAttoRepPerLot);
 		result.attoRepPerLot -= result.attoRepPerLot % repGrid;
 		result.raisedAttoEth = result.filledLots * lotAttoEth;
 		uint256 principal = result.filledLots * result.attoRepPerLot;
-		result.soldAttoRep = result.raiseLimitReached ? principal : inventoryAttoRep;
+		result.soldAttoRep = principal;
 		result.roundingAttoRep = result.soldAttoRep - principal;
 	}
 

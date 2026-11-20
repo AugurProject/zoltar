@@ -40,7 +40,7 @@ function fixture(definitionId: string) {
 			targetPriceErrorForDispute: '5000000',
 		}
 		pool.minimumToken1ReportAttoEth = '6'
-		pool.requestPriceCostAttoEth = '121'
+		pool.requestPriceCostAttoEth = '400105'
 		pool.settlementCollateralAttoEth = '100'
 	}
 	snapshot.deployments.uniswapV3Factory = address(40)

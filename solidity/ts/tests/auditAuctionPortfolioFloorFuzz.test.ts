@@ -51,10 +51,9 @@ function modelClearing(inventory: bigint, grid: bigint, bids: readonly ModelBid[
 	if (filled === 0n) return { filled, attoRepPerLot: 0n, sold: 0n, rounding: 0n, fills }
 	const marginal = lotPrice[Number(filled) - 1]
 	if (marginal === undefined) throw new Error('Model marginal missing')
-	const reached = filled === maximum
-	const unrounded = reached ? maxOf(marginal, floor) : inventory / filled
+	const unrounded = maxOf(marginal, floor)
 	const attoRepPerLot = unrounded - (unrounded % grid)
-	const sold = reached ? filled * attoRepPerLot : inventory
+	const sold = filled * attoRepPerLot
 	// Price-time priority: equal limits fill in submission (id) order.
 	let cumulative = 0n
 	for (const bid of order) {
