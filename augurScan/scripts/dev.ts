@@ -1,6 +1,6 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import { watch } from 'node:fs'
 import path from 'node:path'
+import { browserBundleSourceDirectories, watchBrowserBundleSources } from './browser-watch.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '..')
 const build = async (script = 'build'): Promise<void> => {
@@ -41,16 +41,18 @@ const drainBuilds = async (): Promise<void> => {
 		buildInProgress = false
 	}
 }
-const browserWatcher = watch(path.join(projectRoot, 'browser'), { recursive: true }, () => {
+// The bundle also compiles src/ modules, so a src/ change must rebuild it too.
+const stopBrowserWatch = watchBrowserBundleSources(projectRoot, () => {
 	buildQueued = true
 	void drainBuilds()
 })
+console.log(`AugurScan rebuilds the browser bundle when ${browserBundleSourceDirectories.map(directory => `${directory}/`).join(' or ')} changes`)
 
 let shuttingDown = false
 const shutdown = (): void => {
 	if (shuttingDown) return
 	shuttingDown = true
-	browserWatcher.close()
+	stopBrowserWatch()
 	app.kill()
 	indexer.kill()
 }

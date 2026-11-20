@@ -20,6 +20,8 @@ test('transferred build inputs preserve shared freshness so consumers do not reb
 	expect(query.componentArtifactOutputs).toContain('shared/.freshness-hash')
 	expect(query.generatedCachePaths).toContain('shared/.freshness-hash')
 	expect(query.fullOnlyCachePaths).toContain('ui/zoltar/vendor')
+	// The shared stylesheet's fonts are vendored outside every app vendor directory.
+	expect(query.fullOnlyCachePaths).toContain('ui/coreShared/vendor/fonts')
 	expect(query.fullOnlyCachePaths).toContain('augurScan/config/abis.json')
 	expect(query.fullOnlyCachePaths.some(output => query.componentArtifactOutputs.includes(output))).toBe(false)
 	expect([...query.fullOnlyCachePaths, ...query.componentArtifactOutputs].sort()).toEqual([...query.generatedCachePaths].sort())
@@ -32,7 +34,7 @@ test('contract cache ignores unrelated UI and explorer inputs but tracks contrac
 			await mkdir(path.dirname(path.join(root, file)), { recursive: true })
 			await writeFile(path.join(root, file), contents)
 		}
-		for (const file of ['ui/zoltar/package.json', 'tooling/ui/vendor.mts', 'augurScan/browser/app.ts']) {
+		for (const file of ['ui/zoltar/package.json', 'tooling/ui/vendor.mts', 'augurScan/browser/app.ts', 'augurScan/src/collateral.ts']) {
 			const contractBefore = await generatedCacheKey('contracts', root)
 			const fullBefore = await generatedCacheKey('full', root)
 			await setInput(file, 'changed')

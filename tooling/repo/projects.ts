@@ -90,6 +90,8 @@ const botAudit = dependencyAuditCommand
 /**
  * Canonical project ownership and build graph. All packages share the root workspace lockfile.
  */
+// Every app's vendor step writes the shared stylesheet's fonts beside ui/coreShared/css rather than into the app vendor directory.
+const sharedVendoredFontsDirectory = 'ui/coreShared/vendor/fonts'
 export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json']
 
 export const projects: readonly Project[] = [
@@ -219,13 +221,13 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('ui/zoltar'),
 			build: { ...packageTask('ui/zoltar', 'build', { groups: ['ui'], outputs: ['ui/zoltar/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
-			vendor: { ...packageTask('ui/zoltar', 'vendor', { cacheInputs: [...packageInputs('ui/zoltar'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/zoltar/vendor'] },
+			vendor: { ...packageTask('ui/zoltar', 'vendor', { cacheInputs: [...packageInputs('ui/zoltar'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/zoltar/vendor', sharedVendoredFontsDirectory] },
 			'test-build': { ...packageTask('ui/zoltar', 'build:tests'), outputs: ['ui/zoltar/js/tests'] },
 			workers: packageTask('ui/zoltar', 'build:workers'),
 			typecheck: { ...packageTask('ui/zoltar', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/zoltar', ['core-audit']),
 		},
-		generatedDirectories: ['ui/zoltar/js', 'ui/zoltar/dist', 'ui/zoltar/vendor'],
+		generatedDirectories: ['ui/zoltar/js', 'ui/zoltar/dist', 'ui/zoltar/vendor', sharedVendoredFontsDirectory],
 		ci: { scope: 'core', artifactOutputs: ['ui/zoltar/js', 'ui/zoltar/dist'] },
 	},
 	{
@@ -236,13 +238,13 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('ui/statoblast'),
 			build: { ...packageTask('ui/statoblast', 'build', { groups: ['ui'], outputs: ['ui/statoblast/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
-			vendor: { ...packageTask('ui/statoblast', 'vendor', { cacheInputs: [...packageInputs('ui/statoblast'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/statoblast/vendor'] },
+			vendor: { ...packageTask('ui/statoblast', 'vendor', { cacheInputs: [...packageInputs('ui/statoblast'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/statoblast/vendor', sharedVendoredFontsDirectory] },
 			'test-build': { ...packageTask('ui/statoblast', 'build:tests'), outputs: ['ui/statoblast/js/tests'] },
 			workers: packageTask('ui/statoblast', 'build:workers'),
 			typecheck: { ...packageTask('ui/statoblast', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/statoblast', ['core-audit']),
 		},
-		generatedDirectories: ['ui/statoblast/js', 'ui/statoblast/dist', 'ui/statoblast/vendor'],
+		generatedDirectories: ['ui/statoblast/js', 'ui/statoblast/dist', 'ui/statoblast/vendor', sharedVendoredFontsDirectory],
 		ci: { scope: 'core', artifactOutputs: ['ui/statoblast/js', 'ui/statoblast/dist'] },
 	},
 	{
@@ -253,13 +255,13 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('ui/openoracle'),
 			build: { ...packageTask('ui/openoracle', 'build', { groups: ['ui'], outputs: ['ui/openoracle/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
-			vendor: { ...packageTask('ui/openoracle', 'vendor', { cacheInputs: [...packageInputs('ui/openoracle'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/openoracle/vendor'] },
+			vendor: { ...packageTask('ui/openoracle', 'vendor', { cacheInputs: [...packageInputs('ui/openoracle'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/openoracle/vendor', sharedVendoredFontsDirectory] },
 			'test-build': { ...packageTask('ui/openoracle', 'build:tests'), outputs: ['ui/openoracle/js/tests'] },
 			workers: packageTask('ui/openoracle', 'build:workers'),
 			typecheck: { ...packageTask('ui/openoracle', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/openoracle', ['core-audit']),
 		},
-		generatedDirectories: ['ui/openoracle/js', 'ui/openoracle/dist', 'ui/openoracle/vendor'],
+		generatedDirectories: ['ui/openoracle/js', 'ui/openoracle/dist', 'ui/openoracle/vendor', sharedVendoredFontsDirectory],
 		ci: { scope: 'core', artifactOutputs: ['ui/openoracle/js', 'ui/openoracle/dist'] },
 	},
 	{
@@ -271,14 +273,14 @@ export const projects: readonly Project[] = [
 			setup: packageInstallTask('ui/trading'),
 			build: { ...packageTask('ui/trading', 'build', { groups: ['ui'], outputs: ['ui/trading/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
 			test: packageTask('ui/trading', 'test'),
-			vendor: { ...packageTask('ui/trading', 'vendor', { cacheInputs: [...packageInputs('ui/trading'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/trading/vendor'] },
+			vendor: { ...packageTask('ui/trading', 'vendor', { cacheInputs: [...packageInputs('ui/trading'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/trading/vendor', sharedVendoredFontsDirectory] },
 			'test-build': { ...packageTask('ui/trading', 'build:tests'), outputs: ['ui/trading/js/tests'] },
 			workers: packageTask('ui/trading', 'build:workers'),
 			typecheck: { ...packageTask('ui/trading', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			knip: rootTask(['bun', 'x', 'knip', '--production', '--workspace', 'ui/trading', '--include', 'files'], ['knip.ts', 'ui/trading/**']),
 			audit: packageAuditTask('ui/trading', ['core-audit']),
 		},
-		generatedDirectories: ['ui/trading/js', 'ui/trading/dist', 'ui/trading/vendor'],
+		generatedDirectories: ['ui/trading/js', 'ui/trading/dist', 'ui/trading/vendor', sharedVendoredFontsDirectory],
 		ci: { scope: 'core', artifactOutputs: ['ui/trading/js', 'ui/trading/dist'] },
 	},
 	{
@@ -357,7 +359,7 @@ export const projects: readonly Project[] = [
 			build: packageTask('augurScan', 'build', {
 				outputs: [...augurScanMetadataOutputs, 'augurScan/public/app.js'],
 				groups: ['generated'],
-				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'docs/*-deployment-addresses.json'],
+				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'augurScan/src/**', 'docs/*-deployment-addresses.json'],
 			}),
 			test: packageTask('augurScan', 'test:ci', { groups: ['complete-validation'] }),
 			check: packageTask('augurScan', 'check', { covers: ['lint'] }),

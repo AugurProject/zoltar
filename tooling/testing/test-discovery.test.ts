@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getTimingContextPaths, getWeightedTestFiles, KNOWN_FILE_WEIGHTS, parseShardOption } from './run-balanced-test-shard.mts'
-import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles } from './run-solidity-bytecode-coverage.mts'
+import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles, parseCoverageShardNumber } from './run-solidity-bytecode-coverage.mts'
 import { TEST_BUILD_TARGET_IDS } from '../ui/tests.mts'
 import { createBalancedTestShards, discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, hasExplicitTestPath, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
 import {
@@ -127,6 +127,19 @@ describe('canonical test discovery', () => {
 		expect(shardedFiles).toContain('solidity/ts/tests/statoblast/securityPoolCommitmentStateful.test.ts')
 		expect(new Set(shardedFiles).size).toBe(shardedFiles.length)
 		expect(shards.every(shard => shard.length > 0)).toBe(true)
+	})
+
+	test('bytecode coverage shard selection rejects incomplete or malformed selectors', () => {
+		expect(parseCoverageShardNumber([], 2)).toBeUndefined()
+		expect(parseCoverageShardNumber(['--shard', '2'], 2)).toBe(2)
+		expect(parseCoverageShardNumber(['--shard=1'], 2)).toBe(1)
+		expect(() => parseCoverageShardNumber(['--shard'], 2)).toThrow('--shard requires a shard number')
+		expect(() => parseCoverageShardNumber(['--shard', '--bail'], 2)).toThrow('--shard requires a shard number')
+		expect(() => parseCoverageShardNumber(['--shard='], 2)).toThrow('Invalid Solidity bytecode coverage shard')
+		expect(() => parseCoverageShardNumber(['--shard', '2junk'], 2)).toThrow('Invalid Solidity bytecode coverage shard')
+		expect(() => parseCoverageShardNumber(['--shard', '0'], 2)).toThrow('Invalid Solidity bytecode coverage shard')
+		expect(() => parseCoverageShardNumber(['--shard', '3'], 2)).toThrow('Unknown Solidity bytecode coverage shard')
+		expect(() => parseCoverageShardNumber(['--shard=1', '--shard=2'], 2)).toThrow('--shard may be given only once')
 	})
 
 	test('fuzz extensions remain discoverable without depending on a particular production model', async () => {
