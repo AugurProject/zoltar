@@ -229,8 +229,9 @@ export const forkEscalationContractReferences: ContractReference[] = [
 		interactions: [
 			{
 				call: '`start(startBondAttoRep, nonDecisionThresholdAttoRep)`',
-				caller: 'Immutable owner, the `EscalationGameFactory`, only (`Only owner`), during atomic deployment',
-				effect: 'Initializes a local game and sets activation three days after deployment. For ordinary pool games, the factory lowers an oversized configured bond to `nonDecisionThresholdAttoRep - 1` before this call.',
+				caller: 'Immutable owner, the `EscalationGameFactory`, only (`Only owner`), during the first report',
+				effect:
+					'Initializes a local game and sets activation three days after this call. The factory deploys the game in the same transaction, or starts the unstarted game that the permissionless `EscalationGameFactory.prepareEscalationGame(securityPool)` deployed earlier at the same address; preparation never starts the clock. For ordinary pool games, the factory lowers an oversized configured bond to `nonDecisionThresholdAttoRep - 1` before this call.',
 				declarations: [
 					{
 						name: 'start',
@@ -241,7 +242,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`startFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep)`',
-				caller: 'Immutable owner, the `EscalationGameFactory`, only (`Only owner`), during atomic continuation deployment',
+				caller: 'Immutable owner, the `EscalationGameFactory`, only (`Only owner`), during continuation deployment, including a game prepared earlier',
 				effect: 'Initializes a paused continuation with inherited elapsed time, an optional fixed matching child outcome, and immutable fork-time escalation-haircut and backing accounting. It does not start the remaining clock until `resumeFromFork`.',
 				declarations: [
 					{

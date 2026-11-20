@@ -185,7 +185,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 	const sendRaw = async (from: Address, to: Address | undefined, data: Hex) => {
 		clock += 1n
 		await raw('evm_setNextBlockTimestamp', [`0x${clock.toString(16)}`])
-		const hash = await raw('eth_sendTransaction', [to === undefined ? { from, data, gas: '0x1c9c380' } : { from, to, data, gas: '0x1c9c380' }])
+		const hash = await raw('eth_sendTransaction', [to === undefined ? { from, data, gas: '0x1000000' } : { from, to, data, gas: '0x1000000' }])
 		let receipt: unknown
 		for (let attempt = 0; attempt < 2000 && (typeof receipt !== 'object' || receipt === null); attempt++) {
 			try {

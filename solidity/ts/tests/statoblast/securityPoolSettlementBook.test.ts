@@ -981,7 +981,8 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 	let client: WriteClient
 	let address: Address
 	const target = () => ({ abi: mapArtifact.abi, address })
-	const set = (root: bigint, key: bigint, value: bigint, weight = value) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'set', args: [root, key, value, weight] }))
+	// A synthetic 256-level key path exceeds the per-transaction gas cap; production keys are far shallower, so stress writes may set gas.
+	const set = (root: bigint, key: bigint, value: bigint, weight = value, gas?: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'set', args: [root, key, value, weight], ...(gas === undefined ? {} : { gas }) }))
 	const get = (root: bigint, key: bigint) => client.readContract({ ...target(), functionName: 'get', args: [root, key] })
 	const prefix = (root: bigint, key: bigint) => client.readContract({ ...target(), functionName: 'prefixTotalModular', args: [root, key] })
 	const total = (root: bigint) => client.readContract({ ...target(), functionName: 'total', args: [root] })
@@ -1150,13 +1151,13 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 		expect(await total(root)).toBe(257n)
 		const gas = await client.estimateContractGas({ ...target(), functionName: 'set', args: [root, 0n, 2n, 2n] })
 		expect(gas).toBeLessThan(25_000_000n)
-		await set(root, 0n, 2n)
+		await set(root, 0n, 2n, 2n, 25_000_000n)
 		expect(await get(root + 1n, 0n)).toBe(2n)
 		expect(await get(root, 0n)).toBe(1n)
 		expect(await prefix(root + 1n, 0n)).toBe(2n)
 		expect(await prefix(root, 0n)).toBe(1n)
 		expect(await prefix(root + 1n, (1n << 256n) - 1n)).toBe(258n)
-		await set(root + 1n, 0n, 0n)
+		await set(root + 1n, 0n, 0n, 0n, 25_000_000n)
 		expect(await total(root + 2n)).toBe(256n)
 		expect(await get(root + 2n, 0n)).toBe(0n)
 		expect(await prefix(root + 2n, 0n)).toBe(0n)

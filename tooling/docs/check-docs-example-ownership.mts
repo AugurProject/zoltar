@@ -48,11 +48,14 @@ async function assertEscalationRulesMatchContracts(): Promise<void> {
 	const proofVerifier = await readFile('solidity/contracts/statoblast/EscalationGameProofVerifier.sol', 'utf8')
 	const escalationGameTypes = await readFile('solidity/contracts/statoblast/EscalationGameTypes.sol', 'utf8')
 	const escalationGameStorage = await readFile('solidity/contracts/statoblast/EscalationGameStorage.sol', 'utf8')
+	// Durations and the payout split are defined once in Constants.sol (#1479); the escalation sources must reference them.
+	const constants = await readFile('solidity/contracts/Constants.sol', 'utf8')
 	assert.equal(solidityConstant(escalationGameTypes, 'EXCESS_REWARD_WINDOW_DIVISOR', 'EscalationGameTypes.sol'), escalationRules.excessRewardWindowDivisor)
-	assert.equal(solidityConstant(escalationGameTypes, 'ESCALATION_TIME_LENGTH', 'EscalationGameTypes.sol'), escalationTimeLengthSeconds)
-	const activationDelay = escalationGameStorage.match(/ACTIVATION_DELAY = (\d+) days;/)
-	assert.ok(activationDelay?.[1] !== undefined, 'EscalationGameStorage.sol must define ACTIVATION_DELAY in days')
-	assert.equal(BigInt(activationDelay[1]), escalationRules.activationDays)
+	assert.equal(solidityConstant(constants, 'ESCALATION_TIME_LENGTH', 'Constants.sol'), escalationTimeLengthSeconds)
+	assert.match(escalationGameTypes, /\bESCALATION_TIME_LENGTH = Constants\.ESCALATION_TIME_LENGTH;/, 'EscalationGameTypes.sol must take ESCALATION_TIME_LENGTH from Constants.sol')
+	assert.equal(solidityConstant(constants, 'FORK_RESPONSE_DELAY', 'Constants.sol'), escalationRules.activationDays * 86_400n)
+	assert.match(escalationGameStorage, /\bACTIVATION_DELAY = Constants\.FORK_RESPONSE_DELAY;/, 'EscalationGameStorage.sol must take ACTIVATION_DELAY from Constants.FORK_RESPONSE_DELAY')
+	const payoutConstant = (name: string) => solidityConstant(constants, name, 'Constants.sol')
 	const directWithdrawal = solidityFunction(proofVerifier, 'computeWinningWithdrawal', 'EscalationGameProofVerifier.sol')
 	assert.match(
 		directWithdrawal,
@@ -61,13 +64,21 @@ async function assertEscalationRulesMatchContracts(): Promise<void> {
 	)
 	const withdrawal = solidityFunction(proofVerifier, 'computeAllocatedWinningWithdrawal', 'EscalationGameProofVerifier.sol')
 	assert.match(withdrawal, /bindingCapitalAttoRep \+ bindingCapitalAttoRep \/ EXCESS_REWARD_WINDOW_DIVISOR/, 'the reward-eligible cap must add binding capital divided by the excess-reward window divisor')
-	const pools = [...withdrawal.matchAll(/\(\(bindingCapitalAttoRep \* (\d+)\) \/ (\d+)\)/g)].map(match => ({ denominator: BigInt(match[2] ?? ''), numerator: BigInt(match[1] ?? '') }))
+	const pools = [...withdrawal.matchAll(/\(\(bindingCapitalAttoRep \* Constants\.(\w+)\) \/\s*Constants\.(\w+)\)/g)].map(match => ({ denominator: payoutConstant(match[2] ?? ''), numerator: payoutConstant(match[1] ?? '') }))
 	assert.deepEqual(pools, [
 		{ denominator: escalationRules.poolDenominator, numerator: escalationRules.rewardPoolNumerator },
 		{ denominator: escalationRules.poolDenominator, numerator: escalationRules.haircutPoolNumerator },
 	])
-	assert.match(withdrawal, /bonusAttoRep =\s*\(rewardEligibleDepositAttoRep \* \(\(bindingCapitalAttoRep \* \d+\) \/ \d+\)\) \/ rewardEligiblePrincipalAttoRep;/, 'the bonus must share the reward pool pro rata across the reward-eligible principal')
-	assert.match(withdrawal, /burnAmountAttoRep =\s*\(rewardEligibleDepositAttoRep \* \(\(bindingCapitalAttoRep \* \d+\) \/ \d+\)\) \/ rewardEligiblePrincipalAttoRep;/, 'the haircut must share the haircut pool pro rata across the reward-eligible principal')
+	assert.match(
+		withdrawal,
+		/bonusAttoRep =\s*\(rewardEligibleDepositAttoRep \*\s*\(\(bindingCapitalAttoRep \* Constants\.ESCALATION_WINNER_BONUS_NUMERATOR\) \/\s*Constants\.ESCALATION_PAYOUT_DENOMINATOR\)\) \/ rewardEligiblePrincipalAttoRep;/,
+		'the bonus must share the reward pool pro rata across the reward-eligible principal',
+	)
+	assert.match(
+		withdrawal,
+		/burnAmountAttoRep =\s*\(rewardEligibleDepositAttoRep \*\s*\(\(bindingCapitalAttoRep \* Constants\.ESCALATION_BURN_NUMERATOR\) \/\s*Constants\.ESCALATION_PAYOUT_DENOMINATOR\)\) \/ rewardEligiblePrincipalAttoRep;/,
+		'the haircut must share the haircut pool pro rata across the reward-eligible principal',
+	)
 	assert.match(withdrawal, /if \(actualForkThresholdAttoRep < nonDecisionThresholdAttoRep\) \{\s*amountToWithdrawAttoRep =\s*\(amountToWithdrawAttoRep \* actualForkThresholdAttoRep\) \/ nonDecisionThresholdAttoRep;/, 'fork scaling must multiply by the actual fork threshold over the non-decision threshold')
 	// The published example must be a legal game state: balances never exceed the non-decision threshold.
 	assert.ok(escalationPayoutExample.winningOutcomeBalanceAttoRep <= escalationPayoutExample.nonDecisionThresholdAttoRep, 'the winning balance in the example cannot exceed the non-decision threshold')

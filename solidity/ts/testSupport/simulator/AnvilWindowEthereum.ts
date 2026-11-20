@@ -66,7 +66,7 @@ type EthCallCoverageRequest = {
 	readonly blockOverrides?: unknown
 }
 
-const DEFAULT_ANVIL_TRANSACTION_GAS = '0x1c9c380'
+const DEFAULT_ANVIL_TRANSACTION_GAS = '0x1000000' // The EIP-7825 per-transaction cap, so over-cap transactions fail in tests (#1453).
 // CI can keep Anvil receipts pending well past a minute when multiple shards
 // are driving simulator-backed transactions concurrently.
 const SEND_TRANSACTION_RECEIPT_TIMEOUT_MS = 180_000

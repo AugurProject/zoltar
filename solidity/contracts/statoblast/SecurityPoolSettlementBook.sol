@@ -10,6 +10,7 @@ import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
+import { Constants } from '../Constants.sol';
 
 /// @notice Central ETH settlement accounting with distinct internal units and outcome supply.
 /// @dev This contract records liabilities; its authority holds and transfers the actual ETH.
@@ -23,7 +24,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
-	uint48 public constant MINIMUM_FORK_RESPONSE = 3 days;
+	uint48 public constant MINIMUM_FORK_RESPONSE = Constants.FORK_RESPONSE_DELAY;
 	/// @notice Exclusive bound of every fee-stream end (about year 2242). Streams stop charging after it.
 	uint48 public constant FEE_END_LIMIT = uint48(1) << 33;
 	address public immutable portfolio;

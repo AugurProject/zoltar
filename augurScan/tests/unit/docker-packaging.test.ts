@@ -180,7 +180,7 @@ describe('Docker packaging', () => {
 		expect(source).toContain('FROM workspace AS browser-build')
 		expect(source).toContain('COPY augurScan/browser ./browser')
 		expect(source).toContain('RUN bun run build:browser')
-		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine AS runtime'))
+		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS runtime'))
 		expect(runtimeStage).toContain('COPY --from=browser-build /workspace/augurScan/public ./augurScan/public')
 		expect(runtimeStage).toContain('COPY augurScan/schema.sql ./augurScan/schema.sql')
 		expect(runtimeStage).toContain('COPY augurScan/migrations ./augurScan/migrations')
@@ -190,7 +190,7 @@ describe('Docker packaging', () => {
 
 	test('packages source-provenance inputs beside the runtime server', async () => {
 		const source = await readFile(dockerfile, 'utf8')
-		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine AS runtime'))
+		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS runtime'))
 		expect(runtimeStage).toContain('COPY augurScan/package.json ./augurScan/')
 		expect(runtimeStage).toContain('COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compose-source.ts')
 		expect(runtimeStage).toContain('COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts')

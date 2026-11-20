@@ -425,7 +425,7 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 			if (timestamp <= lastTime) throw new Error(`fuzz: timestamp ${timestamp} is not after ${lastTime}`)
 			await ethereum.requestRaw({ method: 'evm_setNextBlockTimestamp', params: [`0x${timestamp.toString(16)}`] })
 			lastTime = timestamp
-			const request = { from: owner, ...(to === undefined ? {} : { to }), data, gas: '0x1c9c380', gasPrice: '0x0' }
+			const request = { from: owner, ...(to === undefined ? {} : { to }), data, gas: '0x1000000', gasPrice: '0x0' }
 			const hash = await ethereum.requestRaw({ method: 'eth_sendTransaction', params: [request] })
 			for (let attempt = 0; attempt < 20_000; attempt++) {
 				const mined = await ethereum.requestRaw({ method: 'eth_getTransactionReceipt', params: [hash] }).catch(() => undefined)

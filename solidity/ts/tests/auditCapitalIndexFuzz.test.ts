@@ -502,7 +502,7 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		const ethereum = node.getAnvilWindowEthereum()
 		const next = (await latest()) + 1n
 		await ethereum.request({ method: 'evm_setNextBlockTimestamp', params: [`0x${next.toString(16)}`] })
-		const transaction = { from: call.from, to: call.to, data: call.data, value: '0x0', gas: '0x1c9c380', gasPrice: '0x0' }
+		const transaction = { from: call.from, to: call.to, data: call.data, value: '0x0', gas: '0x1000000', gasPrice: '0x0' }
 		const hash = await ethereum.requestRaw({ method: 'eth_sendTransaction', params: [transaction] })
 		for (let attempt = 0; attempt < 20_000; attempt++) {
 			const receipt = await ethereum.request({ method: 'eth_getTransactionReceipt', params: [hash] })

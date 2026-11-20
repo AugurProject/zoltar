@@ -2,8 +2,9 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { Constants } from '../Constants.sol';
 
-uint256 constant ESCALATION_TIME_LENGTH = 7 weeks;
+uint256 constant ESCALATION_TIME_LENGTH = Constants.ESCALATION_TIME_LENGTH;
 uint256 constant SCALE = 1e6;
 uint256 constant LN2_SCALED = 693147;
 uint256 constant MAX_ATANH_ITERATIONS = 16;

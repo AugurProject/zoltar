@@ -65,7 +65,7 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 		const owner = client.account.address
 		const history: string[] = []
 		const transact = async (to: Address | undefined, data: Hex): Promise<Address | undefined> => {
-			const request = { from: owner, ...(to === undefined ? {} : { to }), data, gas: '0x1c9c380', gasPrice: '0x0' }
+			const request = { from: owner, ...(to === undefined ? {} : { to }), data, gas: '0x1000000', gasPrice: '0x0' }
 			const hash = await ethereum.requestRaw({ method: 'eth_sendTransaction', params: [request] })
 			for (let attempt = 0; attempt < 20_000; attempt++) {
 				const mined = await ethereum.requestRaw({ method: 'eth_getTransactionReceipt', params: [hash] }).catch(() => undefined)

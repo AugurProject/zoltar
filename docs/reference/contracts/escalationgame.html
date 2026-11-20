@@ -35,14 +35,14 @@
 					<tbody>
 						<tr>
 							<td><code>start(startBondAttoRep, nonDecisionThresholdAttoRep)</code><wbr /></td>
-							<td>Immutable owner, the <code>EscalationGameFactory</code>, only (<code>Only owner</code>), during atomic deployment</td>
+							<td>Immutable owner, the <code>EscalationGameFactory</code>, only (<code>Only owner</code>), during the first report</td>
 							<td>Game not already started, and <code>nonDecisionThresholdAttoRep &gt; startBondAttoRep &gt; 0</code> (<code>Invalid game start</code>).</td>
-							<td>Initializes a local game and sets activation three days after deployment. For ordinary pool games, the factory lowers an oversized configured bond to <code>nonDecisionThresholdAttoRep - 1</code> before this call.</td>
+							<td>Initializes a local game and sets activation three days after this call. The factory deploys the game in the same transaction, or starts the unstarted game that the permissionless <code>EscalationGameFactory.prepareEscalationGame(securityPool)</code> deployed earlier at the same address; preparation never starts the clock. For ordinary pool games, the factory lowers an oversized configured bond to <code>nonDecisionThresholdAttoRep - 1</code> before this call.</td>
 							<td><code>GameStarted</code></td>
 						</tr>
 						<tr>
 							<td><code>startFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep)</code><wbr /></td>
-							<td>Immutable owner, the <code>EscalationGameFactory</code>, only (<code>Only owner</code>), during atomic continuation deployment</td>
+							<td>Immutable owner, the <code>EscalationGameFactory</code>, only (<code>Only owner</code>), during continuation deployment, including a game prepared earlier</td>
 							<td>Game not already started, and <code>nonDecisionThresholdAttoRep &gt; startBondAttoRep &gt; 0</code> (<code>Invalid game start</code>); <code>elapsedAtFork</code> is a signed number of seconds between minus three days and seven weeks, inclusive (<code>Invalid fork elapsed time</code>).</td>
 							<td>Initializes a paused continuation with inherited elapsed time, an optional fixed matching child outcome, and immutable fork-time escalation-haircut and backing accounting. It does not start the remaining clock until <code>resumeFromFork</code>.</td>
 							<td><code>GameContinuedFromFork</code></td>

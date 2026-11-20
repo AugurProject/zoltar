@@ -69,6 +69,7 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	depositRepOnOutcome: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	depositRepOnOutcomeWithLead: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	depositWalletRepToEscalationGameWithLead: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
+	prepareEscalationGame: { title: 'Prepare reporting', completedTitle: 'Reporting prepared', description: 'Set up reporting for this question. This does not start the reporting clock.' },
 	depositWalletRepToEscalationGame: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	withdrawFromEscalationGame: { title: settleEscalationDeposits, completedTitle: escalationDepositsSettled, description: 'Settle the selected deposits after resolution.' },
 	settle: { title: 'Settle report', completedTitle: 'Report settled', description: 'Settle the completed oracle report.' },

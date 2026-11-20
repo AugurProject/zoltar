@@ -19,6 +19,7 @@ import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolPortfolioAuction } from './SecurityPoolPortfolioAuction.sol';
 import { SecurityPoolUniformPriceAuction } from './SecurityPoolUniformPriceAuction.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { Constants } from '../Constants.sol';
 
 interface IPortfolioForkRoot {
 	function originUniverseId() external view returns (uint248);
@@ -406,7 +407,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		settlement.createChildUniverse(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep, raisedAttoEth);
 		settlement.setFeeClock(child, CheckedCast.toUint48(zoltar.getForkRecapitalizationDeadline(branch.parent)));
 		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
-		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].portfolioTimeAnchor + 3 days);
+		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].portfolioTimeAnchor + Constants.FORK_RESPONSE_DELAY);
 	}
 
 	/// @notice Resolve only this actual fork, never recursively walk ancestors.

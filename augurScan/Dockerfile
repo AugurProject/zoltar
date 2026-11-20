@@ -1,6 +1,8 @@
 ARG BUN_VERSION=1.4.4
+# Multi-arch index digest of oven/bun:${BUN_VERSION}-alpine; update it together with BUN_VERSION.
+ARG BUN_IMAGE_DIGEST=sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 
-FROM oven/bun:${BUN_VERSION}-alpine AS workspace
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS workspace
 WORKDIR /workspace
 COPY package.json bun.lock ./
 COPY augurScan/package.json ./augurScan/package.json
@@ -57,7 +59,7 @@ COPY docs/mainnet-deployment-addresses.json ./docs/mainnet-deployment-addresses.
 COPY docs/sepolia-deployment-addresses.json ./docs/sepolia-deployment-addresses.json
 RUN bun run --cwd augurScan metadata:build
 
-FROM oven/bun:${BUN_VERSION}-alpine AS runtime
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS runtime
 WORKDIR /workspace
 ENV NODE_ENV=production
 COPY --from=dependencies /workspace/node_modules ./node_modules

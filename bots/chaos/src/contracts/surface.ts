@@ -133,6 +133,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolForker', 'forkZoltarWithOwnEscalationGame', 'selectable', 'statoblast.fork.own-question'),
 
 	entry('EscalationGameFactory', 'deployEscalationGame', 'excluded-dangerous', undefined, 'A direct caller would deploy an orphan game whose security-pool identity is not registered by SecurityPoolFactory.'),
+	entry('EscalationGameFactory', 'prepareEscalationGame', 'excluded-dangerous', undefined, 'Chaos reports through depositWalletRepToEscalationGame, which deploys or reuses the same unstarted game; separate preparation has no distinct ecosystem postcondition.'),
 	entry('EscalationGameFactory', 'deployEscalationGameFromFork', 'excluded-dangerous', undefined, 'A direct caller would deploy an orphan continuation game outside canonical child-pool initialization.'),
 	entry('EscalationGame', 'start', 'role-restricted', undefined, 'Only the deploying factory starts a game.'),
 	entry('EscalationGame', 'startFromFork', 'role-restricted', undefined, 'Only a canonical child pool starts an inherited game.'),

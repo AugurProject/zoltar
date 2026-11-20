@@ -1683,7 +1683,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
 				}),
 			),
-			/Escalation game deployment failed/,
+			/Invalid game start/, // A second deployment reuses the pool's canonical game address, which starts only once (#1453).
 		)
 
 		const coordinatorWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.abi, bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.evm.bytecode.object) }))

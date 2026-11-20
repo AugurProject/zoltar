@@ -964,7 +964,7 @@ describe('Contract Test Suite', () => {
 		assert.ok(lateChildSupply > 0n, 'late child supply should remain positive')
 		assert.strictEqual(lateChildSupply, earlyChildSupply, 'child universes from the same fork should share the same theoretical supply snapshot')
 	})
-	test('#1353 genesis tracks external supply until the first fork and then fixes child caps', async () => {
+	test('#1353, #1464: genesis tracks external supply until the first fork and then fixes child caps', async () => {
 		const initial = await getUniverseTheoreticalSupplyAttoRep(client, 0n)
 		const externalSupply = initial - 1_000n
 		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: externalSupply } } })
