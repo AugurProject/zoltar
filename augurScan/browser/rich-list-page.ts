@@ -4,7 +4,7 @@ import { exactUnit, tokenDecimals } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import { canonicalOperationsPath } from './routes.ts'
 import { retainedPaginationAvailable } from './refresh-presentation.ts'
-import { RICH_LIST_MAX_OFFSET, richListContinuationAvailable } from '../src/rich-list-limits.ts'
+import { richListContinuationAvailable } from '../src/rich-list-limits.ts'
 import { renderRichListTable, richListWalletBalances } from './rich-list-table.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
 
@@ -141,6 +141,6 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 	}
 	rows.setAttribute('aria-busy', 'false')
 	const paginationEnded = richListItems.length < richListTotal && !richListContinuationAvailable(richListItems.length, richListTotal)
-	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses${paginationEnded ? ` · paging stops after offset ${number(RICH_LIST_MAX_OFFSET)}` : ''}`
+	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses${paginationEnded ? ` · the list ends here; only the top ${number(richListItems.length)} can be shown` : ''}`
 	$('#richlist-more').hidden = !retainedPaginationAvailable(richListContinuationAvailable(richListItems.length, richListTotal), canonicalRefreshRequired)
 }
