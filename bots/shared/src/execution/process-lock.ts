@@ -83,7 +83,7 @@ export class ProcessLockHeldError extends Error {
 		readonly owner: string,
 		readonly lockPath: string,
 	) {
-		super(`${subject} is already locked (${owner}). Stop the other process before removing ${lockPath}.`)
+		super(`${subject} is already locked (${owner}) through ${lockPath}. Stop the process that holds it; the lock is released when that process exits, so never delete the lock file.`)
 		this.name = 'ProcessLockHeldError'
 	}
 }

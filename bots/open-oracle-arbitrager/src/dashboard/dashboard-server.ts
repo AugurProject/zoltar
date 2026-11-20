@@ -273,8 +273,13 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		port,
 		// The shared server rejects cross-origin mutations before routing, so every non-GET route below is same-origin.
 		route: async (request, { url }) => {
-			if (request.method === 'GET' && (url.pathname === '/documentation' || url.pathname === '/documentation/')) {
+			if (request.method === 'GET' && url.pathname === '/documentation') {
 				return new Response(Bun.file(join(documentationDirectory, 'operator-guide.html')), { headers: securityHeaders('text/html; charset=utf-8') })
+			}
+			// The guide's stylesheet, chart script, and screenshots are relative to the dashboard root, so the trailing-slash
+			// form redirects to the canonical route instead of serving a page whose assets resolve under /documentation/.
+			if (request.method === 'GET' && url.pathname === '/documentation/') {
+				return new Response(undefined, { headers: { ...securityHeaders('text/plain; charset=utf-8'), location: `/documentation${url.search}` }, status: 308 })
 			}
 			if (request.method === 'GET' && url.pathname === '/documentation/reference') {
 				const documents = await Promise.all(REFERENCE_DOCUMENTS.map(name => Bun.file(join(projectDirectory, name)).text()))

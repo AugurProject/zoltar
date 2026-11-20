@@ -12,6 +12,25 @@ type Wallet = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 /** Durable, one-shot instructions use the same quorum, simulation and journal as automatic takeovers. */
+/** The journal classification of each instruction by its effect on the operator's funds. */
+const INSTRUCTION_KINDS: Record<PortfolioInstruction['action'], RuntimeState['pendingTransactions'][number]['kind']> = {
+	'auction-activate': 'withdrawal',
+	'auction-bid': 'deposit',
+	'auction-refund': 'withdrawal',
+	'fork-choice': 'migration',
+	'vault-deposit': 'deposit',
+	'vault-earnings': 'fees',
+	'vault-fork-choice': 'migration',
+	'vault-health': 'configuration',
+	'vault-retire': 'withdrawal',
+	'vault-withdraw': 'withdrawal',
+}
+
+/** @internal Tests verify each instruction's journal classification. */
+export function portfolioInstructionKind(action: PortfolioInstruction['action']) {
+	return INSTRUCTION_KINDS[action]
+}
+
 export async function executePortfolioInstruction(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, instruction: PortfolioInstruction, priceAllowed: (observation: PortfolioObservation) => Promise<boolean>) {
 	if (!settings.runtime.execute || state.pendingTransactions.length !== 0) throw new Error('Pending recovery or dry-run mode blocks portfolio instructions')
 	const fingerprint = JSON.stringify(serializePortfolioInstructions([instruction])[0])
@@ -44,9 +63,7 @@ export async function executePortfolioInstruction(wallet: Wallet, settings: Oper
 		const fresh = await refresh()
 		if (fresh.request.to !== request.to || fresh.request.data !== request.data || fresh.request.value !== request.value || fresh.completes !== completes) throw new PortfolioOpportunityExpired('Instruction terms changed before submission')
 	}
-	let kind: 'migration' | 'deposit' | 'withdrawal' = 'withdrawal'
-	if (instruction.action === 'fork-choice' || instruction.action === 'vault-fork-choice') kind = 'migration'
-	if (instruction.action === 'auction-bid' || instruction.action === 'vault-deposit') kind = 'deposit'
+	const kind = portfolioInstructionKind(instruction.action)
 	await submitCall(
 		wallet,
 		settings,

@@ -12,6 +12,16 @@ describe('retirement CLI', () => {
 		})
 	})
 
+	test('accepts the space-separated unmatched-share loss and rejects arguments it would otherwise ignore', () => {
+		const recipient = '0x0000000000000000000000000000000000000001'
+		expect(parseRunCommand(['--drain', recipient, '--exit-unmatched-shares', '150', '--exit-after-completion', '--confirm', 'x'])).toMatchObject({ exitAfterCompletion: true, exitUnmatchedShares: true, maximumExitLossBps: 150 })
+		expect(parseRunCommand(['--drain', recipient, '--confirm', 'x'])).toMatchObject({ exitAfterCompletion: false, exitUnmatchedShares: false, maximumExitLossBps: 0, migrateExistingClaims: false })
+		expect(() => parseRunCommand(['--drain', recipient, '--exit-unmatched-share=150', '--confirm', 'x'])).toThrow('Unsupported or repeated drain argument')
+		expect(() => parseRunCommand(['--drain', recipient, '--exit-after-completion', '--exit-after-completion', '--confirm', 'x'])).toThrow('Unsupported or repeated drain argument')
+		expect(() => parseRunCommand(['--drain', recipient, '--confirm', 'x', '--exit-unmatched-shares'])).toThrow('requires a maximum loss')
+		expect(() => parseRunCommand(['--drain', recipient, '--exit-unmatched-shares=1e2', '--confirm', 'x'])).toThrow('10000')
+	})
+
 	test('rejects missing confirmation and invalid maximum loss', () => {
 		expect(() => parseRunCommand(['--drain', '0x1'])).toThrow('--confirm')
 		expect(() => parseRunCommand(['--drain', '0x1', '--exit-unmatched-shares=10001', '--confirm', 'x'])).toThrow('10000')

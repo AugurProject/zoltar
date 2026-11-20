@@ -41,6 +41,8 @@ export type LiquidatorRuntime = {
 	readPool: ReadPool
 	settings: OperatorSettings
 	settingsRevision: LoadedSettings['revision']
+	/** The startup connectivity check failed without a safety fault; scans repeat it until it passes. */
+	startupConnectivityPending: boolean
 	wakeProfileSwitchWait: (() => void) | undefined
 	wallet: LiquidatorWallet | undefined
 }
@@ -91,6 +93,7 @@ export async function createLiquidatorRuntime(loaded: LoadedSettings, collaborat
 		lastDryRunKey: undefined,
 		missingDeploymentAddress: undefined,
 		profileSwitchRequested: false,
+		startupConnectivityPending: false,
 		readPool,
 		settings,
 		settingsRevision: loaded.revision,

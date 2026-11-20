@@ -4,6 +4,7 @@ import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executo
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
 import { loadPriceHistory } from '#monitoring/market-monitor'
 import { loadExecutionHistory } from '#state/operator-state'
+import { loadSettlementJournal, settlementJournalPath } from '#state/settlement-store'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, type ExclusiveProcessLock, loadPositionJournal } from '#state/position-store'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, checkSubmissionEndpoints } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -28,7 +29,8 @@ export async function preflightOperatorProfile(settingsFile: string, target: Per
 				if (target.privateKey === undefined) throw new Error('Execution requires an active signer')
 				signerLock = await acquireExecutionSignerLock(chain.id, privateKeyToAccount(target.privateKey).address)
 			}
-			await Promise.all([loadPositionJournal(target.runtime.positionFile, chain.id), loadExecutionHistory(target.runtime.historyFile, chain.id), loadPriceHistory(target.runtime.priceHistoryFile, chain.id)])
+			// Every journal the operator reads at startup, so a switch never persists a profile that cannot restart.
+			await Promise.all([loadPositionJournal(target.runtime.positionFile, chain.id), loadSettlementJournal(settlementJournalPath(target.runtime.positionFile), chain.id), loadExecutionHistory(target.runtime.historyFile, chain.id), loadPriceHistory(target.runtime.priceHistoryFile, chain.id)])
 		},
 		() => [signerLock, journalLock],
 	)

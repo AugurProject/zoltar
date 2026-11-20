@@ -51,7 +51,7 @@ async function runOperator(loaded: LoadedSettings, processLocks: BotProcessLocks
 	if (dashboard !== undefined) {
 		logEvent('liquidator', 'dashboardStarted', { url: dashboard.url.href })
 	}
-	await checkStartupConnectivity(runtime, deps, dashboard)
+	runtime.startupConnectivityPending = await checkStartupConnectivity(runtime, deps, dashboard)
 	recordActivity(deps.state, {
 		details: `chain=${runtime.settings.network.chainId.toString()} factory=${runtime.settings.deployment.securityPoolFactory}`,
 		kind: 'scan',

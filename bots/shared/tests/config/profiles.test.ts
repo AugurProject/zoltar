@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { contentRevision, readFileIfPresent, writeRevisionedFile } from '../../src/config/durable-file.ts'
@@ -74,6 +74,10 @@ async function fixture() {
 		return contents === undefined ? undefined : parseStored(contents)
 	}
 	const loadProfile = (network: NetworkName) => load(networkProfilePath(path, network))
+	const loadStoredProfile = async (network: NetworkName) => {
+		const contents = await readFileIfPresent(networkProfilePath(path, network))
+		return contents === undefined ? undefined : { revision: contentRevision(contents), settings: parseStored(contents) }
+	}
 	const assertCandidates = (candidates: readonly ProfileCandidate<Settings>[]) =>
 		assertProfileCandidates({
 			assertIdentity: candidate => {
@@ -103,11 +107,11 @@ async function fixture() {
 			assertCandidates,
 			createProfile: async target => ({ ...settings(target, [join(directory, `${target}-created.jsonl`)]), paused: true, tunable: 0 }),
 			current: { revision: contentRevision(contents), settings: parseStored(contents) },
-			loadProfile,
+			loadProfile: loadStoredProfile,
 			network,
 			networkOf: value => value.network,
 			saveActive: (value, expectedRevision) => save(path, value, expectedRevision),
-			saveProfile: (profileNetwork, value) => save(networkProfilePath(path, profileNetwork), value),
+			saveProfile: (profileNetwork, value, expectedRevision) => save(networkProfilePath(path, profileNetwork), value, expectedRevision),
 		})
 	}
 	const snapshot = (files: readonly string[]) => Promise.all(files.map(file => readFile(file, 'utf8')))
@@ -229,8 +233,54 @@ test('the switch writes the active file only at the revision it loaded', async (
 		network: 'sepolia',
 		networkOf: value => value.network,
 		saveActive: (value, expectedRevision) => save(path, value, expectedRevision),
-		saveProfile: (network, value) => save(networkProfilePath(path, network), value),
+		saveProfile: (network, value, expectedRevision) => save(networkProfilePath(path, network), value, expectedRevision),
 	})
 	await expect(result).rejects.toThrow('Configuration changed on disk')
 	expect(parseStored(await readFile(path, 'utf8'))).toMatchObject({ network: 'mainnet', tunable: 1 })
+})
+
+test('accepts a durable path that revisits a resolved self-referencing directory link', async () => {
+	const { directory, isolation, path, save, settings } = await fixture()
+	await symlink('.', join(directory, 'here'), 'dir')
+	await writeFile(join(directory, 'example.json'), '{}\n')
+	await save(path, settings('mainnet', [join(directory, 'here', 'here', 'example.json')]))
+	await isolation()
+})
+
+test('rejects a genuine symbolic-link cycle in a durable path', async () => {
+	const { directory, isolation, path, save, settings } = await fixture()
+	await symlink(join(directory, 'second'), join(directory, 'first'))
+	await symlink(join(directory, 'first'), join(directory, 'second'))
+	await save(path, settings('mainnet', [join(directory, 'first', 'journal.jsonl')]))
+	await expect(isolation()).rejects.toThrow(/symbolic links|symbolic-link cycle/)
+})
+
+test('a switch rejected by a newer target profile leaves that profile unchanged', async () => {
+	const { directory, path, save, settings } = await fixture()
+	const sepoliaPath = networkProfilePath(path, 'sepolia')
+	await save(path, settings('mainnet', [join(directory, 'mainnet.jsonl')]))
+	await save(sepoliaPath, settings('sepolia', [join(directory, 'sepolia.jsonl')]))
+	const loaded = await readFile(path, 'utf8')
+	const result = switchNetworkProfile<Settings>({
+		assertCandidates: async () => undefined,
+		createProfile: async () => {
+			throw new Error('The stored profile must be used')
+		},
+		current: { revision: contentRevision(loaded), settings: parseStored(loaded) },
+		loadProfile: async network => {
+			const contents = await readFileIfPresent(networkProfilePath(path, network))
+			if (contents === undefined) return undefined
+			const stored = { revision: contentRevision(contents), settings: parseStored(contents) }
+			// A second writer saves a newer Sepolia profile after this switch loaded it.
+			if (network === 'sepolia') await save(sepoliaPath, { ...stored.settings, tunable: 15_000 })
+			return stored
+		},
+		network: 'sepolia',
+		networkOf: value => value.network,
+		saveActive: (value, expectedRevision) => save(path, value, expectedRevision),
+		saveProfile: (network, value, expectedRevision) => save(networkProfilePath(path, network), value, expectedRevision),
+	})
+	await expect(result).rejects.toThrow('Configuration changed on disk')
+	expect(parseStored(await readFile(sepoliaPath, 'utf8'))).toMatchObject({ tunable: 15_000 })
+	expect(parseStored(await readFile(path, 'utf8'))).toMatchObject({ network: 'mainnet' })
 })

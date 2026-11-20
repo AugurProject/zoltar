@@ -102,7 +102,8 @@ export type PendingTransactionIntent = {
 	portfolioFunding?: PortfolioFundingEffect | undefined
 	portfolioInstruction?: InstructionIdentity | undefined
 	hash: Hex
-	kind: 'deployment' | 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
+	/** What the transaction does to the operator's funds; `configuration` changes vault settings without moving tokens. */
+	kind: 'configuration' | 'deployment' | 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
 	label: string
 	/** Renewable relay envelope deadline; not calldata validity. */
 	maxBlockNumber: bigint
