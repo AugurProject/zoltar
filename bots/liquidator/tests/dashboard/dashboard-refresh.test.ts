@@ -1500,6 +1500,16 @@ describe('liquidator go-live settings', () => {
 		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Dry run · ready to go live')
 	})
 
+	test('keeps live execution locked while the saved key differs from the active signer', async () => {
+		const ready = { ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 as const }, networkConfigured: true, savedSigner: '0x1111111111111111111111111111111111111111' }
+		const page = await dashboard(ready, state(undefined, [], { lastScannedBlock: '120', wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
+		expect(readiness(page)[0]).toBe('false:Execution signer=Saved key 0x111111…111111 differs from the active signer; save or remove it')
+		const toggle = page.window.document.getElementById('execution-enabled')
+		if (!(toggle instanceof page.window.HTMLInputElement)) throw new Error('Expected execution switch')
+		expect(toggle.disabled).toBe(true)
+		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Dry run · prerequisites missing')
+	})
+
 	test('arms live execution through the readiness-gated switch and returns to the saved mode when the bot rejects it', async () => {
 		const ready = { ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 as const }, networkConfigured: true }
 		const page = await dashboard(ready, state(undefined, [], { lastScannedBlock: '120', wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))

@@ -187,6 +187,9 @@ export function configurationRevisionConflict(subject: string) {
 	return error
 }
 
+/** The expected revision of a file that must still be absent when a revisioned write commits. */
+export const MISSING_FILE_REVISION = 'missing'
+
 type RevisionedWriteOptions = {
 	conflict: () => Error
 	expectedRevision?: string | undefined
@@ -195,7 +198,8 @@ type RevisionedWriteOptions = {
 
 /**
  * Atomically replaces `path` and returns the revision of the saved bytes. With an expected revision, the destination is
- * compared at commit time and a missing or changed file raises `conflict()` without replacing it.
+ * compared at commit time and a missing or changed file raises `conflict()` without replacing it. `MISSING_FILE_REVISION`
+ * instead requires the destination to still be absent.
  */
 export async function writeRevisionedFile(path: string, contents: string, options: RevisionedWriteOptions) {
 	const filesystem = options.filesystem ?? durableFilesystem
@@ -206,7 +210,7 @@ export async function writeRevisionedFile(path: string, contents: string, option
 				? undefined
 				: async () => {
 						const current = await readFileIfPresent(path, filesystem)
-						if (current === undefined || contentRevision(current) !== expectedRevision) throw options.conflict()
+						if ((current === undefined ? MISSING_FILE_REVISION : contentRevision(current)) !== expectedRevision) throw options.conflict()
 					},
 		filesystem,
 	})

@@ -167,6 +167,25 @@ test('loads valid price history around truncated and structurally invalid record
 	expect(await loadPriceHistory(path, 1)).toEqual([valid, valid])
 })
 
+test('keeps the next sample after a torn final price history record', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-market-history-torn-'))
+	temporaryDirectories.push(directory)
+	const path = join(directory, 'prices.jsonl')
+	const template = {
+		pool: '0x0000000000000000000000000000000000000002' as Address,
+		priceWeth: '0.0042',
+		sampledAt: '2026-07-25T00:00:00.000Z',
+		symbol: 'REPv2',
+		token: '0x0000000000000000000000000000000000000001' as Address,
+		venue: 'Uniswap V3 0.3%',
+	}
+	const sample = (blockNumber: string) => ({ ...template, blockNumber })
+	await writeFile(path, `${JSON.stringify({ chainId: 1, point: sample('100') })}\n{"chainId":1,"point":{"blockNumber":"101"`, 'utf8')
+	expect(await loadPriceHistory(path, 1)).toEqual([sample('100')])
+	await appendPriceHistory(path, [sample('102')], 1)
+	expect(await loadPriceHistory(path, 1)).toEqual([sample('100'), sample('102')])
+})
+
 test('compacts price history after it crosses the storage bound', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-market-history-'))
 	temporaryDirectories.push(directory)

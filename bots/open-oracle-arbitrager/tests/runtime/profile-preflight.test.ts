@@ -1,5 +1,32 @@
-import { expect, test } from 'bun:test'
-import { runThenReleaseLocks } from '../../src/runtime/profile-preflight.ts'
+import { afterEach, expect, test } from 'bun:test'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { parseOperatorSettings } from '#config/settings-store'
+import { settlementJournalPath } from '#state/settlement-store'
+import example from '../../config/operator.example.json'
+import { preflightOperatorProfile, runThenReleaseLocks } from '../../src/runtime/profile-preflight.ts'
+
+const temporaryDirectories: string[] = []
+
+afterEach(async () => {
+	await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { force: true, recursive: true })))
+})
+
+test('preflight rejects a target profile whose settlement journal cannot be read at startup', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-preflight-'))
+	temporaryDirectories.push(directory)
+	const parsed = parseOperatorSettings(example)
+	const target = {
+		...parsed,
+		networkConfigured: false,
+		runtime: { ...parsed.runtime, historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') },
+	}
+	const settingsFile = join(directory, 'operator.json')
+	await preflightOperatorProfile(settingsFile, target)
+	await writeFile(settlementJournalPath(target.runtime.positionFile), '{"truncated":')
+	await expect(preflightOperatorProfile(settingsFile, target)).rejects.toThrow()
+})
 
 function recordingLock(name: string, released: string[], releaseError?: Error) {
 	return {

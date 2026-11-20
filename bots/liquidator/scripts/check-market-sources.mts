@@ -1,9 +1,12 @@
 const [dashboardUrl, ...extra] = process.argv.slice(2)
 if (dashboardUrl === undefined || extra.length > 0) throw new Error('Usage: bun run smoke:markets -- http://127.0.0.1:4183')
 const origin = new URL(dashboardUrl).origin
+// A network-bound dashboard requires the same Basic credentials the browser prompt uses.
+const password = process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD']
+const authorization = password === undefined || password === '' ? {} : { authorization: `Basic ${Buffer.from(`operator:${password}`, 'utf8').toString('base64')}` }
 const response = await fetch(new URL('/api/test-market-sources', origin), {
 	body: '{}',
-	headers: { 'content-type': 'application/json', origin },
+	headers: { ...authorization, 'content-type': 'application/json', origin },
 	method: 'PUT',
 })
 const result: unknown = await response.json()

@@ -1,5 +1,6 @@
 import { extname } from 'node:path'
 import type { NetworkName } from '../monitoring/connectivity.ts'
+import { MISSING_FILE_REVISION } from './durable-file.ts'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from './persistent-path.ts'
 
 type ProfileProcessMode = { once: boolean; ui: boolean; uiHost: string; uiPort: number }
@@ -84,33 +85,36 @@ type NetworkProfileSwitch<Settings extends NetworkProfileSettings> = {
 	/** Builds a paused, unconfigured profile for a network that has never been stored. */
 	createProfile: (network: NetworkName) => Promise<Settings>
 	current: { revision: string; settings: Settings }
-	loadProfile: (network: NetworkName) => Promise<Settings | undefined>
+	loadProfile: (network: NetworkName) => Promise<{ revision: string; settings: Settings } | undefined>
 	network: NetworkName
 	networkOf: (settings: Settings) => NetworkName
 	preflight?: ((target: Settings) => Promise<void>) | undefined
 	saveActive: (settings: Settings, expectedRevision: string) => Promise<string>
-	saveProfile: (network: NetworkName, settings: Settings) => Promise<unknown>
+	/** Must replace the profile only at `expectedRevision`, which is `MISSING_FILE_REVISION` for a profile not yet stored. */
+	saveProfile: (network: NetworkName, settings: Settings, expectedRevision: string) => Promise<unknown>
 }
 
 /**
  * Stores the active settings as their network's profile and activates the target network's profile paused. Every
- * stored profile is validated before anything is written, and the active file is replaced only at its loaded revision.
+ * stored profile is validated before anything is written, and every file is replaced only at its loaded revision.
  */
 export async function switchNetworkProfile<Settings extends NetworkProfileSettings>(request: NetworkProfileSwitch<Settings>) {
 	const { current, network, networkOf } = request
 	const currentNetwork = networkOf(current.settings)
-	const stored = await storedNetworkProfileCandidates(current.settings, networkOf, request.loadProfile)
+	const profiles = { mainnet: await request.loadProfile('mainnet'), sepolia: await request.loadProfile('sepolia') }
+	const stored = await storedNetworkProfileCandidates(current.settings, networkOf, async profileNetwork => profiles[profileNetwork]?.settings)
 	await request.assertCandidates(stored.candidates)
 	if (currentNetwork === network) return current
-	const target = { ...((network === 'mainnet' ? stored.mainnet : stored.sepolia) ?? (await request.createProfile(network))), paused: true }
+	const target = { ...(profiles[network]?.settings ?? (await request.createProfile(network))), paused: true }
 	await request.assertCandidates([
 		{ expected: currentNetwork, settings: current.settings },
 		{ expected: network, settings: target },
 	])
 	assertCompatibleProfileProcessMode(current.settings, target)
 	await request.preflight?.(target)
-	await request.saveProfile(currentNetwork, { ...current.settings, paused: true })
-	await request.saveProfile(network, target)
+	// Each write is conditional on the revision loaded above, so a concurrent writer's newer profile is never reverted.
+	await request.saveProfile(currentNetwork, { ...current.settings, paused: true }, profiles[currentNetwork]?.revision ?? MISSING_FILE_REVISION)
+	await request.saveProfile(network, target, profiles[network]?.revision ?? MISSING_FILE_REVISION)
 	const revision = await request.saveActive(target, current.revision)
 	return { revision, settings: target }
 }
