@@ -29,9 +29,6 @@ const entry = (contract: string, method: string, classification: OperationClassi
 // This is deliberately explicit. New protocol methods should fail the artifact coverage
 // test until their chaos behavior (or exclusion reason) is reviewed.
 export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] = [
-	entry('EscalationChallengeEscrow', 'contribute', 'excluded-dangerous', undefined, 'A contribution locks holder REP until withdrawal or actual escalation. The catalog has no pooled challenge funding budget.'),
-	entry('EscalationChallengeEscrow', 'withdraw', 'excluded-dangerous', undefined, 'Only an unactivated contributor can withdraw after its consented deadline or game inactivity. The catalog does not create escrow contributions.'),
-	entry('EscalationChallengeEscrow', 'activate', 'excluded-dangerous', undefined, 'Activation spends pledged REP on an escalation. The catalog has no pooled challenge lifecycle or budget.'),
 	entry('ZoltarQuestionData', 'createQuestion', 'selectable', 'zoltar.question.create-binary'),
 	entry('Zoltar', 'forkUniverse', 'selectable', 'zoltar.universe.fork'),
 	entry('Zoltar', 'burnRep', 'selectable', 'zoltar.rep.burn'),
@@ -145,7 +142,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('EscalationGame', 'initializeForkCarryOutcome', 'role-restricted', undefined, 'Only the owning SecurityPool may install the canonical inherited carry snapshot.'),
 	entry('EscalationGame', 'depositRepOnOutcome', 'selectable', 'statoblast.escalation.deposit-wallet-rep'),
 	entry('EscalationGame', 'depositRepOnOutcomeWithLead', 'excluded-dangerous', undefined, 'Leading replies require an explicit result bound; the random single-wallet planner supports ordinary partial deposits.'),
-	entry('EscalationGame', 'depositRepOnOutcomeForBatch', 'excluded-dangerous', undefined, 'Batch reporting assigns the caller’s REP to explicit contributor beneficiaries; the random single-wallet planner must not invent recipient allocations.'),
 	entry('EscalationGame', 'depositRepOnOutcomeWithAuthorizationAndLead', 'excluded-dangerous', undefined, 'A relayed leading reply requires an operation-bound holder authorization; the catalog has no signed authorization provenance.'),
 	entry('EscalationGame', 'sweepResidualRepToSecurityPool', 'selectable', 'statoblast.escalation.sweep-residual'),
 	entry('EscalationGame', 'settleOrdinaryGame', 'excluded-dangerous', undefined, 'Standalone idempotent checkpointing has no positive-transfer postcondition for the random planner; ordinary claims, redemption and positive residual sweeps already execute this checkpoint.'),
@@ -164,7 +160,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('EscalationGameDepositDelegate', 'depositRepOnOutcomeWithLead', 'excluded-dangerous', undefined, 'Protected deposits use the EscalationGame host; direct calls use isolated delegate storage.'),
 	entry('EscalationGameDepositDelegate', 'depositRepOnOutcomeWithPermitAndLead', 'excluded-dangerous', undefined, 'Protected signed deposits require explicit wallet intent and use the EscalationGame fallback.'),
 	entry('EscalationGameDepositDelegate', 'depositRepOnOutcomeWithAuthorizationAndLead', 'excluded-dangerous', undefined, 'Protected relayed deposits require operation-bound authorization provenance and use the EscalationGame fallback.'),
-	entry('EscalationGameDepositDelegate', 'depositRepOnOutcomeForBatch', 'excluded-dangerous', undefined, 'This storage-coupled batch entrypoint is valid only through the typed EscalationGame wrapper; a direct call uses isolated delegate storage.'),
 	entry('EscalationGameDepositDelegate', 'depositRepOnOutcomeWithPermit', 'excluded-dangerous', undefined, 'This signed storage-coupled entrypoint is meaningful only through EscalationGame fallback and requires explicit wallet intent.'),
 	entry('EscalationGameDepositDelegate', 'depositRepOnOutcomeWithAuthorization', 'excluded-dangerous', undefined, 'This relayed signed entrypoint is meaningful only through EscalationGame fallback and requires durable authorization provenance.'),
 	entry('EscalationGameDepositDelegate', 'recordDeposit', 'excluded-dangerous', undefined, 'This shared storage-coupled module is valid only through the typed EscalationGame deposit entrypoint.'),

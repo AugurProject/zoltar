@@ -5,7 +5,6 @@ import {
 	computeEscalationFinalityElapsed,
 	ESCALATION_ACTIVATION_DELAY,
 	ESCALATION_TIME_LENGTH,
-	getEscalationRequiredSupportAttoRep,
 	getWinningEscalationDepositClaimAmount,
 	getWinningImportedEscalationDepositClaimAmount,
 	hasReachedNonDecision,
@@ -69,58 +68,35 @@ describe('escalation math', () => {
 	})
 
 	test('applies the start bond to the offered amount, before the tie adjustment', () => {
-		expect(projectEscalationDeposit({ amountAttoRep: 10n, balancesAttoRep: [0n, 0n, 10n], nonDecisionThresholdAttoRep: 100n, outcome: 'yes', startBondAttoRep: 10n })).toMatchObject({ acceptedAmountAttoRep: 9n, projectedBalancesAttoRep: [0n, 9n, 10n], takesLead: false, tieAdjusted: true })
+		expect(projectEscalationDeposit({ amountAttoRep: 10n, balancesAttoRep: [0n, 0n, 10n], nonDecisionThresholdAttoRep: 100n, outcome: 'yes', startBondAttoRep: 10n })).toMatchObject({ acceptedAmountAttoRep: 9n, projectedBalancesAttoRep: [0n, 9n, 10n], tieAdjusted: true })
 		expect(projectEscalationDeposit({ amountAttoRep: 9n, balancesAttoRep: [0n, 0n, 10n], nonDecisionThresholdAttoRep: 100n, outcome: 'yes', startBondAttoRep: 10n })).toBeUndefined()
 	})
 
-	test('requires support to meet the curve only once the curve has passed the median and one outcome leads', () => {
+	test('accepts any deposit of at least the start bond, whatever the curve', () => {
 		expect(computeEscalationCurveAttoRep(1n, 8n, 0n)).toBe(0n)
 		expect(computeEscalationCurveAttoRep(1n, 8n, ESCALATION_TIME_LENGTH / 3n)).toBe(2n)
-		expect(getEscalationRequiredSupportAttoRep([0n, 10n, 4n], 4n)).toBe(0n)
-		expect(getEscalationRequiredSupportAttoRep([0n, 10n, 4n], 5n)).toBe(5n)
-		expect(getEscalationRequiredSupportAttoRep([0n, 10n, 4n], 12n)).toBe(12n)
-		expect(getEscalationRequiredSupportAttoRep([0n, 10n, 10n], 12n)).toBe(0n)
+		const base = { balancesAttoRep: [0n, 10n, 4n], nonDecisionThresholdAttoRep: 100n, outcome: 'no', startBondAttoRep: 2n } as const
+		expect(projectEscalationDeposit({ ...base, amountAttoRep: 2n })).toMatchObject({ acceptedAmountAttoRep: 2n, projectedBalancesAttoRep: [0n, 10n, 6n] })
+		expect(projectEscalationDeposit({ ...base, outcome: 'invalid', amountAttoRep: 2n })).toMatchObject({ projectedBalancesAttoRep: [2n, 10n, 4n] })
+		expect(projectEscalationDeposit({ ...base, amountAttoRep: 1n })).toBeUndefined()
 	})
 
-	test('rejects a deposit that leaves its outcome below a curve that has passed the median', () => {
-		const base = { balancesAttoRep: [0n, 10n, 4n], nonDecisionThresholdAttoRep: 100n, outcome: 'no', startBondAttoRep: 1n } as const
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 2n, curveAttoRep: 4n })).toMatchObject({ acceptedAmountAttoRep: 2n, takesLead: false })
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 2n, curveAttoRep: 7n })).toBeUndefined()
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 3n, curveAttoRep: 7n })).toMatchObject({ projectedBalancesAttoRep: [0n, 10n, 7n], takesLead: false })
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 7n, curveAttoRep: 12n })).toBeUndefined()
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 8n, curveAttoRep: 12n })).toMatchObject({ projectedBalancesAttoRep: [0n, 10n, 12n], takesLead: true })
-		expect(projectEscalationDeposit({ ...base, outcome: 'yes', amountAttoRep: 1n, curveAttoRep: 12n })).toBeUndefined()
-		// The tie adjustment applies before the curve comparison.
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 6n, curveAttoRep: 10n })).toBeUndefined()
-	})
-
-	test('marks a deposit as taking the lead only when a trailing outcome passes the previous maximum', () => {
-		const base = { nonDecisionThresholdAttoRep: 100n, startBondAttoRep: 1n } as const
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 7n, balancesAttoRep: [0n, 10n, 4n], outcome: 'no' })?.takesLead).toBe(true)
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 5n, balancesAttoRep: [0n, 10n, 4n], outcome: 'no' })?.takesLead).toBe(false)
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 5n, balancesAttoRep: [0n, 10n, 4n], outcome: 'yes' })?.takesLead).toBe(false)
-		expect(projectEscalationDeposit({ ...base, amountAttoRep: 5n, balancesAttoRep: [0n, 10n, 10n], outcome: 'yes' })?.takesLead).toBe(false)
-	})
-
-	test('projects the end time as the later of the curve deadline and the response period', () => {
-		const base = { activationTime: 1000n, nonDecisionThresholdAttoRep: 8n, startBondAttoRep: 1n, timestamp: 5000n } as const
+	test('projects the end time as the curve crossing of the median balance', () => {
+		const base = { activationTime: 1000n, nonDecisionThresholdAttoRep: 8n, startBondAttoRep: 1n } as const
 		const curveElapsed = computeEscalationFinalityElapsed(1n, 8n, 2n)
-		const balances = [0n, 4n, 2n] as const
-		expect(projectEscalationEndTime({ ...base, projection: { projectedBalancesAttoRep: balances, takesLead: false }, responseRestartedUntil: 0n })).toBe(1000n + curveElapsed)
-		expect(projectEscalationEndTime({ ...base, projection: { projectedBalancesAttoRep: balances, takesLead: false }, responseRestartedUntil: 1000n + curveElapsed + 7n })).toBe(1000n + curveElapsed + 7n)
-		const late = 1000n + curveElapsed
-		expect(projectEscalationEndTime({ ...base, timestamp: late, projection: { projectedBalancesAttoRep: balances, takesLead: true }, responseRestartedUntil: 0n })).toBe(late + ESCALATION_ACTIVATION_DELAY)
-		// A lead change early on the curve leaves the later curve deadline in force.
-		expect(projectEscalationEndTime({ ...base, timestamp: 0n, projection: { projectedBalancesAttoRep: balances, takesLead: true }, responseRestartedUntil: 0n })).toBe(1000n + curveElapsed)
+		expect(projectEscalationEndTime({ ...base, balancesAttoRep: [0n, 4n, 2n] })).toBe(1000n + curveElapsed)
+		// A change of leader with the same median keeps the same deadline.
+		expect(projectEscalationEndTime({ ...base, balancesAttoRep: [0n, 2n, 4n] })).toBe(1000n + curveElapsed)
+		// Raising the median moves it later; it never passes the escalation interval.
+		expect(projectEscalationEndTime({ ...base, balancesAttoRep: [0n, 4n, 3n] })).toBeGreaterThan(1000n + curveElapsed)
+		expect(projectEscalationEndTime({ ...base, balancesAttoRep: [0n, 8n, 7n] })).toBeLessThanOrEqual(1000n + ESCALATION_TIME_LENGTH)
 	})
 
-	test('projects a resumed continuation from its rebased curve, its fresh response period and any restart', () => {
-		const base = { activationTime: 0n, nonDecisionThresholdAttoRep: 8n, startBondAttoRep: 1n, timestamp: 500n } as const
+	test('projects a resumed continuation from its rebased curve and its fixed response period', () => {
+		const base = { activationTime: 0n, nonDecisionThresholdAttoRep: 8n, startBondAttoRep: 1n, balancesAttoRep: [0n, 4n, 2n] } as const
 		const curveElapsed = computeEscalationFinalityElapsed(1n, 8n, 2n)
-		const projection = { projectedBalancesAttoRep: [0n, 4n, 2n], takesLead: false } as const
-		expect(projectEscalationEndTime({ ...base, projection, responseRestartedUntil: 0n, continuation: { forkElapsedAtStart: curveElapsed + 5n, forkResumedAt: 100n } })).toBe(100n + ESCALATION_ACTIVATION_DELAY)
-		expect(projectEscalationEndTime({ ...base, projection, responseRestartedUntil: 0n, continuation: { forkElapsedAtStart: -ESCALATION_ACTIVATION_DELAY, forkResumedAt: 100n } })).toBe(100n + curveElapsed + ESCALATION_ACTIVATION_DELAY)
-		expect(projectEscalationEndTime({ ...base, projection: { ...projection, takesLead: true }, responseRestartedUntil: 0n, continuation: { forkElapsedAtStart: curveElapsed + 5n, forkResumedAt: 100n } })).toBe(500n + ESCALATION_ACTIVATION_DELAY)
+		expect(projectEscalationEndTime({ ...base, continuation: { forkElapsedAtStart: curveElapsed + 5n, forkResumedAt: 100n } })).toBe(100n + ESCALATION_ACTIVATION_DELAY)
+		expect(projectEscalationEndTime({ ...base, continuation: { forkElapsedAtStart: -ESCALATION_ACTIVATION_DELAY, forkResumedAt: 100n } })).toBe(100n + curveElapsed + ESCALATION_ACTIVATION_DELAY)
 	})
 
 	test('requires two outcomes to reach the non-decision threshold', () => {

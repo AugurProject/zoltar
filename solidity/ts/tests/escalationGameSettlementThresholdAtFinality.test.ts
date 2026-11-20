@@ -134,12 +134,12 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		expect(await e2e.claimLocal(r6, child.pool, INVALID, [second.localIndex], second.depositor)).toBe(secondEntitlement)
 	})
 
-	test('a batch deposit records the settlement fork threshold like a single deposit', async () => {
+	test('a direct game deposit records the settlement fork threshold like a pool deposit', async () => {
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
 		const source = fixture.poolFor(base.questionId).securityPool
-		const [r2, r3, r4, r5] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5)]
+		const [r2, r3, r5] = [e2e.account(2), e2e.account(3), e2e.account(5)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
@@ -159,11 +159,7 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(healthy)
 
 		await approveToken(r3, getRepTokenAddress(U0), g.address)
-		const batch = (amounts: readonly [bigint, bigint]) => writeContractAndWait(r3, () => r3.writeContract({ ...g, functionName: 'depositRepOnOutcomeForBatch', args: [NO, [r3.account.address, r4.account.address], [...amounts]], gas: BRANCH_GAS }))
-		// The start-bond tie trim cannot apply to a batch: a batch that would exactly tie the leader is rejected whole.
-		await expect(batch([10n * K, 10n * K])).rejects.toThrow('Contributions would be trimmed')
-		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(healthy)
-		await batch([15n * K, 15n * K])
+		await writeContractAndWait(r3, () => r3.writeContract({ ...g, functionName: 'depositRepOnOutcome', args: [NO, 30n * K], gas: BRANCH_GAS }))
 		expect(await e2e.balances(g.address)).toEqual([0n, 70n * K, 80n * K])
 		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(reduced)
 	})

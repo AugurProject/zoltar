@@ -51,8 +51,7 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 currentBalance = outcomeState[outcomeIndex].balanceAttoRep;
 		require(currentBalance < nonDecisionThresholdAttoRep && amountAttoRep >= startBondAttoRep, 'Invalid deposit preview');
 		(acceptedAmountAttoRep, resultingCumulativeAmountAttoRep) = _getAcceptedDepositAmount(outcomeIndex, amountAttoRep, currentBalance, nonDecisionThresholdAttoRep - currentBalance);
-		// Past the median, only support that meets the rising curve is accepted.
-		require(acceptedAmountAttoRep != 0 && (provisional == BinaryOutcomes.BinaryOutcome.None || resultingCumulativeAmountAttoRep >= totalCostAttoRep()), 'Invalid deposit preview');
+		require(acceptedAmountAttoRep != 0, 'Invalid deposit preview');
 	}
 
 	/// @notice Quote a reply that must lead, or complete the non-decision threshold.
@@ -81,11 +80,6 @@ contract EscalationGame is EscalationGameSettlement {
 
 	function depositRepOnOutcomeWithAuthorizationAndLead(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 signatureS) external {
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorizationAndLead, (depositor, outcome, maximumDepositAttoRep, validAfter, validBefore, nonce, v, r, signatureS)));
-	}
-
-	/// @notice Caller-funded atomic report with separate native claim ownership for up to sixteen contributors.
-	function depositRepOnOutcomeForBatch(BinaryOutcomes.BinaryOutcome outcome, address[] calldata beneficiaries, uint256[] calldata amountsAttoRep) external {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.depositRepOnOutcomeForBatch, (outcome, beneficiaries, amountsAttoRep)));
 	}
 
 	function _initializeStartParams(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) private {

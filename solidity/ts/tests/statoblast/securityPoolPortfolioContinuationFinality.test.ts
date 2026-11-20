@@ -23,7 +23,7 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 
 describe('Statoblast: inherited activation delay and finality', () => {
 	const fixture = useSecurityPoolPortfolioFixture({})
-	test('activation-boundary lead flip reschedules reporter and settlement finality', async () => {
+	test('an activation-boundary lead flip keeps reporter and settlement finality on the curve deadline', async () => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		const owner = fixture.owner(),
@@ -40,7 +40,9 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [2, 2n * bond] }))
 		expect((await owner.getBlock()).timestamp).toBe(activation)
 		const end = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
-		expect(end).toBe(activation + 3n * DAY)
+		// The flip restarts no response period: the deadline is the curve crossing of the start-bond median.
+		expect(end).toBeLessThan(activation + 3n * DAY)
+		expect(end).toBe(activation + (await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'computeTimeSinceStartFromAttritionCostAttoRep', args: [bond + 1n] })) - 1n)
 		const engine = await owner.readContract({ ...p, functionName: 'settlement' })
 		const book = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' })
 		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [base.genesisUniverse] })
