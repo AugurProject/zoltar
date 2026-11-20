@@ -53,6 +53,24 @@ describe('simulation engine prepared states', () => {
 		expect(await restored.request({ method: 'eth_getTransactionReceipt', params: [firstLog.transactionHash] })).toMatchObject({ status: '0x1', transactionHash: firstLog.transactionHash })
 	}, 60_000)
 
+	test('a restored save reports missing historical state instead of absent code at its restored heights', async () => {
+		const engine = await createBaselineEngine()
+		await engine.bootstrap()
+		const repAddress = engine.getProfile().genesisRepTokenAddress
+		const account = engine.getState().selectedAccount
+		const historicalBlock = '0x3'
+		const historicalCode = await engine.request({ method: 'eth_getCode', params: [repAddress, historicalBlock] })
+		expect(historicalCode).not.toBe('0x')
+
+		const restored = await createSimulationEngine({ dependencies, initialization: { envelope: parseSavedSimulationStateEnvelope(await engine.exportState('history check')), kind: 'saved-state', stateId: 'history-check' } })
+		await restored.bootstrap()
+
+		expect(await restored.request({ method: 'eth_getBlockByNumber', params: [historicalBlock, false] })).toMatchObject({ number: historicalBlock })
+		await expect(restored.request({ method: 'eth_getCode', params: [repAddress, historicalBlock] })).rejects.toThrow('Simulation state at block 3 is unavailable')
+		await expect(restored.request({ method: 'eth_getBalance', params: [account, historicalBlock] })).rejects.toThrow('Simulation state at block 3 is unavailable')
+		expect(await restored.request({ method: 'eth_getCode', params: [repAddress, 'latest'] })).toBe(await engine.request({ method: 'eth_getCode', params: [repAddress, 'latest'] }))
+	}, 60_000)
+
 	test('a state saved without block history still restores at its clock', async () => {
 		const engine = await createBaselineEngine()
 		await engine.bootstrap()

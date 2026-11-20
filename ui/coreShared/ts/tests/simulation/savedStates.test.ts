@@ -260,6 +260,19 @@ describe('saved simulation states', () => {
 			])
 		})
 
+		test.each([
+			['malformed storage', '{bad json'],
+			['a corrupted record', JSON.stringify([{ baseScenario: 'baseline', id: 'broken-state', name: 'Broken state', savedAt: '2026-06-02T12:35:56.000Z', serialized: '{bad json' }])],
+		])('backs up %s before an ordinary save replaces it', (_label, rawValue) => {
+			window.localStorage.setItem(SAVED_STATES_KEY, rawValue)
+			expect(getSavedSimulationStateStorageSummary().warning).toBeDefined()
+
+			const saved = persistSavedSimulationState(createSerializedSavedState({ name: 'Fresh save', savedAt: '2026-06-03T12:34:56.000Z' }))
+
+			expect(listSavedSimulationStateRecordIds()).toEqual([saved.id])
+			expect(readBackups()).toEqual([expect.objectContaining({ rawValue })])
+		})
+
 		test('keeps a bounded history of malformed saved-state storage backups', () => {
 			window.localStorage.setItem(
 				BACKUP_KEY,

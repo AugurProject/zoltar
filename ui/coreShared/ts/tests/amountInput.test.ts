@@ -1,7 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatAmountForDisplay, getAmountInputErrorMessage, getAmountPreset, validateAmountInput, type AmountInputLimits } from '../forms/amountInput.js'
+import { formatRoundedCurrencyBalance } from '../lib/formatters.js'
+import { AMOUNT_INPUT_PATTERN, formatAmountForDisplay, getAmountInputErrorMessage, getAmountPreset, validateAmountInput, type AmountInputLimits } from '../forms/amountInput.js'
 
 const ONE = 10n ** 18n
 
@@ -22,6 +23,18 @@ void describe('amount input validation', () => {
 		expect(validateAmountInput('.25', { decimals: 6 })).toEqual({ status: 'valid', amount: 250_000n })
 		expect(validateAmountInput('1.1234567', { decimals: 6 })).toEqual({ status: 'invalid', problem: 'precision' })
 		expect(messageFor('1.1234567', { decimals: 6 })).toBe('Use no more than 6 decimal places.')
+	})
+
+	void test('accepts a displayed grouped amount in both the native pattern and the parser', () => {
+		// Browsers compile the pattern attribute as an anchored regular expression with the `v` flag.
+		const nativePattern = new RegExp(`^(?:${AMOUNT_INPUT_PATTERN})$`, 'v')
+		const displayed = formatRoundedCurrencyBalance(123_450n, 2)
+		expect(displayed).toBe('1\u00a0234.50')
+		for (const value of [displayed, '1 234.50', '1234.50']) {
+			expect(nativePattern.test(value)).toBe(true)
+			expect(validateAmountInput(value, { decimals: 2 })).toEqual({ status: 'valid', amount: 123_450n })
+		}
+		expect(nativePattern.test('1e5')).toBe(false)
 	})
 
 	void test('rejects malformed, negative, and zero amounts with a message for each', () => {

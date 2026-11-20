@@ -15,7 +15,7 @@ export type RoutingConfig<TRoute extends AppRoute = AppRoute> = {
 	readonly routes: readonly RouteDefinition<TRoute>[]
 }
 
-const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['genesis', 'network', 'rpcUrl', 'simScenario', 'simState', 'simulate', 'universe'])
+const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['genesis', 'network', 'rpcUrl', 'simScenario', 'simState', 'simWallet', 'simulate', 'universe'])
 
 function getPageSearchParams(search = window.location.search) {
 	return new URLSearchParams(search)
@@ -68,8 +68,9 @@ function buildRoutingState<TRoute extends AppRoute>(config: RoutingConfig<TRoute
 	return { config, routeByHash, hashByRoute, queryParametersByRoute, routeMatchers }
 }
 
+/** Resolves every route through the canonical `#/path` form, so `#deploy`, `deploy` and `#/deploy` reach the same route in the typed router and the mounted app. */
 function resolveRoutingStateRoute<TRoute extends AppRoute>(routing: RoutingState<TRoute>, hash: string): TRoute | 'not-found' {
-	const { routeHash } = parseRouteHash(hash)
+	const { routeHash } = parseRouteHash(normalizeRouteHash(hash))
 	const exactRoute = routing.routeByHash[routeHash]
 	if (exactRoute !== undefined) return exactRoute
 	if (routeHash === '' || routeHash === '#/') return routing.config.defaultRoute
@@ -137,7 +138,7 @@ export function createRouting<TRoute extends AppRoute>(config: RoutingConfig<TRo
 			return hash
 		},
 		resolve(hash: string): TRoute | 'not-found' {
-			return resolveRoutingStateRoute(routing, normalizeRouteHash(hash))
+			return resolveRoutingStateRoute(routing, hash)
 		},
 	}
 }
@@ -181,7 +182,7 @@ export function getTopLevelRouteSearch(nextRoute: AppRoute, search = getRouteHas
 
 export function getCurrentRouteHash() {
 	const routing = requireRouting()
-	const { routeHash } = parseRouteHash(window.location.hash)
+	const { routeHash } = parseRouteHash(normalizeRouteHash(window.location.hash))
 	return routeHash === '' ? (routing.hashByRoute[routing.config.defaultRoute] ?? '') : routeHash
 }
 

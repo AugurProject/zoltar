@@ -37,10 +37,12 @@ export function getSavedSimulationStateLocation(stateId: string) {
 	return getSimulationLocation(nextSearch)
 }
 
+/** Startup reads `simState` from the page query as well as the hash, so either one selects a saved state. */
 export function hasSavedSimulationStateRoute() {
-	const params = new URLSearchParams(getRouteHashSearch())
-	const stateId = params.get('simState')
-	return stateId !== null && stateId.trim() !== ''
+	return [getRouteHashSearch(), window.location.search].some(search => {
+		const stateId = new URLSearchParams(search).get('simState')
+		return stateId !== null && stateId.trim() !== ''
+	})
 }
 
 function stageSimulationLocation(nextUrl: string) {

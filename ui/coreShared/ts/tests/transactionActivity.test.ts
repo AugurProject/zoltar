@@ -18,7 +18,7 @@ import {
 	settleTransactionActivity,
 	type TransactionActivityEntry,
 } from '../transactions/transactionActivity.js'
-import { isTransactionTrackingStopped } from '../transactions/transactionTrackingStop.js'
+import { isTransactionTrackingStopped, subscribeTransactionTrackingStopped } from '../transactions/transactionTrackingStop.js'
 import { createTransactionScope, mergeTransactionScopes, securityPoolTransactionScope, transactionScopesOverlap, universeTransactionScope } from '../transactions/transactionScope.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
@@ -159,6 +159,32 @@ describe('transaction activity list', () => {
 			expect(hasPendingTransactionActivity(['market:0x5'])).toBeFalse()
 			expect(window.localStorage.getItem(storageKey)).toContain(hashOf(6))
 		} finally {
+			restore()
+		}
+	})
+
+	test('releases a transaction another open view stopped tracking without a reload', () => {
+		const restore = installActiveEnvironmentForTesting(createFakeBackend())
+		const released: Hash[] = []
+		const unsubscribe = subscribeTransactionTrackingStopped(hash => released.push(hash))
+		try {
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			const storageKey = transactionActivity.value.storageKey
+			if (storageKey === undefined) throw new Error('Expected persisted activity for a connected account')
+			recordTransactionSubmitted({ hash: hashOf(8), scope: ['pool:0x8'], title: 'Deposit' })
+			expect(hasPendingTransactionActivity(['pool:0x8'])).toBeTrue()
+
+			// The other view persists the dropped status; this view only hears the storage event.
+			const stopped = settleTransactionActivity(transactionActivity.value.entries, hashOf(8), { status: 'failed', failureKind: 'dropped' }, Date.now())
+			window.localStorage.setItem(storageKey, serializeTransactionActivity(stopped))
+			window.dispatchEvent(new window.StorageEvent('storage', { key: storageKey }))
+
+			expect(hasPendingTransactionActivity(['pool:0x8'])).toBeFalse()
+			expect(transactionActivity.value.entries.find(item => item.hash === hashOf(8))).toMatchObject({ status: 'failed', failureKind: 'dropped' })
+			expect(released).toEqual([hashOf(8)])
+			expect(isTransactionTrackingStopped(hashOf(8))).toBeTrue()
+		} finally {
+			unsubscribe()
 			restore()
 		}
 	})
