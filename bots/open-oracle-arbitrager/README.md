@@ -31,7 +31,9 @@ Reference documents:
 
 ## Supported collateral
 
-The reference arbitrager supports WETH as report `token1`. It does not dispute or settle reports for portfolios with USDC or another non-WETH collateral token: funding, hedging and recovery all use WETH. Such portfolios need a separate corrector and settler; running this bot does not satisfy that requirement for them.
+WETH is always supported as report `token1`. Portfolios collateralized in another token, such as USDC or USDT, are supported only for tokens listed in [`collateralTokens`](./CONFIGURATION.md#collateral-tokens); the bot skips every other `token1` and records the token in the skip reason. Unlisted portfolios still need a separate corrector and settler.
+
+For an allowlisted collateral, the bot hedges REP against that collateral through Uniswap V3 or V2 pools that pair REP with it; Uniswap V4 pools settle against native ETH and are used only for WETH. Profit, capital at risk, and the market-consensus check stay in WETH, valued through the collateral's configured Uniswap V3 WETH pool; [collateral tokens](./CONFIGURATION.md#collateral-tokens) describes that valuation and its limits. Funding, settlement, and withdrawal use the collateral itself, so the wallet holds and approves that token instead of WETH for those reports.
 
 ## How the flow works
 

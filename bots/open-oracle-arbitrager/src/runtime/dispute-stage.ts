@@ -54,6 +54,7 @@ export async function runDisputeStage(runtime: OperatorRuntime, context: Operato
 			selected.hedgeVenue,
 			selected.hedgeFee,
 			metadata,
+			selected.report.game.token1.toLowerCase() === config.network.weth.toLowerCase() ? undefined : state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token1.toLowerCase()),
 			runtime.positions,
 			state.centralizedMarket,
 			selected.marketConsensus,

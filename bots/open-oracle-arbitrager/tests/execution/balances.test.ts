@@ -11,7 +11,7 @@ import type { Pool } from '#core/operator-types'
 
 const network = networkConfiguration('sepolia')
 const config = { network, router: network.factory, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined }
-const pools: Pool[] = ([100, 500, 3000, 10000] as const).map(fee => ({ venue: 'uniswap-v3', address: network.factory, fee, token: network.rep, liquidity: 1n, spotTick: 0n, twapTick: 0n }))
+const pools: Pool[] = ([100, 500, 3000, 10000] as const).map(fee => ({ venue: 'uniswap-v3', address: network.factory, fee, quoteToken: network.weth, token: network.rep, liquidity: 1n, spotTick: 0n, twapTick: 0n }))
 const wallet = { account: privateKeyToAccount(`0x${'11'.repeat(32)}`) }
 const account = wallet.account.address
 const healthyToken = getAddress('0x0000000000000000000000000000000000000001')

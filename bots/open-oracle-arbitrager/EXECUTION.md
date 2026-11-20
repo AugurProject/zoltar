@@ -146,9 +146,9 @@ Reports already owned by the execution account are skipped because OpenOracle se
 
 ## Required ETH, WETH, and tokens
 
-There is no single fixed funding amount. OpenOracle contributions increase with the current round, while the executor also needs hedge inventory. The dashboard's **Open opportunities** table shows the total `Required WETH` and `Required token` that the executor pulls from the wallet, including both the OpenOracle contribution and the atomic hedge. The branch formulas and event fields are explained in the [operator guide](./docs/operator-guide.html#math).
+There is no single fixed funding amount. OpenOracle contributions increase with the current round, while the executor also needs hedge inventory. The dashboard's **Open opportunities** table shows the total `Required collateral` (WETH, or the report's allowlisted collateral token) and `Required token` that the executor pulls from the wallet, including both the OpenOracle contribution and the atomic hedge. The branch formulas and event fields are explained in the [operator guide](./docs/operator-guide.html#math).
 
-The execution account needs:
+The execution account needs the following. For a report collateralized in an [allowlisted non-WETH token](./CONFIGURATION.md#collateral-tokens), read that token wherever WETH appears below; gas still needs ETH.
 
 - `ETH balance >=` the sum of every signed transaction's gas limit multiplied by its fee cap, plus an operational buffer.
 - `WETH balance >= required WETH` for the selected report.

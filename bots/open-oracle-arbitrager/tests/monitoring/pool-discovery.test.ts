@@ -72,15 +72,15 @@ function clientWithFactory(code: '0x' | '0x01', options: { pools?: Map<string, P
 	return { batchedCalls: () => batchedCalls, client, codeReads, contractCalls: () => contractCalls }
 }
 
-const discover = (client: ReturnType<typeof clientWithFactory>['client'], blockNumber?: bigint) => discoverTokenPools(client, { blockNumber, chainId: 11155111, factory: network.factory, multicall3: network.multicall3, tokens: [token], weth: network.weth })
+const discover = (client: ReturnType<typeof clientWithFactory>['client'], blockNumber?: bigint) => discoverTokenPools(client, { blockNumber, chainId: 11155111, factory: network.factory, multicall3: network.multicall3, quoteToken: network.weth, tokens: [token] })
 
 describe('Uniswap factory discovery', () => {
 	test('keeps token discovery available when the V3 factory is undeployed', async () => {
 		const missing = clientWithFactory('0x')
-		expect(await discover(missing.client)).toEqual([{ constantProduct: [], token, v3: [] }])
+		expect(await discover(missing.client)).toEqual([{ constantProduct: [], quoteToken: network.weth, token, v3: [] }])
 		expect(missing.contractCalls()).toBe(0)
 		const deployed = clientWithFactory('0x01')
-		expect(await discover(deployed.client)).toEqual([{ constantProduct: [], token, v3: [] }])
+		expect(await discover(deployed.client)).toEqual([{ constantProduct: [], quoteToken: network.weth, token, v3: [] }])
 		// Every fee tier is resolved through one batched request.
 		expect(deployed.contractCalls()).toBe(4)
 		expect(deployed.batchedCalls()).toBe(1)
@@ -90,7 +90,7 @@ describe('Uniswap factory discovery', () => {
 		const logged = spyOn(console, 'error').mockImplementation(() => {})
 		try {
 			const incompatible = clientWithFactory('0x01', { poolResult: 'invalid' })
-			expect(await discover(incompatible.client)).toEqual([{ constantProduct: [], token, v3: [] }])
+			expect(await discover(incompatible.client)).toEqual([{ constantProduct: [], quoteToken: network.weth, token, v3: [] }])
 			expect(logged).toHaveBeenCalledTimes(4)
 		} finally {
 			logged.mockRestore()
@@ -125,8 +125,8 @@ test('loads pool state for every discovered pool in one batch and drops empty po
 	])
 	const loaded = await poolsForTokens(deployed.client, config, discovered, 100n)
 	expect(loaded).toEqual([
-		{ address: pool500, fee: 500, liquidity: 10n, spotTick: 5n, token, twapTick: 10n, venue: 'uniswap-v3' },
-		{ address: pool3000, fee: 3000, liquidity: 20n, spotTick: -7n, token, twapTick: -11n, venue: 'uniswap-v3' },
+		{ address: pool500, fee: 500, liquidity: 10n, quoteToken: network.weth, spotTick: 5n, token, twapTick: 10n, venue: 'uniswap-v3' },
+		{ address: pool3000, fee: 3000, liquidity: 20n, quoteToken: network.weth, spotTick: -7n, token, twapTick: -11n, venue: 'uniswap-v3' },
 	])
 	expect(deployed.batchedCalls()).toBe(2)
 })
@@ -224,14 +224,21 @@ test('reports which fee tier failed when pool state is unreadable', async () => 
 
 test('discovers V2 and V4 execution candidates without any V3 pool or reads', async () => {
 	const deployed = clientWithFactory('0x')
-	const candidates = await poolsForTokens(deployed.client, { ...config, router: undefined, v2Router: pool500, v4PoolManager: pool3000, v4Quoter: pool500 }, [{ token, v3: [], constantProduct: [{ address: pool500, fee: 3000, kind: 'uniswap-v2', venue: 'Uniswap V2' }] }], 100n)
-	expect(candidates).toEqual([{ address: pool500, fee: 3000, token, venue: 'uniswap-v2' }, ...([100, 500, 3000, 10000] as const).map(fee => ({ address: pool3000, fee, token, venue: 'uniswap-v4' as const }))])
+	const candidates = await poolsForTokens(deployed.client, { ...config, router: undefined, v2Router: pool500, v4PoolManager: pool3000, v4Quoter: pool500 }, [{ quoteToken: network.weth, token, v3: [], constantProduct: [{ address: pool500, fee: 3000, kind: 'uniswap-v2', venue: 'Uniswap V2' }] }], 100n)
+	expect(candidates).toEqual([{ address: pool500, fee: 3000, quoteToken: network.weth, token, venue: 'uniswap-v2' }, ...([100, 500, 3000, 10000] as const).map(fee => ({ address: pool3000, fee, quoteToken: network.weth, token, venue: 'uniswap-v4' as const }))])
 	expect(deployed.contractCalls()).toBe(0)
+})
+
+test('#1274: pairs discovered against a non-WETH collateral keep it as their quote token and never add V4 candidates', async () => {
+	const usdc = getAddress('0x00000000000000000000000000000000000000c0')
+	const deployed = clientWithFactory('0x')
+	const candidates = await poolsForTokens(deployed.client, { ...config, router: undefined, v2Router: pool500, v4PoolManager: pool3000, v4Quoter: pool500 }, [{ quoteToken: usdc, token, v3: [], constantProduct: [{ address: pool500, fee: 3000, kind: 'uniswap-v2', venue: 'Uniswap V2' }] }], 100n)
+	expect(candidates).toEqual([{ address: pool500, fee: 3000, quoteToken: usdc, token, venue: 'uniswap-v2' }])
 })
 
 test('does not read the V3 factory when V3 is disabled', async () => {
 	const deployed = clientWithFactory('0x')
-	expect(await discoverTokenPools(deployed.client, { chainId: 11155111, factory: undefined, multicall3: network.multicall3, tokens: [token], weth: network.weth })).toEqual([{ constantProduct: [], token, v3: [] }])
+	expect(await discoverTokenPools(deployed.client, { chainId: 11155111, factory: undefined, multicall3: network.multicall3, quoteToken: network.weth, tokens: [token] })).toEqual([{ constantProduct: [], quoteToken: network.weth, token, v3: [] }])
 	expect(deployed.codeReads).toEqual([])
 	expect(deployed.contractCalls()).toBe(0)
 })
@@ -259,7 +266,15 @@ test('#1446: a gas-burning collateral token cannot suppress healthy token market
 	})
 	const logged = spyOn(console, 'error').mockImplementation(() => {})
 	try {
-		const markets = await loadTokenMarkets(client, { blockNumber: 100n, explorerUrl: 'https://explorer.example', metadataCache: createTokenMetadataCache(), multicall3: network.multicall3, pools: [badToken, token].map(token => ({ token, v3: [], constantProduct: [] })), wallet: undefined, weth: network.weth })
+		const markets = await loadTokenMarkets(client, {
+			blockNumber: 100n,
+			explorerUrl: 'https://explorer.example',
+			metadataCache: createTokenMetadataCache(),
+			multicall3: network.multicall3,
+			pools: [badToken, token].map(token => ({ quoteToken: network.weth, token, v3: [], constantProduct: [] })),
+			wallet: undefined,
+			weth: network.weth,
+		})
 		expect(markets.map(market => market.address)).toEqual([token])
 	} finally {
 		logged.mockRestore()

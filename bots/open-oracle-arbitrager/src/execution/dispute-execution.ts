@@ -1,7 +1,7 @@
 import type { Configuration } from '#config/configuration'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
-import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth } from '#core/position-accounting'
+import { expectedWithdrawalToken2, hedgedProfitBeforeGasToken1 } from '#core/position-accounting'
 import { plannedGasPriceAttoEth, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
 import {
 	calculateFee,
@@ -11,8 +11,10 @@ import {
 	evaluateBuyRep,
 	evaluateSellRep,
 	executorFunding,
+	executableDexPriceRepPerEth,
 	fundedCapitalAtRiskAttoWeth,
 	hasFreshSubmissionWindow,
+	hedgeReferenceToken1,
 	hedgeWethLimitAttoEth,
 	isSelfReport,
 	meetsProfitThreshold,
@@ -48,6 +50,8 @@ import { formatTokenAmount } from '#monitoring/market-monitor'
 import { executionReadQuorum, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
 import { decimalSignedEth, decimalWeth } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'
+import { formatPositionCollateralAmount, type PositionCollateral } from '#state/position-collateral'
+import { attoWethValue } from '#core/collateral-valuation'
 import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -68,6 +72,8 @@ export async function executeDispute(
 	hedgeVenue: Venue,
 	hedgeFee: (typeof FEES)[number],
 	tokenMetadata: { decimals: number; symbol: string },
+	/** Metadata of a non-WETH report collateral; undefined for WETH. */
+	collateralMetadata: { decimals: number; symbol: string } | undefined,
 	positions: readonly PositionRecord[],
 	centralizedMarket: CentralizedMarketEstimate | undefined,
 	marketConsensus: MarketConsensusEstimate | undefined,
@@ -94,6 +100,8 @@ export async function executeDispute(
 	if (hedgePool === zeroAddress) throw new Error('Execution requires a discovered or configured Uniswap pool')
 	const game = report.game
 	if (isSelfReport(account.address, game.currentReporter)) throw new Error('Self-disputes use different OpenOracle accounting and are not supported')
+	const wethCollateral = game.token1.toLowerCase() === config.network.weth.toLowerCase()
+	if (!wethCollateral && collateralMetadata === undefined) throw new Error('Non-WETH collateral execution requires collateral token metadata')
 	const newAmount1 = calculateNextAmount1(game)
 	const reportId = report.helper.reportId.toString()
 	const quoteBlock = await client.getBlock()
@@ -120,15 +128,15 @@ export async function executeDispute(
 	const newAmount2 = executionSnapshot.replacementAmount2
 	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	const refreshedQuote = selectBestExecution(
-		[safetyAdjustedQuote(evaluateSellRep(game, executionSnapshot.sellHedgeQuote, 0n), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config), safetyAdjustedQuote(evaluateBuyRep(game, executionSnapshot.buyHedgeQuote, 0n), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config)].filter(
-			candidate => candidate.tokenToSwap.toLowerCase() === tokenToSwap.toLowerCase(),
-		),
+		[
+			safetyAdjustedQuote(evaluateSellRep(game, executionSnapshot.sellHedgeQuote, 0n, executionSnapshot.valuation), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config),
+			safetyAdjustedQuote(evaluateBuyRep(game, executionSnapshot.buyHedgeQuote, 0n, executionSnapshot.valuation), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config),
+		].filter(candidate => candidate.tokenToSwap.toLowerCase() === tokenToSwap.toLowerCase()),
 		candidate => candidate.netProfitAttoWeth,
 	)
 	if (refreshedQuote === undefined) throw new Error('Canonical execution snapshot did not produce an arbitrage quote')
 	if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed before submission')
-	const referenceWeth = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsAttoWeth : refreshedQuote.hedgeCostAttoWeth
-	const refreshedDexPriceRepPerEth = referenceWeth === 0n ? 0n : (refreshedQuote.hedgeAmountAttoRep * 10n ** 18n) / referenceWeth
+	const refreshedDexPriceRepPerEth = executableDexPriceRepPerEth(refreshedQuote)
 	const finalMarketPriceAllowsExecution = () =>
 		centralizedMarketConfigurationAllowsExecution(config.centralizedMarkets) &&
 		(marketConsensus === undefined
@@ -148,10 +156,13 @@ export async function executeDispute(
 		throw new Error('Final executable DEX price is not confirmed by independent market consensus')
 	}
 	if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Final replacement ratio does not derive the selected arbitrage direction')
-	const hedgeLimitQuote = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsAttoWeth : refreshedQuote.hedgeCostAttoWeth
+	const hedgeLimitQuote = hedgeReferenceToken1(refreshedQuote)
 	const hedgeLimit = hedgeWethLimitAttoEth(refreshedQuote.direction, hedgeLimitQuote, config.maxHedgeSlippageBps)
 	const funding = executorFunding(game, newAmount1, newAmount2, refreshedQuote.direction === 'buy-rep' ? hedgeLimit : 0n)
-	if (executionSnapshot.weth < funding.token1 || executionSnapshot.token < funding.token2) throw new Error('Canonical execution snapshot no longer has the inventory required by the signed bundle')
+	const collateral: PositionCollateral | undefined =
+		collateralMetadata === undefined || wethCollateral ? undefined : { decimals: collateralMetadata.decimals, symbol: collateralMetadata.symbol, token: game.token1, valuationAttoWeth: executionSnapshot.valuation.attoWeth.toString(), valuationUnits: executionSnapshot.valuation.units.toString() }
+	const collateralPosition = { collateral }
+	if (executionSnapshot.token1 < funding.token1 || executionSnapshot.token < funding.token2) throw new Error('Canonical execution snapshot no longer has the inventory required by the signed bundle')
 	const lockedToken = expectedWithdrawalToken2(refreshedQuote.direction, game.currentAmount2, newAmount2)
 	const replacementCredit1 = 2n * newAmount1 + calculateFee(newAmount1, game.feePercentage)
 	const replacementCredit2 = 2n * newAmount2 + calculateFee(newAmount2, game.feePercentage)
@@ -174,12 +185,13 @@ export async function executeDispute(
 	const executionPayload = buildHedgeExecutionPayload({
 		expectedParentBlockHash: executionSnapshot.blockHash,
 		executionIntent: {
+			...(collateral === undefined ? {} : { collateralSymbol: collateral.symbol }),
 			direction: refreshedQuote.direction,
 			estimatedNetProfitWeth: decimalWeth(refreshedQuote.netProfitAttoWeth),
 			estimatedProfitBeforeGasEth: decimalWeth(refreshedQuote.profitBeforeGasAttoWeth),
 			reportId,
 			requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
-			requiredWeth: decimalWeth(funding.token1),
+			requiredWeth: formatPositionCollateralAmount(collateralPosition, funding.token1),
 			token: game.token2,
 			tokenSymbol: tokenMetadata.symbol,
 		},
@@ -214,12 +226,13 @@ export async function executeDispute(
 		to: executor,
 	})
 	const signedTransactions = [{ kind: 'dispute' as const, signed: executionSigned, token: undefined, tokenSymbol: undefined }]
-	const capitalAtRiskAttoWeth = fundedCapitalAtRiskAttoWeth(funding, refreshedQuote.hedgeAmountAttoRep, hedgeLimitQuote, hedgeLimit)
+	const capitalAtRiskAttoWeth = fundedCapitalAtRiskAttoWeth(funding, refreshedQuote.hedgeAmountAttoRep, hedgeLimitQuote, hedgeLimit, refreshedQuote.valuation)
 	let stagedPosition = {
 		account: account.address,
 		actualEntryGasCostEth: '0',
 		capitalAtRiskWeth: decimalWeth(capitalAtRiskAttoWeth),
 		closedAt: undefined,
+		...(collateral === undefined ? {} : { collateral }),
 		direction: refreshedQuote.direction,
 		entrySubmissionBlockNumber: quoteBlockNumber.toString(),
 		entrySubmissionMode: config.submission.mode,
@@ -232,7 +245,7 @@ export async function executeDispute(
 		gasExpenditures: [],
 		historyOutbox: undefined,
 		hedgeAmountToken: formatTokenAmount(refreshedQuote.hedgeAmountAttoRep, tokenMetadata.decimals),
-		hedgeWeth: decimalWeth(hedgeLimitQuote),
+		hedgeWeth: formatPositionCollateralAmount(collateralPosition, hedgeLimitQuote),
 		hedgedProfitBeforeGasEth: decimalSignedEth(refreshedQuote.profitBeforeGasAttoWeth),
 		lifecycleGasCostEth: '0',
 		lifecycleReceiptRecovered: false,
@@ -243,7 +256,7 @@ export async function executeDispute(
 		lifecycleWalletTokenBefore: undefined,
 		lifecycleWalletWethBefore: undefined,
 		lockedToken: formatTokenAmount(lockedToken, tokenMetadata.decimals),
-		lockedWeth: decimalWeth(newAmount1),
+		lockedWeth: formatPositionCollateralAmount(collateralPosition, newAmount1),
 		manualReconciliation: undefined,
 		openedAt: new Date().toISOString(),
 		reportAmount1: newAmount1.toString(),
@@ -496,7 +509,7 @@ export async function executeDispute(
 	if (confirmedPosition === undefined) {
 		const hedgeExecution = hedgeExecutionFromLogs(executionLogs, executor)
 		if (hedgeExecution.reportId !== report.helper.reportId) throw new Error('Executor hedge event report id does not match the submitted report')
-		const hedgedProfitBeforeGas = hedgedProfitBeforeGasWeth(refreshedQuote.direction, hedgeExecution.hedgeAmountAttoWeth, game.currentAmount1, calculateFee(game.currentAmount1, game.feePercentage), calculateFee(game.currentAmount1, game.protocolFee))
+		const hedgedProfitBeforeGas = attoWethValue(refreshedQuote.valuation, hedgedProfitBeforeGasToken1(refreshedQuote.direction, hedgeExecution.hedgeAmountAttoWeth, game.currentAmount1, calculateFee(game.currentAmount1, game.feePercentage), calculateFee(game.currentAmount1, game.protocolFee)), 'down')
 		confirmedPosition = {
 			...stagedPosition,
 			actualEntryGasCostEth: decimalWeth(actualGasCost),
@@ -506,7 +519,7 @@ export async function executeDispute(
 			entryTransactionHashes: [executionHash],
 			gasExpenditures: entryGasExpenditures,
 			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenMetadata.decimals),
-			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountAttoWeth),
+			hedgeWeth: formatPositionCollateralAmount(collateralPosition, hedgeExecution.hedgeAmountAttoWeth),
 			hedgedProfitBeforeGasEth: decimalSignedEth(hedgedProfitBeforeGas),
 			status: 'open-pending-finality',
 		}

@@ -1,3 +1,4 @@
+import type { Configuration } from '#config/configuration'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { logEvent } from '@zoltar/bot-shared/infrastructure/log-event'
 import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
@@ -90,6 +91,14 @@ function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configur
 	}
 }
 
+/**
+ * Configured tokens are never displaced by the bounded set of permissionlessly observed tokens. Allowlisted collateral is
+ * configured so its metadata and WETH markets stay available however many other tokens reports reference.
+ */
+export function scanConfiguredTokens(config: Pick<Configuration, 'collateralTokens' | 'tokenAddresses'>) {
+	return [...config.tokenAddresses, ...config.collateralTokens.map(collateral => collateral.address)]
+}
+
 const DEFAULT_AUGUR_DISCOVERY_REFRESH_MILLISECONDS = 60_000
 
 /**
@@ -167,13 +176,15 @@ export function formatTokenAmount(value: bigint, decimals: number) {
 
 export type DiscoveredTokenPools = {
 	constantProduct: readonly { address: Address; fee: number; kind: ConstantProductVenueKind; venue: string }[]
+	/** WETH for the market overview and WETH-collateral reports; an allowlisted collateral token for its own reports. */
+	quoteToken: Address
 	token: Address
 	v3: readonly { address: Address; fee: (typeof UNISWAP_V3_FEES)[number] }[]
 }
 
 /**
- * Resolves every candidate Uniswap V3 pool and mainnet constant-product pair for the monitored tokens
- * in one batched read so the market overview and the execution pool set share a single discovery.
+ * Resolves every candidate Uniswap V3 pool and mainnet constant-product pair between the monitored tokens and
+ * `quoteToken` in one batched read so the market overview and the execution pool set share a single discovery.
  */
 export async function discoverTokenPools(
 	client: DeploymentReader & BatchReader,
@@ -182,8 +193,8 @@ export async function discoverTokenPools(
 		chainId: number
 		factory: Address | undefined
 		multicall3: Address
+		quoteToken: Address
 		tokens: readonly Address[]
-		weth: Address
 	},
 ): Promise<readonly DiscoveredTokenPools[]> {
 	let factory = parameters.factory
@@ -198,8 +209,8 @@ export async function discoverTokenPools(
 	const fees = factory === undefined ? [] : UNISWAP_V3_FEES
 	const venues = parameters.chainId === MAINNET_CHAIN_ID ? MAINNET_CONSTANT_PRODUCT_VENUES : []
 	const calls = parameters.tokens.flatMap(token => [
-		...(factory === undefined ? [] : fees.map(fee => ({ address: factory, abi: uniswapV3FactoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] }) satisfies BatchCall)),
-		...venues.map(venue => ({ address: venue.factory, abi: constantProductFactoryAbi, functionName: 'getPair', args: [token, parameters.weth] }) satisfies BatchCall),
+		...(factory === undefined ? [] : fees.map(fee => ({ address: factory, abi: uniswapV3FactoryAbi, functionName: 'getPool', args: [parameters.quoteToken, token, fee] }) satisfies BatchCall)),
+		...venues.map(venue => ({ address: venue.factory, abi: constantProductFactoryAbi, functionName: 'getPair', args: [token, parameters.quoteToken] }) satisfies BatchCall),
 	])
 	const results = await batchRead(client, parameters.multicall3, calls, parameters.blockNumber)
 	const stride = fees.length + venues.length
@@ -223,7 +234,7 @@ export async function discoverTokenPools(
 			const address = requiredRpcAddress(result.result, `${venue.name} pair`)
 			return address === zeroAddress ? [] : [{ address, fee: venue.fee, kind: venue.kind, venue: venue.name }]
 		})
-		return { constantProduct, token, v3 }
+		return { constantProduct, quoteToken: parameters.quoteToken, token, v3 }
 	})
 }
 

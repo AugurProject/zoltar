@@ -49,7 +49,7 @@ function recordLifecycleProgress(state: OperatorState, result: 'processed' | 'pr
 	const summary = lifecycleOperationSummary(result, position.reportId, updatedPosition)
 	recordOperation(state, {
 		category: 'transaction',
-		details: `withdrawn=${updatedPosition?.withdrawnWeth ?? 'unknown'} WETH; ${updatedPosition?.withdrawnToken ?? 'unknown'} ${updatedPosition?.tokenSymbol ?? 'token'}`,
+		details: `withdrawn=${updatedPosition?.withdrawnWeth ?? 'unknown'} ${updatedPosition?.collateral?.symbol ?? 'WETH'}; ${updatedPosition?.withdrawnToken ?? 'unknown'} ${updatedPosition?.tokenSymbol ?? 'token'}`,
 		level: 'info',
 		message: summary.message,
 		reason: summary.reason,

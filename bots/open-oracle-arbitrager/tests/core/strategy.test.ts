@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { decimalSignedEth } from '#state/operator-state'
+import { WETH_VALUATION } from '#core/collateral-valuation'
 import {
 	calculateNextAmount1,
 	calculateTrackedNetProfitEth,
@@ -11,7 +12,7 @@ import {
 	executorFunding,
 	fundedCapitalAtRiskAttoWeth,
 	hasFreshSubmissionWindow,
-	hedgeSlippageReserveAttoWeth,
+	hedgeSlippageReserveToken1,
 	hedgeWethLimitAttoEth,
 	isSelfReport,
 	meetsProfitThreshold,
@@ -49,7 +50,7 @@ describe('OpenOracle arbitrage strategy', () => {
 
 		const expensiveRepReplacement = { amount1: newAmount1, amount2: 2_400_000n }
 		// The hedge repays the locked token2 plus both fees (2_000_000 + 20_000 + 2_000 REP); the executor funds only the replacement itself.
-		expect(evaluateBuyRep(game, 0n, 0n).hedgeAmountAttoRep).toBe(2_022_000n)
+		expect(evaluateBuyRep(game, 0n, 0n, WETH_VALUATION).hedgeAmountAttoRep).toBe(2_022_000n)
 		expect(executorFunding(game, expensiveRepReplacement.amount1, expensiveRepReplacement.amount2, 0n)).toEqual({
 			token1: 150_000n,
 			token2: 2_400_000n,
@@ -59,11 +60,11 @@ describe('OpenOracle arbitrage strategy', () => {
 	})
 
 	test('uses executable hedge quotes, all fees, and gas for profitability', () => {
-		const sell = evaluateSellRep(game, 1_300_000n, 10_000n)
+		const sell = evaluateSellRep(game, 1_300_000n, 10_000n, WETH_VALUATION)
 		expect(sell.netProfitAttoWeth).toBe(279_000n)
 		expect(meetsProfitThreshold(sell, 20_000n, 100n)).toBe(true)
 
-		const buy = evaluateBuyRep(game, 900_000n, 10_000n)
+		const buy = evaluateBuyRep(game, 900_000n, 10_000n, WETH_VALUATION)
 		expect(buy.hedgeAmountAttoRep).toBe(2_022_000n)
 		expect(buy.netProfitAttoWeth).toBe(90_000n)
 		expect(meetsProfitThreshold(buy, 100_000n, 100n)).toBe(false)
@@ -71,17 +72,17 @@ describe('OpenOracle arbitrage strategy', () => {
 	})
 
 	test('applies the return floor to each direction-specific cost basis at its exact boundary', () => {
-		const sellAtThreshold = evaluateSellRep(game, 1_028_110n, 7_000n)
-		expect(sellAtThreshold.hedgeCostAttoWeth).toBe(1_011_000n)
+		const sellAtThreshold = evaluateSellRep(game, 1_028_110n, 7_000n, WETH_VALUATION)
+		expect(sellAtThreshold.hedgeCostToken1).toBe(1_011_000n)
 		expect(sellAtThreshold.netProfitAttoWeth).toBe(10_110n)
 		expect(meetsProfitThreshold(sellAtThreshold, 0n, 100n)).toBe(true)
-		expect(meetsProfitThreshold(evaluateSellRep(game, 1_028_109n, 7_000n), 0n, 100n)).toBe(false)
+		expect(meetsProfitThreshold(evaluateSellRep(game, 1_028_109n, 7_000n, WETH_VALUATION), 0n, 100n)).toBe(false)
 
-		const buyAtThreshold = evaluateBuyRep(game, 900_000n, 91_000n)
-		expect(buyAtThreshold.hedgeCostAttoWeth).toBe(900_000n)
+		const buyAtThreshold = evaluateBuyRep(game, 900_000n, 91_000n, WETH_VALUATION)
+		expect(buyAtThreshold.hedgeCostToken1).toBe(900_000n)
 		expect(buyAtThreshold.netProfitAttoWeth).toBe(9_000n)
 		expect(meetsProfitThreshold(buyAtThreshold, 0n, 100n)).toBe(true)
-		expect(meetsProfitThreshold(evaluateBuyRep(game, 900_000n, 91_001n), 0n, 100n)).toBe(false)
+		expect(meetsProfitThreshold(evaluateBuyRep(game, 900_000n, 91_001n, WETH_VALUATION), 0n, 100n)).toBe(false)
 	})
 
 	test('increments by one after the escalation halt', () => {
@@ -112,15 +113,15 @@ describe('OpenOracle arbitrage strategy', () => {
 			token2: 2_300_001n,
 		})
 		expect(hedgeWethLimitAttoEth('buy-rep', 1_000_000n, 50n)).toBe(1_005_000n)
-		expect(hedgeSlippageReserveAttoWeth('sell-rep', 101n, 100n)).toBe(2n)
-		expect(hedgeSlippageReserveAttoWeth('buy-rep', 101n, 100n)).toBe(2n)
+		expect(hedgeSlippageReserveToken1('sell-rep', 101n, 100n)).toBe(2n)
+		expect(hedgeSlippageReserveToken1('buy-rep', 101n, 100n)).toBe(2n)
 	})
 
 	test('values funded capital at the more conservative quote or signed hedge limit', () => {
 		const funding = { token1: 100n, token2: 200n }
-		expect(fundedCapitalAtRiskAttoWeth(funding, 400n, 1_000n, 995n)).toBe(600n)
-		expect(fundedCapitalAtRiskAttoWeth(funding, 400n, 1_000n, 1_005n)).toBe(603n)
-		expect(fundedCapitalAtRiskAttoWeth(funding, 0n, 1_000n, 1_005n)).toBe(100n)
+		expect(fundedCapitalAtRiskAttoWeth(funding, 400n, 1_000n, 995n, WETH_VALUATION)).toBe(600n)
+		expect(fundedCapitalAtRiskAttoWeth(funding, 400n, 1_000n, 1_005n, WETH_VALUATION)).toBe(603n)
+		expect(fundedCapitalAtRiskAttoWeth(funding, 0n, 1_000n, 1_005n, WETH_VALUATION)).toBe(100n)
 	})
 
 	test('rejects self-disputes because they use different contract accounting', () => {

@@ -15,7 +15,7 @@ function queueRow(candidate: SettlementCandidateSnapshot, link: ExplorerLink) {
 			exactAmount(candidate.projectedGasCostEth, 'ETH'),
 			exactAmount(candidate.projectedNetEth, 'ETH'),
 			`${candidate.elapsed} ${candidate.windowUnit}`,
-			`WETH/${candidate.tokenSymbol}`,
+			`${candidate.collateralSymbol ?? 'WETH'}/${candidate.tokenSymbol}`,
 			link(candidate.coordinator, 'address', `settlement:${candidate.reportId}:coordinator`),
 		],
 		QUEUE_LABELS,

@@ -195,12 +195,14 @@ export type OperatorSnapshot = PollStatus & {
 	wallet: Address | undefined
 }
 
-export type PublicExecutionRecord = Pick<ExecutionRecord, 'actualGasCostEth' | 'direction' | 'estimatedNetProfitWeth' | 'executedAt' | 'reportId' | 'requiredToken' | 'requiredWeth' | 'tokenSymbol' | 'trackedNetProfitEth' | 'transactionHash'>
+export type PublicExecutionRecord = Pick<ExecutionRecord, 'actualGasCostEth' | 'collateralSymbol' | 'direction' | 'estimatedNetProfitWeth' | 'executedAt' | 'reportId' | 'requiredToken' | 'requiredWeth' | 'tokenSymbol' | 'trackedNetProfitEth' | 'transactionHash'>
 
 export type PublicPositionRecord = Pick<
 	PositionRecord,
 	'actualEntryGasCostEth' | 'direction' | 'entryTransactionHash' | 'hedgedProfitBeforeGasEth' | 'lifecycleGasCostEth' | 'lifecycleReceiptRecovered' | 'lifecycleSettlerRewardEth' | 'openedAt' | 'realizedNetProfitEth' | 'reportId' | 'status' | 'tokenSymbol' | 'withdrawnToken' | 'withdrawnWeth'
 > & {
+	/** Symbol of a non-WETH report collateral; `withdrawnWeth` is then an amount of that token. */
+	collateralSymbol?: string | undefined
 	hasLifecycleTransactions: boolean
 	manuallyReconciled: boolean
 }
