@@ -14,6 +14,10 @@ const serializedAtomicStringAllowlist = new Set([
 	'augurScan/tests/integration/postgres-operations.test.ts',
 	'augurScan/tests/unit/capital-presentation.test.ts',
 	'augurScan/tests/unit/capital-snapshots.test.ts',
+	// Decoded event-argument fixtures carry exact atomic integers as decimal strings, as the indexer stores them.
+	'augurScan/tests/integration/postgres-capital-history.test.ts',
+	'augurScan/tests/integration/postgres-explorer-history.test.ts',
+	'augurScan/tests/unit/semantic-evidence.test.ts',
 	// Auction demand curves consume and return exact atomic integers as decimal strings.
 	'augurScan/src/operations.ts',
 	'augurScan/tests/browser/demo-api/operations-detail.ts',
