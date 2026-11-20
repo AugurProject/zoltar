@@ -1,13 +1,13 @@
 import { estimateExecutionGas, PREFLIGHT_BALANCE } from './gas-estimate.ts'
 import { simulateWithRevalidation } from './simulation.ts'
 import { createPublicClient, createWalletClient, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { MAX_PRIORITY_FEE_PER_GAS, cappedMaximumFeePerGas, maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, transactionMaxBlockNumber } from '@zoltar/bot-shared/execution/transaction-submission'
+import { MAX_PRIORITY_FEE_PER_GAS, cappedMaximumFeePerGas, maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, submissionRejectedEverywhere, transactionMaxBlockNumber } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumPendingNonce, settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { OperatorSettings } from '#config/settings'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '#state/operator-state'
 import { finalizedReceiptWithQuorum, resolvePortfolioReceipt } from '#execution/recovery'
-import { assertExecutionActive, assertGasCostLimitForBaseFee, assertOperatorNotStopping, requireFinalizedTransactionReceipt } from '#execution/execution-safety'
+import { assertExecutionActive, assertGasCostLimitForBaseFee, assertOperatorNotStopping, requireFinalizedTransactionReceipt, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
@@ -174,16 +174,25 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 		await saveDurableState(settings.runtime.stateFile, state)
 		throw error
 	}
-	await submitSignedTransaction({
-		address: account.address,
-		hash: signed.hash,
-		maxBlockNumber: signed.maxBlockNumber,
-		publicRpcUrls: settings.connectivity.publicRpcUrls,
-		publicSubmit: sendRawTransactionToRpc,
-		serializedTransaction: signed.serializedTransaction,
-		settings: settings.submission,
-		signMessage: account.signMessage,
-	})
+	try {
+		await submitSignedTransaction({
+			address: account.address,
+			hash: signed.hash,
+			maxBlockNumber: signed.maxBlockNumber,
+			publicRpcUrls: settings.connectivity.publicRpcUrls,
+			publicSubmit: sendRawTransactionToRpc,
+			serializedTransaction: signed.serializedTransaction,
+			settings: settings.submission,
+			signMessage: account.signMessage,
+		})
+	} catch (error) {
+		if (submissionRejectedEverywhere(error)) {
+			const pendingTransactions = state.pendingTransactions.filter(intent => intent.hash !== signed.hash)
+			await saveDurableState(settings.runtime.stateFile, { ...state, pendingTransactions })
+			state.pendingTransactions = pendingTransactions
+		}
+		throw error
+	}
 	const hash: Hex = signed.hash
 	const receiptDeadline = Date.now() + 180_000
 	for (;;) {
@@ -196,7 +205,7 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 			break
 		} catch (error) {
 			assertOperatorNotStopping(state)
-			if (Date.now() >= receiptDeadline) throw error
+			if (Date.now() >= receiptDeadline) throw new TransactionAwaitingCanonicalFinality(call.label, hash, error)
 		}
 	}
 	const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, hash, pool)

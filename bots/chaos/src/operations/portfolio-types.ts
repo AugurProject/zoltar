@@ -23,6 +23,7 @@ export interface PortfolioCapitalSnapshot {
 	minimumCommitmentAttoEth: CanonicalUintString
 	securityMultiplierBps: CanonicalUintString
 	ownerConservativePrice: CanonicalUintString
+	ownerLiquidating: boolean
 	priceValid: boolean
 	priceValidUntil: CanonicalUintString
 	forkTime: CanonicalUintString

@@ -98,6 +98,7 @@ export type Activity = {
 }
 
 export type PendingTransactionIntent = {
+	cancellation?: { hash: Hex; serializedTransaction: Hex } | undefined
 	reportSponsorship?: ReportSponsorship | undefined
 	reportOperations?: { feed: Address; reportId: bigint } | undefined
 	portfolioFunding?: PortfolioFundingEffect | undefined

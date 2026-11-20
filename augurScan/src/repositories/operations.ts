@@ -66,17 +66,12 @@ export const operationsOverviewSupplement = async (sql: SQL, chainId: number, sn
 			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC,
 				timeline.block_hash DESC, timeline.entity_type DESC, timeline.entity_identity DESC LIMIT 30`,
 		sql`SELECT
-			(SELECT count(DISTINCT (open_oracle_address, report_id)) FROM open_oracle_report_events
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS reports,
-			(SELECT count(DISTINCT game_address) FROM escalation_game_events
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS escalations,
-			(SELECT count(DISTINCT auction_address) FROM collateral_repair_auction_events
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS auctions,
-			(SELECT count(DISTINCT pool_address) FROM pools
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS pools,
-			(SELECT count(DISTINCT pair_address) FROM amm_markets
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS markets,
-			(SELECT count(*) FROM chain_reorganizations WHERE chain_id = ${chainId})::integer AS reorganizations`,
+			COALESCE((SELECT total FROM protocol_entity_totals WHERE chain_id=${chainId} AND domain='reports' AND canonical AND block_number<=${snapshotBlock} ORDER BY block_number DESC LIMIT 1),0)::integer AS reports,
+			COALESCE((SELECT total FROM protocol_entity_totals WHERE chain_id=${chainId} AND domain='escalations' AND canonical AND block_number<=${snapshotBlock} ORDER BY block_number DESC LIMIT 1),0)::integer AS escalations,
+			COALESCE((SELECT total FROM protocol_entity_totals WHERE chain_id=${chainId} AND domain='auctions' AND canonical AND block_number<=${snapshotBlock} ORDER BY block_number DESC LIMIT 1),0)::integer AS auctions,
+			COALESCE((SELECT total FROM protocol_entity_totals WHERE chain_id=${chainId} AND domain='pools' AND canonical AND block_number<=${snapshotBlock} ORDER BY block_number DESC LIMIT 1),0)::integer AS pools,
+			COALESCE((SELECT total FROM protocol_entity_totals WHERE chain_id=${chainId} AND domain='markets' AND canonical AND block_number<=${snapshotBlock} ORDER BY block_number DESC LIMIT 1),0)::integer AS markets,
+			(SELECT count(*) FROM chain_reorganizations WHERE chain_id=${chainId})::integer AS reorganizations`,
 	])
 	return { recentChanges, totals: totals[0] }
 }
@@ -85,8 +80,21 @@ export const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<
 	const snapshotBlock = String(asOf['blockNumber'])
 	const rows = await sql`
 		WITH identities AS (
-			SELECT DISTINCT open_oracle_address, report_id FROM open_oracle_report_events
-			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
+			SELECT split_part(identity, ':', 1) AS open_oracle_address,
+			 split_part(identity, ':', 2)::numeric AS report_id
+			FROM protocol_entity_identities
+			WHERE chain_id=${chainId} AND domain='reports' AND canonical AND block_number<=${snapshotBlock}
+		), candidates AS MATERIALIZED (
+			SELECT identity.open_oracle_address,identity.report_id,
+			 latest.block_number,latest.log_index,latest.tx_hash
+			FROM identities identity JOIN LATERAL (
+			 SELECT evidence.block_number,evidence.log_index,evidence.tx_hash FROM open_oracle_report_events evidence
+			 WHERE evidence.chain_id=${chainId} AND evidence.open_oracle_address=identity.open_oracle_address
+			  AND evidence.report_id=identity.report_id AND evidence.canonical AND evidence.block_number<=${snapshotBlock}
+			 ORDER BY evidence.block_number DESC,evidence.log_index DESC,evidence.tx_hash DESC LIMIT 1
+			) latest ON true
+			WHERE (latest.block_number,latest.log_index,latest.tx_hash)<(${cursorBlock}::bigint,${cursorLog}::integer,${cursorTx})
+			ORDER BY latest.block_number DESC,latest.log_index DESC,latest.tx_hash DESC LIMIT ${queryLimit}
 		)
 		SELECT identity.open_oracle_address, identity.report_id::text AS report_id,
 			latest.event_name, latest.block_number::text AS block_number, latest.block_hash, latest.tx_hash, latest.log_index,
@@ -96,7 +104,7 @@ export const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<
 				AND evidence.canonical AND evidence.block_number <= ${snapshotBlock}
 				AND evidence.event_name IN ('ReportSubmitted', 'ReportDisputed'))::integer AS observed_rounds,
 			block.timestamp AS block_timestamp
-		FROM identities identity
+		FROM candidates identity
 		JOIN LATERAL (
 			SELECT * FROM open_oracle_report_events evidence WHERE evidence.chain_id = ${chainId}
 				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id

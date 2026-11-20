@@ -147,3 +147,23 @@ test('automatic capital deposits can fund the minimum commitment instead of repe
 	capital.principalAttoRep = principal.toString()
 	expect(capitalPolicy('commitment').evaluate(snapshot, options).eligible).toBe(true)
 })
+
+for (const priceValid of [true, false]) {
+	test(`liquidating capital rejects new deposits and cleans up confirmed approvals with price valid ${priceValid}`, () => {
+		const { snapshot, capital, options } = fixture()
+		const draft = depositCapital.buildPlan(snapshot, options)
+		if (draft === undefined) throw new Error('Missing initial capital deposit')
+		const token = snapshot.wallet.tokens.find(token => token.address === capital.repToken)
+		if (token === undefined) throw new Error('Missing wallet REP')
+		token.allowances[capital.capitalLedger] = String(draft.metadata['amountAttoRep'])
+		capital.ownerLiquidating = true
+		capital.priceValid = priceValid
+		expect(depositCapital.evaluate(snapshot, options).eligible).toBe(false)
+		expect(depositCapital.buildPlan(snapshot, options)).toBeUndefined()
+		const cleanup = depositCapital.buildContinuationPlan?.(snapshot, options, { previousPlan: { ...draft, planningSeed: options.seed }, confirmedStepIds: ['approve-capital-rep'] })
+		expect(cleanup?.continuationDisposition).toBe('cleanup-only')
+		expect(cleanup?.steps.map(step => step.id)).toEqual(['revoke-capital-rep'])
+		capital.ownerLiquidating = false
+		expect(depositCapital.evaluate(snapshot, options).eligible).toBe(true)
+	})
+}

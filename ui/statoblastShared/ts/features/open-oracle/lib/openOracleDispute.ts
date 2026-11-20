@@ -157,6 +157,8 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 				| 'flexibleEscalation'
 				| 'isDistributed'
 				| 'multiplier'
+				| 'callbackContract'
+				| 'callbackGasLimit'
 				| 'protocolFee'
 				| 'reportTimestamp'
 				| 'settlementTime'

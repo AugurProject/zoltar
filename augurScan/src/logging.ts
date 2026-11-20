@@ -164,7 +164,9 @@ const isRpcIdentifier = (value: unknown): value is number | string | null => val
 const isSuccessfulRpcResponse = (request: RpcEnvelope | undefined, response: RpcEnvelope | undefined): boolean => response?.jsonrpc === '2.0' && isRpcIdentifier(request?.id) && response.id === request.id && Object.hasOwn(response, 'result') && !Object.hasOwn(response, 'error')
 
 // Log ranges aggregate many blocks; ordinary calls have a smaller allocation budget.
-const responseLimit = (method: unknown): number => (method === 'eth_getLogs' ? 32 : 4) * 1024 * 1024
+// At the 2^24 transaction gas cap, 375-gas LOG0s can produce over 14 MiB
+// of receipt JSON; long data/topics remain bounded by their gas costs.
+const responseLimit = (method: unknown): number => (method === 'eth_getTransactionReceipt' || method === 'eth_getLogs' ? 32 : 4) * 1024 * 1024
 const parsedResponses = new WeakMap<Response, { readonly value: JsonValue } | { readonly error: unknown }>()
 
 export const parseLoggedRpcResponse = async (response: Response, method: string): Promise<JsonValue> => {

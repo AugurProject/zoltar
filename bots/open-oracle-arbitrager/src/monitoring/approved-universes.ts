@@ -10,7 +10,7 @@ export async function loadApprovedUniverses(readers: readonly ReadClient[], conf
 		'approved universe REP identities',
 		readers.map(async (reader, index) => ({
 			endpoint: endpoints[index] ?? '',
-			value: await loadUniverseTreeBatched(reader, canonicalZoltar(config.network.name), blockNumber, config.network.multicall3),
+			value: await loadUniverseTreeBatched(reader, canonicalZoltar(config.network.name), blockNumber, config.network.multicall3, config.operatorSettings.approvedUniverses),
 		})),
 		config.rpcQuorum,
 	)

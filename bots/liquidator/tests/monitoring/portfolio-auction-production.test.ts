@@ -3,25 +3,23 @@ import { describe, expect, test } from 'bun:test'
 import { paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { securityPoolCapitalLedgerAbi as capitalAbi } from '@zoltar/bot-shared/contracts/abi'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
 import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
 import { portfolioTarget } from '../../src/monitoring/portfolio-auction.ts'
 import { executePortfolioTakeover } from '../../src/execution/portfolio-executor.ts'
-import { distressedSecondWinner, repairAuctionKeeper } from '../support/collateral-repair-auction.ts'
+import { distressedSecondWinner, repairAuctionKeeper, repairAuctionTerms, prepareKeeperCollateralRepairAuction } from '../support/collateral-repair-auction.ts'
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
 describe('portfolio operator funded auction capital integration', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1000n })
 	test('a keeper authenticates lazy winners and acquires a distressed winner with bounded gas', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareKeeperCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
-		// Set purchased collateral explicitly so the later price makes these
-		// positions distressed, independently of the shared bidding helper default.
-		// Equal limits fill in submission order, so both bids fit the four-lot
-		// target and the second winner keeps three lots for a partial repair.
-		const first = await context.bid(context.owner, 1n, (35n * unit) / 10n)
-		const second = await context.bid(context.other, 3n, (35n * unit) / 10n)
+		const terms = await repairAuctionTerms(context)
+		// Divide the actual target between two winners; both must remain virtual
+		// and the second must retain enough commitment for a partial repair.
+		const first = await context.bid(context.owner, 1n, terms.repPerLot)
+		const second = await context.bid(context.other, terms.lotCount - 1n, terms.repPerLot)
 		await context.closingQuote()
 		await context.finalize()
 		const keeperOperator = repairAuctionKeeper(fixture, context)
@@ -61,7 +59,7 @@ describe('portfolio operator funded auction capital integration', () => {
 			}
 			const taken = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'ownerCollateral', args: [account.address] })
 			expect(taken[1]).toBeGreaterThan(unit)
-			expect(taken[1]).toBeLessThan(3n * unit)
+			expect(taken[1]).toBeLessThan(winner.commitment)
 			const acquisition = state.activities.find(activity => activity.status === 'confirmed')
 			if (acquisition?.hash === undefined) throw new Error('Takeover was not confirmed')
 			const acquiredTransaction = await reader.getTransaction({ hash: acquisition.hash })

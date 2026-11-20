@@ -1,3 +1,4 @@
+import { refreshHistoryAggregates } from '../../src/database/history-aggregates.ts'
 import { expect } from 'bun:test'
 import { handleApi } from '../../src/api.ts'
 import { ScannerDatabase } from '../../src/database.ts'
@@ -140,6 +141,8 @@ postgresTest(
 						(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
 					VALUES (${historicalChainId}, 2, ${secondHash}, 1, ${firstHash}, 1, 'projection-rebuild')
 				`
+			await refreshHistoryAggregates(database.sql, historicalChainId, firstHash, '1')
+			await refreshHistoryAggregates(database.sql, historicalChainId, secondHash, '2')
 			const operationsResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${historicalChainId}&atBlock=1`), database.sql)
 			if (operationsResponse === undefined) throw new Error('historical Operations endpoint did not return a response')
 			const operations = (await operationsResponse.json()) as {

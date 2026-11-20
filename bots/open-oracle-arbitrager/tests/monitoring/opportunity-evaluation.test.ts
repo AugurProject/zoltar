@@ -66,10 +66,37 @@ const report: OpenOracleStatePreimage = {
 const pool: Pool = { venue: 'uniswap-v3', address: poolAddress, fee: 3000, liquidity: 10n ** 24n, spotTick: 0n, token: rep, twapTick: 0n }
 const marketBlock = { hash: `0x${'ab'.repeat(32)}` as Hex, number: 100n, observedAt: 1_000 }
 
+function sqrt(value: bigint) {
+	if (value < 2n) return value
+	let root = value
+	let next = (root + 1n) / 2n
+	while (next < root) {
+		root = next
+		next = (root + value / root) / 2n
+	}
+	return root
+}
+function marginalSqrt(replacement: bigint, v4 = false) {
+	const amount1 = calculateNextAmount1(report.game)
+	return sqrt((2n ** 192n * (v4 ? replacement : amount1)) / (v4 ? amount1 : replacement))
+}
+function marginalReplacement(replacement: bigint, v4 = false) {
+	const price = marginalSqrt(replacement, v4) ** 2n
+	return v4 ? (calculateNextAmount1(report.game) * price) / 2n ** 192n : (calculateNextAmount1(report.game) * 2n ** 192n) / price
+}
+function slot0(price: bigint, tick = 0n) {
+	return encodeAbiParameters([{ type: 'uint160' }, { type: 'int24' }, { type: 'uint16' }, { type: 'uint16' }, { type: 'uint16' }, { type: 'uint8' }, { type: 'bool' }], [price, tick, 0n, 1n, 1n, 0n, true])
+}
+function v4Slot0(replacement: bigint) {
+	return encodeAbiParameters([{ type: 'bytes32' }], [`0x${marginalSqrt(replacement, true).toString(16).padStart(64, '0')}`])
+}
+
 function quoterClient(options: { v3SellOut: bigint; v3BuyIn: bigint | undefined; replacementOut: bigint; v4: (fee: number) => { sellOut: bigint; buyIn: bigint } | undefined }) {
 	const requests: { blockTag: unknown; functionName: string; target: string }[] = []
 	let batched = 0
 	const provider = multicallProvider(network.multicall3, ({ blockTag, data, to }) => {
+		if (to === poolAddress) return slot0(marginalSqrt(options.replacementOut))
+		if (to === v4PoolManager) return v4Slot0(options.replacementOut)
 		if (to.toLowerCase() === network.quoter.toLowerCase()) {
 			const decoded = decodeFunctionData({ abi: uniswapV3QuoterAbi, data })
 			requests.push({ blockTag, functionName: decoded.functionName, target: 'v3' })
@@ -104,12 +131,12 @@ function quoterClient(options: { v3SellOut: bigint; v3BuyIn: bigint | undefined;
 
 describe('batched hedge evaluation', () => {
 	test('quotes V4 and its replacement ratio without querying V3', async () => {
-		const quoter = quoterClient({ replacementOut: 120n * 10n ** 18n, v3BuyIn: 0n, v3SellOut: 0n, v4: fee => (fee === 500 ? { buyIn: 7n * 10n ** 17n, sellOut: 13n * 10n ** 17n } : undefined) })
+		const quoter = quoterClient({ replacementOut: 88n * 10n ** 18n, v3BuyIn: 0n, v3SellOut: 0n, v4: fee => (fee === 500 ? { buyIn: 132n * 10n ** 16n, sellOut: 13n * 10n ** 17n } : undefined) })
 		const evaluation = await evaluate(quoter.client, { ...config, router: undefined }, report, { venue: 'uniswap-v4', address: v4PoolManager, fee: 500, token: rep }, 10n ** 9n, marketBlock)
 		expect(quoter.batched()).toBe(1)
 		expect(quoter.requests).toHaveLength(3)
 		expect(quoter.requests.every(request => request.blockTag === '0x64' && request.target === 'v4')).toBeTrue()
-		expect(evaluation.replacementAmount2).toBe(120n * 10n ** 18n)
+		expect(evaluation.replacementAmount2).toBe(marginalReplacement(88n * 10n ** 18n, true))
 		expect(evaluation.candidate?.venue).toBe('uniswap-v4')
 		expect(evaluation.candidate?.quote.netProfitAttoWeth).toBeGreaterThan(0n)
 		expect(evaluation.observations.map(observation => observation.sourceId)).toEqual(['uniswap-v4'])
@@ -135,6 +162,7 @@ describe('batched hedge evaluation', () => {
 test('identifies insufficient V3 liquidity only when the failed buy exceeds the pool token balance', async () => {
 	const provider = multicallProvider(network.multicall3, ({ blockTag, data, to }) => {
 		expect(blockTag).toBe('0x64')
+		if (to === poolAddress) return slot0(marginalSqrt(88n * 10n ** 18n))
 		if (to.toLowerCase() === rep.toLowerCase()) {
 			const decoded = decodeFunctionData({ abi: erc20Abi, data })
 			expect(decoded.functionName).toBe('balanceOf')
@@ -173,6 +201,7 @@ describe('report inspection over batched pool evaluations', () => {
 
 	function poolQuoterClient(quotes: (fee: number) => { buyIn: bigint; replacementOut: bigint | undefined; sellOut: bigint }) {
 		const provider = multicallProvider(network.multicall3, ({ data, to }) => {
+			if (to === poolAddress || to === otherPool.address) return slot0(marginalSqrt(quotes(to === poolAddress ? 3000 : 500).replacementOut ?? 88n * 10n ** 18n))
 			if (to.toLowerCase() !== network.quoter.toLowerCase()) throw new Error(`Unexpected contract read ${to}`)
 			const decoded = decodeFunctionData({ abi: uniswapV3QuoterAbi, data })
 			const fee = Number(decoded.args[0].fee)
@@ -188,7 +217,7 @@ describe('report inspection over batched pool evaluations', () => {
 	test('keeps the best pool when only another pool lost its replacement quote', async () => {
 		const logged = spyOn(console, 'log').mockImplementation(() => {})
 		try {
-			const client = poolQuoterClient(fee => (fee === 3000 ? { buyIn: 7n * 10n ** 17n, replacementOut: 120n * 10n ** 18n, sellOut: 13n * 10n ** 17n } : { buyIn: 9n * 10n ** 17n, replacementOut: undefined, sellOut: 11n * 10n ** 17n }))
+			const client = poolQuoterClient(fee => (fee === 3000 ? { buyIn: 132n * 10n ** 16n, replacementOut: 88n * 10n ** 18n, sellOut: 13n * 10n ** 17n } : { buyIn: 9n * 10n ** 17n, replacementOut: undefined, sellOut: 11n * 10n ** 17n }))
 			const decisions: string[] = []
 			const evaluated = await inspectReport(client, undefined, inspectionConfig, report, [otherPool, pool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], message => decisions.push(message))
 			expect(evaluated?.opportunity).toMatchObject({ decision: 'dry-run-opportunity', pool: pool.address })
@@ -201,7 +230,7 @@ describe('report inspection over batched pool evaluations', () => {
 	test('keeps a report whose only venue quote failed visible with the quote failure', async () => {
 		const logged = spyOn(console, 'log').mockImplementation(() => {})
 		try {
-			const client = poolQuoterClient(() => ({ buyIn: 7n * 10n ** 17n, replacementOut: undefined, sellOut: 13n * 10n ** 17n }))
+			const client = poolQuoterClient(() => ({ buyIn: 132n * 10n ** 16n, replacementOut: undefined, sellOut: 13n * 10n ** 17n }))
 			const decisions: string[] = []
 			const evaluated = await inspectReport(client, undefined, inspectionConfig, report, [pool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], (_, reason) => decisions.push(reason))
 			expect(evaluated?.candidate).toBeUndefined()
@@ -235,7 +264,7 @@ describe('report inspection over batched pool evaluations', () => {
 			const evaluated = await inspectReport(client, undefined, inspectionConfig, report, [drifted, { ...otherPool, spotTick: 500n, twapTick: 0n }], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], (_, reason) => decisions.push(reason))
 			expect(evaluated?.opportunity).toMatchObject({ decision: 'skipped', reason: '2 pools exceed the 100 tick spot/TWAP limit', reportId: '7' })
 			expect(decisions).toEqual(['2 pools exceed the 100 tick spot/TWAP limit'])
-			const mixedClient = poolQuoterClient(() => ({ buyIn: 7n * 10n ** 17n, replacementOut: undefined, sellOut: 13n * 10n ** 17n }))
+			const mixedClient = poolQuoterClient(() => ({ buyIn: 132n * 10n ** 16n, replacementOut: undefined, sellOut: 13n * 10n ** 17n }))
 			const mixed = await inspectReport(mixedClient, undefined, inspectionConfig, report, [drifted, otherPool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], () => {})
 			expect(mixed?.opportunity).toMatchObject({
 				decision: 'skipped',
@@ -266,7 +295,7 @@ describe('report inspection over batched pool evaluations', () => {
 	test('keeps timing skips visible while the report is inside its settlement window', async () => {
 		const logged = spyOn(console, 'log').mockImplementation(() => {})
 		try {
-			const client = poolQuoterClient(() => ({ buyIn: 7n * 10n ** 17n, replacementOut: 120n * 10n ** 18n, sellOut: 13n * 10n ** 17n }))
+			const client = poolQuoterClient(() => ({ buyIn: 132n * 10n ** 16n, replacementOut: 88n * 10n ** 18n, sellOut: 13n * 10n ** 17n }))
 			const inspect = (timestamp: bigint, minimumRemainingSeconds = 1n) => inspectReport(client, undefined, { ...inspectionConfig, minimumRemainingSeconds }, report, [pool], 100n, marketBlock.hash, timestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], () => {})
 			const beforeDelay = await inspect(report.game.reportTimestamp + 1n)
 			expect(beforeDelay?.opportunity).toMatchObject({ decision: 'skipped', reason: 'Dispute delay has not elapsed; disputable in 9 seconds', timeRemaining: '299' })
@@ -282,9 +311,9 @@ describe('report inspection over batched pool evaluations', () => {
 
 const pair = getAddress('0x0000000000000000000000000000000000000022')
 const oracle = getAddress('0x0000000000000000000000000000000000000099')
-const reserveToken = 10_000n * 10n ** 18n
-const reserveWeth = 130n * 10n ** 18n
-const replacement = 90n * 10n ** 18n
+const reserveToken = 1_000_000n * 10n ** 18n
+const reserveWeth = 13_000n * 10n ** 18n
+const replacement = 88n * 10n ** 18n
 
 function independentClient(venue: 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4', options: { replacement?: bigint; failReplacement?: boolean; empty?: boolean } = {}) {
 	const calls: { blockTag: unknown; to: string }[] = []
@@ -292,10 +321,11 @@ function independentClient(venue: 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4', op
 		network.multicall3,
 		({ blockTag, data, to }) => {
 			calls.push({ blockTag, to })
+			if (venue === 'uniswap-v4' && to === v4PoolManager) return v4Slot0(options.replacement ?? replacement)
 			if (venue === 'uniswap-v3' && to.toLowerCase() === poolAddress.toLowerCase()) {
 				const decoded = decodeFunctionData({ abi: poolAbi, data })
 				if (decoded.functionName === 'liquidity') return encodeAbiParameters([{ type: 'uint128' }], [options.empty ? 0n : 10n ** 24n])
-				if (decoded.functionName === 'slot0') return encodeAbiParameters([{ type: 'uint160' }, { type: 'int24' }, { type: 'uint16' }, { type: 'uint16' }, { type: 'uint16' }, { type: 'uint8' }, { type: 'bool' }], [2n ** 96n, 5n, 0n, 1n, 1n, 0n, true])
+				if (decoded.functionName === 'slot0') return slot0(marginalSqrt(options.replacement ?? replacement), 5n)
 				return encodeAbiParameters(
 					[{ type: 'int56[]' }, { type: 'uint160[]' }],
 					[
@@ -307,7 +337,7 @@ function independentClient(venue: 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4', op
 			if (venue === 'uniswap-v3' && to.toLowerCase() === network.quoter.toLowerCase()) {
 				const decoded = decodeFunctionData({ abi: uniswapV3QuoterAbi, data })
 				const exactInput = decoded.functionName === 'quoteExactInputSingle' && decoded.args[0].tokenIn.toLowerCase() === rep.toLowerCase() ? 13n * 10n ** 17n : replacement
-				const amount = decoded.functionName === 'quoteExactOutputSingle' ? 14n * 10n ** 17n : exactInput
+				const amount = decoded.functionName === 'quoteExactOutputSingle' ? 132n * 10n ** 16n : exactInput
 				return encodeAbiParameters(uniswapV3QuoterAbi[0].outputs, [amount, 0n, 0n, 0n])
 			}
 			if (venue === 'uniswap-v2' && to.toLowerCase() === pair.toLowerCase()) {
@@ -321,7 +351,7 @@ function independentClient(venue: 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4', op
 				expect(decoded.args[0].poolKey.currency1).toBe(rep)
 				expect(decoded.args[0].poolKey.hooks).toBe('0x0000000000000000000000000000000000000000')
 				if (options.empty) throw new Error('uninitialized V4 pool')
-				if (decoded.functionName === 'quoteExactOutputSingle') return encodeAbiParameters(uniswapV4QuoterAbi[0].outputs, [14n * 10n ** 17n, 0n])
+				if (decoded.functionName === 'quoteExactOutputSingle') return encodeAbiParameters(uniswapV4QuoterAbi[0].outputs, [132n * 10n ** 16n, 0n])
 				if (decoded.args[0].zeroForOne) {
 					expect(decoded.args[0].exactAmount).toBe(calculateNextAmount1(report.game))
 					if (options.failReplacement) throw new Error('replacement unavailable')
@@ -361,7 +391,7 @@ for (const venue of ['uniswap-v2', 'uniswap-v4'] as const) {
 		const execution = { ...enabled, connectivity: saved.connectivity, quorumRpcUrls: ['https://second.example'], rpcQuorum: 1 as const, executor: reporter, openOracle: oracle, twapSeconds: 60 }
 		const snapshot = await executionReadQuorum([reader.client, independentClient(venue).client], execution, report, selected, venue, 3000, 100n, reporter)
 		expect(snapshot.v3State).toBeUndefined()
-		expect(snapshot.replacementAmount2).toBe(venue === 'uniswap-v2' ? constantProductExactInput(calculateNextAmount1(report.game), reserveWeth, reserveToken) : replacement)
+		expect(snapshot.replacementAmount2).toBe(venue === 'uniswap-v2' ? (calculateNextAmount1(report.game) * reserveToken) / reserveWeth : marginalReplacement(replacement, true))
 		expect(snapshot.sellHedgeQuote).toBe(venue === 'uniswap-v2' ? constantProductExactInput(report.game.currentAmount2, reserveToken, reserveWeth) : 13n * 10n ** 17n)
 		if (venue === 'uniswap-v2') expect(snapshot.buyHedgeQuote).toBe(constantProductExactOutput(report.game.currentAmount2 + calculateFee(report.game.currentAmount2, report.game.feePercentage) + calculateFee(report.game.currentAmount2, report.game.protocolFee), reserveWeth, reserveToken))
 		expect(reader.calls.every(call => call.blockTag === '0x64' && call.to.toLowerCase() !== network.quoter.toLowerCase() && call.to.toLowerCase() !== poolAddress.toLowerCase())).toBeTrue()
@@ -381,22 +411,22 @@ test('V3 retains its own liquidity and TWAP reads in the final quorum', async ()
 	const reader = independentClient('uniswap-v3')
 	const snapshot = await executionReadQuorum([reader.client, independentClient('uniswap-v3').client], execution, report, pool, 'uniswap-v3', 3000, 100n, reporter)
 	expect(snapshot.v3State).toMatchObject({ liquidity: 10n ** 24n, spotTick: 5n, twapTick: 5n })
-	expect(snapshot.replacementAmount2).toBe(replacement)
+	expect(snapshot.replacementAmount2).toBe(marginalReplacement(replacement))
 	await expect(executionReadQuorum([independentClient('uniswap-v3', { empty: true }).client], execution, report, pool, 'uniswap-v3', 3000, 100n, reporter)).rejects.toThrow()
 })
 
 test('selects a profitable direction consistent with the same venue replacement ratio', async () => {
-	const quoter = quoterClient({ replacementOut: 90n * 10n ** 18n, v3BuyIn: 5n * 10n ** 17n, v3SellOut: 13n * 10n ** 17n, v4: () => undefined })
+	const quoter = quoterClient({ replacementOut: 88n * 10n ** 18n, v3BuyIn: 132n * 10n ** 16n, v3SellOut: 13n * 10n ** 17n, v4: () => undefined })
 	const evaluation = await evaluate(quoter.client, config, report, pool, 1n, marketBlock)
 	expect(evaluation.candidate?.quote.direction).toBe('sell-rep')
 	expect(evaluation.candidate?.quote.netProfitAttoWeth).toBeGreaterThan(0n)
 })
 
 test('a higher-profit sell with a missing buy quote cannot block an executable alternative venue', async () => {
-	const quoter = quoterClient({ replacementOut: replacement, v3BuyIn: undefined, v3SellOut: 15n * 10n ** 17n, v4: () => ({ sellOut: 13n * 10n ** 17n, buyIn: 14n * 10n ** 17n }) })
+	const quoter = quoterClient({ replacementOut: replacement, v3BuyIn: undefined, v3SellOut: 1132n * 10n ** 16n, v4: () => ({ sellOut: 13n * 10n ** 17n, buyIn: 132n * 10n ** 16n }) })
 	const raw = await quoteVenue(quoter.client, config, pool, { sellAmount: report.game.currentAmount2, buyAmount: report.game.currentAmount2, replacementAttoWeth: calculateNextAmount1(report.game) }, 100n)
-	expect(raw.sell).toBe(15n * 10n ** 17n)
-	expect(raw.replacement).toBe(replacement)
+	expect(raw.sell).toBe(1132n * 10n ** 16n)
+	expect(raw.replacement).toBe(marginalReplacement(replacement))
 	expect(raw.buy).toBeUndefined()
 	const saved = parseOperatorSettings(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json())
 	const execution = { ...config, connectivity: saved.connectivity, quorumRpcUrls: [], rpcQuorum: 1 as const, executor: reporter, openOracle: oracle, twapSeconds: 60 }
@@ -406,7 +436,7 @@ test('a higher-profit sell with a missing buy quote cannot block an executable a
 	const evaluated = await inspectReport(quoter.client, undefined, inspection, report, [pool, alternative], 100n, marketBlock.hash, 101n, 1n, undefined, { decimals: 18, symbol: 'REP' }, true, true, false, [{ ...report.game, coordinator: reporter, openOracle: oracle }], () => {})
 	expect(evaluated?.opportunity).toMatchObject({ decision: 'dry-run-opportunity', venue: 'uniswap-v4' })
 	const final = await executionReadQuorum([independentClient('uniswap-v4').client], execution, report, alternative, 'uniswap-v4', 3000, 100n, reporter)
-	expect(final.replacementAmount2).toBe(replacement)
+	expect(final.replacementAmount2).toBe(marginalReplacement(replacement, true))
 })
 
 test('summarizes uninitialized V4 pools and keeps the decoded cause for details', async () => {
@@ -429,6 +459,7 @@ test('summarizes uninitialized V4 pools and keeps the decoded cause for details'
 						{ success: false, returnData: reverted },
 						{ success: false, returnData: reverted },
 						{ success: false, returnData: reverted },
+						{ success: false, returnData: reverted },
 					],
 				]),
 		}),
@@ -436,4 +467,13 @@ test('summarizes uninitialized V4 pools and keeps the decoded cause for details'
 	const quotes = await quoteVenue(client, config, { venue: 'uniswap-v4', address: v4PoolManager, fee: 500, token: rep }, { sellAmount: 100n, buyAmount: 100n, replacementAttoWeth: 1n }, 100n)
 	expect(quotes.failureSummary).toBe('Pool is not initialized')
 	expect(quotes.failure).toContain('UnexpectedRevertBytes(PoolNotInitialized())')
+})
+
+test('#1483: final execution rejects excessive impact even when a pool passed earlier selection', async () => {
+	const saved = parseOperatorSettings(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json())
+	const execution = { ...config, connectivity: saved.connectivity, quorumRpcUrls: [], rpcQuorum: 1 as const, executor: reporter, openOracle: oracle, twapSeconds: 60 }
+	for (const venue of ['uniswap-v3', 'uniswap-v4'] as const) {
+		const selected: Pool = venue === 'uniswap-v3' ? pool : { venue, address: v4PoolManager, token: rep, fee: 3000 }
+		await expect(executionReadQuorum([independentClient(venue, { replacement: 10n ** 18n }).client], execution, report, selected, venue, 3000, 100n, reporter)).rejects.toThrow('maximum price impact')
+	}
 })

@@ -777,3 +777,23 @@ test('supports loopback and configured network authorities for a container bind'
 	})
 	expect(mixedAuthorityMutation.status).toBe(403)
 })
+
+test('#1480: explicit universe lookup is bounded, read-only, and same-origin protected', async () => {
+	const lookups: unknown[] = []
+	const universes = [{ id: '0' }, { id: '123', parentId: '0', outcomeIndex: '7' }]
+	const { origin } = startServer(
+		dashboardControls({
+			lookupUniverse: value => {
+				lookups.push(value)
+				return universes
+			},
+		}),
+	)
+	const response = await jsonRequest(origin, '/api/universe-lookup', 'POST', { universeId: '123' })
+	expect(response.status).toBe(200)
+	expect(await response.json()).toEqual({ universes })
+	expect(lookups).toEqual([{ universeId: '123' }])
+	const rejected = await fetch(`${origin}/api/universe-lookup`, { method: 'POST', headers: { origin: 'https://other.example', 'content-type': 'application/json' }, body: JSON.stringify({ universeId: '456' }) })
+	expect(rejected.status).toBe(403)
+	expect(lookups).toHaveLength(1)
+})

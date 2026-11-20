@@ -235,3 +235,33 @@ test('does not read the V3 factory when V3 is disabled', async () => {
 	expect(deployed.codeReads).toEqual([])
 	expect(deployed.contractCalls()).toBe(0)
 })
+
+test('#1446: a gas-burning collateral token cannot suppress healthy token markets', async () => {
+	const badToken = getAddress('0x00000000000000000000000000000000000000ff')
+	const provider = multicallProvider(network.multicall3, ({ to, data }) => {
+		if (to === badToken) throw new Error('execution reverted: out of gas')
+		const call = decodeFunctionData({ abi: erc20Abi, data })
+		if (call.functionName === 'name') return encodeAbiParameters([{ type: 'string' }], ['Reputation'])
+		if (call.functionName === 'symbol') return encodeAbiParameters([{ type: 'string' }], ['REP'])
+		return encodeAbiParameters([{ type: 'uint8' }], [18n])
+	})
+	const client = createPublicClient({
+		chain: network.chain,
+		transport: custom({
+			request: async parameters => {
+				if (parameters.method === 'eth_call' && Array.isArray(parameters.params)) {
+					const transaction = parameters.params[0]
+					if (typeof transaction !== 'object' || transaction === null || !('gas' in transaction) || transaction.gas !== '0x30d40') throw new Error('Token read must be gas-isolated')
+				}
+				return provider.request(parameters)
+			},
+		}),
+	})
+	const logged = spyOn(console, 'error').mockImplementation(() => {})
+	try {
+		const markets = await loadTokenMarkets(client, { blockNumber: 100n, explorerUrl: 'https://explorer.example', metadataCache: createTokenMetadataCache(), multicall3: network.multicall3, pools: [badToken, token].map(token => ({ token, v3: [], constantProduct: [] })), wallet: undefined, weth: network.weth })
+		expect(markets.map(market => market.address)).toEqual([token])
+	} finally {
+		logged.mockRestore()
+	}
+})

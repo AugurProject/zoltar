@@ -1,3 +1,4 @@
+import { tokenDisplayText } from './token-metadata-limits.ts'
 import { type CollateralDisplayUnit, usesCollateralUnits } from './collateral-metadata.ts'
 import { abiForKind, catalogAbis, wrapperAbiForInput } from './abi-catalog.ts'
 import { dependencyDiscoveryKinds, discoveries } from './contract-discovery.ts'
@@ -203,7 +204,7 @@ const formattedTokenAmount = (value: unknown, address: string | undefined, kind:
 	const referencedKind = address === undefined ? undefined : contractKinds.get(address.toLowerCase())
 	const protocolUnit = (referencedKind === undefined ? undefined : protocolTokenUnit[referencedKind]) ?? (address?.toLowerCase() === emitterAddress?.toLowerCase() && kind !== undefined ? protocolTokenUnit[kind] : undefined)
 	const decimals = protocolUnit?.decimals ?? metadata?.decimals
-	const symbol = protocolUnit?.symbol ?? metadata?.symbol ?? 'tokens'
+	const symbol = protocolUnit?.symbol ?? tokenDisplayText(metadata?.symbol, 'symbol') ?? 'tokens'
 	return decimals === undefined ? `${value} base units` : `${exactUnits(value, decimals)} ${symbol}`
 }
 

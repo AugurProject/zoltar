@@ -25,7 +25,7 @@ export type TimelineFilters = {
 
 export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) => {
 	const { chainId, entityType, event, address, query, fromBlock, toBlock, canonical, asOfBlock, cursor, limit } = filters
-	// A fresh fragment per query, so the rows and count queries never share one Query object.
+	// Build a fresh fragment for each occurrence in the page and enrichment query.
 	const timelineFilter = () => sql`
 		WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
 			AND timeline.block_number <= ${asOfBlock}
@@ -39,8 +39,7 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 				OR timeline.source_contract ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
 				OR timeline.summary_data::text ILIKE ${query === undefined ? '' : literalContainsPattern(query)})
 	`
-	const [rows, totalRows] = await Promise.all([
-		sql`
+	const rows = await sql`
 			SELECT timeline.*, block.timestamp AS block_timestamp,
 				CASE WHEN timeline.canonical THEN 'canonical'
 					WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
@@ -53,7 +52,11 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 				invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at,
 				-- Auction amounts are in the auction's collateral token, which its tagged reads sample.
 				CASE WHEN timeline.entity_type = 'auction' THEN ${latestAuctionCollateral(sql, chainId, asOfBlock, sql`timeline.entity_identity`)} END AS collateral
-			FROM protocol_timeline_entries timeline
+			FROM (SELECT timeline.* FROM protocol_timeline_entries timeline ${timelineFilter()}
+			 AND (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash, timeline.entity_type, timeline.entity_identity) <
+			 (${cursor.block}::bigint, ${cursor.log}::integer, ${cursor.tx}, ${cursor.blockHash}, ${cursor.entityType}, ${cursor.identity})
+			 ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC,
+			 timeline.block_hash DESC, timeline.entity_type DESC, timeline.entity_identity DESC LIMIT ${limit + 1}) timeline
 			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
 			LEFT JOIN LATERAL (
 				SELECT replacement.id, replacement.reason,
@@ -73,12 +76,8 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC,
 				timeline.block_hash DESC, timeline.entity_type DESC, timeline.entity_identity DESC
 			LIMIT ${limit + 1}
-		`,
-		sql`
-			SELECT count(*)::text AS total FROM protocol_timeline_entries timeline ${timelineFilter()}
-		`,
-	])
-	return { rows, totalRows }
+		`
+	return { rows }
 }
 
 export const timelineRows = async (

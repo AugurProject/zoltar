@@ -43,7 +43,7 @@ describe('factory, pair, and router integration', () => {
 	const deploy = async (artifact: Readonly<{ abi: Abi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = [], value = 0n) => await deployContract(client, encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args }), value)
 
 	async function initialize(value = 10_000n, conditionalYesBps = 7_000n) {
-		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, value, conditionalYesBps, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, value, conditionalYesBps, unboundedShares, unboundedShares, 0n, 0n, 1n, account, 10n ** 12n], value }))
 	}
 
 	async function tokenBalance(owner: Address, outcome: 0n | 1n | 2n) {
@@ -161,9 +161,29 @@ describe('factory, pair, and router integration', () => {
 
 		const freshRouter = await deploy(routerArtifact, [freshFactory])
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [freshRouter, true] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: freshRouter, functionName: 'initializeWithEth', args: [cleanPair, 10_000n, 5_000n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 10_000n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: freshRouter, functionName: 'initializeWithEth', args: [cleanPair, 10_000n, 5_000n, unboundedShares, unboundedShares, 0n, 0n, 1n, account, 10n ** 12n], value: 10_000n }))
 		expect(await client.readContract({ abi: pairArtifact.abi, address: cleanPair, functionName: 'totalSupply' })).toBeGreaterThan(0n)
 	})
+
+	for (const probability of [2_000n, 8_000n])
+		test(`#1440: manipulated first-liquidity fallback cannot pass signed bounds at ${probability} bps`, async () => {
+			const value = 100n * 10n ** 18n
+			const quote = await client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, value, probability, unboundedShares, unboundedShares, 0n, 0n, 0n, account, NO_DEADLINE], value })
+			const dust = 10n ** 9n
+			for (const outcome of [1n, 2n]) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | outcome, 4n * dust] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'initialize', args: [dust, dust, 0n, account, NO_DEADLINE] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [probability < 5_000n, 3n * dust, 0n, account, NO_DEADLINE] }))
+			await expect(
+				client.writeContract({
+					abi: routerArtifact.abi,
+					address: router,
+					functionName: 'initializeWithEth',
+					args: [pair, value, probability, (quote.result.yesUsed * 10_050n) / 10_000n, (quote.result.noUsed * 10_050n) / 10_000n, (quote.result.yesUsed * 9_950n) / 10_000n, (quote.result.noUsed * 9_950n) / 10_000n, (quote.result.liquidity * 9_950n) / 10_000n, account, NO_DEADLINE],
+					value,
+				}),
+			).rejects.toThrow('Liquidity price slippage')
+		})
 
 	test('a dust initialization does not block the atomic first-liquidity path (#1260)', async () => {
 		// Anyone can seed the canonical pair with dust at a price of their choosing first.
@@ -174,10 +194,10 @@ describe('factory, pair, and router integration', () => {
 		const shares = value * rate
 		// At 70% YES the caller would deposit 3/7 of its YES; the dust pair sits at 50%, outside those bounds.
 		const seventyYes = (shares * 3_000n) / 7_000n
-		await expect(client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, value, 7_000n, seventyYes, shares, 1n, account, 10n ** 12n], value })).rejects.toThrow('Liquidity price slippage')
+		await expect(client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, value, 7_000n, seventyYes, shares, 0n, 0n, 1n, account, 10n ** 12n], value })).rejects.toThrow('Liquidity price slippage')
 		// At the caller's own price the atomic path still succeeds and adds liquidity proportionally.
 		const lpBefore = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
-		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [pool, value, 5_000n, shares, shares, shares - 1_000n, account, 10n ** 12n], value }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [pool, value, 5_000n, shares, shares, 0n, 0n, shares - 1_000n, account, 10n ** 12n], value }))
 		const lpAfter = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		expect(lpAfter - lpBefore).toBe(shares)
 		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })).toEqual([shares + 1_001n, shares + 1_001n])
@@ -211,7 +231,7 @@ describe('factory, pair, and router integration', () => {
 
 		await initialize()
 		const parentReserves = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
-		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [childPair, 10_000n, 5_000n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 10_000n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [childPair, 10_000n, 5_000n, unboundedShares, unboundedShares, 0n, 0n, 1n, account, 10n ** 12n], value: 10_000n }))
 		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })).toEqual(parentReserves)
 		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'balanceOf', args: [childPair, childUniverse << 8n] })).toBe(0n)
 	})
@@ -322,7 +342,7 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 7n }))
 		const initialAmount = 10_007n
 		const initialYesBps = 3_300n
-		const initialQuote = await client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, initialAmount, initialYesBps, unboundedShares, unboundedShares, 0n, account, deadline], value: initialAmount })
+		const initialQuote = await client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, initialAmount, initialYesBps, unboundedShares, unboundedShares, 0n, 0n, 0n, account, deadline], value: initialAmount })
 		expectDepositMatches(estimateLiquidity(await readPoolState(), 'initialize', initialAmount, initialYesBps), initialQuote.result)
 		await initialize(initialAmount, initialYesBps)
 
@@ -389,7 +409,7 @@ describe('factory, pair, and router integration', () => {
 	})
 
 	test('preserves reserve, product, INVALID, and router-residue invariants across stateful swap sequences', async () => {
-		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 50_000n, 5_000n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 50_000n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 50_000n, 5_000n, unboundedShares, unboundedShares, 0n, 0n, 1n, account, 10n ** 12n], value: 50_000n }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
 		for (let index = 0n; index < 16n; index++) {
 			const yesForNo = index % 2n === 0n

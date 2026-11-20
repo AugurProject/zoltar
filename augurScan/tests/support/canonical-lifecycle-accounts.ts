@@ -1,3 +1,4 @@
+import { refreshHistoryAggregates } from '../../src/database/history-aggregates.ts'
 // Account-level stages of the canonical lifecycle integration test: address interactions, actions,
 // address transaction snapshots, and rich-list rankings over the stored chain.
 import { expect } from 'bun:test'
@@ -52,6 +53,8 @@ export const seedAddressActivity = async ({ database }: LifecycleContext, { repl
 			VALUES (${chainId}, ${replacement.hash}, 2, ${transactionHash}, ${referencedOnlyAddress.toLowerCase()},
 				'0x0000000000000000000000000000000000000000', 'referenced', true)
 		`
+	await refreshHistoryAggregates(database.sql, chainId, replacement.hash, '2')
+	await refreshHistoryAggregates(database.sql, chainId, third.hash, '3')
 }
 
 export const expectAddressInteractionsAndActions = async ({ database }: LifecycleContext): Promise<void> => {
@@ -296,6 +299,7 @@ export const expectLargeRichListSnapshotPages = async ({ database }: LifecycleCo
 			FROM generate_series(1, 5000) participant
 			ON CONFLICT DO NOTHING
 		`
+	await refreshHistoryAggregates(database.sql, chainId, replacement.hash, '2')
 	const largePageResponse = await database.read(sql => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10`), sql), 8_000)
 	if (largePageResponse === undefined) throw new Error('large rich-list page did not return a response')
 	const largePage = (await largePageResponse.json()) as { items: Array<{ address: string }>; total: number; snapshotCursor: string; snapshotBlock: string }

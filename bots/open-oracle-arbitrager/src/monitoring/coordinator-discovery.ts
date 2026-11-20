@@ -15,7 +15,7 @@ const escrowFeedAbi = [{ type: 'function', name: 'feed', stateMutability: 'view'
 type DiscoveryConfiguration = Pick<Configuration, 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>
 
 /** Authenticate indexed reports through the canonical portfolio/universe feed binding, independent of question count. */
-export async function discoverCoordinatorPolicies(clients: readonly ReadClient[], config: DiscoveryConfiguration, blockNumber: bigint, blockHash: Hex, retainedReportIds: readonly bigint[] = [], observedReports: readonly ObservedReport[] = []) {
+export async function discoverCoordinatorPolicies(clients: readonly ReadClient[], config: DiscoveryConfiguration, blockNumber: bigint, blockHash: Hex, _retainedReportIds: readonly bigint[] = [], observedReports: readonly ObservedReport[] = []) {
 	const approved = config.operatorSettings.approvedUniverses
 	if (approved.length === 0) return []
 	const factory = canonicalSecurityPoolFactory(config.network.name)
@@ -53,6 +53,7 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 					config.network.multicall3,
 					creators.map(address => ({ address, abi: escrowFeedAbi, functionName: 'feed' })),
 					blockNumber,
+					{ gas: 100_000n },
 				)
 				for (const [index, creator] of creators.entries()) {
 					const result = escrowFeeds[index]
@@ -68,6 +69,7 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 								{ address: feed, abi: sharedPoolPriceFeedAbi, functionName: 'universeId' },
 							],
 							blockNumber,
+							{ gas: 100_000n },
 						)
 						const portfolio = bindings[0]
 						const universe = bindings[1]
@@ -86,10 +88,20 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 						if (!sharedFeeds.has(policy.coordinator.toLowerCase())) return policy
 						const pendingId = await client.readContract({ address: policy.coordinator, abi: sharedPoolPriceFeedAbi, functionName: 'pendingReportId', blockNumber })
 						const reportEscrows: Record<string, Address> = {}
-						for (const reportId of new Set([pendingId, ...retainedReportIds, ...(observedIds.get(policy.coordinator.toLowerCase()) ?? [])])) {
-							if (reportId === 0n) continue
-							const candidate = await client.readContract({ address: policy.coordinator, abi: sharedPoolPriceFeedAbi, functionName: 'reportCandidates', args: [reportId], blockNumber })
-							if (candidate[0].toLowerCase() !== zeroAddress) reportEscrows[reportId.toString()] = candidate[0]
+						// Only the creator-authenticated ids for this feed belong in its candidate reads.
+						// Retained ids are matched to creators by the discovery caller, not probed on every feed.
+						const ids = [...new Set([pendingId, ...(observedIds.get(policy.coordinator.toLowerCase()) ?? [])])].filter(id => id !== 0n)
+						const candidates = await batchRead(
+							client,
+							config.network.multicall3,
+							ids.map(reportId => ({ address: policy.coordinator, abi: sharedPoolPriceFeedAbi, functionName: 'reportCandidates', args: [reportId] })),
+							blockNumber,
+						)
+						for (const [index, reportId] of ids.entries()) {
+							const result = candidates[index]
+							if (result?.status !== 'success' || !Array.isArray(result.result) || typeof result.result[0] !== 'string' || !isAddress(result.result[0])) throw new Error('Shared feed candidate read failed')
+							const escrow = getAddress(result.result[0])
+							if (escrow !== zeroAddress) reportEscrows[reportId.toString()] = escrow
 							else if (reportId === pendingId) throw new Error('Shared feed pending report has no authenticated escrow')
 						}
 						return { ...policy, reportEscrows }

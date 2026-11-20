@@ -1,3 +1,5 @@
+import { lookupUniverseLineages } from '#monitoring/universe-lookup'
+import { createReadClients, createReadPool } from './operator-runtime.ts'
 import { createSignerConflictSnapshot } from './signer-conflict-snapshot.ts'
 import { canonicalExecutorSalt } from '#execution/executor-identity'
 import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
@@ -21,7 +23,7 @@ import { operatorStatusAfterPause, type SyncCursor } from '@zoltar/bot-shared/mo
 import { operatorSnapshot, queuedSignerChange, recordOperation, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { ExclusiveProcessLock } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
-import { networkConfiguration } from '#config/network'
+import { canonicalZoltar, networkConfiguration } from '#config/network'
 import { requireSafeDeploymentTransition } from './deployment-transition.ts'
 import { EXECUTOR_DEPLOYMENT_MESSAGES, RESUME_REQUIRES_CONFIGURED_CHAIN } from '#state/executor-deployment-recovery'
 import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from './executor-deployment-control.ts'
@@ -62,6 +64,17 @@ export function startOperatorControlPlane(parameters: {
 		const next = update(latest.settings)
 		await persistSettings(next, latest.revision)
 		return next
+	}
+	const validateUniverseIds = async (ids: readonly bigint[]) => {
+		const known = state.universes ?? []
+		if (ids.every(id => known.some(universe => universe.id === id))) {
+			validateApprovedUniverseSelection(known, ids)
+			return known
+		}
+		const lineages = await lookupUniverseLineages(createReadClients(config, createReadPool(config)), canonicalZoltar(config.network.name), ids, config.execute ? config.rpcQuorum : 1)
+		validateApprovedUniverseSelection(lineages, ids)
+		state.universes = [...new Map([...known, ...lineages].map(universe => [universe.id, universe])).values()]
+		return lineages
 	}
 	let settingsUpdateQueue = Promise.resolve()
 	let profileSwitchInProgress = false
@@ -148,7 +161,7 @@ export function startOperatorControlPlane(parameters: {
 				let nextPendingSignerLock: ExclusiveProcessLock | undefined
 				let savedRevision = ''
 				try {
-					if (next.approvedUniverses.length > 0) validateApprovedUniverseSelection(state.universes ?? [], next.approvedUniverses)
+					if (next.approvedUniverses.length > 0) await validateUniverseIds(next.approvedUniverses)
 					requireSafeDeploymentTransition(state, pending.deployment ?? fixedState.deployment, next.deployment)
 					if (next.runtime.execute && signer.address !== undefined && !keepsActiveSigner && !keepsPendingSigner) {
 						if (lockManager === undefined) throw new Error('Execution signer lock management is unavailable')
@@ -169,6 +182,7 @@ export function startOperatorControlPlane(parameters: {
 					pending.deployment = next.deployment
 					pending.execute = next.runtime.execute
 					pending.logLookbackBlocks = next.runtime.logLookbackBlocks
+					pending.maxPriceImpactBps = next.runtime.maxPriceImpactBps
 					pending.maxHedgeSlippageBps = next.runtime.maxHedgeSlippageBps
 					pending.pollMilliseconds = next.runtime.pollMilliseconds
 					if (!config.networkConfigured && next.networkConfigured) {
@@ -480,11 +494,18 @@ export function startOperatorControlPlane(parameters: {
 				return next
 			})
 		},
+		lookupUniverse: value =>
+			queueSettingsUpdate(async () => {
+				if (typeof value !== 'object' || value === null || !('universeId' in value) || Object.keys(value).length !== 1) throw new Error('Universe lookup requires one universeId')
+				const ids = parseApprovedUniverses([value.universeId])
+				const lineages = await validateUniverseIds(ids)
+				return lineages.map(universe => ({ id: universe.id.toString(), parentId: universe.parentId?.toString(), outcomeIndex: universe.outcomeIndex?.toString(), repToken: universe.repToken, forkQuestionId: universe.forkQuestionId.toString() }))
+			}),
 		setApprovedUniverses: value =>
 			queueSettingsUpdate(() =>
 				runConfigurationSignerOperation(signerOperationGate, async () => {
 					const approvedUniverses = parseApprovedUniverses(value)
-					validateApprovedUniverseSelection(state.universes ?? [], approvedUniverses)
+					await validateUniverseIds(approvedUniverses)
 					const next = await persistFocusedSettings(settings => ({ ...settings, approvedUniverses }))
 					pending.operatorSettings = next
 					state.tokenAddresses = []

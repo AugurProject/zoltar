@@ -12,8 +12,8 @@ export class FinalizedTakeoverExpired extends Error {
 export class TransactionAwaitingCanonicalFinality extends Error {
 	readonly hash: Hex
 
-	constructor(label: string, hash: Hex) {
-		super(`${label} transaction ${hash} is awaiting canonical finality`)
+	constructor(label: string, hash: Hex, cause?: unknown) {
+		super(`${label} transaction ${hash} is awaiting canonical finality`, { cause })
 		this.name = 'TransactionAwaitingCanonicalFinality'
 		this.hash = hash
 	}

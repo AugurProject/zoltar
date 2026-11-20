@@ -712,7 +712,7 @@ a.operations-row:focus-visible {
 .operations-exact-evidence dd {
 	margin: 0.28rem 0 0;
 	overflow-wrap: anywhere;
-	word-break: break-all;
+	word-break: normal;
 	font: 0.8125rem / 1.45 var(--mono);
 }
 .operations-evidence {
@@ -1316,6 +1316,12 @@ figure.time-chart > svg {
 .operations-as-of-filter .secondary {
 	padding-inline: 0.65rem;
 	white-space: nowrap;
+}
+.operations-filter-feedback {
+	margin: 0;
+	color: var(--red);
+	font-size: 0.8125rem;
+	line-height: 1.4;
 }
 .operations-filter-actions {
 	display: flex;

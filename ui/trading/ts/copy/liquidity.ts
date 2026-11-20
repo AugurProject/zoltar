@@ -55,3 +55,5 @@ export const removalAmountTooSmall = 'Increase the amount to receive Yes and No 
 
 export const initializeEstimateNote = 'Estimate from your price and the current collateral rate.'
 export const initializeLocalEstimateNote = `${initializeEstimateNote} ${recheckedBeforeWallet}`
+
+export const minimumDeposit = 'Minimum Yes / No deposit'

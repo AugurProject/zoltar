@@ -274,3 +274,13 @@ test('repair automation requires an explicit income horizon and never counts sou
 	observation.snapshot.economics.annualFeeBps = 0n
 	expect(evaluate(observation, settings).plan).toBeUndefined()
 })
+
+test('#1448: a liquidating keeper cannot plan a forbidden principal top-up', () => {
+	const observation = portfolioObservation()
+	observation.snapshot.positions = [{ id: 2n, owner: observation.snapshot.owner, batch: 0n, rep: unit, commitment: unit, maxHealthyPrice: 0n, releasedRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, liquidationStarted: 1n, remainingCommitment: 0n, retirementPreview: undefined }]
+	observation.snapshot.ownerPrincipalAttoRep = unit
+	observation.snapshot.ownerCommitmentAttoEth = unit
+	const result = evaluate(observation)
+	expect(result.plan).toBeUndefined()
+	expect(result.reason).toContain('Receiver position is liquidating')
+})

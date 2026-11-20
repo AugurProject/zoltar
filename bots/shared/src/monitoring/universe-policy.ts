@@ -124,7 +124,33 @@ function childPageCall(zoltar: Address, blockNumber: bigint, universeId: bigint,
 	return { abi: universeRegistryAbi, address: zoltar, args: [universeId, start, CHILD_UNIVERSE_PAGE] as const, blockNumber, functionName: 'getDeployedChildUniverses' as const }
 }
 
-export async function loadUniverseTree(client: PublicClient<Transport, Chain>, zoltar: Address, blockNumber: bigint) {
+/** Reads only selected identities and their ancestors, never permissionless sibling lists. */
+async function loadSelectedLineages(client: Pick<PublicClient<Transport, Chain>, 'readContract'>, zoltar: Address, blockNumber: bigint, selectedIds: readonly bigint[]) {
+	const identities = new Map<bigint, UniverseIdentity>()
+	for (const selected of [0n, ...selectedIds]) {
+		let id = selected
+		const visited = new Set<bigint>()
+		while (!identities.has(id)) {
+			if (visited.has(id)) throw new Error('Universe has a cyclic parent lineage')
+			visited.add(id)
+			const value = await client.readContract({ abi: universeRegistryAbi, address: zoltar, args: [id], blockNumber, functionName: 'universes' })
+			if (value.reputationToken === zeroAddress) throw new Error(`Universe ${id.toString()} is not deployed`)
+			identities.set(id, { id, parentId: id === 0n ? undefined : value.parentUniverseId, outcomeIndex: id === 0n ? undefined : value.forkingOutcomeIndex, forkQuestionId: value.forkQuestionId, forkTime: value.forkTime, repToken: getAddress(value.reputationToken) })
+			if (id === 0n) break
+			id = value.parentUniverseId
+			if (visited.has(id)) throw new Error('Universe has a cyclic parent lineage')
+		}
+	}
+	const universes = [...identities.values()].sort((a, b) => {
+		if (a.id === b.id) return 0
+		return a.id < b.id ? -1 : 1
+	})
+	for (const id of selectedIds) validateApprovedUniverseSelection(universes, [id])
+	return universes
+}
+
+export async function loadUniverseTree(client: PublicClient<Transport, Chain>, zoltar: Address, blockNumber: bigint, selectedIds?: readonly bigint[]) {
+	if (selectedIds !== undefined) return loadSelectedLineages(client, zoltar, blockNumber, selectedIds)
 	const root = await client.readContract({
 		abi: universeRegistryAbi,
 		address: zoltar,
@@ -150,7 +176,8 @@ export async function loadUniverseTree(client: PublicClient<Transport, Chain>, z
  * Same traversal as `loadUniverseTree`, but every level of the tree is read through one Multicall3
  * request: the unforked case costs a single round trip instead of one per registry call.
  */
-export async function loadUniverseTreeBatched(client: Pick<PublicClient<Transport, Chain>, 'multicall'>, zoltar: Address, blockNumber: bigint, multicall3: Address) {
+export async function loadUniverseTreeBatched(client: Pick<PublicClient<Transport, Chain>, 'multicall' | 'readContract'>, zoltar: Address, blockNumber: bigint, multicall3: Address, selectedIds?: readonly bigint[]) {
+	if (selectedIds !== undefined) return loadSelectedLineages(client, zoltar, blockNumber, selectedIds)
 	const pageCall = (universeId: bigint, start: bigint) => ({ abi: universeRegistryAbi, address: zoltar, args: [universeId, start, CHILD_UNIVERSE_PAGE] as const, functionName: 'getDeployedChildUniverses' as const })
 	const [root, rootPage] = await client.multicall({
 		allowFailure: false,

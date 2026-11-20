@@ -620,6 +620,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 				m.totalFree += op.amount
 			} else {
 				const p = positionOf(m, owner.positionId)
+				requireModel(p.price >= m.liq, 'Position is liquidating')
 				ledgerReplace(m, p.id, p.rep + op.amount, p.k)
 			}
 			requireModel(owner.walletRep >= op.amount, 'TOKEN')

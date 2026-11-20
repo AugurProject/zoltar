@@ -442,3 +442,30 @@ test('presentation-only balances retain position context without authorizing a w
 	await expect(hook.state().claim()).rejects.toThrow('Account refresh pending.')
 	expect(requests).toHaveLength(0)
 })
+
+test.each([true, false])('#1448: liquidation blocks REP top-ups and combined health deposits at a fresh or stale price (%s)', async priceValid => {
+	const base = capitalSnapshot()
+	const snapshot = capitalSnapshot({ priceValid, allowanceAttoRep: 100n * unit, positions: base.positions.map(position => ({ ...position, maxHealthyPrice: unit, liquidationStarted: 1n })) })
+	const { hook, requests } = await setup(snapshot)
+	await act(() => {
+		hook.state().setDepositAmount('5')
+		hook.state().setHealthDepositAmount('5')
+	})
+	expect(hook.state().fundingReason).toContain('liquidating')
+	expect(hook.state().depositReason).toContain('liquidating')
+	expect(hook.state().healthDepositReason).toContain('liquidating')
+	await expect(hook.state().deposit()).rejects.toThrow('liquidating')
+	await expect(hook.state().depositAndSetHealth()).rejects.toThrow('liquidating')
+	expect(requests).toEqual([])
+})
+
+test('#1448: a position that enters liquidation during review blocks an already planned REP deposit', async () => {
+	const snapshot = capitalSnapshot({ allowanceAttoRep: 100n * unit })
+	const { hook, requests, transport } = await setup(snapshot)
+	await act(() => hook.state().setDepositAmount('5'))
+	await act(() => hook.state().deposit())
+	const request = requests[0]
+	if (request?.validateBeforeSubmit === undefined) throw new Error('Deposit preflight missing')
+	transport.setSnapshot({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, maxHealthyPrice: unit, liquidationStarted: 1n })) })
+	await expect(request.validateBeforeSubmit()).rejects.toThrow('liquidating')
+})

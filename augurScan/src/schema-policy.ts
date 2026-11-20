@@ -1,4 +1,5 @@
-export const CURRENT_SCHEMA_VERSION = '8'
+export const CURRENT_SCHEMA_VERSION = '9'
+export const STALE_CONTRACT_VALUES_SCHEMA_VERSION = '8'
 const SUPPORTED_POSTGRES_VERSION = '17.11'
 
 const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server version. augurScan requires PostgreSQL ${SUPPORTED_POSTGRES_VERSION} because schema fingerprints are version-specific; the database was not modified.`
@@ -31,6 +32,7 @@ export type SupportedSchemaVersion =
 	| typeof INVALIDATION_COUNTS_SCHEMA_VERSION
 	| typeof COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION
 	| typeof CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION
+	| typeof STALE_CONTRACT_VALUES_SCHEMA_VERSION
 
 type SchemaMigration = { readonly version: SupportedSchemaVersion; readonly file: string; readonly description: string }
 
@@ -42,7 +44,8 @@ const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = [
 	{ version: INVALIDATION_COUNTS_SCHEMA_VERSION, file: '005-invalidation-counts.sql', description: 'Stored history invalidation occurrence counts' },
 	{ version: COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION, file: '006-collateral-repair-auctions.sql', description: 'Collateral repair auction storage names' },
 	{ version: CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION, file: '007-current-contract-events.sql', description: 'Storage for events the current contracts emit' },
-	{ version: CURRENT_SCHEMA_VERSION, file: '008-stale-contract-values.sql', description: 'Removal of values no current contract supplies' },
+	{ version: STALE_CONTRACT_VALUES_SCHEMA_VERSION, file: '008-stale-contract-values.sql', description: 'Removal of values no current contract supplies' },
+	{ version: CURRENT_SCHEMA_VERSION, file: '009-bounded-read-indexes.sql', description: 'Selective address and report reads' },
 ]
 
 /** Migrations that upgrade a database at `startingVersion` to the current schema, in application order. */
@@ -64,8 +67,9 @@ export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, com
 	}
 }
 
-export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'migrate-from-5' | 'migrate-from-6' | 'migrate-from-7' | 'current' => {
+export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'migrate-from-5' | 'migrate-from-6' | 'migrate-from-7' | 'migrate-from-8' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
+	if (markerVersion === STALE_CONTRACT_VALUES_SCHEMA_VERSION) return 'migrate-from-8'
 	if (markerVersion === CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION) return 'migrate-from-7'
 	if (markerVersion === COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION) return 'migrate-from-6'
 	if (markerVersion === INVALIDATION_COUNTS_SCHEMA_VERSION) return 'migrate-from-5'

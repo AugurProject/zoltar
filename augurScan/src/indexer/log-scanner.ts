@@ -4,7 +4,7 @@ import type { Address, Hash, Log } from '../ethereum.ts'
 import { ChainContinuityError, isPrunedHistoricalStateError, isSplittableLogRangeError, queryCanonicalLogRange, requireLogPosition } from '../indexer-runtime.ts'
 import { unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata } from '../types.ts'
-import { uniswapV2V3TokenPairs } from '../uniswap.ts'
+import { uniswapDiscoveryTopics } from '../uniswap.ts'
 import {
 	chunks,
 	type DeploymentAwareLogPlan,
@@ -29,20 +29,23 @@ async function queryLogs(providers: ProviderState, toBlock: bigint, inputs: read
 	const ordinaryInputs = inputs.filter(({ address }) => !filteredKinds.has(contracts.get(address.toLowerCase())?.kind ?? ''))
 	const groups = rpcLogQueryGroups(ordinaryInputs)
 	const ordinaryPages = await mapLimit(groups, 3, group => providers.logClient.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
-	const tokenPairs = uniswapV2V3TokenPairs(contracts.values())
+	const tokenPairs = uniswapDiscoveryTopics(contracts.values())
 	const v2Queries = inputsOfKind('uniswapV2Factory').flatMap(input => tokenPairs.map(tokens => ({ input, ...tokens })))
 	const v2Pages = await mapLimit(v2Queries, 3, ({ input, token0, token1 }) => providers.logClient.getLogs({ address: input.address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }))
 	const v3Queries = inputsOfKind('uniswapV3Factory').flatMap(input => tokenPairs.map(tokens => ({ input, ...tokens })))
 	const v3Pages = await mapLimit(v3Queries, 3, ({ input, token0, token1 }) => providers.logClient.getLogs({ address: input.address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }))
-	const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 25)
+	const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 256)
 	const v4Queries = inputsOfKind('uniswapV4PoolManager').flatMap(input => poolIdGroups.map(ids => ({ input, ids })))
 	const initializePages = await mapLimit(v4Queries, 3, ({ input, ids }) => providers.logClient.getLogs({ address: input.address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }))
 	const swapPages = await mapLimit(v4Queries, 3, ({ input, ids }) => providers.logClient.getLogs({ address: input.address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }))
+	const reputationTokens = new Set([...contracts.values()].filter(contract => contract.kind === 'reputationToken').map(contract => contract.address.slice(2).toLowerCase()))
 	const unique = new Map<string, Log>()
 	for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...initializePages.flat(), ...swapPages.flat()]) {
 		const position = requireLogPosition(log)
 		const input = inputs.find(({ address }) => address.toLowerCase() === log.address.toLowerCase())
 		if (input === undefined || position.blockNumber < input.fromBlock || position.blockNumber > toBlock) throw new ChainContinuityError(`RPC returned a log outside its requested deployment-aware range through ${toBlock}`)
+		const kind = contracts.get(log.address.toLowerCase())?.kind
+		if ((kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory') && !log.topics.slice(1, 3).some(topic => reputationTokens.has(topic.slice(-40).toLowerCase()))) continue
 		unique.set(`${position.transactionHash}:${position.logIndex}`, log)
 	}
 	return [...unique.values()].sort((left, right) => {
@@ -175,24 +178,31 @@ export async function getAllLogs(state: Pick<NetworkIndexerState, 'network' | 'p
 }
 
 export function mergeLogs(target: Map<bigint, Log[]>, logs: readonly Log[]): void {
+	const blocks = new Map<bigint, Map<string, Log>>()
 	for (const log of logs) {
 		const position = requireLogPosition(log)
-		const existing = target.get(position.blockNumber) ?? []
-		if (
-			!existing.some(candidate => {
-				const candidatePosition = requireLogPosition(candidate)
-				return candidatePosition.transactionHash === position.transactionHash && candidatePosition.logIndex === position.logIndex
-			})
-		) {
-			existing.push(log)
-			existing.sort((left, right) => {
+		let entries = blocks.get(position.blockNumber)
+		if (entries === undefined) {
+			entries = new Map(
+				(target.get(position.blockNumber) ?? []).map(existing => {
+					const key = requireLogPosition(existing)
+					return [`${key.transactionHash}:${key.logIndex}`, existing]
+				}),
+			)
+			blocks.set(position.blockNumber, entries)
+		}
+		const key = `${position.transactionHash}:${position.logIndex}`
+		if (!entries.has(key)) entries.set(key, log)
+	}
+	for (const [blockNumber, entries] of blocks)
+		target.set(
+			blockNumber,
+			[...entries.values()].sort((left, right) => {
 				const a = requireLogPosition(left)
 				const b = requireLogPosition(right)
 				return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
-			})
-			target.set(position.blockNumber, existing)
-		}
-	}
+			}),
+		)
 }
 
 export async function getKnownLogs(providers: ProviderState, blockNumber: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, blockHash: Hash): Promise<Log[]> {

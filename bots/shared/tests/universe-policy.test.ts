@@ -120,3 +120,32 @@ test('batched discovery reads the unforked registry in one request and pages wid
 	expect(wide.batches).toHaveLength(3)
 	expect(wide.batches.every(batch => batch.blockNumber === 42n)).toBeTrue()
 })
+
+test('#1480: selected lineage discovery never enumerates unrelated scalar children', async () => {
+	const base = createPublicClient({
+		chain: mainnet,
+		transport: custom({
+			request: async () => {
+				throw new Error('Unexpected RPC')
+			},
+		}),
+	})
+	const ids: bigint[] = []
+	const client = new Proxy(base, {
+		get(target, property) {
+			if (property !== 'readContract') return Reflect.get(target, property)
+			return async (parameters: { functionName: string; args: readonly bigint[]; blockNumber: bigint }) => {
+				expect(parameters.functionName).toBe('universes')
+				expect(parameters.blockNumber).toBe(42n)
+				const id = parameters.args[0]
+				if (id === undefined) throw new Error('Missing universe')
+				ids.push(id)
+				return { forkQuestionId: 1n, forkTime: 10n, forkingOutcomeIndex: id, parentUniverseId: id === 2n ? 1n : 0n, reputationToken: universe(id, undefined).repToken }
+			}
+		},
+	})
+	const selected = await loadUniverseTree(client, universe(10n, undefined).repToken, 42n, [2n])
+	expect(selected.map(entry => entry.id).sort()).toEqual([0n, 1n, 2n])
+	expect(ids).toHaveLength(3)
+	expect(approvedUniverseRepTokens(selected, [2n])).toEqual([universe(2n, 1n).repToken])
+})

@@ -36,29 +36,22 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 	values.push(limit, offset)
 	const rows = await sql.unsafe(
 		`WITH ${snapshotParameter === undefined ? '' : `snapshot_contracts AS (${contractsAtSnapshot}),`} activity_summary AS (
-			SELECT activity.chain_id, activity.address, min(activity.block_number) AS first_seen_block,
-				max(activity.block_number) AS last_seen_block,
-				count(DISTINCT activity.tx_hash) FILTER (WHERE activity.role = 'sender') AS transaction_count,
-				count(DISTINCT activity.tx_hash) AS interaction_count,
-				count(DISTINCT NULLIF(activity.pool_address, '0x0000000000000000000000000000000000000000')) AS pool_count
-			FROM address_activity activity WHERE activity.canonical ${throughSnapshot('activity.block_number')} ${chainClause} ${addressClause}
-			GROUP BY activity.chain_id, activity.address
+			SELECT activity.chain_id,activity.address,summary.first_seen_block,summary.block_number AS last_seen_block,
+			 summary.transaction_count,summary.interaction_count,summary.pool_count
+			FROM address_catalog activity JOIN networks network ON network.chain_id=activity.chain_id
+			JOIN LATERAL (SELECT state.* FROM address_activity_summaries state WHERE state.chain_id=activity.chain_id AND state.address=activity.address
+			 AND state.canonical AND state.block_number <= ${snapshotParameter ?? 'network.indexed_block'} ORDER BY state.block_number DESC LIMIT 1) summary ON true
+			WHERE true ${chainClause} ${addressClause}
 		), latest_balances AS (
-			SELECT DISTINCT ON (snapshot.chain_id, snapshot.address, snapshot.asset_address)
-				snapshot.chain_id, snapshot.address, snapshot.asset_address, snapshot.asset_kind, snapshot.balance,
-				snapshot.block_number, snapshot.observed_at
-			FROM address_balance_snapshots snapshot
-			JOIN blocks observed_block ON observed_block.chain_id = snapshot.chain_id
-				AND observed_block.hash = snapshot.block_hash AND observed_block.canonical
-			JOIN networks observed_network ON observed_network.chain_id = snapshot.chain_id
-			WHERE snapshot.canonical AND snapshot.block_number <= ${snapshotParameter ?? 'observed_network.indexed_block'} AND (
-				snapshot.asset_kind = 'native' OR EXISTS (
-					SELECT 1 FROM ${contractTable} asset
-					WHERE asset.chain_id = snapshot.chain_id AND asset.address = snapshot.asset_address AND asset.canonical
-						AND asset.kind IN ('reputationToken', 'weth')
-				)
-			)
-			ORDER BY snapshot.chain_id, snapshot.address, snapshot.asset_address, snapshot.block_number DESC
+			SELECT snapshot.chain_id,snapshot.address,snapshot.asset_address,snapshot.asset_kind,snapshot.balance,snapshot.block_number,snapshot.observed_at
+			FROM activity_summary owner JOIN address_balance_assets asset ON asset.chain_id=owner.chain_id AND asset.address=owner.address
+			JOIN networks observed_network ON observed_network.chain_id=owner.chain_id
+			JOIN LATERAL (SELECT state.* FROM address_balance_snapshots state
+			 WHERE state.chain_id=asset.chain_id AND state.address=asset.address AND state.asset_address=asset.asset_address
+			  AND state.canonical AND state.block_number <= ${snapshotParameter ?? 'observed_network.indexed_block'}
+			 ORDER BY state.block_number DESC LIMIT 1) snapshot ON true
+			WHERE snapshot.asset_kind='native' OR EXISTS (SELECT 1 FROM ${contractTable} token
+			 WHERE token.chain_id=snapshot.chain_id AND token.address=snapshot.asset_address AND token.canonical AND token.kind IN ('reputationToken','weth'))
 		), balance_summary AS (
 			SELECT chain_id, address,
 				COALESCE(sum(balance) FILTER (WHERE asset_kind = 'weth'), 0) AS weth_balance,
@@ -74,15 +67,15 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 				count(*) FILTER (WHERE kind = 'weth') AS weth_token_count
 			FROM ${contractTable} WHERE canonical GROUP BY chain_id
 		), latest_token_metadata AS (
-			-- Superseded metadata clears its row flag; the block determines historical canonicality.
-			SELECT DISTINCT ON (metadata.chain_id, metadata.address)
-				metadata.chain_id, metadata.address, metadata.name, metadata.symbol, metadata.decimals
-			FROM token_metadata metadata
-			JOIN blocks observed_block ON observed_block.chain_id = metadata.chain_id
-				AND observed_block.hash = metadata.block_hash AND observed_block.canonical
-			JOIN networks observed_network ON observed_network.chain_id = metadata.chain_id
-			WHERE ${snapshotParameter === undefined ? 'metadata.canonical' : 'true'} ${throughSnapshot('observed_block.number')} AND metadata.read_block <= ${snapshotParameter ?? 'observed_network.indexed_block'}
-			ORDER BY metadata.chain_id, metadata.address, metadata.read_block DESC
+		 SELECT metadata.chain_id,metadata.address,metadata.name,metadata.symbol,metadata.decimals
+		 FROM (SELECT DISTINCT chain_id,asset_address FROM latest_balances WHERE asset_kind IN ('rep','weth')) token
+		 JOIN networks observed_network ON observed_network.chain_id=token.chain_id
+		 JOIN LATERAL (SELECT metadata.* FROM token_metadata metadata
+		  JOIN blocks observed_block ON observed_block.chain_id=metadata.chain_id AND observed_block.hash=metadata.block_hash AND observed_block.canonical
+		  WHERE metadata.chain_id=token.chain_id AND metadata.address=token.asset_address
+		   AND ${snapshotParameter === undefined ? 'metadata.canonical' : 'true'} ${throughSnapshot('observed_block.number')}
+		   AND metadata.read_block <= ${snapshotParameter ?? 'observed_network.indexed_block'}
+		  ORDER BY metadata.read_block DESC LIMIT 1) metadata ON true
 		), largest_rep AS (
 			SELECT DISTINCT ON (rep.chain_id, rep.address)
 				rep.chain_id, rep.address, rep.asset_address AS token_address, rep.balance,

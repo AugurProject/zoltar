@@ -24,7 +24,8 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			SELECT log.block_hash, log.tx_hash FROM logs log
 			WHERE ${account}::text IS NOT NULL AND log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${asOfBlock}
 				AND log.event_name IN ('TransferSingle', 'TransferBatch', 'CompleteSetCreated', 'CompleteSetsFunded', 'CompleteSetRedeemed', 'SharesRedeemed')
-				AND ${account} IN (lower(log.arguments->>'from'), lower(log.arguments->>'to'), lower(log.arguments->>'creator'), lower(log.arguments->>'redeemer'), lower(log.arguments->>'recipient'))
+				AND (lower(log.arguments->>'from') = ${account} OR lower(log.arguments->>'to') = ${account}
+					OR lower(log.arguments->>'creator') = ${account} OR lower(log.arguments->>'redeemer') = ${account} OR lower(log.arguments->>'recipient') = ${account})
 			UNION
 			SELECT event.block_hash, event.tx_hash FROM amm_trade_events event
 			WHERE ${account}::text IS NOT NULL AND event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${asOfBlock}

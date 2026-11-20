@@ -17,7 +17,7 @@ import {
 	reorgSearchFloor,
 	rpcLogQueryGroups,
 	startIndexers,
-	tokenMetadataNeedsRead,
+	tokenMetadataReadCandidates,
 	uniswapV4PoolIds,
 } from '../../src/indexer.ts'
 import {
@@ -65,7 +65,7 @@ import {
 import { createRpcRequestQueue, RpcQueueSaturatedError, RpcRequestMethodError, withRpcRequestQueue } from '../../src/rpc-request-queue.ts'
 import { unixSecondsToDate } from '../../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../../src/types.ts'
-import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../../src/uniswap.ts'
+import { isSupportedUniswapV4Market, uniswapV4PoolId } from '../../src/uniswap.ts'
 
 const tokenMetadata: TokenMetadata = {
 	address: '0x1000000000000000000000000000000000000001',
@@ -74,6 +74,7 @@ const tokenMetadata: TokenMetadata = {
 }
 
 const address = '0x1000000000000000000000000000000000000001' as const
+const metadataReadCandidates = (metadata: TokenMetadata | undefined, blockNumber: bigint, floor = 0n) => tokenMetadataReadCandidates([address], new Map(metadata === undefined ? [] : [[address, metadata]]), blockNumber, floor)
 const metadataAbi = parseAbi(['function decimals() view returns (uint8)', 'function name() view returns (string)', 'function symbol() view returns (string)'])
 
 class BaseError extends Error {
@@ -494,7 +495,7 @@ describe('network indexer lifecycle', () => {
 		}
 	})
 
-	test('derives V2/V3 and V4 filters for WETH, USDC, and native ETH quotes', () => {
+	test('derives V4 filters for USDC and native ETH quotes', () => {
 		const usdc = '0x3000000000000000000000000000000000000003'
 		const contracts = new Map<string, ContractMetadata>([
 			[address, { address, kind: 'reputationToken', label: 'REP', provenance: 'manifest' }],
@@ -508,12 +509,6 @@ describe('network indexer lifecycle', () => {
 				},
 			],
 			[usdc, { address: usdc, kind: 'usdc', label: 'USDC', provenance: 'manifest' }],
-		])
-		expect(uniswapV2V3TokenPairs(contracts.values())).toEqual([
-			{ token0: address, token1: '0x2000000000000000000000000000000000000002' },
-			{ token0: '0x2000000000000000000000000000000000000002', token1: address },
-			{ token0: address, token1: usdc },
-			{ token0: usdc, token1: address },
 		])
 		const ids = uniswapV4PoolIds(contracts)
 		expect(ids).toHaveLength(8)
@@ -2753,8 +2748,8 @@ describe('network indexer lifecycle', () => {
 				},
 			})
 			expect(metadata).toEqual({ address, readError: 'Historical state pruned', readBlock: 11_000_001n })
-			expect(tokenMetadataNeedsRead(metadata, 11_000_025n, 11_000_026n)).toBe(false)
-			expect(tokenMetadataNeedsRead(metadata, 11_000_026n, 11_000_026n)).toBe(true)
+			expect(metadataReadCandidates(metadata, 11_000_025n, 11_000_026n)).toEqual([])
+			expect(metadataReadCandidates(metadata, 11_000_026n, 11_000_026n)).toEqual([address])
 		}
 	})
 
@@ -2891,13 +2886,13 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('retries failed token metadata reads with bounded block backoff', () => {
-		expect(tokenMetadataNeedsRead(undefined, 1n)).toBe(true)
-		expect(tokenMetadataNeedsRead(tokenMetadata, 34n)).toBe(false)
-		expect(tokenMetadataNeedsRead(tokenMetadata, 35n)).toBe(true)
-		expect(tokenMetadataNeedsRead({ address: tokenMetadata.address, decimals: 6, readBlock: tokenMetadata.readBlock }, 100n)).toBe(false)
-		expect(tokenMetadataNeedsRead(undefined, 41n, 42n)).toBe(false)
-		expect(tokenMetadataNeedsRead(tokenMetadata, 41n, 42n)).toBe(false)
-		expect(tokenMetadataNeedsRead(undefined, 42n, 42n)).toBe(true)
+		expect(metadataReadCandidates(undefined, 1n)).toEqual([address])
+		for (const blockNumber of [34n, 35n]) expect(metadataReadCandidates(tokenMetadata, blockNumber)).toEqual([])
+		expect([34n, 35n].map(blockNumber => metadataReadCandidates({ ...tokenMetadata, readError: 'HttpRequestError' }, blockNumber))).toEqual([[], [address]])
+		expect(metadataReadCandidates({ address: tokenMetadata.address, decimals: 6, readBlock: tokenMetadata.readBlock }, 100n)).toEqual([])
+		expect(metadataReadCandidates(undefined, 41n, 42n)).toEqual([])
+		expect(metadataReadCandidates(tokenMetadata, 41n, 42n)).toEqual([])
+		expect(metadataReadCandidates(undefined, 42n, 42n)).toEqual([address])
 	})
 
 	test('never requires RPC history below a configured start boundary', () => {

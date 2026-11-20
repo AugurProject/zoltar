@@ -147,6 +147,9 @@ postgresTest('rolls back every sparse batch table when final canonical validatio
 		await database.sql`DELETE FROM logs WHERE chain_id = ${sparseChainId}`
 		await database.sql`DELETE FROM transactions WHERE chain_id = ${sparseChainId}`
 		await database.sql`DELETE FROM log_scan_cursors WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM address_activity_summaries WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM protocol_entity_totals WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM protocol_entity_identities WHERE chain_id = ${sparseChainId}`
 		await database.sql`DELETE FROM blocks WHERE chain_id = ${sparseChainId}`
 		await database.sql`DELETE FROM networks WHERE chain_id = ${sparseChainId}`
 		await database.sql`DELETE FROM live_events WHERE payload ->> 'chainId' = ${sparseChainId.toString()}`
@@ -285,7 +288,8 @@ postgresTest('returns the originating transaction action on every log row', asyn
 		}
 	} finally {
 		await lease?.release()
-		for (const table of ['address_activity', 'actions', 'logs', 'transactions', 'contracts', 'blocks', 'networks']) await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [actionChainId])
+		for (const table of ['address_activity_summaries', 'protocol_entity_totals', 'protocol_entity_identities', 'address_catalog', 'address_balance_assets', 'address_activity', 'actions', 'logs', 'transactions', 'contracts', 'blocks', 'networks'])
+			await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [actionChainId])
 		await database.sql`DELETE FROM live_events WHERE payload ->> 'chainId' = ${String(actionChainId)}`
 		await database.close()
 	}

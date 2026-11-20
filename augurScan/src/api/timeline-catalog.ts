@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { hasTimelineSearchTrigram } from '../timeline-search.ts'
 import { stateCatalogRows, timelineCatalogRows, timelineRows } from '../repositories/timeline.ts'
 import { selectedPoolStateRows, selectedStateEntity } from '../repositories/state-target.ts'
 import { detailPage, paged, parseTimelineCatalogCursor, protocolCursorFor, protocolCursorForRequest, timelineCatalogCursorFor } from './entity-details.ts'
@@ -15,6 +16,7 @@ export const timelineCatalogResponse = async (sql: SQL, url: URL): Promise<Respo
 	if (event !== undefined && (event.length > 128 || !/^[A-Za-z][A-Za-z0-9_]*$/.test(event))) throw new ApiRequestError('event must be a complete semantic event name')
 	const address = evmAddress(url.searchParams.get('address'), 'address')
 	const query = url.searchParams.get('q')?.trim() || undefined
+	if (query !== undefined && !hasTimelineSearchTrigram(query) && event === undefined && address === undefined && entityType === undefined) throw new ApiRequestError('q must contain 3 consecutive letters or digits, or include an entity, event, or address filter')
 	if (query !== undefined && query.length > 128) throw new ApiRequestError('q must not exceed 128 characters')
 	const fromBlock = postgresBigint(url.searchParams.get('fromBlock'), 'fromBlock') ?? '0'
 	const toBlock = postgresBigint(url.searchParams.get('toBlock'), 'toBlock') ?? POSTGRES_BIGINT_MAX.toString()
@@ -31,7 +33,7 @@ export const timelineCatalogResponse = async (sql: SQL, url: URL): Promise<Respo
 	const cursorBlockHash = cursor?.[11] ?? `0x${'f'.repeat(64)}`
 	const cursorEntityType = cursor?.[12] ?? '\uffff'
 	const cursorEntityIdentity = cursor?.[13] ?? '\uffff'
-	const { rows, totalRows } = await timelineCatalogRows(sql, {
+	const { rows } = await timelineCatalogRows(sql, {
 		chainId,
 		entityType,
 		event,
@@ -50,7 +52,7 @@ export const timelineCatalogResponse = async (sql: SQL, url: URL): Promise<Respo
 		filters: { entityType, event, address, query, fromBlock, toBlock, canonical },
 		data: {
 			...paged(rows, limit, row => timelineCatalogCursorFor(chainId, filterIdentity, asOf, row)),
-			total: String(totalRows[0]?.['total'] ?? '0'),
+			totalIsExact: false,
 		},
 	})
 }

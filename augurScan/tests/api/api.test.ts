@@ -225,7 +225,15 @@ test('validates operations catalogs and timeline identities before querying', as
 		expect(response?.status).toBe(400)
 		expect(await response?.json()).toEqual({ error: 'chainId is required' })
 	}
-	for (const path of ['state/timeline?chainId=1&entityType=INVALID', 'state/timeline?chainId=1&event=not-an-event', 'state/timeline?chainId=1&fromBlock=2&toBlock=1', `state/timeline?chainId=1&q=${'a'.repeat(129)}`]) {
+	for (const path of [
+		'state/timeline?chainId=1&q=!!!',
+		'state/timeline?chainId=1&q=a!b!c',
+		'state/timeline?chainId=1&q=%25_%25',
+		'state/timeline?chainId=1&entityType=INVALID',
+		'state/timeline?chainId=1&event=not-an-event',
+		'state/timeline?chainId=1&fromBlock=2&toBlock=1',
+		`state/timeline?chainId=1&q=${'a'.repeat(129)}`,
+	]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 	}

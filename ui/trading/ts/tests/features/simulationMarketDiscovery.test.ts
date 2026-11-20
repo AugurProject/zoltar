@@ -47,9 +47,13 @@ test('universe and address lookup discovery reads only the selected universe', a
 	expect(result.universeIds).toEqual([0n, 123n])
 	expect(result.markets).toEqual([])
 	expect(calls).toEqual([123n])
+	const saved = await discoverSavedMarkets(client, configuration, 123n, [])
+	expect(saved.selectedUniverseId).toBe(123n)
+	expect(saved.markets).toEqual([])
+	expect(calls).toEqual([123n, 123n])
 	await expect(discoverUniverses(client, configuration, 999n)).rejects.toThrow('Universe does not exist')
 	await expect(discoverUniverses(client, configuration, 0n, () => false)).rejects.toThrow('Market discovery cancelled')
-	expect(calls).toEqual([123n, 999n])
+	expect(calls).toEqual([123n, 123n, 999n])
 })
 
 test('only missing pool identity reads are classified as a missing security pool', async () => {
@@ -325,7 +329,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				pairIndex.deployments = Array.from({ length: 1_001 }, (_value, i) => ({ securityPool: getAddress(`0x${(i + 100_000).toString(16).padStart(40, '0')}`), shareToken: addressedPool, universeId: 0n }))
 				const attemptedPools = new Set<Address>()
 				const boundedRead: typeof client.readContract = async parameters => {
-					if (parameters.functionName === 'getDeployedChildUniverses') return await client.readContract(parameters)
+					if (parameters.functionName === 'getRepToken') return await client.readContract(parameters)
 					attemptedPools.add(parameters.address)
 					throw new Error('Pool read unavailable in bounded-page fixture')
 				}

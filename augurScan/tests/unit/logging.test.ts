@@ -274,3 +274,13 @@ test('database JSON replaces unsupported characters in nested text values', () =
 	const separator = String.fromCodePoint(0)
 	expect(JSON.parse(databaseJsonText({ labels: [`First${separator}Second`, String.raw`\u0000`] }))).toEqual({ labels: ['First�Second', String.raw`\u0000`] })
 })
+
+test('#1442: valid receipts above the ordinary RPC cap remain readable', async () => {
+	const filename = await rpcLogPath()
+	const result = { logs: Array.from({ length: 13_000 }, (_, logIndex) => ({ address: `0x${'12'.repeat(20)}`, transactionHash: `0x${'34'.repeat(32)}`, blockHash: `0x${'56'.repeat(32)}`, blockNumber: '0x1', transactionIndex: '0x0', logIndex: `0x${logIndex.toString(16)}`, topics: [], data: '0x', removed: false })) }
+	const body = JSON.stringify({ id: 1, jsonrpc: '2.0', result })
+	expect(new TextEncoder().encode(body).length).toBeGreaterThan(4 * 1024 * 1024)
+	const loggingFetch = createRethLoggingFetch(filename, async () => new Response(body))
+	const response = await postRpc(loggingFetch, 1, 'eth_getTransactionReceipt', ['0x01'])
+	expect(await response.json()).toEqual({ id: 1, jsonrpc: '2.0', result })
+})

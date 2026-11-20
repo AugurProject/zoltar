@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { encodeOpaqueCursor, isJsonArray, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
-import { historicalExportRows, historicalExportSnapshot, historicalExportSnapshotCanonical, historicalExportTotal } from '../repositories/exports.ts'
+import { historicalExportRows, historicalExportSnapshot, historicalExportSnapshotCanonical } from '../repositories/exports.ts'
 import { ApiConflictError, ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresIntegerString, normalize, postgresBigint } from './shared.ts'
 
 type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
@@ -56,7 +56,7 @@ const parseHistoricalExportCursor = (value: string | null): HistoricalExportCurs
 				typeof parts[7] !== 'string' ||
 				!/^0x[0-9a-f]{64}$/.test(parts[7]) ||
 				!isPostgresBigint(parts[8]) ||
-				!isPostgresBigint(parts[9]) ||
+				(parts[9] !== 'unknown' && !isPostgresBigint(parts[9])) ||
 				typeof parts[10] !== 'string' ||
 				typeof parts[11] !== 'string' ||
 				typeof parts[12] !== 'string' ||
@@ -107,32 +107,54 @@ export const historicalExport = async (sql: SQL, url: URL): Promise<Response> =>
 	const applicationHash = cursor?.[11] ?? currentApplicationHash
 	const projectionHash = cursor?.[12] ?? currentProjectionHash
 	const lastKey = cursor?.[13]
-	const totalRows = cursor === undefined ? await historicalExportTotal(sql, { dataset, chainId, canonical, fromBlock, toBlock, snapshotBlock, snapshotInvalidationId }) : []
-	const snapshotTotal = cursor?.[9] ?? String(totalRows[0]?.['total'] ?? '0')
-	const rows = await historicalExportRows(sql, {
-		dataset,
-		chainId,
-		canonical,
-		fromBlock,
-		toBlock,
-		snapshotBlock,
-		snapshotInvalidationId,
-		limit,
-		lastKey,
-	})
-	const truncated = rows.length > limit
-	const exported = rows.slice(0, limit)
-	const finalRow = exported[exported.length - 1] as Record<string, unknown> | undefined
-	const exportedLastKey = finalRow === undefined ? undefined : EXPORT_KEY_COLUMNS[dataset].map(column => String(finalRow[column]))
+	const snapshotTotal = cursor?.[9] ?? 'unknown'
+	const lines: string[] = []
+	const encoder = new TextEncoder()
+	const maximumBytes = 8 * 1024 * 1024
+	let bodyBytes = 0
+	let exportedLastKey = lastKey
+	let truncated = false
+	let complete = false
+	while (!complete && lines.length < limit) {
+		const batchLimit = Math.min(32, limit - lines.length)
+		const rows = await historicalExportRows(sql, {
+			dataset,
+			chainId,
+			canonical,
+			fromBlock,
+			toBlock,
+			snapshotBlock,
+			snapshotInvalidationId,
+			limit: batchLimit,
+			lastKey: exportedLastKey,
+		})
+		for (const row of rows.slice(0, batchLimit)) {
+			const line = `${JSON.stringify(normalize(row))}\n`
+			const bytes = encoder.encode(line).length
+			if (bytes > maximumBytes) throw new ApiRequestError('An export record exceeds the 8 MiB page budget')
+			if (bodyBytes + bytes > maximumBytes) {
+				truncated = true
+				complete = true
+				break
+			}
+			lines.push(line)
+			bodyBytes += bytes
+			exportedLastKey = EXPORT_KEY_COLUMNS[dataset].map(column => String(row[column]))
+		}
+		if (!complete) {
+			truncated = rows.length > batchLimit
+			complete = !truncated
+		}
+	}
 	const snapshotPrefix = [1, dataset, chainId, canonical, fromBlock, toBlock, snapshotBlock, snapshotHash, snapshotInvalidationId, snapshotTotal, abiHash, applicationHash, projectionHash] as const
 	const nextCursor = truncated && exportedLastKey !== undefined ? historicalExportCursorFor(snapshotPrefix, exportedLastKey) : undefined
-	const body = `${exported.map((row: Record<string, unknown>) => JSON.stringify(normalize(row))).join('\n')}${exported.length === 0 ? '' : '\n'}`
+	const body = lines.join('')
 	return new Response(body, {
 		headers: {
 			'cache-control': 'no-store',
 			'content-type': 'application/x-ndjson; charset=utf-8',
 			'content-disposition': `attachment; filename="augurscan-${dataset}-${chainId}-${fromBlock}-${toBlock}.ndjson"`,
-			'x-augurscan-returned': String(exported.length),
+			'x-augurscan-returned': String(lines.length),
 			'x-augurscan-truncated': String(truncated),
 			'x-augurscan-snapshot-block': snapshotBlock,
 			'x-augurscan-snapshot-hash': snapshotHash,

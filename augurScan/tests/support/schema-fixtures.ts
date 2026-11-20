@@ -4,6 +4,11 @@ import { POOL_SNAPSHOTS_BEFORE_SCHEMA_7, TABLES_REMOVED_IN_SCHEMA_7 } from '../.
 // Model the physical v7 layout without losing pool or price rows: the constant pool deployment columns and
 // the coordinator seed price shape that migration 008 removed.
 export const rewindStaleContractValuesToV7 = async (database: ScannerDatabase): Promise<void> => {
+	await database.sql.unsafe('DROP TABLE IF EXISTS public.address_catalog, public.address_balance_assets, public.address_activity_summaries, public.protocol_entity_identities, public.protocol_entity_totals')
+	const migration = await Bun.file(new URL('../../migrations/009-bounded-read-indexes.sql', import.meta.url)).text()
+	for (const match of migration.matchAll(/CREATE INDEX ([a-z_][a-z0-9_]*) ON public\./g)) {
+		await database.sql.unsafe(`DROP INDEX IF EXISTS public.${match[1]}`)
+	}
 	await database.sql.unsafe(`
 		ALTER TABLE public.pools ADD COLUMN collateral_repair_auction_address text DEFAULT '0x0000000000000000000000000000000000000000' NOT NULL;
 		ALTER TABLE public.pools ALTER COLUMN collateral_repair_auction_address DROP DEFAULT;

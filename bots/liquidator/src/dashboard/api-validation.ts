@@ -1,3 +1,4 @@
+import type { UniverseNode } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { portfolioView, type PortfolioView } from './portfolio-response.ts'
 import type { MonitoredPool } from './pool-presentation.ts'
 import { array, booleanValue, decode, dictionary, numberValue, object, oneOf, optional, stringValue, unknownValue } from '@zoltar/bot-shared/dashboard/response-validation'
@@ -200,3 +201,6 @@ export const decodeSnapshot = (value: unknown) => decode(value, snapshot, 'state
 export const decodeConfiguration = (value: unknown) => decode(value, configuration, 'configuration document')
 export const decodeMarketProbe = (value: unknown) => decode(value, marketProbe, 'market source response')
 export const decodeSigner = (value: unknown) => decode(value, object<{ wallet?: string }>({ wallet: optionalString }), 'signer response')
+
+export const decodeUniverseLookup = (value: unknown) =>
+	decode(value, object<{ universes: UniverseNode[] }>({ universes: array(object<UniverseNode>({ id: stringValue, parentId: optionalString, outcomeIndex: optionalString, forkQuestionId: optionalString, repToken: optionalString, summary: optionalString })) }), 'universe lookup response')

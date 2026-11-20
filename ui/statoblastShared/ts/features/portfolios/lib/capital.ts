@@ -1,3 +1,4 @@
+import { depositLiquidating } from '../../../copy/portfolioCapital.js'
 import type { PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 
 const ceilDivide = (value: bigint, divisor: bigint) => (value + divisor - 1n) / divisor
@@ -78,4 +79,10 @@ export function capitalWithdrawalReason(snapshot: PortfolioCapitalSnapshot, amou
 		if (!snapshot.priceValid) return 'A new accepted REP price is required before withdrawing committed principal.'
 	}
 	return 'Amount exceeds your withdrawable REP. Retire commitment to release more principal.'
+}
+
+/** Matches the ledger rule even while the accepted price is stale. */
+export function capitalDepositReason(snapshot: Pick<PortfolioCapitalSnapshot, 'ownerAccount' | 'positions' | 'liquidationPrice'>) {
+	const position = snapshot.positions.find(position => position.id === snapshot.ownerAccount.positionId)
+	return position !== undefined && position.commitment > 0n && position.maxHealthyPrice < snapshot.liquidationPrice ? depositLiquidating : undefined
 }

@@ -30,6 +30,51 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		return reduced
 	}
 
+	test('#1439: delayed materialization after a second fork preserves final winner entitlement', async () => {
+		const { base } = fixture
+		const owner = fixture.owner()
+		const U0 = base.genesisUniverse
+		const source = fixture.poolFor(base.questionId).securityPool
+		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
+		await fixture.prepare()
+		await fixture.mint(10n * unit)
+		await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		for (const [sender, outcome, amount] of [
+			[r2, YES, 70n * K],
+			[r3, NO, 50n * K],
+			[r4, INVALID, 40n * K],
+		] as const)
+			await e2e.deposit(sender, source, outcome, amount)
+		const game0 = await e2e.gameOf(source)
+		const end0 = await owner.readContract({ ...e2e.game(game0), functionName: 'getEscalationGameEndDate' })
+		const fork0 = await e2e.forkOn(r6, U0, await e2e.unrelatedQuestion('delayed settlement threshold origin fork'))
+		await e2e.choose(owner, U0, YES)
+		const A = await e2e.activateBranch(U0, YES)
+		const everyone = [owner, fixture.other(), r2, r3, r4, r5, r6]
+		for (const holder of everyone) {
+			const balance = await e2e.rep(U0, holder.account.address)
+			if (balance > 0n) await e2e.migrateWalletRep(holder, U0, balance, [YES])
+		}
+		await base.mockWindow.setTime(fork0 + 9n * 7n * 24n * 3600n + (end0 - fork0) + 1n)
+		await e2e.forkOn(r6, A, await e2e.unrelatedQuestion('delayed settlement threshold second fork'))
+		for (const holder of everyone) {
+			const balance = await e2e.rep(A, holder.account.address)
+			if (balance === 0n) continue
+			await approveToken(holder, getRepTokenAddress(A), getZoltarAddress())
+			await writeContractAndWait(holder, () => holder.writeContract({ ...e2e.zoltar(), functionName: 'addRepToMigrationBalance', args: [A, balance], gas: BRANCH_GAS }))
+		}
+		const child = await e2e.materialize(source, A)
+		const game = e2e.game(child.game)
+		const threshold = await owner.readContract({ ...game, functionName: 'nonDecisionThresholdAttoRep' })
+		expect(await owner.readContract({ ...e2e.zoltar(), functionName: 'getForkThresholdAttoRep', args: [A] })).toBeLessThan(threshold)
+		expect(await owner.readContract({ ...game, functionName: 'settlementForkThresholdAttoRep' })).toBeGreaterThanOrEqual(threshold)
+		const inherited = await e2e.lineageLeaves([game0], YES)
+		const first = inherited[0]
+		if (first === undefined) throw new Error('Missing winner leaf')
+		const expected = expectedWinningClaim(first.amount, first.cumulative, 50n * K, 70n * K).payout
+		expect(await e2e.claimInherited(r5, child.pool, YES, inherited, [first], new SparseNullifierTree())).toBe(expected)
+	})
+
 	test('a continued game pays its entitlement at finality when REP is burned before the first claim', async () => {
 		const { base } = fixture
 		const owner = fixture.owner()

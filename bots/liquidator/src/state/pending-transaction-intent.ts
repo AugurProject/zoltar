@@ -40,6 +40,18 @@ function parseReportOperations(value: unknown): PendingTransactionIntent['report
 	return { feed: getAddress(String(Reflect.get(value, 'feed'))), reportId: BigInt(reportId) }
 }
 
+async function parseCancellation(value: unknown, sender: string, nonce: bigint, chainId: number): Promise<PendingTransactionIntent['cancellation']> {
+	if (value === undefined) return undefined
+	if (typeof value !== 'object' || value === null) throw new Error('Invalid pending cancellation')
+	const hash = Reflect.get(value, 'hash')
+	const serializedTransaction = Reflect.get(value, 'serializedTransaction')
+	if (!isHash32(hash) || !isSerializedTransaction(serializedTransaction) || keccak256(serializedTransaction) !== hash) throw new Error('Invalid cancellation transaction hash')
+	const transaction = parseTransaction(serializedTransaction)
+	if (transaction.chainId !== BigInt(chainId) || transaction.nonce !== nonce || transaction.to?.toLowerCase() !== sender.toLowerCase() || transaction.value !== 0n || (transaction.data !== undefined && transaction.data !== '0x')) throw new Error('Cancellation must be a same-nonce zero-value self transfer')
+	if ((await recoverTransactionAddress({ serializedTransaction })).toLowerCase() !== sender.toLowerCase()) throw new Error('Cancellation signer differs from pending intent')
+	return { hash, serializedTransaction }
+}
+
 export async function parsePendingTransactionIntent(intent: unknown, expectedChainId: number): Promise<PendingTransactionIntent> {
 	if (typeof intent !== 'object' || intent === null || Array.isArray(intent)) throw new Error('Pending transaction intent must be an object')
 	const hash = Reflect.get(intent, 'hash')
@@ -74,6 +86,7 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 	const receiptExpectation = parseReceiptExpectation(rawExpectation)
 	const requiresMarketEvidence = typeof rawRequiresMarketEvidence === 'boolean' ? rawRequiresMarketEvidence : kind === 'deposit' || kind === 'liquidation' || kind === 'withdrawal'
 	return {
+		cancellation: await parseCancellation(Reflect.get(intent, 'cancellation'), normalizedSender, parsedNonce, expectedChainId),
 		lastValidBlockNumber: lastValidBlockNumber === undefined ? undefined : BigInt(lastValidBlockNumber),
 		reconciliationReason,
 		hash,

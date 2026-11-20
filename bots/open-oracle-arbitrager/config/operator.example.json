@@ -36,6 +36,7 @@
 		"execute": false,
 		"historyFile": ".state/history-mainnet.jsonl",
 		"logLookbackBlocks": 256,
+		"maxPriceImpactBps": 100,
 		"maxHedgeSlippageBps": 50,
 		"once": false,
 		"pollMilliseconds": 1000,

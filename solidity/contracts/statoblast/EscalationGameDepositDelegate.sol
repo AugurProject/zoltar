@@ -348,10 +348,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		}
 	}
 
-	/// @dev Deposits require an unforked universe, so this is the live threshold while the game can still change.
+	/// @dev A final continuation can materialize after its universe forked again.
+	/// Migration after finality must not scale down its already-earned claims.
 	function _recordSettlementForkThreshold(address poolAddress) private {
 		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(poolAddress);
-		settlementForkThresholdAttoRep = Zoltar(pool.zoltar()).getForkThresholdAttoRep(pool.universeId());
+		Zoltar registry = Zoltar(pool.zoltar());
+		settlementForkThresholdAttoRep =
+			registry.getForkTime(pool.universeId()) != 0
+				? nonDecisionThresholdAttoRep
+				: registry.getForkThresholdAttoRep(pool.universeId());
 	}
 
 	function _appendCarryLeaf(OutcomeState storage state, uint256 nodeId) private {

@@ -20,6 +20,7 @@ export type LoadUniverseOutcomes = (address: Address, universeId: bigint, start:
 const loadConnectedOutcomes: LoadUniverseOutcomes = (address, universeId, start) => loadUniverseOutcomePage(createConnectedReadClient(), address, universeId, start)
 
 import { ScalarUniverseOutcomePicker, type LoadScalarUniverseOutcome } from './ScalarUniverseOutcomePicker.js'
+export type { LoadScalarUniverseOutcome } from './ScalarUniverseOutcomePicker.js'
 
 type Props = { universe: ZoltarUniverseSummary; loadPage?: LoadUniverseOutcomes; loadOutcome?: LoadScalarUniverseOutcome }
 

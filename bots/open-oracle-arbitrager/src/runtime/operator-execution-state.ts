@@ -69,6 +69,10 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 		reportScanReset = applyLookbackBlockSetting(config, pending.logLookbackBlocks)
 		pending.logLookbackBlocks = undefined
 	}
+	if (pending.maxPriceImpactBps !== undefined) {
+		config.maxPriceImpactBps = pending.maxPriceImpactBps
+		pending.maxPriceImpactBps = undefined
+	}
 	if (pending.maxHedgeSlippageBps !== undefined) {
 		config.maxHedgeSlippageBps = pending.maxHedgeSlippageBps
 		pending.maxHedgeSlippageBps = undefined

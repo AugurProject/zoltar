@@ -1,3 +1,4 @@
+import { refreshHistoryAggregates } from './history-aggregates.ts'
 import type { SQL } from 'bun'
 import { databaseJsonText, databaseText } from '../database-json.ts'
 import { storeLogProjections } from '../database-projections.ts'
@@ -139,6 +140,7 @@ export async function persistBlockInTransaction(this: ScannerDatabase, transacti
 					`
 		await storeLogProjections(transaction, chainId, item, provenance)
 	}
+	await refreshHistoryAggregates(transaction, chainId, block.hash, block.number.toString())
 	for (const cursor of block.logScanCursors) {
 		assertLogScanCursorUpdate(block.number, cursor)
 		await transaction`

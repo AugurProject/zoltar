@@ -1,3 +1,5 @@
+import { errorChain } from '@zoltar/core-shared/errors/errorChain'
+import { tokenMetadataText } from '../token-metadata-limits.ts'
 import { runtimeConfig } from '../config.ts'
 import { type ContractDeploymentObservation, DatabaseConsistencyError, type LogScanCursor, manifestContractSetChanged } from '../database.ts'
 import { errorChainIncludes } from '../error-chain.ts'
@@ -42,8 +44,8 @@ export const uniswapV4PoolIds = (contracts: ReadonlyMap<string, ContractMetadata
 			return quotes.flatMap(quote => uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) => uniswapV4PoolId(address, fee, tickSpacing, quote)))
 		})
 
-export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint, stateStartBlock = 0n): boolean =>
-	blockNumber >= stateStartBlock && (metadata === undefined || (metadata.decimals === undefined && (metadata.readError === prunedTokenMetadataError || blockNumber >= metadata.readBlock + 25n)))
+const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint, stateStartBlock = 0n): boolean =>
+	blockNumber >= stateStartBlock && (metadata === undefined || (metadata.decimals === undefined && !permanentTokenMetadataFailure(metadata.readError) && (metadata.readError === prunedTokenMetadataError || blockNumber >= metadata.readBlock + 25n)))
 
 export const reorgSearchFloor = (startBlock: bigint, checkpoint: bigint, confirmationDepth: bigint): bigint => {
 	const candidate = checkpoint > confirmationDepth ? checkpoint - confirmationDepth : startBlock
@@ -56,10 +58,27 @@ export type TokenMetadataCalls = {
 	readonly symbol: () => Promise<string>
 }
 
-const unavailableMetadataErrors = new Set(['AbiDecodingError', 'ContractFunctionRevertedError', 'ContractFunctionZeroDataError'])
+const unavailableMetadataErrors = new Set(['AbiDecodingError', 'ContractFunctionRevertedError', 'ContractFunctionZeroDataError', 'ResponseBodyTooLargeError', 'TokenMetadataContractError'])
+export const permanentTokenMetadataFailure = (reason: string | undefined): boolean => reason === 'ERC-20 metadata unavailable' || reason?.startsWith('ERC-20 metadata exceeds') === true
+
+/** New evidence is read once; recurring retries have a fixed budget, oldest attempts first. */
+export function tokenMetadataReadCandidates(candidates: readonly Address[], metadata: ReadonlyMap<string, TokenMetadata>, blockNumber: bigint, stateStartBlock: bigint): readonly Address[] {
+	const ready = candidates.filter(address => tokenMetadataNeedsRead(metadata.get(address.toLowerCase()), blockNumber, stateStartBlock))
+	const fresh = ready.filter(address => !metadata.has(address.toLowerCase())).sort()
+	const retries = ready
+		.filter(address => metadata.has(address.toLowerCase()))
+		.sort((a, b) => {
+			const left = metadata.get(a.toLowerCase())?.readBlock ?? 0n
+			const right = metadata.get(b.toLowerCase())?.readBlock ?? 0n
+			if (left < right) return -1
+			if (left > right) return 1
+			return a.localeCompare(b)
+		})
+	return [...fresh, ...retries.slice(0, 32)]
+}
 export const prunedTokenMetadataError = 'Historical state pruned'
 
-const isUnavailableMetadataCall = (error: unknown): boolean => errorChainIncludes(error, unavailableMetadataErrors)
+const isUnavailableMetadataCall = (error: unknown): boolean => errorChainIncludes(error, unavailableMetadataErrors) || errorChain(error).some(current => 'message' in current && typeof current.message === 'string' && /(?:out of gas|invalid opcode|invalid jump)/i.test(current.message))
 
 type MetadataCallResult<T> = { readonly status: 'available'; readonly value: T } | { readonly status: 'pruned' } | { readonly status: 'unavailable' }
 
@@ -87,13 +106,15 @@ export const readTokenMetadata = async (address: Address, blockNumber: bigint, c
 		return {
 			address,
 			decimals: decimals.value,
-			...(name?.status === 'available' ? { name: name.value } : {}),
-			...(symbol?.status === 'available' ? { symbol: symbol.value } : {}),
+			...(name?.status === 'available' ? { name: tokenMetadataText(name.value, 'name') } : {}),
+			...(symbol?.status === 'available' ? { symbol: tokenMetadataText(symbol.value, 'symbol') } : {}),
 			readBlock: blockNumber,
 		}
 	} catch (error) {
 		if (isPrunedHistoricalStateError(error)) return { address, readError: prunedTokenMetadataError, readBlock: blockNumber }
-		return { address, readError: safeIndexerFailureReason(error), readBlock: blockNumber }
+		if (error instanceof Error && error.name === 'TokenMetadataContractError') return { address, readError: error.message, readBlock: blockNumber }
+		const readError = isUnavailableMetadataCall(error) ? 'ERC-20 metadata unavailable' : safeIndexerFailureReason(error)
+		return { address, readError, readBlock: blockNumber }
 	}
 }
 

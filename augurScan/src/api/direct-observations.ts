@@ -3,7 +3,7 @@ import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 import { directObservationMaxima, directObservationRows } from '../repositories/direct-observations.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, cursorTimestamp, directObservationTotal, evmAddress, hasCursorSnapshot, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
+import { ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, cursorTimestamp, evmAddress, hasCursorSnapshot, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { snapshotCatalogRequest } from './trading-catalog.ts'
 
@@ -15,7 +15,6 @@ type DirectObservationSnapshot = {
 	readonly canonical: CanonicalHistoryFilter
 	readonly maxBalanceId: string
 	readonly maxMetadataId: string
-	readonly total: string
 }
 
 type DirectObservationCursor = readonly [
@@ -76,18 +75,15 @@ const directObservationSnapshot = (value: string): DirectObservationSnapshot => 
 		const canonical = record['canonical']
 		const maxBalanceId = record['maxBalanceId']
 		const maxMetadataId = record['maxMetadataId']
-		const total = record['total']
 		if (
 			(kind !== 'all' && kind !== 'address-balance' && kind !== 'token-metadata') ||
 			(address !== undefined && (typeof address !== 'string' || !/^0x[0-9a-f]{40}$/.test(address))) ||
 			(canonical !== 'canonical' && canonical !== 'orphaned' && canonical !== 'all') ||
 			!isPostgresBigint(maxBalanceId) ||
-			!isPostgresBigint(maxMetadataId) ||
-			!isPostgresBigint(total) ||
-			BigInt(total) > BigInt(Number.MAX_SAFE_INTEGER)
+			!isPostgresBigint(maxMetadataId)
 		)
 			throw new Error('shape')
-		return { kind, ...(address === undefined ? {} : { address }), canonical, maxBalanceId, maxMetadataId, total }
+		return { kind, ...(address === undefined ? {} : { address }), canonical, maxBalanceId, maxMetadataId }
 	} catch (error) {
 		throw new ApiRequestError('cursor snapshot is invalid', { cause: error })
 	}
@@ -109,12 +105,11 @@ export const directObservationsResponse = async (sql: SQL, url: URL): Promise<Re
 			canonical,
 			maxBalanceId: String(maxima[0]?.['max_balance_id'] ?? '0'),
 			maxMetadataId: String(maxima[0]?.['max_metadata_id'] ?? '0'),
-			total: '0',
 		}
 	} else {
 		snapshot = directObservationSnapshot(cursor[3])
 		if (snapshot.kind !== requestedKind || snapshot.address !== address || snapshot.canonical !== canonical) throw new ApiRequestError('cursor does not match filters')
-		if (cursor[10] > Number(snapshot.total)) throw new ApiRequestError('cursor is invalid')
+		if (BigInt(cursor[10]) > BigInt(snapshot.maxBalanceId) + BigInt(snapshot.maxMetadataId)) throw new ApiRequestError('cursor is invalid')
 	}
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 4 }])
 	const rows = await directObservationRows(sql, {
@@ -123,8 +118,6 @@ export const directObservationsResponse = async (sql: SQL, url: URL): Promise<Re
 		limit,
 		...(cursor === undefined ? {} : { cursor: { observedAt: cursor[11], kind: cursor[12], id: cursor[13] } }),
 	})
-	if (cursor === undefined) snapshot = { ...snapshot, total: String(rows[0]?.['total'] ?? '0') }
-	const total = directObservationTotal(snapshot.total)
 	const pageRows = rows.slice(0, limit)
 	const items = pageRows.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total' && key !== 'cursor_observed_at')))
 	const offset = cursor?.[10] ?? 0
@@ -136,7 +129,7 @@ export const directObservationsResponse = async (sql: SQL, url: URL): Promise<Re
 		asOf,
 		data: {
 			items,
-			total,
+			totalIsExact: false,
 			limit,
 			offset,
 			hasMore,

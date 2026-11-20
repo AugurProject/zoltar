@@ -32,7 +32,7 @@ export function safetyAdjustedQuote(quote: ArbitrageQuote, gasCost: bigint, life
 	}
 }
 
-export type EvaluationConfiguration = Pick<Configuration, 'maxHedgeSlippageBps' | 'network' | 'riskLimits' | 'submission' | 'router' | 'v2Router' | 'v4PoolManager' | 'v4Quoter'>
+export type EvaluationConfiguration = Pick<Configuration, 'maxPriceImpactBps' | 'maxHedgeSlippageBps' | 'network' | 'riskLimits' | 'submission' | 'router' | 'v2Router' | 'v4PoolManager' | 'v4Quoter'>
 
 export async function evaluate(client: BatchReader, config: EvaluationConfiguration, report: OpenOracleStatePreimage, pool: Pool, gasPrice: bigint, marketBlock: { hash: `0x${string}`; number: bigint; observedAt: number }) {
 	const game = report.game
@@ -67,7 +67,7 @@ export async function evaluate(client: BatchReader, config: EvaluationConfigurat
 
 export async function executionReadQuorum(
 	clients: readonly ReadClient[],
-	config: Pick<Configuration, 'network' | 'router' | 'v2Router' | 'v4PoolManager' | 'v4Quoter' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum' | 'executor' | 'openOracle' | 'twapSeconds'>,
+	config: Pick<Configuration, 'network' | 'router' | 'v2Router' | 'v4PoolManager' | 'v4Quoter' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum' | 'executor' | 'openOracle' | 'twapSeconds' | 'maxPriceImpactBps'>,
 	report: OpenOracleStatePreimage,
 	pool: Pool,
 	hedgeVenue: Venue,

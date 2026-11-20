@@ -10,6 +10,7 @@ import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/t
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { AddressText } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
@@ -18,7 +19,7 @@ import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reportin
 import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
-import { loadAllSecurityPools } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadSecurityPoolListing, loadSelectedSecurityPool, type UnavailableSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
@@ -39,8 +40,9 @@ type Props = {
 
 /** Question-specific shares and reporting; backing, liquidation and auctions live in the portfolio workspace. */
 export function PortfolioQuestionWorkspace({ accountState, parameters, deploymentStatuses, enabled, environmentKey, universeId, currentTimestamp, selectedAddress, onSelect }: Props) {
-	const [snapshot, setSnapshot] = useState<{ environmentKey: number; questions: ListedSecurityPool[] }>({ environmentKey, questions: [] })
+	const [snapshot, setSnapshot] = useState<{ environmentKey: number; questions: ListedSecurityPool[]; unavailable: UnavailableSecurityPool[] }>({ environmentKey, questions: [], unavailable: [] })
 	const questions = snapshot.environmentKey === environmentKey ? snapshot.questions : []
+	const unavailable = snapshot.environmentKey === environmentKey ? snapshot.unavailable.filter(question => question.universeId === universeId) : []
 	const [loading, setLoading] = useState(false)
 	const [loadError, setLoadError] = useState<string>()
 	const [refresh, setRefresh] = useState(0)
@@ -56,17 +58,25 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 		let current = true
 		setLoadError(undefined)
 		if (!enabled) {
-			setSnapshot({ environmentKey, questions: [] })
+			setSnapshot({ environmentKey, questions: [], unavailable: [] })
 			setLoading(false)
 			return
 		}
 		setLoading(true)
-		void loadAllSecurityPools(createConnectedReadClient())
+		void (async () => {
+			const client = createConnectedReadClient()
+			if (selectedAddress === '') return await loadSecurityPoolListing(client)
+			if (!isAddress(selectedAddress)) throw new Error('Enter a valid question address.')
+			return { pools: [await loadSelectedSecurityPool(client, getAddress(selectedAddress))], unavailable: [] }
+		})()
 			.then(value => {
-				if (current) setSnapshot({ environmentKey, questions: value })
+				if (current) setSnapshot({ environmentKey, questions: value.pools, unavailable: value.unavailable })
 			})
 			.catch(error => {
-				if (current) setLoadError(getErrorMessage(error, 'Unable to load portfolio questions.'))
+				if (current) {
+					setLoadError(getErrorMessage(error, 'Unable to load portfolio questions.'))
+					if (selectedAddress !== '') setSnapshot({ environmentKey, questions: [], unavailable: [] })
+				}
 			})
 			.finally(() => {
 				if (current) setLoading(false)
@@ -74,7 +84,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 		return () => {
 			current = false
 		}
-	}, [enabled, environmentKey, refresh])
+	}, [enabled, environmentKey, refresh, selectedAddress])
 	useEffect(() => {
 		if (selected === undefined) return
 		reporting.setReportingForm(form => ({ ...form, securityPoolAddress: selected.securityPoolAddress }))
@@ -122,6 +132,9 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 			<div className='route-view-flow'>
 				<RouteHeader title={copy.portfolioQuestions} description={copy.portfolioQuestionsDescription} actions={<a href='#/portfolios'>{copy.openPortfolios}</a>} />
 				<ErrorNotice message={loadError} />
+				{unavailable.map(question => (
+					<StateHint key={question.address} title={<AddressText address={question.address} />} presentation={{ key: 'load_failed', badgeLabel: copy.questionUnavailable, badgeTone: 'blocked', detail: question.reason }} />
+				))}
 				{loading && <EmptyState title={copy.loadingQuestions} />}
 				{!loading && questions.filter(question => question.universeId === universeId).length === 0 && <EmptyState title={copy.noRegisteredQuestions} detail={copy.registerQuestionsHint} actions={<a href='#/portfolios'>{copy.openPortfolios}</a>} />}
 				{!loading && questions.filter(question => question.universeId === universeId).length > 0 && (
