@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { createWalletClient, defineChain, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createWalletClient, defineChain, privateKeyToAccount, type Hex, keccak256, parseTransaction, isHex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { parseSettings } from '#config/settings'
 import { loadSettings, saveSettings } from '#config/settings-store'
@@ -18,7 +18,7 @@ async function fixture() {
 	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
 	settings.network.chainId = 1
 	settings.runtime.stateFile = join(directory, 'state.json')
-	const control = { head: 140n, nonce: 0n, receipt: false }
+	const control: { head: bigint; nonce: bigint; receipt: boolean; cancellationHash?: Hex; cancellationMined: boolean; rejectCancellation?: boolean } = { head: 140n, nonce: 0n, receipt: false, cancellationMined: false }
 	const requests: string[] = []
 	const server = Bun.serve({
 		hostname: '127.0.0.1',
@@ -30,13 +30,25 @@ async function fixture() {
 			if (typeof method !== 'string') throw new Error('Missing JSON-RPC method')
 			requests.push(method)
 			let result: unknown
-			if (method === 'eth_getTransactionReceipt')
-				result = control.receipt
-					? { blockHash: receipt.blockHash, blockNumber: '0x64', contractAddress: null, cumulativeGasUsed: '0x5208', effectiveGasPrice: '0x1', from: intent.sender, gasUsed: '0x5208', logs: [], status: '0x1', to: receipt.to, transactionHash: intent.hash, transactionIndex: '0x0', type: '0x2' }
-					: null
-			else if (method === 'eth_getTransactionCount') result = `0x${control.nonce.toString(16)}`
+			if (method === 'eth_sendRawTransaction') {
+				if (control.rejectCancellation) return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'provider unavailable' } })
+				const raw = Reflect.get(payload, 'params')?.[0]
+				if (!isHex(raw, { strict: true })) throw new Error('Missing signed cancellation')
+				const hash = keccak256(raw)
+				const transaction = parseTransaction(raw)
+				expect(transaction.nonce).toBe(intent.nonce)
+				expect(transaction.to?.toLowerCase()).toBe(intent.sender.toLowerCase())
+				expect(transaction.value).toBe(0n)
+				control.cancellationHash = hash
+				result = hash
+			} else if (method === 'eth_getTransactionReceipt') {
+				const envelope = { blockHash: receipt.blockHash, blockNumber: '0x64', contractAddress: null, cumulativeGasUsed: '0x5208', effectiveGasPrice: '0x1', from: intent.sender, gasUsed: '0x5208', logs: [], status: '0x1', transactionIndex: '0x0', type: '0x2' }
+				if (control.cancellationMined && Reflect.get(payload, 'params')?.[0] === control.cancellationHash) result = { ...envelope, to: intent.sender, transactionHash: control.cancellationHash }
+				else if (control.receipt) result = { ...envelope, to: receipt.to, transactionHash: intent.hash }
+				else result = null
+			} else if (method === 'eth_getTransactionCount') result = `0x${control.nonce.toString(16)}`
 			else if (method === 'eth_blockNumber') result = `0x${control.head.toString(16)}`
-			else if (method === 'eth_getBlockByNumber') result = { number: Reflect.get(payload, 'params')?.[0], hash: receipt.blockHash, baseFeePerGas: '0x1', timestamp: '0x1', transactions: [] }
+			else if (method === 'eth_getBlockByNumber') result = { number: Reflect.get(payload, 'params')?.[0] === 'latest' ? `0x${control.head.toString(16)}` : Reflect.get(payload, 'params')?.[0], hash: receipt.blockHash, baseFeePerGas: '0x1', timestamp: '0x1', transactions: [] }
 			else return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: `Unexpected recovery RPC ${method}` } })
 			return Response.json({ id, jsonrpc: '2.0', result })
 		},
@@ -71,21 +83,34 @@ async function fixture() {
 	}
 }
 
+test('#1471: dropped expired intents persist and broadcast a same-nonce cancellation without replaying the action', async () => {
+	const f = await fixture()
+	try {
+		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(true)
+		const pending = (await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions[0]
+		expect(pending?.hash).toBe(f.intent.hash)
+		expect(pending?.cancellation?.hash).toBe(f.control.cancellationHash)
+		expect(f.control.cancellationHash).toBeDefined()
+		expect(f.state.pendingTransactions).toHaveLength(1)
+	} finally {
+		await f.close()
+	}
+})
+
 for (const mode of ['public', 'private'] as const)
 	for (const head of [110n, 140n]) {
-		test(`retains signed ${mode} intent at block ${head} without renewing or broadcasting stale portfolio decisions`, async () => {
+		test(`waits or cancels signed ${mode} intent at block ${head} without replaying portfolio decisions`, async () => {
 			const f = await fixture()
 			try {
 				f.intent.mode = mode
 				f.control.head = head
-				const original = { ...f.intent }
 				await saveDurableState(f.settings.runtime.stateFile, f.state)
 				f.state.pendingTransactions = (await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions
-				await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('automatic replay is disabled')
+				expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(true)
 				const pending = (await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions[0]
-				expect(pending).toMatchObject(original)
-				expect(pending?.reconciliationReason).toContain('replace signer nonce 0')
-				expect(f.requests).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionCount'])
+				expect(pending?.hash).toBe(f.intent.hash)
+				expect(pending?.serializedTransaction).toBe(f.intent.serializedTransaction)
+				expect(pending?.cancellation !== undefined).toBe(head > 132n)
 			} finally {
 				await f.close()
 			}
@@ -114,7 +139,7 @@ test('failed persistence cannot discard an ambiguous signed transaction', async 
 		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow()
 		expect(f.state.pendingTransactions).toHaveLength(1)
 		expect((await loadDurableState(originalPath, 1)).pendingTransactions[0]?.hash).toBe(f.intent.hash)
-		expect(f.requests).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionCount'])
+		expect(f.requests).not.toContain('eth_sendRawTransaction')
 	} finally {
 		await f.close()
 	}
@@ -193,6 +218,64 @@ test('restores the authenticated pending signer after restarting with a differen
 		expect(await recoverPendingTransactions(current, f.wallet, state)).toBe(false)
 		expect(state.pendingTransactions).toHaveLength(0)
 		expect((await loadDurableState(current.runtime.stateFile, current.network.chainId)).pendingTransactions).toHaveLength(0)
+	} finally {
+		await f.close()
+	}
+})
+
+test('#1471: confirmed cancellation releases the original journal without applying its financial effects', async () => {
+	const f = await fixture()
+	try {
+		await recoverPendingTransactions(f.settings, f.wallet, f.state)
+		f.state.pendingTransactions = (await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions
+		f.control.cancellationMined = true
+		f.control.nonce = 1n
+		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(false)
+		expect(f.state.pendingTransactions).toEqual([])
+		expect((await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions).toEqual([])
+		expect(f.state.activities[0]?.message).toContain('Cancelled dropped transaction')
+	} finally {
+		await f.close()
+	}
+})
+test('#1471: cancellation above the configured gas budget waits without forgetting the intent', async () => {
+	const f = await fixture()
+	try {
+		f.settings.strategy.maximumGasCostAttoEth = 1n
+		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(true)
+		expect(f.state.pendingTransactions).toHaveLength(1)
+		expect(f.requests).not.toContain('eth_sendRawTransaction')
+	} finally {
+		await f.close()
+	}
+})
+
+test('#1471: late original inclusion wins over an outstanding cancellation', async () => {
+	const f = await fixture()
+	try {
+		await recoverPendingTransactions(f.settings, f.wallet, f.state)
+		f.control.receipt = true
+		f.control.nonce = 1n
+		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(false)
+		expect(f.state.pendingTransactions).toEqual([])
+		expect(f.state.activities[0]?.message).toBe(`${f.intent.label}: completed`)
+	} finally {
+		await f.close()
+	}
+})
+
+test('#1471: cancellation delivery failure remains visible and retries the same durable transaction', async () => {
+	const f = await fixture()
+	try {
+		f.control.rejectCancellation = true
+		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(true)
+		const cancellation = f.state.pendingTransactions[0]?.cancellation
+		expect(cancellation).toBeDefined()
+		expect(f.state.activities[0]?.message).toContain('Cancellation delivery unavailable')
+		f.control.rejectCancellation = false
+		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(true)
+		expect(f.state.pendingTransactions[0]?.cancellation).toEqual(cancellation)
+		expect(f.control.cancellationHash).toBe(cancellation?.hash)
 	} finally {
 		await f.close()
 	}

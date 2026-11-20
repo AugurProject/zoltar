@@ -7,6 +7,7 @@ import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
 import { getDecimalSeparatorError, parseDecimalInput, parseDecimalInputResult, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ensureSentence, formatWriteErrorMessage, getErrorDetail, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getOpenOracleSettlementSafetyGuard } from '../../../protocol/openOracleSettlementSafety.js'
 import { getOpenOracleDisputeSubmissionReserve, getOpenOracleDisputeSubmissionTimingGuard } from '../../../protocol/openOracleDisputeTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
@@ -326,7 +327,9 @@ export function getOpenOracleReportProgressTone(progress: OpenOracleReportProgre
 			return assertNever(progress)
 	}
 }
-export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleSelectedReportActionMode {
+export function getOpenOracleSelectedReportActionMode(
+	report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType' | 'callbackContract' | 'callbackGasLimit'>,
+): OpenOracleSelectedReportActionMode {
 	const status = getOpenOracleReportStatus(report)
 	switch (status) {
 		case 'Settled':
@@ -358,9 +361,11 @@ function formatOpenOracleLifecycleRemaining(remaining: bigint, timeType: boolean
 	if (timeType) return formatDuration(remaining)
 	return `${remaining.toString()} block${remaining === 1n ? '' : 's'}`
 }
-export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
+export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType' | 'callbackContract' | 'callbackGasLimit'>): OpenOracleReportActionAvailability {
 	const closed = getClosedOpenOracleReportAvailability(report)
 	if (closed !== undefined) return closed
+	const safetyGuard = getOpenOracleSettlementSafetyGuard(report)
+	if (safetyGuard !== undefined) return { canAct: false, message: safetyGuard }
 	const currentClock = getOpenOracleLifecycleClockValue(report)
 	const disputeStart = report.reportTimestamp + report.disputeDelay
 	const settlementStart = report.reportTimestamp + report.settlementTime

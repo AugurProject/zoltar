@@ -17,11 +17,10 @@ import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { loadCentralPortfolioQuestion } from './securityPoolPortfolioState.js'
 
 /** Question views read settlement and underwriting from their shared portfolio at one block. */
-export async function loadSecurityPoolDetails(client: ReadClient, deployment: SecurityPoolDeploymentTuple): Promise<ListedSecurityPool> {
+export async function loadSecurityPoolDetails(client: ReadClient, deployment: SecurityPoolDeploymentTuple, snapshotBlockNumber?: bigint): Promise<ListedSecurityPool> {
 	const { securityPool: securityPoolAddress, universeId, openOraclePriceCoordinator: managerAddress } = deployment
-	const block = await client.getBlock()
-	if (block.number === undefined) throw new Error('Question snapshot requires a mined block.')
-	const blockNumber = block.number
+	const blockNumber = snapshotBlockNumber ?? (await client.getBlock()).number
+	if (blockNumber === undefined) throw new Error('Question snapshot requires a mined block.')
 	const infrastructure = getInfraContractAddresses()
 	const [capital, portfolioAddress, escalationGameAddress, state, outcome, forkTime, price, settledAt, validUntil, marketDetails] = await Promise.all([
 		client.readContract({ abi: poolArtifact.abi, address: securityPoolAddress, functionName: 'portfolioCustody', blockNumber }),

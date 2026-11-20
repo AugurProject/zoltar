@@ -211,3 +211,26 @@ test('stored inputs and sources survive disk reload and approval continuation un
 		await rm(directory, { recursive: true, force: true })
 	}
 })
+
+for (const id of ['trading.pair.create-and-initialize', 'trading.pair.initialize-eth']) {
+	test(`${id} editable bounds follow the initialization liquidity minimum and deadline`, () => {
+		const snapshot = editableSnapshot()
+		if (id === 'trading.pair.create-and-initialize') snapshot.pairs = []
+		else {
+			const pair = snapshot.pairs[0]
+			if (pair === undefined) throw new Error('Missing pair')
+			Object.assign(pair, { status: 6, totalSupply: '0', effectiveYesReserve: '0', effectiveNoReserve: '0' })
+		}
+		const plan = build(id, { minimumLiquidity: '8000' }, snapshot)
+		if (plan.deadlineTimestamp === undefined) throw new Error('Missing initialization deadline')
+		const fields = operationInputSchema(id)
+		const minimum = fields.find(field => field.key === 'minimumLiquidity')
+		const deadline = fields.find(field => field.key === 'deadline')
+		if (minimum === undefined || deadline === undefined) throw new Error('Missing initialization inputs')
+		expect(transaction(plan).args[7]).toBe(8000n)
+		expect(inputFieldValue(minimum, plan)).toBe('8000')
+		expect(inputFieldValue(deadline, plan)).toBe(plan.deadlineTimestamp)
+		const roundtrip = build(id, { minimumLiquidity: inputFieldValue(minimum, plan), deadline: inputFieldValue(deadline, plan) }, snapshot)
+		expect(transaction(roundtrip).args).toEqual(transaction(plan).args)
+	})
+}

@@ -1,3 +1,5 @@
+import { sendJson } from './dashboard-requests.ts'
+import { decodeUniverseLookup } from './api-validation.ts'
 import type { PublicOperatorSnapshot } from '#state/operator-state'
 import { refreshFormButton } from '@zoltar/bot-shared/dashboard/form-state'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
@@ -61,6 +63,7 @@ export function createMarketPanels(state: DashboardState, elements: DashboardEle
 				refreshFormButton('tokens-form')
 			},
 			savedMessage: '',
+			lookupUniverse: async id => decodeUniverseLookup(await sendJson('/api/universe-lookup', 'POST', { universeId: id })).universes,
 		})
 		universeExplorer.update({ universes: snapshot.universes ?? [], approved: state.approvedUniverseIds, network: snapshot.network, disabled: elements.tokensFieldset.disabled })
 

@@ -2,6 +2,8 @@ import type { SQL } from 'bun'
 import { INITIAL_MIGRATABLE_SCHEMA_VERSION, type SupportedSchemaVersion } from './schema-policy.ts'
 import { POOL_COLUMNS_REMOVED_IN_SCHEMA_8, POOL_SNAPSHOTS_BEFORE_SCHEMA_7, REP_ETH_PRICE_SNAPSHOTS_BEFORE_SCHEMA_8, TABLES_REMOVED_IN_SCHEMA_7 } from './schema-removed-tables.ts'
 
+const readAggregateTables = new Set(['address_catalog', 'address_balance_assets', 'address_activity_summaries', 'protocol_entity_identities', 'protocol_entity_totals'])
+
 interface SchemaLayout {
 	readonly relations: readonly string[]
 	readonly columns: readonly string[]
@@ -93,6 +95,7 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	for (const match of normalizedSchema.matchAll(/CREATE TABLE public\.([a-z_][a-z0-9_]*) \(\n([\s\S]*?)\n\);/g)) {
 		const [, table, body] = match
 		if (table === undefined || body === undefined || (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityTables.has(table)) || ((version === '1' || version === '2') && ownershipTables.has(table))) continue
+		if (Number(version) < 9 && readAggregateTables.has(table)) continue
 		relations.add(`table:${table}`)
 		for (const sourceLine of body.split('\n')) {
 			const line = sourceLine.trim().replace(/,$/, '')
@@ -121,6 +124,7 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	for (const match of normalizedSchema.matchAll(/ALTER TABLE ONLY public\.([a-z_][a-z0-9_]*)\s+ADD CONSTRAINT ([a-z_][a-z0-9_]*) ([\s\S]*?);/g)) {
 		const [, table, name, definition] = match
 		if (table === undefined || name === undefined || definition === undefined) continue
+		if (Number(version) < 9 && readAggregateTables.has(table)) continue
 		if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityTables.has(table)) continue
 		if ((version === '1' || version === '2') && ownershipTables.has(table)) continue
 		constraints.add(`${table}.${name}|${normalizeDefinition(definition)}`)
@@ -128,6 +132,32 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	for (const match of normalizedSchema.matchAll(/CREATE (UNIQUE )?INDEX ([a-z_][a-z0-9_]*)\s+ON public\.([a-z_][a-z0-9_]*)\s+([\s\S]*?);/g)) {
 		const [, unique, name, table, definition] = match
 		if (name === undefined || table === undefined || definition === undefined) continue
+		if (Number(version) < 9 && (readAggregateTables.has(table) || ['address_activity_pool_membership', 'report_catalog_recent'].includes(name))) continue
+		if (
+			Number(version) < 9 &&
+			[
+				'logs_sender_lookup',
+				'logs_receiver_lookup',
+				'logs_creator_lookup',
+				'logs_redeemer_lookup',
+				'logs_recipient_lookup',
+				'logs_migrator_lookup',
+				'logs_report_lookup',
+				'transactions_sender_history',
+				'escalation_depositor_lookup',
+				'auction_bidder_lookup',
+				'amm_recipient_lookup',
+				'escalation_claim_positions',
+				'timeline_source_lookup',
+				'timeline_related_lookup',
+				'timeline_summary_search',
+				'timeline_identity_search',
+				'timeline_event_search',
+				'timeline_source_search',
+				'address_balances_asset_refresh',
+			].includes(name)
+		)
+			continue
 		if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && (historicalIntegrityTables.has(table) || historicalIntegrityIndexes.has(name))) continue
 		if ((version === '1' || version === '2') && (ownershipTables.has(table) || ownershipIndexes.has(name))) continue
 		indexes.add(`${name}|${normalizeDefinition(`CREATE ${unique ?? ''}INDEX ${name} ON public.${table} ${definition}`)}`)

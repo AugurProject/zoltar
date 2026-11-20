@@ -33,6 +33,7 @@ test('records every applied migration version when upgrading an older schema', (
 		['6', '006-collateral-repair-auctions.sql'],
 		['7', '007-current-contract-events.sql'],
 		['8', '008-stale-contract-values.sql'],
+		['9', '009-bounded-read-indexes.sql'],
 	])
 	expect(versions('2')).toEqual([
 		['3', '003-indexer-ownership.sql'],
@@ -41,6 +42,7 @@ test('records every applied migration version when upgrading an older schema', (
 		['6', '006-collateral-repair-auctions.sql'],
 		['7', '007-current-contract-events.sql'],
 		['8', '008-stale-contract-values.sql'],
+		['9', '009-bounded-read-indexes.sql'],
 	])
 	expect(versions('3')).toEqual([
 		['4', '004-question-seconds.sql'],
@@ -48,23 +50,31 @@ test('records every applied migration version when upgrading an older schema', (
 		['6', '006-collateral-repair-auctions.sql'],
 		['7', '007-current-contract-events.sql'],
 		['8', '008-stale-contract-values.sql'],
+		['9', '009-bounded-read-indexes.sql'],
 	])
 	expect(versions('4')).toEqual([
 		['5', '005-invalidation-counts.sql'],
 		['6', '006-collateral-repair-auctions.sql'],
 		['7', '007-current-contract-events.sql'],
 		['8', '008-stale-contract-values.sql'],
+		['9', '009-bounded-read-indexes.sql'],
 	])
 	expect(versions('5')).toEqual([
 		['6', '006-collateral-repair-auctions.sql'],
 		['7', '007-current-contract-events.sql'],
 		['8', '008-stale-contract-values.sql'],
+		['9', '009-bounded-read-indexes.sql'],
 	])
 	expect(versions('6')).toEqual([
 		['7', '007-current-contract-events.sql'],
 		['8', '008-stale-contract-values.sql'],
+		['9', '009-bounded-read-indexes.sql'],
 	])
-	expect(versions('7')).toEqual([['8', '008-stale-contract-values.sql']])
+	expect(versions('7')).toEqual([
+		['8', '008-stale-contract-values.sql'],
+		['9', '009-bounded-read-indexes.sql'],
+	])
+	expect(versions('8')).toEqual([['9', '009-bounded-read-indexes.sql']])
 	expect(versions(CURRENT_SCHEMA_VERSION)).toEqual([])
 	expect(pendingSchemaMigrations('1').at(-1)?.version).toBe(CURRENT_SCHEMA_VERSION)
 })
@@ -266,7 +276,7 @@ test('upgrades version 5 auction names while fingerprinting its existing layout'
 	expect(current.relations).toContain('table:collateral_repair_auction_events')
 	expect(current.relations).not.toContain('table:truth_auction_events')
 	expect(expectedSchemaLayout(schema, '6').columns.some(column => column.startsWith('pools.collateral_repair_auction_address|'))).toBe(true)
-	expect(pendingSchemaMigrations('5').map(migration => migration.file)).toEqual(['006-collateral-repair-auctions.sql', '007-current-contract-events.sql', '008-stale-contract-values.sql'])
+	expect(pendingSchemaMigrations('5').map(migration => migration.file)).toEqual(['006-collateral-repair-auctions.sql', '007-current-contract-events.sql', '008-stale-contract-values.sql', '009-bounded-read-indexes.sql'])
 })
 
 test('upgrades version 6 accounting storage while fingerprinting its existing layout', async () => {
@@ -286,7 +296,7 @@ test('upgrades version 6 accounting storage while fingerprinting its existing la
 	expect(current.columns.some(column => column.startsWith('pool_snapshots.vault_address|'))).toBe(false)
 	// The auction rename of migration 006 is already applied at version 6.
 	expect(previous.relations).toContain('table:collateral_repair_auction_events')
-	expect(pendingSchemaMigrations('6').map(migration => migration.file)).toEqual(['007-current-contract-events.sql', '008-stale-contract-values.sql'])
+	expect(pendingSchemaMigrations('6').map(migration => migration.file)).toEqual(['007-current-contract-events.sql', '008-stale-contract-values.sql', '009-bounded-read-indexes.sql'])
 })
 
 test('upgrades version 7 stale contract values while fingerprinting its existing layout', async () => {
@@ -306,5 +316,5 @@ test('upgrades version 7 stale contract values while fingerprinting its existing
 	expect(current.columns).toContain('rep_eth_price_snapshots.settlement_timestamp|timestamp with time zone|not-null||')
 	// The accounting storage of migration 007 is already replaced at version 7.
 	expect(previous.relations).not.toContain('table:vault_snapshots')
-	expect(pendingSchemaMigrations('7').map(migration => migration.file)).toEqual(['008-stale-contract-values.sql'])
+	expect(pendingSchemaMigrations('7').map(migration => migration.file)).toEqual(['008-stale-contract-values.sql', '009-bounded-read-indexes.sql'])
 })

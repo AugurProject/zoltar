@@ -1,3 +1,4 @@
+import type { UniverseNode } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import type { StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { ConnectivitySettings } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -44,6 +45,7 @@ export const isSettlementSettings = object<SettlementSettings>({ enabled: boolea
 export const isRuntimeLimits = object<StoredRuntimeLimits>({
 	logLookbackBlocks: numberValue,
 	maxHedgeSlippageBps: numberValue,
+	maxPriceImpactBps: optional(numberValue),
 	pollMilliseconds: numberValue,
 	riskLimits: object<StoredRuntimeLimits['riskLimits']>({ lifecycleGasReserveWeth: stringValue, maxConcurrentPositions: numberValue, maxDailyGasSpendWeth: stringValue, maxPositionNotionalWeth: stringValue, maxTotalLockedWeth: stringValue }),
 })
@@ -62,3 +64,6 @@ const addressValue = (value: unknown): value is string => typeof value === 'stri
 const hashValue = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
 export const decodePrediction = (value: unknown) => decode(value, object<{ address: string }>({ address: addressValue }), 'executor prediction')
 export const decodeExecutorDeployment = (value: unknown) => decode(value, object<{ address: string; alreadyDeployed: boolean; transactionHash?: string }>({ address: addressValue, alreadyDeployed: booleanValue, transactionHash: optional(hashValue) }), 'executor deployment response')
+
+export const decodeUniverseLookup = (value: unknown) =>
+	decode(value, object<{ universes: UniverseNode[] }>({ universes: array(object<UniverseNode>({ id: stringValue, parentId: optional(stringValue), outcomeIndex: optional(stringValue), repToken: optional(stringValue), summary: optional(stringValue), forkQuestionId: optional(stringValue) })) }), 'universe lookup')

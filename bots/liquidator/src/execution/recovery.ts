@@ -1,11 +1,13 @@
 import { createPublicClient, parseTransaction, type Account, type Chain, type Hex, type Transport, type WalletClient, createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
-import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { observeReceiptWithQuorum } from '@zoltar/bot-shared/execution/receipt-quorum'
 import type { OperatorSettings } from '#config/settings'
 import { PRIVATE_INTENT_FINALITY_BLOCKS } from '#core/cycle-control'
 import { type initialRuntimeState, assertIntentSender, saveDurableState } from '#state/operator-state'
 import { resolveFinalizedReceipt } from '#execution/receipt-transition'
+import { cancelDroppedIntent } from './cancel-dropped-intent.ts'
+import { commitReconciledIntent } from '#state/operator-state'
 import { explainTakeoverReceiptExpiry } from './takeover-receipt-expiry.ts'
 
 function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, pool: ReturnType<typeof createRpcEndpointPool>) {
@@ -73,6 +75,15 @@ export async function recoverPendingTransactions(
 			continue
 		}
 		if (receiptResult.observed) return true
+		if (intent.cancellation !== undefined) {
+			const cancelled = await finalizedReceiptWithQuorum(settings, wallet, intent.cancellation.hash, pool)
+			if (cancelled.receipt !== undefined) {
+				if (cancelled.receipt.from.toLowerCase() !== intent.sender.toLowerCase() || cancelled.receipt.to?.toLowerCase() !== intent.sender.toLowerCase()) throw new Error('Cancellation receipt identity mismatch')
+				await commitReconciledIntent(settings.runtime.stateFile, state, intent.hash, { kind: intent.kind, hash: intent.cancellation.hash, status: 'confirmed', message: `Cancelled dropped transaction: ${intent.label}` })
+				continue
+			}
+			if (cancelled.observed) return true
+		}
 		const requireReconciliation = async (reason: string): Promise<never> => {
 			intent.reconciliationReason = `${reason}; inspect the transaction and reconcile its receipt or replace signer nonce ${intent.nonce.toString()} before resuming`
 			await saveDurableState(settings.runtime.stateFile, state)
@@ -92,9 +103,18 @@ export async function recoverPendingTransactions(
 		if (nonce > intent.nonce) {
 			await requireReconciliation('The signer nonce was consumed without a receipt for this transaction; manual reconciliation is required')
 		}
-		// Portfolio takeovers and earnings claims both require fresh profitability
-		// checks. A relay expiry cannot invalidate a signed transaction or free its nonce.
-		await requireReconciliation('Fresh portfolio and market evidence is required; automatic replay is disabled')
+		const pinned = await sharedQuorumReadTargets(clients, settings.connectivity.rpcQuorum)
+		const head = pinned.blockNumber
+		if (head <= intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS) return true
+		const block = await settledQuorumValue(
+			'cancellation signing block',
+			pinned.readers.map(async ({ client, endpoint }) => ({ endpoint, value: await client.getBlock({ blockNumber: head }) })),
+			settings.connectivity.rpcQuorum,
+		)
+		if (block.baseFeePerGas === undefined) throw new Error('Cancellation block has no base fee')
+		if (isStopping()) return true
+		await cancelDroppedIntent(settings, wallet, state, intent, block.baseFeePerGas)
+		return true
 	}
 	return false
 }

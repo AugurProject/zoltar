@@ -117,6 +117,7 @@ export const createOperationsViews = (context: ScannerContext) => {
 		api,
 		operationsDetailRoute: routeView.operationsDetailRoute,
 		operationsCatalogSection,
+		operationsSectionFilters,
 		operationsDetailRouteKey: routeView.operationsDetailRouteKey,
 		data: operationsData,
 		renderOperations,

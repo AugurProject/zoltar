@@ -152,19 +152,19 @@ const expectReplayedObservationsServed = async ({ database, observationChainId }
 	})
 }
 
-// Pages through every retained attempt and rejects a cursor whose total was tampered with.
+// Pages through every retained attempt and rejects an impossible cursor offset.
 const expectRetainedObservationAudit = async ({ database, observationChainId }: DirectObservationContext): Promise<void> => {
 	const firstObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4`), database.sql)
 	if (firstObservationResponse === undefined) throw new Error('direct observation audit response was not returned')
 	const firstObservationPage = (await firstObservationResponse.json()) as {
-		data: { items: Array<Record<string, unknown>>; total: number; nextCursor: string }
+		data: { items: Array<Record<string, unknown>>; totalIsExact: boolean; nextCursor: string }
 	}
-	expect(firstObservationPage.data.total).toBe(7)
+	expect(firstObservationPage.data.totalIsExact).toBe(false)
 	expect(firstObservationPage.data.items).toHaveLength(4)
 	const observationCursorParts = decodeOpaqueCursor(firstObservationPage.data.nextCursor)
 	if (!Array.isArray(observationCursorParts) || observationCursorParts.length !== 14) throw new Error('direct observation cursor is malformed')
 	const overflowingObservationCursor = [...observationCursorParts]
-	overflowingObservationCursor[10] = firstObservationPage.data.total + 1
+	overflowingObservationCursor[10] = Number.MAX_SAFE_INTEGER
 	const overflowingObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4&cursor=${encodeURIComponent(btoa(JSON.stringify(overflowingObservationCursor)))}`), database.sql)
 	expect(overflowingObservationResponse?.status).toBe(400)
 	const secondObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4&cursor=${encodeURIComponent(firstObservationPage.data.nextCursor)}`), database.sql)
@@ -238,9 +238,9 @@ const invalidateObservationsByChainReorg = async ({ database, observationChainId
 	const orphanedObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=orphaned`), database.sql)
 	if (orphanedObservationResponse === undefined) throw new Error('orphaned direct observation audit response was not returned')
 	const orphanedObservations = (await orphanedObservationResponse.json()) as {
-		data: { items: Array<Record<string, unknown>>; total: number }
+		data: { items: Array<Record<string, unknown>>; totalIsExact: boolean }
 	}
-	expect(orphanedObservations.data.total).toBe(7)
+	expect(orphanedObservations.data.totalIsExact).toBe(false)
 	expect(orphanedObservations.data.items).toHaveLength(7)
 	expect(orphanedObservations.data.items).toEqual(expect.arrayContaining([expect.objectContaining({ evidence_status: 'chain-orphaned', invalidation_reason: 'chain-reorg' })]))
 }
@@ -299,8 +299,8 @@ const invalidateObservationsByManifestReset = async ({ database, observationChai
 	expect(storedCounts[0]?.occurrence_counts).toMatchObject({ 'address-balance': '1', 'token-metadata': '1' })
 	const manifestObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=orphaned`), database.sql)
 	if (manifestObservationResponse === undefined) throw new Error('manifest-invalidated direct observation audit response was not returned')
-	const manifestObservations = (await manifestObservationResponse.json()) as { data: { items: Array<Record<string, unknown>>; total: number } }
-	expect(manifestObservations.data.total).toBe(9)
+	const manifestObservations = (await manifestObservationResponse.json()) as { data: { items: Array<Record<string, unknown>>; totalIsExact: boolean } }
+	expect(manifestObservations.data.totalIsExact).toBe(false)
 	expect(manifestObservations.data.items).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({

@@ -1,12 +1,13 @@
 import { createPublicClient, createWalletClient, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { mainnet, parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import { securityPoolCapitalLedgerAbi as capitalAbi, erc20Abi } from '@zoltar/bot-shared/contracts/abi'
 import { expect } from 'bun:test'
 import { type useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import type { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
 import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
+import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
 import { portfolioSettings } from './portfolio-observation.ts'
@@ -55,4 +56,35 @@ export async function distressedSecondWinner(context: RepairAuction, keeperOpera
 	expect(next.snapshot.timestamp).toBeLessThan(next.snapshot.priceValidUntil)
 	expect(winner.liquidationStarted).toBe(initialWinner.liquidationStarted)
 	return { keeper, next, winner }
+}
+
+/** Reads current equal-lot terms instead of assuming the historical one-ETH lot. */
+export async function repairAuctionTerms(context: RepairAuction) {
+	const abi = parseAbi(['function lotAttoEth() view returns (uint256)', 'function targetLots() view returns (uint256)', 'function repGrid() view returns (uint256)', 'function minimumCollateralAttoRepPerLot() view returns (uint256)'])
+	const [collateralPerLot, lotCount, grid, minimumRepPerLot] = await Promise.all([
+		context.owner.readContract({ address: context.auction, abi, functionName: 'lotAttoEth' }),
+		context.owner.readContract({ address: context.auction, abi, functionName: 'targetLots' }),
+		context.owner.readContract({ address: context.auction, abi, functionName: 'repGrid' }),
+		context.owner.readContract({ address: context.auction, abi, functionName: 'minimumCollateralAttoRepPerLot' }),
+	])
+	if (typeof collateralPerLot !== 'bigint' || typeof lotCount !== 'bigint' || typeof grid !== 'bigint' || typeof minimumRepPerLot !== 'bigint' || grid === 0n) throw new Error('Auction lot terms are invalid')
+	const repPerLot = (((collateralPerLot * 35n) / 10n + grid - 1n) / grid) * grid
+	expect(lotCount).toBeGreaterThan(1n)
+	expect(repPerLot).toBeGreaterThanOrEqual((minimumRepPerLot * 12n) / 10n)
+	return { collateralPerLot, lotCount, repPerLot, minimumRepPerLot, grid }
+}
+
+/** Keeps fee-bearing demand divisible without relying on the old one-ETH lots. */
+export async function prepareKeeperCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolPortfolioFixture>) {
+	// An exact fee denominator makes the integer-per-second holding fee
+	// divisible by eight at any whole basis-point rate, preserving that divisor at a fork.
+	const quantum = 365n * DAY * 10_000n * 8n
+	return await preparePortfolioCollateralRepairAuction({
+		...fixture,
+		mint: async (amount = 10n * unit, question, options) => {
+			const principal = amount - (amount % quantum)
+			expect(principal).toBeGreaterThan(0n)
+			return await fixture.mint(principal, question, options)
+		},
+	})
 }

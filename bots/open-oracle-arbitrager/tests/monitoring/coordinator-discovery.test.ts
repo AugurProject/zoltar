@@ -144,14 +144,7 @@ test('rejects disagreement between otherwise valid readers', async () => {
 })
 
 test('retains older authenticated report identities, ignoring absent candidates', async () => {
-	const policies = await discoverCoordinatorPolicies(
-		[reader({ sharedFeed: true }).client],
-		await configuration(),
-		10n,
-		hash,
-		[6n, 9n],
-		[reports[1]].filter(report => report !== undefined),
-	)
+	const policies = await discoverCoordinatorPolicies([reader({ sharedFeed: true }).client], await configuration(), 10n, hash, [6n, 9n], reports)
 	expect(policies[0]?.reportEscrows).toEqual({ '6': secondPool, '7': other })
 })
 
@@ -164,4 +157,42 @@ test('discovers questionless portfolio feeds through canonical bindings', async 
 test('an observed escrow cannot introduce a feed outside the canonical factory binding', async () => {
 	const policies = await discoverCoordinatorPolicies([reader({ sharedFeed: true, wrongFeedBinding: true }).client], await configuration(), 10n, hash, [], reports)
 	expect(policies).toEqual([])
+})
+
+test('#1441: gas-burning creators cannot prevent genuine feed authentication', async () => {
+	const base = reader({ sharedFeed: true })
+	const badCreator = getAddress('0x00000000000000000000000000000000000000ff')
+	const client: typeof base.client = {
+		...base.client,
+		multicall: async parameters => {
+			if (parameters.contracts.some(call => call.address === badCreator)) throw new Error('aggregate3 exhausted by a gas-burning creator')
+			return base.client.multicall(parameters)
+		},
+	}
+	const policies = await discoverCoordinatorPolicies([client], await configuration(), 10n, hash, [], [...reports, { reportId: 8n, creator: badCreator }])
+	expect(policies.map(policy => policy.coordinator)).toEqual([feed])
+	expect(policies[0]?.reportEscrows).toEqual({ '6': secondPool, '7': other })
+})
+
+test('#1447: retained candidates are batched and unrelated retained ids are not probed on a feed', async () => {
+	const base = reader({ sharedFeed: true })
+	let candidateBatches = 0
+	let sequentialCandidates = 0
+	const client: typeof base.client = {
+		...base.client,
+		multicall: async parameters => {
+			if (parameters.contracts.some(call => call.functionName === 'reportCandidates')) candidateBatches++
+			return base.client.multicall(parameters)
+		},
+		readContract: async parameters => {
+			if (parameters.functionName === 'reportCandidates') sequentialCandidates++
+			return base.client.readContract(parameters)
+		},
+	}
+	const observed = Array.from({ length: 1000 }, (_, index) => ({ reportId: BigInt(index + 10), creator: other }))
+	const policies = await discoverCoordinatorPolicies([client], await configuration(), 10n, hash, [99999n], observed)
+	expect(sequentialCandidates).toBe(0)
+	expect(candidateBatches).toBe(6)
+	expect(Object.keys(policies[0]?.reportEscrows ?? {})).toHaveLength(1001)
+	expect(policies[0]?.reportEscrows?.['99999']).toBeUndefined()
 })

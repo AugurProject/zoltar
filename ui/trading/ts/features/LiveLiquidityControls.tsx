@@ -254,6 +254,11 @@ function LiquidityPreviewSection({ preview, bounds, market, connected, protectio
 						<MetricField label={liquidityCopy.sharesDeposited}>
 							{formatOutcomeWithValue(preview.yesUsed, shareOutcome.yes, market)} / {formatOutcomeWithValue(preview.noUsed, shareOutcome.no, market)}
 						</MetricField>
+						{preview.operation === 'initialize' ? (
+							<MetricField label={liquidityCopy.minimumDeposit}>
+								{formatOutcomeWithValue(bounds.minimumYesDeposit, shareOutcome.yes, market)} / {formatOutcomeWithValue(bounds.minimumNoDeposit, shareOutcome.no, market)}
+							</MetricField>
+						) : undefined}
 					</DataGrid>
 				</ReadOnlyDetailAccordion>
 			)}

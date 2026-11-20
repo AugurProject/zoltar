@@ -58,12 +58,13 @@ test('trading catalog treats wildcard characters as literal search text', async 
 	}
 })
 
-test('timeline rows and total counts use the same literal search pattern', async () => {
+test('timeline page and enrichment filters escape literal search text in one query', async () => {
 	const { bindings, database, sql } = captureQueries()
 	try {
 		await timelineCatalogRows(sql, { chainId: 1, query: search, canonical: 'canonical', fromBlock: '0', toBlock: '100', asOfBlock: '100', limit: 10, cursor: { block: '101', log: 0, tx: '', blockHash: '', entityType: '', identity: '' } })
-		expect(bindings).toHaveLength(2)
-		for (const values of bindings) expect(values.filter(value => value === escaped)).toHaveLength(4)
+		expect(bindings).toHaveLength(1)
+		// Both the bounded page and its enrichment filter escape all four searchable fields.
+		expect(bindings.flat().filter(value => value === escaped)).toHaveLength(8)
 	} finally {
 		await database.close()
 	}

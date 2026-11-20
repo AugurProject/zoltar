@@ -280,6 +280,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 			}
 			await submitFocusedForm('runtime-form', 'runtime-status', 'Saving risk limits…', async () => {
 				const runtime = {
+					maxPriceImpactBps: saved.maxPriceImpactBps ?? 100,
 					logLookbackBlocks,
 					maxHedgeSlippageBps,
 					pollMilliseconds,

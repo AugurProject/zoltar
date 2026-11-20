@@ -253,7 +253,7 @@ export async function loadTokenMarkets(
 		const balanceIndex = parameters.wallet === undefined ? undefined : enqueue({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [parameters.wallet] })
 		return { balanceIndex, constantProductIndexes, metadataIndex, v3Indexes }
 	})
-	const results = await batchRead(client, parameters.multicall3, calls, parameters.blockNumber)
+	const results = await batchRead(client, parameters.multicall3, calls, parameters.blockNumber, { gas: 200_000n })
 	const snapshots: TokenMarketSnapshot[] = []
 	for (const [index, discovered] of parameters.pools.entries()) {
 		const token = discovered.token

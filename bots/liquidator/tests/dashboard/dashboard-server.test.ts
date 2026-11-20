@@ -593,3 +593,34 @@ test('portfolio monitoring responses exclude protected nested metadata', async (
 	expect(body).toMatchObject({ portfolios: [{ address: '0x123', positions: [{ id: '3', takeoverStatus: 'Funded takeover ready' }] }] })
 	expect(JSON.stringify(body)).not.toContain('protected')
 })
+
+test('#1480: universe lookup is on demand and does not approve the loaded universe', async () => {
+	const requested: unknown[] = []
+	const server = startServer({
+		lookupUniverse: async value => {
+			requested.push(value)
+			return { universes: [{ id: '0' }, { id: '42', parentId: '0' }] }
+		},
+	})
+	const response = await fetch(new URL('/api/universe-lookup', server.url), { method: 'POST', headers: { 'content-type': 'application/json', origin: server.url.origin }, body: JSON.stringify({ universeId: '42' }) })
+	expect(response.status).toBe(200)
+	expect(await response.json()).toEqual({ universes: [{ id: '0' }, { id: '42', parentId: '0' }] })
+	expect(requested).toEqual([{ universeId: '42' }])
+})
+
+test('#1480: lookup requires configured network and same-origin request', async () => {
+	let reads = 0
+	const server = startServer({
+		isNetworkConfigured: () => false,
+		lookupUniverse: async () => {
+			reads++
+			return {}
+		},
+	})
+	const response = await fetch(new URL('/api/universe-lookup', server.url), { method: 'POST', headers: { 'content-type': 'application/json', origin: server.url.origin }, body: '{}' })
+	expect(response.status).toBe(400)
+	expect(reads).toBe(0)
+	const foreign = await fetch(new URL('/api/universe-lookup', server.url), { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://foreign.example' }, body: '{}' })
+	expect(foreign.status).toBe(403)
+	expect(reads).toBe(0)
+})

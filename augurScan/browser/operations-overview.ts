@@ -286,7 +286,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			'timeline',
 			() => [
 				operationsPanel('Cross-protocol historical timeline', timelineRows, 'No semantic evidence matches these filters.', {
-					label: `${operationCounted(selectedCatalogPage?.['total'], 'matching transition')} · canonical status and invalidation provenance included`,
+					label: `${operationCounted(timelineRows.length, 'matching transition')} shown · canonical status and invalidation provenance included`,
 				}),
 			],
 		],

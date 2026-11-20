@@ -10,7 +10,7 @@ export async function scanPortfolioContext(client: PublicClient<Transport, Chain
 	if (isStopping()) throw new OperatorStopping()
 	if (block.hash === undefined || block.number === undefined) throw new Error('Portfolio scan block is missing canonical identity')
 	const snapshotBlock = { hash: block.hash, number: block.number, timestamp: block.timestamp }
-	const universes = (await loadUniverseTree(client, settings.deployment.zoltar, snapshotBlock.number)).map(universe => ({ ...universe, approved: settings.approvedUniverses.includes(universe.id) }))
+	const universes = (await loadUniverseTree(client, settings.deployment.zoltar, snapshotBlock.number, [...new Set([...settings.approvedUniverses, ...settings.selectedPortfolios.map(selection => selection.universeId)])])).map(universe => ({ ...universe, approved: settings.approvedUniverses.includes(universe.id) }))
 	const walletRepByToken = new Map<string, bigint>()
 	if (wallet !== undefined) {
 		const selectedUniverses = new Set(settings.selectedPortfolios.map(selection => selection.universeId))

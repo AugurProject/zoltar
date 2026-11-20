@@ -167,7 +167,8 @@ export async function demoOperationsCatalogRoute(env: DemoEnvironment, path: str
 			asOf: operations.asOf,
 			data: {
 				items: older === undefined ? [] : [{ ...older, block_number: String(BigInt(operations.asOf.blockNumber) - 100n) }],
-				...(section === 'forks' || section === 'timeline' ? { total: items.length + 1 } : {}),
+				...(section === 'forks' ? { total: items.length + 1 } : {}),
+				...(section === 'timeline' || section === 'trading' ? { totalIsExact: false } : {}),
 				limit: 100,
 				hasMore: false,
 			},
@@ -178,7 +179,7 @@ export async function demoOperationsCatalogRoute(env: DemoEnvironment, path: str
 		asOf: operations.asOf,
 		data: {
 			items,
-			...(section === 'forks' || section === 'timeline' ? { total: items.length + (continuationFixture ? 1 : 0) } : {}),
+			...(section === 'forks' ? { total: items.length + (continuationFixture ? 1 : 0) } : {}),
 			limit: 100,
 			hasMore: continuationFixture,
 			...(continuationFixture ? { nextCursor: 'demo-older' } : {}),

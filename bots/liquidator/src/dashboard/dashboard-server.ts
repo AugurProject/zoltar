@@ -14,6 +14,7 @@ import { operatorHeader } from './header.ts'
 import { settingsPageMarkup } from './settings-page.tsx'
 
 export type DashboardController = {
+	lookupUniverse?: (value: unknown) => unknown | Promise<unknown>
 	getPoolCatalog?: (page: number, address?: Address, scope?: 'all' | 'monitored') => Promise<PoolCatalogPage>
 	getConfiguration: () => unknown | Promise<unknown>
 	getState: () => unknown | Promise<unknown>
@@ -268,6 +269,14 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return json(await controller.getConfiguration())
 				} catch (error) {
 					return publicDashboardError('liquidator', error, 503, 'configuration-read', 'Configuration is unavailable. Retry or check protected bot logs for details.')
+				}
+			}
+			if (request.method === 'POST' && url.pathname === '/api/universe-lookup' && controller.lookupUniverse !== undefined) {
+				try {
+					if (!(await controller.isNetworkConfigured())) throw new Error(CHAIN_CONFIGURATION_REQUIRED)
+					return json(await controller.lookupUniverse(await boundedDashboardJson(request)))
+				} catch (error) {
+					return publicDashboardError('liquidator', error, 400, 'universe-lookup', 'Universe lookup failed. Check the ID and RPC connectivity.')
 				}
 			}
 			const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([

@@ -2,6 +2,7 @@ import { hasSubmissionWindow, TRANSACTION_SUBMISSION_RESERVE_SECONDS } from '@zo
 import { hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getOpenOracleSettlementSafetyGuard } from './openOracleSettlementSafety.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
 import { reportAlreadySettled } from '../copy/openOracle.js'
 
@@ -20,6 +21,8 @@ export async function requireOpenOracleDisputeSubmissionWindow(client: Pick<Read
 	const [state, block] = await Promise.all([loadOpenOracleStoredState(client, address, reportId), client.getBlock()])
 	if (state.settled) throw new Error(reportAlreadySettled)
 	const timeType = hasOpenOracleFlag(state.latest.game, OPEN_ORACLE_FLAG_TIME_TYPE)
+	const safetyGuard = getOpenOracleSettlementSafetyGuard({ ...state.latest.game, timeType })
+	if (safetyGuard !== undefined) throw new Error(safetyGuard)
 	const currentClock = timeType ? block.timestamp : block.number
 	if (currentClock === undefined) throw new Error('Could not read the current dispute clock. Retry before sending.')
 	const guard = getOpenOracleDisputeSubmissionTimingGuard({ ...state.latest.game, currentClock, timeType })

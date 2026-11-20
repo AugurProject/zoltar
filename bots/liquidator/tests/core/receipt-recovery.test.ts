@@ -61,7 +61,7 @@ function rpcServer(includeEffectiveGasPrice: boolean, receiptBlockHash = blockHa
 					jsonrpc: '2.0',
 					result: {
 						hash: blockNumber === '0x64' ? blockHash : descendantHash,
-						number: blockNumber,
+						number: blockNumber === 'latest' ? '0x70' : blockNumber,
 						timestamp: '0x1',
 						transactions: [],
 					},
@@ -174,11 +174,14 @@ for (const nonce of [0, 1]) {
 	test(`retains ambiguous portfolio intent with signer nonce ${nonce} instead of replaying stale decisions`, async () => {
 		const { intent, receipt } = await portfolioReceiptIntent()
 		await withPortfolioRecovery('portfolio-ambiguous-', intent, receipt, nonce, async ({ settings, state, wallet }) => {
-			await expect(recoverPendingTransactions(settings, wallet, state)).rejects.toThrow(nonce === 0 ? 'automatic replay is disabled' : 'nonce was consumed')
+			await saveDurableState(settings.runtime.stateFile, state)
+			if (nonce === 0) expect(await recoverPendingTransactions(settings, wallet, state)).toBe(true)
+			else await expect(recoverPendingTransactions(settings, wallet, state)).rejects.toThrow('nonce was consumed')
 			expect(state.pendingTransactions).toHaveLength(1)
 			const loaded = await loadDurableState(settings.runtime.stateFile, 1)
 			expect(loaded.pendingTransactions[0]?.hash).toBe(intent.hash)
-			expect(loaded.pendingTransactions[0]?.reconciliationReason).toContain('reconcile its receipt or replace signer nonce')
+			if (nonce !== 0) expect(loaded.pendingTransactions[0]?.reconciliationReason).toContain('reconcile its receipt or replace signer nonce')
+			else expect(loaded.pendingTransactions[0]?.reconciliationReason).toBeUndefined()
 		})
 	})
 }

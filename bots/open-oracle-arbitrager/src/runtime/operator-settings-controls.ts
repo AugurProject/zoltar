@@ -18,7 +18,7 @@ export function queuedSettingsSections(pending: PendingOperatorUpdates): QueuedS
 	if (pending.deployment !== undefined) sections.push('deployment')
 	if (pending.execute !== undefined) sections.push('execution')
 	if (pending.centralizedMarkets !== undefined) sections.push('markets')
-	if (pending.riskLimits !== undefined || pending.logLookbackBlocks !== undefined || pending.maxHedgeSlippageBps !== undefined || pending.pollMilliseconds !== undefined) sections.push('risk')
+	if (pending.riskLimits !== undefined || pending.logLookbackBlocks !== undefined || pending.maxHedgeSlippageBps !== undefined || pending.maxPriceImpactBps !== undefined || pending.pollMilliseconds !== undefined) sections.push('risk')
 	if (pending.settlement !== undefined) sections.push('settlement')
 	if (pending.strategy !== undefined) sections.push('strategy')
 	if (pending.submission !== undefined) sections.push('submission')
@@ -88,6 +88,7 @@ export function createOperatorSettingsControls(context: OperatorSettingsContext)
 			return queueSettingsUpdate(async () => {
 				await persistFocusedSettings(settings => ({ ...settings, runtime: { ...settings.runtime, ...next } }))
 				pending.logLookbackBlocks = next.logLookbackBlocks
+				pending.maxPriceImpactBps = next.maxPriceImpactBps
 				pending.maxHedgeSlippageBps = next.maxHedgeSlippageBps
 				pending.pollMilliseconds = next.pollMilliseconds
 				pending.riskLimits = next.riskLimits

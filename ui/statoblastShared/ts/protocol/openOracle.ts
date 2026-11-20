@@ -1,3 +1,4 @@
+import { conservativeOpenOracleSettlementGas } from './openOracleSettlementSafety.js'
 import { wrapWeth } from './wethFunding.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import { bigintToSafeNumber, toEventSelector, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
@@ -22,8 +23,6 @@ import { requireOpenOracleDisputeSubmissionWindow } from './openOracleDisputeTim
 // Flags mirrored from OpenOracle.sol that the shared package does not export.
 const OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT = 1n << 5n
 const OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION = 1n << 6n
-const OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT = 5_000_000n
-const OPEN_ORACLE_SETTLE_OVERHEAD_GAS = 300_000n
 const OPEN_ORACLE_REPORT_MISSING_ERROR_NAME = 'OpenOracleReportMissingError'
 
 function createOpenOracleReportMissingError(reportId: bigint) {
@@ -63,13 +62,9 @@ export function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decim
 	return amount1 === 0n ? 0n : (amount2 * 10n ** (BigInt(OPEN_ORACLE_PRICE_UNITS) + BigInt(decimals1))) / (amount1 * 10n ** BigInt(decimals2))
 }
 
-// settle forwards exactly callbackGasLimit to the callback. EIP-150 lets a call forward at most 63/64 of the remaining gas,
-// and settle reverts with InvalidGasLimit unless callbackGasLimit / 63 remains afterwards, so budget both plus settle overhead.
+/** Budgets both callback execution and caller-side return-data processing. */
 export function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'], 'callbackContract' | 'callbackGasLimit'>) {
-	if (game.callbackContract === zeroAddress) return OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT
-	const callbackGasLimit = game.callbackGasLimit
-	const required = (callbackGasLimit * 64n + 62n) / 63n + callbackGasLimit / 63n + OPEN_ORACLE_SETTLE_OVERHEAD_GAS
-	return required > OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT ? required : OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT
+	return conservativeOpenOracleSettlementGas(game)
 }
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleReportDetails> {

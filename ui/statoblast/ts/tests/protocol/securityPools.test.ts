@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test'
 import { getAddress, RpcError, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { loadAllSecurityPools, loadRegisteredPortfolios } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadAllSecurityPools, loadRegisteredPortfolios, loadSecurityPoolListing, loadSelectedSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { createMockLoaderClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { centralPortfolioRead, owner, portfolio, capital, token } from '../features/portfolios/capitalFixture.js'
 
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
 const deployment = { securityPool: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, openOraclePriceCoordinator: token, statoblastSecurityMultiplierBps: 20000n }
-function fixture({ forked = false, reporting = false, missingPortfolio = false, reorg = false } = {}) {
+function fixture({ forked = false, reporting = false, missingPortfolio = false, reorg = false, brokenSecond = false } = {}) {
 	const reads: string[] = []
 	let headReads = 0
 	const client = createMockLoaderClient({
@@ -20,9 +20,27 @@ function fixture({ forked = false, reporting = false, missingPortfolio = false, 
 			if (request.functionName !== 'getOutcomeLabels') expect(request.blockNumber).toBe(99n)
 			switch (request.functionName) {
 				case 'securityPoolDeploymentCount':
-					return 1n
+					return brokenSecond ? 2n : 1n
 				case 'securityPoolDeploymentsRange':
-					return [deployment]
+					return brokenSecond ? [deployment, { ...deployment, securityPool: second }] : [deployment]
+				case 'getSecurityPoolOriginId':
+					return `0x${'01'.repeat(32)}`
+				case 'getSecurityPool':
+					return owner
+				case 'universeId':
+					return deployment.universeId
+				case 'openOraclePriceCoordinator':
+					return token
+				case 'parent':
+					return zeroAddress
+				case 'questionId':
+					return deployment.questionId
+				case 'statoblastSecurityMultiplierBps':
+					return deployment.statoblastSecurityMultiplierBps
+				case 'shareToken':
+					return token
+				case 'initialReportPriorityFeeAttoEthPerGas':
+					return 1n
 				case 'portfolioCustody':
 					return missingPortfolio ? zeroAddress : capital
 				case 'getSecurityPoolPortfolio':
@@ -52,6 +70,7 @@ function fixture({ forked = false, reporting = false, missingPortfolio = false, 
 			}
 		},
 		multicall: async request => {
+			if (brokenSecond && request.contracts.some(call => call.address === second && call.functionName === 'refreshPortfolioFees')) throw new Error('execution reverted: collateral unavailable')
 			if (request.contracts[0]?.functionName !== 'questions') expect(request.blockNumber).toBe(99n)
 			return request.contracts.map(call => {
 				reads.push(call.functionName)
@@ -73,8 +92,11 @@ test.each([false, true])('discovers native portfolio question snapshots (reporti
 	expect(reads).not.toContain('getVaults')
 	expect(reads).not.toContain('securityVaults')
 })
-test('rejects a question with no portfolio custody', async () => {
-	await expect(loadAllSecurityPools(fixture({ missingPortfolio: true }).client)).rejects.toThrow('Question has no portfolio')
+test('marks a question without portfolio custody unavailable and still rejects direct loading', async () => {
+	const listing = await loadSecurityPoolListing(fixture({ missingPortfolio: true }).client)
+	expect(listing.pools).toEqual([])
+	expect(listing.unavailable[0]).toMatchObject({ address: owner, reason: expect.stringContaining('Question has no portfolio.') })
+	await expect(loadSelectedSecurityPool(fixture({ missingPortfolio: true }).client, owner)).rejects.toThrow('Question has no portfolio')
 })
 test('rejects a replaced discovery anchor after loading question snapshots', async () => {
 	await expect(loadAllSecurityPools(fixture({ reorg: true }).client)).rejects.toThrow('deployments changed')
@@ -278,4 +300,17 @@ test('a reorganization during the portfolio reads is reported as such', async ()
 		},
 	}
 	await expect(loadRegisteredPortfolios(reorganized, 0n)).rejects.toThrow('Portfolios changed during discovery')
+})
+
+test('#1469: a broken portfolio question cannot hide a healthy question', async () => {
+	const pools = await loadAllSecurityPools(fixture({ brokenSecond: true }).client)
+	expect(pools).toHaveLength(1)
+	expect(pools[0]?.securityPoolAddress).toBe(owner)
+})
+
+test('#1469: direct question loading never enumerates other deployments', async () => {
+	const { client, reads } = fixture({ brokenSecond: true })
+	expect((await loadSelectedSecurityPool(client, owner)).securityPoolAddress).toBe(owner)
+	expect(reads).not.toContain('securityPoolDeploymentCount')
+	expect(reads).not.toContain('securityPoolDeploymentsRange')
 })

@@ -71,6 +71,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			historyFile: '.state/history.jsonl',
 			logLookbackBlocks: 256n,
 			maxHedgeSlippageBps: 50n,
+			maxPriceImpactBps: 100n,
 			once: false,
 			pollMilliseconds: 15_000,
 			positionFile: '.state/positions.json',
@@ -469,4 +470,12 @@ test('stores only venue switches and derives addresses again on load', () => {
 	const stored = serializeOperatorSettings(parsed)
 	expect(stored.deployment).toEqual({ uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true })
 	expect(parseOperatorSettings(JSON.parse(JSON.stringify(stored))).deployment).toEqual(parsed.deployment)
+})
+
+test('replacement-price impact defaults to 100 bps and validates configured limits', () => {
+	const current = serializeOperatorSettings(settings(undefined))
+	const { maxPriceImpactBps: _limit, ...runtime } = current.runtime
+	expect(parseOperatorSettings({ ...current, runtime }).runtime.maxPriceImpactBps).toBe(100n)
+	expect(parseOperatorSettings({ ...current, runtime: { ...runtime, maxPriceImpactBps: 25 } }).runtime.maxPriceImpactBps).toBe(25n)
+	for (const invalid of [-1, 1001, 1.5, '100']) expect(() => parseOperatorSettings({ ...current, runtime: { ...runtime, maxPriceImpactBps: invalid } })).toThrow('Runtime maxPriceImpactBps')
 })

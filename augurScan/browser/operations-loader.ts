@@ -14,6 +14,7 @@ interface OperationsLoaderDeps {
 	operationsDetailRoute: () => OperationsDetailRoute | undefined
 	operationsCatalogSection: () => OperationsCatalogSection | undefined
 	operationsDetailRouteKey: (route: OperationsDetailRoute) => string
+	operationsSectionFilters: (section: string) => HTMLElement[]
 	data: ReturnType<typeof createOperationsData>
 	renderOperations: (response: OperationsResponse, context?: OperationsRenderContext, live?: boolean) => void
 	renderOperationsDetailPage: (response: OperationsResponse, route: OperationsDetailRoute, context?: OperationsRenderContext, live?: boolean) => void
@@ -103,7 +104,7 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 					}
 					// The click event must not reach loadOperations, whose only parameter is its options object.
 					renderRetryStatus(status, operationsFailureMessage(false, error instanceof Error ? error.status : undefined, detail), () => loadOperations())
-					content.replaceChildren()
+					content.replaceChildren(...deps.operationsSectionFilters(operationsCatalogSection() ?? ''))
 					renderedSignature = undefined
 					content.setAttribute('aria-busy', 'false')
 					return false

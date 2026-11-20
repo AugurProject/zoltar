@@ -1,7 +1,7 @@
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
-import { type Configuration, decodeConfiguration, type Snapshot } from './api-validation.ts'
+import { type Configuration, decodeConfiguration, decodeUniverseLookup, type Snapshot } from './api-validation.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { put } from './dashboard-requests.ts'
+import { api, put } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import { publicFailure } from './pool-presentation.ts'
 
@@ -79,6 +79,7 @@ export function createPoolSelection({ state, elements, populateConfiguration, sy
 	function renderUniverses(snapshot: Snapshot, disabled?: boolean) {
 		universeExplorer ??= createUniverseExplorer(elements.universeRows, {
 			savedMessage: 'Universe approvals saved.',
+			lookupUniverse: async universeId => decodeUniverseLookup(await api('/api/universe-lookup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ universeId }) }, 15_000)).universes,
 			onChange: async next => {
 				const epoch = state.profileRequestEpoch
 				try {

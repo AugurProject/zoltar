@@ -58,7 +58,7 @@ test('reads inventory in one batch, tolerates a reverting token, and values REP 
 		expect(balances?.snapshot).toEqual({ availableEth: '5', availableRep: '100', availableWeth: '1', repValueWeth: '3', totalValueWeth: '9' })
 		// One inventory batch, four quote batches, and four pool-balance diagnostics for failed buy quotes.
 		expect(batches).toBe(9)
-		expect(blockTags).toHaveLength(21)
+		expect(blockTags).toHaveLength(25)
 		expect(blockTags.every(blockTag => blockTag === '0x64')).toBeTrue()
 		expect(logged).toHaveBeenCalledTimes(1)
 		expect(String(logged.mock.calls[0]?.[0])).toContain(`token=${revertingToken} balanceUnavailable=`)

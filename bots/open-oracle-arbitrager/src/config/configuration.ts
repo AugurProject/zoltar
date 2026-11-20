@@ -26,6 +26,7 @@ export type Configuration = MutableStrategy & {
 	historyFile: string
 	logLookbackBlocks: bigint
 	maxHedgeSlippageBps: bigint
+	maxPriceImpactBps?: bigint
 	network: NetworkConfiguration
 	networkConfigured: boolean
 	once: boolean
@@ -82,6 +83,7 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 		historyFile: resolve(saved.runtime.historyFile),
 		logLookbackBlocks: saved.runtime.logLookbackBlocks,
 		maxHedgeSlippageBps: saved.runtime.maxHedgeSlippageBps,
+		maxPriceImpactBps: saved.runtime.maxPriceImpactBps ?? 100n,
 		network,
 		networkConfigured: saved.networkConfigured,
 		once: saved.runtime.once,

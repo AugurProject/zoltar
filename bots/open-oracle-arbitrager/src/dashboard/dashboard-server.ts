@@ -1,3 +1,4 @@
+import type { UniverseNode } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { StoredCentralizedMarketSettings, StoredRuntimeLimits } from '#config/settings-store'
@@ -40,6 +41,7 @@ type DashboardController = {
 	updateCentralizedMarkets?: (value: unknown) => StoredCentralizedMarketSettings | Promise<StoredCentralizedMarketSettings>
 	updateExecution?: (value: unknown) => { execute: boolean } | Promise<{ execute: boolean }>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
+	lookupUniverse?: (value: unknown) => readonly UniverseNode[] | Promise<readonly UniverseNode[]>
 	setApprovedUniverses?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 	updateTokens?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 }
@@ -427,6 +429,15 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return json(await controller.predictExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
 					return publicDashboardError('arbitrager', error, 400, 'executor-prediction', 'Executor prediction could not be completed. Review the submitted salt and protected bot logs.')
+				}
+			}
+			if (request.method === 'POST' && url.pathname === '/api/universe-lookup') {
+				try {
+					await requireConfiguredChain(controller)
+					if (controller.lookupUniverse === undefined) throw new Error('Universe lookup is unavailable')
+					return json({ universes: await controller.lookupUniverse(await boundedDashboardJson(request)) })
+				} catch (error) {
+					return publicDashboardError('arbitrager', error, 400, 'universe-lookup', 'Universe lookup failed. Check the universe ID and RPC connection.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/approved-universes') {

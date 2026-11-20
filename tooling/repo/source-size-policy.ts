@@ -35,7 +35,7 @@ export const testSourceLineLimit = 1500
  */
 export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Split by behavior area into sibling test files that share a fixture module.', [
-		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3443],
+		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3438],
 		['bots/chaos/tests/execution/transaction-executor.test.ts', 1847],
 		['bots/chaos/tests/monitoring/discovery.test.ts', 1694],
 		['bots/chaos/tests/runtime/dashboard-controller.test.ts', 1666],

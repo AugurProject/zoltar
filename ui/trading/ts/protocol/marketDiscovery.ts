@@ -1,4 +1,3 @@
-import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { getAddress, zeroAddress, type Address, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
@@ -15,7 +14,7 @@ import {
 	mapWithConcurrency,
 	loadLiveMarket,
 	shareBalanceScope,
-	loadUniverseIds,
+	loadSelectedUniverseIds,
 	marketDiscoveryPage,
 	refreshSecurityPoolDeploymentIndex,
 	registryBlockAnchorIsCanonical,
@@ -79,12 +78,7 @@ export async function discoverAddressedMarket(client: PublicClient, configuratio
 
 /** Confirms one selected universe for universe and address-lookup routes without enumerating the tree. */
 export async function discoverUniverses(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, isCurrent = () => true) {
-	if (!isCurrent()) throw new Error('Market discovery cancelled')
-	const selectedUniverseId = requestedUniverseId ?? 0n
-	const reputationToken = await client.readContract({ abi: Zoltar_Zoltar.abi, address: configuration.zoltar, functionName: 'getRepToken', args: [selectedUniverseId] })
-	if (!isCurrent()) throw new Error('Market discovery cancelled')
-	if (reputationToken === zeroAddress) throw new Error('Universe does not exist')
-	const universeIds = selectedUniverseId === 0n ? [0n] : [0n, selectedUniverseId]
+	const { universeIds, selectedUniverseId } = await loadSelectedUniverseIds(client, configuration, requestedUniverseId, isCurrent)
 	return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
 }
 
@@ -124,8 +118,7 @@ async function discoverWalletPools(client: PublicClient, configuration: Deployme
 
 /** Refresh wallet-wide holdings plus saved addresses; cached summaries never supply balances or prices. */
 export async function discoverSavedMarkets(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, savedMarkets: readonly SavedPortfolioPool[], onProgress?: MarketDiscoveryProgress, isCurrent = () => true, account?: Address) {
-	const universeIds = await runReadOperation(operation => loadUniverseIds(readOperationClient(client, operation), configuration, isCurrent), { isCurrent })
-	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	const { universeIds, selectedUniverseId } = await runReadOperation(operation => loadSelectedUniverseIds(readOperationClient(client, operation), configuration, requestedUniverseId, isCurrent), { isCurrent })
 	const walletPools = account === undefined || selectedUniverseId === undefined ? [] : await discoverWalletPools(client, configuration, selectedUniverseId, account, isCurrent)
 	const saved = [...new Map([...walletPools, ...savedMarkets].filter(market => market.universeId === undefined || market.universeId === selectedUniverseId).map(market => [market.pool.toLowerCase(), market])).values()]
 	const total = BigInt(saved.length)
@@ -154,8 +147,7 @@ export async function discoverSavedMarkets(client: PublicClient, configuration: 
 }
 
 export async function discoverTradingMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, requestedStart = 0n, pageSize = 25n, index = createTradingPairIndex(), isCurrent = () => true, onProgress?: MarketDiscoveryProgress) {
-	const universeIds = await loadUniverseIds(client, configuration, isCurrent)
-	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	const { universeIds, selectedUniverseId } = await loadSelectedUniverseIds(client, configuration, requestedUniverseId, isCurrent)
 	if (selectedUniverseId === undefined) return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
 	const canonical = async (anchor: { blockNumber: bigint; blockHash: Hash }) =>
 		await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), getActiveBackend().id === 'simulation' ? undefined : async blockNumber => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) }))

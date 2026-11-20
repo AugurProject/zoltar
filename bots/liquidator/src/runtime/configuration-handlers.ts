@@ -1,3 +1,4 @@
+import { lookupUniverseLineages } from './universe-lookup.ts'
 import { parsePortfolioPolicy, parsePortfolioSelections } from '#config/portfolio-policy'
 import { parseRootMarketSettings } from '#config/canonical-deployment'
 import { updateSupportedPortfolio } from '#config/pool-selection'
@@ -30,7 +31,9 @@ export function setApprovedUniverses(runtime: LiquidatorRuntime, deps: Liquidato
 	return deps.configurationMutationGate.run(async () => {
 		const { state } = deps
 		const approvedUniverses = parseApprovedUniverses(value)
-		validateApprovedUniverseSelection(state.universes, approvedUniverses)
+		const missing = approvedUniverses.some(id => !state.universes.some(universe => universe.id === id))
+		const discovered = missing ? await lookupUniverseLineages(runtime, approvedUniverses) : state.universes
+		validateApprovedUniverseSelection(discovered, approvedUniverses)
 		await persistSettings(runtime, deps, current => ({ ...current, approvedUniverses }))
 		for (const universe of state.universes) universe.approved = approvedUniverses.includes(universe.id)
 		for (const pool of state.pools) pool.approvedUniverse = approvedUniverses.includes(pool.universeId)

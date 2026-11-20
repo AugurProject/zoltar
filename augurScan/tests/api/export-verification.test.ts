@@ -109,3 +109,16 @@ test('validates timeline and reorganization identity order and request scope', (
 		),
 	).toThrow('reorganization row is outside the snapshot invalidation boundary')
 })
+
+test('unknown-total exports retain snapshot, line-count, ordering, and continuation checks', () => {
+	const pageTwo = btoa(JSON.stringify([1, 'logs', 1, 'all', '0', '10', '10', hash('1'), '3', 'unknown', 'abi', 'application', 'projection', ['2', '0', '0', hash('2'), hash('5')]]))
+	const firstHeaders = headers({ 'x-augurscan-snapshot-total': 'unknown', 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'true', 'x-augurscan-next-cursor': pageTwo })
+	const first = verifyExportPage(firstHeaders, body(logRow(1), logRow(2)), logScope)
+	expect(first).toMatchObject({ total: 'unknown', returnedTotal: '2', truncated: true })
+	const finalHeaders = headers({ 'x-augurscan-snapshot-total': 'unknown', 'x-augurscan-returned': '1', 'x-augurscan-truncated': 'false' })
+	expect(verifyExportPage(finalHeaders, body(logRow(3)), logScope, first, pageTwo)).toMatchObject({ total: 'unknown', returnedTotal: '3', truncated: false })
+	expect(() => verifyExportPage(firstHeaders, body(logRow(1)), logScope)).toThrow('line count')
+	expect(() => verifyExportPage(finalHeaders, body(logRow(2)), logScope, first, pageTwo)).toThrow('strictly increasing')
+	expect(() => verifyExportPage(finalHeaders, body(logRow(3)), logScope, first, cursor(2))).toThrow('does not continue')
+	expect(() => verifyExportPage(headers({ 'x-augurscan-snapshot-total': 'unknown', 'x-augurscan-returned': '1', 'x-augurscan-truncated': 'false', 'x-augurscan-snapshot-hash': hash('9') }), body(logRow(3)), logScope, first, pageTwo)).toThrow('snapshot headers changed')
+})

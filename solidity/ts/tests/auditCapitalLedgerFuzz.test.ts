@@ -446,6 +446,7 @@ type Snapshot = Awaited<ReturnType<ReturnType<typeof createDriver>['read']>>
 const stringify = (value: unknown) => JSON.stringify(value, (_key, item: unknown) => (typeof item === 'bigint' ? `${item}n` : item))
 
 const KNOWN_REVERTS = [
+	'Position is liquidating',
 	'Repairs pay future income only',
 	'Position requires additional backing',
 	'Receiver commitment below minimum',

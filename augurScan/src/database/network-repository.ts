@@ -286,9 +286,16 @@ export async function richListBalanceTargets(this: ScannerDatabase, chainId: num
 				LIMIT ${limit}
 			`
 		const assetRows = await sql`
-				SELECT address, kind FROM contracts
-				WHERE chain_id = ${chainId} AND canonical AND kind IN ('reputationToken', 'weth')
-				ORDER BY kind, address
+				SELECT asset.address, asset.kind FROM contracts asset
+				LEFT JOIN LATERAL (SELECT max(snapshot.block_number) AS sampled_block, count(DISTINCT snapshot.address) AS sampled_addresses
+				 FROM address_balance_snapshots snapshot WHERE snapshot.chain_id = asset.chain_id
+				  AND snapshot.asset_address = asset.address AND snapshot.canonical
+				  AND snapshot.address = ANY(${sql.array(
+						addressRows.map((row: Record<string, unknown>) => String(row['address'])),
+						'TEXT',
+					)})) sampled ON true
+				WHERE asset.chain_id = ${chainId} AND asset.canonical AND asset.kind IN ('reputationToken', 'weth')
+				ORDER BY sampled.sampled_addresses ASC, sampled.sampled_block ASC NULLS FIRST, asset.kind, asset.address LIMIT 8
 			`
 		return {
 			addresses: addressRows.map((row: Record<string, unknown>) => String(row['address']) as Address),

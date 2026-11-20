@@ -21,7 +21,7 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as capitalCopy from '../../../copy/portfolioCapital.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
-import { capitalAuthorizationReason, capitalWithdrawalReason, requiredPortfolioCollateral, maximumPortfolioCommitment, capitalHealthReason, capitalRetirementReason, coveredUnderwaterCommitment } from '../lib/capital.js'
+import { capitalDepositReason, capitalAuthorizationReason, capitalWithdrawalReason, requiredPortfolioCollateral, maximumPortfolioCommitment, capitalHealthReason, capitalRetirementReason, coveredUnderwaterCommitment } from '../lib/capital.js'
 import type { usePortfolio } from './usePortfolio.js'
 import type { usePortfolioActions } from './usePortfolioActions.js'
 
@@ -136,7 +136,8 @@ export function usePortfolioAggregate(
 		reportInput.value = ''
 	}, [snapshot?.chainId, snapshot?.portfolio, snapshot?.owner, snapshot?.universeId, snapshot?.ownerAccount.targetHealthFactorBps])
 	const positive = (value: bigint | undefined) => (value === undefined || value === 0n ? 'Enter a positive amount.' : undefined)
-	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? 'Insufficient wallet REP.' : undefined)
+	const topUpReason = snapshot === undefined ? undefined : capitalDepositReason(snapshot)
+	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? topUpReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? 'Insufficient wallet REP.' : undefined)
 	const depositReason = fundingReason ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.allowanceAttoRep ? 'Approve REP before depositing.' : undefined)
 	const withdrawReason = ownerReason ?? (snapshot === undefined ? undefined : capitalWithdrawalReason(snapshot, withdrawAttoRep))
 	const healthReason = ownerReason ?? (snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps))
@@ -144,6 +145,7 @@ export function usePortfolioAggregate(
 		ownerReason ??
 		inactiveReason ??
 		admissionReason ??
+		topUpReason ??
 		positive(healthDepositAttoRep) ??
 		(snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.walletAttoRep ? 'Insufficient wallet REP.' : undefined) ??
 		(snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps, healthDepositAttoRep))
@@ -176,6 +178,10 @@ export function usePortfolioAggregate(
 				validateBeforeSubmit: async () => {
 					const latest = await loadPortfolioCapitalSnapshot({ client: portfolioReadClient(createConnectedReadClient()), portfolio: selected.portfolio, owner: selected.owner, universeId: selected.universeId })
 					if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error('Portfolio context changed. Review the transaction again.')
+					if (['depositPortfolioRep', 'depositPortfolioHealthRep', 'approvePortfolioRep', 'approvePortfolioHealthRep'].includes(action)) {
+						const reason = capitalDepositReason(latest)
+						if (reason !== undefined) throw new Error(reason)
+					}
 					await validate?.(latest)
 					await request.validateBeforeSubmit?.()
 				},

@@ -1,3 +1,4 @@
+import { lookupUniverse } from './universe-lookup.ts'
 import { portfolioViews } from '#state/portfolio-view'
 import { serializedSettings } from '#config/settings'
 import { marketConfigurations } from '#core/candidate-selection'
@@ -48,6 +49,7 @@ export function startLiquidatorDashboard(runtime: LiquidatorRuntime, deps: Liqui
 		switchNetworkProfile: value => switchNetworkProfile(runtime, deps, value),
 		reconcileTransaction: value => reconcileTransaction(runtime, deps, value),
 		testMarketSources: () => testMarketSources(runtime, deps),
+		lookupUniverse: value => lookupUniverse(runtime, value),
 		setApprovedUniverses: value => setApprovedUniverses(runtime, deps, value),
 		setMarketConfiguration: value => setMarketConfiguration(runtime, deps, value),
 		setNetworkConnectivity: value => setNetworkConnectivity(runtime, deps, value),

@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import type { JsonRecord, OperationsResponse } from '../../browser/api-validation.ts'
-import { createOperationsComponents } from '../../browser/operations-components.ts'
+import { createOperationsComponents, renderOperationsTimelineFilters } from '../../browser/operations-components.ts'
 import { createOperationsData } from '../../browser/operations-data.ts'
 import { createOperationsLoader } from '../../browser/operations-loader.ts'
 import { renderOperationsOverview } from '../../browser/operations-overview.ts'
@@ -196,6 +196,7 @@ test('an unchanged live refresh keeps the rendered operations page and a changed
 			api,
 			operationsDetailRoute: () => undefined,
 			operationsCatalogSection: () => undefined,
+			operationsSectionFilters: () => [],
 			operationsDetailRouteKey: route => route.kind,
 			data: createOperationsData(
 				api,
@@ -239,5 +240,72 @@ test('trading catalog displays volumes using each market collateral unit', async
 			expect(rendered).toContain(`${volume} 24-hour volume`)
 			expect(rendered).toContain(`${volume} all-time volume`)
 		}
+	})
+})
+
+test('short unscoped timeline text stays editable and is rejected before navigation', async () => {
+	await withOperationsPage('http://localhost/operations/timeline?chainId=1', () => {
+		const navigate = mock((_url: URL) => undefined)
+		const form = renderOperationsTimelineFilters(new URL(location.href), '1', false, path => path, navigate)
+		lookup('#operations-content').append(form)
+		const dispatch = (type: string) => {
+			const event = document.createEvent('Event')
+			event.initEvent(type, true, true)
+			form.dispatchEvent(event)
+		}
+		const search = form.querySelector<HTMLInputElement>('input[name="q"]')
+		if (search === null) throw new Error('Missing search input')
+		for (const query of ['zz', '!!!', 'a!b!c', '%_%']) {
+			search.value = query
+			dispatch('input')
+			dispatch('submit')
+			expect(navigate).not.toHaveBeenCalled()
+		}
+		expect(form.textContent).toContain('3 consecutive letters or digits')
+		search.value = 'price'
+		dispatch('input')
+		dispatch('submit')
+		expect(navigate).toHaveBeenCalledTimes(1)
+		const entity = form.querySelector<HTMLInputElement>('input[name="entityType"]')
+		if (entity === null) throw new Error('Missing entity filter')
+		entity.value = 'report'
+		search.value = '!!!'
+		dispatch('input')
+		dispatch('submit')
+		expect(navigate).toHaveBeenCalledTimes(2)
+	})
+})
+
+test('a direct invalid timeline URL retains editable filters after the API rejects it', async () => {
+	await withOperationsPage('http://localhost/operations/timeline?chainId=1&q=zz', async () => {
+		const { routeView } = createRouteView()
+		const api = async () => {
+			throw new Error('q must contain 3 consecutive letters or digits')
+		}
+		const load = createOperationsLoader({
+			state: createOperationsRouteState(),
+			requiredChainId: () => '1',
+			lookup,
+			api,
+			operationsDetailRoute: () => undefined,
+			operationsCatalogSection: () => 'timeline',
+			operationsDetailRouteKey: route => route.kind,
+			operationsSectionFilters: routeView.operationsSectionFilters,
+			data: createOperationsData(
+				api,
+				() => '1',
+				() => new URL(location.href),
+			),
+			renderOperations: () => undefined,
+			renderOperationsDetailPage: () => undefined,
+			renderSignature: () => '',
+			renderRetryStatus: (status, message) => {
+				status.textContent = message
+			},
+		})
+		expect(await load()).toBe(false)
+		expect(document.querySelector<HTMLInputElement>('input[name="q"]')?.value).toBe('zz')
+		expect(document.body.textContent).toContain('Clear filters')
+		expect(lookup('#operations-status').textContent).toContain('3 consecutive letters or digits')
 	})
 })

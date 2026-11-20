@@ -321,26 +321,14 @@ export async function refreshSecurityPoolDeploymentIndex<Deployment>(
 	return snapshot
 }
 
-export async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration, isCurrent = () => true) {
-	const universeIds = [0n]
-	const seen = new Set(['0'])
-	for (let universeIndex = 0; universeIndex < universeIds.length; universeIndex += 1) {
-		const universeId = universeIds[universeIndex]
-		if (universeId === undefined) throw new Error('Universe discovery lost its current entry')
-		for (let start = 0n; ; start += 100n) {
-			if (!isCurrent()) throw new Error('Market discovery cancelled')
-			const [, childUniverseIds, children] = await client.readContract({ abi: zoltarAbi, address: configuration.zoltar, functionName: 'getDeployedChildUniverses', args: [universeId, start, 100n] })
-			if (childUniverseIds.length !== children.length) throw new Error('Zoltar returned mismatched child universe arrays')
-			for (const childUniverseId of childUniverseIds) {
-				const key = childUniverseId.toString()
-				if (seen.has(key)) throw new Error(`Zoltar universe ${key} appears more than once`)
-				seen.add(key)
-				universeIds.push(childUniverseId)
-			}
-			if (children.length < 100) break
-		}
-	}
-	return universeIds
+/** Validates only the requested universe; unrelated descendants never delay a market read. */
+export async function loadSelectedUniverseIds(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, isCurrent = () => true) {
+	if (!isCurrent()) throw new Error('Market discovery cancelled')
+	const selectedUniverseId = requestedUniverseId ?? 0n
+	const token = await client.readContract({ abi: zoltarAbi, address: configuration.zoltar, functionName: 'getRepToken', args: [selectedUniverseId] })
+	if (!isCurrent()) throw new Error('Market discovery cancelled')
+	if (token === zeroAddress) throw new Error('Universe does not exist')
+	return { universeIds: selectedUniverseId === 0n ? [0n] : [0n, selectedUniverseId], selectedUniverseId }
 }
 
 export async function loadSecurityPoolRegistry(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, blockNumber: bigint, isCurrent = () => true, registry?: { index: RegistryIndex<SecurityPoolDeployment>; anchor: RegistryBlockAnchor }) {
@@ -393,8 +381,7 @@ export async function discoverLiveUniverseMarketPage(
 	index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>(),
 	onProgress?: MarketDiscoveryProgress,
 ) {
-	const universeIds = await loadUniverseIds(client, configuration)
-	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	const { universeIds, selectedUniverseId } = await loadSelectedUniverseIds(client, configuration, requestedUniverseId)
 	const selectedDeployments = selectedUniverseId === undefined ? [] : await loadSecurityPoolDeploymentsInUniverse(client, configuration, selectedUniverseId, index)
 	const page = marketDiscoveryPage(BigInt(selectedDeployments.length), requestedStart, pageSize)
 	const pageEnd = page.start + page.count

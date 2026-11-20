@@ -73,6 +73,7 @@ export async function discoverPortfolioCapital(context: EcosystemDiscoveryContex
 			minimumCommitmentAttoEth: canonicalUintString(capital.economics.minimumCommitmentAttoEth),
 			securityMultiplierBps: canonicalUintString(capital.securityMultiplierBps),
 			ownerConservativePrice: canonicalUintString(capital.ownerConservativePrice),
+			ownerLiquidating: capital.positions.some(position => position.maxHealthyPrice < capital.liquidationPrice),
 			priceValid: capital.priceValid,
 			priceValidUntil: canonicalUintString(capital.priceValidUntil),
 			forkTime: canonicalUintString(capital.forkTime),

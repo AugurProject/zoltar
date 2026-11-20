@@ -68,12 +68,16 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 	})
 
-	test('a deposit repairs indexed health and cancels an existing liquidation interval immediately', async () => {
+	test('a liquidating owner cannot deposit until an oracle recovery restores indexed health', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price((3n * E) / 2n)
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBeGreaterThan(0n)
+		await expect(deposit(alice, 53n * E)).rejects.toThrow('Position is liquidating')
+		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 100n * E })
+		expect(await healthy()).toBe(0n)
+		await price(E)
 		await deposit(alice, 53n * E)
 		expect(await healthy()).toBe(100n * E)
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
@@ -117,7 +121,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect(await position(id)).toMatchObject({ rep: 210n * E, commitment: 100n * E, remainingCommitment: 0n })
 	})
 
-	test('a restoring deposit checkpoints old fee eligibility and earns only later healthy income', async () => {
+	test('oracle recovery checkpoints old fee eligibility and earns only later healthy income', async () => {
 		await deposit(alice, 105n * E)
 		await deposit(bob, 210n * E)
 		const a = await authorize(alice, 100n * E)
@@ -127,7 +131,8 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86400n * E }))
 		const fundedAt = (await alice.getBlock()).timestamp
 		await getAnvilWindowEthereum().advanceTime(100n)
-		await deposit(alice, 53n * E)
+		await expect(deposit(alice, 53n * E)).rejects.toThrow('Position is liquidating')
+		await price(E)
 		const restoredAt = (await alice.getBlock()).timestamp
 		const priorAlice = await earnedEth(alice, a)
 		const priorBob = await earnedEth(bob, b)
@@ -174,7 +179,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect((await position((await account(keeper)).positionId)).commitment).toBe(50n * E)
 	})
 
-	test('owner authorization rejects third-party live collateral deposits while allowing an owner to repair health', async () => {
+	test('owner authorization rejects third-party deposits and liquidation blocks the owner until oracle recovery', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
@@ -183,6 +188,10 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await expect(writeContractAndWait(bob, () => bob.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'depositFor', args: [alice.account.address, 1n] }))).rejects.toThrow('Invalid capital deposit')
 		expect((await position(id)).rep).toBe(105n * E)
 		expect((await account(alice)).freeAttoRep).toBe(0n)
+		await expect(deposit(alice, 53n * E)).rejects.toThrow('Position is liquidating')
+		expect((await position(id)).rep).toBe(105n * E)
+		expect(await healthy()).toBe(0n)
+		await price(E)
 		await deposit(alice, 53n * E)
 		expect((await position(id)).rep).toBe(158n * E)
 		expect(await healthy()).toBe(100n * E)

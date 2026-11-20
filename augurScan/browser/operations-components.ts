@@ -1,4 +1,5 @@
 import * as Plot from '@observablehq/plot'
+import { hasTimelineSearchTrigram } from '../src/timeline-search.ts'
 import type { JsonRecord } from './api-validation.ts'
 import { exactNumber, utcDateTime } from './format.ts'
 import { identifierCopyButton } from './identifier-copy.ts'
@@ -96,7 +97,14 @@ export const retainedFilterForm = (container: ParentNode, next: HTMLFormElement)
 /** Applies a filter form through in-place navigation after validating its block-number fields. */
 const bindFilterForm = (form: HTMLFormElement, actionPath: string, blockFields: readonly string[], navigate: (destination: URL) => void): void => {
 	const inputs = () => [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[name], select[name]')]
+	const feedback = actionPath === '/operations/timeline' ? element('small', 'operations-filter-feedback') : undefined
+	if (feedback !== undefined) {
+		feedback.hidden = true
+		feedback.setAttribute('role', 'alert')
+		form.querySelector('input[name="q"]')?.parentElement?.append(feedback)
+	}
 	form.addEventListener('input', () => {
+		if (feedback !== undefined) feedback.hidden = true
 		for (const input of inputs()) input.setCustomValidity('')
 	})
 	form.addEventListener('submit', event => {
@@ -104,6 +112,16 @@ const bindFilterForm = (form: HTMLFormElement, actionPath: string, blockFields: 
 		const byName = new Map(inputs().map(input => [input.name, input]))
 		for (const input of byName.values()) input.setCustomValidity('')
 		const fieldValue = (name: string) => byName.get(name)?.value ?? ''
+		const query = fieldValue('q').trim()
+		if (feedback !== undefined && query !== '' && !hasTimelineSearchTrigram(query) && ['entityType', 'event', 'address'].every(name => fieldValue(name).trim() === '')) {
+			feedback.textContent = 'Use 3 consecutive letters or digits, or add an entity, event, or address filter.'
+			feedback.hidden = false
+			const search = byName.get('q')
+			search?.setCustomValidity('Use 3 consecutive letters or digits, or add an entity, event, or address filter.')
+			search?.focus()
+			return
+		}
+		if (feedback !== undefined) feedback.hidden = true
 		const failure = blockFields.length === 2 ? blockRangeError(fieldValue(blockFields[0] ?? ''), fieldValue(blockFields[1] ?? '')) : blockRangeError(fieldValue(blockFields[0] ?? ''), '')
 		if (failure !== undefined) {
 			const invalid = byName.get(failure.field === 'fromBlock' ? (blockFields[0] ?? '') : (blockFields[1] ?? ''))
@@ -161,16 +179,7 @@ export const renderOperationsTimelineFilters = (pageUrl: URL, chainId: string, i
 	clear.textContent = 'Clear filters'
 	const actions = element('div', 'operations-filter-actions')
 	actions.append(submit, clear)
-	form.append(
-		field('Search', 'q', 'Event, entity, or evidence…'),
-		field('Entity type', 'entityType', 'fork, vault, amm…'),
-		field('Event', 'event', 'ReportDisputed…'),
-		field('Address', 'address', '0x…'),
-		field('From block', 'fromBlock', '0', 'numeric'),
-		field('To block', 'toBlock', 'Latest', 'numeric'),
-		canonicalLabel,
-		actions,
-	)
+	form.append(field('Search', 'q', '3+ characters…'), field('Entity type', 'entityType', 'fork, vault, amm…'), field('Event', 'event', 'ReportDisputed…'), field('Address', 'address', '0x…'), field('From block', 'fromBlock', '0', 'numeric'), field('To block', 'toBlock', 'Latest', 'numeric'), canonicalLabel, actions)
 	bindFilterForm(form, '/operations/timeline', ['fromBlock', 'toBlock'], navigate)
 	return form
 }

@@ -55,6 +55,7 @@ export function capitalFixture(snapshot: EcosystemSnapshot) {
 		minimumCommitmentAttoEth: 100n.toString(),
 		securityMultiplierBps: '12000',
 		ownerConservativePrice: '1000000000000000000',
+		ownerLiquidating: false,
 		priceValid: true,
 		priceValidUntil: '9999999999',
 		forkTime: '0',

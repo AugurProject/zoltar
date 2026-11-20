@@ -50,6 +50,11 @@ export const directObservationRows = async (sql: SQL, query: DirectObservationQu
 				AND ${snapshot.kind === 'address-balance'} = false
 				AND (${snapshot.address ?? null}::text IS NULL OR observation.address = ${snapshot.address ?? null})
 			AND (${snapshot.canonical} = 'all' OR observation.canonical = (${snapshot.canonical} = 'canonical'))
+		), selected AS MATERIALIZED (
+		 SELECT * FROM observations observation
+		 WHERE (${cursor === undefined} OR (observation.observed_at, observation.observation_kind, observation.id) <
+		  (${cursor?.observedAt ?? '9999-12-31T23:59:59.999Z'}::timestamptz, ${cursor?.kind ?? 'token-metadata'}, ${cursor?.id ?? '0'}::bigint))
+		 ORDER BY observation.observed_at DESC, observation.observation_kind DESC, observation.id DESC LIMIT ${limit + 1}
 		)
 		SELECT observation.observation_kind, observation.id::text AS observation_id,
 			observation.chain_id::text AS chain_id, observation.block_hash,
@@ -65,9 +70,8 @@ export const directObservationRows = async (sql: SQL, query: DirectObservationQu
 				WHEN invalidation.reason = 'start-boundary-advanced' THEN 'coverage-reset'
 				ELSE 'noncanonical-unknown' END AS evidence_status,
 			invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
-			invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at,
-			count(*) OVER ()::text AS total
-		FROM observations observation
+			invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at
+		FROM selected observation
 		JOIN blocks block ON block.chain_id = observation.chain_id AND block.hash = observation.block_hash
 		LEFT JOIN LATERAL (
 			SELECT replacement.id, replacement.reason,

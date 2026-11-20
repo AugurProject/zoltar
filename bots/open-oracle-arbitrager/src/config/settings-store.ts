@@ -24,6 +24,7 @@ type RuntimeSettings = {
 	historyFile: string
 	logLookbackBlocks: bigint
 	maxHedgeSlippageBps: bigint
+	maxPriceImpactBps?: bigint
 	once: boolean
 	/** The main loop interval between scans. */
 	pollMilliseconds: number
@@ -71,11 +72,12 @@ function defaultCentralizedMarkets(assetAddress: `0x${string}`, assetChainId: nu
 }
 
 /** The runtime fields the dashboard may change while the operator runs; the rest of `runtime` is fixed for the process. */
-export type RuntimeLimits = Pick<RuntimeSettings, 'logLookbackBlocks' | 'maxHedgeSlippageBps' | 'pollMilliseconds' | 'riskLimits'>
+export type RuntimeLimits = Pick<RuntimeSettings, 'logLookbackBlocks' | 'maxHedgeSlippageBps' | 'maxPriceImpactBps' | 'pollMilliseconds' | 'riskLimits'>
 
 export type StoredRuntimeLimits = {
 	logLookbackBlocks: number
 	maxHedgeSlippageBps: number
+	maxPriceImpactBps?: number
 	pollMilliseconds: number
 	riskLimits: {
 		lifecycleGasReserveWeth: string
@@ -151,11 +153,11 @@ export function durableJournalPaths(runtime: Pick<RuntimeSettings, 'historyFile'
 
 const durableJournalPathsMustBeDistinct = 'Runtime historyFile, positionFile, priceHistoryFile, and the derived settlement journal must use distinct paths'
 
-const RUNTIME_LIMIT_KEYS = ['logLookbackBlocks', 'maxHedgeSlippageBps', 'pollMilliseconds', 'riskLimits']
+const RUNTIME_LIMIT_KEYS = ['logLookbackBlocks', 'maxHedgeSlippageBps', 'maxPriceImpactBps', 'pollMilliseconds', 'riskLimits']
 
 /** Parses the runtime fields the dashboard's risk form edits; `runtime` must carry them and may carry nothing else. */
 function parseRuntimeLimits(runtime: Record<string, unknown>): RuntimeLimits {
-	if (RUNTIME_LIMIT_KEYS.some(key => !(key in runtime))) throw new Error('Runtime limits require logLookbackBlocks, maxHedgeSlippageBps, pollMilliseconds, and riskLimits')
+	if (RUNTIME_LIMIT_KEYS.filter(key => key !== 'maxPriceImpactBps').some(key => !(key in runtime))) throw new Error('Runtime limits require logLookbackBlocks, maxHedgeSlippageBps, pollMilliseconds, and riskLimits')
 	const risk = requiredRecord(runtime['riskLimits'], 'Runtime risk limits')
 	const riskKeys = ['lifecycleGasReserveWeth', 'maxConcurrentPositions', 'maxDailyGasSpendWeth', 'maxPositionNotionalWeth', 'maxTotalLockedWeth']
 	if (Object.keys(risk).some(key => !riskKeys.includes(key)) || riskKeys.some(key => !(key in risk))) throw new Error('Runtime risk limits require exactly the supported risk fields')
@@ -165,6 +167,7 @@ function parseRuntimeLimits(runtime: Record<string, unknown>): RuntimeLimits {
 	return {
 		logLookbackBlocks: BigInt(integer(runtime['logLookbackBlocks'], 'Runtime logLookbackBlocks', 0, 256)),
 		maxHedgeSlippageBps: BigInt(integer(runtime['maxHedgeSlippageBps'], 'Runtime maxHedgeSlippageBps', 0, 1_000)),
+		maxPriceImpactBps: BigInt(integer(runtime['maxPriceImpactBps'] ?? 100, 'Runtime maxPriceImpactBps', 0, 1_000)),
 		pollMilliseconds: integer(runtime['pollMilliseconds'], 'Runtime pollMilliseconds', 1_000, 3_600_000),
 		riskLimits: {
 			lifecycleGasReserveAttoWeth: weth(risk['lifecycleGasReserveWeth'], 'Runtime lifecycleGasReserveWeth'),
@@ -188,6 +191,7 @@ export function serializeRuntimeLimits(limits: RuntimeLimits): StoredRuntimeLimi
 	return {
 		logLookbackBlocks: Number(limits.logLookbackBlocks),
 		maxHedgeSlippageBps: Number(limits.maxHedgeSlippageBps),
+		maxPriceImpactBps: Number(limits.maxPriceImpactBps ?? 100n),
 		pollMilliseconds: limits.pollMilliseconds,
 		riskLimits: {
 			lifecycleGasReserveWeth: decimalWeth(limits.riskLimits.lifecycleGasReserveAttoWeth),
@@ -214,7 +218,7 @@ export function parseStoredCentralizedMarkets(value: unknown, rep: Address, netw
 function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	const runtime = requiredRecord(value, 'Runtime settings')
 	const keys = ['execute', 'historyFile', 'once', 'positionFile', 'priceHistoryFile', 'ui', 'uiHost', 'uiPort', ...RUNTIME_LIMIT_KEYS]
-	if (Object.keys(runtime).some(key => !keys.includes(key)) || keys.some(key => !(key in runtime))) throw new Error('Runtime settings require exactly the supported runtime fields')
+	if (Object.keys(runtime).some(key => !keys.includes(key)) || keys.filter(key => key !== 'maxPriceImpactBps').some(key => !(key in runtime))) throw new Error('Runtime settings require exactly the supported runtime fields')
 	if (typeof runtime['execute'] !== 'boolean' || typeof runtime['once'] !== 'boolean' || typeof runtime['ui'] !== 'boolean') throw new Error('Runtime execute, once, and ui settings must be booleans')
 	if (runtime['uiHost'] !== '127.0.0.1' && runtime['uiHost'] !== '0.0.0.0') throw new Error('Runtime uiHost must be 127.0.0.1 or 0.0.0.0')
 	const limits = parseRuntimeLimits(runtime)

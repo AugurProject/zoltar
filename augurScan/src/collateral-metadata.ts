@@ -1,3 +1,4 @@
+import { tokenMetadataText } from './token-metadata-limits.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { type Address, getAddress, isAddress, parseAbi, zeroAddress } from './ethereum.ts'
 import type { StateRead } from './snapshots.ts'
@@ -35,7 +36,7 @@ export async function readCollateralMetadata(token: Address, read: StateRead) {
 	const [symbol, units] = await Promise.all([read(token, abi, 'symbol'), read(token, abi, 'decimals')])
 	const decimals = Number(units)
 	if (typeof symbol !== 'string' || symbol.trim() === '' || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Invalid collateral metadata')
-	return { address: token.toLowerCase(), symbol, decimals }
+	return { address: token.toLowerCase(), symbol: tokenMetadataText(symbol, 'symbol'), decimals }
 }
 
 export async function readContractCollateral(address: Address, kind: string, read: StateRead): Promise<{ unit?: CollateralDisplayUnit; readError?: string } | undefined> {

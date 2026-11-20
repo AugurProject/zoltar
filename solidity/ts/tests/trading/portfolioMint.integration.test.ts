@@ -28,7 +28,7 @@ describe('Trading: portfolio-funded complete sets', () => {
 		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
 		const [fee] = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, unit] })
 		await writeContractAndWait(owner, () =>
-			owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 1n, owner.account.address, fixture.base.questionData.endTime - 1n], value: unit + fee + unit / 10n }),
+			owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, owner.account.address, fixture.base.questionData.endTime - 1n], value: unit + fee + unit / 10n }),
 		)
 		expect(await owner.getBalance({ address: router })).toBe(0n)
 		for (const outcome of [0n, 1n, 2n]) expect(await owner.readContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'balanceOf', args: [router, outcome] })).toBe(0n)
@@ -42,9 +42,9 @@ describe('Trading: portfolio-funded complete sets', () => {
 		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: applyLibraries(factoryArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
 		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
 		const deadline = fixture.base.questionData.endTime - 1n
-		await expect(owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 1n, owner.account.address, deadline], value: unit })).rejects.toThrow('Purchase fee exceeds budget')
+		await expect(owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, owner.account.address, deadline], value: unit })).rejects.toThrow('Purchase fee exceeds budget')
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: native.securityPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 1n, owner.account.address, deadline], value: 2n * unit }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, owner.account.address, deadline], value: 2n * unit }))
 		const pair = await owner.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native.securityPool] })
 		const entry = { abi: routerArtifact.abi, address: router, functionName: 'enterPosition' as const, args: [pair, unit, 1, 1n, owner.account.address, deadline] as const, value: 2n * unit }
 		const quote = await owner.simulateContract(entry)

@@ -1,14 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { securityPoolCapitalLedgerAbi as capitalAbi, erc20Abi } from '@zoltar/bot-shared/contracts/abi'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
 import { writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
 import { portfolioTarget } from '../../src/monitoring/portfolio-auction.ts'
 import { executeUnusedPortfolioFunding, unusedPortfolioFunding } from '../../src/execution/portfolio-unused-funding.ts'
 import { loadDurableState } from '../../src/state/operator-state.ts'
 import { executePortfolioTakeover } from '../../src/execution/portfolio-executor.ts'
-import { distressedSecondWinner, repairAuctionKeeper } from '../support/collateral-repair-auction.ts'
+import { distressedSecondWinner, repairAuctionKeeper, repairAuctionTerms, prepareKeeperCollateralRepairAuction } from '../support/collateral-repair-auction.ts'
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
 describe('portfolio abandoned funding integration', () => {
@@ -16,12 +15,12 @@ describe('portfolio abandoned funding integration', () => {
 	// preserving multiple equal lots while retaining profitable holding-fee income.
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 1971n })
 	test('a restarted keeper returns only its journaled funding after the original target becomes healthy', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareKeeperCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
-		// Back both winners at opening and leave the second distressed by the later quote.
-		await context.bid(context.owner, 2n, (35n * unit) / 10n)
-		const second = await context.bid(context.other, 3n, (35n * unit) / 10n)
+		const terms = await repairAuctionTerms(context)
+		await context.bid(context.owner, 1n, terms.repPerLot)
+		const second = await context.bid(context.other, terms.lotCount - 1n, terms.repPerLot)
 		await context.closingQuote()
 		await context.finalize()
 		const keeperOperator = repairAuctionKeeper(fixture, context)

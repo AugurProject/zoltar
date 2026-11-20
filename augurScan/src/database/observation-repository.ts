@@ -60,6 +60,7 @@ export async function storeRichListBalances(this: ScannerDatabase, chainId: numb
 					)
 				`
 			if (balance.readStatus === 'failed') continue
+			await transaction`INSERT INTO address_balance_assets (chain_id,address,asset_address) VALUES (${chainId},${balance.owner.toLowerCase()},${balance.assetAddress.toLowerCase()}) ON CONFLICT DO NOTHING`
 			await transaction`
 					INSERT INTO address_balance_snapshots (chain_id, block_hash, block_number, address, asset_address, asset_kind, balance, canonical, observed_at)
 					VALUES (${chainId}, ${blockHash}, ${blockNumber.toString()}, ${balance.owner.toLowerCase()}, ${balance.assetAddress.toLowerCase()}, ${balance.assetKind}, ${balance.balance.toString()}, true, now())

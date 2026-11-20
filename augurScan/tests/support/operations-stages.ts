@@ -1,3 +1,4 @@
+import { refreshHistoryAggregates } from '../../src/database/history-aggregates.ts'
 // Paginated catalog stages of the operations snapshot integration test. Each stage reads the seeded
 // operations chain and proves continuation cursors are filter-, scope-, and generation-bound.
 import { expect } from 'bun:test'
@@ -22,14 +23,14 @@ export const expectTimelinePagination = async ({ database, operationsChainId, or
 	const firstTimelinePage = (await firstTimelinePageResponse?.json()) as {
 		data: { items: Array<{ entity_identity: string }>; total: string; hasMore: boolean; nextCursor?: string }
 	}
-	expect(firstTimelinePage.data).toMatchObject({ items: [expect.objectContaining({ entity_identity: 'b' })], total: '2', hasMore: true })
+	expect(firstTimelinePage.data).toMatchObject({ items: [expect.objectContaining({ entity_identity: 'b' })], totalIsExact: false, hasMore: true })
 	const timelineCursor = firstTimelinePage.data.nextCursor
 	if (typeof timelineCursor !== 'string') throw new Error('global timeline omitted its continuation')
 	const mismatchedTimelineFilterResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=AuditTwin&q=${encodeURIComponent('🪐')}&limit=1&cursor=${encodeURIComponent(timelineCursor)}`), database.sql)
 	expect(mismatchedTimelineFilterResponse?.status).toBe(400)
 	const secondTimelinePageResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=AuditTwin&q=${encodeURIComponent('🔮')}&limit=1&cursor=${encodeURIComponent(timelineCursor)}`), database.sql)
 	expect(await secondTimelinePageResponse?.json()).toMatchObject({
-		data: { items: [expect.objectContaining({ entity_identity: 'a' })], total: '2', hasMore: false },
+		data: { items: [expect.objectContaining({ entity_identity: 'a' })], totalIsExact: false, hasMore: false },
 	})
 }
 
@@ -41,7 +42,7 @@ export const expectUnicodeTradingPagination = async ({ database, operationsChain
 	}
 	expect(firstUnicodeTradingPage.data).toMatchObject({
 		items: [expect.objectContaining({ question_title: 'Will the 🔮 forecast resolve?' })],
-		total: 102,
+		totalIsExact: false,
 		hasMore: true,
 	})
 	const unicodeTradingCursor = firstUnicodeTradingPage.data.nextCursor
@@ -52,7 +53,7 @@ export const expectUnicodeTradingPagination = async ({ database, operationsChain
 	expect(await secondUnicodeTradingPageResponse?.json()).toMatchObject({
 		data: {
 			items: [expect.objectContaining({ question_title: 'Will the 🔮 forecast resolve?' })],
-			total: 102,
+			totalIsExact: false,
 			offset: 1,
 			hasMore: true,
 		},
@@ -141,6 +142,8 @@ export const expectReportCatalogGenerations = async ({ database, operationsChain
 			(${operationsChainId}, ${hash}, ${`0x${'f'.repeat(64)}`}, 1, 1, ${oracle.toLowerCase()}, 8,
 				'ReportSubmitted', 1, jsonb_build_object('reportId', '8'), true)
 		`
+	const aggregateBlocks = await database.sql`SELECT DISTINCT block_hash,block_number FROM open_oracle_report_events WHERE chain_id=${operationsChainId} AND canonical ORDER BY block_number`
+	for (const block of aggregateBlocks) await refreshHistoryAggregates(database.sql, operationsChainId, String(block.block_hash), String(block.block_number))
 	const firstCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1`), database.sql)
 	if (firstCatalogResponse === undefined) throw new Error('report catalog did not return a response')
 	const firstCatalog = (await firstCatalogResponse.json()) as {

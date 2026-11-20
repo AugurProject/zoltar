@@ -50,6 +50,7 @@ function depositStep(snapshot: EcosystemSnapshot, token: `0x${string}`, ledger: 
 
 function depositCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 	return openCapital(snapshot, options)
+		.filter(capital => !capital.ownerLiquidating)
 		.map(capital => {
 			// Automatic deposits should fund at least one commitment. Explicit top-ups may be smaller.
 			const ceil = (value: bigint, divisor: bigint) => (value + divisor - 1n) / divisor
@@ -125,6 +126,7 @@ export const depositCapital: OperationDefinition = {
 		const approved = allowance(inventory, ledger) >= spend
 		if (
 			capital === undefined ||
+			capital.ownerLiquidating ||
 			inventory === undefined ||
 			spend === 0n ||
 			spend > optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN) ||

@@ -83,7 +83,7 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 		if (indexedResponse === undefined) throw new Error('indexed timeline endpoint did not return a response')
 		expect(indexedResponse.status).toBe(200)
 		expect(await indexedResponse.json()).toMatchObject({
-			data: { items: [{ semantic_event_kind: 'CommitmentTakenOver', entity_identity: `${oracle.toLowerCase()}:1`, summary_data: capitalEvidence[3]?.argumentsValue }], total: '1' },
+			data: { items: [{ semantic_event_kind: 'CommitmentTakenOver', entity_identity: `${oracle.toLowerCase()}:1`, summary_data: capitalEvidence[3]?.argumentsValue }], totalIsExact: false },
 		})
 		await database.storeEntityStateSnapshots(
 			operationsChainId,

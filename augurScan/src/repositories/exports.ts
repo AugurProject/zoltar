@@ -36,22 +36,6 @@ export const historicalExportSnapshotCanonical = async (sql: SQL, chainId: numbe
 		) AS snapshot_canonical
 	`
 
-export const historicalExportTotal = async (sql: SQL, query: Omit<HistoricalExportQuery, 'limit' | 'lastKey'>) => {
-	const { dataset, chainId, canonical, fromBlock, toBlock, snapshotBlock, snapshotInvalidationId } = query
-	if (dataset === 'logs')
-		return await sql`SELECT count(*)::text AS total FROM logs log
-			WHERE log.chain_id = ${chainId} AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
-				AND log.block_number <= ${snapshotBlock} AND (${canonical === 'all'} OR log.canonical = ${canonical === 'canonical'})`
-	if (dataset === 'timeline')
-		return await sql`SELECT count(*)::text AS total FROM protocol_timeline_entries timeline
-			WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
-				AND timeline.block_number <= ${snapshotBlock} AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})`
-	return await sql`SELECT count(*)::text AS total FROM chain_reorganizations
-		WHERE chain_id = ${chainId} AND id <= ${snapshotInvalidationId} AND (
-			reason = 'start-boundary-advanced' OR COALESCE(previous_block, ancestor_block) BETWEEN ${fromBlock} AND ${toBlock}
-		)`
-}
-
 export const historicalExportRows = async (sql: SQL, query: HistoricalExportQuery) => {
 	const { dataset, chainId, canonical, fromBlock, toBlock, snapshotBlock, snapshotInvalidationId, limit, lastKey } = query
 	if (dataset === 'logs')

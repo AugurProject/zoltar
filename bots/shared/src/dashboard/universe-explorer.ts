@@ -1,7 +1,9 @@
+export type { UniverseNode } from './universe-tree.ts'
 import { shorten, stickyShellHeight } from './dom.ts'
 import { indexUniverseTree, universeApprovalSelection, universeLabel, universeLineage, visibleUniverseRows, type UniverseNode } from './universe-tree.ts'
 
 const PAGE_SIZE = 60
+let lookupSequence = 0
 
 type ExplorerState = {
 	universes: readonly UniverseNode[]
@@ -10,7 +12,7 @@ type ExplorerState = {
 	disabled: boolean
 }
 
-export function createUniverseExplorer(host: HTMLElement, options: { onChange: (next: Set<string>) => void | Promise<void>; savedMessage: string }) {
+export function createUniverseExplorer(host: HTMLElement, options: { onChange: (next: Set<string>) => void | Promise<void>; savedMessage: string; lookupUniverse?: (id: string) => Promise<readonly UniverseNode[]> }) {
 	const document = host.ownerDocument
 	const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string) => {
 		const element = document.createElement(tag)
@@ -45,6 +47,24 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 	}
 	filterLabel.append(filter)
 	toolbar.append(searchLabel, filterLabel)
+	const lookupInput = make('input', 'ue-search')
+	lookupInput.type = 'text'
+	lookupInput.inputMode = 'numeric'
+	lookupInput.setAttribute('aria-label', 'Universe ID to look up')
+	const lookupStatus = make('span', 'ue-status')
+	lookupStatus.id = `universe-lookup-status-${lookupSequence++}`
+	lookupStatus.setAttribute('role', 'status')
+	lookupInput.setAttribute('aria-describedby', lookupStatus.id)
+	lookupInput.placeholder = 'Universe ID'
+	const lookupButton = button('ue-text-button', 'Look up universe', () => {
+		void lookupUniverse()
+	})
+	lookupButton.dataset['universeLookup'] = ''
+	if (options.lookupUniverse !== undefined) {
+		const lookupLabel = make('label', 'ue-search-label')
+		lookupLabel.append(make('span', 'ue-label', 'Universe ID'), lookupInput, lookupButton, lookupStatus)
+		toolbar.append(lookupLabel)
+	}
 	const context = make('div', 'ue-context')
 	const count = make('span', 'ue-count')
 	const collapse = button('ue-text-button', 'Collapse branches', () => {
@@ -80,6 +100,40 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 	let pending = false
 	let signature = ''
 	let networkRevision = 0
+	let lookupPending = false
+	const lookedUp = new Map<string, UniverseNode>()
+	async function lookupUniverse() {
+		if (lookupPending || state.disabled || options.lookupUniverse === undefined) return
+		const id = lookupInput.value.trim()
+		if (!/^(?:0|[1-9]\d*)$/.test(id) || BigInt(id) >= 2n ** 248n) {
+			lookupStatus.textContent = 'Enter a non-negative universe ID below 2²⁴⁸.'
+			lookupStatus.dataset['error'] = 'true'
+			return
+		}
+		const revision = networkRevision
+		lookupPending = true
+		lookupStatus.textContent = 'Looking up universe…'
+		lookupStatus.dataset['error'] = 'false'
+		render()
+		try {
+			const lineage = await options.lookupUniverse(id)
+			if (revision !== networkRevision) return
+			if (!lineage.some(universe => universe.id === id)) throw new Error('Universe lookup did not return the requested universe')
+			for (const universe of lineage) lookedUp.set(universe.id, universe)
+			tree = indexUniverseTree([...new Map([...state.universes, ...lookedUp.values()].map(universe => [universe.id, universe])).values()])
+			reveal(id)
+			lookupStatus.textContent = 'Universe found. Review its lineage before approving.'
+		} catch (error) {
+			if (revision !== networkRevision) return
+			lookupStatus.textContent = error instanceof Error ? error.message : 'Universe lookup failed. Retry.'
+			lookupStatus.dataset['error'] = 'true'
+		} finally {
+			if (revision === networkRevision) {
+				lookupPending = false
+				render()
+			}
+		}
+	}
 	const scrollOnMobile = (target: HTMLElement) => {
 		if (document.defaultView?.matchMedia('(max-width: 700px)').matches !== true) return
 		// The section navigation sits inside the operator header, so the header height already covers it.
@@ -228,6 +282,9 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 		more.textContent = `Show ${Math.min(PAGE_SIZE, visible.total - visible.rows.length).toLocaleString()} more · ${visible.rows.length.toLocaleString()} of ${visible.total.toLocaleString()}`
 		collapse.textContent = branch === undefined ? 'Collapse branches' : 'Show whole tree'
 		collapse.disabled = (branch === undefined && expanded.size === 0) || visible.filtering
+		lookupInput.disabled = state.disabled || lookupPending
+		lookupButton.disabled = state.disabled || lookupPending
+		lookupButton.textContent = lookupPending ? 'Looking up…' : 'Look up universe'
 		search.disabled = state.disabled
 		filter.disabled = state.disabled
 		renderDetails()
@@ -249,6 +306,11 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 			const networkChanged = next.network !== state.network
 			if (networkChanged) {
 				networkRevision += 1
+				lookupStatus.textContent = ''
+				lookupStatus.dataset['error'] = 'false'
+				lookedUp.clear()
+				lookupPending = false
+				lookupInput.value = ''
 				expanded.clear()
 				branchRoot = undefined
 				focused = undefined
@@ -258,7 +320,7 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 				status.textContent = ''
 			}
 			state = pending && !networkChanged ? { ...next, approved: state.approved } : next
-			tree = indexUniverseTree(next.universes)
+			tree = indexUniverseTree([...new Map([...next.universes, ...lookedUp.values()].map(universe => [universe.id, universe])).values()])
 			if (focused === undefined || !tree.byId.has(focused)) {
 				focused = tree.roots[0]?.id
 				for (const root of tree.roots) expanded.add(root.id)

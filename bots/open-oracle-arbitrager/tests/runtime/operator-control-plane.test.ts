@@ -147,7 +147,7 @@ test('focused settlement, risk-limit, and market-source forms persist their sect
 	})
 	expect(runtime.status, await runtime.clone().text()).toBe(200)
 	expect(await runtime.json()).toEqual({
-		runtime: { logLookbackBlocks: 32, maxHedgeSlippageBps: 75, pollMilliseconds: 5_000, riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } },
+		runtime: { logLookbackBlocks: 32, maxHedgeSlippageBps: 75, maxPriceImpactBps: 100, pollMilliseconds: 5_000, riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } },
 	})
 	expect(pending.logLookbackBlocks).toBe(32n)
 	expect(pending.maxHedgeSlippageBps).toBe(75n)

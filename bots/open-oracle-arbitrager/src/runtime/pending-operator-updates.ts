@@ -17,6 +17,7 @@ export type PendingOperatorUpdates = {
 	deployment: DeploymentSettings | undefined
 	execute: boolean | undefined
 	logLookbackBlocks: bigint | undefined
+	maxPriceImpactBps?: bigint | undefined
 	maxHedgeSlippageBps: bigint | undefined
 	network: Configuration['network'] | undefined
 	operatorSettings: PersistedOperatorSettings | undefined

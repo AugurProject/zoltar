@@ -166,7 +166,7 @@ describe('collateral-independent outcome disputes', () => {
 		})
 	}
 	test('#1337 quarantines collateral burns without blocking REP checkpoints', async () => {
-		const { owner, token, target, portfolio, feed } = await prepare()
+		const { owner, other, token, target, portfolio, feed } = await prepare()
 		const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...target, functionName: 'capitalLedger', args: [fixture.base.genesisUniverse] }) }
 		const bounty = await owner.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
 		await writeContractAndWait(owner, () => owner.writeContract({ ...feed, functionName: 'requestPortfolioPrice', args: [4n * unit, 500n * unit, bounty], value: bounty }))
@@ -176,7 +176,9 @@ describe('collateral-independent outcome disputes', () => {
 		const burn = '0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF'
 		await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'setBlocked', args: [burn, true] }))
 		await fixture.base.mockWindow.advanceTime(86_401n)
-		await fixture.deposit(unit, owner, portfolio)
+		await expect(fixture.deposit(unit, owner, portfolio)).rejects.toThrow('Position is liquidating')
+		// An idle provider can checkpoint the deferred burn without curing the liquidating owner.
+		await fixture.deposit(unit, other, portfolio)
 		const pending = await owner.readContract({ ...capital, functionName: 'pendingBurnCash' })
 		expect(pending).toBeGreaterThan(0n)
 		await expect(owner.simulateContract({ ...capital, functionName: 'flushBurn' })).rejects.toThrow('SafeERC20Ops token call reverted')

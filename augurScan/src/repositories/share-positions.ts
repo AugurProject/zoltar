@@ -20,6 +20,10 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 			) item
 			WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock}
 				AND log.event_name IN ('TransferSingle', 'TransferBatch')
+				AND (${filter.address ?? null}::text IS NULL OR lower(log.arguments->>'from') = ${filter.address ?? null} OR lower(log.arguments->>'to') = ${filter.address ?? null})
+				AND (${filter.market ?? null}::text IS NULL OR EXISTS (SELECT 1 FROM amm_markets selected
+					WHERE selected.chain_id = ${chainId} AND selected.canonical AND selected.block_number <= ${snapshotBlock}
+						AND selected.pair_address = ${filter.market ?? null} AND selected.share_token_address = log.emitter_address))
 		), deltas AS (
 			SELECT token, receiver AS address, id, amount FROM transfers
 			UNION ALL SELECT token, sender AS address, id, -amount FROM transfers
@@ -91,9 +95,14 @@ export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlo
 
 export const escalationPayouts = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) => {
 	const rows = await sql`
-  WITH latest AS (
+  WITH candidate_games AS (
+   SELECT DISTINCT entity_identity FROM entity_state_snapshots
+   WHERE chain_id = ${chainId} AND canonical AND entity_type = 'escalation' AND block_number <= ${snapshotBlock}
+    AND read_result->'claimEvidence'->'positions' @> ${JSON.stringify([{ depositor: address }])}::text::jsonb
+  ), latest AS (
    SELECT DISTINCT ON (entity_identity) entity_identity, block_number, block_hash, read_result
    FROM entity_state_snapshots WHERE chain_id = ${chainId} AND canonical AND entity_type = 'escalation' AND block_number <= ${snapshotBlock}
+    AND entity_identity IN (SELECT entity_identity FROM candidate_games)
    ORDER BY entity_identity, block_number DESC, observed_at DESC
   ), positions AS (
    SELECT latest.entity_identity AS game_address, latest.block_number::text AS snapshot_block, latest.block_hash AS snapshot_block_hash, position

@@ -1,15 +1,17 @@
+import { tokenDisplayText } from '../token-metadata-limits.ts'
+import { errorChainIncludes } from '../error-chain.ts'
 import { type CollateralIdentityCache, readContractCollateral, usesCollateralUnits, withCollateralIdentityCache } from '../collateral-metadata.ts'
 import { discoverPortfolioEventDependencies } from './portfolio-discovery.ts'
 import { transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
-import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, zeroAddress } from '../ethereum.ts'
+import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, type PublicClient, zeroAddress } from '../ethereum.ts'
 import { addressActivityFrom, ChainContinuityError, commitCanonicalRead, confirmCanonicalBlock, isProtocolEvidenceEmitter, isPrunedHistoricalStateError, jsonEvidence, labelsFrom, readWithPrunedStateFallback, requireLogPosition, requireReceiptPosition } from '../indexer-runtime.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from '../metadata.ts'
 import { sampleEntityState } from '../snapshot-client.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../types.ts'
-import { erc20BalanceAbi, erc20MetadataAbi, mapLimit, prunedTokenMetadataError, type RpcBlockHeader, readTokenMetadata as readTokenMetadataFromRpc, tokenMetadataNeedsRead } from './planning.ts'
+import { erc20BalanceAbi, erc20MetadataAbi, mapLimit, prunedTokenMetadataError, type RpcBlockHeader, readTokenMetadata as readTokenMetadataFromRpc, tokenMetadataReadCandidates, permanentTokenMetadataFailure } from './planning.ts'
 import { type BlockHeaderReader, discoverStateStartBlock, getBlockHeader, type HistoricalStateContext } from './network-provider.ts'
 import { assertLease, type NetworkIndexerState, type ProviderState, requireLease } from './network-state.ts'
 
@@ -151,11 +153,7 @@ export async function indexBlock(
 		const decoded = decodeAction(contract, pair.transaction.input, labels, tokenMetadata, contractKinds)
 		for (const candidate of tokenAddressesFrom(contract?.kind, decoded, pair.transaction.to, contractKinds)) tokenCandidates.add(candidate)
 	}
-	const tokenMetadataReads = await mapLimit(
-		[...tokenCandidates].filter(candidate => tokenMetadataNeedsRead(tokenMetadata.get(candidate.toLowerCase()), number, state.stateBoundary.startBlock)),
-		4,
-		candidate => readTokenMetadata(state.providers, candidate, number),
-	)
+	const tokenMetadataReads = await mapLimit(tokenMetadataReadCandidates([...tokenCandidates], tokenMetadata, number, state.stateBoundary.startBlock), 4, candidate => readTokenMetadata(state.providers, candidate, number))
 	if (tokenMetadataReads.some(metadata => metadata.readError === prunedTokenMetadataError)) await discoverStateStartBlock(state, observedHead, number, true)
 	for (const metadata of tokenMetadataReads) tokenMetadata.set(metadata.address.toLowerCase(), metadata)
 	const displayLabels = new Map(labels)
@@ -178,8 +176,9 @@ export async function indexBlock(
 	const collateralByAddress = new Map(collateralDisplays.flatMap(([address, unit]) => (unit === undefined ? [] : [[address, unit] as const])))
 	const displayContext = { nativeSymbol: state.network.nativeSymbol, collateralByAddress }
 	for (const metadata of tokenMetadata.values()) {
-		const label = metadata.name ?? metadata.symbol
-		if (label !== undefined) displayLabels.set(metadata.address.toLowerCase(), metadata.symbol === undefined ? label : `${label} (${metadata.symbol})`)
+		const symbol = tokenDisplayText(metadata.symbol, 'symbol')
+		const label = tokenDisplayText(metadata.name, 'name') ?? symbol
+		if (label !== undefined) displayLabels.set(metadata.address.toLowerCase(), symbol === undefined ? label : `${label} (${symbol})`)
 	}
 	const storedLogs: StoredLog[] = []
 	for (const receipt of receipts) {
@@ -205,6 +204,7 @@ export async function indexBlock(
 			try {
 				return [hash, { status: 'available', trace: await transactionCallTrace(state.providers.client, hash) }] as const
 			} catch (error) {
+				if (errorChainIncludes(error, new Set(['ResponseBodyTooLargeError']))) return [hash, { status: 'unavailable' }] as const
 				if (unsupportedTraceError(error)) {
 					state.providers.traceUnsupported.add(state.providers.active)
 					return [hash, { status: 'unavailable' }] as const
@@ -367,21 +367,29 @@ export async function refreshEntityStateSnapshots(state: NetworkIndexerState, bl
 }
 
 async function readTokenMetadata(providers: ProviderState, address: Address, blockNumber: bigint): Promise<TokenMetadata> {
-	return await readTokenMetadataFromRpc(address, blockNumber, {
-		decimals: async () => {
-			const result = await providers.client.readContract({ address, abi: erc20MetadataAbi, functionName: 'decimals', blockNumber })
-			if (typeof result !== 'bigint' || result > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('ERC-20 decimals returned an invalid value')
-			return Number(result)
-		},
-		name: async () => {
-			const result = await providers.client.readContract({ address, abi: erc20MetadataAbi, functionName: 'name', blockNumber })
-			if (typeof result !== 'string') throw new Error('ERC-20 name returned an invalid value')
-			return result
-		},
-		symbol: async () => {
-			const result = await providers.client.readContract({ address, abi: erc20MetadataAbi, functionName: 'symbol', blockNumber })
-			if (typeof result !== 'string') throw new Error('ERC-20 symbol returned an invalid value')
-			return result
-		},
-	})
+	const from = async (client: PublicClient) =>
+		await readTokenMetadataFromRpc(address, blockNumber, {
+			decimals: async () => {
+				const result = await client.readContract({ address, abi: erc20MetadataAbi, functionName: 'decimals', blockNumber, gas: 100_000n })
+				if (typeof result !== 'bigint' || result > BigInt(Number.MAX_SAFE_INTEGER)) throw Object.assign(new Error('ERC-20 decimals returned an invalid value'), { name: 'AbiDecodingError' })
+				return Number(result)
+			},
+			name: async () => {
+				const result = await client.readContract({ address, abi: erc20MetadataAbi, functionName: 'name', blockNumber, gas: 100_000n })
+				if (typeof result !== 'string') throw Object.assign(new Error('ERC-20 name returned an invalid value'), { name: 'AbiDecodingError' })
+				return result
+			},
+			symbol: async () => {
+				const result = await client.readContract({ address, abi: erc20MetadataAbi, functionName: 'symbol', blockNumber, gas: 100_000n })
+				if (typeof result !== 'string') throw Object.assign(new Error('ERC-20 symbol returned an invalid value'), { name: 'AbiDecodingError' })
+				return result
+			},
+		})
+	const metadata = await from(providers.client)
+	if (metadata.readError === undefined || permanentTokenMetadataFailure(metadata.readError) || metadata.readError === prunedTokenMetadataError) return metadata
+	// Ambiguous failures must not become permanent based on one endpoint.
+	const alternate = providers.list.find(provider => provider !== providers.active)
+	if (alternate === undefined) return metadata
+	const confirmation = await from(alternate.client)
+	return confirmation.readError === undefined || permanentTokenMetadataFailure(confirmation.readError) ? confirmation : metadata
 }

@@ -1,8 +1,9 @@
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio } from '../contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio, statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../contractArtifact.js'
 
-import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { errorChain } from '@zoltar/core-shared/errors/errorChain'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
@@ -30,8 +31,23 @@ async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigin
 	)
 }
 
-async function loadListedSecurityPools(client: ReadClient, deployments: readonly SecurityPoolDeploymentTuple[]) {
-	return await Promise.all(deployments.map(deployment => loadSecurityPoolDetails(client, deployment)))
+export type UnavailableSecurityPool = { address: Address; universeId: bigint; questionId: bigint; reason: string }
+
+async function loadListedSecurityPools(client: ReadClient, deployments: readonly SecurityPoolDeploymentTuple[], blockNumber: bigint) {
+	const pools: ListedSecurityPool[] = []
+	const unavailable: UnavailableSecurityPool[] = []
+	// Each pool has its own request boundary. Bounded batches prevent a growing
+	// registry from issuing every pool's fee checkpoint at once.
+	for (let start = 0; start < deployments.length; start += 4) {
+		const results = await Promise.allSettled(deployments.slice(start, start + 4).map(deployment => loadSecurityPoolDetails(client, deployment, blockNumber)))
+		for (const [offset, result] of results.entries()) {
+			const deployment = deployments[start + offset]
+			if (deployment === undefined) throw new Error('Question deployment is missing')
+			if (result.status === 'fulfilled') pools.push(result.value)
+			else unavailable.push({ address: deployment.securityPool, universeId: deployment.universeId, questionId: deployment.questionId, reason: getErrorMessage(result.reason, 'Question unavailable.') })
+		}
+	}
+	return { pools, unavailable }
 }
 
 type DeploymentRegistryAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber: bigint }>
@@ -90,12 +106,37 @@ function applyChildForkActivityHints(pools: ListedSecurityPool[]) {
 	})
 }
 
-export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSecurityPool[]> {
+export async function loadSecurityPoolListing(client: ReadClient) {
 	const anchor = await loadDeploymentRegistryAnchor(client)
 	const deployments = await loadDeploymentRegistry(client, anchor)
-	const pools = await loadListedSecurityPools(client, deployments)
+	const { pools, unavailable } = await loadListedSecurityPools(client, deployments, anchor.blockNumber)
 	await requireDeploymentRegistryAnchor(client, anchor)
-	return applyChildForkActivityHints(pools)
+	return { pools: applyChildForkActivityHints(pools), unavailable }
+}
+
+export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSecurityPool[]> {
+	return (await loadSecurityPoolListing(client)).pools
+}
+
+/** Resolves one factory-authenticated question without depending on the question list. */
+export async function loadSelectedSecurityPool(client: ReadClient, securityPool: Address): Promise<ListedSecurityPool> {
+	const anchor = await loadDeploymentRegistryAnchor(client)
+	const blockNumber = anchor.blockNumber
+	const factory = getInfraContractAddresses().securityPoolFactory
+	const pool = { abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, blockNumber }
+	const [originId, universeId] = await Promise.all([client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getSecurityPoolOriginId', args: [securityPool], blockNumber }), client.readContract({ ...pool, functionName: 'universeId' })])
+	const registered = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getSecurityPool', args: [originId, universeId], blockNumber })
+	if (!sameAddress(registered, securityPool)) throw new Error('This question is not registered with the configured factory.')
+	const [manager, parent, questionId, multiplier] = await Promise.all([
+		client.readContract({ ...pool, functionName: 'openOraclePriceCoordinator' }),
+		client.readContract({ ...pool, functionName: 'parent' }),
+		client.readContract({ ...pool, functionName: 'questionId' }),
+		client.readContract({ ...pool, functionName: 'statoblastSecurityMultiplierBps' }),
+	])
+	const priorityFee = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas', blockNumber })
+	const details = await loadSecurityPoolDetails(client, { securityPool, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier, initialReportPriorityFeeAttoEthPerGas: priorityFee }, blockNumber)
+	await requireDeploymentRegistryAnchor(client, anchor)
+	return details
 }
 
 export type RegisteredPortfolio = { portfolio: Address; questionCount: number }

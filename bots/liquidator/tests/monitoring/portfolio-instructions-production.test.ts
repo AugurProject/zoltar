@@ -3,27 +3,23 @@ import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securi
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
 import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addRepToMigrationBalance, splitMigrationRep, getZoltarForkThreshold, forkUniverse, getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
 import { PortfolioOpportunityExpired } from '../../src/execution/portfolio-executor.ts'
 import { executePortfolioInstruction } from '../../src/execution/portfolio-instructions.ts'
 import { loadDurableState } from '../../src/state/operator-state.ts'
-import { repairAuctionKeeper } from '../support/collateral-repair-auction.ts'
+import { repairAuctionKeeper, repairAuctionTerms, prepareKeeperCollateralRepairAuction } from '../support/collateral-repair-auction.ts'
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 import { loadPortfolioAuctionSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 
 describe('explicit portfolio instruction lifecycle', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	test('bids once across restart, counts pending exposure, activates and manages the winning vault', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareKeeperCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const { account, reader: client, scope, settings, wallet } = repairAuctionKeeper(fixture, context)
-		const auctionTerms = await loadPortfolioAuctionSnapshot({ client, portfolio: fixture.portfolio, universeId: context.child, bidder: account.address })
-		if (auctionTerms.auction === undefined) throw new Error('Missing open auction')
-		const bidCollateral = 2n * auctionTerms.auction.lotAttoEth
 		await context.mock.setBalance(account.address, 100n * unit)
 		await wallet.sendTransaction({ to: settings.deployment.weth, value: 10n * unit })
 		settings.portfolioPolicy.maximumPrincipalAttoRep = 1_000_000n * unit
@@ -31,11 +27,14 @@ describe('explicit portfolio instruction lifecycle', () => {
 		settings.portfolioPolicy.maximumCommitmentAttoEth = 1000n * unit
 		settings.strategy.maximumGasCostAttoEth = unit
 		const { pool, state, stop } = await serveMockChainRpc(context.mock, settings, account.address, scope)
+		const terms = await repairAuctionTerms(context)
+		const bidLots = terms.lotCount > 2n ? 2n : 1n
+		const bidCollateral = terms.collateralPerLot * bidLots
 		const base = { portfolio: fixture.portfolio, universeId: context.child }
-		const bid = { ...base, id: 'one-bid', action: 'auction-bid' as const, lots: 2n, minimumAttoRepPerLot: 20n * unit, targetHealthFactorBps: 10_000n, maximumValueAttoEth: 10n * unit }
+		const bid = { ...base, id: 'one-bid', action: 'auction-bid' as const, lots: bidLots, minimumAttoRepPerLot: terms.minimumRepPerLot, targetHealthFactorBps: 10_000n, maximumValueAttoEth: bidCollateral }
 		try {
-			const lowBid = { ...bid, id: 'losing-bid', minimumAttoRepPerLot: 100n * unit }
-			await expect(executePortfolioInstruction(wallet, settings, state, pool, { ...lowBid, maximumValueAttoEth: unit }, async () => true)).rejects.toThrow('exceeds collateral or commitment limits')
+			const lowBid = { ...bid, id: 'losing-bid', minimumAttoRepPerLot: terms.repPerLot * 2n }
+			await expect(executePortfolioInstruction(wallet, settings, state, pool, { ...lowBid, maximumValueAttoEth: bidCollateral - 1n }, async () => true)).rejects.toThrow('exceeds collateral or commitment limits')
 			await wallet.writeContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'approve', args: [context.auction, 1n] })
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, lowBid, async () => true)).toBe(true)
 			expect(state.completedPortfolioInstructions?.[lowBid.id]).toBeUndefined()
@@ -48,7 +47,7 @@ describe('explicit portfolio instruction lifecycle', () => {
 			const lowAuction = await loadPortfolioAuctionSnapshot({ client, portfolio: fixture.portfolio, universeId: context.child, bidder: account.address })
 			const loser = lowAuction.auction?.bids[0]
 			if (loser === undefined) throw new Error('Missing losing bid')
-			await context.bid(context.owner, 5n, 40n * unit)
+			await context.bid(context.owner, terms.lotCount, terms.repPerLot)
 			const beforeRefund = await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })
 			const refund = { ...base, id: 'early-refund', action: 'auction-refund' as const, bidId: loser.id }
 			settings.strategy.maximumGasCostAttoEth = 1n
@@ -69,7 +68,7 @@ describe('explicit portfolio instruction lifecycle', () => {
 			const restored = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
 			state.completedPortfolioInstructions = restored.completedPortfolioInstructions
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, bid, async () => true)).toBe(false)
-			await expect(executePortfolioInstruction(wallet, settings, state, pool, { ...bid, lots: 3n }, async () => true)).rejects.toThrow('cannot be reused')
+			await expect(executePortfolioInstruction(wallet, settings, state, pool, { ...bid, lots: bidLots + 1n }, async () => true)).rejects.toThrow('cannot be reused')
 			const pending = await loadPortfolioObservation(client, settings, account.address, scope, await client.getBlockNumber())
 			expect(pending.managedPrincipalAttoRep).toBeGreaterThan(pending.snapshot.ownerPrincipalAttoRep)
 			expect(pending.nextScope.managedVaults).toHaveLength(2)

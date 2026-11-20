@@ -62,8 +62,8 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 			await readClient.waitForTransactionReceipt({ hash })
 		}
 		const liquidityHash = !nativeFunding
-			? await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithCollateral', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, account, block.timestamp + 1_200n, budget] })
-			: await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, account, block.timestamp + 1_200n], value: 10n ** 16n })
+			? await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithCollateral', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, 0n, 0n, account, block.timestamp + 1_200n, budget] })
+			: await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, 0n, 0n, account, block.timestamp + 1_200n], value: 10n ** 16n })
 		const liquidityReceipt = await readClient.waitForTransactionReceipt({ hash: liquidityHash })
 		if (liquidityReceipt.status !== 'success') throw new Error('Trading simulation liquidity initialization reverted')
 		const portfolio = await readClient.readContract({ abi: factoryArtifact.abi, address: addresses.securityPoolFactory, functionName: 'getSecurityPoolPortfolio', args: [market.pool] })

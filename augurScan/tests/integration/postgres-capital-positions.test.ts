@@ -1,3 +1,4 @@
+import { refreshHistoryAggregates } from '../../src/database/history-aggregates.ts'
 import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { handleApi } from '../../src/api.ts'
@@ -58,7 +59,27 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 	// Target selection runs on the reserved connection, which holds the temporary tables.
 	const database = new ScannerDatabase(url)
 	try {
-		for (const table of ['blocks', 'contracts', 'pools', 'pool_state_events', 'escalation_game_events', 'collateral_repair_auction_events', 'protocol_timeline_entries', 'entity_state_snapshots', 'address_activity', 'networks', 'address_balance_snapshots', 'token_metadata', 'universe_events', 'questions'])
+		for (const table of [
+			'blocks',
+			'contracts',
+			'pools',
+			'pool_state_events',
+			'escalation_game_events',
+			'collateral_repair_auction_events',
+			'protocol_timeline_entries',
+			'entity_state_snapshots',
+			'address_activity',
+			'address_catalog',
+			'address_balance_assets',
+			'address_activity_summaries',
+			'protocol_entity_identities',
+			'protocol_entity_totals',
+			'networks',
+			'address_balance_snapshots',
+			'token_metadata',
+			'universe_events',
+			'questions',
+		])
 			await connection.unsafe(`CREATE TEMP TABLE ${table} (LIKE public.${table} INCLUDING DEFAULTS INCLUDING INDEXES)`)
 		for (const number of [1, 2, 3]) await connection`INSERT INTO blocks (chain_id, number, hash, parent_hash, canonical, timestamp) VALUES (${chainId}, ${number}, ${blockHash(number)}, ${zeroHash}, true, ${new Date(Date.UTC(2026, 0, number))})`
 		for (const [contract, kind] of [
@@ -203,6 +224,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 		await snapshot('auction', keylessAuction, 1, { lotAttoEth: '1', collateral: keylessAuctionToken })
 		await snapshot('auction', keylessAuction, 3, { lotAttoEth: '1' })
 		expect(await auctionCollateral(connection, chainId, '3', keylessAuction)).toEqual(keylessAuctionToken)
+		for (const number of [1, 2, 3]) await refreshHistoryAggregates(connection, chainId, blockHash(number), String(number))
 		const rich = await richListRows(connection, { chainId, address: lower(alice), snapshotBlock: '3', limit: 10, offset: 0, sort: 'transactions' })
 		expect(rich[0]?.['auction_claims']).toEqual([expect.objectContaining({ type: 'BidSettled', entity: auction, collateral: auctionCollateralToken }), expect.objectContaining({ type: 'BidSettled', entity: keylessAuction, collateral: keylessAuctionToken })])
 		expect(rich[0]?.['capital_positions']).toEqual([

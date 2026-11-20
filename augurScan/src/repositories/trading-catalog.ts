@@ -11,20 +11,11 @@ export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: nu
 			WHERE market.chain_id = ${chainId} AND market.canonical AND market.block_number <= ${asOfBlock}
 			ORDER BY market.pair_address, market.block_number DESC, market.log_index DESC
 		)
-		SELECT market.pair_address, market.pool_address, market.share_token_address,
-			market.universe_id::text, market.fee_bps::text, question.question_id::text, question.title AS question_title,
-			(SELECT state.read_result->'collateral' FROM entity_state_snapshots state
-			 WHERE state.chain_id = market.chain_id AND state.entity_identity = market.pool_address
-				AND state.entity_type = 'pool' AND state.canonical AND state.read_status = 'success' AND state.block_number <= ${asOfBlock}
-			 ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral,
-			price.yes_reserve_atto_shares::text, price.no_reserve_atto_shares::text,
-			price.conditional_yes_bps::text, price.conditional_no_bps::text,
-			price.block_number::text AS price_block_number, price.timestamp AS price_timestamp,
-			COALESCE(activity.swap_count, 0)::integer AS swap_count,
-			COALESCE(activity.liquidity_event_count, 0)::integer AS liquidity_event_count,
-			COALESCE(activity.lp_holder_count, 0)::integer AS lp_holder_count,
-			COALESCE(activity.fees_atto_shares, 0)::text AS fees_atto_shares,
-			count(*) OVER ()::integer AS total
+		, page AS MATERIALIZED (
+		 SELECT market.*, question.question_id, question.title AS question_title,
+		  price.yes_reserve_atto_shares, price.no_reserve_atto_shares, price.conditional_yes_bps, price.conditional_no_bps,
+		  price.block_number AS price_block_number, price.timestamp AS price_timestamp
+
 		FROM markets market
 		LEFT JOIN pools pool ON pool.chain_id = market.chain_id AND pool.pool_address = market.pool_address AND pool.canonical
 		LEFT JOIN questions question ON question.chain_id = pool.chain_id AND question.question_id = pool.question_id AND question.canonical
@@ -35,6 +26,27 @@ export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: nu
 				AND snapshot.block_number <= ${asOfBlock}
 			ORDER BY snapshot.block_number DESC, snapshot.log_index DESC LIMIT 1
 		) price ON true
+		WHERE (${search ?? null}::text IS NULL OR market.pair_address ILIKE ${pattern ?? null}
+			OR market.pool_address ILIKE ${pattern ?? null}
+			OR question.title ILIKE ${pattern ?? null})
+		ORDER BY price.block_number DESC NULLS LAST, market.block_number DESC, market.pair_address
+		LIMIT ${limit} OFFSET ${offset}
+		)
+
+		SELECT market.pair_address, market.pool_address, market.share_token_address,
+			market.universe_id::text, market.fee_bps::text, market.question_id::text, market.question_title AS question_title,
+			(SELECT state.read_result->'collateral' FROM entity_state_snapshots state
+			 WHERE state.chain_id = market.chain_id AND state.entity_identity = market.pool_address
+				AND state.entity_type = 'pool' AND state.canonical AND state.read_status = 'success' AND state.block_number <= ${asOfBlock}
+			 ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral,
+			market.yes_reserve_atto_shares::text, market.no_reserve_atto_shares::text,
+			market.conditional_yes_bps::text, market.conditional_no_bps::text,
+			market.price_block_number::text AS price_block_number, market.price_timestamp AS price_timestamp,
+			COALESCE(activity.swap_count, 0)::integer AS swap_count,
+			COALESCE(activity.liquidity_event_count, 0)::integer AS liquidity_event_count,
+			COALESCE(activity.lp_holder_count, 0)::integer AS lp_holder_count,
+			COALESCE(activity.fees_atto_shares, 0)::text AS fees_atto_shares
+		FROM page market
 		LEFT JOIN LATERAL (
 			SELECT count(*) FILTER (WHERE event.event_name = 'Swap') AS swap_count,
 				count(*) FILTER (WHERE event.event_name IN ('LiquidityInitialized', 'LiquidityAdded', 'LiquidityRemoved')) AS liquidity_event_count,
@@ -59,10 +71,6 @@ export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: nu
 			WHERE event.chain_id = market.chain_id AND event.market_address = market.pair_address AND event.canonical
 				AND event.block_number <= ${asOfBlock}
 		) activity ON true
-		WHERE (${search ?? null}::text IS NULL OR market.pair_address ILIKE ${pattern ?? null}
-			OR market.pool_address ILIKE ${pattern ?? null}
-			OR question.title ILIKE ${pattern ?? null})
-		ORDER BY price.block_number DESC NULLS LAST, market.block_number DESC, market.pair_address
-		LIMIT ${limit} OFFSET ${offset}
+		ORDER BY market.price_block_number DESC NULLS LAST, market.block_number DESC, market.pair_address
 	`
 }

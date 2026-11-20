@@ -246,7 +246,7 @@ Auction `AttoEth` amounts (lots, demand, proceeds, refunds and fees) are base un
 
 `chainId` is required. `kind` defaults to `all` and accepts `all`, `address-balance`, or `token-metadata`. `canonical` defaults to `canonical` and also accepts `orphaned` or `all`. For balance observations, `address` matches either the balance owner or the asset contract; for metadata observations, it matches the token contract. `limit` defaults to 100 and caps at 250.
 
-The response contains `chainId`, the standard Operations `asOf` boundary, and `data` with `items`, exact numeric `total`, `limit`, `offset`, `hasMore`, and `nextCursor` when another page exists. The endpoint supports at most `Number.MAX_SAFE_INTEGER` matching observations in one snapshot; a larger set returns `400` and asks the caller to narrow `kind`, `address`, or `canonical` so neither the total nor its cursor position can be rounded. Every item contains:
+The response contains `chainId`, the standard Operations `asOf` boundary, and `data` with `items`, `totalIsExact: false`, `limit`, `offset`, `hasMore`, and `nextCursor` when another page exists. It does not calculate a chain-wide total. Follow the cursor until `hasMore` is false. Cursor offsets must remain safe integers. Every item contains:
 
 | Field | Meaning |
 | --- | --- |
@@ -258,7 +258,7 @@ The response contains `chainId`, the standard Operations `asOf` boundary, and `d
 | `canonical`, `evidence_status` | Current canonicality and `canonical`, `chain-orphaned`, `manifest-superseded`, `coverage-reset`, or `noncanonical-unknown` classification |
 | `invalidation_id`, `invalidation_reason`, `invalidation_causes`, `invalidated_at` | Latest replacement provenance, null while canonical |
 
-An address-balance `result` contains `balance` as a decimal string on success or `readFailureReason` on failure. A token-metadata `result` contains the available `name`, `symbol`, and `decimals`; failed rows also contain `readError`. Raw `offset` is rejected. Continue only with the returned cursor because it binds both observation-kind maxima, all filters, the exact total, and the `asOf` generation.
+An address-balance `result` contains `balance` as a decimal string on success or `readFailureReason` on failure. A token-metadata `result` contains the available `name`, `symbol`, and `decimals`; failed rows also contain `readError`. Raw `offset` is rejected. Continue only with the returned cursor because it binds both observation-kind maxima, all filters and the `asOf` generation.
 
 ### Semantic state and coverage
 
@@ -280,14 +280,14 @@ Integrity includes `decodeCoverage` for the selected chain and snapshot: observe
 | --- | --- | --- | --- |
 | `logs` | `chainId`; optional `event`, `address`, `decoded`; `canonical` defaults to `canonical` | `limit` defaults to 100 and caps at 250; pass top-level `nextCursor` as `cursor` until absent. Raw `offset` is unavailable. | Selected block/hash, invalidation/source generation, and exact filter scope; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
 | `reorgs` | `chainId` | `limit` defaults to 50 and caps at 250; pass top-level `nextCursor` as `cursor` until absent. Raw `offset` is rejected. | Indexed block/hash, invalidation/source generation, and the greatest replacement ID visible on the first page; a later replacement returns `409` |
-| `export` | `chainId`; `dataset=logs\|timeline\|reorgs`; optional block range; `canonical` filters only logs and timeline, while reorganization rows have no canonical/orphan classification | `limit` defaults to 5,000 and caps at 50,000; pass `x-augurscan-next-cursor` as `cursor` until absent. Raw `offset` is rejected. See [`GET /api/v1/export`](#get-apiv1export). | Indexed block/hash, latest invalidation ID, exact total, filter scope, and source hashes; changed snapshot returns `409` |
+| `export` | `chainId`; `dataset=logs\|timeline\|reorgs`; optional block range; `canonical` filters only logs and timeline, while reorganization rows have no canonical/orphan classification | `limit` defaults to 5,000 and caps at 50,000; pages also stop at 8 MiB of UTF-8 NDJSON. Pass `x-augurscan-next-cursor` as `cursor` until absent. Raw `offset` is rejected. See [`GET /api/v1/export`](#get-apiv1export). | Indexed block/hash, latest invalidation ID, filter scope, and source hashes; changed snapshot returns `409` |
 | Report, escalation, auction, and fork catalogs | `chainId` | `limit` defaults to 100 and caps at 250; pass `data.nextCursor` as `cursor` while `data.hasMore`. Fork responses also return exact `data.total`. | Selected block/hash plus invalidation/source generation; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
 | Risk catalog | `chainId` | `limit` defaults to 100 and caps at 250; compare the returned pools with exact `data.pagination.poolTotal`, and pass `data.pagination.poolNextCursor` as `poolCursor` while `poolHasMore` | Selected block/hash plus invalidation/source generation; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
 | Trading catalog | `chainId`; also accepts `q` | `limit` defaults to 100 and caps at 250; pass `data.nextCursor` as `cursor` while `data.hasMore`. Its encoded offset accepts every non-negative safe integer and has no artificial 100,000-row ceiling. | Selected block/hash, invalidation/source generation, and exact search filter; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
 | Integrity catalog | `chainId` | `limit` defaults to 100 and caps at 250; pass `data.nextCursor` as `cursor` while `data.hasMore`. Replacements continue by `(detected_at, id)` keyset; `data.offset` is a display count rather than a database offset. | Selected block/hash, invalidation/source generation, and greatest replacement ID visible on the first page; a later invalidation returns `409` |
-| Global timeline catalog | `chainId`; optional entity, event, address, text, block range, and canonical filters | `limit` defaults to 100 and caps at 250; `data.total` is an exact lossless decimal string and `data.nextCursor` continues `(block_number, log_index, tx_hash, block_hash, entity_type, entity_identity)` | Selected block/hash, invalidation/source generation, and exact filter set; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
+| Global timeline catalog | `chainId`; optional entity, event, address, text, block range, and canonical filters | `limit` defaults to 100 and caps at 250; `data.totalIsExact` is false; no total is computed. Unscoped `q` needs three consecutive Unicode letters or digits for indexed substring search; other text requires an entity, event, or address filter. `data.nextCursor` continues `(block_number, log_index, tx_hash, block_hash, entity_type, entity_identity)` | Selected block/hash, invalidation/source generation, and exact filter set; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
 | Report, escalation, auction, fork, trading, and timeline details | Path identity and chain | `limit` defaults to 100 and caps at 250; continue the nested event collection with its `nextCursor` while `hasMore`. Report details page coordinator evidence independently with `decisionLimit` and `decisionCursor` in `data.coordinatorDecisions`. | Selected block/hash plus invalidation/source generation; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
-| Direct read observations | `chainId`; `kind=all\|address-balance\|token-metadata`; optional address and canonical scope | `limit` defaults to 100 and caps at 250; `data.total` is exact and `data.nextCursor` continues by `(observed_at, kind, id)` within a snapshot that fixes the greatest visible ID for each observation kind. Raw `offset` is rejected. | Selected block/hash, invalidation/source generation, exact filters, and first-page observation IDs; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
+| Direct read observations | `chainId`; `kind=all\|address-balance\|token-metadata`; optional address and canonical scope | `limit` defaults to 100 and caps at 250; `data.totalIsExact` is false; no total is computed. `data.nextCursor` continues by `(observed_at, kind, id)` within a snapshot that fixes the greatest visible ID for each observation kind. Raw `offset` is rejected. | Selected block/hash, invalidation/source generation, exact filters, and first-page observation IDs; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
 | Pool risk details | Path identity and chain; optional `atBlock` | `limit` defaults to 250 and caps at 1,000; pass `data.history.nextCursor` as `cursor` while `truncated`. The state, accounting, and lifecycle histories use independent keyset positions in that cursor. Raw `offset` is rejected. | Selected block/hash, invalidation/source generation, and exact risk identity; a newer head is allowed, while invalidation or loss of the retained boundary returns `409` |
 | Pool, question, and universe history | Path identity and chain; optional `fromBlock`/`toBlock` | `limit` defaults to 1,000 and caps at 2,000; pass `coverage.nextCursor` as `cursor` while present. Raw `offset` is rejected. | Indexed block/hash, invalidation/source generation, exact identity and block range, and scanner start; changed history returns `409` |
 | Address transactions | `chainId` and `address` | `limit` defaults to 50 and caps at 100; pass top-level `nextCursor` as `cursor` until absent | Snapshot block/hash, total, and invalidation/source generation; change returns `409` |
@@ -309,7 +309,7 @@ Integrity includes `decodeCoverage` for the selected chain and snapshot: observe
 
 ### `GET /api/v1/export`
 
-A snapshot-bound newline-delimited JSON export. Use it for durable audit files with per-page proofs.
+A snapshot-bound newline-delimited JSON export. Use it for durable audit files with per-page identity, ordering, and snapshot checks.
 
 | Parameter | Required | Meaning |
 | --- | --- | --- |
@@ -317,16 +317,17 @@ A snapshot-bound newline-delimited JSON export. Use it for durable audit files w
 | `dataset` | yes | `logs`, `timeline`, or `reorgs`. |
 | `fromBlock`, `toBlock` | no | Block range. |
 | `canonical` | no | `canonical`, `orphaned`, or `all` for logs or timeline. Reorganization records are durable replacements rather than canonical/orphan rows, so the parameter does not filter them. |
-| `limit` | no | Defaults to 5,000 and cannot exceed 50,000. |
+| `limit` | no | Defaults to 5,000 and cannot exceed 50,000. Each page also stops at 8 MiB of UTF-8 NDJSON; a single larger record returns `400` rather than being silently truncated. |
 | `cursor` | no | The previous response's `x-augurscan-next-cursor`. |
 
 | Response header | Meaning |
 | --- | --- |
 | `x-augurscan-returned` | The row count. |
+| `x-augurscan-snapshot-total` | `unknown`; export does not run a full-history count. |
 | `x-augurscan-truncated` | Whether another page exists. |
 | `x-augurscan-next-cursor` | The continuation, when truncated. |
 
-Snapshot block/hash, invalidation ID, exact total, and the selected network's applied ABI/application/projection source hashes are repeated in response headers and encoded in the cursor. The applied hashes are updated only when the process that owns that network's indexer lease successfully seeds its configuration and replay decision; starting a standby process does not change them. An indexed replacement or a change to any applied source marker returns `409` instead of mixing pages.
+Snapshot block/hash, invalidation ID, and the selected network's applied ABI/application/projection source hashes are repeated in response headers and encoded in the cursor. The applied hashes are updated only when the process that owns that network's indexer lease successfully seeds its configuration and replay decision; starting a standby process does not change them. An indexed replacement or a change to any applied source marker returns `409` instead of mixing pages.
 
 **Log rows.** Every exported log occurrence contains its raw `topics` and `data`, current decoded display fields, decode error, and its complete immutable log `interpretations` array. Each interpretation identifies its kind/key, serialized result, run, run schema/application version, ABI/application/projection source hashes, and interpretation time.
 
@@ -402,3 +403,5 @@ Pool history returns:
 - `openOracleHistory`: coordinator-linked OpenOracle lifecycle evidence
 
 These are event-time observations. AMM and Uniswap spot series are not presented as manipulation-resistant oracle values. See [STATE_MODEL.md](STATE_MODEL.md) for the retained-evidence model, field provenance, and completeness rules.
+
+Token display metadata is bounded to 256 UTF-8 bytes for names and 64 bytes for symbols. Contract reverts, malformed metadata and oversized responses are recorded as permanent metadata failures. Connection failures remain retryable with a bounded retry budget. Raw token addresses remain available when metadata is unavailable.

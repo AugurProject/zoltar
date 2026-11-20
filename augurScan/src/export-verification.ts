@@ -46,6 +46,8 @@ const decimal = (value: unknown, name: string): string => {
 	return value
 }
 
+const snapshotTotal = (value: unknown, name: string): string => (value === 'unknown' ? value : decimal(value, name))
+
 const rowDecimal = (value: unknown, name: string): string => {
 	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return String(value)
 	return decimal(value, name)
@@ -106,9 +108,9 @@ export const parseExportValidationState = (value: unknown): ExportValidationStat
 	const nextCursor = state['nextCursor']
 	if (nextCursor !== undefined && (typeof nextCursor !== 'string' || nextCursor.length === 0)) throw new Error('next cursor must be a non-empty string')
 	if (truncated !== (nextCursor !== undefined)) throw new Error('truncated state and next cursor do not agree')
-	const total = decimal(state['total'], 'snapshot total')
+	const total = snapshotTotal(state['total'], 'snapshot total')
 	const returnedTotal = decimal(state['returnedTotal'], 'cumulative returned count')
-	if (BigInt(returnedTotal) > BigInt(total) || (truncated ? BigInt(returnedTotal) >= BigInt(total) : returnedTotal !== total)) throw new Error('validation state counts do not agree')
+	if (total !== 'unknown' && (BigInt(returnedTotal) > BigInt(total) || (truncated ? BigInt(returnedTotal) >= BigInt(total) : returnedTotal !== total))) throw new Error('validation state counts do not agree')
 	return {
 		snapshot,
 		total,
@@ -229,7 +231,7 @@ const parseCursor = (cursor: string): CursorBoundary => {
 	return {
 		scope,
 		snapshot,
-		total: decimal(value[9], 'cursor snapshot total'),
+		total: snapshotTotal(value[9], 'cursor snapshot total'),
 		lastKey: keyFor(scope.dataset, lastKeyValue, true),
 	}
 }
@@ -266,7 +268,7 @@ export const verifyExportPage = (headerSource: string, body: string, scope: Expo
 	if (!Number.isSafeInteger(returnedNumber)) throw new Error('returned count must be a safe integer')
 	const rows = ndjsonRecords(body)
 	if (rows.length !== returnedNumber) throw new Error('NDJSON line count does not match x-augurscan-returned')
-	const total = decimal(requiredHeader(headers, 'x-augurscan-snapshot-total'), 'snapshot total')
+	const total = snapshotTotal(requiredHeader(headers, 'x-augurscan-snapshot-total'), 'snapshot total')
 	const truncatedValue = requiredHeader(headers, 'x-augurscan-truncated')
 	if (truncatedValue !== 'true' && truncatedValue !== 'false') throw new Error('x-augurscan-truncated must be true or false')
 	const truncated = truncatedValue === 'true'
@@ -299,10 +301,11 @@ export const verifyExportPage = (headerSource: string, body: string, scope: Expo
 		lastBodyKey = key
 	}
 	if (nextBoundary !== undefined && (lastBodyKey === undefined || !sameKey(scope.dataset, lastBodyKey, nextBoundary.lastKey))) throw new Error('next cursor does not identify the final export row')
+	if (truncated && rows.length === 0) throw new Error('truncated page must make progress')
 	const returnedTotal = BigInt(previous?.returnedTotal ?? '0') + BigInt(returned)
-	const exactTotal = BigInt(total)
-	if (returnedTotal > exactTotal) throw new Error('cumulative returned count exceeds snapshot total')
-	if (truncated ? returnedTotal >= exactTotal : returnedTotal !== exactTotal) throw new Error(truncated ? 'truncated page must leave records remaining' : 'final page count does not match snapshot total')
+	const exactTotal = total === 'unknown' ? undefined : BigInt(total)
+	if (exactTotal !== undefined && returnedTotal > exactTotal) throw new Error('cumulative returned count exceeds snapshot total')
+	if (exactTotal !== undefined && (truncated ? returnedTotal >= exactTotal : returnedTotal !== exactTotal)) throw new Error(truncated ? 'truncated page must leave records remaining' : 'final page count does not match snapshot total')
 	return {
 		snapshot,
 		total,

@@ -1,3 +1,4 @@
+import { getOpenOracleDisputeAvailability } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 /// <reference types="bun-types" />
 
@@ -643,3 +644,29 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 		}
 	})
 }
+
+for (const scenario of ['callback gas', 'return bomb', 'settlement duration'] as const)
+	test(`#1456 refuses a dispute with unsafe ${scenario} before writing`, async () => {
+		const preimage = createDisputePreimage(true)
+		if (scenario === 'settlement duration') preimage.game.settlementTime = 2n ** 48n - 1n
+		else {
+			preimage.game.callbackContract = vaultAddress
+			preimage.game.callbackGasLimit = scenario === 'return bomb' ? 9_000_000n : 2n ** 32n - 1n
+		}
+		let sent = 0
+		const writer = createMockWriteClient(
+			() => sent++,
+			async request => readStoredOracleFixture(request.functionName, preimage),
+		)
+		const reader = createMockLoaderClient({ getBlock: async () => ({ timestamp: 200n, number: 2n }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
+		const wallet = createOfflineReporterWallet()
+		await expect(disputeOracleReport({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account }, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))).rejects.toThrow('settlement')
+		expect(sent).toBe(0)
+	})
+
+test('#1456: unsafe settlement disables dispute availability with a reason', () => {
+	const report = { callbackContract: vaultAddress, callbackGasLimit: 9_000_000, currentBlockNumber: 10n, currentReporter: initialReporter, currentTime: 200n, disputeDelay: 0n, isDistributed: false, reportTimestamp: 100n, settlementTime: 1000n, timeType: true }
+	expect(getOpenOracleDisputeAvailability(report)).toMatchObject({ canAct: false, message: expect.stringContaining('settlement gas') })
+	expect(getOpenOracleDisputeAvailability({ ...report, callbackGasLimit: 100_000 }).canAct).toBe(true)
+	expect(getOpenOracleDisputeAvailability({ ...report, callbackContract: zeroAddress, settlementTime: 2n ** 48n - 1n })).toMatchObject({ canAct: false, message: expect.stringContaining('settlement duration') })
+})

@@ -2,18 +2,6 @@ import { type Address, encodeAbiParameters, getAddress, type Hex, isAddress, kec
 
 type ContractIdentity = { readonly address: Address; readonly kind: string }
 
-export const uniswapV2V3TokenPairs = (contracts: Iterable<ContractIdentity>): readonly { readonly token0: Address; readonly token1: Address }[] => {
-	const values = [...contracts]
-	const reputationTokens = values.filter(({ kind }) => kind === 'reputationToken').map(({ address }) => address)
-	const quoteTokens = values.filter(({ kind }) => kind === 'weth' || kind === 'usdc').map(({ address }) => address)
-	return reputationTokens.flatMap(rep =>
-		quoteTokens.flatMap(quote => [
-			{ token0: rep, token1: quote },
-			{ token0: quote, token1: rep },
-		]),
-	)
-}
-
 export const uniswapV4PoolConfigurations = [
 	{ fee: 100, tickSpacing: 1 },
 	{ fee: 500, tickSpacing: 10 },
@@ -40,4 +28,10 @@ export const isSupportedUniswapV4Market = (market: UniswapV4MarketIdentity): boo
 	const configuration = uniswapV4PoolConfigurations.find(({ fee, tickSpacing }) => market.feeHundredthsBip === fee.toString() && market.tickSpacing === tickSpacing.toString())
 	if (configuration === undefined) return false
 	return market.marketId.toLowerCase() === uniswapV4PoolId(getAddress(market.token0Address), configuration.fee, configuration.tickSpacing, getAddress(market.token1Address))
+}
+
+/** Quote-token topics cover every REP child without one query per child. */
+export const uniswapDiscoveryTopics = (contracts: Iterable<ContractIdentity>): readonly { token0?: readonly Address[]; token1?: readonly Address[] }[] => {
+	const quotes = [...contracts].filter(({ kind }) => kind === 'weth' || kind === 'usdc').map(({ address }) => address)
+	return quotes.length === 0 ? [] : [{ token0: quotes }, { token1: quotes }]
 }

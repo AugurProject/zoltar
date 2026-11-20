@@ -64,6 +64,9 @@ export const expectCanonicalLogPagination = async ({ database }: LifecycleContex
 					indexed_timestamp = '2026-01-03T00:00:00Z', observed_block = 3
 				WHERE chain_id = ${chainId}
 			`
+	await database.sql`DELETE FROM address_activity_summaries WHERE chain_id = ${chainId} AND block_hash = ${advancedHeadHash}`
+	await database.sql`DELETE FROM protocol_entity_totals WHERE chain_id = ${chainId} AND block_hash = ${advancedHeadHash}`
+	await database.sql`DELETE FROM protocol_entity_identities WHERE chain_id = ${chainId} AND block_hash = ${advancedHeadHash}`
 	await database.sql`DELETE FROM blocks WHERE chain_id = ${chainId} AND hash = ${advancedHeadHash}`
 	return firstLogPage.nextCursor
 }
