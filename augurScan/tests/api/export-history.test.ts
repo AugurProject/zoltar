@@ -100,6 +100,23 @@ export AUGURSCAN_CHAIN_ID=11155111
 export AUGURSCAN_EXPORT_DIRECTORY="$2"
 export AUGURSCAN_EXPORT_DATASET="$3"
 export AUGURSCAN_EXPORT_CONTAINER="augurscan-export-$3"
+export AUGURSCAN_EXPORT_BARRIER="$4"
+# Both attempts reach the real atomic claim before either can acquire it.
+mkdir() {
+  if test "$1" = "$AUGURSCAN_EXPORT_DIRECTORY/.export-attempt"; then
+    touch "$AUGURSCAN_EXPORT_BARRIER.$AUGURSCAN_EXPORT_DATASET"
+    local ready=0 attempt
+    for ((attempt = 0; attempt < 500; attempt++)); do
+      if test -f "$AUGURSCAN_EXPORT_BARRIER.logs" && test -f "$AUGURSCAN_EXPORT_BARRIER.timeline"; then
+        ready=1
+        break
+      fi
+      sleep 0.01
+    done
+    test "$ready" = 1 || { echo 'Concurrent export barrier timed out' >&2; return 2; }
+  fi
+  command mkdir "$@"
+}
 docker() { :; }
 augurscan_export_readiness() { return 0; }
 augurscan_curl() {
@@ -121,13 +138,14 @@ augurscan_export_history`,
 					exportScript,
 					exportDirectory,
 					dataset,
+					path.join(directory, 'claim-ready'),
 				],
 				{ cwd: projectRoot, env: processEnv(), stdout: 'pipe', stderr: 'pipe' },
 			)
 		const attempts = [exportDataset('logs'), exportDataset('timeline')]
 		const results = await Promise.all(attempts.map(async attempt => ({ status: await attempt.exited, stdout: await new Response(attempt.stdout).text(), stderr: await new Response(attempt.stderr).text() })))
 		const published = results.filter(result => result.status === 0)
-		expect(published).toHaveLength(1)
+		expect(published, JSON.stringify(results)).toHaveLength(1)
 		expect(published[0]?.stdout).toContain(`Validated export: ${exportDirectory}`)
 		const refused = results.filter(result => result.status !== 0)
 		expect(refused).toHaveLength(1)
