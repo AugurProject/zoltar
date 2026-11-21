@@ -1,3 +1,6 @@
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -47,6 +50,28 @@ describe('portfolio overview', () => {
 		url: 'http://localhost/#/portfolio',
 	})
 
+	test('caps insured exits at the ticket impact limit, applies selected slippage, and hides them after closing', async () => {
+		const balances = { scope: scope(openPool), yes: 100n * SET, no: 0n, invalid: 100n * SET, lp: 0n }
+		const view = (selected: LiveMarket, slippageBps = 50n, yes = balances.yes) => (
+			<LivePortfolio entries={[{ market: selected, balances: { ...balances, yes }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} settings={{ ...DEFAULT_TRADE_SETTINGS, slippageBps }} />
+		)
+		const rendered = await renderIntoDocument(view(openMarket))
+		cleanupRendered = rendered.cleanup
+		const maximum = () => {
+			const label = Array.from(rendered.container.querySelectorAll('.metric-label')).find(node => node.textContent === 'Maximum insured Yes exit')
+			const text = label?.parentElement?.querySelector('.metric-field-value')?.textContent
+			if (text === undefined || text === null) throw new Error('Missing maximum insured exit')
+			return Number.parseFloat(text)
+		}
+		expect(maximum()).toBeLessThan(3)
+		await act(() => render(view(openMarket, 1n, SET), rendered.container))
+		const withoutSlippage = maximum()
+		await act(() => render(view(openMarket, 500n, SET), rendered.container))
+		expect(maximum()).toBeLessThan(withoutSlippage)
+		await act(() => render(view({ ...openMarket, endTime: NOW }), rendered.container))
+		expect(rendered.container.textContent).not.toContain('Maximum insured Yes exit')
+	})
+
 	test('summarizes total value and attention items and offers Sell or Redeem per row', async () => {
 		const rendered = await renderIntoDocument(
 			<LivePortfolio
@@ -62,7 +87,7 @@ describe('portfolio overview', () => {
 		)
 		cleanupRendered = rendered.cleanup
 		const summary = rendered.container.querySelector('[aria-label="Portfolio summary"]')
-		expect(summary?.textContent).toContain('Total value3 ETH')
+		expect(summary?.textContent).toContain('Total value3.00 ETH')
 		expect(summary?.textContent).not.toContain('Profit / loss')
 		expect(summary?.textContent).toContain('Positions2')
 		expect(summary?.textContent).toContain('Needs attention2')
@@ -79,7 +104,7 @@ describe('portfolio overview', () => {
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${openPool}"] a[aria-label^="Redeem"]`)).toBeNull()
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] a[aria-label="Redeem: Resolved market"]`)?.getAttribute('href')).toBe(`#/market/${resolvedPool}`)
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] a[aria-label^="Sell"]`)).toBeNull()
-		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"]`)?.textContent).toContain('Position value2 ETH')
+		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"]`)?.textContent).toContain('Position value2.00 ETH')
 	})
 
 	test('Sell opens the ticket in Sell mode on the outcome the account holds', async () => {
@@ -94,11 +119,11 @@ describe('portfolio overview', () => {
 		const market = { ...resolvedMarket, universeForkTime: 1n }
 		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: { scope: scope(resolvedPool), yes: 2n * SET, no: 0n, invalid: 0n, lp: 0n }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent).toContain('Total value2 ETH')
+		expect(rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent).toContain('Total value2.00 ETH')
 		expect(rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent).not.toContain('without a price')
 		const position = rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"]`)
 		expect(position?.querySelector('.badge')?.textContent).toBe('Resolved')
-		expect(position?.textContent).toContain('Position value2 ETH')
+		expect(position?.textContent).toContain('Position value2.00 ETH')
 		expect(position?.querySelector('a[aria-label="Redeem: Resolved market"]')?.getAttribute('href')).toBe(`#/market/${resolvedPool}`)
 		expect(rendered.container.querySelector('.portfolio-action-items')?.textContent).not.toContain('Settle')
 	})
@@ -157,7 +182,7 @@ describe('portfolio overview', () => {
 		// The row's value caption says the shares must migrate, so no holding or LP claim repeats that redemption is unavailable.
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] .portfolio-holdings`)?.textContent).not.toContain('Redemption unavailable')
 		const details = rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] details`)
-		expect(details?.textContent).toContain('LP Yes claim1 Yes (1 ETH if the question resolves Yes)')
+		expect(details?.textContent).toContain('LP Yes claim1.0000 Yes (1.00 ETH if the question resolves Yes)')
 		expect(details?.textContent).not.toContain('Redemption unavailable')
 	})
 

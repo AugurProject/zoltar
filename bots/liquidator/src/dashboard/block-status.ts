@@ -17,5 +17,5 @@ export function blockStatusText(snapshot: Observation | undefined, now = Date.no
 export function scanStatusText(snapshot: Observation) {
 	if (snapshot.deploymentCheckedBlock !== undefined) return `Deployments checked at block ${snapshot.deploymentCheckedBlock}`
 	if (snapshot.lastScanAt !== undefined) return `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
-	return snapshot.scanning ? 'Scanning configured pools…' : 'Waiting for first scan'
+	return snapshot.scanning ? 'Scanning configured portfolios…' : 'Waiting for first scan'
 }

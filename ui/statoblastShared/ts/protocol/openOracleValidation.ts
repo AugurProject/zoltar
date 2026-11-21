@@ -1,3 +1,4 @@
+import { OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS } from './openOracleSettlementSafety.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -50,6 +51,7 @@ export function getOpenOracleCreateParameterValidation(
 	if (ethValueAttoEth !== settlerRewardAttoEth) return { field: 'ethValueAttoEth', message: 'ETH sent must equal the settler reward for ERC-20 token pairs.' }
 	if (settlementTime < 0n) return { field: 'settlementTime', message: 'Enter a valid settlement delay.' }
 	if (settlementTime > OPEN_ORACLE_UINT48_MAX) return { field: 'settlementTime', message: 'Settlement delay exceeds the contract maximum.' }
+	if (settlementTime > OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS) return { field: 'settlementTime', message: 'Settlement delay must not exceed one year in this interface.' }
 	if (disputeDelay < 0n) return { field: 'disputeDelay', message: 'Enter a valid dispute delay.' }
 	if (disputeDelay > OPEN_ORACLE_UINT24_MAX) return { field: 'disputeDelay', message: 'Dispute delay exceeds the contract maximum.' }
 	if (settlementTime <= disputeDelay) return { field: 'settlementTime', message: 'Settlement delay must be greater than dispute delay.' }

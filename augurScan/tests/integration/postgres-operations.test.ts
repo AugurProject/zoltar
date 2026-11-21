@@ -166,7 +166,7 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 		data: { history: Record<string, unknown> & { stateSnapshots: Array<{ id: string }>; accountingSnapshots: Array<Record<string, unknown>>; nextCursor: string } }
 	}
 	expect(firstRiskHistory.data.history.stateSnapshots).toHaveLength(1)
-	expect(firstRiskHistory.data.history.accountingSnapshots).toEqual([expect.objectContaining({ pool_address: oracle.toLowerCase(), reason: 5, settlement_collateral_atto_eth: '40', share_token_supply_atto_shares: '40' })])
+	expect(firstRiskHistory.data.history.accountingSnapshots).toEqual([expect.objectContaining({ pool_address: oracle.toLowerCase(), reason: 2, settlement_collateral_atto_eth: '40', share_token_supply_atto_shares: '40' })])
 	expect(firstRiskHistory.data.history).not.toHaveProperty('liquidations')
 	expect(firstRiskHistory.data).not.toHaveProperty('approvalEvents')
 	expect(firstRiskHistory.data.history.nextCursor).toBeString()
@@ -267,6 +267,27 @@ const expectManifestResetRetention = async ({ database, operationsChainId, netwo
 	expect(resampleTargets).toEqual([])
 }
 
+const expectUniqueEscalationCollections = async ({ database, operationsChainId, oracle }: OperationsContext) => {
+	const game = '0x7777777777777777777777777777777777777777'
+	for (const [index, eventName] of ['DepositOnOutcome', 'LocalDepositAppended', 'ClaimCheckpointProgress', 'ClaimDeposit'].entries()) {
+		const eventData = JSON.stringify({ depositor: address, outcome: 1, amountAttoRep: '100', parentDepositIndex: '7' })
+		const logIndex = 800_000 + index
+		await database.sql`
+			INSERT INTO logs (chain_id, block_hash, tx_hash, log_index, block_number, transaction_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
+			SELECT chain_id, block_hash, tx_hash, ${logIndex}, block_number, 0, ${game}, '[]'::jsonb, '0x', ${eventName}, ${eventData}::text::jsonb, 'decoded', ${eventName}, true
+			FROM logs WHERE chain_id = ${operationsChainId} AND emitter_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number LIMIT 1
+		`
+		await database.sql`
+			INSERT INTO escalation_game_events (chain_id, block_hash, tx_hash, log_index, block_number, game_address, event_name, event_data, canonical)
+			SELECT chain_id, block_hash, tx_hash, log_index, block_number, ${game}, event_name, arguments, true FROM logs WHERE chain_id = ${operationsChainId} AND emitter_address = ${game} AND log_index = ${logIndex}
+		`
+	}
+	const response = await handleApi(new Request(`http://localhost/api/v1/state/escalations/${operationsChainId}/${game}`), database.sql)
+	if (response === undefined) throw new Error('Escalation detail missing')
+	expect(response.status).toBe(200)
+	expect(await response.json()).toMatchObject({ data: { deposits: [{ event_name: 'LocalDepositAppended' }], claims: [{ event_name: 'ClaimDeposit' }] } })
+}
+
 postgresTest(
 	'stores operations snapshots, paginates entity evidence, and explains indexed access paths',
 	async () => {
@@ -302,6 +323,7 @@ postgresTest(
 			await expectRecentTakeovers(context)
 			await expectRiskHistoryAndSeverity(context)
 			await expectSnapshotsAndIndexedPlans(context)
+			await expectUniqueEscalationCollections(context)
 			await expectManifestResetRetention(context)
 		} finally {
 			await database.close()

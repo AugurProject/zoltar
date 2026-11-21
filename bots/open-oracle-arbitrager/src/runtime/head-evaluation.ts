@@ -1,3 +1,4 @@
+import { updateHeadMarketConsensus } from './market-consensus-state.ts'
 import { plannedGasPriceAttoEth, utcDayGasSpentWeth } from '#core/safety-controls'
 import { canonicalBlockHashWithQuorum } from '#execution/execution-orchestration'
 import { dateFromBlockTimestamp } from '#execution/recovery-support'
@@ -63,7 +64,8 @@ export async function evaluatePinnedHead(runtime: OperatorRuntime, context: Oper
 	const { candidates, cycleDexObservations, opportunities } = gated
 	state.activeReportCount = inspectedReports.length
 	state.marketObservations = mergeMarketObservations(state.marketObservations ?? [], cycleDexObservations, config.centralizedMarkets.maximumObservationAgeMilliseconds)
-	state.marketConsensus =
+	updateHeadMarketConsensus(
+		state,
 		config.centralizedMarkets.venueConsensus === undefined
 			? undefined
 			: estimateMarketConsensus(
@@ -71,7 +73,8 @@ export async function evaluatePinnedHead(runtime: OperatorRuntime, context: Oper
 					marketConsensusSettings(config.centralizedMarkets),
 					config.network.rep,
 					config.network.chain.id,
-				)
+				),
+	)
 	state.reportPaths = head.discoversReportsFromCoordinators
 		? []
 		: [...runtime.reports.entries()].map(([id, report]) => ({

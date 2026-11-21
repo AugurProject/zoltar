@@ -510,8 +510,8 @@ describe('network indexer lifecycle', () => {
 			[usdc, { address: usdc, kind: 'usdc', label: 'USDC', provenance: 'manifest' }],
 		])
 		const ids = uniswapV4PoolIds(contracts)
-		expect(ids).toHaveLength(8)
-		expect(new Set(ids).size).toBe(8)
+		expect(ids).toHaveLength(10)
+		expect(new Set(ids).size).toBe(10)
 		expect(ids).toContain(uniswapV4PoolId(address, 3_000, 60, usdc))
 		expect(ids.every(id => /^0x[0-9a-f]{64}$/.test(id))).toBeTrue()
 	})
@@ -544,6 +544,7 @@ describe('network indexer lifecycle', () => {
 				tickSpacing: '5',
 			}),
 		).toBeFalse()
+		expect(isSupportedUniswapV4Market({ ...standard, marketId: uniswapV4PoolId(address, 10_001, 200, usdc), token0Address: currency0, token1Address: currency1, feeHundredthsBip: '10001', tickSpacing: '200' })).toBeTrue()
 		expect(isSupportedUniswapV4Market({ ...standard, marketId: `0x${'ab'.repeat(32)}` })).toBeFalse()
 		expect(isSupportedUniswapV4Market({ ...standard, hooksAddress: '0x2000000000000000000000000000000000000002' })).toBeFalse()
 	})

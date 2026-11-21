@@ -114,8 +114,8 @@ test('omits an unavailable Evidence tab and falls back to Overview', () => {
 })
 
 test('keeps coordinator records and their pager on Evidence', () => {
-	renderDetail('report', 'evidence', { coordinatorDecisions: { items: [{ event_name: 'DecisionAccepted' }], hasMore: true, nextCursor: 'older' } }, load => {
-		expect(document.body.textContent).toContain('DecisionAccepted')
+	renderDetail('report', 'evidence', { coordinatorDecisions: { items: [{ event_name: 'ReportCompleted' }], hasMore: true, nextCursor: 'older' } }, load => {
+		expect(document.body.textContent).toContain('ReportCompleted')
 		document.querySelector<HTMLButtonElement>('[data-detail-collection="decisions"]')?.click()
 		expect(load).toHaveBeenCalledWith(expect.objectContaining({ decisionTargetCount: 101 }))
 	})

@@ -43,7 +43,7 @@ Card-like surfaces must never be nested inside other card-like surfaces. A scree
 
 ## Components and reuse
 
-Inspect shared `ui/coreShared/ts/components`, the relevant `ui/<app>/ts/features/*/components`, and the touched route before introducing a primitive or pattern.
+Inspect shared `ui/coreShared/ts/components`, the relevant product features under `ui/zoltarShared/ts/features`, `ui/statoblastShared/ts/features`, or `ui/trading/ts/features`, and the touched route before introducing a primitive or pattern.
 
 - Reuse a component when its semantic role, behavior, and accessibility match the need.
 - Adapt composition around the closest shared pattern when that preserves its meaning.

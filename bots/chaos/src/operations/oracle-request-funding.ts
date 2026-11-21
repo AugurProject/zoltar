@@ -5,9 +5,7 @@ import type { OracleRequestFundingSnapshot, PoolSnapshot } from './types.ts'
 
 export const BPS_DENOMINATOR = 10_000n
 const OPEN_INTEREST_DIVIDER = 100n
-const OPEN_ORACLE_PERCENTAGE_PRECISION = 10_000_000n
 const PRICE_PRECISION = 10n ** 18n
-const UINT24_MAXIMUM = (1n << 24n) - 1n
 const UINT32_MAXIMUM = (1n << 32n) - 1n
 const UINT96_MAXIMUM = (1n << 96n) - 1n
 const UINT128_MAXIMUM = (1n << 128n) - 1n
@@ -23,14 +21,11 @@ export function isOracleRequestFundingError(error: unknown) {
 }
 
 type CoordinatorFundingValues = {
-	minimumReportCollateral: bigint | undefined
-	settlementBountyMultiplierBps: bigint | undefined
+	minimumReportCollateral: bigint
+	minimumRepReportAttoRep: bigint
+	settlementBountyMultiplierBps: bigint
 	escalationHaltMultiplierBps: bigint
-	gasConsumedOpenOracleReportPrice: bigint
-	gasUnitsForOneDispute: bigint
 	initialReportPriorityFeeAttoEthPerGas: bigint
-	reportDenominator: bigint
-	reportNumeratorMultiplier: bigint
 	settlementCallbackGasLimit: bigint
 }
 
@@ -79,82 +74,36 @@ function mulDivCeil(left: bigint, right: bigint, denominator: bigint, label: str
 }
 
 function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): CoordinatorFundingValues {
-	const minimumReportCollateral = snapshot.minimumReportCollateral === undefined ? undefined : uint256(snapshot.minimumReportCollateral, 'minimumReportCollateral')
-	if (minimumReportCollateral !== undefined && (minimumReportCollateral === 0n || minimumReportCollateral > UINT128_MAXIMUM)) throw oracleRequestFundingError('Invalid collateral report floor')
-	const settlementBountyMultiplierBps = snapshot.settlementBountyMultiplierBps === undefined ? undefined : uint256(snapshot.settlementBountyMultiplierBps, 'settlementBountyMultiplierBps')
-	if (settlementBountyMultiplierBps !== undefined && settlementBountyMultiplierBps < BPS_DENOMINATOR) throw oracleRequestFundingError('Invalid shared settlement fee multiplier')
-	if (minimumReportCollateral !== undefined && settlementBountyMultiplierBps === undefined) throw oracleRequestFundingError('Shared settlement fee multiplier missing')
-	const gasConsumedOpenOracleReportPrice = uint256(snapshot.gasConsumedOpenOracleReportPrice, 'gasConsumedOpenOracleReportPrice')
+	if (snapshot.minimumReportCollateral === undefined || snapshot.settlementBountyMultiplierBps === undefined || snapshot.minimumRepReportAttoRep === undefined) throw oracleRequestFundingError('Shared feed funding inputs missing; refresh discovery')
+	const minimumReportCollateral = uint256(snapshot.minimumReportCollateral, 'minimumReportCollateral')
+	const minimumRepReportAttoRep = uint256(snapshot.minimumRepReportAttoRep, 'minimumRepReportAttoRep')
+	const settlementBountyMultiplierBps = uint256(snapshot.settlementBountyMultiplierBps, 'settlementBountyMultiplierBps')
 	const settlementCallbackGasLimit = uint256(snapshot.settlementCallbackGasLimit, 'settlementCallbackGasLimit')
-	const gasUnitsForOneDispute = uint256(snapshot.gasUnitsForOneDispute, 'gasUnitsForOneDispute')
 	const initialReportPriorityFeeAttoEthPerGas = uint256(snapshot.initialReportPriorityFeeAttoEthPerGas, 'initialReportPriorityFeeAttoEthPerGas')
-	const targetPriceErrorForDispute = uint256(snapshot.targetPriceErrorForDispute, 'targetPriceErrorForDispute')
-	const openOracleSecurityMultiplierBps = uint256(snapshot.openOracleSecurityMultiplierBps, 'openOracleSecurityMultiplierBps')
-	const protocolFee = uint256(snapshot.protocolFee, 'protocolFee')
-	const feePercentage = uint256(snapshot.feePercentage, 'feePercentage')
 	const escalationHaltMultiplierBps = uint256(snapshot.escalationHaltMultiplierBps, 'escalationHaltMultiplierBps')
+	if (minimumReportCollateral === 0n || minimumReportCollateral > UINT128_MAXIMUM) throw oracleRequestFundingError('Invalid collateral report floor')
+	if (settlementBountyMultiplierBps < BPS_DENOMINATOR) throw oracleRequestFundingError('Invalid shared settlement fee multiplier')
 	if (settlementCallbackGasLimit > UINT32_MAXIMUM) throw oracleRequestFundingError('settlementCallbackGasLimit exceeds uint32')
-	if (protocolFee > UINT24_MAXIMUM) throw oracleRequestFundingError('protocolFee exceeds uint24')
-	if (feePercentage > UINT24_MAXIMUM) throw oracleRequestFundingError('feePercentage exceeds uint24')
-	if (gasUnitsForOneDispute === 0n) throw oracleRequestFundingError('gasUnitsForOneDispute must be positive')
 	if (initialReportPriorityFeeAttoEthPerGas === 0n) throw oracleRequestFundingError('initialReportPriorityFeeAttoEthPerGas must be positive')
-	if (targetPriceErrorForDispute >= OPEN_ORACLE_PERCENTAGE_PRECISION) throw oracleRequestFundingError('targetPriceErrorForDispute must be below OpenOracle precision')
-	if (openOracleSecurityMultiplierBps < BPS_DENOMINATOR) throw oracleRequestFundingError('openOracleSecurityMultiplierBps must be at least 10000')
 	if (escalationHaltMultiplierBps === 0n) throw oracleRequestFundingError('escalationHaltMultiplierBps must be positive')
-	const fees = checkedAdd(protocolFee, feePercentage, 'oracle fees')
-	if (fees >= targetPriceErrorForDispute) throw oracleRequestFundingError('Oracle fees must be below targetPriceErrorForDispute')
-	const correctionProfitNumerator = targetPriceErrorForDispute - fees
-	const reportNumeratorMultiplier = checkedMultiply(openOracleSecurityMultiplierBps, OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute, 'oracle report numerator multiplier')
-	const reportDenominator = checkedMultiply(BPS_DENOMINATOR, correctionProfitNumerator, 'oracle report denominator')
-	let maximumPriorityFeeReportAttoEth = (UINT128_MAXIMUM * BPS_DENOMINATOR) / escalationHaltMultiplierBps
-	if (maximumPriorityFeeReportAttoEth > UINT128_MAXIMUM) maximumPriorityFeeReportAttoEth = UINT128_MAXIMUM
-	maximumPriorityFeeReportAttoEth /= 2n
-	const maximumPriorityDisputeGasCost = (maximumPriorityFeeReportAttoEth * reportDenominator) / reportNumeratorMultiplier
-	const maximumInitialReportPriorityFeeAttoEthPerGas = maximumPriorityDisputeGasCost / gasUnitsForOneDispute
-	if (initialReportPriorityFeeAttoEthPerGas > maximumInitialReportPriorityFeeAttoEthPerGas) {
-		throw oracleRequestFundingError('initialReportPriorityFeeAttoEthPerGas exceeds OpenOracle limits')
-	}
-	return {
-		minimumReportCollateral,
-		settlementBountyMultiplierBps,
-		escalationHaltMultiplierBps,
-		gasConsumedOpenOracleReportPrice,
-		gasUnitsForOneDispute,
-		initialReportPriorityFeeAttoEthPerGas,
-		reportDenominator,
-		reportNumeratorMultiplier,
-		settlementCallbackGasLimit,
-	}
+	return { minimumReportCollateral, minimumRepReportAttoRep, settlementBountyMultiplierBps, escalationHaltMultiplierBps, initialReportPriorityFeeAttoEthPerGas, settlementCallbackGasLimit }
 }
 
-function minimumToken1ReportForGasPrice(gasPriceAttoEthPerGas: bigint, funding: CoordinatorFundingValues) {
-	if (gasPriceAttoEthPerGas === 0n) return 0n
-	const disputeGasCost = checkedMultiply(gasPriceAttoEthPerGas, funding.gasUnitsForOneDispute, 'oracle dispute gas cost')
-	return mulDivCeil(disputeGasCost, funding.reportNumeratorMultiplier, funding.reportDenominator, 'minimum oracle report')
-}
-
-function minimumToken1ReportAttoEth(baseFeePerGas: bigint, settlementCollateralAttoEth: bigint, funding: CoordinatorFundingValues) {
-	if (funding.minimumReportCollateral !== undefined) return checkedAdd(funding.minimumReportCollateral, ceilDiv(settlementCollateralAttoEth, OPEN_INTEREST_DIVIDER), 'minimum oracle report')
-	const priorityReport = minimumToken1ReportForGasPrice(funding.initialReportPriorityFeeAttoEthPerGas, funding)
-	const baseFeeReport = minimumToken1ReportForGasPrice(baseFeePerGas, funding)
-	const openInterestReport = ceilDiv(settlementCollateralAttoEth, OPEN_INTEREST_DIVIDER)
-	const minimum = checkedAdd(priorityReport, baseFeeReport > openInterestReport ? baseFeeReport : openInterestReport, 'minimum oracle report')
-	return minimum > 0n ? minimum : 1n
+function minimumToken1ReportAttoEth(_baseFeePerGas: bigint, settlementCollateralAttoEth: bigint, funding: CoordinatorFundingValues, proposedPrice?: bigint) {
+	const collateralBudget = checkedAdd(funding.minimumReportCollateral, ceilDiv(settlementCollateralAttoEth, OPEN_INTEREST_DIVIDER), 'minimum oracle report')
+	if (proposedPrice === undefined) return collateralBudget
+	const repBudget = mulDivCeil(funding.minimumRepReportAttoRep, PRICE_PRECISION, proposedPrice, 'REP inventory collateral budget')
+	return collateralBudget > repBudget ? collateralBudget : repBudget
 }
 
 function requestPriceCostAttoEth(baseFeePerGas: bigint, funding: CoordinatorFundingValues) {
-	if (funding.settlementBountyMultiplierBps !== undefined) {
-		const bounty = calculateOracleSettlementBountyAttoEth({ baseFeePerGas, initialReportPriorityFeeAttoEthPerGas: funding.initialReportPriorityFeeAttoEthPerGas, settlementCallbackGasLimit: funding.settlementCallbackGasLimit, maxSettlementBaseFeeMultiplierBps: funding.settlementBountyMultiplierBps })
-		if (bounty > UINT256_MAXIMUM) throw oracleRequestFundingError('oracle request bounty exceeds uint256')
-		return bounty
-	}
-	const bounty = calculateOracleSettlementBountyAttoEth({ baseFeePerGas, initialReportPriorityFeeAttoEthPerGas: funding.initialReportPriorityFeeAttoEthPerGas, settlementCallbackGasLimit: funding.settlementCallbackGasLimit })
+	const bounty = calculateOracleSettlementBountyAttoEth({ baseFeePerGas, initialReportPriorityFeeAttoEthPerGas: funding.initialReportPriorityFeeAttoEthPerGas, settlementCallbackGasLimit: funding.settlementCallbackGasLimit, maxSettlementBaseFeeMultiplierBps: funding.settlementBountyMultiplierBps })
 	if (bounty > UINT256_MAXIMUM) throw oracleRequestFundingError('oracle request bounty exceeds uint256')
 	return bounty
 }
 
 function fundingBoundsForMaximumBaseFee(parameters: { funding: CoordinatorFundingValues; maximumBaseFeePerGas: bigint; proposedRepPerEthPrice: bigint; settlementCollateralAttoEth: bigint }): OracleRequestFundingBounds {
-	const maximumInitialAttoWeth = minimumToken1ReportAttoEth(parameters.maximumBaseFeePerGas, parameters.settlementCollateralAttoEth, parameters.funding)
+	const maximumInitialAttoWeth = minimumToken1ReportAttoEth(parameters.maximumBaseFeePerGas, parameters.settlementCollateralAttoEth, parameters.funding, parameters.proposedRepPerEthPrice)
 	if (maximumInitialAttoWeth > UINT128_MAXIMUM) throw oracleRequestFundingError('WETH report exceeds uint128')
 	const maximumInitialAttoRep = mulDivCeil(maximumInitialAttoWeth, parameters.proposedRepPerEthPrice, PRICE_PRECISION, 'REP report')
 	if (maximumInitialAttoRep > UINT128_MAXIMUM) throw oracleRequestFundingError('REP report exceeds uint128')
@@ -246,7 +195,7 @@ export function oracleRequestFundingEnvelope(parameters: OracleRequestFundingEnv
 export function oracleRequestSettlementCollateralCeiling(parameters: { coordinator: OracleRequestFundingSnapshot; envelope: OracleRequestFundingBounds }): CanonicalUintString {
 	const funding = coordinatorFundingValues(parameters.coordinator)
 	const initialWethAttoEth = uint256(parameters.envelope.maximumInitialAttoWeth, 'maximumInitialAttoWeth')
-	const priorityReportAttoEth = funding.minimumReportCollateral ?? minimumToken1ReportForGasPrice(funding.initialReportPriorityFeeAttoEthPerGas, funding)
+	const priorityReportAttoEth = funding.minimumReportCollateral
 	if (initialWethAttoEth < priorityReportAttoEth) throw oracleRequestFundingError('Oracle request WETH report is below its configured stake floor')
 	return checkedMultiply(initialWethAttoEth - priorityReportAttoEth, OPEN_INTEREST_DIVIDER, 'oracle settlement collateral ceiling').toString()
 }
@@ -261,7 +210,7 @@ export function assertOracleRequestFundingEnvelope(parameters: { coordinator: Or
 	const settlementCollateralAttoEth = uint256(parameters.settlementCollateralAttoEth, 'settlementCollateralAttoEth')
 	const persistedInitialAttoWeth = uint256(parameters.envelope.maximumInitialAttoWeth, 'maximumInitialAttoWeth')
 	if (persistedInitialAttoWeth > UINT128_MAXIMUM) throw oracleRequestFundingError(`${subject} WETH report exceeds uint128`)
-	const currentMinimumAttoWeth = minimumToken1ReportAttoEth(maximumBaseFeePerGas, settlementCollateralAttoEth, funding)
+	const currentMinimumAttoWeth = minimumToken1ReportAttoEth(maximumBaseFeePerGas, settlementCollateralAttoEth, funding, proposedRepPerEthPrice)
 	if (currentMinimumAttoWeth > persistedInitialAttoWeth) throw oracleRequestFundingError(`${subject} no longer covers the current WETH report`)
 	const expectedInitialAttoRep = mulDivCeil(persistedInitialAttoWeth, proposedRepPerEthPrice, PRICE_PRECISION, 'REP report')
 	if (expectedInitialAttoRep > UINT128_MAXIMUM || expectedInitialAttoRep !== uint256(parameters.envelope.maximumInitialAttoRep, 'maximumInitialAttoRep')) {
@@ -281,7 +230,7 @@ export function assertOracleRequestFundingEnvelope(parameters: { coordinator: Or
 	}
 }
 
-/** Ordinary pools use question collateral; shared feeds protect all live question exposure. */
+/** The canonical shared feed protects aggregate live exposure across its questions. */
 export function poolOracleExposure(pool: PoolSnapshot) {
-	return pool.priceFeed.toLowerCase() === pool.coordinator.toLowerCase() ? pool.settlementCollateralAttoEth : pool.oracleExposureAttoEth
+	return pool.oracleExposureAttoEth
 }

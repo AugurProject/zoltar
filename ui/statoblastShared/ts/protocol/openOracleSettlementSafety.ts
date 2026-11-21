@@ -7,7 +7,7 @@ const DEFAULT_SETTLEMENT_GAS = 5_000_000n
 const SETTLEMENT_OVERHEAD_GAS = 600_000n
 // A longer game may be valid onchain, but the UI does not invite a new
 // disputer to lock funds for more than a year (12 seconds per block).
-const MAX_SETTLEMENT_SECONDS = 365n * 24n * 60n * 60n
+export const OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS = 365n * 24n * 60n * 60n
 
 type Callback = { callbackContract: Address; callbackGasLimit: bigint | number }
 
@@ -35,7 +35,7 @@ export function getOpenOracleSettlementGasLimit(game: Callback, trustedCallback:
 
 export function getOpenOracleSettlementSafetyGuard(report: Callback & { settlementTime: bigint; timeType: boolean; trustedSettlementCallback: boolean }) {
 	if (conservativeOpenOracleSettlementGas(report, report.trustedSettlementCallback) > TRANSACTION_GAS_CAP) return 'This report exceeds the safe settlement gas limit. Disputing it could lock your dispute deposit.'
-	const maximum = report.timeType ? MAX_SETTLEMENT_SECONDS : MAX_SETTLEMENT_SECONDS / 12n
+	const maximum = report.timeType ? OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS : OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS / 12n
 	if (report.settlementTime > maximum) return 'This report has a settlement duration longer than one year. Disputing it could lock your dispute deposit.'
 	return undefined
 }

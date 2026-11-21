@@ -24,3 +24,13 @@ test('narrows rejected ranges, preserves order, and restores the maximum range a
 	])
 	expect(logs).toEqual([0n, 1n, 2n, 3n, 4n, 5n])
 })
+
+for (const message of ['block range is too wide', 'please reduce the query range', 'query timeout', 'request timed out']) {
+	test(`narrows provider-limited log requests: ${message}`, async () => {
+		const logs = await fetchLogsWithAdaptiveRanges(0n, 1n, 2n, async ({ fromBlock, toBlock }) => {
+			if (fromBlock !== toBlock) throw new Error(message)
+			return [fromBlock]
+		})
+		expect(logs).toEqual([0n, 1n])
+	})
+}

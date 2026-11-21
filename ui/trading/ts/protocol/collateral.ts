@@ -17,7 +17,7 @@ export function tokenFunded(market: CollateralMarket) {
 	return !collateralAsset(market).native
 }
 
-export function formatCollateralAmount(value: bigint, market: CollateralMarket, digits = 4, rounding: 'nearest' | 'down' = 'nearest') {
+export function formatCollateralAmount(value: bigint, market: CollateralMarket, digits = 2, rounding: 'nearest' | 'down' = 'nearest') {
 	const asset = collateralAsset(market)
 	const amount = rounding === 'down' ? formatTrimmedUnits(value, asset.decimals, digits) : formatRoundedUnits(value, asset.decimals, digits)
 	return `${amount} ${asset.symbol}`

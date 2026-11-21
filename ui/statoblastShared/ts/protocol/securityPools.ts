@@ -188,9 +188,9 @@ function isExecutionFailure(error: unknown) {
 
 /**
  * Portfolios that open in this universe, most recently registered first. The factory registers a portfolio when its
- * setup configures its price feed, so a portfolio still in setup can only be opened by its address. Any caller can
- * register its own address the same way, so only addresses that answer as a portfolio with a capital ledger in this
- * universe are listed; a portfolio keeps one ledger per universe it can open in.
+ * setup configures its price feed, so a portfolio still in setup can only be opened by its address. The factory
+ * accepts registration only from portfolios it deployed. Listings also verify the capital ledger for this universe;
+ * a portfolio keeps one ledger per universe it can open in.
  */
 export async function loadRegisteredPortfolios(client: ReadClient, universeId: bigint): Promise<RegisteredPortfolio[]> {
 	const anchor = await loadDeploymentRegistryAnchor(client)

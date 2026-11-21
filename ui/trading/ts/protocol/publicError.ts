@@ -1,7 +1,7 @@
 import { endSentence } from '../lib/format.js'
 import { getErrorDetail, isWalletRejection, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 
-const PROVIDER_IDENTIFIER_PATTERN = /(?<![0-9a-f])0x[0-9a-f]{40}(?![0-9a-f])|share[ -]?token|token[ _-]?id|contract address|call (?:arguments?|args)|\bargs?:/i
+const PROVIDER_IDENTIFIER_PATTERN = /(?<![0-9a-f])0x[0-9a-f]{40}(?![0-9a-f])|token[ _-]?id|contract address|call (?:arguments?|args)|\bargs?:/i
 
 /** Shared error cleanup, except that details naming provider identifiers (addresses, token IDs, call arguments) fall back to generic copy. Every result is a closed sentence, so it can be shown as-is or follow a lead. */
 export function publicErrorMessage(error: unknown, fallback: string) {

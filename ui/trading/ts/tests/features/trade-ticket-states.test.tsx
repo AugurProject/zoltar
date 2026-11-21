@@ -154,13 +154,13 @@ describe('trade ticket states', () => {
 		const visible = container.querySelector('.transaction-review-details')?.textContent
 		for (const phrase of ['Average price', 'Minimum received', 'Yes after trade']) expect(visible).toContain(phrase)
 		// The profit is the payout shown beside the shares received less the ETH paid, with the return it makes.
-		expect(visible).toMatch(/Profit if the question resolves Yes\+[\d.]+ ETH \(\+[\d.]+%\)/)
+		expect(visible).toMatch(/Profit if the question resolves Yes≈ \+[\d.]+ ETH \(\+[\d.]+%\)/)
 		expect(visible).not.toContain('Price impact')
 		const details = container.querySelector('.trade-estimate details')?.textContent
-		for (const phrase of ['Price impact', 'Trading fee', '0.3% · ≈ 0.00', 'you keep their Invalid shares', 'Holding fees reduce collateral payouts']) expect(details).toContain(phrase)
+		for (const phrase of ['Price impact', 'Trading fee', '0.3% · 0.000750 ETH', 'you keep their Invalid shares', 'Holding fees reduce collateral payouts']) expect(details).toContain(phrase)
 		// The headline states what each resolution pays: the bought outcome, the Invalid shares the buy keeps, and nothing on the other outcome.
 		const headline = container.querySelector('.transaction-review-primary')?.textContent
-		for (const phrase of ['You receive ≈', 'if the question resolves Yes', 'Invalid insurance', 'if the question resolves Invalid', '0 ETH if No']) expect(headline).toContain(phrase)
+		for (const phrase of ['You receive', 'if the question resolves Yes', 'Invalid insurance', 'if the question resolves Invalid', '0.00 ETH if No']) expect(headline).toContain(phrase)
 		expect(container.querySelectorAll('.transaction-review-primary .trade-estimate-value-detail')).toHaveLength(2)
 		expect(headline).not.toContain('0 ETH otherwise')
 		expect(details).not.toContain('Invalid insurance')
@@ -177,7 +177,7 @@ describe('trade ticket states', () => {
 		const quoteStatus = () => rendered.container.querySelector('.trade-quote-announcement')
 		expect(quoteStatus()?.getAttribute('role')).toBe('status')
 		const firstQuote = quoteStatus()?.textContent ?? ''
-		expect(firstQuote).toMatch(/^Estimate: you receive about [\d.]+ Yes\.$/)
+		expect(firstQuote).toMatch(/^Estimate: you receive ≈ [\d.]+ Yes\.$/)
 		await act(() => render(ticketFor('0.25'), rendered.container))
 		// The disabled button still says why, but the live region stays quiet while the amount settles.
 		expect(feedback()?.textContent).toContain('Updating estimate…')
@@ -188,7 +188,7 @@ describe('trade ticket states', () => {
 		})
 		expect(feedback()?.getAttribute('aria-live')).toBe('polite')
 		expect(feedback()?.textContent).not.toContain('Updating estimate…')
-		expect(quoteStatus()?.textContent).toMatch(/^Estimate: you receive about [\d.]+ Yes\.$/)
+		expect(quoteStatus()?.textContent).toMatch(/^Estimate: you receive ≈ [\d.]+ Yes\.$/)
 		expect(quoteStatus()?.textContent).not.toBe(firstQuote)
 	})
 

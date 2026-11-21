@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import { latestAuctionCollateral } from './auction-collateral.ts'
 import { latestLedgers } from './capital.ts'
 import { literalContainsPattern } from './like-pattern.ts'
+import { numericIdentity } from './search.ts'
 
 export type TimelineFilters = {
 	readonly chainId: number
@@ -112,6 +113,7 @@ export const timelineRows = async (
 
 export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, queryLimit: number, offset = 0, query?: string) => {
 	const search = query === undefined ? undefined : literalContainsPattern(query)
+	const questionId = query === undefined ? undefined : numericIdentity(query)
 	const versionRows = await sql`
 		WITH catalog_identity AS (
 			SELECT 'question'::text AS kind, q.chain_id::text AS chain_id, q.question_id::text AS identity, q.created_timestamp::text AS position, q.title::text AS detail
@@ -149,11 +151,11 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 			? await sql`SELECT q.*, q.start_time::text AS start_time, q.end_time::text AS end_time, n.id AS network_id,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count,
 				(SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count
-				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
+				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''} OR q.question_id::text = ${questionId ?? null}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
 			: await sql`SELECT q.*, q.start_time::text AS start_time, q.end_time::text AS end_time, n.id AS network_id,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count,
 				(SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count
-				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND q.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
+				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND q.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''} OR q.question_id::text = ${questionId ?? null}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
 	const pools =
 		chainId === undefined
 			? await sql`SELECT p.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = p.chain_id AND state.entity_type = 'pool' AND state.entity_identity = p.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title,

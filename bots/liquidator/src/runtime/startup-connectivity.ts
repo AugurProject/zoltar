@@ -19,7 +19,7 @@ async function verifyConfiguredConnectivity(runtime: ConnectivityRuntime) {
 			throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
 		}
 	}
-	await checkSubmissionEndpoints(runtime.settings.submission, runtime.settings.network.chainId)
+	await checkSubmissionEndpoints(runtime.settings.submission, runtime.settings.network.chainId, ['eth_sendPrivateTransaction'])
 }
 
 /**

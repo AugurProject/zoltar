@@ -411,7 +411,7 @@ describe('SimulationBanner', () => {
 		}
 	})
 
-	test('refreshes the app after updating the REP/ETH mock price', async () => {
+	test('refreshes the app after updating the REP per ETH mock price', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
 		const setRepPerEthPrice = mock(async () => undefined)
@@ -421,9 +421,9 @@ describe('SimulationBanner', () => {
 		try {
 			const advancedControls = openAdvancedControls(renderedComponent.container)
 			const advancedQueries = within(advancedControls)
-			const repPerEthLabel = advancedQueries.getByText('REP/ETH mock price')
+			const repPerEthLabel = advancedQueries.getByText('REP per ETH mock price')
 			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
-			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP/ETH mock price input')
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP per ETH mock price input')
 
 			fireEvent.input(repPerEthInput, {
 				currentTarget: { value: '2' },
@@ -448,21 +448,21 @@ describe('SimulationBanner', () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
 		const setRepPerEthPrice = mock(async () => {
-			throw new Error('Simulation REP/ETH price must be greater than zero')
+			throw new Error('Simulation REP per ETH price must be greater than zero')
 		})
 		const controller = createSimulationController({ setRepPerEthPrice })
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
 
 		try {
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			const repPerEthLabel = within(advancedControls).getByText('REP/ETH mock price')
+			const repPerEthLabel = within(advancedControls).getByText('REP per ETH mock price')
 			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
-			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP/ETH mock price input')
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP per ETH mock price input')
 
 			fireEvent.input(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
 			fireEvent.change(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
 
-			await waitFor(() => expect(within(advancedControls).getByRole('alert').textContent).toContain('Simulation REP/ETH price must be greater than zero'))
+			await waitFor(() => expect(within(advancedControls).getByRole('alert').textContent).toContain('Simulation REP per ETH price must be greater than zero'))
 			expect(getElementValue(repPerEthInput)).toBe('1')
 			expect(onRefresh).not.toHaveBeenCalled()
 		} finally {
@@ -482,9 +482,9 @@ describe('SimulationBanner', () => {
 
 		try {
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			const repPerEthLabel = within(advancedControls).getByText('REP/ETH mock price')
+			const repPerEthLabel = within(advancedControls).getByText('REP per ETH mock price')
 			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
-			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP/ETH mock price input')
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP per ETH mock price input')
 
 			fireEvent.input(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
 			fireEvent.change(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
@@ -515,8 +515,8 @@ describe('SimulationBanner', () => {
 
 		try {
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			const oldInput = within(advancedControls).getByText('REP/ETH mock price').parentElement?.querySelector('input')
-			if (!(oldInput instanceof HTMLInputElement)) throw new Error('Expected a REP/ETH mock price input')
+			const oldInput = within(advancedControls).getByText('REP per ETH mock price').parentElement?.querySelector('input')
+			if (!(oldInput instanceof HTMLInputElement)) throw new Error('Expected a REP per ETH mock price input')
 			fireEvent.input(oldInput, { currentTarget: { value: '3' }, target: { value: '3' } })
 			fireEvent.change(oldInput, { currentTarget: { value: '3' }, target: { value: '3' } })
 
@@ -528,7 +528,7 @@ describe('SimulationBanner', () => {
 				await oldControl.promise.catch(() => undefined)
 			})
 
-			const replacementInput = within(renderedComponent.container).getByText('REP/ETH mock price').parentElement?.querySelector('input')
+			const replacementInput = within(renderedComponent.container).getByText('REP per ETH mock price').parentElement?.querySelector('input')
 			expect(getElementValue(replacementInput ?? document.createElement('div'))).toBe('2')
 			expect(within(renderedComponent.container).queryByRole('alert')).toBeNull()
 		} finally {

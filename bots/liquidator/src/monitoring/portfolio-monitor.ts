@@ -131,13 +131,13 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 		controllingOwner = getAddress(await client.readContract({ address: owner, abi: securityPoolAuctionVaultAbi, functionName: 'owner', blockNumber }))
 		if (controllingOwner !== bindings.owner) throw new Error('Position auction vault owner does not match its code')
 	}
-	let retirementStatus = 'Not retiring'
+	let retirementStatus = 'No pending reduction'
 	if (uint(account['batch']) !== 0n && uint(account['commitment']) !== 0n) {
 		const raw = await client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'previewRetirement', args: [id, snapshot.conservativePrice, snapshot.demandAttoEth], blockNumber })
 		const preview = record(raw, 'Retirement preview')
 		const status = preview['status']
 		if (typeof status !== 'bigint' && typeof status !== 'number') throw new Error('Invalid retirement preview status')
-		const label = ['Not retiring', 'Imports are open', 'Demand exceeds healthy commitment', 'Earlier requests reserve available capacity', 'Insufficient spare commitment', 'Ready to serve'][Number(status)]
+		const label = ['No pending reduction', 'Child preparation in progress', 'Demand exceeds healthy capacity', 'Capacity reserved for earlier requests', 'Waiting for enough spare capacity', 'Enough capacity at this snapshot'][Number(status)]
 		if (label === undefined) throw new Error('Invalid retirement preview status')
 		retirementStatus = label
 	}

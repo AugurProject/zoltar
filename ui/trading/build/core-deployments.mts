@@ -18,38 +18,42 @@ function requiredChainId(value: unknown) {
 
 function deploymentStepAddress(steps: unknown, id: string) {
 	if (!Array.isArray(steps)) throw new Error('deploymentSteps must be an array')
-	const step = steps.find(candidate => isObjectRecord(candidate) && candidate.id === id)
+	const step = steps.find(candidate => isObjectRecord(candidate) && candidate['id'] === id)
 	if (!isObjectRecord(step)) throw new Error(`deploymentSteps must contain ${id}`)
-	return getAddress(requiredString(step.address, `${id}.address`))
+	return getAddress(requiredString(step['address'], `${id}.address`))
 }
 
 export function coreDeploymentFromManifest(candidate: unknown) {
-	if (!isObjectRecord(candidate) || !isObjectRecord(candidate.network)) throw new Error('Core deployment manifest network is required')
-	const chainId = requiredChainId(candidate.network.chainId)
-	const genesisOutcome = parseGenesisOutcome(typeof candidate.network.genesisOutcome === 'string' ? candidate.network.genesisOutcome : undefined)
+	if (!isObjectRecord(candidate) || !isObjectRecord(candidate['network'])) throw new Error('Core deployment manifest network is required')
+	const chainId = requiredChainId(candidate['network']['chainId'])
+	const genesisOutcome = parseGenesisOutcome(typeof candidate['network']['genesisOutcome'] === 'string' ? candidate['network']['genesisOutcome'] : undefined)
 	if (genesisOutcome === undefined) throw new Error('network.genesisOutcome must be yes or no')
 	const rpcUrl = defaultCoreDeploymentRpcUrls[chainId]
 	if (rpcUrl === undefined) throw new Error(`Core deployment manifest chain ${chainId.toString()} has no default RPC URL`)
 	return {
 		chainId,
 		genesisOutcome,
-		chainName: requiredString(candidate.network.name, 'network.name'),
+		chainName: requiredString(candidate['network']['name'], 'network.name'),
 		rpcUrl,
-		id: requiredString(candidate.network.id, 'network.id'),
-		proxyDeployer: deploymentStepAddress(candidate.deploymentSteps, 'proxyDeployer'),
-		securityPoolFactory: deploymentStepAddress(candidate.deploymentSteps, 'securityPoolFactory'),
-		zoltar: deploymentStepAddress(candidate.deploymentSteps, 'zoltar'),
+		id: requiredString(candidate['network']['id'], 'network.id'),
+		proxyDeployer: deploymentStepAddress(candidate['deploymentSteps'], 'proxyDeployer'),
+		securityPoolFactory: deploymentStepAddress(candidate['deploymentSteps'], 'securityPoolFactory'),
+		zoltar: deploymentStepAddress(candidate['deploymentSteps'], 'zoltar'),
 	}
 }
 
-export async function writeCoreDeploymentRegistry(output: string) {
+export async function readCoreDeploymentRegistry() {
 	const repositoryRoot = path.resolve(import.meta.dir, '../../..')
 	const manifestPaths = deploymentManifestIds.map(manifestId => path.join(repositoryRoot, 'docs', getDeploymentManifestFileName(manifestId)))
-	const deployments = await Promise.all(
+	return await Promise.all(
 		manifestPaths.map(async manifestPath => {
 			const candidate: unknown = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
 			return coreDeploymentFromManifest(candidate)
 		}),
 	)
+}
+
+export async function writeCoreDeploymentRegistry(output: string) {
+	const deployments = await readCoreDeploymentRegistry()
 	await fs.writeFile(output, `${JSON.stringify(deployments, undefined, 2)}\n`)
 }

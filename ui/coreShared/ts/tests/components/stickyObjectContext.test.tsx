@@ -19,7 +19,7 @@ describe('StickyObjectContext', () => {
 		const rendered = await renderIntoDocument(<StickyObjectContext title='Will it rain?' items={[{ label: 'Pool', value: '0x1111' }]} titleRef={titleRef} />)
 		cleanupRendered = rendered.cleanup
 
-		const heading = rendered.container.querySelector('.sticky-object-context-copy h3')
+		const heading = rendered.container.querySelector<HTMLHeadingElement>('.sticky-object-context-copy h3')
 		expect(heading).not.toBeNull()
 		expect(titleRef.current).toBe(heading)
 		expect(heading?.getAttribute('tabindex')).toBe('-1')
@@ -31,7 +31,7 @@ describe('StickyObjectContext', () => {
 		const rendered = await renderIntoDocument(<StickyObjectContext title='Will it rain?' items={[]} />)
 		cleanupRendered = rendered.cleanup
 
-		const heading = rendered.container.querySelector('.sticky-object-context-copy h3')
+		const heading = rendered.container.querySelector<HTMLHeadingElement>('.sticky-object-context-copy h3')
 		expect(heading?.textContent).toBe('Will it rain?')
 		expect(heading?.hasAttribute('tabindex')).toBeFalse()
 	})

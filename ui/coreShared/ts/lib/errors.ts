@@ -207,7 +207,7 @@ function getKnownTransactionErrorDetail(details: string[]) {
 		if (message !== undefined) return message
 	}
 	for (const detail of details) {
-		if (detail.toLowerCase().includes('stale price')) return pricingCopy.poolOraclePriceExpiredError
+		if (/\bcapital price stale\b/i.test(detail)) return pricingCopy.poolOraclePriceExpiredError
 		const classified = classifiedTransactionErrors.find(({ pattern }) => pattern.test(detail))
 		if (classified !== undefined) return classified.message
 	}

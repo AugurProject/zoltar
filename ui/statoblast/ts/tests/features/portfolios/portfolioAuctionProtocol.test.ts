@@ -77,17 +77,17 @@ test('selected vault authentication uses its initial branch without scanning bid
 	expect(result).toEqual({ vault, bidder: owner, auction, initialCapital: capital, initialUniverse: 42n, bidId: 3n, filledLots: 1n, materialized: false })
 	expect(new Set(source.reads.map(read => read.blockNumber))).toEqual(new Set([10n]))
 	expect(source.reads.some(read => read.functionName === 'bidderBidCount' || read.functionName === 'bidderBidId')).toBe(false)
-	source.values.auctionPosition = { vault, positionId: 1n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: true, earnedAttoEth: 7n, earnedAttoRep: 9n }
+	source.values['auctionPosition'] = { vault, positionId: 1n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: true, earnedAttoEth: 7n, earnedAttoRep: 9n }
 	expect((await authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).materialized).toBe(true)
 })
 
 test('unopened or losing vaults need no nonexistent cohort position to recover accidentally sent assets', async () => {
 	const source = fixture()
-	source.values.finalized = false
+	source.values['finalized'] = false
 	expect(await authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).toMatchObject({ filledLots: 0n, materialized: false })
 	expect(source.reads.some(read => read.functionName === 'auctionPosition')).toBe(false)
-	source.values.finalized = true
-	source.values.previewBid = { bidder: owner, vault, filledLots: 0n }
+	source.values['finalized'] = true
+	source.values['previewBid'] = { bidder: owner, vault, filledLots: 0n }
 	expect(await authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).toMatchObject({ filledLots: 0n, materialized: false })
 	expect(source.reads.some(read => read.functionName === 'auctionPosition')).toBe(false)
 })

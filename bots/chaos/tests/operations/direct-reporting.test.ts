@@ -1,3 +1,4 @@
+import { escalationWithdrawalSafe } from '../../src/operations/statoblast/planning.ts'
 import { withdrawEscalation } from '../../src/operations/statoblast/reporter-claims.ts'
 import { expect, test } from 'bun:test'
 import { directEscalationDeposit } from '../../src/operations/statoblast/direct-deposits.ts'
@@ -35,7 +36,7 @@ test('wallet reporting needs no vault registration and preserves approval cleanu
 
 test('resolved wallet reporter claims are available without a vault slot', () => {
 	const snapshot = snapshotFixture()
-	const options = planningOptionsFixture({ immutableTopologyCapacity: { maxPools: 16, maxUniverses: 16, maxVaultsPerPool: 1, maxQuestions: 16, maximumAggregateItems: 100 } })
+	const options = planningOptionsFixture({ immutableTopologyCapacity: { maxPools: 16, maxUniverses: 16, maxQuestions: 16, maximumAggregateItems: 100 } })
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Missing question fixture')
 	pool.questionOutcome = 1
@@ -93,4 +94,19 @@ test('initial question reporting uses wallet REP and cleans up approval if anoth
 	const cleanup = escalationDeposit.buildContinuationPlan?.(snapshot, options, { previousPlan: { ...draft, planningSeed: options.seed }, confirmedStepIds: ['approve-rep'] })
 	expect(cleanup?.continuationDisposition).toBe('cleanup-only')
 	expect(cleanup?.steps[0]?.id).toBe('revoke-rep')
+})
+
+test('a fork at the exact game end carries ordinary deposits to the children', () => {
+	const snapshot = snapshotFixture()
+	const pool = snapshot.pools[0]
+	if (pool === undefined) throw new Error('Missing question fixture')
+	const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
+	if (universe === undefined) throw new Error('Missing universe fixture')
+	pool.escalationGameEndTime = '100'
+	pool.escalationNonDecisionState = 0
+	pool.escalationHasReachedNonDecision = false
+	universe.forkTime = '100'
+	expect(escalationWithdrawalSafe(snapshot, pool)).toBe(false)
+	universe.forkTime = '101'
+	expect(escalationWithdrawalSafe(snapshot, pool)).toBe(true)
 })

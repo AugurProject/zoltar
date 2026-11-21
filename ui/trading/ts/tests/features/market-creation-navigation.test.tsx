@@ -1,3 +1,5 @@
+import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import { expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -25,7 +27,7 @@ test('continues a newly created market in its liquidity view with a confirmation
 	const services = {
 		...offlineControllerServices,
 		...connectedWalletServices(account, configuration.chainId),
-		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => await receipt.promise }),
+		createTradingWalletClient: () => testDouble<WriteClient>({ waitForTransactionReceipt: async () => await receipt.promise }),
 		discoverAddressedMarket: async () => discoveryPage([created ? initialized : market]),
 		loadLiveBalances: async (_client: unknown, selected: typeof market) => ({ scope: shareBalanceScope(selected), invalid: 0n, yes: 0n, no: 0n, lp: 0n }),
 	}
@@ -44,7 +46,9 @@ test('continues a newly created market in its liquidity view with a confirmation
 		await waitForDom(() => document.querySelector('input[name="amount"]') !== null, 'creation form')
 		// The addressed market's question names the page, so browser tabs and history tell markets apart.
 		expect(titles.at(-1)).toBe(market.title)
-		await act(() => buttonByLabel('Connect wallet').click())
+		await act(() => {
+			buttonByLabel('Connect wallet').click()
+		})
 		const input = document.querySelector('input[name="amount"]')
 		if (!(input instanceof HTMLInputElement)) throw new Error('Missing liquidity amount')
 		await act(() => {
@@ -52,24 +56,34 @@ test('continues a newly created market in its liquidity view with a confirmation
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 		})
 		await waitForDom(() => !buttonByLabel('Create market and add liquidity').disabled, 'enabled initialization')
-		await act(() => buttonByLabel('Create market and add liquidity').click())
+		await act(() => {
+			buttonByLabel('Create market and add liquidity').click()
+		})
 		await waitForDom(() => created, 'transaction submission')
 		expect(tradingRouting.resolve(window.location.hash)).toBe(`create-market/${market.pool}`)
-		await act(() => receipt.resolve({ status: 'success' }))
+		await act(() => {
+			receipt.resolve({ status: 'success' })
+		})
 		// The creation deposited liquidity, so the user continues in that market's liquidity view, told that it worked.
 		await waitForDom(() => tradingRouting.resolve(window.location.hash) === `liquidity/${market.pool}`, 'liquidity navigation after creation')
 		expect(window.location.hash).toContain('simulate=1')
 		expect(window.location.hash).toContain('simScenario=deployed')
 		expect(window.location.hash).toContain('universe=1')
-		await act(() => render(view(`liquidity/${market.pool}`), rendered.container))
+		await act(() => {
+			render(view(`liquidity/${market.pool}`), rendered.container)
+		})
 		expect(document.body.textContent).not.toContain('This pool already has a trading market.')
 		expect(rendered.container.querySelector('.market-workspace')).not.toBeNull()
 		expect(rendered.container.querySelector('.market-created-notice')?.textContent).toContain('Market created and liquidity added.')
 		// The confirmation belongs to the creation; another view of the market does not repeat it.
-		await act(() => render(view(`market/${market.pool}`), rendered.container))
+		await act(() => {
+			render(view(`market/${market.pool}`), rendered.container)
+		})
 		expect(rendered.container.querySelector('.market-created-notice')).toBeNull()
 		window.location.hash = `#/create-market/${market.pool}`
-		await act(() => render(view(`create-market/${market.pool}`), rendered.container))
+		await act(() => {
+			render(view(`create-market/${market.pool}`), rendered.container)
+		})
 		await waitForDom(() => tradingRouting.resolve(window.location.hash) === `market/${market.pool}`, 'market navigation on reopening')
 		expect(document.body.textContent).not.toContain('This pool already has a trading market.')
 		expect(document.body.textContent).not.toContain('Market created:')
@@ -90,9 +104,13 @@ test('a market another account creates while the creation route is open opens as
 	try {
 		await waitForDom(() => document.querySelector('input[name="amount"]') !== null, 'creation form')
 		createdElsewhere = true
-		await act(() => invalidateAppData())
+		await act(() => {
+			invalidateAppData()
+		})
 		await waitForDom(() => tradingRouting.resolve(window.location.hash) === `market/${market.pool}`, 'market navigation after external creation')
-		await act(() => render(<LiveTrading route={`liquidity/${market.pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container))
+		await act(() => {
+			render(<LiveTrading route={`liquidity/${market.pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container)
+		})
 		expect(rendered.container.querySelector('.market-created-notice')).toBeNull()
 	} finally {
 		await rendered.cleanup()
@@ -111,8 +129,34 @@ test('the list landings say when the selected universe has forked and link to it
 		expect(notice?.textContent).toContain('Settlement tab')
 		expect(notice?.textContent).not.toContain('migrate')
 		expect(notice?.querySelector('a')?.getAttribute('href')).toContain('#/universe')
-		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={offlineControllerServices} />, rendered.container))
+		await act(() => {
+			render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={offlineControllerServices} />, rendered.container)
+		})
 		expect(rendered.container.querySelector('.universe-forked-notice')).toBeNull()
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('an active market offers settlement and preserves the chosen view when reopened', async () => {
+	const market = etherScaleMarketFixture()
+	const configuration = deploymentConfigurationFixture()
+	const dom = installDomEnvironment(`http://localhost/#/market/${market.pool}`)
+	const services = { ...offlineControllerServices, discoverAddressedMarket: async () => discoveryPage([market]) }
+	const view = () => <LiveTrading route={`market/${market.pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />
+	let rendered = await renderIntoDocument(view())
+	try {
+		await waitForDom(() => document.querySelector('.market-workspace') !== null, 'active market workspace')
+		const settlement = document.getElementById('market-workspace-settlement-tab')
+		expect(settlement).not.toBeNull()
+		if (!(settlement instanceof HTMLButtonElement)) throw new Error('Missing settlement tab')
+		await act(() => settlement.click())
+		expect(settlement.getAttribute('aria-selected')).toBe('true')
+		expect(window.location.hash).toContain('view=settlement')
+		await rendered.cleanup()
+		rendered = await renderIntoDocument(view())
+		await waitForDom(() => document.getElementById('market-workspace-settlement-tab')?.getAttribute('aria-selected') === 'true', 'restored settlement view')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

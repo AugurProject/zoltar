@@ -1,4 +1,4 @@
-import { AUGUR_GENESIS_FORK_QUESTION } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { AUGUR_GENESIS_FORK_QUESTION } from '../../shared/zoltar/ts/deployment/genesisUniverses.js'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
@@ -25,7 +25,7 @@ const PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS = 120_000
 const PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS = 600_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
-let server: Bun.Server | undefined
+let server: Bun.Server<undefined> | undefined
 
 const chromiumPath = getChromiumPath()
 const productionBrowserTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS)
@@ -508,7 +508,7 @@ test(
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		await loadProductionDocumentInChromium(
-			`${baseUrl}/statoblast/#/portfolios?simulate=1&genesis=yes&simScenario=portfolio`,
+			`${baseUrl}/statoblast/#/portfolios?simulate=1&genesis=yes&simScenario=securitypoolx2`,
 			{ height: 900, width: 1440 },
 			async driver => {
 				// Worker bootstrap can finish before main-thread discovery authenticates the ledger.
@@ -666,7 +666,7 @@ async function portfolioMetric(driver: ProductionBrowserDriver, label: string) {
 	return driver.evaluate(`(() => { const field = [...document.querySelectorAll('.metric-label')].find(node => node.textContent === ${JSON.stringify(label)}); return field?.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, '') })()`)
 }
 
-productionInteractionTest('capital-recovery', '#/portfolios?simulate=1&genesis=yes&simScenario=portfolio', { height: 844, width: 390 }, async driver => {
+productionInteractionTest('capital-recovery', '#/portfolios?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 	const before = await portfolioMetric(driver, capitalCopy.principalRep)
 	expect(before).toBe('5000REP')
@@ -691,7 +691,7 @@ productionInteractionTest('capital-recovery', '#/portfolios?simulate=1&genesis=y
 	expect(await portfolioMetric(driver, capitalCopy.principalRep)).toBe('5001REP')
 })
 
-productionInteractionTest('portfolio-purchase', '#/portfolios?simulate=1&genesis=yes&simScenario=portfolio', { height: 900, width: 1440 }, async driver => {
+productionInteractionTest('portfolio-purchase', '#/portfolios?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 	const selected = await driver.evaluate(
 		`(() => { const label = [...document.querySelectorAll('label')].find(node => node.textContent === ${JSON.stringify(portfolioCopy.registeredQuestions)}); const select = label?.control; if (!(select instanceof HTMLSelectElement)) return false; const option = [...select.options].find(option => option.value !== ''); if (!option) return false; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,

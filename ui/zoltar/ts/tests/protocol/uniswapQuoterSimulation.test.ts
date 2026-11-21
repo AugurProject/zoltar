@@ -3,7 +3,7 @@ import { quoteSinglePool } from './testSupport/singlePoolQuote.js'
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { createPublicClient, getAddress, http } from '@zoltar/core-shared/evm/ethereum'
-import { ETH_ADDRESS, getRepAddress, quoteBestExactInputWithSource } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, quoteBestExactInputWithSource } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -32,9 +32,17 @@ function createStubReadClient(): ReadClient {
 }
 
 describe('simulation Uniswap quotes', () => {
-	test('rejects unsupported pairs when only the simulation REP price is available', async () => {
-		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
-		await expect(quoteBestExactInputWithSource(createStubReadClient(), getRepAddress(), ETH_ADDRESS, 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
+	test('rejects the unsupported ETH/USDC pair before attempting a contract read', async () => {
+		const profile = createFakeSimulationProfile()
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile }))
+		const client = createStubReadClient()
+		let reads = 0
+		client.readContract = async () => {
+			reads += 1
+			throw new Error('Unsupported pairs need no contract read')
+		}
+		await expect(quoteBestExactInputWithSource(client, ETH_ADDRESS, profile.usdcAddress, 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
+		expect(reads).toBe(0)
 		resetEnvironment()
 	})
 

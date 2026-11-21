@@ -431,7 +431,7 @@ async function checkPublicTransactionSubmissionEndpoint(url: string, expectedCha
 	}
 }
 
-type RelayMethod = 'eth_callBundle' | 'eth_sendBundle'
+type RelayMethod = 'eth_callBundle' | 'eth_sendBundle' | 'eth_sendPrivateTransaction'
 
 async function rawRelayCapabilityError(url: string, requestedMethod: string, capabilityMethod: RelayMethod, timeoutMilliseconds: number) {
 	const response = await fetch(url, {
@@ -505,14 +505,13 @@ async function checkPrivateTransactionRelayEndpoint(url: string, expectedChainId
 	}
 }
 
-async function checkPrivateRelayEndpoint(url: string, expectedChainId: number): Promise<EndpointCheck> {
+async function checkPrivateRelayEndpoint(url: string, expectedChainId: number, requiredMethods: readonly RelayMethod[]): Promise<EndpointCheck> {
 	const checkedAt = new Date().toISOString()
 	let chainId: number | undefined
 	try {
 		chainId = await readRpcChainId(url)
 		if (chainId !== expectedChainId) throw endpointMethodFailure(new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`), url, 'eth_chainId')
-		await assertRelayMethodCapability(url, 'eth_callBundle')
-		await assertRelayMethodCapability(url, 'eth_sendBundle')
+		for (const method of requiredMethods) await assertRelayMethodCapability(url, method)
 		return { chainId, checkedAt, error: undefined, kind: 'private-relay', status: 'healthy', target: endpointLabel(url) }
 	} catch (error) {
 		return {
@@ -534,9 +533,9 @@ export async function checkConnectivity(settings: ConnectivitySettings, expected
 	return checks
 }
 
-export async function checkSubmissionEndpoints(settings: SubmissionSettings, expectedChainId: number) {
+export async function checkSubmissionEndpoints(settings: SubmissionSettings, expectedChainId: number, requiredMethods: readonly RelayMethod[] = ['eth_callBundle', 'eth_sendBundle', 'eth_sendPrivateTransaction']) {
 	if (settings.mode === 'public') return []
-	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateRelayEndpoint(url, expectedChainId)))
+	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateRelayEndpoint(url, expectedChainId, requiredMethods)))
 	const failed = checks.filter(check => check.status === 'failed')
 	const safetyFailure = failed.find(check => check.failureDisposition !== 'connectivity-degraded')
 	const healthyOriginCount = new Set(checks.filter(check => check.status === 'healthy').map(check => check.target)).size

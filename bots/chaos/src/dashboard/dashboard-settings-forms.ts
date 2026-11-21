@@ -155,9 +155,9 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 					return [toggle.dataset['ecosystemToggle']]
 				})
 				if (enabledEcosystems.length === 0) throw new Error('Enable at least one ecosystem.')
-				const maximumEthPerOperation = parseReserve(elements.maximumEthOperationInput, 'Maximum ETH per operation', 'positive')
+				const maximumEthPerOperation = parseReserve(elements.maximumEthOperationInput, 'Maximum ETH per workflow', 'positive')
 				const maximumGasCostEth = parseReserve(elements.maximumGasCostInput, 'Maximum gas cost', 'positive')
-				const maximumRepPerOperation = parseReserve(elements.maximumRepOperationInput, 'Maximum REP per operation', 'positive')
+				const maximumRepPerOperation = parseReserve(elements.maximumRepOperationInput, 'Maximum REP per workflow', 'positive')
 				// The saved execution mode decides the reserve rules; the mode itself changes only through the Execution mode panel.
 				const live = configuration.execute === true
 				const minimumEthReserve = parseReserve(elements.reserveEthInput, 'ETH reserve', live ? 'live-reserve' : 'non-negative')

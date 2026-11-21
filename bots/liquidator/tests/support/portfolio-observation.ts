@@ -17,7 +17,7 @@ export function portfolioSettings() {
 	})
 }
 export function portfolioObservation(): PortfolioObservation {
-	const position = { id: 1n, owner: targetAddress, batch: 0n, rep: 99n * unit, commitment: 100n * unit, maxHealthyPrice: unit - 1n, remainingCommitment: 0n, liquidationStarted: 100n, retirementStatus: 'Not retiring', stalledRetirement: false }
+	const position = { id: 1n, owner: targetAddress, batch: 0n, rep: 99n * unit, commitment: 100n * unit, maxHealthyPrice: unit - 1n, remainingCommitment: 0n, liquidationStarted: 100n, retirementStatus: 'No pending reduction', stalledRetirement: false }
 	return {
 		selection: { address: portfolioAddress, universeId: 0n },
 		selected: true,
@@ -52,6 +52,7 @@ export function portfolioObservation(): PortfolioObservation {
 			totalPledgedAttoRep: 99n * unit,
 			totalCommitmentAttoEth: 100n * unit,
 			healthyCommitmentAttoEth: 0n,
+			availableMintCapacityAttoEth: 0n,
 			totalFreeAttoRep: 0n,
 			currentBatch: 0n,
 			nextBatch: 1n,

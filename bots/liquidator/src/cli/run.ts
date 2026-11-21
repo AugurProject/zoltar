@@ -24,7 +24,7 @@ async function preflightNetworkProfile(target: OperatorSettings) {
 			const chainId = await readRpcChainId(rpcUrl)
 			if (chainId !== target.network.chainId) throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
 		}
-		await checkSubmissionEndpoints(target.submission, target.network.chainId)
+		await checkSubmissionEndpoints(target.submission, target.network.chainId, ['eth_sendPrivateTransaction'])
 	}
 	const locks = await acquireBotProcessLocks({ chainId: target.network.chainId, execute: target.runtime.execute, privateKey: target.privateKey, stateFile: target.runtime.stateFile }, LIQUIDATOR_PROCESS_LOCK_OPTIONS)
 	try {

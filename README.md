@@ -73,7 +73,7 @@ Sepolia defaults to its profile RPC at
 network's default without changing code:
 
 - Add `?rpcUrl=https://your-rpc.example` to the app URL
-- Set `localStorage['zoltar.rpcUrl']`
+- Open Settings and set the RPC URL for the selected network
 - Set `globalThis.__ZOLTAR_RPC_URL__` before bootstrapping the app
 - Set the `ZOLTAR_RPC_URL` environment variable for environments that inject `process.env`
 
@@ -84,10 +84,10 @@ query (for example, `#/deploy?network=sepolia`). The application then uses
 Sepolia chain ID `11155111`, its configured public RPC, Sepolia Etherscan links,
 and Sepolia-specific deterministic contract addresses.
 
-The deployment flow installs both Yes and No genesis deployments. Each uses
-its own REP token and Zoltar contract; later forks use the existing universe IDs
-within that deployment. On mainnet the two tokens are Augur V2's REP Yes and REP
-No. Sepolia installs two genesis REP tokens before their dependent contracts;
+The app deployment flow installs the selected Yes or No genesis deployment. Each
+uses its own REP token and Zoltar contract; later forks use universe IDs within
+that deployment. On mainnet the two tokens are Augur V2's REP Yes and REP No.
+Sepolia installs the selected genesis REP token before its dependent contracts;
 WETH is Uniswap's published Sepolia contract. Initial Sepolia REP
 holders and exact 18-decimal balances are defined in
 [`shared/zoltar/ts/deployment/sepoliaRepAllocations.ts`](./shared/zoltar/ts/deployment/sepoliaRepAllocations.ts).
@@ -120,7 +120,7 @@ While a dev server is running, `UI_DEV_SERVER_URL=http://localhost:4153 bun run 
 
 `bun run ui:layout-scan -- --app <apps>` builds and serves the named apps (one or more, comma separated; `--app` is required), then walks every route, view tab, disclosure, and dialog launcher it can reach in each simulation scenario at five viewport sizes, and reports content that is cut off, runs off the screen, overlaps, or is squeezed. Each finding explains the measured problem, the likely cause and fix, the source files involved, and links a highlighted screenshot; `--help` lists the options for narrowing the scan or scanning a running server.
 
-This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. In Trading, `simScenario=deployed` deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable, and the default `simScenario=trading-funded` additionally initializes pair liquidity and funds the simulation wallet with Yes, No, Invalid, and LP shares. `simScenario=trading-forked` starts from that funded market and forks its universe through the pool's own escalation game, so Settlement offers Fork migration for the wallet's parent-universe shares.
+This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. In Trading, `simScenario=deployed` deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable, and the default `simScenario=trading-funded` additionally initializes pair liquidity and funds the simulation wallet with Yes, No, Invalid, and LP shares. `simScenario=trading-forked` starts from that funded market and forks its universe directly through Zoltar, so Settlement offers Fork migration for the wallet's parent-universe shares.
 
 Simulation mode details:
 
@@ -129,10 +129,10 @@ Simulation mode details:
 - Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
 - Every app supports `simScenario=baseline` and `simScenario=deployed`. The other seeded scenarios are app-specific:
   - Zoltar: `two-questions` and `forked-categorical`
-  - Statoblast: `portfolio`, `portfolio-auction`, `security-pool`, and `securitypoolx2`
+  - Statoblast and OpenOracle: `portfolio-auction`, `security-pool`, and `securitypoolx2`
   - Trading: `trading-funded`, `trading-usdc`, and `trading-forked`
 - The live simulation chain is ephemeral and exists only in the current browser tab session; only states explicitly saved from the simulation banner persist in browser storage
-- Serve commands prepare a snapshot of every scenario (`bun run ui:snapshots <app>` does it on its own, `bun run ui:snapshots:check` reports whether they are current), so opening a scenario restores its seeded chain in about a second instead of replaying the seeding. The watch rebuild removes the snapshots whenever a source behind the simulation changes, the serve and watch commands regenerate stale ones before serving, and the production build ships only snapshots that match the current sources; without them the app seeds live
+- Serve commands prepare a Yes-genesis snapshot of every scenario (`bun run ui:snapshots <app>` does it on its own, `bun run ui:snapshots:check` reports whether they are current), so opening a Yes-genesis scenario restores its seeded chain in about a second instead of replaying the seeding. No-genesis scenarios seed live. The watch rebuild removes the snapshots whenever a source behind the simulation changes, the serve and watch commands regenerate stale ones before serving, and the production build ships only snapshots that match the current sources; without them the app seeds live
 
 ## Common Commands
 
@@ -160,7 +160,7 @@ Each serve command first builds the selected app and its dependencies, then serv
 | Run the full lint, documentation, and repository checks | `bun run check`                                                                                |
 | Format, or verify formatting                      | `bun run format`, `bun run format:check`                                                            |
 | Find dead code                                    | `bun run knip`                                                                                       |
-| Validate everything CI validates                  | `bun run validate` (plus preflight and browser smoke tests: `bun run test:all`)                     |
+| Run comprehensive local validation                  | `bun run validate` (plus preflight and browser smoke tests: `bun run test:all`)                     |
 
 ### Script families
 
@@ -170,7 +170,7 @@ Root scripts are grouped by prefix:
 - `app:serve:<app>`, `app:watch:<app>`, `ui:build*`, `ui:browser-smoke:<app>`, `ui:layout-scan`, `ui:publish:*`: build, serve, smoke-test, layout-scan, and publish the UI apps.
 - `test`, `test:*`, `coverage*`: `test` runs `tsc` and then the canonical root suite (`test:run`). `test:preflight` covers the project registry and CI tooling, the `test:browser:*` and `test:integration:*` tiers run only when invoked explicitly, and the remaining `test:*` scripts run focused suites.
 - `check`, `check:*`, `lint:*`, `docs:check*`, `format*`, `knip*`: static analysis. `check` runs `check:static` (Biome and custom lint rules), `docs:check`, and `check:repository`. `check:complete` adds formatting, dead-code analysis, and generated-output freshness, and is the repository's `check` task in `validate`.
-- `validate`, `test:all`: the complete local validation used for CI and release parity.
+- `validate`, `test:all`: comprehensive local validation. CI additionally runs mutation smoke, the browser workflow tier, dependency auditing and augurScan PostgreSQL integration.
 - `projects:*`: run one task (`setup`, `test`, `check`, `typecheck`, `workers`) across the projects registered in `tooling/repo/projects.ts`.
 - `ci:*`: entry points used by GitHub Actions jobs.
 - `trading:*`: Trading-only shortcuts used by the [Trading development guide](https://augurproject.github.io/zoltar/docs/how-to/trading-set-up-development.html).

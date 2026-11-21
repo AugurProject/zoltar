@@ -183,7 +183,7 @@ function parseRuntimeLimits(runtime: Record<string, unknown>): RuntimeLimits {
 	if (Object.keys(risk).some(key => !riskKeys.includes(key)) || riskKeys.some(key => !(key in risk))) throw new Error('Runtime risk limits require exactly the supported risk fields')
 	const maxPositionNotionalAttoWeth = weth(risk['maxPositionNotionalWeth'], 'Runtime maxPositionNotionalWeth')
 	const maxTotalLockedAttoWeth = weth(risk['maxTotalLockedWeth'], 'Runtime maxTotalLockedWeth')
-	if (maxPositionNotionalAttoWeth > maxTotalLockedAttoWeth) throw new Error('Runtime maxPositionNotionalAttoWeth cannot exceed maxTotalLockedAttoWeth')
+	if (maxPositionNotionalAttoWeth > maxTotalLockedAttoWeth) throw new Error('Runtime maxPositionNotionalWeth cannot exceed maxTotalLockedWeth')
 	return {
 		logLookbackBlocks: BigInt(integer(runtime['logLookbackBlocks'], 'Runtime logLookbackBlocks', 0, 256)),
 		maxHedgeSlippageBps: BigInt(integer(runtime['maxHedgeSlippageBps'], 'Runtime maxHedgeSlippageBps', 0, 1_000)),

@@ -256,7 +256,7 @@ describe('useTradingOperations', () => {
 		},
 		{
 			capacity: createMintCapacity({ escalationGameActive: true, mintingCapacityAttoEth: 0n }),
-			expectedMessage: 'Minting is paused while the outcome is disputed.',
+			expectedMessage: 'Minting is closed for this question once reporting starts.',
 			name: 'an escalation game has started',
 		},
 	])('blocks complete-set mint writes when $name', async ({ capacity, expectedMessage }) => {

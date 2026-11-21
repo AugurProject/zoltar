@@ -379,7 +379,7 @@ test('recovery REP blocks cash-only buys without blocking share sales', () => {
 	const recovered = { ...market, settlementRecoveryAttoRep: shares }
 	const buy = tradeTicketModel({ ...ready, market: recovered })
 	expect(buy.estimate).toBeUndefined()
-	expect(buy.availability.reason).toBe('New complete sets require recovery REP. Use portfolio purchases.')
+	expect(buy.availability.reason).toBe('New complete sets require recovery REP. Purchase complete sets from this market’s portfolio in Statoblast.')
 	const sell = tradeTicketModel({ ...ready, market: recovered, mode: 'exit', amount: '0.01' })
 	expect(sell.availability.disabled).toBe(false)
 	expect(sell.estimate?.kind).toBe('exit')

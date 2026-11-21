@@ -286,7 +286,7 @@ describe('operator connectivity', () => {
 		const relay = (chainId: string) =>
 			rpc(method => {
 				if (method === 'eth_chainId') return chainId
-				if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' })
+				if (method === 'eth_callBundle' || method === 'eth_sendBundle' || method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' })
 				throw new Error(`Unexpected method: ${method}`)
 			})
 		const mainnetRelay = relay('0x1')
@@ -466,7 +466,7 @@ describe('operator connectivity', () => {
 	test('counts healthy distinct relay origins toward bundle capability preflight threshold', async () => {
 		const acceptedOrigin = rpc(method => {
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error: { code: -32_602, message: 'invalid params' }, id: 1, jsonrpc: '2.0' })
+			if (method === 'eth_callBundle' || method === 'eth_sendBundle' || method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_602, message: 'invalid params' }, id: 1, jsonrpc: '2.0' })
 			throw new Error(`Unexpected method: ${method}`)
 		})
 		const rejectedOrigin = rpc(() => Response.json({ error: { code: -32_000, message: 'temporarily unavailable' }, id: 1, jsonrpc: '2.0' }, { status: 503 }))
@@ -483,8 +483,7 @@ describe('operator connectivity', () => {
 		const authenticationRejectingRelay = rpc((method, _params, request) => {
 			requestedMethods.push(method)
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_sendPrivateTransaction') {
-				expect(request.headers.get('x-flashbots-signature')).not.toBeNull()
+			if (method === 'eth_sendPrivateTransaction' && request.headers.get('x-flashbots-signature') !== null) {
 				return Response.json({ error: { code: -32_600, message: 'invalid flashbots signature' }, id: 1, jsonrpc: '2.0' })
 			}
 			expect(request.headers.get('x-flashbots-signature')).toBeNull()
@@ -558,7 +557,7 @@ describe('operator connectivity', () => {
 		]) {
 			const regularRpc = rpc(method => {
 				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error, id: 1, jsonrpc: '2.0' })
+				if (method === 'eth_callBundle' || method === 'eth_sendBundle' || method === 'eth_sendPrivateTransaction') return Response.json({ error, id: 1, jsonrpc: '2.0' })
 				throw new Error(`Unexpected method: ${method}`)
 			})
 			const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [regularRpc] })
@@ -615,7 +614,7 @@ describe('operator connectivity', () => {
 		]) {
 			const privateRelay = rpc(method => {
 				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error, id: 1, jsonrpc: '2.0' })
+				if (method === 'eth_callBundle' || method === 'eth_sendBundle' || method === 'eth_sendPrivateTransaction') return Response.json({ error, id: 1, jsonrpc: '2.0' })
 				throw new Error(`Unexpected method: ${method}`)
 			})
 			await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [privateRelay] }), 1)).resolves.toMatchObject([{ chainId: 1, status: 'healthy' }])
@@ -633,7 +632,7 @@ describe('operator connectivity', () => {
 		]) {
 			const endpoint = rpc(method => {
 				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json(responseBody)
+				if (method === 'eth_callBundle' || method === 'eth_sendBundle' || method === 'eth_sendPrivateTransaction') return Response.json(responseBody)
 				throw new Error(`Unexpected method: ${method}`)
 			})
 			await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('did not prove eth_callBundle support')
@@ -643,7 +642,7 @@ describe('operator connectivity', () => {
 	test('rejects unavailable private relays even when their body resembles capability evidence', async () => {
 		const endpoint = rpc(method => {
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' }, { status: 503 })
+			if (method === 'eth_callBundle' || method === 'eth_sendBundle' || method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' }, { status: 503 })
 			throw new Error(`Unexpected method: ${method}`)
 		})
 		let failure: unknown

@@ -1,4 +1,5 @@
 import { decodeEventLog, encodeFunctionData, getAddress, parseAbi, parseAbiItem, toEventSelector, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { loadPortfolioPriceSnapshot, type PortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -19,7 +20,7 @@ const abi = parseAbi([
 	'function tokenHolder(address owner,address token) view returns (uint256)',
 	'function recoverReport(uint256 id)',
 	'function withdrawFunding()',
-	'event PriceRequested(uint256 indexed reportId,uint256 maxSettlementBaseFeeAttoEthPerGas)',
+	'event PriceRequested(uint256 indexed reportId,uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)',
 ])
 export async function loadPortfolioBranchPrice(client: ReadClient, portfolio: Address, owner: Address, universeId: bigint) {
 	const snapshot = await loadPortfolioPriceSnapshot({ client: { ...portfolioReadClient(client), getBalance: parameters => client.getBalance(parameters) }, portfolio, owner, universeId })
@@ -63,7 +64,21 @@ export async function loadPortfolioPriceReport(client: ReadClient, snapshot: Por
 		throw new Error('Report escrow or oracle identities do not match this price feed.')
 	const [block, chain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chain !== snapshot.chainId) throw new Error('Report state changed. Refresh and retry.')
-	return { reportId, escrow, sponsor, outcome: BigInt(requireIntegerLikeValue(outcome, 'report outcome')), state, eligibleAt: game.reportTimestamp + game.settlementTime, baseFeePerGas: block.baseFeePerGas, maxSettlementBaseFee, wethCredit: releasedCredit(wethCredit), repCredit: releasedCredit(repCredit) }
+	const reportOutcome = BigInt(requireIntegerLikeValue(outcome, 'report outcome'))
+	let recoveryBaseFeeBlocked = false
+	if (state.settled && reportOutcome === 0n && block.baseFeePerGas !== undefined && block.baseFeePerGas > maxSettlementBaseFee) {
+		// Only the feed can determine whether rejection retires this candidate or
+		// executes canonical-price operations, which still enforce its fee ceiling.
+		try {
+			await client.simulateContract({ account: snapshot.owner, address: snapshot.feed, abi, functionName: 'recoverReport', args: [reportId], blockNumber })
+		} catch (error) {
+			if (getErrorDetail(error)?.includes('Base fee too high')) recoveryBaseFeeBlocked = true
+			else throw error
+		}
+		const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
+		if (finalBlock.hash !== snapshot.blockHash || finalChain !== snapshot.chainId) throw new Error('Report state changed. Refresh and retry.')
+	}
+	return { reportId, escrow, sponsor, outcome: reportOutcome, state, eligibleAt: game.reportTimestamp + game.settlementTime, baseFeePerGas: block.baseFeePerGas, maxSettlementBaseFee, recoveryBaseFeeBlocked, wethCredit: releasedCredit(wethCredit), repCredit: releasedCredit(repCredit) }
 }
 function releasedCredit(value: unknown) {
 	const amount = requireBigintValue(value, 'report token credit')
@@ -89,7 +104,7 @@ export function buildPortfolioPriceFundingWithdrawal(snapshot: PortfolioPriceSna
 }
 export function submittedPortfolioPriceReport(receipt: Pick<TransactionReceipt, 'logs'>, feed: Address) {
 	for (const log of receipt.logs) {
-		if (getAddress(log.address) !== getAddress(feed) || log.topics[0] !== toEventSelector(parseAbiItem('event PriceRequested(uint256 indexed reportId,uint256 maxSettlementBaseFeeAttoEthPerGas)'))) continue
+		if (getAddress(log.address) !== getAddress(feed) || log.topics[0] !== toEventSelector(parseAbiItem('event PriceRequested(uint256 indexed reportId,uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)'))) continue
 		const decoded = decodeEventLog({ abi, data: log.data, topics: log.topics })
 		if (decoded.eventName === 'PriceRequested') return requireBigintValue(Array.isArray(decoded.args) ? decoded.args[0] : Reflect.get(requireObjectValue(decoded.args, 'price report event'), 'reportId'), 'created report ID')
 	}

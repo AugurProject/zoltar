@@ -140,16 +140,16 @@ export function LiveTrading({
 		window.location.replace(getTradingRouteHref(`#/liquidity/${existingMarketPool}`))
 	}, [creatingMarket, existingMarketPool, marketWorkflowLocked])
 	const showsMarketCreated = createdMarketPool !== undefined && workflowRoute === 'liquidity' && routePool?.toLowerCase() === createdMarketPool
-	// Trade and settlement share the `#/market/<address>` hash, so a closed market's chosen view lives in its `view` parameter; liquidity is its own hash.
-	const [closedMarketView, setClosedMarketView] = useState<'trade' | 'settlement'>('settlement')
-	useEffect(() => setClosedMarketView(readMarketViewParam(parseRouteHash(window.location.hash).search) ?? 'settlement'), [routePool])
+	// Trade and settlement share the market hash; the chosen view survives refresh through its view parameter.
+	const [marketView, setMarketView] = useState<'trade' | 'settlement'>()
+	useEffect(() => setMarketView(readMarketViewParam(parseRouteHash(window.location.hash).search)), [routePool])
 	const marketOpen = selected !== undefined && marketAcceptsNewRisk(selected, nowSeconds)
 	// A market that stops trading while its own trade is in flight or just settled keeps the ticket on screen, so that trade's status and hash stay in view.
 	// The view switches during render: an effect would first commit the Settlement view, unmounting the ticket and dropping its focus.
 	const [observedMarket, setObservedMarket] = useState({ pool: selected?.pool, open: marketOpen })
 	if (observedMarket.pool !== selected?.pool || observedMarket.open !== marketOpen) {
 		setObservedMarket({ pool: selected?.pool, open: marketOpen })
-		if (observedMarket.pool === selected?.pool && observedMarket.open && !marketOpen && position.state !== 'idle') setClosedMarketView('trade')
+		if (observedMarket.pool === selected?.pool && observedMarket.open && !marketOpen && position.state !== 'idle') setMarketView('trade')
 	}
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
@@ -341,6 +341,7 @@ export function LiveTrading({
 					) : undefined}
 					{(discoveryState === 'error' && visibleMarkets.length === 0) || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? undefined : (
 						<LivePortfolio
+							settings={tradeSettings}
 							discoveryComplete={discoveryState === 'ready'}
 							entries={visiblePortfolioEntries}
 							balanceState={portfolioBalanceState}
@@ -358,7 +359,7 @@ export function LiveTrading({
 	const routePresentation = liveWorkflowRoutePresentation(workflowRoute)
 	// Navigation stays free while a transaction is pending; only the market it touches keeps its ticket locked until it settles.
 	const ticketLocked = marketWorkflowLocked || isMarketTransactionPending(selected?.pool)
-	let activeView: MarketWorkspaceView = marketOpen ? 'trade' : closedMarketView
+	let activeView: MarketWorkspaceView = marketView ?? (marketOpen ? 'trade' : 'settlement')
 	if (workflowRoute === 'liquidity') activeView = 'liquidity'
 	const viewTabId = (view: MarketWorkspaceView) => `market-workspace-${view}-tab`
 	const openView = (view: MarketWorkspaceView) => {
@@ -367,16 +368,16 @@ export function LiveTrading({
 			window.location.hash = getTradingRouteHref(`#/liquidity/${selected.pool}`)
 			return
 		}
-		setClosedMarketView(view)
-		// Only a closed market offers both views; its choice stays in the hash so a refresh keeps it.
-		const viewParam = marketOpen ? undefined : view
+		setMarketView(view)
+		// Settlement also permits complete-set redemption while a market remains open.
+		const viewParam = view
 		if (workflowRoute === 'market') replaceRouteHashSearch(search => writeMarketViewParam(search, viewParam))
 		else window.location.hash = marketViewHref(selected.pool, viewParam)
 	}
 	const viewOptions = [
 		{ value: 'trade' as const, id: viewTabId('trade'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.trade },
 		{ value: 'liquidity' as const, id: viewTabId('liquidity'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.liquidity },
-		...(marketOpen ? [] : [{ value: 'settlement' as const, id: viewTabId('settlement'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.settlement }]),
+		{ value: 'settlement' as const, id: viewTabId('settlement'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.settlement },
 	]
 	// A loaded market's trade and liquidity pages are titled by the market question itself, with a way back to the list;
 	// other states name the workflow and let the object header below carry the question. Focus lands on whichever

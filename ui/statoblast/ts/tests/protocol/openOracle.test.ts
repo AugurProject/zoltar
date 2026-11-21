@@ -88,7 +88,30 @@ function createDisputePreimage(timeType: boolean) {
 	return preimage
 }
 
+function encodedLogTopics(parameters: Parameters<typeof encodeEventTopics>[0]) {
+	return encodeEventTopics(parameters).map(topic => {
+		if (topic === null) throw new Error('A log fixture must not contain a wildcard topic')
+		return topic
+	})
+}
+
 describe('openOracle protocol client', () => {
+	for (const nativeSide of ['token1', 'token2'] as const) {
+		for (const self of [false, true]) {
+			test(`funds native ${nativeSide} dispute with exact value (self=${self})`, async () => {
+				const preimage = createDisputePreimage(true)
+				preimage.game[nativeSide] = zeroAddress
+				preimage.game.currentReporter = self ? initialReporter : token1Address
+				const values: Array<bigint | undefined> = []
+				const writer = createMockWriteClient(request => values.push(request.value))
+				const { extend: _extend, ...reader } = createMockLoaderClient({ getBlock: async () => ({ timestamp: 200n, number: 1n }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
+				const wallet = createOfflineReporterWallet()
+				const client = { ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account, chain: wallet.chain }
+				await disputeOracleReport(client, getOpenOracleAddress(), 1n, preimage.game.token2, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))
+				expect(values).toEqual([nativeSide === 'token1' || self ? 1n : 21n])
+			})
+		}
+	}
 	for (const timeType of [true, false]) {
 		for (const remaining of [0n, 1n, timeType ? 60n : 2n, timeType ? 61n : 3n]) {
 			test(`dispute checks ${remaining} remaining ${timeType ? 'seconds' : 'blocks'} before sending`, async () => {
@@ -98,9 +121,9 @@ describe('openOracle protocol client', () => {
 					() => sent++,
 					async request => readStoredOracleFixture(request.functionName, preimage),
 				)
-				const reader = createMockLoaderClient({ getBlock: async () => ({ timestamp: timeType ? 1_100n - remaining : 1n, number: timeType ? 1n : 1_100n - remaining }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
+				const { extend: _extend, ...reader } = createMockLoaderClient({ getBlock: async () => ({ timestamp: timeType ? 1_100n - remaining : 1n, number: timeType ? 1n : 1_100n - remaining }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
 				const wallet = createOfflineReporterWallet()
-				const attempt = disputeOracleReport({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account }, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))
+				const attempt = disputeOracleReport({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account, chain: wallet.chain }, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))
 				if (remaining > (timeType ? 60n : 2n)) {
 					await attempt
 					expect(sent).toBe(1)
@@ -124,9 +147,9 @@ describe('openOracle protocol client', () => {
 					() => sent++,
 					async request => readStoredOracleFixture(request.functionName, preimage),
 				)
-				const reader = createMockLoaderClient({ getBlock: async () => ({ timestamp: timeType ? currentClock : 1n, number: timeType ? 1n : currentClock }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
+				const { extend: _extend, ...reader } = createMockLoaderClient({ getBlock: async () => ({ timestamp: timeType ? currentClock : 1n, number: timeType ? 1n : currentClock }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
 				const wallet = createOfflineReporterWallet()
-				const reviewed = createReviewedClient({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account, call: async () => ({ data: toHex(0n) }) }, async () => {
+				const reviewed = createReviewedClient({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account, chain: wallet.chain, call: async () => ({ data: toHex(0n) }) }, async () => {
 					if (++validations === 2) currentClock = 1_100n - remaining
 				})
 				const attempt = disputeOracleReport(reviewed, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))
@@ -378,8 +401,8 @@ describe('openOracle protocol client', () => {
 			preimage.game.callbackContract = vaultAddress
 			const abi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
 			const { data, eventName } = settlementOutcomes[status]
-			const log = { address: vaultAddress, data, topics: encodeEventTopics({ abi, eventName, args: { reportId: 7n } }) }
-			const logs = [{ ...log, address: token1Address }, { ...log, topics: encodeEventTopics({ abi, eventName, args: { reportId: 8n } }) }, { ...log, topics: [] }, log]
+			const log = { address: vaultAddress, data, topics: encodedLogTopics({ abi, eventName, args: { reportId: 7n } }) }
+			const logs = [{ ...log, address: token1Address }, { ...log, topics: encodedLogTopics({ abi, eventName, args: { reportId: 8n } }) }, { ...log, topics: [] }, log]
 			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs }) }
 			const result = await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
 			expect(result.priceSettlement).toEqual(settlementOutcomes[status].expected)
@@ -392,12 +415,12 @@ describe('openOracle protocol client', () => {
 			preimage.game.callbackContract = vaultAddress
 			const feedAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
 			const escrowAbi = parseAbi(['event ReportCompleted(uint256 indexed reportId,address indexed priceFeed,uint8 outcome)'])
-			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('uint8'), [accepted ? 1 : 2]), topics: encodeEventTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateSecurityPoolAddress } }) }
+			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('uint8'), [accepted ? 1 : 2]), topics: encodedLogTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateSecurityPoolAddress } }) }
 			const eventName = accepted ? ('PriceReported' as const) : ('PriceReportRejected' as const)
 			const result = {
 				address: alternateSecurityPoolAddress,
 				data: accepted ? encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]) : encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report stale', 0n, 0n, 0n, 0n]),
-				topics: encodeEventTopics({ abi: feedAbi, eventName, args: { reportId: 7n } }),
+				topics: encodedLogTopics({ abi: feedAbi, eventName, args: { reportId: 7n } }),
 			}
 			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs: [result, completed] }) }
 			expect((await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)).priceSettlement).toEqual(accepted ? { status: 'accepted' } : { status: 'rejected', reason: 'Report stale' })
@@ -411,7 +434,7 @@ describe('openOracle protocol client', () => {
 		const rejection = {
 			address: vaultAddress,
 			data: encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report stale', 0n, 0n, 0n, 0n]),
-			topics: encodeEventTopics({ abi, eventName: 'PriceReportRejected', args: { reportId: 7n } }),
+			topics: encodedLogTopics({ abi, eventName: 'PriceReportRejected', args: { reportId: 7n } }),
 		}
 		const client = {
 			...createMockWriteClient(() => {}),
@@ -425,6 +448,7 @@ describe('openOracle protocol client', () => {
 		const reporter = getAddress('0x00000000000000000000000000000000000000e1')
 		let capturedData: Hex | undefined
 		let capturedGas: bigint | undefined
+		const readCapturedGas = (): bigint | undefined => capturedGas
 		let capturedTo: Address | null | undefined
 		const client = createMockWriteClient(request => {
 			capturedData = request.data
@@ -459,7 +483,7 @@ describe('openOracle protocol client', () => {
 		})
 
 		expect(capturedTo).toBe(getOpenOracleAddress())
-		expect(capturedGas).toBe(5_000_000n)
+		expect(readCapturedGas()).toBe(5_000_000n)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
 			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
@@ -475,25 +499,26 @@ describe('openOracle protocol client', () => {
 		preimage.game.callbackContract = getAddress('0x00000000000000000000000000000000000000f9')
 		preimage.game.callbackGasLimit = callbackGasLimit
 		let capturedGas: bigint | undefined
+		const readCapturedGas = (): bigint | undefined => capturedGas
 		const client = createMockWriteClient(request => {
 			capturedGas = request.gas
 		})
 
 		await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
 		// EIP-150 forwards at most 63/64 of the remaining gas, and settle requires callbackGasLimit / 63 to remain afterwards.
-		expect(capturedGas ?? 0n).toBeGreaterThan((callbackGasLimit * 64n) / 63n + callbackGasLimit / 63n)
+		expect(readCapturedGas() ?? 0n).toBeGreaterThan((callbackGasLimit * 64n) / 63n + callbackGasLimit / 63n)
 		// An untrusted callback may also spend its budget on return data, but no request may exceed one transaction's gas cap.
-		expect(capturedGas ?? 0n).toBeGreaterThanOrEqual(2n * callbackGasLimit)
-		expect(capturedGas ?? 0n).toBeLessThanOrEqual(16_777_216n)
+		expect(readCapturedGas() ?? 0n).toBeGreaterThanOrEqual(2n * callbackGasLimit)
+		expect(readCapturedGas() ?? 0n).toBeLessThanOrEqual(16_777_216n)
 
 		capturedGas = undefined
 		preimage.game.callbackGasLimit = 10_000_000n
 		await expect(settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)).rejects.toThrow('more gas than one transaction allows')
-		expect(capturedGas).toBeUndefined()
+		expect(readCapturedGas()).toBeUndefined()
 
 		preimage.game.callbackGasLimit = 1_000n
 		await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
-		expect(capturedGas).toBe(5_000_000n)
+		expect(readCapturedGas()).toBe(5_000_000n)
 	})
 
 	test('loads sentinel-adjusted balances and keeps a failed withdrawal retryable', async () => {
@@ -564,6 +589,7 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 				...wallet,
 				...asWriteClient(writer),
 				account: wallet.account,
+				chain: wallet.chain,
 				call: async () => ({ data: toHex(0n) }),
 				multicall: createMulticallStub(async request =>
 					getContractFunctionName(request.contracts[0]) === 'openOracle'
@@ -639,9 +665,9 @@ for (const scenario of ['callback gas', 'return bomb', 'settlement duration'] as
 			() => sent++,
 			async request => readStoredOracleFixture(request.functionName, preimage),
 		)
-		const reader = createMockLoaderClient({ getBlock: async () => ({ timestamp: 200n, number: 2n }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
+		const { extend: _extend, ...reader } = createMockLoaderClient({ getBlock: async () => ({ timestamp: 200n, number: 2n }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
 		const wallet = createOfflineReporterWallet()
-		await expect(disputeOracleReport({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account }, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))).rejects.toThrow('settlement')
+		await expect(disputeOracleReport({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account, chain: wallet.chain }, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))).rejects.toThrow('settlement')
 		expect(sent).toBe(0)
 	})
 
@@ -842,9 +868,9 @@ describe('settlement gas for feed-authenticated escrow callbacks', () => {
 			request => sentGas.push(request.gas),
 			async request => readStoredOracleFixture(request.functionName, preimage),
 		)
-		const reader = createReportClient(preimage, createOpenOracleMulticall({ tokens, escrow: { registered: true, candidate: feedEscrowAddress } }))
+		const { extend: _extend, ...reader } = createReportClient(preimage, createOpenOracleMulticall({ tokens, escrow: { registered: true, candidate: feedEscrowAddress } }))
 		const wallet = createOfflineReporterWallet()
-		const client = { ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account }
+		const client = { ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account, chain: wallet.chain }
 		await disputeOracleReport(client, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))
 		expect(sentGas).toHaveLength(1)
 		await settleOracleReport(client, getOpenOracleAddress(), 1n, preimage)
@@ -857,8 +883,8 @@ describe('settlement gas for feed-authenticated escrow callbacks', () => {
 		const preimage = createEscrowPreimage(9_000_000n)
 		let sent = 0
 		const writer = createMockWriteClient(() => sent++)
-		const reader = createReportClient(preimage, createOpenOracleMulticall({ tokens, escrow: { registered: false, candidate: feedEscrowAddress } }))
-		await expect(settleOracleReport({ ...asWriteClient(writer), ...reader }, getOpenOracleAddress(), 1n, preimage)).rejects.toThrow('more gas than one transaction allows')
+		const { extend: _extend, ...reader } = createReportClient(preimage, createOpenOracleMulticall({ tokens, escrow: { registered: false, candidate: feedEscrowAddress } }))
+		await expect(settleOracleReport({ ...asWriteClient(writer), ...reader, chain: SEPOLIA_NETWORK_PROFILE.chain }, getOpenOracleAddress(), 1n, preimage)).rejects.toThrow('more gas than one transaction allows')
 		expect(sent).toBe(0)
 	})
 

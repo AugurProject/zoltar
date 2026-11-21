@@ -7,7 +7,7 @@ import { createLoadController, resolveLoadableValueState, resolveRequestedLoadab
 void describe('load state helpers', () => {
 	void test('bounds backend readiness and allows retry without running a premature read', async () => {
 		const originalSetTimeout = globalThis.setTimeout
-		const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? 5 : delay, ...args))
+		const timer = spyOn(globalThis, 'setTimeout').mockImplementation(Object.assign((...[handler, delay, ...args]: Parameters<typeof originalSetTimeout>) => originalSetTimeout(handler, delay === 120_000 ? 5 : delay, ...args), originalSetTimeout))
 		const controller = createLoadController()
 		let reads = 0
 		let failure: unknown

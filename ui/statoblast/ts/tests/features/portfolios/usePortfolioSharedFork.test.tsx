@@ -1,3 +1,6 @@
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { PortfolioSharedFork } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfolioSharedFork.js'
+import * as forkCopy from '@zoltar/ui-statoblast-shared/copy/portfolioSharedFork.js'
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -64,6 +67,7 @@ async function setup() {
 	return {
 		hook,
 		requests,
+		parameters,
 		source,
 		snapshot,
 		opened,
@@ -107,7 +111,7 @@ test('one irreversible choice has an explicit review and rechecks the strict nat
 test('shared preparation waits until cutoff and activation waits until the activation deadline', async () => {
 	const { hook, source, snapshot, requests } = await setup()
 	expect(hook.state().startReason).toContain('choice deadline')
-	expect(hook.state().finalizeReason).toContain('Start branch migration')
+	expect(hook.state().finalizeReason).toContain('earliest activation time')
 	source.setSnapshot({ ...snapshot, timestamp: 2_000n, blockNumber: 11n })
 	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'11'.repeat(32)}` } })
 	await waitFor(() => expect(hook.state().state?.timestamp).toBe(2_000n))
@@ -171,7 +175,7 @@ test('fresh branches can prepare custody or start migration in a single transact
 	setStarted(true)
 	await expect(migrate.validateBeforeSubmit?.()).rejects.toThrow('already started')
 	await refresh('aa')
-	await waitFor(() => expect(hook.state().finalizeReason).toContain('activation deadline'))
+	await waitFor(() => expect(hook.state().finalizeReason).toContain('earliest activation time'))
 })
 test.each([
 	['portfolio', { portfolio: capital }],
@@ -334,4 +338,44 @@ test('the first owner can record a choice for a fresh branch in one transaction'
 	await expect(choose.validateBeforeSubmit?.()).resolves.toBeUndefined()
 	setChosen(true)
 	await expect(choose.validateBeforeSubmit?.()).rejects.toThrow('Fork choice is no longer available')
+})
+
+test('USDC source recovery quantities and outcome rights use collateral precision', async () => {
+	const fixture = await recoverySetup()
+	fixture.source.setRead('balanceOfPortfolioRecoveryRights', [3_000_000n, 5_000_000n, 4_000_000n])
+	const snapshot = capitalSnapshot({ ...fixture.snapshot, collateral: { address: token, symbol: 'USDC', decimals: 6 } })
+	const view = await renderIntoDocument(<PortfolioSharedFork {...fixture.parameters} snapshot={snapshot} />)
+	lifecycle.trackRendered(view)
+	const questionInput = [...view.container.querySelectorAll('label')].find(label => label.textContent === forkCopy.question)?.parentElement?.querySelector('input')
+	if (questionInput === undefined || questionInput === null) throw new Error('Question input missing')
+	await act(() => {
+		questionInput.value = '7'
+		questionInput.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	const quantity = (label: string) =>
+		[...view.container.querySelectorAll('.metric-label')]
+			.find(node => node.textContent === label)
+			?.parentElement?.querySelector('.currency-value')
+			?.getAttribute('title')
+			?.replaceAll(/\s/g, '')
+	await waitFor(() => expect(quantity(forkCopy.available)).toBe('3'))
+	expect(quantity(forkCopy.invalidAvailable)).toBe('3')
+	expect(quantity(forkCopy.yesAvailable)).toBe('5')
+	expect(quantity(forkCopy.noAvailable)).toBe('4')
+})
+
+test('a prepared branch can activate without a separate migration-start transaction', async () => {
+	const { hook, source, snapshot, requests, setPrepared } = await setup()
+	source.setSnapshot({ ...snapshot, timestamp: 3_000n })
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'33'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().state?.timestamp).toBe(3_000n))
+	expect(hook.state().state?.branch?.started).toBe(false)
+	expect(hook.state().finalizeReason).toBeUndefined()
+	await act(() => hook.state().finalize())
+	expect(requests).toHaveLength(1)
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing activation request')
+	await expect(request.validateBeforeSubmit?.()).resolves.toBeUndefined()
+	setPrepared(false)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Prepare branch capital first')
 })

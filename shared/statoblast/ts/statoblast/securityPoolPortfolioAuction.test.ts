@@ -103,7 +103,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		auction,
 		balanceOf: options.walletAttoEth ?? 100n * unit,
 		allowance: 100n * unit,
-		clearing: [6n * unit, 3n, 3n * unit, 18n * unit + 1n, 1n, 0n, 0n, 0n, 3n, false],
+		clearing: [6n * unit, 3n, 3n * unit, 18n * unit, 0n, 0n, 0n, 0n, 3n, false],
 		...overrides,
 	}
 	const client: Parameters<typeof loadPortfolioAuctionSnapshot>[0]['client'] = {
@@ -132,6 +132,15 @@ const load = (source: ReturnType<typeof fixture>, bidStart = 0n, bidCount = 16) 
 const bidTerms = { lots: 2n, minimumAttoRepPerLot: 5n * unit, targetHealthFactorBps: 12_000n }
 
 describe('portfolio collateral repair auction SDK', () => {
+	test('#1493: opening accounts for lot resizing before checking inventory', async () => {
+		const snapshot = await load(fixture({ lotAttoEth: 100n, targetLots: 8n, shortfallAttoEth: 800n, inventoryAttoRep: 150n, repGrid: 101n, securityMultiplierBps: 10_000n, conservativePrice: unit }, { opened: false }))
+		expect(portfolioAuctionOpeningReason(snapshot)).toContain('cannot back one collateral lot')
+	})
+	test('#1495: an unopened finalized auction remains readable', async () => {
+		const snapshot = await load(fixture({ [`${engine}:finalized`]: true, bidderBidCount: 0n }, { opened: false, finalized: true }))
+		expect(snapshot.auction?.opened).toBe(false)
+		expect(snapshot.auction?.finalized).toBe(true)
+	})
 	test('Collateral bids need token approval but no existing REP and pledge only purchased collateral', async () => {
 		const source = fixture()
 		const snapshot = await load(source)
@@ -290,7 +299,7 @@ describe('portfolio collateral repair auction SDK', () => {
 	test('partial fills expose original principal while unused bid refunds remain separate transactions', async () => {
 		const snapshot = await load(fixture({ [`${engine}:refundCreditAttoEth`]: unit }, { finalized: true }))
 		expect(snapshot.auction?.bids[0]?.fill).toEqual({ filledLots: 1n, usedAttoEth: unit, refundAttoEth: unit, principalAttoRep: 6n * unit })
-		expect(snapshot.auction).toMatchObject({ refundAttoEth: unit, clearing: { soldAttoRep: 18n * unit + 1n, roundingAttoRep: 1n } })
+		expect(snapshot.auction).toMatchObject({ refundAttoEth: unit, clearing: { soldAttoRep: 18n * unit, roundingAttoRep: 0n } })
 		expect(snapshot.auction?.bids[0]?.position).toMatchObject({ positionId: 0n, materialized: false, principalAttoRep: 6n * unit, commitmentAttoEth: unit, liquidationStarted: 30n, earnedAttoEth: 7n, earnedAttoRep: 9n })
 		expect(decodeFunctionData({ abi, data: buildPortfolioAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
 		expect(buildPortfolioAuctionMaterializeRequest(snapshot, 1n)).toMatchObject({ account: bidder, to: capital, value: 0n })

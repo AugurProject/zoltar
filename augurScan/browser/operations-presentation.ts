@@ -54,8 +54,6 @@ const poolProtocolStateLabel = (value: JsonValue | undefined): string => {
 			return 'Pool forked'
 		case '2':
 			return 'Fork migration'
-		case 'bad-debt':
-			return 'Bad debt'
 		// Capital position states.
 		case 'healthy':
 			return 'Healthy'
@@ -152,4 +150,10 @@ export const forkParticipationUniverse = (event: Readonly<Record<string, unknown
 	const eventData = isPlainRecord(event['event_data']) ? event['event_data'] : {}
 	const universeId = eventData['universeId']
 	return identity.includes(':') && typeof universeId === 'string' ? universeId : identity
+}
+
+/** Later claims do not reopen a concluded game; continuation creation alone does not conclude one. */
+export const isConcludedEscalation = (record: Readonly<Record<string, unknown>>): boolean => {
+	if (typeof record['concluded'] === 'boolean') return record['concluded']
+	return ['NonDecisionReached', 'InheritedThresholdTie', 'OrdinarySettlementInitialized'].includes(String(record['event_name'] ?? ''))
 }

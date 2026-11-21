@@ -196,7 +196,7 @@ describe('useMarketCreation', () => {
 		await hook.setForm({ endTime: '2026-07-02T00:00:00.000Z', title: 'Question A' })
 
 		let createPromise: Promise<unknown> = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			createPromise = hook.state().createMarket()
 		})
 
@@ -218,7 +218,9 @@ describe('useMarketCreation', () => {
 		const onTransactionFinished = mock(() => undefined)
 		const hook = await renderMarketCreationHook({ createMarket: createMarketTransaction, initialProps: { activeUniverseId: 0n }, parameters: { onTransactionFinished, onTransactionRequested: () => false } })
 
-		await act(async () => await hook.state().createMarket())
+		await act(async () => {
+			await hook.state().createMarket()
+		})
 
 		expect(createMarketTransaction).not.toHaveBeenCalled()
 		expect(onTransactionFinished).not.toHaveBeenCalled()
@@ -361,7 +363,7 @@ describe('useMarketCreation', () => {
 		await hook.setForm({ endTime: '2026-10-02T00:00:00.000Z', title: 'Universe A question' })
 
 		let createPromise: Promise<unknown> | undefined
-		await act(() => {
+		await act(async () => {
 			createPromise = hook.state().createMarket()
 		})
 		await act(async () => {

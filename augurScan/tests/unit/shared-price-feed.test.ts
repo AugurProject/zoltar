@@ -45,8 +45,8 @@ test('discovers the shared report contract from its authenticated coordinator bi
 test('projects shared funding, aggregate exposure, and price acceptance under the feed identity', () => {
 	for (const [name, args] of [
 		['ReportFundingAssigned', { reportId: 7n, coordinator, sponsor: coordinator }],
-		['ExposureCheckpoint', { coordinator, exposureAttoEth: 100n, aggregateExposureAttoEth: 200n }],
-		['PriceReportRejected', { reportId: 7n, reason: 'Invalid candidate', pendingReportId: 8n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 1n, lastPrice: 2000000000000000000n, lastSettlementTimestamp: 1000n }],
+		['ExposureCheckpoint', { coordinator, aggregateExposureAttoEth: 200n }],
+		['PriceReportRejected', { reportId: 7n, reason: 'Report stale', pendingReportId: 8n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 1n, lastPrice: 2000000000000000000n, lastSettlementTimestamp: 1000n }],
 	] as const) {
 		expect(projectionsFrom(log(name, args))).toContainEqual(expect.objectContaining({ type: 'domainEvent', domain: 'oracle', entityType: 'price-feed', entityIdentity: feed.toLowerCase(), semanticEventKind: name }))
 	}

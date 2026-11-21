@@ -1,3 +1,4 @@
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -248,11 +249,11 @@ export function usePortfolioAggregate(
 		livePositions,
 		claimReason,
 		serveReason,
-		positionReasons: (id: bigint) => {
+		positionReasons: (id: bigint, requestedCommitment = remainingCommitment) => {
 			const position = livePositions.find(item => item.id === id)
 			const common = ownerReason ?? inactiveReason ?? (position === undefined ? 'Position is no longer live.' : undefined)
 			return {
-				retire: common ?? (snapshot === undefined ? undefined : capitalRetirementReason(snapshot, id, remainingCommitment)),
+				retire: common ?? (snapshot === undefined ? undefined : capitalRetirementReason(snapshot, id, requestedCommitment)),
 			}
 		},
 		approve: (amount: bigint) =>
@@ -261,7 +262,7 @@ export function usePortfolioAggregate(
 				to: selected.repToken,
 				value: 0n,
 				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auctionVault?.vault ?? selected.capitalLedger, amount] }),
-				reviewDescription: `Allow ${selected.auctionVault?.vault ?? selected.capitalLedger} to transfer up to ${formatEther(amount)} REP from your wallet. This does not deposit or pledge REP.`,
+				reviewDescription: `Allow ${selected.auctionVault?.vault ?? selected.capitalLedger} to transfer up to ${formatCurrencyBalance(amount)} REP from your wallet. This does not deposit or pledge REP.`,
 			})),
 		approveHealthDeposit: (amount: bigint) =>
 			run('approvePortfolioHealthRep', 'Approve REP for health target', healthFundingReason, selected => ({
@@ -269,7 +270,7 @@ export function usePortfolioAggregate(
 				to: selected.repToken,
 				value: 0n,
 				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auctionVault?.vault ?? selected.capitalLedger, amount] }),
-				reviewDescription: `Allow ${selected.auctionVault?.vault ?? selected.capitalLedger} to transfer up to ${formatEther(amount)} REP. Depositing and saving your target is a separate transaction.`,
+				reviewDescription: `Allow ${selected.auctionVault?.vault ?? selected.capitalLedger} to transfer up to ${formatCurrencyBalance(amount)} REP. Depositing and saving your target is a separate transaction.`,
 			})),
 		deposit: () =>
 			run('depositPortfolioRep', 'Deposit REP', depositReason, selected => {
@@ -278,7 +279,7 @@ export function usePortfolioAggregate(
 					selected.auctionVault === undefined
 						? buildPortfolioCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep })
 						: buildPortfolioAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: depositAttoRep, targetHealthFactorBps: selected.ownerAccount.targetHealthFactorBps || 10_000n })
-				return { ...request, reviewDescription: `Deposit exactly ${formatEther(depositAttoRep)} REP into your account. It immediately backs any existing commitment without increasing it. Authorizing capacity is a separate transaction.` }
+				return { ...request, reviewDescription: `Deposit exactly ${formatCurrencyBalance(depositAttoRep)} REP into your account. It immediately backs any existing commitment without increasing it. Authorizing capacity is a separate transaction.` }
 			}),
 		withdraw: () =>
 			run(
@@ -289,7 +290,7 @@ export function usePortfolioAggregate(
 					if (withdrawAttoRep === undefined) throw new Error('Enter a withdrawal amount.')
 					return {
 						...buildPortfolioCapitalWithdrawPrincipalRequest({ ...base(selected), amountAttoRep: withdrawAttoRep }),
-						reviewDescription: `Withdraw ${formatEther(withdrawAttoRep)} REP to ${selected.owner}. Any remaining commitment must retain your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target.`,
+						reviewDescription: `Withdraw ${formatCurrencyBalance(withdrawAttoRep)} REP to ${selected.owner}. Any remaining commitment must retain your saved ${formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target.`,
 					}
 				},
 				latest => {
@@ -306,7 +307,7 @@ export function usePortfolioAggregate(
 					if (healthBps === undefined) throw new Error('Enter your health target.')
 					return {
 						...buildPortfolioCapitalSetHealthRequest({ ...base(selected), targetHealthFactorBps: healthBps }),
-						reviewDescription: `Save a ${formatUnits(healthBps, 2)}% target for withdrawals and authorizations. Raising the target requires enough REP now. This does not change your commitment or the protocol liquidation threshold.`,
+						reviewDescription: `Save a ${formatCurrencyBalance(healthBps, 2)}% target for withdrawals and authorizations. Raising the target requires enough REP now. This does not change your commitment or the protocol liquidation threshold.`,
 					}
 				},
 				latest => {
@@ -325,7 +326,7 @@ export function usePortfolioAggregate(
 						...(selected.auctionVault === undefined
 							? buildPortfolioCapitalDepositAndSetHealthRequest({ ...base(selected), amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })
 							: buildPortfolioAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })),
-						reviewDescription: `Deposit ${formatEther(healthDepositAttoRep)} REP and save a ${formatUnits(healthBps, 2)}% target together. Your commitment does not increase. Raising a live target requires sufficient backing; if that check fails, both changes revert.`,
+						reviewDescription: `Deposit ${formatCurrencyBalance(healthDepositAttoRep)} REP and save a ${formatCurrencyBalance(healthBps, 2)}% target together. Your commitment does not increase. Raising a live target requires sufficient backing; if that check fails, both changes revert.`,
 					}
 				},
 				async latest => {
@@ -350,7 +351,7 @@ export function usePortfolioAggregate(
 					if (commitmentAttoEth === undefined) throw new Error('Enter a commitment.')
 					return {
 						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: commitmentAttoEth, ...(reportId === undefined ? {} : { reportId }) }),
-						reviewDescription: `Authorize ${formatUnits(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol} commitment backed by all ${formatEther(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
+						reviewDescription: `Authorize ${formatCurrencyBalance(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol} commitment backed by all ${formatCurrencyBalance(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
 					}
 				},
 				async latest => {
@@ -362,7 +363,11 @@ export function usePortfolioAggregate(
 					if (reason !== undefined) throw new Error(reason)
 				},
 			),
-		claim: () => run('claimPortfolioEarnings', 'Claim earnings', claimReason, selected => ({ ...buildPortfolioCapitalClaimEarningsRequest(base(selected)), reviewDescription: 'Checkpoint and collect your earned ETH and REP. Future vesting rewards stay in the pool. This does not withdraw your principal.' })),
+		claim: () =>
+			run('claimPortfolioEarnings', 'Claim earnings', claimReason, selected => ({
+				...buildPortfolioCapitalClaimEarningsRequest(base(selected)),
+				reviewDescription: `Checkpoint and collect your earned ${selected.collateral.symbol} and REP. Future vesting rewards stay in the pool. This does not withdraw your principal.`,
+			})),
 		serve: () =>
 			run(
 				'servePortfolioRetirement',
@@ -372,7 +377,7 @@ export function usePortfolioAggregate(
 					if (pendingRetirement === undefined) throw new Error('No pending retirement.')
 					return {
 						...buildPortfolioCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement.id }),
-						reviewDescription: `Finish your request at ${formatUnits(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. Earlier requested reductions remain reserved even if their owners have not claimed. ${capitalCopy.retirementPreviewHint}`,
+						reviewDescription: `Finish your request at ${formatCurrencyBalance(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. Earlier requested reductions remain reserved even if their owners have not claimed. ${capitalCopy.retirementPreviewHint}`,
 					}
 				},
 				latest => {
@@ -384,25 +389,29 @@ export function usePortfolioAggregate(
 					if (pendingRetirement.retirementPreview?.status === 'ready' && current.retirementPreview?.status !== 'ready') throw new Error('Retirement capacity changed. Refresh the preview and review the transaction again.')
 				},
 			),
-		retire: (id: bigint) =>
+		retire: (id: bigint, requestedCommitment = remainingCommitment) =>
 			run(
 				`retirePortfolio-${id}`,
-				'Request retirement',
+				livePositions.some(position => position.id === id && position.batch !== 0n) ? capitalCopy.resubmitRetirement : 'Request retirement',
 				ownerReason ?? inactiveReason,
 				selected => {
-					const reason = capitalRetirementReason(selected, id, remainingCommitment)
-					if (reason !== undefined || remainingCommitment === undefined) throw new Error(reason ?? 'Enter a remaining commitment.')
+					const reason = capitalRetirementReason(selected, id, requestedCommitment)
+					if (reason !== undefined || requestedCommitment === undefined) throw new Error(reason ?? 'Enter a remaining commitment.')
 					const position = selected.positions.find(item => item.id === id && item.commitment > 0n)
 					const covered = position === undefined ? undefined : coveredUnderwaterCommitment(selected, position)
-					const queuesInFull = position !== undefined && covered !== undefined && remainingCommitment === 0n && position.commitment - covered < selected.economics.minimumCommitmentAttoEth
-					const queue = retirementQueueDescription(queuesInFull ? undefined : covered, remainingCommitment, selected.collateral)
+					const queuesWithoutCure = position !== undefined && covered !== undefined && position.commitment - covered < selected.economics.minimumCommitmentAttoEth
+					const queue = retirementQueueDescription(queuesWithoutCure ? undefined : covered, requestedCommitment, selected.collateral)
+					const description =
+						position !== undefined && position.batch !== 0n
+							? `Re-submit position ${id}'s saved retirement target of ${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol}. Its target stays fixed.`
+							: `Reduce position ${id} to ${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment.`
 					return {
-						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: remainingCommitment }),
-						reviewDescription: `Reduce position ${id} to ${formatUnits(remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. ${remainingCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,
+						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: requestedCommitment }),
+						reviewDescription: `${description} ${requestedCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,
 					}
 				},
 				latest => {
-					const reason = capitalRetirementReason(latest, id, remainingCommitment)
+					const reason = capitalRetirementReason(latest, id, requestedCommitment)
 					if (reason !== undefined) throw new Error(reason)
 				},
 			),

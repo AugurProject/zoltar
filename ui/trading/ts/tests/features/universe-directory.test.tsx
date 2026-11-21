@@ -1,3 +1,4 @@
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -13,7 +14,16 @@ import { getTradingEnvironmentLocationKey, installTradingRouting } from '../../l
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 import { offlineControllerServices } from '../support/liveTradingServices.js'
 
-const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+const configuration: DeploymentConfiguration = {
+	zoltar: deploymentConfigurationFixture().zoltar,
+	chainId: 31_337,
+	chainName: 'Local',
+	rpcUrl: 'http://127.0.0.1:8545',
+	securityPoolFactory: `0x${'11'.repeat(20)}`,
+	factory: `0x${'22'.repeat(20)}`,
+	router: `0x${'33'.repeat(20)}`,
+	feeBps: 30,
+}
 
 beforeEach(() => installTradingRouting())
 

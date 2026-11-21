@@ -5,10 +5,10 @@ import { testDouble } from './testDouble.js'
 export type MockReadClient = Pick<ReadClient, 'readContract'>
 type MockLoaderClient = ReadClient
 type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
-type MockReadContractHandler = (request: MockReadContractRequest) => Promise<unknown>
+type MockReadContractHandler = (request: MockReadContractRequest) => unknown
 type MockLoaderMulticallRequest = Parameters<MockLoaderClient['multicall']>[0]
-type MockLoaderMulticallHandler = (request: MockLoaderMulticallRequest) => Promise<unknown>
-export type MockWriteClient = {
+type MockLoaderMulticallHandler = (request: MockLoaderMulticallRequest) => unknown
+export type MockWriteClient = Partial<Omit<WriteClient, 'readContract' | 'sendTransaction' | 'waitForTransactionReceipt'>> & {
 	readContract: ReadClient['readContract']
 	sendTransaction: WriteClient['sendTransaction']
 	waitForTransactionReceipt: (_request: { hash: Hash }) => Promise<Pick<TransactionReceipt, 'status'>>
@@ -22,15 +22,15 @@ export function getContractFunctionName(contract: unknown) {
 }
 
 export function createBlockWithTimestamp(timestamp: bigint) {
-	return { timestamp }
+	return { timestamp, transactions: [] }
 }
 
 export function createReadContractStub(handler: MockReadContractHandler): ReadClient['readContract'] {
-	return async request => (await handler(testDouble<MockReadContractRequest>(request))) as never
+	return testDouble<ReadClient['readContract']>(async (request: MockReadContractRequest) => await handler(request))
 }
 
 export function createMulticallStub(handler: MockLoaderMulticallHandler): MockLoaderClient['multicall'] {
-	return async request => (await handler(request as MockLoaderMulticallRequest)) as never
+	return testDouble<MockLoaderClient['multicall']>(async (request: MockLoaderMulticallRequest) => await handler(request))
 }
 
 export function createMockLoaderClient({ getBlock, getLogs = async () => [], multicall, readContract }: { getBlock: () => Promise<{ timestamp: bigint }>; getLogs?: () => Promise<readonly unknown[]>; multicall: MockLoaderMulticallHandler; readContract: MockReadContractHandler }): MockLoaderClient {

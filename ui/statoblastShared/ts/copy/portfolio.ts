@@ -35,9 +35,9 @@ export const mintAmount = 'Collateral'
 export const minimumShares = 'Minimum complete sets'
 export const openQuestionShares = 'Open question shares'
 
-export const maximumPurchaseFee = 'Maximum purchase fee'
+export const maximumPurchaseFee = 'Maximum purchase charge'
 export const maximumPurchaseFeeHint = 'Charged on every purchase, including reused backing. Only the actual fee is transferred.'
-export const estimatedPurchaseFee = 'Purchase fee'
+export const estimatedPurchaseFee = 'Purchase charge (fee + premium)'
 export const registeredQuestions = 'Question'
 export const findQuestionById = 'Find by question ID'
 export const retryQuestionDetails = 'Retry question details'
@@ -50,8 +50,8 @@ export const admissionOpenHint = 'Anyone may add an eligible question. Authorize
 export const admissionFixedHint = 'Only the listed questions may receive backing. Nobody can change this list after the policy is deployed.'
 export const fixedQuestionIds = 'Approved question IDs'
 export const fixedQuestionIdsHint = 'Separate decimal or hexadecimal IDs with commas or spaces. Registration can happen later.'
-export const purchaseFeePercent = 'Purchase fee (%)'
-export const minimumPurchaseFee = 'Minimum purchase fee'
+export const purchaseFeePercent = 'Base purchase fee (%)'
+export const minimumPurchaseFee = 'Minimum base purchase fee'
 export const immutableEconomics = 'Admission and economic settings are fixed at pool creation. Each owner chooses their own health target and commitment.'
 export const deployAdmission = 'Deploy admission policy'
 export const deployingAdmission = 'Deploying admission policy…'
@@ -69,7 +69,7 @@ export const readUnavailable = 'Account refresh pending.'
 
 export const triggerUniverseFork = 'Trigger universe fork'
 
-export const triggerUniverseForkDescription = 'This unresolved question forks its universe. Portfolio owners and reporters must choose their recovery branch.'
+export const triggerUniverseForkDescription = 'This unresolved question forks its universe. Portfolio owners choose a recovery branch. Reporter balances are copied into every child branch.'
 
 export const universeForkTriggered = 'Universe fork triggered'
 

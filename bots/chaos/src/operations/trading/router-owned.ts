@@ -1,10 +1,11 @@
+import { sharesToProjectedRep } from '../pool-economics.ts'
 import { erc1155Abi, twoWayConstantProductPairAbi } from '@zoltar/bot-shared/contracts/abi'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { inputInteger, inputMatches } from '../input-values.ts'
 import { amount, choose, eligible, encodeStep, erc1155WalletDebit, erc20WalletDebit, eventEvidence, mixSeed, planBase, planningDeadline } from '../planning.ts'
 import { shareTokenId, sharesToEth, walletShares } from '../statoblast/planning.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationPlan, OperationPlanDraft, PairSnapshot, PlanningOptions, PoolSnapshot, ShareInventory } from '../types.ts'
-import { metadataAddress, metadataOutcome, metadataPair, metadataPositiveAmount, previousReceiveActionMatches, previousRemoveActionMatches } from './continuations.ts'
+import { metadataAddress, metadataOutcome, metadataPair, metadataPositiveAmount, metadataUnsignedAmount, previousReceiveActionMatches, previousRemoveActionMatches } from './continuations.ts'
 import { poolForPair, poolLifecycleOpen, poolQuestion, receiveRequestData } from './pool-state.ts'
 import { MAXIMUM_TRADING_SPEND, maximumAfterSlippage, minimumAfterSlippage, minimumOf, minimumPositivePayoutShares, quoteExactOutput, removableLiquidity, removableLiquidityQuote } from './pricing.ts'
 
@@ -23,7 +24,7 @@ export function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: Plan
 		deadlineTimestamp: deadline,
 		definitionId: 'trading.liquidity.remove',
 		ecosystem: 'trading',
-		label: 'Router remove',
+		label: 'Remove liquidity',
 		metadata,
 		postconditions: ['LP balance decreases and outcome shares return'],
 		risk: 'medium',
@@ -35,7 +36,7 @@ export function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: Plan
 				evidence: [eventEvidence(pair.address, 'LiquidityRemoved(address,address,uint256,uint256,uint256)')],
 				functionName: 'removeLiquidity',
 				id: 'removeLiquidity',
-				label: 'Router remove',
+				label: 'Remove liquidity',
 				to: pair.address,
 				walletAssetDebits: [erc20WalletDebit(pair.address, liquidity, 'lp-token')],
 			}),
@@ -43,12 +44,13 @@ export function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: Plan
 	})
 }
 
-function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, completeAmount: bigint, minimumEthAttoEth: bigint, metadata: OperationPlan['metadata']) {
+function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, completeAmount: bigint, minimumEthAttoEth: bigint, minimumRepAttoRep: bigint, metadata: OperationPlan['metadata']) {
 	const pool = poolForPair(snapshot, pair)
 	const shares = pool === undefined ? undefined : walletShares(snapshot, pool)
 	const universe = pool === undefined ? undefined : snapshot.universes.find(candidate => candidate.id === pool.universeId)
 	if (pool === undefined || shares === undefined || pool.systemState !== 0 || universe?.forkTime !== '0') return undefined
-	if (amount(shares.invalid) < completeAmount || amount(shares.yes) < completeAmount || amount(shares.no) < completeAmount || sharesToEth(pool, completeAmount) < minimumEthAttoEth) return undefined
+	if (amount(shares.invalid) < completeAmount || amount(shares.yes) < completeAmount || amount(shares.no) < completeAmount || sharesToEth(pool, completeAmount) < minimumEthAttoEth || sharesToProjectedRep(pool, completeAmount) < minimumRepAttoRep || (minimumEthAttoEth === 0n && minimumRepAttoRep === 0n))
+		return undefined
 	const deadline = planningDeadline(snapshot, options, mixSeed(options.seed, 'trading.complete-set.redeem:deadline'))
 	if (deadline === undefined) return undefined
 	const tokenIds = [0, 1, 2].map(outcome => shareTokenId(shares.universeId, outcome))
@@ -58,13 +60,13 @@ function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 		ecosystem: 'trading',
 		label: 'Router redeem',
 		metadata,
-		postconditions: ['Complete sets redeem to ETH and wallet share balances decrease'],
+		postconditions: ['Complete sets redeem to collateral and recovery REP while wallet share balances decrease'],
 		risk: 'medium',
 		snapshot,
 		steps: [
 			encodeStep({
 				abi: erc1155Abi,
-				args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, tokenIds.map(() => completeAmount), receiveRequestData(snapshot, pool, pair, shares, 1, 3, completeAmount, 0n, minimumEthAttoEth, BigInt(deadline))],
+				args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, tokenIds.map(() => completeAmount), receiveRequestData(snapshot, pool, pair, shares, 1, 3, completeAmount, 0n, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)],
 				evidence: [eventEvidence(pool.address, COMPLETE_SET_REDEEMED_SIGNATURE)],
 				functionName: 'safeBatchTransferFrom',
 				id: 'redeemCompleteSet',
@@ -76,13 +78,13 @@ function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 	})
 }
 
-function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, longOutcome: 1 | 2, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, metadata: OperationPlan['metadata']) {
+function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, longOutcome: 1 | 2, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, minimumRepAttoRep: bigint, metadata: OperationPlan['metadata']) {
 	const pool = poolForPair(snapshot, pair)
 	const shares = pool === undefined ? undefined : walletShares(snapshot, pool)
 	if (pool === undefined || shares === undefined || pair.status !== 0 || amount(shares.invalid) < completeAmount || amount(longOutcome === 1 ? shares.yes : shares.no) < maximumLong) return undefined
 	if (!poolLifecycleOpen(snapshot, pool, options, 0)) return undefined
 	const requiredSwapInput = quoteExactOutput(pair, longOutcome === 1, completeAmount)
-	if (requiredSwapInput === undefined || requiredSwapInput + completeAmount > maximumLong || sharesToEth(pool, completeAmount) < minimumEthAttoEth) return undefined
+	if (requiredSwapInput === undefined || requiredSwapInput + completeAmount > maximumLong || sharesToEth(pool, completeAmount) < minimumEthAttoEth || sharesToProjectedRep(pool, completeAmount) < minimumRepAttoRep || (minimumEthAttoEth === 0n && minimumRepAttoRep === 0n)) return undefined
 	const deadline = planningDeadline(snapshot, options, mixSeed(options.seed, 'trading.position.exit:deadline'), amount(poolQuestion(snapshot, pool)?.endTime ?? '0') - 1n)
 	if (deadline === undefined) return undefined
 	const tokenIds = [shareTokenId(shares.universeId, 0), shareTokenId(shares.universeId, longOutcome)]
@@ -92,13 +94,13 @@ function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptio
 		ecosystem: 'trading',
 		label: 'Router exit',
 		metadata,
-		postconditions: ['Complete sets redeem to ETH and wallet share balances decrease'],
+		postconditions: ['Complete sets redeem to collateral and recovery REP while wallet share balances decrease'],
 		risk: 'medium',
 		snapshot,
 		steps: [
 			encodeStep({
 				abi: erc1155Abi,
-				args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, [completeAmount, maximumLong], receiveRequestData(snapshot, pool, pair, shares, 0, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline))],
+				args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, [completeAmount, maximumLong], receiveRequestData(snapshot, pool, pair, shares, 0, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)],
 				evidence: [eventEvidence(pair.address, 'Swap(address,address,bool,bool,uint256,uint256,uint256,uint256,uint256)'), eventEvidence(pool.address, COMPLETE_SET_REDEEMED_SIGNATURE)],
 				functionName: 'safeBatchTransferFrom',
 				id: 'exitPosition',
@@ -122,18 +124,19 @@ function rebuildRouterRemove(snapshot: EcosystemSnapshot, options: PlanningOptio
 function rebuildRouterReceive(snapshot: EcosystemSnapshot, options: PlanningOptions, context: OperationContinuationContext, pair: PairSnapshot, kind: Exclude<RouterOwnedKind, 'remove'>) {
 	const { metadata } = context.previousPlan
 	const completeAmount = metadataPositiveAmount(metadata, 'completeAmount')
-	const minimumEthAttoEth = metadataPositiveAmount(metadata, 'minimumEthAttoEth')
+	const minimumEthAttoEth = metadataUnsignedAmount(metadata, 'minimumEthAttoEth')
+	const minimumRepAttoRep = metadataUnsignedAmount(metadata, 'minimumRepAttoRep')
 	const pool = poolForPair(snapshot, pair)
 	const shares = pool === undefined ? undefined : walletShares(snapshot, pool)
-	if (completeAmount === undefined || minimumEthAttoEth === undefined || pool === undefined || shares === undefined) return undefined
+	if (completeAmount === undefined || minimumEthAttoEth === undefined || minimumRepAttoRep === undefined || pool === undefined || shares === undefined) return undefined
 	if (kind === 'redeem') {
-		if (!previousReceiveActionMatches(snapshot, context, pool, pair, shares, 1, 3, completeAmount, 0n, minimumEthAttoEth)) return undefined
-		return buildRouterRedeemPlan(snapshot, options, pair, completeAmount, minimumEthAttoEth, metadata)
+		if (!previousReceiveActionMatches(snapshot, context, pool, pair, shares, 1, 3, completeAmount, 0n, minimumEthAttoEth, minimumRepAttoRep)) return undefined
+		return buildRouterRedeemPlan(snapshot, options, pair, completeAmount, minimumEthAttoEth, minimumRepAttoRep, metadata)
 	}
 	const longOutcome = metadataOutcome(metadata, 'longOutcome')
 	const maximumLong = metadataPositiveAmount(metadata, 'maximumLong')
-	if (longOutcome === undefined || maximumLong === undefined || !previousReceiveActionMatches(snapshot, context, pool, pair, shares, 0, longOutcome, completeAmount, maximumLong, minimumEthAttoEth)) return undefined
-	return buildRouterExitPlan(snapshot, options, pair, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, metadata)
+	if (longOutcome === undefined || maximumLong === undefined || !previousReceiveActionMatches(snapshot, context, pool, pair, shares, 0, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, minimumRepAttoRep)) return undefined
+	return buildRouterExitPlan(snapshot, options, pair, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, minimumRepAttoRep, metadata)
 }
 
 function buildRouterOwnedContinuation(snapshot: EcosystemSnapshot, options: PlanningOptions, context: OperationContinuationContext, kind: RouterOwnedKind): OperationPlanDraft | undefined {
@@ -162,7 +165,7 @@ function routerOwnedPairReady(snapshot: EcosystemSnapshot, pair: PairSnapshot, k
 	if (kind === 'redeem') {
 		const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
 		const complete = completeSetBalance(shares)
-		return pool.systemState === 0 && universe?.forkTime === '0' && complete > 0n && sharesToEth(pool, complete) > 0n
+		return pool.systemState === 0 && universe?.forkTime === '0' && complete > 0n && (sharesToEth(pool, complete) > 0n || sharesToProjectedRep(pool, complete) > 0n)
 	}
 	if (pair.status !== 0 || !poolLifecycleOpen(snapshot, pool, options, 0)) return false
 	const complete = minimumPositivePayoutShares(pool)
@@ -178,18 +181,28 @@ function buildRemoveFromPair(snapshot: EcosystemSnapshot, options: PlanningOptio
 	const liquidity = inputInteger(options, 'amount', removableLiquidity(pair), 1n, removableLiquidity(pair))
 	const quote = removableLiquidityQuote(pair, liquidity)
 	if (quote === undefined) return undefined
-	const minimumYes = inputInteger(options, 'minimumYes', minimumAfterSlippage(quote.yesOut), 1n, quote.yesOut)
-	const minimumNo = inputInteger(options, 'minimumNo', minimumAfterSlippage(quote.noOut), 1n, quote.noOut)
+	const minimumYes = inputInteger(options, 'minimumYes', minimumAfterSlippage(quote.yesOut), quote.yesOut === 0n ? 0n : 1n, quote.yesOut)
+	const minimumNo = inputInteger(options, 'minimumNo', minimumAfterSlippage(quote.noOut), quote.noOut === 0n ? 0n : 1n, quote.noOut)
 	return buildRouterRemovePlan(snapshot, options, pair, liquidity, minimumYes, minimumNo, { liquidity: liquidity.toString(), minimumNo: minimumNo.toString(), minimumYes: minimumYes.toString(), pair: pair.address, pool: pool.address, router: snapshot.deployments.tradingRouter })
 }
 
-const minimumEthForCompleteSets = (options: PlanningOptions, pool: PoolSnapshot, completeAmount: bigint) => inputInteger(options, 'minimumEthAttoEth', minimumAfterSlippage(sharesToEth(pool, completeAmount)), 1n, sharesToEth(pool, completeAmount))
+const minimumRepForCompleteSets = (options: PlanningOptions, pool: PoolSnapshot, completeAmount: bigint) => inputInteger(options, 'minimumRepAttoRep', minimumAfterSlippage(sharesToProjectedRep(pool, completeAmount)), 0n, sharesToProjectedRep(pool, completeAmount))
+
+const minimumEthForCompleteSets = (options: PlanningOptions, pool: PoolSnapshot, completeAmount: bigint) => inputInteger(options, 'minimumEthAttoEth', minimumAfterSlippage(sharesToEth(pool, completeAmount)), 0n, sharesToEth(pool, completeAmount))
 
 function buildRedeemFromPair(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, pool: PoolSnapshot, shares: ShareInventory) {
 	const available = completeSetBalance(shares)
 	const completeAmount = inputInteger(options, 'amount', available, 1n, available)
 	const minimumEthAttoEth = minimumEthForCompleteSets(options, pool, completeAmount)
-	return buildRouterRedeemPlan(snapshot, options, pair, completeAmount, minimumEthAttoEth, { completeAmount: completeAmount.toString(), minimumEthAttoEth: minimumEthAttoEth.toString(), pair: pair.address, pool: pool.address, router: snapshot.deployments.tradingRouter })
+	const minimumRepAttoRep = minimumRepForCompleteSets(options, pool, completeAmount)
+	return buildRouterRedeemPlan(snapshot, options, pair, completeAmount, minimumEthAttoEth, minimumRepAttoRep, {
+		minimumRepAttoRep: minimumRepAttoRep.toString(),
+		completeAmount: completeAmount.toString(),
+		minimumEthAttoEth: minimumEthAttoEth.toString(),
+		pair: pair.address,
+		pool: pool.address,
+		router: snapshot.deployments.tradingRouter,
+	})
 }
 
 function buildExitFromPair(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, pool: PoolSnapshot, shares: ShareInventory, id: string) {
@@ -208,7 +221,9 @@ function buildExitFromPair(snapshot: EcosystemSnapshot, options: PlanningOptions
 	const route = choose(routes, mixSeed(options.seed, `${id}:direction`))
 	if (route === undefined) return undefined
 	const minimumEthAttoEth = minimumEthForCompleteSets(options, pool, completeAmount)
-	return buildRouterExitPlan(snapshot, options, pair, route.longOutcome, completeAmount, route.maximumLong, minimumEthAttoEth, {
+	const minimumRepAttoRep = minimumRepForCompleteSets(options, pool, completeAmount)
+	return buildRouterExitPlan(snapshot, options, pair, route.longOutcome, completeAmount, route.maximumLong, minimumEthAttoEth, minimumRepAttoRep, {
+		minimumRepAttoRep: minimumRepAttoRep.toString(),
 		completeAmount: completeAmount.toString(),
 		longOutcome: route.longOutcome,
 		maximumLong: route.maximumLong.toString(),
@@ -253,7 +268,7 @@ export function routerOwnedDefinition(kind: RouterOwnedKind): OperationDefinitio
 			return eligible(found ? undefined : `No wallet inventory is eligible to ${kind}`)
 		},
 		id,
-		label: `Router ${kind}`,
+		label: kind === 'remove' ? 'Remove liquidity' : `Router ${kind}`,
 		method,
 		risk: 'medium',
 	}

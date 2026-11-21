@@ -1,3 +1,7 @@
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import { waitForDom } from '../support/dom.js'
 import { usePortfolioQueries, usePortfolioRefreshEffects } from '../../features/live/usePortfolioQueries.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -64,7 +68,7 @@ describe('live balance selection', () => {
 		let revalidating = false
 		const services = {
 			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
+			createTradingPublicClient: () => testDouble<PublicClient>({}),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				if (revalidating) await gate.promise
 				if (selected.pool === secondPool) throw new Error('Second pool unavailable')
@@ -87,7 +91,9 @@ describe('live balance selection', () => {
 		expect(state?.portfolioBalanceState).toBe('ready')
 		expect(state?.portfolioEntries[1]?.error).toContain('Second pool unavailable')
 		revalidating = true
-		await act(() => render(<Probe markets={[{ ...market }, { ...secondMarket }]} />, rendered.container))
+		await act(() => {
+			render(<Probe markets={[{ ...market }, { ...secondMarket }]} />, rendered.container)
+		})
 		await flush()
 		expect(state?.portfolioBalanceState).toBe('ready')
 		expect(state?.portfolioEntries[1]?.error).toContain('Second pool unavailable')
@@ -101,7 +107,7 @@ describe('live balance selection', () => {
 		const calls: Address[] = []
 		const services = {
 			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
+			createTradingPublicClient: () => testDouble<PublicClient>({}),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				calls.push(selected.pool)
 				await first.promise
@@ -121,14 +127,20 @@ describe('live balance selection', () => {
 		const rendered = await renderIntoDocument(<Probe markets={[market]} />)
 		cleanupRendered = rendered.cleanup
 		await flush()
-		await act(() => render(<Probe markets={[market, secondMarket]} />, rendered.container))
+		await act(() => {
+			render(<Probe markets={[market, secondMarket]} />, rendered.container)
+		})
 		await flush()
 		expect(calls).toEqual([market.pool])
-		await act(() => render(<Probe markets={[market, secondMarket]} />, rendered.container))
+		await act(() => {
+			render(<Probe markets={[market, secondMarket]} />, rendered.container)
+		})
 		first.resolve()
 		await waitForDom(() => state?.portfolioEntries[0]?.balances?.yes === 10n ** 18n, 'first progressive balance')
 		expect(calls).toEqual([market.pool])
-		await act(() => render(<Probe markets={[]} route='market' />, rendered.container))
+		await act(() => {
+			render(<Probe markets={[]} route='market' />, rendered.container)
+		})
 		await act(async () => {
 			await Bun.sleep(1_100)
 		})
@@ -159,7 +171,7 @@ describe('live balance selection', () => {
 				return discoveryPage([{ ...found }])
 			},
 			...connectedWalletServices(account, configuration.chainId),
-			createTradingWalletClient: () => ({}),
+			createTradingWalletClient: () => testDouble<WriteClient>({}),
 			loadLiveBalances: async (_client: unknown, selectedMarket: LiveMarket) => {
 				const load = createDeferred<LiveBalances>()
 				pendingBalanceLoads.push({ pool: selectedMarket.pool, resolve: load.resolve })
@@ -173,12 +185,13 @@ describe('live balance selection', () => {
 				configuration,
 				configurationError: undefined,
 				selectedUniverseId: '1',
+				urlUniverseId: undefined,
 				onUniversesChange: () => undefined,
 				onWorkflowLockChange: () => undefined,
 				onWalletSummaryChange: () => undefined,
 				walletSummaryRetryNonce: 0,
-				defaultSlippage: '0.5',
-				defaultValidityMinutes: '20',
+				settings: DEFAULT_TRADE_SETTINGS,
+
 				services,
 			})
 			return null
@@ -191,7 +204,9 @@ describe('live balance selection', () => {
 			return controller
 		}
 		const setRoute = async (route: string) => {
-			await act(() => render(<Harness route={route} />, rendered.container))
+			await act(() => {
+				render(<Harness route={route} />, rendered.container)
+			})
 			await flush()
 		}
 		await act(async () => {
@@ -207,7 +222,9 @@ describe('live balance selection', () => {
 		const load = pendingBalanceLoads[index]
 		if (load === undefined) throw new Error(`Missing balance load ${index.toString()}`)
 		const loadedMarket = load.pool === pool ? market : secondMarket
-		await act(async () => load.resolve(balancesFor(loadedMarket, multiplier)))
+		await act(async () => {
+			await load.resolve(balancesFor(loadedMarket, multiplier))
+		})
 		await flush()
 	}
 

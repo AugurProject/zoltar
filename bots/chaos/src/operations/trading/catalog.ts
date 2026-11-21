@@ -25,20 +25,6 @@ const shareApprovalDefinition: OperationDefinition = {
 	risk: 'medium',
 }
 
-const lpApprovalDefinition: OperationDefinition = {
-	buildPlan: () => undefined,
-	classification: 'prerequisite',
-	contract: 'TwoWayConstantProductPair',
-	description: 'A bounded LP-token allowance is automatically prepended to router liquidity removal.',
-	discoveryInputs: ['wallet LP balance', 'router LP allowance'],
-	ecosystem: 'trading',
-	evaluate: () => disabled('Prerequisites are composed into selectable plans'),
-	id: 'trading.lp.approve',
-	label: 'Approve LP token',
-	method: 'approve',
-	risk: 'medium',
-}
-
 export const TRADING_OPERATIONS: readonly OperationDefinition[] = [
 	deployTradingFactory,
 	deployTradingRouter,
@@ -71,5 +57,4 @@ export const TRADING_OPERATIONS: readonly OperationDefinition[] = [
 	routerOwnedDefinition('remove'),
 	migrateShares,
 	shareApprovalDefinition,
-	lpApprovalDefinition,
 ]

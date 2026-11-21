@@ -459,7 +459,6 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')
 	requireModel(k > 0n && k <= source.k, 'Invalid takeover commitment')
 	if (cure(m, id, 0n, false) !== 0n && (!inTree(source) || source.price >= m.liq)) {
-		requireModel(minAward === 0n, 'Takeover award below minimum')
 		return { cured: true, full: false, merged: false, award: 0n, debit: 0n, sourceOwner: source.owner, sourceBatch: source.batch, receiverPrincipal: 0n, receiverCommitment: 0n }
 	}
 	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')

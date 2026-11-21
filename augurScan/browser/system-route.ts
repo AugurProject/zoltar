@@ -1,3 +1,4 @@
+import { shortUniverseId } from './identifier-format.ts'
 import { collateralUnit } from '../src/collateral.ts'
 import type { EntityHistory, PoolRecord, RenderEntityListOptions, SelectEntityOptions, StateCatalog, StateEntity, StateTab, QuestionRecord, UniverseRecord } from './browser-types.ts'
 import type { SystemRouteState } from './system-route-state.ts'
@@ -6,7 +7,7 @@ import type { RefreshGate } from './live-refresh.ts'
 import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
 import { refreshPresentation } from './refresh-presentation.ts'
 import { exactUnit } from './format.ts'
-import { short, shortIdentifier } from './identifier-format.ts'
+import { short } from './identifier-format.ts'
 import { questionStatus } from './question-time.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
 
@@ -49,7 +50,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 	const entityCopy = (type: StateTab, item: StateEntity): [string, string] => {
 		if (type === 'pools' && 'settlement_collateral_atto_eth' in item) return [item.question_title ?? short(item.pool_address), `${short(item.pool_address, 8, 6)} · ${exactUnit(item.settlement_collateral_atto_eth, collateralUnit(item).decimals, collateralUnit(item).symbol)}`]
 		if (type === 'questions' && 'outcome_options' in item) return [item.title, `${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
-		if ('universe_id' in item && 'pool_count' in item) return [item.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(item.universe_id, 9, 6)}`, `${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`]
+		if ('universe_id' in item && 'pool_count' in item) return [item.universe_id === '0' ? 'Genesis universe' : `Universe ${shortUniverseId(item.universe_id)}`, `${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`]
 		throw new Error(`State entity does not match the selected ${type} tab`)
 	}
 

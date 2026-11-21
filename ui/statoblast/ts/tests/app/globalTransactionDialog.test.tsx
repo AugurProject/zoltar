@@ -66,7 +66,9 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(rendered)
 		const panel = await measureNotice(rendered.container)
 		expect(document.documentElement.style.getPropertyValue('--transaction-status-inset')).toBe('200px')
-		await act(() => fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' })))
+		await act(() => {
+			fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' }))
+		})
 		expect(document.documentElement.style.getPropertyValue('--transaction-status-inset')).toBe('')
 	})
 
@@ -119,7 +121,7 @@ describe('GlobalTransactionDialog', () => {
 		const hash = '0x3333333333333333333333333333333333333333333333333333333333333333'
 		const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 		const controller = createTransactionStepController()
-		controller.setPlan([{ title: 'Report No · 2 REP', description: undefined, contractAddress: undefined, spender: undefined, amount: '2 REP', paidFrom: 'Wallet REP' }])
+		controller.setPlan([{ title: 'Report No · 2 REP', description: undefined, contractAddress: undefined, contractLabel: undefined, ethValueAttoEth: undefined, spender: undefined, amount: '2 REP', paidFrom: 'Wallet REP' }])
 		const review = controller.review()
 		function Harness() {
 			return (
@@ -139,7 +141,9 @@ describe('GlobalTransactionDialog', () => {
 			expect(reviewDialog.getByText('Paid from')).not.toBeNull()
 			expect(reviewDialog.getByText('Wallet REP')).not.toBeNull()
 			expect(reviewDialog.getAllByRole('button', { name: 'Report No · 2 REP' })).toHaveLength(1)
-			await act(() => fireEvent.click(reviewDialog.getByRole('button', { name: 'Report No · 2 REP' })))
+			await act(() => {
+				fireEvent.click(reviewDialog.getByRole('button', { name: 'Report No · 2 REP' }))
+			})
 			await review
 			await act(() => {
 				controller.submitted(hash)
@@ -155,7 +159,9 @@ describe('GlobalTransactionDialog', () => {
 			// The shared status panel is a non-modal region, so no dialog remains after the review closes.
 			expect(queries.queryByRole('dialog')).toBeNull()
 			expect(document.querySelector('.transaction-success-panel')).toBeNull()
-			await act(() => fireEvent.click(success.getByRole('button', { name: 'Dismiss' })))
+			await act(() => {
+				fireEvent.click(success.getByRole('button', { name: 'Dismiss' }))
+			})
 			expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		} finally {
 			transactionSteps.value?.cancel()
@@ -164,7 +170,7 @@ describe('GlobalTransactionDialog', () => {
 
 	test('shows a nonblocking pending status and modal confirmed and failed statuses', async () => {
 		const hash = '0xabcd000000000000000000000000000000000000000000000000000000000001'
-		const pending = { hash, title: 'Requesting Price', tone: 'pending' as const, rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
+		const pending: GlobalTransactionPresentation = { hash, title: 'Requesting Price', tone: 'pending' as const, rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
 		const renderedComponent = await renderIntoDocument(
 			<>
 				<button type='button'>Request price</button>
@@ -215,7 +221,7 @@ describe('GlobalTransactionDialog', () => {
 
 	test('keeps confirmed status and its hash until explicitly dismissed, even after a minute', async () => {
 		const hash = '0xabcde0000000000000000000000000000000000000000000000000000000001'
-		const success = { hash, title: 'Price requested', tone: 'success' as const }
+		const success: GlobalTransactionPresentation = { hash, title: 'Price requested', tone: 'success' as const }
 		await withFakeClock(async clock => {
 			const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={success} />)
 			trackRendered(renderedComponent)
@@ -223,7 +229,9 @@ describe('GlobalTransactionDialog', () => {
 			await clock.advance(60000)
 			const panel = queries.getByRole('region', { name: 'Transaction status' })
 			expect(within(panel).getByText(hash)).not.toBeNull()
-			await act(() => fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' })))
+			await act(() => {
+				fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' }))
+			})
 			expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 			await act(() => render(<GlobalTransactionDialog transaction={{ ...success, detail: 'nonce too low', tone: 'error' }} />, renderedComponent.container))
 			await clock.advance(60000)
@@ -241,7 +249,7 @@ describe('GlobalTransactionDialog', () => {
 		controller.submitted(hash)
 		controller.receipt(hash, 'reverted')
 		controller.failed({ kind: 'reverted', message: 'Transaction reverted' })
-		const presentation = { hash, title: 'Price request', tone: 'error' as const, detail: 'Transaction reverted' }
+		const presentation: GlobalTransactionPresentation = { hash, title: 'Price request', tone: 'error' as const, detail: 'Transaction reverted' }
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={presentation}>
 				<TransactionStepsContent contextKey='failed-hash' />
@@ -254,7 +262,9 @@ describe('GlobalTransactionDialog', () => {
 			expect(status.textContent).toContain('Price request')
 			expect(within(status).getByText(hash)).not.toBeNull()
 			expect(document.querySelector('.transaction-step-hash a')).toBeNull()
-			await act(() => fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' })))
+			await act(() => {
+				fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' }))
+			})
 			expect(document.querySelector('.transaction-step-hash a')).toBeNull()
 		} finally {
 			transactionSteps.value?.cancel()
@@ -272,7 +282,7 @@ describe('GlobalTransactionDialog', () => {
 		const firstReview = controller.review(0)
 		await act(() => transactionSteps.value?.confirmStep(0))
 		await firstReview
-		const pending = { hash, title: 'Wrapping ETH', tone: 'pending' as const, rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
+		const pending: GlobalTransactionPresentation = { hash, title: 'Wrapping ETH', tone: 'pending' as const, rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={pending} />)
 		trackRendered(renderedComponent)
 		await act(() => controller.submitted(hash))
@@ -283,12 +293,16 @@ describe('GlobalTransactionDialog', () => {
 		await act(() => undefined)
 		expect(within(document.body).getByRole('region', { name: 'Transaction status' }).textContent).toContain('ETH wrapped')
 		expect(within(document.body).getByRole('region', { name: 'Transaction status' }).textContent).toContain('Confirmed')
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
+		})
 		await act(() => render(<GlobalTransactionDialog transaction={{ ...pending, title: 'ETH wrapped', tone: 'success' }} />, renderedComponent.container))
 		expect(within(document.body).queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		await act(() => render(<GlobalTransactionDialog transaction={{ ...pending, detail: 'Refresh failed after confirmation.', title: 'Wrap completed', tone: 'warning' }} />, renderedComponent.container))
 		expect(within(within(document.body).getByRole('region', { name: 'Transaction status' })).getByText('Refresh failed after confirmation.')).not.toBeNull()
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
+		})
 		controller.skipped()
 		transactionSteps.value?.cancel()
 		await secondReview
@@ -305,7 +319,9 @@ describe('GlobalTransactionDialog', () => {
 		const status = within(document.body).getByRole('region', { name: 'Transaction status' })
 		expect(status.hasAttribute('aria-modal')).toBe(false)
 		expect(within(document.body).getByRole('button', { name: 'Create question' }).closest('[inert]')).toBeNull()
-		await act(() => fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' })))
+		await act(() => {
+			fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' }))
+		})
 		expect(within(document.body).queryByRole('region', { name: 'Transaction status' })).toBeNull()
 	})
 
@@ -334,11 +350,17 @@ describe('GlobalTransactionDialog', () => {
 		expect(form.contains(document.activeElement)).toBe(true)
 		const request = within(form).getByRole('button', { name: 'Request price' })
 		request.focus()
-		await act(() => fireEvent.keyDown(request, { key: 'Tab' }))
+		await act(() => {
+			fireEvent.keyDown(request, { key: 'Tab' })
+		})
 		expect(document.activeElement).toBe(dismiss)
-		await act(() => fireEvent.keyDown(dismiss, { key: 'Escape' }))
+		await act(() => {
+			fireEvent.keyDown(dismiss, { key: 'Escape' })
+		})
 		expect(closed).toBe(true)
-		await act(() => fireEvent.click(dismiss))
+		await act(() => {
+			fireEvent.click(dismiss)
+		})
 		expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 	})
 
@@ -450,7 +472,9 @@ describe('GlobalTransactionDialog', () => {
 		expect(details.contains(documentQueries.getByText('Technical details'))).toBe(true)
 		expect(details.contains(documentQueries.getByText('Arguments'))).toBe(true)
 		expect(details.contains(documentQueries.getByText('0xprepared-price-request'))).toBe(false)
-		await act(() => fireEvent.click(documentQueries.getByText('Transaction details', { selector: 'summary' })))
+		await act(() => {
+			fireEvent.click(documentQueries.getByText('Transaction details', { selector: 'summary' }))
+		})
 		expect(details.open).toBe(true)
 	})
 
@@ -618,7 +642,9 @@ describe('GlobalTransactionDialog', () => {
 		const dismissButton = documentQueries.getByRole('button', { name: 'Dismiss' })
 		expect(dismissButton.classList.contains('primary')).toBe(true)
 		expect(dismissButton.parentElement?.classList.contains('global-transaction-actions')).toBe(true)
-		await act(() => fireEvent.click(dismissButton))
+		await act(() => {
+			fireEvent.click(dismissButton)
+		})
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
 	})
 

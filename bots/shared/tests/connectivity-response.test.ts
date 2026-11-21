@@ -40,3 +40,38 @@ for (const probe of ['rpc', 'relay', 'public-transaction', 'private-transaction'
 		})
 	}
 }
+
+test('#1496: bundle support cannot certify private transaction submission', async () => {
+	const respond = async (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+		const payload: unknown = JSON.parse(String(init?.body))
+		if (typeof payload !== 'object' || payload === null || !('method' in payload)) throw new Error('Missing probe method')
+		if (payload.method === 'eth_chainId') return Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' })
+		return Response.json({ id: 1, jsonrpc: '2.0', error: payload.method === 'eth_sendPrivateTransaction' ? { code: -32601, message: 'Method not found' } : { code: -32602, message: 'Invalid params' } })
+	}
+	respond.preconnect = globalThis.fetch.preconnect
+	const fetchMock = spyOn(globalThis, 'fetch').mockImplementation(respond)
+	try {
+		const settings = validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.example.test'] })
+		await expect(checkSubmissionEndpoints(settings, 1)).rejects.toThrow('eth_sendPrivateTransaction')
+	} finally {
+		fetchMock.mockRestore()
+	}
+})
+
+test('arbitrager preflight requires bundle methods as well as private transaction delivery', async () => {
+	const respond = async (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+		const payload: unknown = JSON.parse(String(init?.body))
+		if (typeof payload !== 'object' || payload === null || !('method' in payload)) throw new Error('Missing probe method')
+		if (payload.method === 'eth_chainId') return Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' })
+		return Response.json({ id: 1, jsonrpc: '2.0', error: payload.method === 'eth_sendPrivateTransaction' ? { code: -32602, message: 'Invalid params' } : { code: -32601, message: 'Method not found' } })
+	}
+	respond.preconnect = globalThis.fetch.preconnect
+	const fetchMock = spyOn(globalThis, 'fetch').mockImplementation(respond)
+	try {
+		const settings = validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.example.test'] })
+		await expect(checkSubmissionEndpoints(settings, 1)).rejects.toThrow('eth_callBundle')
+		await expect(checkSubmissionEndpoints(settings, 1, ['eth_sendPrivateTransaction'])).resolves.toMatchObject([{ status: 'healthy' }])
+	} finally {
+		fetchMock.mockRestore()
+	}
+})

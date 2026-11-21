@@ -116,7 +116,7 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		await connection`DELETE FROM entity_state_snapshots WHERE entity_type = 'auction'`
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 1, ${hash}, ${hash}, 1, 'LocalDepositAppended', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', amountAttoRep: '200' })}::text::jsonb, true)`
 		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical) VALUES (1, 'escalation', ${token}, 1, ${hash}, 'success', ${JSON.stringify({ outcomeBalancesAttoRep: ['2', '3', '4'], finalQuestionResolution: '1' })}::text::jsonb, true)`
-		expect(await escalationCatalogData(connection, 1, '1')).toEqual([expect.objectContaining({ invalid_stake_atto_rep: '2', yes_stake_atto_rep: '3', no_stake_atto_rep: '4' })])
+		expect(await escalationCatalogData(connection, 1, '1')).toEqual([expect.objectContaining({ invalid_stake_atto_rep: '2', yes_stake_atto_rep: '3', no_stake_atto_rep: '4', concluded: false })])
 		expect(await escalationPositions(connection, 1, '1', owner)).toEqual([expect.objectContaining({ principal_atto_rep: '200', consumed_block: null, final_resolution: '1' })])
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 2, ${hash}, ${hash}, 2, 'CarryDepositConsumed', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', reason: '0' })}::text::jsonb, true)`
 		expect((await escalationPositions(connection, 1, '2', owner))[0]).toMatchObject({ consumed_block: '2', consumption_reason: '0' })
@@ -127,6 +127,8 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		] as const)
 			await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 1, ${hash}, ${hash}, ${logIndex}, 'LocalDepositAppended', ${JSON.stringify({ depositor: owner, outcome, parentDepositIndex: String(logIndex), amountAttoRep: '100' })}::text::jsonb, true)`
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 3, ${hash}, ${hash}, 5, 'OrdinarySettlementInitialized', ${JSON.stringify({ outcome: '1', winningPrincipalAttoRep: '200', reservedAttoRep: '200' })}::text::jsonb, true)`
+		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 3, ${hash}, ${hash}, 6, 'ClaimDeposit', '{}'::jsonb, true)`
+		expect((await escalationCatalogData(connection, 1, '3'))[0]).toMatchObject({ event_name: 'ClaimDeposit', concluded: true })
 		expect((await escalationPositions(connection, 1, '2', owner)).map((row: Record<string, unknown>) => [row['outcome'], row['retired_block']])).toEqual([
 			['2', null],
 			['0', null],

@@ -49,6 +49,9 @@ export async function executeUnusedPortfolioFunding(wallet: Wallet, settings: Op
 			portfolioFunding: { key: original.key, operation: 'withdraw', amount: original.amount },
 			preSubmit: refresh,
 			revalidateSimulationRevert: refresh,
+			gasBudgetExceeded: () => {
+				throw new PortfolioOpportunityExpired('Unused funding withdrawal exceeds gas budget; retry later')
+			},
 		},
 		'withdrawal',
 	)

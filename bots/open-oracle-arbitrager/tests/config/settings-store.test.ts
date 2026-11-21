@@ -508,3 +508,8 @@ test('replacement-price impact defaults to 100 bps and validates configured limi
 	expect(parseOperatorSettings({ ...current, runtime: { ...runtime, maxPriceImpactBps: 25 } }).runtime.maxPriceImpactBps).toBe(25n)
 	for (const invalid of [-1, 1001, 1.5, '100']) expect(() => parseOperatorSettings({ ...current, runtime: { ...runtime, maxPriceImpactBps: invalid } })).toThrow('Runtime maxPriceImpactBps')
 })
+
+test('risk-limit validation names the operator file keys', () => {
+	const current = serializeOperatorSettings(settings(undefined))
+	expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, riskLimits: { ...current.runtime.riskLimits, maxPositionNotionalWeth: '11', maxTotalLockedWeth: '10' } } })).toThrow('Runtime maxPositionNotionalWeth cannot exceed maxTotalLockedWeth')
+})

@@ -48,7 +48,7 @@ export async function demoAddressPortfolioRoute(env: DemoEnvironment, path: stri
 			open_oracle_address: demoAddress('9'),
 			report_id: reportCursor === null ? '1842' : '1841',
 			event_name: 'ReportSubmitted',
-			round_number: '2',
+			round_number: '1',
 			block_number: String(BigInt(operations.asOf.blockNumber) - BigInt(reportCursor === null ? 0 : 100)),
 			block_hash: demoHash,
 			tx_hash: reportCursor === null ? `0x${'c'.repeat(64)}` : `0x${'d'.repeat(64)}`,
@@ -169,30 +169,30 @@ export async function demoAddressTransactionsRoute(env: DemoEnvironment, path: s
 			value: ordinal % 4 === 0 ? '125000000000000000' : '0',
 			status: 'success',
 			gas_used: String(94_000 + ordinal * 117),
-			function_name: ordinal % 2 === 0 ? 'report' : 'checkpointPoolAccounting',
-			function_signature: ordinal % 2 === 0 ? 'report((...),bool,bool,(...))' : 'checkpointPoolAccounting(uint8)',
-			action_summary: ordinal % 2 === 0 ? 'report · reportId=1842' : 'checkpointPoolAccounting · reason=Trade',
+			function_name: ordinal % 2 === 0 ? 'report' : 'updateSettlementCollateral',
+			function_signature: ordinal % 2 === 0 ? 'report((...),bool,bool,(...))' : 'updateSettlementCollateral()',
+			action_summary: ordinal % 2 === 0 ? 'report · reportId=1842' : 'updateSettlementCollateral',
 			action_arguments:
 				ordinal % 2 === 0
 					? {
 							reporter: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
 							recipients: ['0x7777777777777777777777777777777777777777', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
 						}
-					: { reason: '1' },
+					: {},
 			action_display_arguments:
 				ordinal % 2 === 0
 					? {
 							reporter: 'OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)',
 							recipients: ['Security Pool (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
 						}
-					: { reason: 'Trade' },
+					: {},
 			action_argument_schema:
 				ordinal % 2 === 0
 					? [
 							{ index: 0, name: 'reporter', type: 'address' },
 							{ index: 1, name: 'recipients', type: 'address[]' },
 						]
-					: [{ index: 0, name: 'reason', type: 'uint8' }],
+					: [],
 			explorer_base_url: network?.explorer_base_url ?? '',
 		}
 	})

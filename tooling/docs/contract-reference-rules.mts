@@ -39,25 +39,32 @@ export type EscalationPayout = {
 	scaledPayoutAttoRep: bigint
 }
 
-// Port of EscalationGameProofVerifier.computeWinningWithdrawal with the reward and haircut pools exposed.
-export function computeWinningWithdrawal(input: EscalationPayoutInput, rules = escalationRules): EscalationPayout {
+// Ordinary settlement takes differences of cumulative allocations, including fork scaling.
+export function computeOrdinaryWinningWithdrawal(input: EscalationPayoutInput, rules = escalationRules): EscalationPayout {
 	const rewardEligibleCapAttoRep = input.bindingCapitalAttoRep + input.bindingCapitalAttoRep / rules.excessRewardWindowDivisor
 	const rewardPoolAttoRep = (input.bindingCapitalAttoRep * rules.rewardPoolNumerator) / rules.poolDenominator
 	const haircutPoolAttoRep = (input.bindingCapitalAttoRep * rules.haircutPoolNumerator) / rules.poolDenominator
 	const rewardEligiblePrincipalAttoRep = input.winningOutcomeBalanceAttoRep < rewardEligibleCapAttoRep ? input.winningOutcomeBalanceAttoRep : rewardEligibleCapAttoRep
-	let bonusAttoRep = 0n
-	let burnAttoRep = 0n
-	if (rewardEligiblePrincipalAttoRep > 0n) {
-		const depositStartAttoRep = input.cumulativeAmountAttoRep - input.depositAmountAttoRep
-		const eligibleEndAttoRep = input.cumulativeAmountAttoRep < rewardEligibleCapAttoRep ? input.cumulativeAmountAttoRep : rewardEligibleCapAttoRep
-		let rewardEligibleDepositAttoRep = eligibleEndAttoRep > depositStartAttoRep ? eligibleEndAttoRep - depositStartAttoRep : 0n
-		if (rewardEligibleDepositAttoRep > input.depositAmountAttoRep) rewardEligibleDepositAttoRep = input.depositAmountAttoRep
-		bonusAttoRep = (rewardEligibleDepositAttoRep * rewardPoolAttoRep) / rewardEligiblePrincipalAttoRep
-		burnAttoRep = (rewardEligibleDepositAttoRep * haircutPoolAttoRep) / rewardEligiblePrincipalAttoRep
+	const prefix = (principal: bigint) => {
+		const eligible = principal < rewardEligibleCapAttoRep ? principal : rewardEligibleCapAttoRep
+		const bonus = rewardEligiblePrincipalAttoRep === 0n ? 0n : (eligible * rewardPoolAttoRep) / rewardEligiblePrincipalAttoRep
+		const burn = rewardEligiblePrincipalAttoRep === 0n ? 0n : (eligible * haircutPoolAttoRep) / rewardEligiblePrincipalAttoRep
+		const payout = principal + bonus
+		const scaledPayout = input.actualForkThresholdAttoRep < input.nonDecisionThresholdAttoRep ? (payout * input.actualForkThresholdAttoRep) / input.nonDecisionThresholdAttoRep : payout
+		return { bonus, burn, payout, scaledPayout }
 	}
-	const payoutAttoRep = input.depositAmountAttoRep + bonusAttoRep
-	const scaledPayoutAttoRep = input.actualForkThresholdAttoRep < input.nonDecisionThresholdAttoRep ? (payoutAttoRep * input.actualForkThresholdAttoRep) / input.nonDecisionThresholdAttoRep : payoutAttoRep
-	return { bonusAttoRep, burnAttoRep, haircutPoolAttoRep, payoutAttoRep, rewardEligibleCapAttoRep, rewardEligiblePrincipalAttoRep, rewardPoolAttoRep, scaledPayoutAttoRep }
+	const end = prefix(input.cumulativeAmountAttoRep)
+	const start = prefix(input.cumulativeAmountAttoRep - input.depositAmountAttoRep)
+	return {
+		bonusAttoRep: end.bonus - start.bonus,
+		burnAttoRep: end.burn - start.burn,
+		payoutAttoRep: end.payout - start.payout,
+		scaledPayoutAttoRep: end.scaledPayout - start.scaledPayout,
+		haircutPoolAttoRep,
+		rewardEligibleCapAttoRep,
+		rewardEligiblePrincipalAttoRep,
+		rewardPoolAttoRep,
+	}
 }
 
 export const escalationPayoutExample: EscalationPayoutInput = {

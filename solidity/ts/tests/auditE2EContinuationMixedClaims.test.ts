@@ -187,7 +187,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		const originYes = originOnly[YES][0]
 		if (originYes === undefined) throw new Error('Missing origin leaf')
 		await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, originOnly[YES], originYes, new SparseNullifierTree())).rejects.toThrow('Question not final')
-		await expect(owner.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'withdrawFromEscalationGame', args: [YES, [0n]] })).rejects.toThrow('Migrate deposits first')
+		await expect(owner.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'withdrawFromEscalationGame', args: [YES, [0n]] })).rejects.toThrow('Deposits carry to child games')
 		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('Question not final')
 		await expect(r2.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, 10n * K] })).rejects.toThrow()
 		expect(snapshot[YES].map(leaf => leaf.amount)).toEqual([30n * K, 40n * K, 20n * K, 40n * K])

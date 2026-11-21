@@ -391,6 +391,11 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.queryByRole('link', { name: 'Migrate REP' })).toBeNull()
 	})
 
+	test('offers migration for prepared REP even when the wallet balance is zero', async () => {
+		const documentQueries = await renderOverviewPanels({ accountState: connectedAccount, universeRepBalanceAttoRep: 0n, hasRepToMigrate: true, universeForkTime: 123n, showUniverseForkedNotice: true, migrateRepHref: '#/zoltar?zoltarView=migrate' })
+		expect(documentQueries.getByRole('link', { name: 'Migrate REP' }).getAttribute('href')).toBe('#/zoltar?zoltarView=migrate')
+	})
+
 	test('explains a forked universe politely and links to the application migration flow', async () => {
 		const documentQueries = await renderOverviewPanels({
 			migrateRepHref: '#/zoltar?zoltarView=migrate',

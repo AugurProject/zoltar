@@ -14,7 +14,7 @@ import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js
 import type { usePortfolio } from './usePortfolio.js'
 import * as copy from '../../../copy/portfolio.js'
 import { defaultPortfolioCreationDraft, parseFixedPortfolioQuestions, parsePortfolioCreationEconomics, portfolioDeploymentReviewDescription, type CuratedAdmissionMode, type PortfolioCreationDraft } from '../lib/creation.js'
-import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission, requirePortfolioQuestionHorizon } from '../../../protocol/securityPoolPortfolioAdmission.js'
+import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission, requirePortfolioQuestionHorizon, requirePortfolioQuestionEligibility } from '../../../protocol/securityPoolPortfolioAdmission.js'
 import { buildPortfolioAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { authenticatePortfolioAuctionVault } from '../../../protocol/securityPoolPortfolioAuction.js'
 
@@ -46,8 +46,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		(model.loading || (busy.value !== undefined && snapshot === undefined) ? copy.loading : undefined) ??
 		(snapshot === undefined && model.presentationSnapshot !== undefined ? copy.readUnavailable : undefined) ??
 		(snapshot === undefined ? copy.enterPortfolio : undefined) ??
-		(parameters.accountAddress?.toLowerCase() !== (snapshot?.auctionVault?.bidder ?? snapshot?.owner)?.toLowerCase() ? copy.ownerRequired : undefined) ??
-		(snapshot?.auctionVault !== undefined && snapshot.auctionVault.filledLots > 0n && !snapshot.auctionVault.materialized ? 'Activate this individual vault in its auction panel before using capital controls.' : undefined)
+		(parameters.accountAddress?.toLowerCase() !== (snapshot?.auctionVault?.bidder ?? snapshot?.owner)?.toLowerCase() ? copy.ownerRequired : undefined)
 	useEffect(() => {
 		error.value = undefined
 		feedback.value = undefined
@@ -168,6 +167,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 			const client = createConnectedReadClient()
 			void requirePortfolioQuestionAdmission(client, snapshot.questionAdmissionPolicy, snapshot.portfolio, snapshot.originUniverseId, questionId, snapshot.blockNumber)
 				.then(async () => await requirePortfolioQuestionHorizon(client, snapshot.portfolio, questionId, snapshot.blockNumber, snapshot.timestamp))
+				.then(async () => await requirePortfolioQuestionEligibility(client, snapshot.originUniverseId, questionId, snapshot.blockNumber))
 				.then(() => {
 					if (current) registration.value = { key: registrationKey }
 				})
@@ -298,18 +298,21 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 			walletReason ??
 			(model.setup === undefined ? 'Deploy or load a portfolio first.' : undefined) ??
 			(model.loading ? 'Refreshing setup status.' : undefined) ??
+			(model.setup !== undefined && model.setup.originForkTime !== 0n ? 'Origin universe forked; setup is permanently closed.' : undefined) ??
 			(model.setup !== undefined && model.setup.stage >= stage ? 'This setup stage is complete.' : undefined) ??
 			(model.setup !== undefined && model.setup.stage !== stage - 1 ? 'Complete the previous setup stage first.' : undefined),
 		prepare: (stage: number) =>
 			run(`preparePortfolio${stage}`, 'Prepare portfolio modules', () => {
 				const selected = model.setup
 				if (selected === undefined || selected.stage !== stage - 1 || parameters.accountAddress === undefined) throw new Error('Refresh and select the next setup stage.')
+				if (selected.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
 				return {
 					...portfolioPreparationRequest(parameters.accountAddress, selected.portfolio),
 					reviewDescription: `Complete setup stage ${stage} of 4. This deploys the next bounded group of custody modules. No REP or trader ETH is deposited.`,
 					validateBeforeSubmit: async () => {
 						const latest = await loadPortfolioSetup(createConnectedReadClient(), selected.portfolio, selected.owner)
 						if (latest.chainId !== selected.chainId || latest.stage !== selected.stage) throw new Error('Setup advanced. Refresh before sending another preparation transaction.')
+						if (latest.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
 					},
 				}
 			}),
@@ -332,6 +335,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 						// The transaction is included in a later block, at least one second after the latest one.
 						const latest = await client.getBlock()
 						await requirePortfolioQuestionHorizon(client, selected.portfolio, id, latest.number, latest.timestamp + 1n)
+						await requirePortfolioQuestionEligibility(client, selected.originUniverseId, id, latest.number)
 					},
 				}
 			}),

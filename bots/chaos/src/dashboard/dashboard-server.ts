@@ -1,3 +1,4 @@
+import { isRecoveryWorkflowStatus } from './recovery-status.ts'
 import { publicChaosState, publicChaosConfiguration, publicRpcHealth, publicSubmissionHealth, publicSubmissionHealthMaximumAgeSeconds } from './public-state.ts'
 export { publicChaosState, publicChaosConfiguration } from './public-state.ts'
 import type { ChaosDashboardController } from './dashboard-controller-contract.ts'
@@ -80,7 +81,7 @@ export function publicChaosReadiness(stateValue: unknown, configurationValue: un
 	const activeWorkflows = Array.isArray(state['workflows'])
 		? state['workflows'].filter(candidate => {
 				const status = record(candidate)?.['status']
-				return status === 'running' || status === 'waiting-continuation' || status === 'waiting-obligation' || status === 'waiting-transaction'
+				return isRecoveryWorkflowStatus(status)
 			}).length
 		: 0
 	const obligations = Array.isArray(state['obligations'])

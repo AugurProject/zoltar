@@ -398,13 +398,14 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '80647e5bffa52cd141bdde13237ab73104cd8ef447daa1644dd0d4349d341a03',
+		compiledAbiFingerprint: 'b80c65ffc09bee9a03c4f3092442b1c0e8deb8939f902915a3915c23e3e93d24',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys every portfolio from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: '896ad4b57b32193677e7a8e6ab745bebb78aa8cc10c5060037753b1802304ab3',
+		readAbiFingerprint: 'b614b97269b3eceef7cab1d8c26a5a7a083c25835a2069184404608c8d8062a3',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `isPortfolio` is true only for a portfolio this factory deployed, and `portfolioCreationCodeHash` is the hash of the only creation code it deploys. `portfolioCount` and strict `portfoliosRange` enumerate, in registration order, the factory-deployed portfolios that have configured their namespace; a deployed portfolio is listed when its final setup step calls `initializePortfolioPriceFeed`. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` returns the factory-deployed portfolio a ledger belongs to; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolCoordinator` returns the prepared child coordinator, or zero before preparation. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `isPortfolio` is true only for a portfolio this factory deployed, and `portfolioCreationCodeHash` is the hash of the only creation code it deploys. `portfolioCount` and strict `portfoliosRange` enumerate, in registration order, the factory-deployed portfolios that have configured their namespace; a deployed portfolio is listed when its final setup step calls `initializePortfolioPriceFeed`. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` returns the factory-deployed portfolio a ledger belongs to; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolCoordinator` returns the prepared child coordinator, or zero before preparation. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured coordinator-factory ceiling used to reject over-cap portfolio creation before setup. `zoltar` identifies the protocol root.',
 		readDeclarations: [
+			{ name: 'maximumReportPriorityFeeAttoEthPerGas' },
 			{
 				name: 'securityPoolDeploymentCount',
 			},
@@ -496,7 +497,7 @@ export const coreContractReferences: ContractReference[] = [
 				signals: 'Returns the canonical feed address. A newly deployed feed emits `SharedPriceFeedRegistered`.',
 			},
 			{
-				call: '`preparePortfolioPriceFeed(source, targetUniverse)`',
+				call: '`preparePortfolioPriceFeed(source, universeId)`',
 				caller: 'Anyone',
 				effect: 'Creates or retrieves a target universe feed in the canonical source pool\u2019s portfolio namespace without moving provider capital.',
 				declarations: [

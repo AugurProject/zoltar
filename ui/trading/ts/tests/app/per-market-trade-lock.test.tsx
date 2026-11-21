@@ -1,3 +1,6 @@
+import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -18,7 +21,16 @@ import { installSilentInjectedWallet, offlineControllerServices } from '../suppo
 const account = `0x${'11'.repeat(20)}` as Address
 const firstMarket = liveMarketFixture({ pool: `0x${'22'.repeat(20)}` as Address, title: 'First market' })
 const secondMarket = liveMarketFixture({ pool: `0x${'23'.repeat(20)}` as Address, shareToken: `0x${'45'.repeat(20)}` as Address, questionId: 3n, title: 'Second market' })
-const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'55'.repeat(20)}`, router: `0x${'66'.repeat(20)}`, feeBps: 30 }
+const configuration: DeploymentConfiguration = {
+	zoltar: deploymentConfigurationFixture().zoltar,
+	chainId: 31_337,
+	chainName: 'Local',
+	rpcUrl: 'http://127.0.0.1:1',
+	securityPoolFactory: `0x${'77'.repeat(20)}`,
+	factory: `0x${'55'.repeat(20)}`,
+	router: `0x${'66'.repeat(20)}`,
+	feeBps: 30,
+}
 const firstHash = `0x${'88'.repeat(32)}` as Hash
 const secondHash = `0x${'8a'.repeat(32)}` as Hash
 
@@ -68,10 +80,21 @@ describe('per-market trade lock in the application shell', () => {
 			},
 			walletChainId: async () => configuration.chainId,
 			connectWallet: async () => account,
-			createTradingWalletClient: () => walletClient,
+			createTradingWalletClient: () => testDouble<WriteClient>(walletClient),
 			loadWalletHeaderBalances: async () => ({ ethAttoEth: 5n * 10n ** 18n, repAttoRep: 0n, repToken: `0x${'47'.repeat(20)}` as Address }),
 			loadLiveBalances: async (_client: unknown, market: LiveMarket) => ({ scope: actualLive.shareBalanceScope(market), invalid: 0n, yes: 0n, no: 0n, lp: 0n }),
-			simulateEntry: async (_client: unknown, _configuration: unknown, market: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => ({ blockNumber: 1n, amount, side, market, deadline: 2n ** 40n, slippageBps: 50n, minimumLongShares: 1n, result: quoteEnterPosition(side, amount, market) }),
+			simulateEntry: async (_client: unknown, _configuration: unknown, market: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => ({
+				blockNumber: 1n,
+				blockHash: `0x${'aa'.repeat(32)}` as const,
+				mintAttoEth: amount,
+				amount,
+				side,
+				market,
+				deadline: 2n ** 40n,
+				slippageBps: 50n,
+				minimumLongShares: 1n,
+				result: { ...quoteEnterPosition(side, amount, market), ethSpent: amount },
+			}),
 			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, quote: { market: LiveMarket }, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
 				submittedMarkets.push(quote.market.pool)
 				return await guardedWrite(async () => (quote.market.pool === firstMarket.pool ? firstHash : secondHash))
@@ -80,11 +103,15 @@ describe('per-market trade lock in the application shell', () => {
 		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(document.body.textContent).toContain('First market'))
-		await act(async () => actionButton('Connect wallet').click())
+		await act(async () => {
+			await actionButton('Connect wallet').click()
+		})
 		await waitFor(() => expect(document.body.textContent).toContain('Wallet: 5 ETH'))
 		await typeAmount('0.01')
 		await waitFor(() => expect(actionButton('Buy Yes').disabled).toBeFalse())
-		await act(async () => actionButton('Buy Yes').click())
+		await act(async () => {
+			await actionButton('Buy Yes').click()
+		})
 		await waitFor(() => expect(transactionActivity.value.entries.map(entry => entry.hash)).toEqual([firstHash]))
 
 		// Only the first market waits for its trade: the second market's ticket and its action stay usable.
@@ -96,7 +123,9 @@ describe('per-market trade lock in the application shell', () => {
 		expect(document.body.textContent).not.toContain('Transaction in progress.')
 		await typeAmount('0.01')
 		await waitFor(() => expect(actionButton('Buy Yes').disabled).toBeFalse())
-		await act(async () => actionButton('Buy Yes').click())
+		await act(async () => {
+			await actionButton('Buy Yes').click()
+		})
 		// Both trades are pending at once, each recorded against its own market.
 		await waitFor(() => expect(transactionActivity.value.entries).toHaveLength(2))
 		expect(submittedMarkets).toEqual([firstMarket.pool, secondMarket.pool])
@@ -109,9 +138,13 @@ describe('per-market trade lock in the application shell', () => {
 		// The first trade confirms while the second market, with its own trade running, is on screen: the first trade's
 		// refresh waits instead of superseding the second market's reads.
 		const discoveriesBeforeFirstReceipt = discoveredPools.length
-		await act(async () => firstReceipt.resolve({ status: 'success' }))
+		await act(async () => {
+			await firstReceipt.resolve({ status: 'success' })
+		})
 		await waitFor(() => expect(transactionActivity.value.entries.find(entry => entry.hash === firstHash)?.status).toBe('confirmed'))
-		await act(async () => await Bun.sleep(20))
+		await act(async () => {
+			await Bun.sleep(20)
+		})
 		expect(discoveredPools.length).toBe(discoveriesBeforeFirstReceipt)
 		expect(transactionActivity.value.entries.find(entry => entry.hash === secondHash)?.status).toBe('pending')
 		expect(document.body.textContent).toContain('Second market')

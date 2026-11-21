@@ -1,3 +1,4 @@
+import { DEFAULT_SIMULATION_REP_PER_ETH_PRICE, DEFAULT_SIMULATION_USDC_PER_REP_PRICE } from '@zoltar/ui-core-shared/simulation/repPrices.js'
 import { portfolioCollateral, type CollateralSymbol } from '../protocol/collateral.js'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
@@ -80,7 +81,16 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	const [minimumReport, exposureDivider] = await Promise.all([readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'minimumToken1ReportAttoEth' }), readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'OPEN_INTEREST_DIVIDER' })])
 	// Prepay the forthcoming commitment as well as the feed's current gas-security floor.
 	const requestedInitialAttoWeth = minimumReport + ceilDiv(commitment, exposureDivider)
-	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, portfolio, onProgressStep: reportStep, poolLabel: 'portfolio', readClient, requestedInitialAttoWeth })
+	const report = await settleSeededOracleReport({
+		accountAddress: owner,
+		createWriteClient,
+		portfolio,
+		onProgressStep: reportStep,
+		poolLabel: 'portfolio',
+		readClient,
+		requestedInitialAttoWeth,
+		repPerCollateralPrice: collateralSymbol === 'USDC' ? 10n ** 36n / DEFAULT_SIMULATION_USDC_PER_REP_PRICE : DEFAULT_SIMULATION_REP_PER_ETH_PRICE,
+	})
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: client, ...report })
 	await reportStep('Settled shared portfolio oracle')
 	await sendPortfolioTransaction(client, buildPortfolioCapitalSetHealthRequest({ owner, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set owner health target')

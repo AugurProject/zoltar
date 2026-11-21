@@ -97,7 +97,7 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 					<PortfolioInput label={copy.question} value={model.questionInput} onChange={model.setQuestion} disabled={disabled} />
 					<PortfolioInput label={copy.shares} value={model.sharesInput} onChange={model.setShares} disabled={disabled} numeric />
 					<MetricField label={copy.available}>
-						<CurrencyValue value={model.recovery?.availableShares} />
+						<CurrencyValue value={model.recovery?.availableShares} units={parameters.snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 				</MetricGrid>
 				<div className='actions'>
@@ -106,13 +106,13 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 				</div>
 				<MetricGrid>
 					<MetricField label={copy.invalidAvailable}>
-						<CurrencyValue value={model.recovery?.rights[0]} />
+						<CurrencyValue value={model.recovery?.rights[0]} units={parameters.snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.yesAvailable}>
-						<CurrencyValue value={model.recovery?.rights[1]} />
+						<CurrencyValue value={model.recovery?.rights[1]} units={parameters.snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.noAvailable}>
-						<CurrencyValue value={model.recovery?.rights[2]} />
+						<CurrencyValue value={model.recovery?.rights[2]} units={parameters.snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 				</MetricGrid>
 				<UserMessage detail={copy.transferHint} />

@@ -46,30 +46,6 @@ var presetDefinitions = {
       values: { aggregateExposureEth: "100", requestedInitialWeth: "25" }
     }
   ],
-  "liquidation-health-example": [
-    {
-      label: "Healthy vault",
-      values: { coverageCommitment: "75", multiplier: "2", price: "5", rep: "1000" }
-    },
-    {
-      label: "Liquidatable vault",
-      values: { coverageCommitment: "75", multiplier: "2", price: "10", rep: "1000" }
-    },
-    {
-      label: "Severe shortfall",
-      values: { coverageCommitment: "150", multiplier: "3", price: "15", rep: "500" }
-    }
-  ],
-  "liquidation-path-example": [
-    {
-      label: "Two small requests",
-      values: { first: "10", second: "15" }
-    },
-    {
-      label: "Two large requests",
-      values: { first: "60", second: "60" }
-    }
-  ],
   "deployment-mask-decoder": [
     {
       label: "First and third set",
@@ -99,10 +75,10 @@ var presetDefinitions = {
     }
   ]
 };
-var toolInputSelector = "[data-example-input], [data-liquidation-input], [data-path-input], [data-tool-input]";
+var toolInputSelector = "[data-example-input], [data-tool-input]";
 var numberControlId = 0;
 function inputKey(input) {
-  return input.dataset["exampleInput"] ?? input.dataset["liquidationInput"] ?? input.dataset["pathInput"] ?? input.dataset["toolInput"];
+  return input.dataset["exampleInput"] ?? input.dataset["toolInput"];
 }
 function toolInputs(tool) {
   return Array.from(tool.querySelectorAll(toolInputSelector)).filter((input) => input instanceof HTMLInputElement || input instanceof HTMLSelectElement);

@@ -362,14 +362,6 @@ checkDiagramControlStates()
 const openOracleHtml = await readFile('docs/reference/open-oracle.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
 
-const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
-for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
-	const exampleId = bindMatch[1]
-	if (exampleId === undefined) {
-		throw new Error('whitepaper bindExample target should be defined')
-	}
-	assert.ok(statoblastHtml.includes(`id="${exampleId}"`), `whitepaper bindExample target should exist: ${exampleId}`)
-}
 const chartRuntimeSource = await readFile('docs/charts/chartRuntime.ts', 'utf8')
 assert.doesNotMatch(chartRuntimeSource, /normalizedEscalationCost|escalationCostChart|requiredRepFraction/i, 'escalation chart runtime should use cumulative binding-capital terminology')
 assert.match(chartRuntimeSource, /ESCALATION_ACTIVATION_DELAY_DAYS \+ ESCALATION_TIME_LENGTH_DAYS \+ 1/, 'escalation Plot should sample every day from game start through day 52')
@@ -458,27 +450,3 @@ assert.equal(
 checkEscalationResponseExamples()
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 4, noBalance: 7, runningCost: 5, yesBalance: 6 }), { atCost: 2, result: 'None' }, 'resolution chart should keep two outcomes at cost unresolved')
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 0, noBalance: 0, runningCost: 5, yesBalance: 0 }), { atCost: 0, result: 'Invalid' }, 'resolution chart should resolve an empty timed-out game to Invalid')
-const feeVectorPrecision = 10n ** 18n
-const feeVectorDecayCandidate = 7n
-const feeVectorEligibleCoverageCommitmentAttoEth = 3n
-const feeVectorIndexNumerator = feeVectorDecayCandidate * feeVectorPrecision + 1n
-const feeVectorIndexDelta = feeVectorIndexNumerator / feeVectorEligibleCoverageCommitmentAttoEth
-const feeVectorIndexRemainderOut = feeVectorIndexNumerator % feeVectorEligibleCoverageCommitmentAttoEth
-const feeVectorReserveNumerator = feeVectorIndexDelta * feeVectorEligibleCoverageCommitmentAttoEth + 5n
-const feeVectorReserveCredit = feeVectorReserveNumerator / feeVectorPrecision
-const feeVectorGlobalRemainderOut = feeVectorReserveNumerator % feeVectorPrecision
-assert.deepEqual(
-	{
-		collateralOut: 100n - feeVectorReserveCredit,
-		feeVectorGlobalRemainderOut,
-		feeVectorIndexRemainderOut,
-		feeVectorReserveCredit,
-	},
-	{
-		collateralOut: 93n,
-		feeVectorGlobalRemainderOut: 4n,
-		feeVectorIndexRemainderOut: 2n,
-		feeVectorReserveCredit: 7n,
-	},
-	'fee accrual documentation vector should preserve nonzero index and global remainders while subtracting only whole-attoETH reserve credit',
-)

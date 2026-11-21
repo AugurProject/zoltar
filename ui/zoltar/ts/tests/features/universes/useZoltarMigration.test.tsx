@@ -15,10 +15,10 @@ import { act } from 'preact/test-utils'
 import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 /** Each outcome is listed with its index and child universe ID on its own isolated line (#1477). */
-function renderedOutcomeLines(entry: unknown) {
+function renderedOutcomeLines(entry: import('@zoltar/ui-core-shared/types/components.js').TransactionIntent | import('@zoltar/ui-core-shared/types/components.js').GlobalTransactionPresentation) {
 	if (typeof entry !== 'object' || entry === null || !('rows' in entry) || !Array.isArray(entry.rows)) throw new Error('Transaction entry has no rows')
-	const outcomes: unknown = entry.rows.find((row: unknown) => typeof row === 'object' && row !== null && 'label' in row && row.label === 'Outcomes')
-	if (typeof outcomes !== 'object' || outcomes === null || !('value' in outcomes)) throw new Error('Transaction entry has no outcomes row')
+	const outcomes = entry.rows.find(row => row.label === 'Outcomes')
+	if (outcomes === undefined) throw new Error('Transaction entry has no outcomes row')
 	const container = document.createElement('div')
 	render(h(Fragment, null, outcomes.value), container)
 	return Array.from(container.querySelectorAll('li bdi')).map(line => line.textContent)
@@ -149,12 +149,12 @@ describe('useZoltarMigration', () => {
 		const universe = createUniverse({
 			childUniverses: [createChildUniverse(), createChildUniverse({ exists: false, forkTime: 0n, outcomeIndex: 2n, outcomeLabel: 'No', universeId: 3n })],
 		})
-		const requested: unknown[] = []
-		const presented: unknown[] = []
+		const requested: import('@zoltar/ui-core-shared/types/components.js').TransactionIntent[] = []
+		const presented: import('@zoltar/ui-core-shared/types/components.js').GlobalTransactionPresentation[] = []
 		const { state } = await renderMigrationHook({
 			ensureZoltarUniverse: async () => universe,
-			onTransactionPresented: (presentation: unknown) => presented.push(presentation),
-			onTransactionRequested: (intent: unknown) => {
+			onTransactionPresented: presentation => presented.push(presentation),
+			onTransactionRequested: intent => {
 				requested.push(intent)
 			},
 			refreshZoltarUniverse: async () => universe,

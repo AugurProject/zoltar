@@ -6,7 +6,7 @@ export const escalationPayoutSummary = (position: Readonly<Record<string, unknow
 	const status = String(position['status'] ?? 'unavailable').replaceAll('-', ' ')
 	const parts = [`${position['kind'] === 'inherited' ? 'Inherited' : 'Local'} · ${status}`, `${amount('principal_atto_rep')} original principal`]
 	if (position['kind'] === 'inherited' && position['source_principal_atto_rep'] !== undefined) parts.push(`${amount('source_principal_atto_rep')} source principal`)
-	if (position['retained_principal_atto_rep'] !== undefined) parts.push(`${amount('retained_principal_atto_rep')} retained`, `${amount('auction_haircut_atto_rep')} latest auction haircut`)
+	if (position['retained_principal_atto_rep'] !== undefined) parts.push(`${amount('retained_principal_atto_rep')} carried principal`)
 	if (position['payout_atto_rep'] !== undefined) parts.push(`${amount('payout_atto_rep')} payable to claim bundle`, `${amount('burn_atto_rep')} protocol burn allocation`)
 	return parts.join(' · ')
 }

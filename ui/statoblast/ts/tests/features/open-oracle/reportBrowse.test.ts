@@ -105,13 +105,13 @@ void describe('OpenOracle report browse cache', () => {
 	})
 
 	test('filters every downloaded report by live lifecycle stage and by ID, symbol, or token address', () => {
-		const timing = { disputeDelay: 10n, settlementTime: 100n }
+		const timing = { disputeDelay: 10n, settlementTime: 200n }
 		const reports = [
 			{ ...createReport(1n), ...timing },
 			{ ...createReport(2n, { disputeOccurred: true }), ...timing },
 			{ ...createReport(3n, { isDistributed: true, token1Symbol: 'DAI' }), ...timing },
 			{ ...createReport(14n, { token2: getAddress('0x00000000000000000000000000000000000000ab') }), ...timing },
-			{ ...createReport(15n, { reportTimestamp: 50n }), ...timing },
+			{ ...createReport(15n, { reportTimestamp: 50n }), ...timing, settlementTime: 100n },
 			{ ...createReport(16n, { reportTimestamp: 145n }), ...timing },
 		]
 		const clock = { currentBlockNumber: undefined, currentTime: 150n }

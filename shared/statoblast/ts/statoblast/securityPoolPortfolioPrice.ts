@@ -228,6 +228,7 @@ export function buildPortfolioPriceOperationsRequest(snapshot: PortfolioPriceSna
 	let requiredGas = 0n
 	for (const operation of batch.operations) {
 		if (decodeUint(operation.gasLimit, 'Operation gas', 32) === 0n || !isHex(operation.data) || operation.data.length < 10 || operation.data.length % 2 !== 0) throw new Error('Invalid report operation.')
+		if ((operation.data.length - 2) / 2 > 512) throw new Error('Operation data cannot exceed 512 bytes.')
 		requiredGas += operation.gasLimit + 100_000n
 	}
 	if (requiredGas > batch.gasLimit) throw new Error('Operation gas budget insufficient.')

@@ -32,7 +32,7 @@ type QuestionSummaryField =
 	| {
 			kind: 'text'
 			label: string
-			value: string
+			value: ComponentChildren
 	  }
 	| {
 			kind: 'identifier'
@@ -75,12 +75,22 @@ function getQuestionSummaryFields(question: ForkQuestionDetails, showEndTime: bo
 	const fields: QuestionSummaryField[] = [{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) }]
 	if (showIdentifier && question.questionId !== undefined) fields.push({ kind: 'identifier', label: commonCopy.questionId, value: question.questionId })
 	if (question.createdAt !== undefined) fields.push({ kind: 'timestamp', label: commonCopy.created, value: question.createdAt })
-	if (fork && question.startTime !== undefined) fields.push(question.startTime === 0n ? { kind: 'text', label: commonCopy.starts, value: commonCopy.none } : { kind: 'timestamp', label: commonCopy.starts, value: question.startTime })
+	if (fork && question.startTime !== undefined) fields.push(question.startTime === 0n ? { kind: 'text', label: commonCopy.starts, value: commonCopy.immediatelyAfterCreation } : { kind: 'timestamp', label: commonCopy.starts, value: question.startTime })
 
 	if (showEndTime && question.endTime !== undefined) fields.push({ kind: 'timestamp', label: commonCopy.endTime, value: question.endTime })
-	fields.push({ kind: 'text', label: question.outcomesComplete === false ? universeCopy.outcomesOnThisPage : commonCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') })
+	fields.push({
+		kind: 'text',
+		label: question.outcomesComplete === false ? universeCopy.outcomesOnThisPage : commonCopy.outcomes,
+		value: (
+			<ul className='plain-list'>
+				{getDisplayedOutcomes(question).map(label => (
+					<li key={label}>{label}</li>
+				))}
+			</ul>
+		),
+	})
 
-	if ((fork || question.marketType === 'scalar') && question.numTicks !== undefined) fields.push({ kind: 'text', label: commonCopy.ticks, value: question.numTicks.toString() })
+	if (question.marketType === 'scalar' && question.numTicks !== undefined) fields.push({ kind: 'text', label: commonCopy.ticks, value: question.numTicks.toString() })
 	if (question.marketType === 'scalar') {
 		if (question.displayValueMin !== undefined && question.displayValueMax !== undefined && question.answerUnit !== undefined)
 			fields.push({ kind: 'text', label: commonCopy.displayRange, value: getDisplayRange({ displayValueMin: question.displayValueMin, displayValueMax: question.displayValueMax, answerUnit: question.answerUnit }) })

@@ -90,5 +90,6 @@ describe('trading exit availability', () => {
 		expect(tradingExitAvailability({ ...open, resolved: true })).toEqual({ open: false, reason: 'Trading has closed because the question resolved' })
 		expect(tradingExitAvailability({ ...open, systemState: '1' })).toEqual({ open: false, reason: 'Trading has closed because the pool is not operational' })
 		expect(tradingExitAvailability({ ...open, awaitingForkContinuation: true })).toEqual({ open: false, reason: 'Trading has closed because the pool is not operational' })
+		expect(tradingExitAvailability({ ...open, awaitingForkContinuation: true, resolved: true })).toEqual({ open: false, reason: 'Trading has closed because the pool is not operational' })
 	})
 })

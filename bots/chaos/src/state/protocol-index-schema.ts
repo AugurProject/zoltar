@@ -1,6 +1,6 @@
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
-import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
+import type { AuctionBidSnapshot, AuctionRefundSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
 import { compareUnsignedStrings } from '../core/units.ts'
 import { assertExactKeys, nonemptyString, normalizedHash32 as hash, requiredRecord, unsignedIntegerString } from './validators.ts'
 
@@ -15,7 +15,7 @@ export type ProtocolIndexIdentity = {
 	chainId: number
 	cursor: { blockHash: Hash; blockNumber: string }
 	openOracle: Address
-	schemaVersion: 4
+	schemaVersion: 5
 	securityPoolForker: Address
 	startBlock: string
 	availableStartBlock?: string
@@ -49,7 +49,7 @@ function boundedUnsignedString(value: unknown, label: string, bits: number) {
 export function parseIdentity(value: unknown, expectedChainId: number, label = 'protocolIndex'): ProtocolIndexIdentity {
 	const index = requiredRecord(value, label)
 	assertExactKeys(index, ['chainId', 'cursor', 'openOracle', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], label)
-	if (index['schemaVersion'] !== 4) throw new Error(`${label}.schemaVersion is unsupported`)
+	if (index['schemaVersion'] !== 5) throw new Error(`${label}.schemaVersion is unsupported`)
 	if (index['chainId'] !== expectedChainId) throw new Error(`Protocol index belongs to chain ${String(index['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const startBlock = boundedUnsignedString(index['startBlock'], `${label}.startBlock`, 256)
 	const cursor = requiredRecord(index['cursor'], `${label}.cursor`)
@@ -62,7 +62,7 @@ export function parseIdentity(value: unknown, expectedChainId: number, label = '
 		chainId: expectedChainId,
 		cursor: { blockHash: hash(cursor['blockHash'], `${label}.cursor.blockHash`), blockNumber: cursorBlockNumber },
 		openOracle: getAddress(nonemptyString(index['openOracle'], `${label}.openOracle`)),
-		schemaVersion: 4,
+		schemaVersion: 5,
 		securityPoolForker: getAddress(nonemptyString(index['securityPoolForker'], `${label}.securityPoolForker`)),
 		startBlock,
 		...(availableStartBlock === undefined ? {} : { availableStartBlock }),
@@ -207,18 +207,6 @@ export function parseMigrationRepSplitProgress(value: unknown, label: string): M
 	}
 }
 
-export function parseChildRepSplitProgress(value: unknown, label: string): ChildRepSplitProgressSnapshot {
-	const progress = requiredRecord(value, label)
-	assertExactKeys(progress, ['childPoolRepSplitAttoRep', 'outcomeIndex', 'pool'], [], label)
-	const childPoolRepSplitAttoRep = boundedUnsignedString(progress['childPoolRepSplitAttoRep'], `${label}.childPoolRepSplitAttoRep`, 256)
-	if (childPoolRepSplitAttoRep === '0') throw new Error(`${label}.childPoolRepSplitAttoRep must be positive`)
-	return {
-		childPoolRepSplitAttoRep,
-		outcomeIndex: boundedUnsignedString(progress['outcomeIndex'], `${label}.outcomeIndex`, 256),
-		pool: getAddress(nonemptyString(progress['pool'], `${label}.pool`)),
-	}
-}
-
 export function compareReports(left: OracleGameSnapshot, right: OracleGameSnapshot) {
 	return compareUnsignedStrings(left.reportId, right.reportId)
 }
@@ -243,11 +231,6 @@ export function compareDeposits(left: EscalationDepositSnapshot, right: Escalati
 export function compareMigrationRoutes(left: MigrationRepSplitProgressSnapshot, right: MigrationRepSplitProgressSnapshot) {
 	const universeOrder = compareUnsignedStrings(left.universeId, right.universeId)
 	return universeOrder === 0 ? compareUnsignedStrings(left.outcomeIndex, right.outcomeIndex) : universeOrder
-}
-
-export function compareChildRoutes(left: ChildRepSplitProgressSnapshot, right: ChildRepSplitProgressSnapshot) {
-	const poolOrder = left.pool.toLowerCase().localeCompare(right.pool.toLowerCase())
-	return poolOrder === 0 ? compareUnsignedStrings(left.outcomeIndex, right.outcomeIndex) : poolOrder
 }
 
 export function assertStrictCanonicalOrder<T>(values: readonly T[], compare: (left: T, right: T) => number, label: string) {
@@ -302,7 +285,7 @@ export function auctionRefundRecord(records: readonly AuctionRefundRecord[]) {
 }
 
 function assertProtocolIndexRecordEnvelope(index: Record<string, unknown>) {
-	const arrays = ['childRepSplits', 'escalationDeposits', 'migrationRepSplits', 'reports'] as const
+	const arrays = ['escalationDeposits', 'migrationRepSplits', 'reports'] as const
 	let recordCount = 0
 	for (const key of arrays) {
 		const records = index[key]
@@ -321,7 +304,7 @@ function assertProtocolIndexRecordEnvelope(index: Record<string, unknown>) {
 export function parseProtocolIndex(value: unknown, expectedChainId: number): ChaosProtocolIndex | undefined {
 	if (value === null || value === undefined) return undefined
 	const index = requiredRecord(value, 'protocolIndex')
-	assertExactKeys(index, ['auctionBids', 'auctionRefunds', 'chainId', 'childRepSplits', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], 'protocolIndex')
+	assertExactKeys(index, ['auctionBids', 'auctionRefunds', 'chainId', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], 'protocolIndex')
 	assertProtocolIndexRecordEnvelope(index)
 	const identity = parseIdentity(
 		{
@@ -348,16 +331,12 @@ export function parseProtocolIndex(value: unknown, expectedChainId: number): Cha
 	escalationDeposits.sort(compareDeposits)
 	assertStrictCanonicalOrder(escalationDeposits, compareDeposits, 'protocolIndex.escalationDeposits')
 	if (!Array.isArray(index['migrationRepSplits'])) throw new Error('protocolIndex.migrationRepSplits must be an array')
-	if (!Array.isArray(index['childRepSplits'])) throw new Error('protocolIndex.childRepSplits must be an array')
 	const migrationRepSplits = index['migrationRepSplits'].map((progress, progressIndex) => parseMigrationRepSplitProgress(progress, `protocolIndex.migrationRepSplits[${progressIndex.toString()}]`))
-	const childRepSplits = index['childRepSplits'].map((progress, progressIndex) => parseChildRepSplitProgress(progress, `protocolIndex.childRepSplits[${progressIndex.toString()}]`))
 	assertStrictCanonicalOrder(migrationRepSplits, compareMigrationRoutes, 'protocolIndex.migrationRepSplits')
-	assertStrictCanonicalOrder(childRepSplits, compareChildRoutes, 'protocolIndex.childRepSplits')
 	return {
 		...identity,
 		auctionBids: auctionBidRecord(bids),
 		auctionRefunds: auctionRefundRecord(refunds),
-		childRepSplits,
 		escalationDeposits,
 		migrationRepSplits,
 		reports,

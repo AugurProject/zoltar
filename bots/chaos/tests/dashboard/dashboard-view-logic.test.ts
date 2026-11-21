@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import { completeConfigurationScope, connectivityScope, draftAfterRevisionChange, executionPolicyScope } from '../../src/dashboard/configuration-draft-scope.ts'
-import { parseConfiguration } from '../../src/dashboard/dashboard-data.ts'
+import { parseConfiguration, parseSnapshot } from '../../src/dashboard/dashboard-data.ts'
 import { mutationsSettled, put, readThroughPut, settledMutations } from '../../src/dashboard/dashboard-requests.ts'
-import { formatRelative, stepValueLabel } from '../../src/dashboard/dashboard-format.ts'
+import { formatRelative, stepValueLabel, recoveryItemCount } from '../../src/dashboard/dashboard-format.ts'
 import { executionPolicyReviewRows } from '../../src/dashboard/execution-policy-review.ts'
 import { parsePublicRetirement, retirementBlockerDescription, retirementPositionDescription } from '../../src/dashboard/retirement-dashboard.ts'
 
@@ -124,4 +124,10 @@ test('a mutation that never answers delays a refresh only for the bounded wait',
 	} finally {
 		globalThis.fetch = originalFetch
 	}
+})
+
+test('recovery badge excludes latent tracking and includes blocked selectable continuations', () => {
+	expect(recoveryItemCount(parseSnapshot({ obligations: [{ status: 'deferred' }] }))).toBe(0)
+	expect(recoveryItemCount(parseSnapshot({ obligations: [{ status: 'deferred', notBefore: '2026-11-21T12:00:00Z' }] }))).toBe(1)
+	expect(recoveryItemCount(parseSnapshot({ currentWorkflow: { classification: 'selectable', status: 'blocked' } }))).toBe(1)
 })

@@ -16,9 +16,14 @@ type TradingOverviewPanelProps = {
 	walletSummary?: WalletSummaryState | undefined
 }
 
-/** The wallet's ETH balance for the account popover. Trading settles in ETH, so REP stays out of its header. */
+/** The account popover keeps the gas balance visible across markets with different collateral tokens. */
 export function TradingBalanceGroup({ walletSummary }: { walletSummary: WalletSummaryState }) {
-	return <WalletBalanceGroup balances={[{ asset: commonCopy.eth, exactWhenRoundedToZero: true, loading: walletSummary.status === 'loading' && walletSummary.ethAttoEth === undefined, value: walletSummary.ethAttoEth }]} />
+	return (
+		<>
+			<WalletBalanceGroup balances={[{ asset: commonCopy.eth, exactWhenRoundedToZero: true, loading: walletSummary.status === 'loading' && walletSummary.ethAttoEth === undefined, value: walletSummary.ethAttoEth }]} />
+			<p className='detail'>{copy.collateralBalanceLocation}</p>
+		</>
+	)
 }
 
 /** Trading's top bar on the shared header panel; wallet balance read failures sit under the bar. */

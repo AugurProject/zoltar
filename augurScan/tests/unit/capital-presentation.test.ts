@@ -74,13 +74,13 @@ test('summarizes cash fee economics and question stream status', () => {
 		burned_atto_rep: '0',
 	}
 	expect(feeEconomicsSummary(universe)).toEqual({
-		rates: '2% annual fee · 0.3% purchase fee · 700 USDC vesting to owners',
-		flows: '1,250 USDC annual fees accrued · 960 USDC purchase fees, 900 USDC to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned',
+		rates: '2% annual holding fee · 0.3% base purchase fee · 700 USDC vesting to owners',
+		flows: '1,250 USDC holding fees accrued · 960 USDC purchase charges, 900 USDC to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned',
 	})
 	// Without a fee read the rates are not guessed; the event totals remain.
 	expect(feeEconomicsSummary({ ...universe, fees: undefined, fee_read_error: 'execution reverted' }).rates).toBe('Rates unavailable')
 	// Totals that have no source are stated as unavailable, never as zero.
-	expect(feeEconomicsSummary({ ...universe, accrued_atto_eth: null, earnings_funded_atto_eth: undefined }).flows).toBe('Unavailable annual fees accrued · 960 USDC purchase fees, Unavailable to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned')
+	expect(feeEconomicsSummary({ ...universe, accrued_atto_eth: null, earnings_funded_atto_eth: undefined }).flows).toBe('Unavailable holding fees accrued · 960 USDC purchase charges, Unavailable to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned')
 	const stream = { collateral: usdc, rate_claim_units_per_second: '203', rate_claim_units_per_year: '6401808000', end_timestamp: '1893456000' }
 	expect(questionFeeStreamSummary(stream, 1_800_000_000n)).toBe('Active fee stream · ends 2030-01-01 00:00:00 UTC')
 	// At or after its end the stream no longer accrues, although its last rate is non-zero.

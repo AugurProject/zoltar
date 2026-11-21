@@ -1,10 +1,10 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { SEPOLIA_REP_ALLOCATIONS } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
-import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, parseAbi, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { GenesisReputationToken_GenesisReputationToken, ReputationToken_ReputationToken } from '../types/contractArtifact'
@@ -18,6 +18,12 @@ describe('GenesisReputationToken', () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
+	})
+
+	test('shared fixture genesis REP is approval-only with the configured theoretical supply', async () => {
+		const address = getAddress(`0x${GENESIS_REPUTATION_TOKEN.toString(16).padStart(40, '0')}`)
+		await assert.rejects(client.readContract({ abi: parseAbi(['function nonces(address) view returns (uint256)']), address, functionName: 'nonces', args: [client.account.address] }))
+		assert.strictEqual(await client.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address, functionName: 'getTotalTheoreticalSupply' }), 11_000_000n * 10n ** 18n)
 	})
 
 	test('matches external REPv2 by exposing approval-based ERC-20 authorization only', () => {

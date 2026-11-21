@@ -1,6 +1,6 @@
 # UI copy modules
 
-These rules apply to every UI copy directory: `ui/coreShared/ts/copy` for cross-product text, and `ui/zoltarShared/ts/copy` and `ui/statoblastShared/ts/copy` for product text. The examples below come from all three.
+These rules apply to all five UI copy directories: `ui/coreShared/ts/copy` for shared text, plus `ui/zoltarShared/ts/copy`, `ui/statoblastShared/ts/copy`, `ui/trading/ts/copy`, and `ui/openoracle/ts/copy` for app text.
 
 User-facing text is grouped by the feature that owns its meaning. Consumers import a feature module as a namespace, such as `import * as commonCopy from '../copy/common.js'`, so call sites retain context without large named-import lists.
 

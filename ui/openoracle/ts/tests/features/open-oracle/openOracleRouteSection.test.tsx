@@ -269,10 +269,14 @@ describe('OpenOracleSection route create view', () => {
 			block.value = 3n
 		})
 		expect(load).toHaveBeenCalledTimes(2)
-		await act(() => first.resolve({ balance: 0n, allowance: 0n }))
+		await act(() => {
+			first.resolve({ balance: 0n, allowance: 0n })
+		})
 		await waitFor(() => expect(load).toHaveBeenCalledTimes(4))
 		expect(document.body.textContent).toContain('Insufficient token balance to fund the report.')
-		await act(() => next.resolve({ balance: 10n ** 20n, allowance: 10n ** 20n }))
+		await act(() => {
+			next.resolve({ balance: 10n ** 20n, allowance: 10n ** 20n })
+		})
 		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
 	})
 
@@ -297,7 +301,9 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report')
 		const firstReads = load.mock.calls.length
 		failed = false
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Retry' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Retry' }))
+		})
 		await waitFor(() => expect(document.body.textContent).not.toContain('Funding RPC unavailable'))
 		expect(load.mock.calls.length).toBeGreaterThan(firstReads)
 		expect(create).not.toHaveBeenCalled()
@@ -422,11 +428,11 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Standalone only. Start pool-managed requests from a security pool.')).not.toBeNull()
+		expect(documentQueries.getByText('Standalone only. Start portfolio-managed requests from the portfolio price panel.')).not.toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Base token address' })).not.toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Quote token address' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Standalone operator workflow')).toBe(false)
-		expect(document.body.textContent?.match(/pool-managed/gi) ?? []).toHaveLength(1)
+		expect(document.body.textContent?.match(/portfolio-managed/gi) ?? []).toHaveLength(1)
 	})
 
 	test('reviews lifecycle delays in human-readable and exact protocol units', async () => {
@@ -908,8 +914,6 @@ describe('OpenOracleSection route create view', () => {
 					OpenOracleSection,
 					createOpenOracleSectionProps({
 						activeView: 'selected-report',
-						isConnected: true,
-						isOnActiveAppChain: true,
 						openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
 						openOracleReportDetails: createOpenOracleReportDetails({
 							currentReporter: '0x3000000000000000000000000000000000000000',
@@ -981,8 +985,8 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		// The badge already names the stage, so a banner repeating it without extra timing context is omitted.
-		expect(document.body.querySelector('.sticky-object-context .badge')?.textContent).toBe('Dispute window open')
-		expect(within(document.body).queryByRole('heading', { name: 'Dispute window open' })).toBeNull()
+		expect(document.body.querySelector('.sticky-object-context .badge')?.textContent).toBe('Dispute window closing')
+		expect(within(document.body).queryByRole('heading', { name: 'Dispute window closing' })).toBeNull()
 	})
 
 	test('reads a report past its settlement time as ready to settle, and a dispute as a caution', async () => {
@@ -1417,15 +1421,19 @@ describe('OpenOracleSection route create view', () => {
 		const surfaces = ['Statoblast report', 'OpenOracle report'].map(name => within(document.body).getByRole('region', { name }))
 		for (const surface of surfaces) {
 			expect(within(surface).getByText('Can settle in 2s')).not.toBeNull()
-			expect(within(surface).getByText('Dispute window open')).not.toBeNull()
+			expect(within(surface).getByText('Dispute window closing')).not.toBeNull()
 			expectTransactionButtonDisabled(surface, 'Settle report')
 		}
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 1150))
+		})
 		for (const surface of surfaces) {
 			expect(within(surface).getByText('Can settle in 1s')).not.toBeNull()
 			expectTransactionButtonDisabled(surface, 'Settle report')
 		}
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 1150))
+		})
 		for (const surface of surfaces) {
 			expect(within(surface).queryByText('Can settle in 1s')).toBeNull()
 			expect(within(surface).getByText('Ready to settle')).not.toBeNull()
@@ -1469,7 +1477,9 @@ describe('OpenOracleSection route create view', () => {
 			expect(page.queryByText('Can settle in 1s')).toBeNull()
 			expectTransactionButtonEnabled(document.body, 'Settle report')
 			expect(reloads).toContain('report')
-			await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report' })))
+			await act(() => {
+				fireEvent.click(page.getByRole('button', { name: 'Settle report' }))
+			})
 			expect(page.queryByRole('dialog')).toBeNull()
 			expect(settle).toHaveBeenCalledTimes(1)
 		})
@@ -1503,7 +1513,7 @@ describe('OpenOracleSection route create view', () => {
 			const page = within(document.body)
 			expect(page.getByText('Can settle in 1s')).not.toBeNull()
 			await clock.advance(1000)
-			expect(page.getByText('Can settle in 1m 0s')).not.toBeNull()
+			expect(page.getByText('Can settle in 1m')).not.toBeNull()
 			expectTransactionButtonDisabled(document.body, 'Settle report')
 		})
 	})
@@ -1532,7 +1542,7 @@ describe('OpenOracleSection route create view', () => {
 			cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
 			await clock.advance(1000)
 			expect(reloads).toContain('report')
-			expect(within(document.body).getByText('Can settle in 1m 0s')).not.toBeNull()
+			expect(within(document.body).getByText('Can settle in 1m')).not.toBeNull()
 			expectTransactionButtonDisabled(document.body, 'Settle report')
 		})
 	})
@@ -1584,10 +1594,10 @@ describe('OpenOracleSection route create view', () => {
 				)
 			).cleanup
 			const page = within(document.body)
-			expect(page.getByText('Can settle in 1h 0m 2s')).not.toBeNull()
+			expect(page.getByText('Can settle in 1h')).not.toBeNull()
 			expectTransactionButtonDisabled(document.body, 'Settle report')
 			await clock.advance(1000)
-			expect(page.getByText('Can settle in 1h 0m 1s')).not.toBeNull()
+			expect(page.getByText('Can settle in 1h')).not.toBeNull()
 			expectTransactionButtonDisabled(document.body, 'Settle report')
 		})
 	})
@@ -1625,10 +1635,14 @@ describe('OpenOracleSection route create view', () => {
 		const queries = within(rendered.container)
 		expect(queries.queryByText(openOracleCopy.noOracleBalances) === null).toBe(true)
 		expect(queries.getByText(openOracleCopy.loadingOracleBalances)).not.toBeNull()
-		await act(() => render(<OpenOracleSection {...props} openOracleWithdrawableBalancesLoading />, rendered.container))
+		await act(() => {
+			render(<OpenOracleSection {...props} openOracleWithdrawableBalancesLoading />, rendered.container)
+		})
 		expect(queries.queryByText(openOracleCopy.noOracleBalances) === null).toBe(true)
 		expectTransactionButtonDisabled(document.body, 'Withdraw ETH', openOracleCopy.loadingOracleBalances)
-		await act(() => render(<OpenOracleSection {...props} openOracleWithdrawableBalances={{ ethAttoEth: 0n, token1: 0n, token2: 0n }} />, rendered.container))
+		await act(() => {
+			render(<OpenOracleSection {...props} openOracleWithdrawableBalances={{ ethAttoEth: 0n, token1: 0n, token2: 0n }} />, rendered.container)
+		})
 		expect(queries.getByText(openOracleCopy.noOracleBalances)).not.toBeNull()
 		expect(queries.queryByText(openOracleCopy.loadingOracleBalances)).toBeNull()
 		// Every withdraw button stays in place, disabled with the shared reason, rather than disappearing at a zero balance.
@@ -1775,7 +1789,7 @@ describe('OpenOracleSection route create view', () => {
 
 	test('closes the dispute form only after the matching dispute succeeds', async () => {
 		const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
-		const result = signal<OpenOracleSectionProps['openOracleResult']>(undefined)
+		const result = signal<OpenOracleSectionTestProps['openOracleResult']>(undefined)
 		function Harness() {
 			return (
 				<GlobalTransactionPresentationProvider transaction={presentation.value}>
@@ -1792,7 +1806,9 @@ describe('OpenOracleSection route create view', () => {
 		const rendered = await renderIntoDocument(<Harness />)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
-		await act(() => fireEvent.click(page.getByRole('button', { name: 'Dispute & swap' })))
+		await act(() => {
+			fireEvent.click(page.getByRole('button', { name: 'Dispute & swap' }))
+		})
 		expect(page.getByRole('dialog')).not.toBeNull()
 		await act(() => {
 			presentation.value = { tone: 'pending', title: 'Dispute pending', operationKey: 'dispute', hash: '0x01' }
@@ -1822,12 +1838,18 @@ describe('OpenOracleSection route create view', () => {
 				)
 				const rendered = await renderIntoDocument(renderSection(createAccountState()))
 				cleanupRenderedComponent = rendered.cleanup
-				await act(() => fireEvent.click(within(document.body).getByRole('button', { name: launcherName })))
-				await act(() => render(renderSection(blockedAccount), rendered.container))
+				await act(() => {
+					fireEvent.click(within(document.body).getByRole('button', { name: launcherName }))
+				})
+				await act(() => {
+					render(renderSection(blockedAccount), rendered.container)
+				})
 				const dialog = within(document.body).getByRole('dialog', { name: dialogName })
 				expect(within(dialog).getAllByRole('button', { name: fixLabel })).toHaveLength(1)
 				const fix = expectWalletFixDescribesAction(dialog, dialogName, fixLabel)
-				await act(() => fireEvent.click(fix))
+				await act(() => {
+					fireEvent.click(fix)
+				})
 				expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 			})
 

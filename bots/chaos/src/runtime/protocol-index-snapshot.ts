@@ -33,13 +33,6 @@ export function indexWithCurrentRefunds(snapshot: EcosystemSnapshot, index: Chao
 }
 
 export function snapshotWithProtocolIndex(snapshot: EcosystemSnapshot, index: ChaosProtocolIndex): EcosystemSnapshot {
-	const childRepSplitsByPool = new Map<string, Record<string, string>>()
-	for (const progress of index.childRepSplits) {
-		const key = progress.pool.toLowerCase()
-		const routes = childRepSplitsByPool.get(key) ?? {}
-		routes[progress.outcomeIndex] = progress.childPoolRepSplitAttoRep
-		childRepSplitsByPool.set(key, routes)
-	}
 	const migrationRepSplitsByUniverse = new Map<string, Record<string, string>>()
 	for (const progress of index.migrationRepSplits) {
 		const routes = migrationRepSplitsByUniverse.get(progress.universeId) ?? {}
@@ -58,10 +51,6 @@ export function snapshotWithProtocolIndex(snapshot: EcosystemSnapshot, index: Ch
 			}
 		}),
 		escalationDeposits: index.escalationDeposits.map(deposit => ({ ...deposit })),
-		pools: snapshot.pools.map(pool => ({
-			...pool,
-			forkRepMigrationProgressByOutcome: { ...(childRepSplitsByPool.get(pool.address.toLowerCase()) ?? {}) },
-		})),
 		reports: index.reports.map(report => ({
 			...report,
 			game: { ...report.game },

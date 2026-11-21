@@ -29,15 +29,22 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		expect(await context.balance(context.other.account.address)).toBe(0n)
 		const grid = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'repGrid' })
 		const minimum = ((100n * unit + grid - 1n) / grid) * grid
-		for (const funding of [2n * unit - 1n, 2n * unit + 1n]) {
-			await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [2n, minimum, 12_000n], value: funding })).rejects.toThrow()
-		}
-		const bid = await context.bid(context.other, 2n, minimum)
+		const collateralToken = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'collateralToken' })
+		const collateralAbi = parseAbi(['function approve(address,uint256) returns (bool)', 'function allowance(address,address) view returns (uint256)'])
+		const approveCollateral = async (amount: bigint) => await writeContractAndWait(context.other, () => context.other.writeContract({ abi: collateralAbi, address: collateralToken, functionName: 'approve', args: [context.auction, amount] }))
+		await approveCollateral(2n * unit - 1n)
+		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [2n, minimum, 12_000n] })).rejects.toThrow('SafeERC20Ops token call reverted')
+		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'bidCount' })).toBe(0n)
+		expect(await collateralBalance(context.other, fixture.portfolio, context.engine)).toBe(0n)
+		await approveCollateral(2n * unit + 1n)
+		const hash = await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [2n, minimum, 12_000n] }))
+		const bid = { hash, id: 1n }
+		expect(await context.other.readContract({ abi: collateralAbi, address: collateralToken, functionName: 'allowance', args: [context.other.account.address, context.auction] })).toBe(1n)
+
 		const { logs } = await context.other.getTransactionReceipt({ hash: bid.hash })
 		const transferAbi = parseAbi(['event Transfer(address indexed src,address indexed dst,uint256 wad)'])
 		const event = transferAbi[0]
 		if (event === undefined) throw new Error('Missing Transfer ABI')
-		const collateralToken = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'collateralToken' })
 		const transfers = logs.filter(log => log.address === collateralToken && log.topics[0] === toEventSelector(event)).map(log => decodeEventLog({ abi: transferAbi, data: log.data, topics: log.topics }).args)
 
 		expect(transfers.some(transfer => 'src' in transfer && 'dst' in transfer && 'wad' in transfer && transfer['src'] === context.other.account.address && transfer['dst'] === context.engine && transfer['wad'] === 2n * unit)).toBe(true)

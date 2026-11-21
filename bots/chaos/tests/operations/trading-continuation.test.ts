@@ -330,3 +330,24 @@ for (const definitionId of ['trading.liquidity.remove', 'trading.complete-set.re
 		}
 	})
 }
+
+test('REP-only complete-set redemption signs and preserves its recovery floor', () => {
+	const snapshot = openTradingSnapshot()
+	const pool = snapshot.pools[0]
+	const shares = snapshot.wallet.shares[0]
+	if (pool === undefined || shares === undefined) throw new Error('Missing recovery basket fixture')
+	pool.projectedSettlementCollateralAttoEth = '0'
+	pool.projectedSettlementRecoveryAttoRep = '1000000000000000000'
+	shares.invalid = shares.yes = shares.no = '1000'
+	const original = requiredPlan(snapshot, 'trading.complete-set.redeem')
+	expect(original.metadata['minimumEthAttoEth']).toBe('0')
+	expect(original.metadata['minimumRepAttoRep']).toBe('990')
+	const call = decodeFunctionData({ abi: erc1155Abi, data: requiredAction(original).data })
+	const request = call.args[4]
+	if (typeof request !== 'string') throw new Error('Missing receive request')
+	expect(BigInt(`0x${request.slice(-64)}`)).toBe(990n)
+	pool.projectedSettlementRecoveryAttoRep = '990000000000000000'
+	expect(exactContinuation(snapshot, original, '')).toBeDefined()
+	pool.projectedSettlementRecoveryAttoRep = '989000000000000000'
+	expect(exactContinuation(snapshot, original, '')).toBeUndefined()
+})

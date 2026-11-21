@@ -10,7 +10,8 @@ type UniswapNetworkAddresses = {
 }
 
 /**
- * `published`: Uniswap's own deployment on that chain; the testnet deployer verifies it and never deploys it.
+ * `published`: Uses Uniswap's published infrastructure. On Sepolia the testnet deployer also
+ * installs the missing SwapRouter bound to the published factory and WETH.
  * `deterministic`: no Uniswap deployment exists, so the testnet deployer installs the vendored Uniswap
  * bytecode and WETH9 through the canonical proxy deployer at these CREATE2 addresses.
  */

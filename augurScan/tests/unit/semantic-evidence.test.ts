@@ -5,7 +5,7 @@ import { semanticFields, semanticSummary, timelineEntityPath, timelineTransition
 test('renders exact lifecycle amounts, counterparties and outcomes without rounding', () => {
 	expect(semanticSummary({ event_data: { badDebtAttoEth: String(1000000000000000001n), outcome: '3', receiver: '0x1111111111111111111111111111111111111111' } }, 'ETH')).toContain('1.000000000000000001 ETH')
 	expect(semanticSummary({ event_data: { badDebtAttoEth: String(10n ** 18n) } }, 'SepoliaETH')).toBe('Bad Debt: 1 SepoliaETH')
-	expect(semanticSummary({ event_data: { outcome: '3' } }, 'ETH')).toContain('None')
+	expect(semanticSummary({ event_data: { outcome: '3' } }, 'ETH')).toContain('Outcome: 3')
 	expect(semanticSummary({ event_data: { funded: false } }, 'ETH')).toContain('No')
 	expect(semanticFields({ outcomeBalancesAttoRep: ['1000000000000000000', '2', '3'] }, 'ETH').map(field => field[0])).toEqual(['INVALID balance', 'YES balance', 'NO balance'])
 })
@@ -29,8 +29,9 @@ test('timeline portfolio premiums use the portfolio collateral token, never nati
 	const premium = { entity_type: 'portfolio-services', summary_data: { universeId: '0', amountAttoEth: '14247' } }
 	expect(timelineTransitionSummary({ ...premium, collateral: { symbol: 'USDC', decimals: 6 } }, 'ETH')).toBe('Universe Id: 0 · Amount: 0.014247 USDC')
 	expect(timelineTransitionSummary(premium, 'ETH')).toBe('Universe Id: 0 · Amount: 14,247 collateral units')
-	// Entities outside a portfolio keep the chain's native unit.
-	expect(timelineTransitionSummary({ entity_type: 'pool', summary_data: { amountAttoEth: String(10n ** 18n) } }, 'ETH')).toBe('Amount: 1 ETH')
+	for (const entity_type of ['pool', 'portfolio-settlement', 'portfolio-auction']) {
+		expect(timelineTransitionSummary({ entity_type, collateral: { symbol: 'USDC', decimals: 6 }, summary_data: { amountAttoEth: '1000000' } }, 'ETH')).toBe('Amount: 1 USDC')
+	}
 })
 
 test('timeline targets link only entities that have a detail page', () => {
@@ -56,7 +57,37 @@ test('reverted ancestors make child ETH movements attempted rather than transfer
 	expect(callTraceRows({ type: 'CALL', calls: [{ value: '0x0' }] }, 'SepoliaETH')).toEqual(['Transaction · CALL · Unknown → Creation · 0 SepoliaETH', 'Internal call (depth 1) · CALL · Unknown → Creation · 0 SepoliaETH'])
 })
 
-test('presents retention evidence as the annual open-interest fee', () => {
-	expect(semanticFields({ currentRetentionRate: '1000000000000000000' }, 'ETH')).toEqual([['Annual open-interest fee', '0%']])
-	expect(semanticFields({ current_retention_rate: null }, 'ETH')).toEqual([['Annual open-interest fee', 'Unavailable']])
+test('presents annual basis points as a fee and leaves legacy retention values raw', () => {
+	expect(semanticFields({ annualFeeBps: '125' }, 'ETH')).toEqual([['Annual open-interest fee', '1.25%']])
+	expect(semanticFields({ annual_fee_bps: null }, 'ETH')).toEqual([['Annual open-interest fee', 'Unavailable']])
+	expect(semanticFields({ currentRetentionRate: '1000000000000000000' }, 'ETH')).toEqual([['Current Retention Rate', '1,000,000,000,000,000,000']])
+})
+
+test('formats pool share supply and coordinator prices with collateral precision', () => {
+	expect(semanticFields({ shareTokenSupplyAttoShares: '1000000', repPerEth1e18: (2n * 10n ** 30n).toString(), lastSettlementTimestamp: '1750000000' }, 'ETH', { symbol: 'USDC', decimals: 6 })).toEqual([
+		['Share Token Supply', '1 shares'],
+		['Rep Per Eth1e18', '2 REP/USDC'],
+		['Last Settlement Timestamp', '2025-06-15 15:06:40 UTC'],
+	])
+})
+
+test('formats auction windows as dates without treating portfolio clock values as timestamps', () => {
+	expect(semanticFields({ opensAt: '1750000000', closesAt: '1750000000', lastSettlementPortfolioTime: '1750000000' }, 'ETH')).toEqual([
+		['Opens At', '2025-06-15 15:06:40 UTC'],
+		['Closes At', '2025-06-15 15:06:40 UTC'],
+		['Last Settlement Portfolio Time', '1,750,000,000'],
+	])
+})
+
+test('timeline coordinator prices carry their REP per collateral units', () => {
+	expect(timelineTransitionSummary({ entity_type: 'price-coordinator', collateral: { symbol: 'USDC', decimals: 6 }, event_data: { price: (2n * 10n ** 30n).toString() } }, 'ETH')).toBe('Rep Per Eth1e18: 2 REP/USDC')
+})
+
+test('renders raw pool accounting columns without requiring an event payload', () => {
+	const record = { block_number: '99', settlement_collateral_atto_eth: '1500000', share_token_supply_atto_shares: '2000000', last_settlement_portfolio_time: '120' }
+	const summary = semanticSummary(record, 'ETH', { symbol: 'USDC', decimals: 6 })
+	expect(summary).toContain('Settlement collateral: 1.5 USDC')
+	expect(summary).toContain('Share token supply: 2 shares')
+	expect(summary).toContain('Last settlement portfolio time: 120')
+	expect(summary).not.toContain('99')
 })

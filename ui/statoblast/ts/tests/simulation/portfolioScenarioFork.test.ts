@@ -60,7 +60,7 @@ test(
 				getDeploymentSteps,
 				getZoltarAddress,
 			},
-			initialization: { kind: 'scenario', scenario: 'portfolio' },
+			initialization: { kind: 'scenario', scenario: 'securitypoolx2' },
 		})
 		try {
 			await engine.bootstrap()

@@ -232,8 +232,8 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 		result['finalization'] = finalization
 		result['collateral'] = collateral ?? null
 	} else {
-		result['deposits'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'DepositOnOutcome' || row['event_name'] === 'LocalDepositAppended')
-		result['claims'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => String(row['event_name']).includes('Claim'))
+		result['deposits'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'LocalDepositAppended')
+		result['claims'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'ClaimDeposit')
 	}
 	return json({ chainId, asOf, data: result })
 }

@@ -72,8 +72,8 @@ test('price preparation blocks before start and creates only one explicit prepar
 	expect(state.requests).toHaveLength(1)
 	expect(decodeFunctionData({ abi, data: lastRequest(state.requests).data })).toEqual({ functionName: 'preparePortfolioPriceFeed', args: [token, 42n] })
 	await state.hook.setProps({ target: { ...state.target, started: false } })
-	expect(state.hook.state().prepareReason).toContain('Prepare the branch')
-	await expect(state.hook.state().prepare()).rejects.toThrow('Prepare the branch')
+	expect(state.hook.state().prepareReason).toContain('Start branch migration')
+	await expect(state.hook.state().prepare()).rejects.toThrow('Start branch migration')
 	expect(state.requests).toHaveLength(1)
 })
 test('wrapping and editable approvals remain independent from requesting a funded report', async () => {
@@ -164,26 +164,40 @@ test('settlement and recovery remain independent after funding closes', async ()
 	expect(state.requests).toHaveLength(3)
 })
 
-test('price settlement waits for the report base-fee ceiling and rechecks the fee before submission (#1370)', async () => {
+test('settlement can complete OpenOracle above the price-acceptance ceiling', async () => {
 	const state = await setup(fixture => {
 		fixture.values['pendingReportId'] = 9n
 		fixture.source.setSnapshot(capitalSnapshot({ timestamp: 1_200n }))
 		fixture.setBaseFee(2n)
 	})
 	await waitFor(() => expect(state.hook.state().report?.reportId).toBe(9n))
-	expect(state.hook.state().settleReason).toContain('base fee')
-	await expect(state.hook.state().settle()).rejects.toThrow('base fee')
-	expect(state.requests).toHaveLength(0)
-
-	state.setBaseFee(1n)
-	await act(() => state.hook.state().refresh())
-	await waitFor(() => expect(state.hook.state().settleReason).toBeUndefined())
+	expect(state.hook.state().settleReason).toBeUndefined()
 	await act(() => state.hook.state().settle())
 	const transaction = lastRequest(state.requests)
 	expect(transaction.reviewDescription).toContain('base fee')
-	await transaction.validateBeforeSubmit?.()
-	state.setBaseFee(2n)
-	await expect(transaction.validateBeforeSubmit?.()).rejects.toThrow('base fee')
+	await expect(transaction.validateBeforeSubmit?.()).resolves.toBeUndefined()
+})
+
+test('high-base-fee recovery follows the exact candidate simulation and rechecks before signing', async () => {
+	const state = await setup(fixture => {
+		fixture.values['pendingReportId'] = 9n
+		fixture.game.settlementTimestamp = 1_200n
+		fixture.source.setSnapshot(capitalSnapshot({ timestamp: 1_200n }))
+		fixture.setBaseFee(2n)
+	})
+	await waitFor(() => expect(state.hook.state().report?.reportId).toBe(9n))
+	expect(state.hook.state().recoverReason).toBeUndefined()
+	await act(() => state.hook.state().recover())
+	const transaction = lastRequest(state.requests)
+	await expect(transaction.validateBeforeSubmit?.()).resolves.toBeUndefined()
+	expect(state.recoveryCalls).toContainEqual(expect.objectContaining({ address: priceFeed, blockNumber: 10n }))
+	state.setRecoveryCallFailure(new Error('execution reverted: Base fee too high'))
+	await expect(transaction.validateBeforeSubmit?.()).rejects.toThrow('ceiling')
+	await act(() => state.hook.state().refresh())
+	await waitFor(() => expect(state.hook.state().recoverReason).toContain('ceiling'))
+	state.setRecoveryCallFailure(new Error('RPC unavailable'))
+	await act(() => state.hook.state().refresh())
+	await waitFor(() => expect(state.hook.state().recoverReason).toContain('RPC unavailable'))
 })
 
 test('new report funding stops one challenge period before the fixed preparation cutoff', async () => {

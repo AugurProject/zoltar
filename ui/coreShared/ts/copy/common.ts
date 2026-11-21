@@ -164,3 +164,5 @@ export const formatLocalTimeLabel = (localTimestamp: CopyTemplateValue) => `Loca
 
 /** The reason a prerequisite step, such as an ETH wrap, is disabled when nothing is left for it to do. */
 export const notNeeded = 'Not needed.'
+
+export const immediatelyAfterCreation = 'Immediately after creation'

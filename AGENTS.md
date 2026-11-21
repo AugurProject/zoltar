@@ -59,7 +59,7 @@ UI app-only exception: when changes are limited to one app's `ui/<app>/ts/**/*.t
 cd ui/zoltar && bun x tsc --project tsconfig.json
 ```
 
-(or the matching `ui/statoblast`, `ui/trading`, or `ui/coreShared` project). Use full `bun run tsc` for UI tests, UI build scripts under `tooling/ui`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
+(or the matching `ui/statoblast`, `ui/trading`, or `ui/openoracle` project). Use full `bun run tsc` for UI tests, UI build scripts under `tooling/ui`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
 
 Skip TypeScript for prose-only, instruction-only, `.codex/agents`-only, formatting-only, or comment-only changes that cannot affect generated imports or executable behavior.
 
@@ -134,7 +134,7 @@ Choose the smallest relevant scenario:
 
 When the change alters a screen that documentation screenshots show, run `bun run docs:screenshots -- --app <app>` and review the recaptured images and the page text that quotes their labels (`bun run test:plan` suggests this).
 
-Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Uniswap-backed REP pricing is intentionally unavailable in simulation; quote-dependent UI must degrade gracefully.
+Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Simulation uses an editable mock Uniswap quoter for supported REP pairs. Quote-dependent UI must still degrade gracefully when no quote is available.
 
 Run the layout scan for the apps whose UI the change reaches, and only those, for example `bun run ui:layout-scan -- --app zoltar --route '#/zoltar' --out <directory outside the repository>`; `--app` is required and takes one or more comma-separated apps. It walks the routes, view tabs, disclosures, and dialog launchers it can reach at five viewport sizes and reports content that is cut off, overflows, overlaps, or is squeezed, with the cause, source locations, and a highlighted screenshot per finding. Fix findings on changed surfaces and pass the report to the visual reviewer; `--help` lists the options.
 

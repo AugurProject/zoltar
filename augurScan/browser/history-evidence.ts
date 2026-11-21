@@ -84,8 +84,6 @@ export const timelineEntityTypeLabel = (value: JsonValue | undefined): string =>
 			return 'AMM market'
 		case 'fork':
 			return 'Universe fork'
-		case 'reporter':
-			return 'Reporter'
 		default:
 			return enumValueLabel(value, 'Entity')
 	}
@@ -155,4 +153,11 @@ export const historyInvalidationEvidencePresentation = (causes: JsonValue | unde
 		occurrenceTotal: occurrenceTotal.toString(),
 		occurrenceFields,
 	}
+}
+
+export const liveResetNotice = (reason: unknown) => {
+	let title = 'Live stream reset'
+	if (reason === 'replay-window-expired') title = 'Live replay window expired'
+	else if (reason === 'cursor-ahead-of-head') title = 'Live cursor ahead of indexed history'
+	return { title, detail: 'Refreshing views from the current database state.' }
 }

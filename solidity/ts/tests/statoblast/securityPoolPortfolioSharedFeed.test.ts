@@ -92,7 +92,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const request = { abi: coordinatorArtifact.abi, address: coordinator, functionName: 'requestPrice', value: bounty } as const
 		const pendingBefore = await getPendingReportId(owner, coordinator)
 
-		await expect(owner.simulateContract({ ...request, args: [unit, minimum - 1n, bounty] })).rejects.toThrow('Report funding exceeds approved budget')
+		await expect(owner.simulateContract({ ...request, args: [unit, minimum - 1n, bounty] })).rejects.toThrow('Report funding below minimum')
 		expect(await getPendingReportId(owner, coordinator)).toBe(pendingBefore)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...request, args: [unit, minimum, bounty] }))
 		const reportId = await getPendingReportId(owner, coordinator)

@@ -18,13 +18,10 @@ interface IOracleReportConfig {
 	function openOracle() external view returns (OpenOracle);
 	function weth() external view returns (IWeth9);
 	function securityPool() external view returns (ISecurityPool);
-	function gasConsumedOpenOracleReportPrice() external view returns (uint256);
 	function getSettlementCallbackGasLimit() external view returns (uint32);
 	function minimumToken1ReportAttoEth() external view returns (uint256);
-	function gasUnitsForOneDispute() external view returns (uint256);
 	function initialReportPriorityFeeAttoEthPerGas() external view returns (uint256);
 	function targetPriceErrorForDispute() external view returns (uint256);
-	function openOracleSecurityMultiplierBps() external view returns (uint256);
 	function settlementTime() external view returns (uint48);
 	function disputeDelay() external view returns (uint24);
 	function protocolFee() external view returns (uint24);
@@ -36,8 +33,8 @@ interface IOracleReportConfig {
 }
 
 /// @notice Stateless standalone-report execution and validation shared by operation coordinators.
-/// @dev Creation uses delegatecall so report funding, reporter credits, and the callback remain with
-/// the calling coordinator. The delegate never accesses coordinator storage slots directly.
+/// @dev Delegatecall preserves sponsor approvals to the calling coordinator for report funding.
+/// Reporter credits and the settlement callback belong to each report escrow. The delegate never accesses coordinator storage slots directly.
 contract OpenOracleReportDelegate {
 	using SafeERC20Ops for IERC20;
 
@@ -46,7 +43,7 @@ contract OpenOracleReportDelegate {
 		IOracleReportConfig config = IOracleReportConfig(address(this));
 		SharedPoolPriceFeed feed = config.sharedPriceFeed();
 		uint256 minimum = feed.minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice);
-		require(requestedInitialAttoWeth >= minimum, 'Report funding exceeds approved budget');
+		require(requestedInitialAttoWeth >= minimum, 'Report funding below minimum');
 		uint256 wethAmount = requestedInitialAttoWeth;
 		uint256 repAmount = Math.mulDiv(wethAmount, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
 		IERC20 weth = feed.collateralToken();

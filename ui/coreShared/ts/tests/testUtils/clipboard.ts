@@ -1,7 +1,7 @@
 type TestClipboard = { writeText: (text: string) => Promise<void> }
 
 /** Installs `clipboard` on the global navigator and on the DOM window's navigator, so copy controls reach it either way. */
-export function installClipboard(clipboard: TestClipboard, windowNavigator: Navigator = window.navigator) {
+export function installClipboard(clipboard: TestClipboard, windowNavigator: object = window.navigator) {
 	Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
 	Reflect.defineProperty(windowNavigator, 'clipboard', { configurable: true, value: clipboard })
 }

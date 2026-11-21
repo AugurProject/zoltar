@@ -121,17 +121,17 @@ function formatUtcTimestamp(timestamp: bigint) {
 
 /**
  * The timestamp in the viewer's time zone, or `timeZone`, in the same layout as the UTC form, such as
- * `2023-11-14 17:13:20 EST`. Undefined when that zone shows the same wall-clock time as UTC, so callers add nothing.
+ * `2023-11-14 17:13:20 UTC-5`. Undefined when that zone shows the same wall-clock time as UTC, so callers add nothing.
  */
 export function formatLocalTimestamp(timestamp: bigint, timeZone?: string) {
 	const utcTimestamp = formatUtcTimestamp(timestamp)
 	if (utcTimestamp === undefined) return undefined
 	const date = new Date(bigintToSafeNumber(timestamp * BigInt(MILLISECONDS_PER_SECOND), 'Timestamp'))
-	const parts = new Intl.DateTimeFormat('en-US', { day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', second: '2-digit', timeZone, timeZoneName: 'short', year: 'numeric' }).formatToParts(date)
+	const parts = new Intl.DateTimeFormat('en-US', { day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', second: '2-digit', timeZone, timeZoneName: 'shortOffset', year: 'numeric' }).formatToParts(date)
 	const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(candidate => candidate.type === type)?.value ?? ''
 	const wallClock = `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}:${part('second')}`
 	if (`${wallClock} UTC` === utcTimestamp) return undefined
-	return `${wallClock} ${part('timeZoneName')}`
+	return `${wallClock} ${part('timeZoneName').replace(/^GMT/, 'UTC')}`
 }
 
 export function formatTimestampDateTime(timestamp: bigint) {

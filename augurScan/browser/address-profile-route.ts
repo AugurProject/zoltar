@@ -136,7 +136,7 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 						largest_rep_symbol: null,
 						rep_balances: [],
 						weth_balances: [],
-						native_balance_detail: { balance: '0', blockNumber: network?.indexed_block ?? '0' },
+						native_balance_detail: null,
 						pool_associations: [],
 						...portfolio.data,
 					}

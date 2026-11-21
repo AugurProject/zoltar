@@ -1,3 +1,5 @@
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -136,7 +138,7 @@ describe('live workflow safety boundary', () => {
 				previousStart: undefined,
 				nextStart: undefined,
 				markets: [
-					{ ...market, endTime: discoveredEndTime, loadError: discoveredLoadError },
+					{ ...market, endTime: discoveredEndTime, ...(discoveredLoadError === undefined ? {} : { loadError: discoveredLoadError }) },
 					{ ...secondMarket, endTime: discoveredEndTime },
 				],
 			}
@@ -170,7 +172,7 @@ describe('live workflow safety boundary', () => {
 			connectWallet: async () => {
 				return connectedAccount
 			},
-			createTradingWalletClient: () => walletClient,
+			createTradingWalletClient: () => testDouble<WriteClient>(walletClient),
 			loadWalletHeaderBalances: async () => {
 				return { ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }
 			},
@@ -185,7 +187,7 @@ describe('live workflow safety boundary', () => {
 			// Prices like the router so the pre-signing check agrees with the ticket's local estimate.
 			simulateEntry: async (_client: unknown, _configuration: unknown, quotedMarket: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => {
 				const result = quoteEnterPosition(side, (amount * quotedMarket.shareTokenSupplyAttoShares) / quotedMarket.settlementCollateralAttoEth, quotedMarket)
-				return { blockNumber: 1n, amount, side, market: quotedMarket, deadline: now + 1_200n, slippageBps: 50n, minimumLongShares: 1n, result }
+				return { blockNumber: 1n, blockHash: `0x${'aa'.repeat(32)}` as const, mintAttoEth: amount, amount, side, market: quotedMarket, deadline: now + 1_200n, slippageBps: 50n, minimumLongShares: 1n, result: { ...result, ethSpent: amount } }
 			},
 			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, quote: { market: LiveMarket; minimumLongShares: bigint; result: { totalLongShares: bigint } }, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
 				submittedEntries.push(quote)
@@ -232,7 +234,10 @@ describe('live workflow safety boundary', () => {
 			expect(discoveredUniverseIds.at(-1)).toBe(2n)
 			expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
 		}
-		const show = async (route: TradingRoute, options?: ViewOptions) => await act(() => render(liveTradingView(route, options), rendered.container))
+		const show = async (route: TradingRoute, options?: ViewOptions) =>
+			await act(() => {
+				render(liveTradingView(route, options), rendered.container)
+			})
 		const marketRoute = `market/${pool}` as const
 		const liquidityRoute = `liquidity/${pool}` as const
 		// Manual refresh controls are gone; leaving and re-entering the addressed route runs an explicit refresh.
@@ -337,11 +342,15 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).toContain(childPool)
 		connectedAccount = `0x${'9b'.repeat(20)}` as Address
 		const universeTwoDiscoveryCount = discoveredUniverseIds.length
-		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
+		await act(async () => {
+			await walletListeners.get('accountsChanged')?.([connectedAccount])
+		})
 		await settleAsyncWorkflow()
 		await expectOnlyUniverseTwoRefreshedSince(universeTwoDiscoveryCount)
 		const universeTwoChainDiscoveryCount = discoveredUniverseIds.length
-		await act(async () => walletListeners.get('chainChanged')?.('0x7a69'))
+		await act(async () => {
+			await walletListeners.get('chainChanged')?.('0x7a69')
+		})
 		await settleAsyncWorkflow()
 		await expectOnlyUniverseTwoRefreshedSince(universeTwoChainDiscoveryCount)
 		deferChildDiscovery = false
@@ -368,14 +377,18 @@ describe('live workflow safety boundary', () => {
 		await show(marketRoute)
 		await flush()
 		connectedAccount = `0x${'9a'.repeat(20)}` as Address
-		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
+		await act(async () => {
+			await walletListeners.get('accountsChanged')?.([connectedAccount])
+		})
 		await settleAsyncWorkflow()
 		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
 		expect(document.body.textContent).not.toContain('Reconnect before simulating or submitting')
 		await show(`security-pool/${pool}`)
 		await settleAsyncWorkflow()
 		const summariesBeforeChainRefresh = walletSummaries.length
-		await act(async () => walletListeners.get('chainChanged')?.('0x7a69'))
+		await act(async () => {
+			await walletListeners.get('chainChanged')?.('0x7a69')
+		})
 		await settleAsyncWorkflow()
 		expect(walletSummaries.length).toBeGreaterThan(summariesBeforeChainRefresh)
 		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
@@ -405,7 +418,9 @@ describe('live workflow safety boundary', () => {
 		positionReceipt = createDeferred<{ status: 'success' | 'reverted' }>()
 		positionBroadcast = createDeferred<undefined>()
 		positionWalletWrite = createDeferred<undefined>()
-		await act(async () => buttonByLabel('Buy Yes').click())
+		await act(async () => {
+			await buttonByLabel('Buy Yes').click()
+		})
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Buy Yes: checking the latest price before your wallet opens')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
@@ -431,7 +446,9 @@ describe('live workflow safety boundary', () => {
 		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
 		// Other routes keep refreshing while the trade runs; only the trade's own market waits for it.
 		const discoveriesBeforePortfolioRefresh = discoveredUniverseIds.length
-		await act(async () => invalidateAppData())
+		await act(async () => {
+			await invalidateAppData()
+		})
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBeGreaterThan(discoveriesBeforePortfolioRefresh)
 		// Another market's ticket shows none of this trade's status or hash and stays usable: one trade runs per market.
@@ -452,7 +469,9 @@ describe('live workflow safety boundary', () => {
 		})
 		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'second market entry estimate')
 		expect(buttonByLabel('Buy Yes').disabled).toBeFalse()
-		await act(async () => buttonByLabel('Buy Yes').click())
+		await act(async () => {
+			await buttonByLabel('Buy Yes').click()
+		})
 		await waitForDom(() => document.body.textContent?.includes('Buy Yes sent. Waiting for confirmation') === true, 'second market pending trade')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(secondMarketTransactionHash)
 		expect(document.querySelector('.transaction-hash')?.textContent).not.toContain(transactionHash)
@@ -469,13 +488,17 @@ describe('live workflow safety boundary', () => {
 		expect(isMarketTransactionPending(secondPool)).toBeTrue()
 		// With both trades pending, other routes still refresh and each pending market's route waits for its own trade.
 		const discoveriesOnSecondPendingMarket = discoveredUniverseIds.length
-		await act(async () => invalidateAppData())
+		await act(async () => {
+			await invalidateAppData()
+		})
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBe(discoveriesOnSecondPendingMarket)
 		await show('portfolio')
 		await settleAsyncWorkflow()
 		const discoveriesBeforeSecondPortfolioRefresh = discoveredUniverseIds.length
-		await act(async () => invalidateAppData())
+		await act(async () => {
+			await invalidateAppData()
+		})
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBeGreaterThan(discoveriesBeforeSecondPortfolioRefresh)
 		await show(marketRoute)
@@ -485,7 +508,9 @@ describe('live workflow safety boundary', () => {
 		expect(document.querySelector('.transaction-hash')?.textContent).not.toContain(secondMarketTransactionHash)
 		expect(document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')?.value).toBe('0.01')
 		const discoveriesOnPendingMarket = discoveredUniverseIds.length
-		await act(async () => invalidateAppData())
+		await act(async () => {
+			await invalidateAppData()
+		})
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBe(discoveriesOnPendingMarket)
 		positionReceipt.resolve({ status: 'success' })
@@ -528,7 +553,9 @@ describe('live workflow safety boundary', () => {
 		await typeAmount('0.02')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 
-		await act(async () => buttonByLabel('Sell').click())
+		await act(async () => {
+			await buttonByLabel('Sell').click()
+		})
 		expect(document.querySelector('[role="tabpanel"] .tx-action-button')).not.toBeNull()
 		expect(document.querySelector('[role="tabpanel"] .pool-mechanics')).toBeNull()
 		expect(document.body.textContent).not.toContain('Factory discovery')
@@ -543,7 +570,9 @@ describe('live workflow safety boundary', () => {
 		await show(liquidityRoute, { recordSummary: false })
 		await flush()
 		await waitForDom(() => hasButton('Remove'), 'liquidity controls')
-		await act(async () => buttonByLabel('Remove').click())
+		await act(async () => {
+			await buttonByLabel('Remove').click()
+		})
 		expect(hasButton('Approve exact LP amount')).toBeFalse()
 		expect(hasButton('Remove liquidity')).toBeTrue()
 		expect(hasButton('Simulate liquidity transaction')).toBeFalse()

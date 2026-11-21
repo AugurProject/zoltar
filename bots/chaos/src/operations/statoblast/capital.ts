@@ -213,7 +213,7 @@ export function capitalPolicy(kind: 'commitment' | 'health'): OperationDefinitio
 	const label = kind === 'commitment' ? 'Set portfolio commitment' : 'Set owner health target'
 	function candidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 		return openCapital(snapshot, options).flatMap(capital => {
-			const fresh = capital.priceValid && amount(capital.priceValidUntil) >= amount(snapshot.anchor.timestamp)
+			const fresh = capital.priceValid && amount(capital.priceValidUntil) > amount(snapshot.anchor.timestamp)
 			const health = amount(capital.targetHealthFactorBps) || 10_000n
 			if (kind === 'health') {
 				const target = inputInteger(options, 'healthFactorBps', health, 10_000n)

@@ -224,8 +224,8 @@ void describe('formatting helpers', () => {
 		})
 
 		void test('formatLocalTimestamp renders the viewer zone in the UTC layout and nothing when it matches UTC', () => {
-			expect(formatLocalTimestamp(1_700_000_000n, 'America/New_York')).toBe('2023-11-14 17:13:20 EST')
-			expect(formatLocalTimestamp(1_700_000_000n, 'Asia/Kolkata')).toBe('2023-11-15 03:43:20 GMT+5:30')
+			expect(formatLocalTimestamp(1_700_000_000n, 'America/New_York')).toBe('2023-11-14 17:13:20 UTC-5')
+			expect(formatLocalTimestamp(1_700_000_000n, 'Asia/Kolkata')).toBe('2023-11-15 03:43:20 UTC+5:30')
 			expect(formatLocalTimestamp(1_700_000_000n, 'UTC')).toBeUndefined()
 			expect(formatLocalTimestamp(1_700_000_000n, 'Europe/London')).toBeUndefined()
 			expect(formatLocalTimestamp(10n ** 30n, 'America/New_York')).toBeUndefined()

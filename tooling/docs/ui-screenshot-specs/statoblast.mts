@@ -4,7 +4,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 	{
 		id: 'portfolio-capital',
 		app: 'statoblast',
-		scenario: 'portfolio',
+		scenario: 'securitypoolx2',
 		route: '#/portfolios',
 		viewport: { width: 800, height: 900 },
 		steps: [{ waitForText: 'PRICE CURRENT' }],
@@ -15,11 +15,11 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 	{
 		id: 'portfolio-purchase',
 		app: 'statoblast',
-		scenario: 'portfolio',
+		scenario: 'securitypoolx2',
 		route: '#/portfolios',
 		viewport: { width: 800, height: 1000 },
 		steps: [{ waitForText: 'PRICE CURRENT' }],
-		expectText: ['Find by question ID', 'Collateral (WETH)', 'Maximum purchase fee (WETH)', 'Minimum complete sets'],
+		expectText: ['Find by question ID', 'Collateral (WETH)', 'Maximum purchase charge (WETH)', 'Minimum complete sets'],
 		crop: { selector: 'section', containing: 'Find by question ID', scrollIntoView: true },
 		usedBy: ['tutorials/statoblast-first-pool.html'],
 	},

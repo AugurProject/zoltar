@@ -1,3 +1,4 @@
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { describe, expect, spyOn, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -7,11 +8,13 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { ProbabilityBar } from '../../components/ProbabilityBar.js'
 import { useQuestionClock } from '../../features/live/useLiveTradingState.js'
-import { liveTradingControllerServices, type LiveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
+import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
+import type { LiveTradingControllerServices } from '../../features/live/liveTradingTypes.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
 
 const configuration: DeploymentConfiguration = {
+	zoltar: deploymentConfigurationFixture().zoltar,
 	chainId: 31_337,
 	chainName: 'Local',
 	rpcUrl: 'http://127.0.0.1:8545',
@@ -42,13 +45,15 @@ function servicesWithBlockTimestamp(timestamp: bigint, calls: { count: number })
 // Records the 12-second block polls the shared watcher schedules without ever firing them.
 function trackQuestionClockTimers(scheduled: number[]) {
 	const originalSetTimeout = globalThis.setTimeout
-	return spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...parameters) => {
-		if (delay === 12_000) {
-			scheduled.push(delay)
-			return originalSetTimeout(() => undefined, 0)
-		}
-		return originalSetTimeout(handler, delay, ...parameters)
-	})
+	return spyOn(globalThis, 'setTimeout').mockImplementation(
+		Object.assign((...[handler, delay, ...parameters]: Parameters<typeof originalSetTimeout>) => {
+			if (delay === 12_000) {
+				scheduled.push(delay)
+				return originalSetTimeout(() => undefined, 0)
+			}
+			return originalSetTimeout(handler, delay, ...parameters)
+		}, originalSetTimeout),
+	)
 }
 
 describe('question clock', () => {

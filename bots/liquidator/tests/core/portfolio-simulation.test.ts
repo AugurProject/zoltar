@@ -34,7 +34,7 @@ async function simulationFixture(mode: Mode) {
 					if (mode === 'malformed' && index === 1) return Response.json({ id, jsonrpc: '2.0', result: 'malformed' })
 					if (mode === 'disagreement' && index === 1) return Response.json({ id, jsonrpc: '2.0', result: '0x' })
 					if (mode === 'transport') return new Response('Unavailable', { status: 503 })
-					return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'execution reverted: Source healthy' } })
+					return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'execution reverted: Position does not need takeover' } })
 				}
 				unexpected.push(String(method))
 				return Response.json({ id, jsonrpc: '2.0', error: { code: -32601, message: 'Unexpected request' } })

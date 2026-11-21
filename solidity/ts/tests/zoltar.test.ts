@@ -6,7 +6,7 @@ import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, GENESIS_UNIVERSE, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
-import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
+import { approveToken, setupTestAccounts, overrideGenesisTheoreticalSupply, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { decodeEventLog, encodeDeployData, getAddress, hexToBytes, isHex, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -238,10 +238,10 @@ describe('Contract Test Suite', () => {
 	})
 
 	test.each([
-		{ name: 'missing genesis REP token code', override: { code: hexToBytes('0x') }, expected: /Genesis REP token address must contain code/ },
-		{ name: 'zero genesis REP theoretical supply', override: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 0n } }, expected: /Genesis REP missing supply: theoretical supply must be non-zero/ },
-		{ name: 'genesis REP theoretical supply above the protocol maximum', override: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 11_000_000n * 10n ** 18n + 1n } }, expected: /Genesis REP exceeds maximum supply/ },
-	])('constructor rejects $name', async ({ override, expected }) => {
+		{ name: 'missing genesis REP token code', supply: undefined, override: { code: hexToBytes('0x') }, expected: /Genesis REP token address must contain code/ },
+		{ name: 'zero genesis REP theoretical supply', override: undefined, supply: 0n, expected: /Genesis REP missing supply: theoretical supply must be non-zero/ },
+		{ name: 'genesis REP theoretical supply above the protocol maximum', override: undefined, supply: 11_000_000n * 10n ** 18n + 1n, expected: /Genesis REP exceeds maximum supply/ },
+	])('constructor rejects $name', async ({ override, supply, expected }) => {
 		const zoltarQuestionDataAddress = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'zoltarQuestionData', address: getZoltarAddress(), args: [] })
 		const deployment = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
@@ -249,7 +249,8 @@ describe('Contract Test Suite', () => {
 			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 
-		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: override })
+		if (supply !== undefined) await overrideGenesisTheoreticalSupply(mockWindow, client, addressString(GENESIS_REPUTATION_TOKEN), supply)
+		else if (override !== undefined) await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: override })
 
 		await assert.rejects(
 			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
@@ -967,12 +968,12 @@ describe('Contract Test Suite', () => {
 	test('#1353, #1464: genesis tracks external supply until the first fork and then fixes child caps', async () => {
 		const initial = await getUniverseTheoreticalSupplyAttoRep(client, 0n)
 		const externalSupply = initial - 1_000n
-		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: externalSupply } } })
+		await overrideGenesisTheoreticalSupply(mockWindow, client, addressString(GENESIS_REPUTATION_TOKEN), externalSupply)
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, 0n), externalSupply)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await writeContractAndWait(client, () => client.writeContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'burnRep', args: [0n, 10n] }))
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, 0n), externalSupply - 10n)
-		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: externalSupply + 500n } } })
+		await overrideGenesisTheoreticalSupply(mockWindow, client, addressString(GENESIS_REPUTATION_TOKEN), externalSupply + 500n)
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, 0n), externalSupply + 490n)
 		const question = makeQuestion('live genesis supply, fixed child cap')
 		await createQuestion(client, question, ['Yes', 'No'])
@@ -980,7 +981,7 @@ describe('Contract Test Suite', () => {
 		await deployChild(client, 0n, 0n)
 		const cap = await getUniverseTheoreticalSupplyAttoRep(client, getChildUniverseId(0n, 0n))
 		const frozen = await getUniverseTheoreticalSupplyAttoRep(client, 0n)
-		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: initial } } })
+		await overrideGenesisTheoreticalSupply(mockWindow, client, addressString(GENESIS_REPUTATION_TOKEN), initial)
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, 0n), frozen)
 		await deployChild(client, 0n, 1n)
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, getChildUniverseId(0n, 1n)), cap)

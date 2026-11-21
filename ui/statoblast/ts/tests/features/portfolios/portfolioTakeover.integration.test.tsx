@@ -40,12 +40,12 @@ describe('manual takeover against native portfolio contracts', () => {
 			expect(snapshot.priceValid).toBe(true)
 			expect(snapshot.timestamp).toBeLessThan(snapshot.priceValidUntil)
 			const backend = { ...createFakeBackend({ accountAddress: keeper.account.address }), createReadClient: () => keeper }
-			installActiveEnvironmentForTesting(backend, backend)
+			installActiveEnvironmentForTesting(backend)
 			let submitted = false
 			let failure: unknown
 			const actions = {
 				ownerReason: undefined,
-				scope: undefined,
+				scope: [],
 				busy: undefined,
 				runPortfolioAction: async (_action: string, _label: string, build: () => PortfolioTransaction | Promise<PortfolioTransaction>) => {
 					try {
@@ -72,12 +72,19 @@ describe('manual takeover against native portfolio contracts', () => {
 			}
 			const button = view.container.querySelector('button')
 			if (button === null) throw new Error('Missing takeover action')
-			await waitFor(() => expect(button.disabled).toBe(false))
+			if (scenario === 'rejected-bounds') {
+				await waitFor(() => expect(view.container.textContent).toContain('Your resulting principal exceeds the maximum total principal.'))
+				expect(button.disabled).toBe(true)
+			} else await waitFor(() => expect(button.disabled).toBe(false))
 			expect(snapshot.ownerCommitmentAttoEth).toBe(0n)
-			await act(() => button.click())
+			await act(() => {
+				button.click()
+			})
 			if (scenario !== 'success') {
-				await waitFor(() => expect(failure).toBeDefined(), { timeout: 30_000 })
-				expect(String(failure)).toContain(scenario === 'changed-price' ? 'changed' : 'Takeover owner principal exceeds limit')
+				if (scenario === 'changed-price') {
+					await waitFor(() => expect(failure).toBeDefined(), { timeout: 30_000 })
+					expect(String(failure)).toContain('changed')
+				} else expect(failure).toBeUndefined()
 				expect(submitted).toBe(false)
 				const after = await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })
 				const sourceAfter = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })

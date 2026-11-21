@@ -1,4 +1,4 @@
-import { encodeFunctionData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, parseAbi, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 import { decodeAddress, decodeUint } from './securityPoolPortfolioDecoding.js'
 
@@ -7,6 +7,8 @@ const abi = parseAbi([
 	'function createCompleteSetWithRecoveryRep(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee,uint256 maximumRecoveryAttoRep)',
 	'function quoteMintRecoveryRep(uint248 universeId,uint256 questionId,uint256 cash) view returns(uint256)',
 	'function addQuestion(uint256 questionId) returns (address)',
+	'function questionOriginIds(uint256 questionId) view returns (bytes32)',
+	'function originUniverseId() view returns (uint248)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
 	'function quoteQuestionMint(address pool,uint256 cash) view returns (uint256)',
 	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 mintAttoEth) view returns (uint256 fee,uint256 premium)',
@@ -45,6 +47,7 @@ export function buildPortfolioAddQuestionRequest(parameters: { caller: Address; 
 }
 
 export type PortfolioMintQuote = {
+	/** Zero until an origin-universe first purchase registers the question. */
 	pool: Address
 	capitalLedger: Address
 	shares: bigint
@@ -58,7 +61,7 @@ export type PortfolioMintQuote = {
 	blockNumber: bigint
 }
 
-/** Quotes units and fees at one block. The atomic purchase still checks available healthy capacity after retirement. */
+/** Quotes units and fees at one block. The atomic purchase still checks available mint capacity, excluding queued retirement reductions. */
 export async function loadPortfolioMintQuote(parameters: { client: PortfolioReadClient; portfolio: Address; universeId: bigint; questionId: bigint; mintAttoEth: bigint; blockNumber?: bigint }): Promise<PortfolioMintQuote> {
 	const portfolio = decodeAddress(parameters.portfolio, 'Portfolio')
 	const universeId = decodeUint(parameters.universeId, 'Universe id', 248)
@@ -68,17 +71,21 @@ export async function loadPortfolioMintQuote(parameters: { client: PortfolioRead
 	const blockNumber = parameters.blockNumber ?? (await parameters.client.getBlock()).number
 	if (blockNumber === undefined) throw new Error('A confirmed block is required for a purchase quote.')
 	const read = (target: Address, functionName: string, args: readonly (Address | bigint)[] = []) => parameters.client.readContract({ address: target, abi, functionName, args, blockNumber })
+	const questionOrigin = await read(portfolio, 'questionOriginIds', [questionId])
+	if (typeof questionOrigin !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(questionOrigin)) throw new Error('Invalid question registration response.')
+	const registered = questionOrigin !== zeroHash
+	if (!registered && decodeUint(await read(portfolio, 'originUniverseId'), 'Origin universe', 248) !== universeId) throw new Error('New questions can only be purchased in the origin universe.')
 	const [poolValue, capitalValue, feeQuote, recoveryQuote] = await Promise.all([
-		read(portfolio, 'getPool', [questionId, universeId]),
+		registered ? read(portfolio, 'getPool', [questionId, universeId]) : zeroAddress,
 		read(portfolio, 'capitalLedger', [universeId]),
 		read(portfolio, 'purchaseQuote', [universeId, questionId, cash]),
 		read(portfolio, 'quoteMintRecoveryRep', [universeId, questionId, cash]),
 	])
 	if (!Array.isArray(feeQuote) || feeQuote.length !== 2) throw new Error('Invalid funded purchase fee quote.')
 	const fee = decodeUint(feeQuote[0], 'Purchase fee')
-	const pool = decodeAddress(poolValue, 'Question pool')
+	const pool = decodeAddress(poolValue, 'Question pool', !registered)
 	const capitalLedger = decodeAddress(capitalValue, 'Capital ledger')
-	const [shares, valid, capacity] = await Promise.all([read(portfolio, 'quoteQuestionMint', [pool, cash]), read(capitalLedger, 'isPriceValid'), read(portfolio, 'availableMintCapacity', [universeId])])
+	const [shares, valid, capacity] = await Promise.all([registered ? read(portfolio, 'quoteQuestionMint', [pool, cash]) : cash, read(capitalLedger, 'isPriceValid'), read(portfolio, 'availableMintCapacity', [universeId])])
 	if (typeof valid !== 'boolean') throw new Error('Invalid capital price validity.')
 	const available = decodeUint(capacity, 'Available commitment')
 	return {

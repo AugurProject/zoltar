@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { getAddress, RpcError, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { loadAllSecurityPools, loadRegisteredPortfolios, loadSecurityPoolListing, loadSelectedSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
-import { createMockLoaderClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createMockLoaderClient, createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { centralPortfolioRead, owner, portfolio, capital, token } from '../features/portfolios/capitalFixture.js'
 
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
@@ -293,11 +293,11 @@ test('a reorganization during the portfolio reads is reported as such', async ()
 	let replaced = false
 	const reorganized = {
 		...client,
-		getBlock: async () => (replaced ? { ...block, hash: `0x${'22'.repeat(32)}` } : block),
-		multicall: async (request: Parameters<typeof client.multicall>[0]) => {
+		getBlock: async () => ({ ...(await client.getBlock()), ...(replaced ? { hash: `0x${'22'.repeat(32)}` as const } : {}) }),
+		multicall: createMulticallStub(async request => {
 			replaced = true
 			return await client.multicall(request)
-		},
+		}),
 	}
 	await expect(loadRegisteredPortfolios(reorganized, 0n)).rejects.toThrow('Portfolios changed during discovery')
 })

@@ -51,3 +51,18 @@ test('#1483: fair spot and TWAP cannot admit a shaped V3 full-size replacement',
 	expect(quotes.replacement).toBe(amounts.replacementAmount1 * 100n)
 	expect(executableVenueQuotes(quotes)).toBeUndefined()
 })
+
+test.each([-1n, 1001n])('venue quotes reject an out-of-range price-impact limit before RPC work (%s)', async maxPriceImpactBps => {
+	let reads = 0
+	const client = createPublicClient({
+		chain: network.chain,
+		transport: custom({
+			request: async () => {
+				reads += 1
+				throw new Error('No RPC is needed for an invalid limit')
+			},
+		}),
+	})
+	await expect(quoteVenue(client, { ...config, maxPriceImpactBps }, { venue: 'uniswap-v2', address, quoteToken: network.weth, token, fee: 3000 }, amounts, 10n)).rejects.toThrow('Maximum price impact must be from 0 to 1000 bps')
+	expect(reads).toBe(0)
+})

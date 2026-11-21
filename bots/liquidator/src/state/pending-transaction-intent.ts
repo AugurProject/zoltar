@@ -7,27 +7,9 @@ type ReceiptExpectation = PendingTransactionIntent['receiptExpectation']
 
 const isSerializedTransaction = (value: unknown): value is Hex => typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})+$/.test(value)
 
-function parseStagedOperation(value: unknown): 0 | 1 {
-	if (value === 0 || value === 1) return value
-	throw new Error('Pending transaction intent has invalid staged operation')
-}
-
 function parseReceiptExpectation(rawExpectation: object): ReceiptExpectation {
 	const expectationType = Reflect.get(rawExpectation, 'type')
 	if (expectationType === 'transaction') return { type: 'transaction' }
-	if (expectationType === 'coordinator-operation' || expectationType === 'staged-success') {
-		return { coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))), operation: parseStagedOperation(Reflect.get(rawExpectation, 'operation')), type: expectationType }
-	}
-	if (expectationType === 'pending-liquidation') {
-		return {
-			amount: BigInt(String(Reflect.get(rawExpectation, 'amount'))),
-			coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))),
-			operator: getAddress(String(Reflect.get(rawExpectation, 'operator'))),
-			receiver: getAddress(String(Reflect.get(rawExpectation, 'receiver'))),
-			target: getAddress(String(Reflect.get(rawExpectation, 'target'))),
-			type: 'pending-liquidation',
-		}
-	}
 	throw new Error('Pending transaction intent has invalid receipt expectation')
 }
 

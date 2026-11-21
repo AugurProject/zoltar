@@ -211,7 +211,9 @@ describe('useZoltarFork', () => {
 		const { rerender, state } = await renderForkHook(parameters, createZoltarForkDependencies({ forkZoltarUniverse, loadZoltarForkAccess: async () => createForkAccessResults() }))
 		expect(state().zoltarForkQuestionId).toBe('0x01')
 
-		await act(async () => rerender({ ...parameters, zoltarForkQuestionId: '0x03' }))
+		await act(async () => {
+			await rerender({ ...parameters, zoltarForkQuestionId: '0x03' })
+		})
 		expect(state().zoltarForkQuestionId).toBe('0x03')
 		await act(async () => {
 			await state().forkZoltar()
@@ -240,16 +242,20 @@ describe('useZoltarFork', () => {
 		const { state, rerender } = await renderForkHook(parameters, dependencies)
 
 		let forkPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			forkPromise = state().forkZoltar()
 		})
 
-		await act(async () => rerender({ ...parameters, activeUniverseId: 2n }))
+		await act(async () => {
+			await rerender({ ...parameters, activeUniverseId: 2n })
+		})
 		expect(state().zoltarForkPending).toBe(true)
 		expect(state().zoltarForkActiveAction).toBe('fork')
 		expect(state().zoltarForkFeedback).toBeUndefined()
 
-		await act(async () => rerender({ ...parameters, activeUniverseId: 2n, zoltarForkQuestionId: '0x0c' }))
+		await act(async () => {
+			await rerender({ ...parameters, activeUniverseId: 2n, zoltarForkQuestionId: '0x0c' })
+		})
 
 		await act(async () => {
 			universeLoad.resolve(createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }))
@@ -277,14 +283,16 @@ describe('useZoltarFork', () => {
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 		const { rerender, state } = await renderForkHook(createForkParameters({ zoltarForkQuestionId: '0x01' }), dependencies)
 		let oldPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			oldPromise = state().forkZoltar()
 		})
 
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		await act(async () => rerender(createForkParameters({ environmentRefreshKey: 1, zoltarForkQuestionId: '0x02' })))
+		await act(async () => {
+			await rerender(createForkParameters({ environmentRefreshKey: 1, zoltarForkQuestionId: '0x02' }))
+		})
 		let newPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			newPromise = state().forkZoltar()
 		})
 		expect(state().zoltarForkPending).toBe(true)
@@ -311,7 +319,7 @@ describe('useZoltarFork', () => {
 	})
 
 	function mockApproveForkRep(hash: Hash) {
-		return mock(async (_accountAddress: string, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _reputationToken: string, _amount: bigint, questionId: bigint, universeId: bigint) => ({
+		return mock(async (_accountAddress: string, _callbacks: import('@zoltar/ui-core-shared/wallet/chainBackend.js').CreateWriteClientCallbacks, _reputationToken: string, _amount: bigint, questionId: bigint, universeId: bigint) => ({
 			action: 'approveForkRep' as const,
 			hash,
 			questionId: `0x${questionId.toString(16)}`,

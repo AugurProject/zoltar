@@ -180,7 +180,6 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 		{ label: 'claimBundle', slot: '0', offset: 0, type: 'struct EscalationClaimBundle' },
 		{ label: 'unresolvedAttoRep', slot: '1', offset: 0, type: 'uint256' },
 		{ label: 'localUnresolvedPrincipalByOutcome', slot: '2', offset: 0, type: 'uint256[3]' },
-		{ label: 'collateralBackingAttoRep', slot: '5', offset: 0, type: 'uint256' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct OutcomeState'), [
 		{ label: 'balanceAttoRep', slot: '0', offset: 0, type: 'uint256' },

@@ -96,7 +96,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	const selectedCollateral = collateralLoaded.value?.key === collateralKey ? collateralLoaded.value : undefined
 	const collateral = selectedCollateral?.collateral
 	const collateralQuote = selectedCollateral?.quoteInput === amountInput ? selectedCollateral.quote : undefined
-	const requiredCollateral = collateralQuote === undefined ? undefined : collateralQuote.amount + collateralQuote.maximumFee
+	const requiredCollateral = collateralQuote === undefined ? undefined : collateralQuote.amount + collateralQuote.fee
 	let collateralReason: string | undefined
 	if (accountAddress === undefined) collateralReason = commonCopy.walletConnectionRequired
 	else if (selectedCollateral?.error !== undefined) collateralReason = selectedCollateral.error

@@ -25,6 +25,24 @@ describe('Statoblast: reject materializing a question that finalized before an u
 	const shares = () => ({ abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken })
 	const coordinator = async () => ({ abi: coordinatorArtifact.abi, address: await fixture.owner().readContract({ ...p(), functionName: 'forkController' }) })
 
+	test('#1495: a fork exactly at the game deadline interrupts parent withdrawals', async () => {
+		await fixture.prepare()
+		const owner = fixture.owner()
+		const base = fixture.base
+		const unrelated = { ...base.questionData, title: 'Unrelated fork at exact game deadline' }
+		await createQuestion(owner, unrelated, base.outcomes)
+		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), getZoltarAddress())
+		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), sourcePool())
+		await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
+		const game = await owner.readContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'escalationGame' })
+		const end = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
+		await base.mockWindow.setTime(end - 1n)
+		await forkUniverse(owner, base.genesisUniverse, getQuestionId(unrelated, base.outcomes))
+		expect((await getUniverseData(owner, base.genesisUniverse)).forkTime).toBe(end)
+		await expect(owner.simulateContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'withdrawFromEscalationGame', args: [1, [0n]] })).rejects.toThrow('Deposits carry to child games')
+	})
+
 	test.each([true, false])('game finalized in the parent before an unrelated fork (disputed: %s)', async disputed => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)

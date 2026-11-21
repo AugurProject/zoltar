@@ -87,6 +87,7 @@ export function parseDecimalInput(value: string, label: string, units: number = 
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error(`${label} is required.`)
 	const result = parseDecimalInputResult(trimmed, units, decimalSeparator)
+	if (result.problem === 'precision') throw new Error(commonCopy.formatDecimalPrecisionError(units))
 	if (result.problem === 'separator') throw new Error(commonCopy.formatDecimalSeparatorRequiredError(label, getDecimalSeparatorError(decimalSeparator)))
 	if (result.value === undefined) throw new Error(commonCopy.formatDecimalNumberRequiredError(label))
 	return result.value

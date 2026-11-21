@@ -26,7 +26,9 @@ test('the market list search opens a pasted pool address even before any market 
 			await type(notAnAddress)
 			expect(form.querySelector('button[type="submit"]')?.textContent).toBe('Open security pool')
 			expect(form.textContent).not.toContain('Enter a full security pool address')
-			await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+			await act(() => {
+				form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+			})
 			expect(tradingRouting.resolve(window.location.hash)).toBe('market')
 			expect(form.textContent).toContain('Enter a full security pool address')
 			expect(input.getAttribute('aria-invalid')).toBe('true')
@@ -37,7 +39,9 @@ test('the market list search opens a pasted pool address even before any market 
 		expect(form.textContent).not.toContain('Enter a full security pool address')
 		expect(form.querySelector('input[type="search"]')).toBe(input)
 		expect(form.querySelector('button[type="submit"]')?.textContent).toBe('Open security pool')
-		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+		await act(() => {
+			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		})
 		expect(tradingRouting.resolve(window.location.hash)).toBe(`market/${pool}`)
 		expect(window.location.hash).toContain('simScenario=trading-funded')
 	} finally {
@@ -59,7 +63,9 @@ for (const target of ['liquidity', 'create-market'] as const)
 				input.value = pool
 				input.dispatchEvent(new Event('input', { bubbles: true }))
 			})
-			await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+			await act(() => {
+				form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+			})
 			expect(tradingRouting.resolve(window.location.hash)).toBe(`${target}/${pool}`)
 		} finally {
 			await rendered.cleanup()

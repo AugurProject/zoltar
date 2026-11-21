@@ -11,7 +11,7 @@ const maximumRepSpendAttoRep = 10n ** 15n
 const options = {
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
-	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxUniverses: 100, maxVaultsPerPool: 100, maximumAggregateItems: 10_000 },
+	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxUniverses: 100, maximumAggregateItems: 10_000 },
 	maximumBlockIntervalSeconds: 15,
 	maxEthSpendAttoEth: maximumEthSpendAttoEth.toString(),
 	maxRepSpendAttoRep: maximumRepSpendAttoRep.toString(),

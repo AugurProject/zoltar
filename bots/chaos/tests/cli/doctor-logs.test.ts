@@ -22,10 +22,12 @@ test.each([0n, 42n, 999n, 1_000n])('probes a bounded available range with log fl
 
 test.each(['permission denied', 'request timed out', 'rate limit exceeded'])('does not treat %s as pruned history', async failure => {
 	let calls = 0
+	let finalRange: { fromBlock?: unknown; toBlock?: unknown } | undefined
 	await expect(
 		probeDoctorLogRange(
 			{
-				getLogs: async () => {
+				getLogs: async range => {
+					finalRange = range
 					calls += 1
 					throw new Error(failure)
 				},
@@ -36,7 +38,10 @@ test.each(['permission denied', 'request timed out', 'rate limit exceeded'])('do
 			256n,
 		),
 	).rejects.toThrow(failure)
-	expect(calls).toBe(1)
+	if (failure === 'request timed out') {
+		expect(calls).toBeLessThanOrEqual(9)
+		expect(finalRange).toMatchObject({ fromBlock: 0n, toBlock: 0n })
+	} else expect(calls).toBe(1)
 })
 
 test('still rejects readers that cannot serve logs at the canonical head', async () => {

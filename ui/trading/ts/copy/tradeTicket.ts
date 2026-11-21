@@ -14,7 +14,7 @@ export const sellShortcutsLabel = 'Sell amount shortcuts'
 export const buyShortcutsLabel = 'Buy amount shortcuts'
 export const estimateHeading = 'Estimate'
 export const estimateNote = `Estimate from the current trading pool reserves. ${recheckedBeforeWallet}`
-export const youReceiveEstimate = 'You receive ≈'
+export const youReceiveEstimate = 'You receive'
 export const youSellEstimate = 'You sell'
 export const minimumReceived = 'Minimum received'
 export const maximumSold = 'Maximum sold'
@@ -69,7 +69,7 @@ export function priceImpactTierAnnouncement(tier: 'low' | 'caution' | 'warning' 
 
 /** Spoken once an amount settles; `amount` is what the trade receives, with its unit. */
 export function formatEstimateAnnouncement(amount: string) {
-	return `Estimate: you receive about ${amount}.`
+	return `Estimate: you receive ${amount}.`
 }
 
 export function buyOutcome(outcome: 'YES' | 'NO') {

@@ -101,6 +101,7 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		priceValidUntil: snapshot.priceValidUntil,
 		isPriceValid: true,
 		demandAttoEth: snapshot.demandAttoEth,
+		availableMintCapacity: snapshot.availableMintCapacityAttoEth,
 		totalFreeAttoRep: 0n,
 		frozen: false,
 		importing: false,

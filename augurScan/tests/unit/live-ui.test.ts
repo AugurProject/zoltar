@@ -17,7 +17,7 @@ import {
 } from '../../browser/activity-detail-dom.ts'
 import { canonicalPageLimit, collectCanonicalPages, collectCursorCollections, compareCanonicalEventPosition, mergeUniqueRecords, paginatedSnapshotWasReplaced, reconcilePaginatedTotal, summarizeHistoryCollections } from '../../browser/canonical-pagination.ts'
 import { contractDeploymentStatus, contractRegistrySection } from '../../browser/contract-registry-status.ts'
-import { demoTimelineEvidenceStatus, evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationNotice, historyInvalidationReasonLabel, isHistoryInvalidationReason, timelineEntityTypeLabel, timelineOccurrenceFields } from '../../browser/history-evidence.ts'
+import { demoTimelineEvidenceStatus, evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationNotice, liveResetNotice, historyInvalidationReasonLabel, isHistoryInvalidationReason, timelineEntityTypeLabel, timelineOccurrenceFields } from '../../browser/history-evidence.ts'
 import { classifyLiveRecords, createForegroundRefreshGate, createLiveRouteRefreshCoordinator, isCurrentCanonicalGeneration, isCurrentContextRequest, isCurrentLiveRequest, runSerializedOperationsLoad, runWithForegroundReservation } from '../../browser/live-refresh.ts'
 import {
 	canReuseNetworkStatusPresentation,
@@ -33,6 +33,7 @@ import {
 	showIndexerSyncDetails,
 } from '../../browser/network-freshness.ts'
 import {
+	isConcludedEscalation,
 	operationsCatalogRecordKey,
 	operationsDetailEvidencePanelVisible,
 	operationsDetailHeaderPresentation,
@@ -468,7 +469,7 @@ test('labels historical pool detail headers as fixed snapshots', () => {
 test('labels protocol risk state separately from scanner assessment', () => {
 	expect(operationsRiskPresentation('0', 'warning')).toEqual({ protocolState: 'Operational', scannerAssessment: 'Warning', scannerTone: 'warning' })
 	expect(operationsRiskPresentation('1', 'healthy')).toEqual({ protocolState: 'Pool forked', scannerAssessment: 'Healthy', scannerTone: 'healthy' })
-	expect(operationsRiskPresentation('bad-debt', 'critical')).toEqual({ protocolState: 'Bad debt', scannerAssessment: 'Critical', scannerTone: 'critical' })
+	expect(operationsRiskPresentation('bad-debt', 'critical')).toEqual({ protocolState: 'Unrecognized pool state', scannerAssessment: 'Critical', scannerTone: 'critical' })
 	expect(operationsRiskPresentation('unavailable', 'unavailable')).toEqual({ protocolState: 'Unavailable', scannerAssessment: 'Unavailable', scannerTone: 'unavailable' })
 	expect(operationsRiskPresentation('future-state', 'future-severity')).toEqual({ protocolState: 'Unrecognized pool state', scannerAssessment: 'Unrecognized assessment', scannerTone: 'unavailable' })
 })
@@ -1428,4 +1429,18 @@ test('discards the previous indexing rate immediately after progress rolls backw
 	const result = indexerProgressEstimate({ start_block: '0', indexed_block: '100', observed_block: '1000' }, { indexedBlock: 200, sampledAt: 1000, blocksPerSecond: 10 }, 2000)
 	expect(result.eta).toBe('Estimating ETA')
 	expect(result.sample?.blocksPerSecond).toBeUndefined()
+})
+
+test('escalation activity follows conclusion history across claims and continuation creation', () => {
+	expect(isConcludedEscalation({ event_name: 'GameContinuedFromFork', concluded: false })).toBe(false)
+	expect(isConcludedEscalation({ event_name: 'GameContinuedFromFork' })).toBe(false)
+	expect(isConcludedEscalation({ event_name: 'ClaimDeposit', concluded: true })).toBe(true)
+	expect(isConcludedEscalation({ event_name: 'CarryDepositConsumed', concluded: true })).toBe(true)
+	expect(isConcludedEscalation({ event_name: 'OrdinarySettlementInitialized' })).toBe(true)
+})
+
+test('live reset notices distinguish an expired replay window from a cursor ahead of the database', () => {
+	expect(liveResetNotice('replay-window-expired').title).toBe('Live replay window expired')
+	expect(liveResetNotice('cursor-ahead-of-head').title).toBe('Live cursor ahead of indexed history')
+	expect(liveResetNotice(undefined).title).toBe('Live stream reset')
 })

@@ -32,8 +32,6 @@ abstract contract EscalationGameStorage {
 		uint256 unresolvedAttoRep;
 		// Original unconsumed principal indexed by BinaryOutcome (Invalid, Yes, No).
 		uint256[3] localUnresolvedPrincipalByOutcome;
-		// Only the new report generating surplus relinquishes this collateral credit.
-		uint256 collateralBackingAttoRep;
 	}
 	mapping(address => VaultAccounting) internal vaultAccounting;
 

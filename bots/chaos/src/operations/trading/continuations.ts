@@ -20,6 +20,11 @@ export function metadataAddress(metadata: OperationPlan['metadata'], key: string
 	return typeof value === 'string' && isAddress(value) ? getAddress(value) : undefined
 }
 
+export function metadataUnsignedAmount(metadata: OperationPlan['metadata'], key: string) {
+	const value = metadata[key]
+	return typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value) ? BigInt(value) : undefined
+}
+
 export function metadataPositiveAmount(metadata: OperationPlan['metadata'], key: string) {
 	const value = metadata[key]
 	if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return undefined
@@ -75,7 +80,7 @@ function sameBigintArray(actual: unknown, expected: readonly bigint[]) {
 	return Array.isArray(actual) && actual.length === expected.length && actual.every((value, index) => value === expected[index])
 }
 
-export function previousReceiveActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint) {
+export function previousReceiveActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, minimumRepAttoRep: bigint) {
 	const step = previousAction(context, operation === 0 ? 'exitPosition' : 'redeemCompleteSet', shares.shareToken)
 	const deadline = context.previousPlan.deadlineTimestamp
 	if (step === undefined || deadline === undefined) return false
@@ -90,7 +95,7 @@ export function previousReceiveActionMatches(snapshot: EcosystemSnapshot, contex
 				decodedAddressMatches(call.args[1], snapshot.deployments.tradingRouter) &&
 				sameBigintArray(call.args[2], tokenIds) &&
 				sameBigintArray(call.args[3], values) &&
-				call.args[4] === receiveRequestData(snapshot, pool, pair, shares, operation, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline))
+				call.args[4] === receiveRequestData(snapshot, pool, pair, shares, operation, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)
 			)
 		}) ?? false
 	)

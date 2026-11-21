@@ -56,6 +56,7 @@ export function capitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {
 		totalPledgedAttoRep: 100n * unit,
 		totalCommitmentAttoEth: 20n * unit,
 		healthyCommitmentAttoEth: 20n * unit,
+		availableMintCapacityAttoEth: 10n * unit,
 		totalFreeAttoRep: 100n * unit,
 		currentBatch: 1n,
 		nextBatch: 2n,

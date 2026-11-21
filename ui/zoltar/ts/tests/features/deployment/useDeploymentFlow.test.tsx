@@ -61,6 +61,7 @@ describe('useDeploymentFlow', () => {
 		const Harness = function DeploymentFlowHarness() {
 			hookState = useDeploymentFlow({
 				accountAddress: WALLET_ADDRESS,
+				environmentRefreshKey: 0,
 				onTransactionFailed: () => undefined,
 				onTransactionFinished: () => undefined,
 				onTransactionPresented: () => undefined,

@@ -139,18 +139,9 @@ export async function demoLogDetailRoute(env: DemoEnvironment, path: string): Pr
 		gas_used: '184220',
 		contract_provenance: context.pageUrl.searchParams.get('detailLiveDemo') === '1' ? `Security Pool Factory.DeploySecurityPool · indexed block ${detailNetwork?.indexed_block}` : 'Security Pool Factory.DeploySecurityPool',
 		explorer_base_url: detailNetwork?.id === 'sepolia' ? 'https://sepolia.etherscan.io' : 'https://etherscan.io',
-		action_arguments: {
-			reason: '1',
-			route: ['0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
-		},
-		action_display_arguments: {
-			reason: 'Trade',
-			route: ['OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
-		},
-		action_argument_schema: [
-			{ index: 0, name: 'reason', type: 'uint8' },
-			{ index: 1, name: 'route', type: 'address[]' },
-		],
+		action_arguments: {},
+		action_display_arguments: {},
+		action_argument_schema: [],
 		receipt: {
 			transactionHash: detailLog.tx_hash,
 			blockHash: detailLog.block_hash,
@@ -160,8 +151,8 @@ export async function demoLogDetailRoute(env: DemoEnvironment, path: string): Pr
 			logs: demoLogs.slice(0, 4).map(({ emitter_address: address, topics, data, log_index: logIndex }) => ({ address, topics, data, logIndex })),
 		},
 		event_signature: 'event QuestionAccountingCheckpoint(uint8 reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime)',
-		function_signature: 'checkpoint(uint8,address[])',
-		action_summary: 'checkpoint(reason=Trade)',
+		function_signature: 'updateSettlementCollateral()',
+		action_summary: 'updateSettlementCollateral',
 		relatedLogs: demoLogs.slice(0, 4),
 	}
 }

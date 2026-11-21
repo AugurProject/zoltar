@@ -9,7 +9,7 @@ test.each([
 	{ rights: [100n, 50n, 120n], availableShares: 50n },
 	{ rights: [0n, 50n, 120n], availableShares: 0n },
 	{ rights: [100n, 80n, 30n], availableShares: 30n },
-])('independent recovery balances $rights remain readable before source preparation without reading source tokens or subtracting claim history', async ({ rights, availableShares }) => {
+])('independent recovery balances $rights remain readable before source preparation without reading source tokens or subtracting claim history', async ({ rights: [...rights], availableShares }) => {
 	const source = capitalClient()
 	const reads: { name: string; block: bigint | undefined }[] = []
 	const client = source.client.extend(() =>
@@ -41,7 +41,7 @@ test.each([
 		}),
 	)
 	const snapshot = { portfolio, owner, universeId: 42n, blockNumber: 10n, blockHash: zeroHash }
-	expect(await loadPortfolioSourceRecovery(client, snapshot, 7n)).toEqual({ pool: zeroAddress, source: token, shareToken: capital, eligible: true, rights, availableShares })
+	expect(await loadPortfolioSourceRecovery(client, snapshot, 7n)).toEqual({ pool: zeroAddress, source: token, shareToken: capital, eligible: true, rights: [...rights], availableShares })
 	expect(new Set(reads.map(read => read.block))).toEqual(new Set([10n]))
 	expect(reads.length).toBeLessThan(12)
 })

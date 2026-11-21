@@ -1,3 +1,4 @@
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -95,7 +96,7 @@ describe('live fork settlement context', () => {
 		const liveMarket = { ...market, systemState: 0, universeForkTime: 0n, tradingStatus: 0 }
 		const publicClient = createPublicClient({ transport: custom({ request: async () => undefined }) })
 		const baseWallet = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
-		const walletClient = { ...baseWallet, waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
+		const walletClient = testDouble<NonNullable<SettlementControlsProps['walletClient']>>({ ...baseWallet, waitForTransactionReceipt: async () => ({ status: 'success' as const }) })
 		let submissions = 0
 		const rendered = await renderIntoDocument(
 			<SettlementControls
@@ -126,9 +127,15 @@ describe('live fork settlement context', () => {
 			input.value = '0.1'
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 		})
-		await act(async () => await Bun.sleep(QUOTE_SETTLE_MILLISECONDS))
-		await act(() => buttonByLabel('Redeem complete sets').click())
-		await act(async () => await Bun.sleep(50))
+		await act(async () => {
+			await Bun.sleep(QUOTE_SETTLE_MILLISECONDS)
+		})
+		await act(() => {
+			buttonByLabel('Redeem complete sets').click()
+		})
+		await act(async () => {
+			await Bun.sleep(50)
+		})
 		expect(submissions).toBe(1)
 		expect(input.value).toBe('')
 		expect(buttonByLabel('Redeem complete sets').disabled).toBe(true)
@@ -169,7 +176,9 @@ describe('live fork settlement context', () => {
 		expect(contextLoads).toBe(1)
 		expect(document.body.textContent).toContain('fork metadata RPC unavailable')
 
-		await act(() => buttonByLabel('Retry fork details').click())
+		await act(() => {
+			buttonByLabel('Retry fork details').click()
+		})
 		await settleEffects()
 		expect(contextLoads).toBe(2)
 		expect(document.body.textContent).toContain('Which branch wins?')
@@ -177,7 +186,9 @@ describe('live fork settlement context', () => {
 		expect(document.body.textContent).toContain('Categorical')
 		const target = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Red') === true && candidate.closest('[aria-label="Settlement operation"]') === null)
 		if (!(target instanceof HTMLButtonElement)) throw new Error('Missing categorical fork target')
-		await act(() => target.click())
+		await act(() => {
+			target.click()
+		})
 		// Selecting a target uses loaded metadata and balances without wallet simulation.
 		expect(document.body.textContent).not.toContain('Simulate authoritative settlement')
 		await act(async () => {
@@ -187,18 +198,24 @@ describe('live fork settlement context', () => {
 		// The acknowledgment states the consequence once; no separate preflight summary repeats it.
 		expect(document.body.textContent).not.toContain('simulation ready at block')
 		// Migration moves the whole balance and locks it in the parent universe, so it waits for an explicit acknowledgment.
-		expect(document.body.textContent).toContain('Migrates your entire balance: <0.0001 Yes')
+		expect(document.body.textContent).toContain('Migrates your entire balance: 0.000000000000000001 Yes')
 		expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
-		await act(() => buttonByLabel('Migrate to 1 child universe').click())
+		await act(() => {
+			buttonByLabel('Migrate to 1 child universe').click()
+		})
 		expect(refreshes).toBe(0)
 		const acknowledgment = document.querySelector('.trade-impact-acknowledge input[type="checkbox"]')
 		if (!(acknowledgment instanceof HTMLInputElement)) throw new Error('Missing migration acknowledgment')
-		expect(acknowledgment.closest('label')?.textContent).toContain('moves all <0.0001 Yes (')
-		expect(acknowledgment.closest('label')?.textContent).toContain('into the selected child universes and permanently locks my Yes transfers')
-		await act(() => acknowledgment.click())
+		expect(acknowledgment.closest('label')?.textContent).toContain('mints 0.000000000000000001 Yes (')
+		expect(acknowledgment.closest('label')?.textContent).toContain('in each selected child universe and keeps the original shares in the parent universe, permanently locking my Yes transfers')
+		await act(() => {
+			acknowledgment.click()
+		})
 		expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(false)
 
-		await act(() => buttonByLabel('Migrate to 1 child universe').click())
+		await act(() => {
+			buttonByLabel('Migrate to 1 child universe').click()
+		})
 		await settleEffects()
 		expect(refreshes).toBe(1)
 		expect(contextLoads).toBe(3)
@@ -206,7 +223,9 @@ describe('live fork settlement context', () => {
 
 		const nextAccount = getAddress(`0x${'aa'.repeat(20)}`)
 		const nextWalletClient = createWalletClient({ account: nextAccount, transport: custom({ request: async () => undefined }) })
-		await act(() => render(settlementView(nextAccount, nextWalletClient, { ...balances, yes: 2n }), rendered.container))
+		await act(() => {
+			render(settlementView(nextAccount, nextWalletClient, { ...balances, yes: 2n }), rendered.container)
+		})
 		await settleEffects()
 		expect(document.body.textContent).not.toContain('confirmed.')
 	})
@@ -239,24 +258,30 @@ describe('live fork settlement context', () => {
 		await settleEffects()
 		// The migration record is read for the connected account.
 		expect(loadedAccounts).toEqual([account])
-		expect(document.body.textContent).toContain('Balance: 1 Yes')
+		expect(document.body.textContent).toContain('Balance: 1.0000 Yes')
 		expect(document.body.textContent).not.toContain('locked after migration')
 		const redTarget = () => {
 			const target = Array.from(document.querySelectorAll('.migration-outcome-select')).find(candidate => candidate.textContent?.includes('Red') === true)
 			if (!(target instanceof HTMLButtonElement)) throw new Error('Missing categorical fork target')
 			return target
 		}
-		await act(() => redTarget().click())
+		await act(() => {
+			redTarget().click()
+		})
 		const acknowledgment = () => document.querySelector<HTMLInputElement>('.trade-impact-acknowledge input[type="checkbox"]')
-		await act(() => acknowledgment()?.click())
-		await act(() => buttonByLabel('Migrate to 1 child universe').click())
+		await act(() => {
+			acknowledgment()?.click()
+		})
+		await act(() => {
+			buttonByLabel('Migrate to 1 child universe').click()
+		})
 		await settleEffects()
 		expect(document.body.textContent).toContain('Migrate to 1 child universe confirmed.')
 		expect(loadedAccounts).toHaveLength(2)
 
 		// The child universe that received the balance is marked migrated, and the balance left behind is locked.
 		expect(redTarget().textContent).toContain('Migrated')
-		expect(document.body.textContent).toMatch(/Balance: 1 Yes \([^)]*\) · locked after migration/)
+		expect(document.body.textContent).toMatch(/Balance: 1.0000 Yes \([^)]*\) · locked after migration/)
 		// The migrated shares are reachable in the child universe's security pool.
 		const childLink = Array.from(document.querySelectorAll('.fork-migrated-list a')).find(link => link.textContent === 'Open in Red universe')
 		expect(childLink?.getAttribute('href')).toContain(`#/market/${canonicalPool}`)
@@ -264,7 +289,9 @@ describe('live fork settlement context', () => {
 		// Selecting it again would migrate nothing, so the migrated target cannot be selected and says why.
 		expect(redTarget().disabled).toBe(true)
 		expect(redTarget().closest('.migration-outcome-row')?.textContent).toContain('This share is already migrated to this child universe.')
-		await act(() => redTarget().click())
+		await act(() => {
+			redTarget().click()
+		})
 		expect(redTarget().getAttribute('aria-pressed') === 'true' || redTarget().getAttribute('aria-checked') === 'true').toBe(false)
 		expect(acknowledgment()?.checked ?? false).toBe(false)
 	})

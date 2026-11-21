@@ -46,8 +46,6 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 	let targetCapacityReason: string | undefined
 	if (disabled) targetCapacityReason = disabledReason
 	else if (model.targetCapacity === undefined) targetCapacityReason = copy.targetUnavailable
-	let available: bigint | undefined
-	if (snapshot !== undefined) available = snapshot.healthyCommitmentAttoEth > snapshot.demandAttoEth ? snapshot.healthyCommitmentAttoEth - snapshot.demandAttoEth : 0n
 	// A forked or importing universe cannot accept a new report, so only an expired price in an active universe asks for one.
 	const priceRequestable = snapshot !== undefined && !snapshot.priceValid && snapshot.forkTime === 0n && !snapshot.importing
 	let status = snapshot?.priceValid ? copy.priceValid : copy.priceStale
@@ -73,7 +71,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 						<CurrencyValue value={snapshot?.demandAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.availableCapacity} loading={model.loading}>
-						<CurrencyValue value={available} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
+						<CurrencyValue value={snapshot?.availableMintCapacityAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.priceExpiry} loading={model.loading}>
 						<TimestampValue timestamp={snapshot?.priceValidUntil} relative={false} zeroText={copy.noPrice} />
@@ -173,7 +171,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 			<SectionBlock title={copy.positions} description={copy.positionsHint}>
 				{snapshot !== undefined && model.livePositions.length === 0 ? <EmptyState title={copy.noPositions} detail={copy.noPositionsHint} /> : undefined}
 				{model.livePositions.map(position => {
-					const reasons = model.positionReasons(position.id)
+					const reasons = model.positionReasons(position.id, position.batch === 0n ? undefined : position.remainingCommitment)
 					const required = snapshot === undefined ? 0n : requiredPortfolioCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 10_000n } }, snapshot.ownerCommitmentAttoEth)
 					const healthy = snapshot !== undefined && position.rep >= required
 					const targetMet = snapshot !== undefined && position.rep >= requiredPortfolioCollateral(snapshot, position.commitment)
@@ -210,7 +208,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 							<UserMessage detail={copy.liquidationHint} />
 							{position.liquidationStarted === 0n ? undefined : <UserMessage detail={copy.liquidationTimingHint} />}
 							{snapshot === undefined || position.batch === 0n ? undefined : <PortfolioRetirementPreview snapshot={snapshot} position={position} />}
-							{/* A pending request is locked until released, so its form is not shown. */}
+							{/* A queued target stays fixed; repeating it lets the ledger cure or release capacity. */}
 							{position.batch === 0n ? (
 								<>
 									<PortfolioInput label={copy.remainingCommitment} hint={copy.remainingCommitmentHint} value={model.remainingCommitmentAmount} onChange={model.setRemainingCommitmentAmount} disabled={disabled} numeric />
@@ -220,7 +218,9 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 										<PortfolioButton model={actions} action={`retirePortfolio-${position.id}`} label={copy.retire} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
 									</div>
 								</>
-							) : undefined}
+							) : (
+								<PortfolioButton model={actions} action={`retirePortfolio-${position.id}`} label={copy.resubmitRetirement} pendingLabel={copy.resubmittingRetirement} reason={reasons.retire} onClick={() => model.retire(position.id, position.remainingCommitment)} />
+							)}
 						</WorkflowSubsection>
 					)
 				})}

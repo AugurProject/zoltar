@@ -71,6 +71,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('risk', 'settlement-book', ['BookCreated', 'SettlementMinted', 'SettlementRedeemed', 'FinalityScheduled', 'FinalClaimsFrozen', 'FeeStreamReplaced', 'AggregateFeesAccrued'], ['bookId']),
 	...definitions('risk', 'portfolio-services', ['PremiumFunded', 'PremiumRecovered', 'UnusedServiceCashBurned'], ['universeId']),
 	...definitions('risk', 'portfolio-settlement', ['RecoveryRepPaid', 'RecoveryRepFunded', 'SettlementRepaired'], ['universeId']),
+	...definitions('risk', 'settlement-book', ['SettlementBookRepaired'], ['bookId']),
 	// A report escrow completes one funded report for the shared feed that created it, so the event joins that feed's history.
 	...definitions('oracle', 'price-feed', ['ReportCompleted'], ['priceFeed']),
 	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
@@ -142,7 +143,7 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	const data = log.decoded.arguments
 	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
 	// The custody contract identifies repairs by universe; its book identifies them by book ID.
-	const definition = eventName === 'SettlementRepaired' && log.contractKind === 'securityPoolSettlementBook' ? ({ domain: 'risk', entityType: 'settlement-book', identityFields: ['bookId'] } as const) : eventDomains[eventName]
+	const definition = eventDomains[eventName]
 	if (definition === undefined) return undefined
 	if (eventName === 'ApprovalForAll' && log.contractKind !== 'shareToken') return undefined
 	if ((eventName === 'Deposit' || eventName === 'Withdrawal') && log.contractKind !== 'weth') return undefined

@@ -24,7 +24,7 @@ export const deployPool: OperationDefinition = {
 	classification: 'selectable',
 	ecosystem: 'statoblast',
 	risk: 'medium',
-	description: 'Adds a question to a discovered portfolio when its admission policy accepts the operator.',
+	description: 'Adds a question to a discovered portfolio when its admission policy accepts that question.',
 	discoveryInputs: ['portfolio universe', 'question admission simulation', 'canonical question registry'],
 	evaluate(snapshot, options) {
 		return eligible(

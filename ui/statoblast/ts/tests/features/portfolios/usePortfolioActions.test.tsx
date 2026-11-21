@@ -85,7 +85,7 @@ test('creation uses an explicit admission transaction before deployment and inva
 function usePortfolioActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof usePortfolioActions>[1] }) {
 	return usePortfolioActions(props.model, props.parameters ?? parameters)
 }
-test('a winning vault is controlled by its bidder and individual controls wait for materialization', async () => {
+test('a winning vault is controlled by its bidder before and after automatic materialization', async () => {
 	capitalClient().install()
 	const snapshot = auctionCapitalSnapshot()
 	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: { ...model(), snapshot } })
@@ -96,12 +96,12 @@ test('a winning vault is controlled by its bidder and individual controls wait f
 	const auctionVault = snapshot.auctionVault
 	if (auctionVault === undefined) throw new Error('Missing auction authority')
 	await hook.setProps({ parameters, model: { ...model(), snapshot: { ...snapshot, auctionVault: { ...auctionVault, materialized: false } } } })
-	expect(hook.state().ownerReason).toContain('Activate this individual vault')
+	expect(hook.state().ownerReason).toBeUndefined()
 })
 test('individual capital actions execute through the authenticated auction vault and sweep returned assets to its bidder', async () => {
 	const fixture = await auctionFixture()
 	const snapshot = auctionCapitalSnapshot()
-	const requests: { data?: Hex | undefined; to?: string | undefined }[] = []
+	const requests: { data?: Hex | undefined; to?: string | null | undefined }[] = []
 	const writer = asWriteClient(createMockWriteClient(request => requests.push(request)))
 	installActiveEnvironmentForTesting({ ...fixture.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
 	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: { ...model(), snapshot } })
@@ -209,7 +209,7 @@ test('setup advances one explicit stage and rejects a stale stage before wallet 
 	installActiveEnvironmentForTesting({ ...source.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
 	const base = model()
 	const snapshot = capitalSnapshot()
-	const setup = { portfolio, owner, stage: 1, originUniverseId: 0n, chainId: 1, blockNumber: snapshot.blockNumber, blockHash: snapshot.blockHash }
+	const setup = { portfolio, owner, stage: 1, originUniverseId: 0n, originForkTime: 0n, chainId: 1, blockNumber: snapshot.blockNumber, blockHash: snapshot.blockHash }
 	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: { ...base, snapshot: undefined, setup } })
 	lifecycle.trackRendered(hook)
 	expect(hook.state().preparationReason(1)).toContain('complete')
@@ -224,6 +224,13 @@ test('setup advances one explicit stage and rejects a stale stage before wallet 
 	await act(() => hook.state().prepare(2))
 	expect(hook.state().error).toContain('Setup advanced')
 	expect(requests).toHaveLength(1)
+	source.setSetupStage(1n)
+	source.setRead('getForkTime', 900n)
+	await act(() => hook.state().prepare(2))
+	expect(hook.state().error).toContain('Origin universe forked')
+	expect(requests).toHaveLength(1)
+	await hook.setProps({ model: { ...base, snapshot: undefined, setup: { ...setup, originForkTime: 900n } } })
+	expect(hook.state().preparationReason(2)).toContain('Origin universe forked')
 })
 
 test('presentation-only accounts explain refresh without enabling writes or replacing the wallet guard', async () => {
@@ -373,4 +380,41 @@ test('question registration is blocked outside the portfolio horizon by chain ti
 	expect(hook.state().error).toContain('has ended')
 	const submitReads = horizonReads().slice(displayedReads.length)
 	expect(new Set(submitReads.map(read => read.blockNumber))).toEqual(new Set([blockNumber + 1n]))
+})
+
+test('registration rejects non-binary questions and insufficient escalation thresholds before signing', async () => {
+	const now = capitalSnapshot().timestamp
+	const source = capitalClient()
+	source.setRead('isQuestionAllowed', true)
+	source.setRead('maximumQuestionHorizonSeconds', 86_400n)
+	source.setRead('getQuestionEndDate', now + 100n)
+	source.setRead('getOutcomeLabels', ['Yes', 'No', 'Other'])
+	source.setRead('getNonDecisionThresholdAttoRep', 2n * 10n ** 18n)
+	source.setRead('getUniverseTheoreticalSupplyAttoRep', 1_000_000n * 10n ** 18n)
+	const { hook, requests } = await renderWithDeploymentWallet(source)
+	await act(() => {
+		hook.state().setQuestionInput('7')
+	})
+	await waitFor(() => expect(hook.state().registerReason).toContain('Yes/No binary'))
+	source.setRead('getOutcomeLabels', ['Yes', 'No'])
+	source.setRead('getNonDecisionThresholdAttoRep', 10n ** 18n)
+	await act(() => {
+		hook.state().setQuestionInput('8')
+	})
+	await waitFor(() => expect(hook.state().registerReason).toContain('threshold is too low'))
+	source.setRead('getNonDecisionThresholdAttoRep', 2n * 10n ** 18n)
+	await act(() => {
+		hook.state().setQuestionInput('9')
+	})
+	await waitFor(() => expect(hook.state().registerReason).toBeUndefined())
+	await act(async () => {
+		await hook.state().register()
+	})
+	expect(requests).toHaveLength(1)
+	source.setRead('getOutcomeLabels', ['No', 'Yes'])
+	await act(async () => {
+		await hook.state().register()
+	})
+	expect(requests).toHaveLength(1)
+	expect(hook.state().error).toContain('Yes/No binary')
 })

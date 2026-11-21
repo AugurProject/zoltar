@@ -14,25 +14,25 @@ afterEach(() => {
 	resetRoutingForTesting()
 })
 
-test('preserves the selected pool and tab through Advanced navigation and refresh', () => {
+test('preserves the selected pool through Advanced navigation and refresh', () => {
 	const pool = '0x1111111111111111111111111111111111111111'
-	window.history.replaceState({}, '', `#/pools/${pool}/vaults?universe=7`)
+	window.history.replaceState({}, '', `#/pools/${pool}?universe=7`)
 	const advanced = getRouteHref('open-oracle')
-	expect(advanced).toBe(`#/open-oracle?universe=7&securityPool=${pool}&selectedPoolView=vaults`)
+	expect(advanced).toBe(`#/open-oracle?universe=7&securityPool=${pool}`)
 	window.history.replaceState({}, '', advanced)
 	installStatoblastRouting()
-	expect(getRouteHref('pools')).toBe(`#/pools/${pool}/vaults?universe=7`)
+	expect(getRouteHref('pools')).toBe(`#/pools/${pool}?universe=7`)
 	window.history.replaceState({}, '', '#/pools?universe=7')
 	expect(getRouteHref('open-oracle')).toBe('#/open-oracle?universe=7&poolsView=browse')
 })
 
 test('a portfolio purchase links to its question pool page inside the same simulation', () => {
 	const pool = '0x3333333333333333333333333333333333333333'
-	window.history.replaceState({}, '', `#/portfolios?simulate=1&genesis=yes&simScenario=portfolio&portfolio=${pool}&owner=${pool}`)
+	window.history.replaceState({}, '', `#/portfolios?simulate=1&genesis=yes&simScenario=securitypoolx2&portfolio=${pool}&owner=${pool}`)
 	const href = buildQuestionPoolHref(pool)
-	expect(href).toBe(`#/pools/${pool}?simulate=1&genesis=yes&simScenario=portfolio`)
+	expect(href).toBe(`#/pools/${pool}?simulate=1&genesis=yes&simScenario=securitypoolx2`)
 	window.history.replaceState({}, '', href)
-	expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute: 'pools', search: '?simulate=1&genesis=yes&simScenario=portfolio', selectedPoolView: '' }))).toBe(false)
+	expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute: 'pools', search: '?simulate=1&genesis=yes&simScenario=securitypoolx2' }))).toBe(false)
 })
 
 test('does not remember incomplete pool addresses or invent a pool tab', () => {
@@ -48,7 +48,7 @@ test('does not remember incomplete pool addresses or invent a pool tab', () => {
 test('keeps Advanced report, browser controls, vault context and universe across primary routes', () => {
 	const pool = '0x1111111111111111111111111111111111111111'
 	const vault = '0x2222222222222222222222222222222222222222'
-	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&selectedPoolView=vaults&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report&poolSearch=hello&poolFilter=ended&poolSort=endTime`)
+	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report&poolSearch=hello&poolFilter=ended&poolSort=endTime`)
 	const pools = getRouteHref('pools')
 	const params = new URLSearchParams(pools.split('?')[1])
 	expect(params.has('openOracleView')).toBe(false)
@@ -86,7 +86,7 @@ test('opens Portfolios with the price report return context and drops removed or
 		const resolvedRoute = statoblastRouting.resolve(href)
 		expect(resolvedRoute).toBe('portfolios')
 		expect(new URLSearchParams(search).has('openOracleView')).toBe(false)
-		expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute, search, selectedPoolView: '' }))).toBe(false)
+		expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute, search }))).toBe(false)
 		window.history.replaceState({}, '', href)
 		expect(getRouteHref('open-oracle')).toBe('#/open-oracle?openOracleReportId=42&universe=7')
 	}

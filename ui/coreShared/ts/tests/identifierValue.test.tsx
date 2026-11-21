@@ -53,7 +53,9 @@ describe('IdentifierValue', () => {
 		const copyButton = within(document.body).getByRole('button', { name: `Copy identifier ${value}` })
 		expect(copyButton.textContent).not.toBe(value)
 		expect(copyButton.title).toBe(value)
-		await act(() => fireEvent.click(copyButton))
+		await act(() => {
+			fireEvent.click(copyButton)
+		})
 		await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledWith(value))
 	})
 

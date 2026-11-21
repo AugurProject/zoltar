@@ -31,6 +31,18 @@ function createQuestionForm(overrides: Partial<MarketFormState> = {}): MarketFor
 	}
 }
 
+test('accepts equal start/end times and a scalar interval with one tick', () => {
+	const form = createQuestionForm({ startTime: '1000', endTime: '1000', marketType: 'scalar', scalarMin: '0', scalarMax: '1', scalarIncrement: '1' })
+	expect(createQuestionParameters(form)).toMatchObject({ questionData: { startTime: 1000n, endTime: 1000n, numTicks: 1n } })
+	expect(validateMarketForm(form).isValid).toBe(true)
+})
+
+test('accepts one categorical label plus the implicit Invalid outcome', () => {
+	const form = createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['One'] })
+	expect(createQuestionParameters(form)).toMatchObject({ outcomeLabels: ['One'] })
+	expect(validateMarketForm(form).isValid).toBe(true)
+})
+
 test.each(['Invalid\u2061', 'Іnvalid', 'Yes\u034f', 'A  B', 'A'.repeat(65)])('#1352 rejects unsupported categorical label %s before encoding', label => {
 	const form = createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Other', label] })
 	expect(() => createQuestionParameters(form)).toThrow('Use 1–64 printable ASCII characters with single spaces between words for each outcome.')
@@ -155,7 +167,9 @@ describe('QuestionCreateSection', () => {
 		const dialog = queries.getByRole('region', { name: 'Transaction status' })
 		expect(within(dialog).getByText('Canceled in wallet.')).not.toBeNull()
 		expect(document.querySelector('form')?.textContent).not.toContain('Canceled in wallet.')
-		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' }))
+		})
 		expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		expect(document.querySelector('form')?.textContent).not.toContain('Canceled in wallet.')
 	})
@@ -190,7 +204,9 @@ describe('QuestionCreateSection', () => {
 		})
 		const documentQueries = within(document.body)
 
-		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' })))
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
+		})
 		expect(createCount).toBe(1)
 
 		await renderedComponent.cleanup()
@@ -235,7 +251,9 @@ describe('QuestionCreateSection', () => {
 		const existing = within(document.body).getByText('Existing question').closest('details')
 		if (!(existing instanceof HTMLElement)) throw new Error('Expected the existing question disclosure')
 		expect(existing.textContent).toContain(question.title)
-		await act(() => fireEvent.click(within(existing).getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` })))
+		await act(() => {
+			fireEvent.click(within(existing).getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` }))
+		})
 		expect(selectedQuestionIds).toEqual([question.questionId])
 		expect(openedViews).toEqual(['fork'])
 	})
@@ -290,7 +308,9 @@ describe('QuestionCreateSection', () => {
 		expect(scalarDescription).toEqual(['A number inside a range, with a unit and increment.', 'e.g. What will the ETH price be on 31 Dec, in USD?'])
 		// The radio names and describes its card, so the visible card text is hidden from browse mode instead of being read a second time.
 		for (const radio of radios) expect(radio.closest('label')?.querySelector('.question-type-option-copy')?.getAttribute('aria-hidden')).toBe('true')
-		await act(() => fireEvent.click(scalar))
+		await act(() => {
+			fireEvent.click(scalar)
+		})
 		expect(updates).toContainEqual({ marketType: 'scalar' })
 	})
 
@@ -308,30 +328,38 @@ describe('QuestionCreateSection', () => {
 		const queries = within(document.body)
 		const slider = queries.getByRole('slider')
 		expect(slider.getAttribute('max')).toBe('100')
-		await act(() => fireEvent.input(slider, { target: { value: '50' } }))
+		await act(() => {
+			fireEvent.input(slider, { target: { value: '50' } })
+		})
 		const value = queries.getByLabelText('Scalar value')
 		if (!(value instanceof HTMLInputElement)) throw new Error('Missing scalar preview value')
 		expect(value.value).toBe('5')
 		const invalid = queries.getByRole('checkbox', { name: 'Invalid' })
-		await act(() => fireEvent.click(invalid))
+		await act(() => {
+			fireEvent.click(invalid)
+		})
 		expect(slider.hasAttribute('disabled')).toBe(true)
-		await act(() => fireEvent.click(invalid))
+		await act(() => {
+			fireEvent.click(invalid)
+		})
 		expect(slider.hasAttribute('disabled')).toBe(false)
 	})
 
-	test('explains the disabled remove buttons at the two-outcome minimum without asking for more outcomes', async () => {
-		await renderSection({ questionForm: createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Yes', 'No'] }) })
+	test('explains the disabled remove buttons at the one-outcome minimum without asking for more outcomes', async () => {
+		await renderSection({ questionForm: createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Only'] }) })
 
 		const reason = document.getElementById('minimum-outcomes-reason')
-		expect(reason?.textContent).toBe('Remove is unavailable: keep at least 2 outcomes.')
+		expect(reason?.textContent).toBe('Remove is unavailable: keep at least 1 outcome.')
 		expect(reason?.classList.contains('field-hint')).toBe(true)
 		expect(within(document.body).getByRole('button', { name: 'Remove outcome 1' }).getAttribute('aria-describedby')).toBe('minimum-outcomes-reason')
 	})
 
 	test('keeps the remove reason after a real outcome error so it never reads as the error', async () => {
-		await renderSection({ questionForm: createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Yes', 'Yes'] }) })
+		await renderSection({ questionForm: createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Invalid'] }) })
 
-		await act(() => within(document.body).getByPlaceholderText('Outcome 1').dispatchEvent(new Event('blur')))
+		await act(() => {
+			within(document.body).getByPlaceholderText('Outcome 1').dispatchEvent(new Event('blur'))
+		})
 		const error = document.getElementById('market-create-outcomes-error')
 		const reason = document.getElementById('minimum-outcomes-reason')
 		if (error === null || reason === null) throw new Error('Expected the outcome error and the remove reason')

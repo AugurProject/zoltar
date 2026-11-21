@@ -15,6 +15,12 @@ interface ITwoWayConstantProductPair {
 		Uninitialized
 	}
 
+	function sync() external;
+	function MINIMUM_LIQUIDITY() external view returns (uint256);
+	function MINIMUM_LIQUIDITY_LOCK() external view returns (address);
+	function name() external view returns (string memory);
+	function symbol() external view returns (string memory);
+	function decimals() external view returns (uint8);
 	function factory() external view returns (address);
 	function securityPool() external view returns (ISecurityPool);
 	function shareToken() external view returns (ITradingShareToken);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import {
@@ -45,7 +45,12 @@ describe('Portfolio question transaction rollback', () => {
 		await fixture.prepare(1_000n * unit, unit)
 		const before = await state()
 		const client = fixture.owner()
-		await expect(client.writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [fixture.base.genesisUniverse, fixture.base.questionId, 2n * unit, client.account.address, 0n, 3n * unit - 2n * unit], value: 0n })).rejects.toThrow()
+		const collateral = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		const services = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
+		await writeContractAndWait(client, () => client.writeContract({ abi: parseAbi(['function approve(address,uint256) returns (bool)']), address: collateral, functionName: 'approve', args: [services, 3n * unit] }))
+		await expect(client.writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [fixture.base.genesisUniverse, fixture.base.questionId, 2n * unit, client.account.address, 0n, 3n * unit - 2n * unit], value: 0n })).rejects.toThrow(
+			'Purchase exceeds healthy capacity',
+		)
 		expect(await state()).toEqual(before)
 		await expect(client.writeContract({ ...pool(), functionName: 'withdrawFromEscalationGame', args: [1, []] })).rejects.toThrow('Game missing')
 		expect(await state()).toEqual(before)

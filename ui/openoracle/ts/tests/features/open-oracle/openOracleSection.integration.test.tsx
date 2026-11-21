@@ -232,7 +232,7 @@ describe.serial('OpenOracleSection integration', () => {
 
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureProxyDeployerDeployed(client)
 		await ensureZoltarDeployed(client)
@@ -246,7 +246,7 @@ describe.serial('OpenOracleSection integration', () => {
 			resetActiveEnvironmentForTesting()
 			mockWindow = getAnvilWindowEthereum()
 			await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], SEPOLIA_NETWORK_PROFILE.chain)
 			Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
 			resetActiveEnvironment = installActiveEnvironmentForTesting(
 				createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, genesisRepTokenAddress: getAddress(addressString(GENESIS_REPUTATION_TOKEN)), chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }),
@@ -271,7 +271,7 @@ describe.serial('OpenOracleSection integration', () => {
 	test('creates, funds, and opens an atomic initial report through the UI', async () => {
 		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(within(document.body).getByText('Standalone only. Start pool-managed requests from a security pool.')).not.toBeNull()
+		expect(within(document.body).getByText('Standalone only. Start portfolio-managed requests from the portfolio price panel.')).not.toBeNull()
 		expect(within(document.body).getByLabelText('Base token address')).not.toBeNull()
 		expect(within(document.body).queryByText('Transaction review')).toBeNull()
 

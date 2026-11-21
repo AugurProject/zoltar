@@ -69,10 +69,6 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
-		viewerVaultExists: true,
-		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
-		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -102,10 +98,6 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
-		viewerVaultExists: true,
-		viewerVaultDisputeStakedAttoRep: 0n,
-		viewerVaultRepBackingAttoRep: 10n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -578,4 +570,11 @@ describe('reporting opening boundary', () => {
 		expect(hasReportingOpened(100n, 101n)).toBe(true)
 		expect(hasReportingOpened(100n, undefined)).toBe(undefined)
 	})
+})
+
+test('reaching non-decision does not claim the universe fork has happened', () => {
+	const details = createReportingDetails({ hasReachedNonDecision: true })
+	const parameters = { reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime }
+	expect(getReportingStagePresentation({ ...parameters, forkAlreadyTriggered: false })?.label).toBe('Ready to fork')
+	expect(getReportingStagePresentation({ ...parameters, forkAlreadyTriggered: true })?.label).toBe('Fork triggered')
 })

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, parseAbiParameters, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, parseAbi, getAddress, parseAbiParameters, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
@@ -15,7 +15,7 @@ import { deployContract } from '../../testSupport/deployContract'
 import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { createCompleteSet, depositRepToVault, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -200,7 +200,10 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await fixture.prepare()
 		const pool = fixture.poolFor(fixture.base.questionId).securityPool
 		await expect(createCompleteSet(fixture.other(), pool, unit)).rejects.toThrow('Use portfolio purchase')
-		await expect(depositRepToVault(fixture.owner(), pool, 100n * unit)).rejects.toThrow()
+		// Encode the removed selector explicitly so the EVM, rather than the current ABI encoder, rejects it.
+		const data = encodeFunctionData({ abi: parseAbi(['function depositRepToVault(uint256,uint256)']), functionName: 'depositRepToVault', args: [100n * unit, 15_000n] })
+		// The simulator executes and reports reverting transactions before mining them.
+		await expect(fixture.owner().sendTransaction({ to: pool, data, gas: 1_000_000n })).rejects.toThrow('execution reverted')
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'totalFreeAttoRep' })).toBe(0n)
 		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', args: [unit] })).rejects.toThrow('Unknown question callback')
 		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'onSharedPriceAccepted', args: [fixture.base.genesisUniverse, unit, 1] })).rejects.toThrow('Only canonical shared feed')

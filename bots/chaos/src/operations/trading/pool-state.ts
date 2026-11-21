@@ -40,7 +40,7 @@ export function protocolQuestionDeadline(snapshot: EcosystemSnapshot, pool: Pool
 	return question === undefined ? undefined : (amount(question.endTime) - 1n).toString()
 }
 
-export function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, deadline: bigint) {
+export function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, deadline: bigint, minimumRepAttoRep: bigint) {
 	const invalidTokenId = shareTokenId(shares.universeId, 0)
 	return encodeReceiveRequest([
 		RECEIVE_REQUEST_VERSION,
@@ -60,6 +60,6 @@ export function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapsh
 		snapshot.wallet.address,
 		snapshot.wallet.address,
 		deadline,
-		0n,
+		minimumRepAttoRep,
 	])
 }

@@ -1,5 +1,5 @@
 import { escapeHtml, headingId, renderRichText } from './contract-reference-rich-text.mts'
-import { computeWinningWithdrawal, escalationFinalDay, escalationPayoutExample, escalationRules, formatRep } from './contract-reference-rules.mts'
+import { computeOrdinaryWinningWithdrawal, escalationFinalDay, escalationPayoutExample, escalationRules, formatRep } from './contract-reference-rules.mts'
 
 // Exact accounting examples and formulas belong to the contract that enforces them. Explanation pages
 // keep the qualitative rule and link here. Every number below is derived from the rules module, which
@@ -19,7 +19,7 @@ const equation = (id: string, label: string, source: string, mathml: string): Ac
 const activationDay = escalationRules.activationDays.toString()
 const finalDay = escalationFinalDay.toString()
 const escalationDays = escalationRules.escalationDays.toString()
-const payout = computeWinningWithdrawal(escalationPayoutExample)
+const payout = computeOrdinaryWinningWithdrawal(escalationPayoutExample)
 const example = escalationPayoutExample
 const rep = formatRep
 const capCeilingFactor = formatRep(attoFactor(1n) + attoFactor(1n) / escalationRules.excessRewardWindowDivisor)
@@ -50,19 +50,19 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Winning-deposit payout',
 				blocks: [
 					paragraph(
-						`Binding capital is the median outcome balance at settlement; no outcome balance can exceed the non-decision threshold. The reward-eligible cap is binding capital plus binding capital divided by \`EXCESS_REWARD_WINDOW_DIVISOR\` (${escalationRules.excessRewardWindowDivisor}), so only the portion of winning deposits up to ${capCeilingFactor} × binding capital participates in the bonus. Of the binding capital, \`${escalationRules.rewardPoolNumerator} / ${escalationRules.poolDenominator}\` funds the reward pool and \`${escalationRules.haircutPoolNumerator} / ${escalationRules.poolDenominator}\` funds the escalation-haircut pool; both are shared pro rata across the reward-eligible principal, which is the smaller of the winning outcome balance and that cap.`,
+						`For an ordinary settlement, binding capital is the median outcome balance at settlement; no outcome balance can exceed the non-decision threshold. The reward-eligible cap is binding capital plus binding capital divided by \`EXCESS_REWARD_WINDOW_DIVISOR\` (${escalationRules.excessRewardWindowDivisor}), so only the portion of winning deposits up to ${capCeilingFactor} × binding capital participates in the bonus. Of the binding capital, \`${escalationRules.rewardPoolNumerator} / ${escalationRules.poolDenominator}\` funds the reward pool and \`${escalationRules.haircutPoolNumerator} / ${escalationRules.poolDenominator}\` funds the escalation-haircut pool; both are shared pro rata across the reward-eligible principal, which is the smaller of the winning outcome balance and that cap.`,
 					),
 					paragraph(
-						`Let binding capital be \`${rep(example.bindingCapitalAttoRep)} REP\`, so the reward-eligible cap is \`${rep(payout.rewardEligibleCapAttoRep)} REP\`, the reward pool is \`${rep(payout.rewardPoolAttoRep)} REP\`, and the escalation-haircut pool is \`${rep(payout.haircutPoolAttoRep)} REP\`. If the winning outcome holds \`${rep(example.winningOutcomeBalanceAttoRep)} REP\` and one deposit contributed \`${rep(example.depositAmountAttoRep)} REP\` inside the eligible range:`,
+						`Let binding capital be \`${rep(example.bindingCapitalAttoRep)} REP\`, so the reward-eligible cap is \`${rep(payout.rewardEligibleCapAttoRep)} REP\`, the reward pool is \`${rep(payout.rewardPoolAttoRep)} REP\`, and the escalation-haircut pool is \`${rep(payout.haircutPoolAttoRep)} REP\`. If the winning outcome holds \`${rep(example.winningOutcomeBalanceAttoRep)} REP\` and one deposit contributed \`${rep(example.depositAmountAttoRep)} REP\` as the final deposit, from cumulative 10 REP to 15 REP:`,
 					),
 					list(
 						`Principal returned: \`${rep(example.depositAmountAttoRep)} REP\`.`,
-						`Bonus: \`${rep(example.depositAmountAttoRep)} × ${rep(payout.rewardPoolAttoRep)} / ${rep(payout.rewardEligiblePrincipalAttoRep)} = ${rep(payout.bonusAttoRep)} REP\`.`,
+						`Bonus: the difference of the rounded cumulative reward allocations at 15 REP and 10 REP is \`${rep(payout.bonusAttoRep)} REP\`.`,
 						`Winning payout: \`${rep(example.depositAmountAttoRep)} + ${rep(payout.bonusAttoRep)} = ${rep(payout.payoutAttoRep)} REP\`.`,
-						`Haircut burned: \`${rep(example.depositAmountAttoRep)} × ${rep(payout.haircutPoolAttoRep)} / ${rep(payout.rewardEligiblePrincipalAttoRep)} = ${rep(payout.burnAttoRep)} REP\` at attoREP precision.`,
+						`Haircut burned: the difference of the rounded cumulative burn allocations is \`${rep(payout.burnAttoRep)} REP\` at attoREP precision.`,
 					),
 					paragraph(
-						`A winning deposit position above \`${rep(payout.rewardEligibleCapAttoRep)} REP\` returns its principal without a bonus. When the Zoltar fork threshold the game recorded at its last deposit, or at a continuation's resume, is below the game's non-decision threshold, the whole withdrawal is scaled by their ratio. If this game's non-decision threshold were \`${rep(example.nonDecisionThresholdAttoRep)} REP\` and the fork threshold \`${rep(example.actualForkThresholdAttoRep)} REP\`, the \`${rep(payout.payoutAttoRep)} REP\` payout becomes \`${rep(payout.payoutAttoRep)} × ${rep(example.actualForkThresholdAttoRep)} / ${rep(example.nonDecisionThresholdAttoRep)} = ${rep(payout.scaledPayoutAttoRep)} REP\`, rounded down to attoREP. Fork scaling can therefore reduce the final transfer below principal.`,
+						`A winning deposit position above \`${rep(payout.rewardEligibleCapAttoRep)} REP\` returns its principal without a bonus. When the Zoltar fork threshold the game recorded at its last deposit is below the game's non-decision threshold, each cumulative payout is scaled by their ratio before taking the difference. If this game's non-decision threshold were \`${rep(example.nonDecisionThresholdAttoRep)} REP\` and the fork threshold \`${rep(example.actualForkThresholdAttoRep)} REP\`, the \`${rep(payout.payoutAttoRep)} REP\` payout becomes \`${rep(payout.scaledPayoutAttoRep)} REP\` after subtracting the two scaled cumulative payouts at attoREP precision. Fork scaling can therefore reduce the final transfer below principal.`,
 					),
 				],
 			},

@@ -157,7 +157,12 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getDepositsByOutcomeLength', args: [outcome] }), expected)
 		}
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
-		const depositPage = deposits.slice(1, 6)
+		const depositPage = await client.readContract({
+			abi: statoblast_EscalationGame_EscalationGame.abi,
+			address: escalationGame,
+			functionName: 'getDepositsByOutcome',
+			args: [QuestionOutcome.Yes, 1n, 5n],
+		})
 		const maxCountDepositPage = await client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
@@ -174,7 +179,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		assert.strictEqual(depositPage.length, 1, 'deposit paging should return only the remaining entries')
 		assert.strictEqual(depositPage[0]?.amountAttoRep, reportBond * 2n, 'paged deposit should retain its amount')
 		assert.strictEqual(depositPage[0]?.depositor, client.account.address, 'paged deposit should retain its depositor')
-		assert.strictEqual(depositPage[0]?.depositIndex, 1n, 'paged deposit should retain its index')
+		assert.strictEqual(depositPage[0]?.cumulativeAmountAttoRep, deposits[1]?.cumulativeAmountAttoRep, 'contract page should retain the indexed deposit cumulative amount')
 		assert.strictEqual(maxCountDepositPage.length, 1, 'max-count deposit paging should return only the remaining entries')
 		assert.strictEqual(maxCountDepositPage[0]?.amountAttoRep, reportBond * 2n, 'max-count paged deposit should retain its amount')
 		assert.strictEqual(maxCountDepositPage[0]?.depositor, client.account.address, 'max-count paged deposit should retain its depositor')

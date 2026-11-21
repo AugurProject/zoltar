@@ -1,3 +1,4 @@
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { beforeEach, expect, spyOn, test } from 'bun:test'
 import { render } from 'preact'
@@ -27,6 +28,7 @@ import { initializeTradingActiveEnvironment } from '../../app/activeEnvironment.
 
 /** The Trading deployment the browser simulation reports in the application-shell tests. */
 const browserSimulationConfiguration: DeploymentConfiguration = {
+	zoltar: deploymentConfigurationFixture().zoltar,
 	chainId: 31_337,
 	chainName: 'Browser simulation',
 	factory: `0x${'22'.repeat(20)}`,
@@ -124,6 +126,7 @@ test('Trading force-refreshes the active environment after saving the active net
 				restoreConfiguredEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }), createReadClient: () => configuredClient })
 			}}
 			loadLiveDeployment={async () => ({
+				zoltar: deploymentConfigurationFixture().zoltar,
 				chainId: 11155111,
 				chainName: 'Sepolia',
 				factory: `0x${'22'.repeat(20)}`,
@@ -137,19 +140,36 @@ test('Trading force-refreshes the active environment after saving the active net
 	try {
 		await waitFor(() => expect(rendered.container.textContent).toContain('Sepolia'))
 		const queries = within(rendered.container)
-		await act(async () => fireEvent.click(queries.getByRole('button', { name: 'Settings' })))
+		await act(async () => {
+			fireEvent.click(queries.getByRole('button', { name: 'Settings' }))
+		})
 		const networkSelect = queries.getByRole('combobox', { name: 'RPC network' }) as HTMLSelectElement
 		expect(networkSelect.value).toBe('sepolia')
 		expect(getActiveNetworkProfile().id).toBe('sepolia')
 		const rpcInput = queries.getByRole('textbox', { name: 'Fallback RPC URL' }) as HTMLInputElement
 		rpcInput.value = 'https://new-rpc.example'
-		await act(async () => fireEvent.input(rpcInput))
+		await act(async () => {
+			fireEvent.input(rpcInput)
+		})
 		const saveButton = queries.getByRole('button', { name: 'Save RPC' }) as HTMLButtonElement
 		expect(saveButton.disabled).toBe(false)
-		await act(async () => saveButton.click())
+		await act(async () => {
+			await saveButton.click()
+		})
 		expect(globalThis.localStorage.getItem('zoltar.rpcUrls')).toContain('new-rpc.example')
 		await waitFor(() => expect(environmentInitializations).toBe(1))
-		expect(createTradingPublicClient({ chainId: 11155111, chainName: 'Sepolia', factory: `0x${'22'.repeat(20)}`, feeBps: 30, router: `0x${'33'.repeat(20)}`, rpcUrl: 'https://old-rpc.example', securityPoolFactory: `0x${'11'.repeat(20)}` })).toBe(configuredClient)
+		expect(
+			createTradingPublicClient({
+				zoltar: deploymentConfigurationFixture().zoltar,
+				chainId: 11155111,
+				chainName: 'Sepolia',
+				factory: `0x${'22'.repeat(20)}`,
+				feeBps: 30,
+				router: `0x${'33'.repeat(20)}`,
+				rpcUrl: 'https://old-rpc.example',
+				securityPoolFactory: `0x${'11'.repeat(20)}`,
+			}),
+		).toBe(configuredClient)
 	} finally {
 		await rendered.cleanup()
 		restoreConfiguredEnvironment?.()
@@ -205,7 +225,10 @@ test('Trading issues no chain reads while the environment is bootstrapping', asy
 		await waitFor(() => expect(rendered.container.textContent).toContain('Deploy trading contracts'))
 		// Flush the inspection effect's pending continuations; without the readiness gate it reaches the
 		// chain here and reports a missing SecurityPoolFactory against a half-bootstrapped simulation.
-		for (let flush = 0; flush < 5; flush += 1) await act(async () => undefined)
+		for (let flush = 0; flush < 5; flush += 1)
+			await act(async () => {
+				await undefined
+			})
 		expect(readClientRequests).toBe(0)
 		expect(rendered.container.textContent).not.toContain(appCopy.securityPoolFactoryNotDeployed)
 	} finally {
@@ -275,14 +298,14 @@ test('shared pool navigation preserves modified clicks and blocks disabled links
 		link.dispatchEvent(primary)
 		expect(primary.defaultPrevented).toBe(true)
 		expect(navigations).toBe(1)
-		await act(() =>
+		await act(() => {
 			render(
 				<SecurityPoolLink {...props} disabled>
 					Selected pool
 				</SecurityPoolLink>,
 				view.container,
-			),
-		)
+			)
+		})
 		const disabled = new MouseEvent('click', { bubbles: true, cancelable: true })
 		link.dispatchEvent(disabled)
 		expect(disabled.defaultPrevented).toBe(true)
@@ -308,7 +331,9 @@ test('price source attribution distinguishes simulation and both live quote sour
 				expect(link?.textContent).toContain(label)
 				expect(link?.getAttribute('href')).toBe('https://example.test/quote')
 				expect(link?.getAttribute('rel')).toBe('noreferrer')
-				await act(() => render(<div>{renderRepPriceSourceLabel(source, undefined)}</div>, view.container))
+				await act(() => {
+					render(<div>{renderRepPriceSourceLabel(source, undefined)}</div>, view.container)
+				})
 				expect(view.container.textContent).toContain(label)
 				expect(view.container.querySelector('a')).toBeNull()
 			} finally {
@@ -358,7 +383,9 @@ for (const initializationFails of [false, true]) {
 			if (initializationFails) expect(within(document.body).getByRole('alert').textContent).toContain('Trading environment unavailable')
 			else expect(document.body.textContent).toBe('Trading ready')
 		} finally {
-			await act(() => render(null, document.body))
+			await act(() => {
+				render(null, document.body)
+			})
 			initialize.mockRestore()
 			errorLog.mockRestore()
 			dom.cleanup()

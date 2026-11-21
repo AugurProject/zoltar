@@ -19,6 +19,7 @@ function logRangeLimitError(error: unknown) {
 		if (!('message' in current) || typeof current.message !== 'string') return false
 		const message = current.message.toLowerCase()
 		if (message.includes('fromblock exceeds toblock')) return false
+		if (message.includes('block range is too wide') || message.includes('please reduce') || message.includes('query timeout') || message.includes('query timed out') || message.includes('request timeout') || message.includes('request timed out')) return true
 		if (message.includes('http 413') || message.includes('range is too large')) return true
 		if (message.includes('response exceeds') || message.includes('response too large')) return true
 		const mentionsRangeCap = message.includes('range') || message.includes('blocks') || message.includes('results') || message.includes('response size')

@@ -1,5 +1,6 @@
+import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { expect, test } from 'bun:test'
-import { indexUniverseTree, universeApprovalSelection, universeLineage, visibleUniverseRows, type UniverseNode } from '../src/dashboard/universe-tree.ts'
+import { indexUniverseTree, universeLabel, universeApprovalSelection, universeLineage, visibleUniverseRows, type UniverseNode } from '../src/dashboard/universe-tree.ts'
 
 const nodes = [{ id: '0' }, { id: '1', parentId: '0', outcomeIndex: '1' }, { id: '2', parentId: '0', outcomeIndex: '2' }, { id: '3', parentId: '1', outcomeIndex: '1' }, { id: '4', parentId: '2', outcomeIndex: '1', repToken: '0xabcdef' }]
 const tree = indexUniverseTree(nodes)
@@ -37,4 +38,11 @@ test('terminates on malformed cyclic ancestry', () => {
 	])
 	expect(universeLineage(cyclic, '1')).toHaveLength(2)
 	expect([...universeApprovalSelection(cyclic, new Set(['1', '2']), '1', false)]).toEqual([])
+})
+
+test('shares canonical genesis names and neutral hex fallbacks with the protocol UI', () => {
+	for (const outcome of ['yes', 'no'] as const) expect(universeLabel({ id: '0', repToken: getGenesisNetworkProfile(MAINNET_NETWORK_PROFILE, outcome).genesisRepTokenAddress })).toBe(`Augur v2 › ${outcome === 'yes' ? 'Yes' : 'No'}`)
+	expect(universeLabel({ id: '0' })).toBe('Genesis universe')
+	// Categorical and scalar index 1 need not mean Yes; missing question metadata stays explicit.
+	expect(universeLabel({ id: '12345678901234567890', parentId: '0', outcomeIndex: '1' })).toBe('Universe 0xab54a9…0ad2')
 })

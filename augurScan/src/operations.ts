@@ -133,7 +133,7 @@ export const reportLifecycle = (input: ReportLifecycleInput): LifecycleState => 
 			nextTransition: settlementBoundary.toString(),
 		}
 	return {
-		state: 'Settleable',
+		state: 'Ready to settle',
 		clock,
 		disputeBoundary: disputeBoundary.toString(),
 		settlementBoundary: settlementBoundary.toString(),
@@ -158,8 +158,8 @@ export const auctionStartedWindow = (eventData: Readonly<Record<string, unknown>
 })
 
 export const auctionLifecycle = (input: AuctionLifecycleInput): string => {
-	if (!input.started) return 'Scheduled'
 	if (input.finalized) return input.settlementCount < input.bidCount ? 'Bid settlements outstanding' : 'Fully settled'
+	if (!input.started) return 'Scheduled'
 	const current = nonNegative(input.indexedTimestamp)
 	const start = nonNegative(input.opensAt)
 	const end = nonNegative(input.closesAt)
@@ -195,7 +195,8 @@ export const swapAnalytics = (input: SwapAnalyticsInput) => {
 	if (resultingReserveIn < amountIn) throw new Error('Swap resulting input reserve is smaller than amountIn')
 	const reserveInBefore = resultingReserveIn - amountIn
 	const reserveOutBefore = resultingReserveOut + amountOut
-	const impactDenominator = reserveOutBefore * amountIn
+	if (feeAmount > amountIn) throw new Error('Swap fee is larger than amountIn')
+	const impactDenominator = reserveOutBefore * (amountIn - feeAmount)
 	const impactNumerator = impactDenominator > amountOut * reserveInBefore ? impactDenominator - amountOut * reserveInBefore : 0n
 	const [reducedImpactNumerator, reducedImpactDenominator] = reduced(impactNumerator, impactDenominator)
 	return {
@@ -295,7 +296,7 @@ export const fixedWindowTwap = (observations: readonly ExactPriceObservation[], 
 export type AuctionBidLevel = { readonly minimumAttoRepPerLot: unknown; readonly lots: unknown }
 
 // The uniform-price auction fills bids in ascending minimumAttoRepPerLot order: a
-// lower REP-per-lot limit accepts less collateral per lot and is therefore the
+// lower REP-per-lot limit accepts less REP for the fixed collateral lot and is therefore the
 // better bid. Demand accumulates in that fill order. A lot is `lotAttoEth` of
 // collateral, known only once AuctionStarted is indexed.
 export const auctionDemandCurve = (bids: readonly AuctionBidLevel[], lotAttoEth: string | undefined) => {

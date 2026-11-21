@@ -1,7 +1,7 @@
 import { Fragment, h, render } from 'preact'
 import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
 import { createMetric } from '@zoltar/bot-shared/dashboard/components'
-import { element } from '@zoltar/bot-shared/dashboard/dom'
+import { element, shorten } from '@zoltar/bot-shared/dashboard/dom'
 import { renderOperatorHealth } from '@zoltar/bot-shared/dashboard/health-panel'
 import type { Configuration, Snapshot } from './api-validation.ts'
 
@@ -31,7 +31,11 @@ export function renderOverviewMetrics(snapshot: Snapshot, configuration: Configu
 		createMetric('Automated scopes', String(snapshot.portfolios?.filter(portfolio => portfolio.automation).length ?? 0)),
 		createMetric('Distressed positions in page', String(snapshot.portfolios?.flatMap(portfolio => portfolio.positions).filter(position => position.distressed).length ?? 0)),
 	)
-	element('wallet-metrics', HTMLDivElement).replaceChildren(createMetric('Wallet ETH', formatAmount(snapshot.metrics.walletEth, 'ETH')), createMetric('Wallet REP', formatAmount(snapshot.metrics.walletRep, 'REP')), createMetric('Managed principal', formatAmount(snapshot.portfolios?.[0]?.managedPrincipalRep, 'REP')))
+	element('wallet-metrics', HTMLDivElement).replaceChildren(
+		createMetric('Wallet ETH', formatAmount(snapshot.metrics.walletEth, 'ETH')),
+		...Object.entries(snapshot.walletRep ?? {}).map(([token, amount]) => createMetric(`Wallet REP · ${shorten(token)}`, formatAmount(amount, 'REP'))),
+		createMetric('Managed principal', formatAmount(snapshot.portfolios?.[0]?.managedPrincipalRep, 'REP')),
+	)
 	renderOverviewHealth(snapshot, configuration, stale)
 }
 

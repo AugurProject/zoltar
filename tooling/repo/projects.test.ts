@@ -1,8 +1,9 @@
+import { acceptedAuditAdvisories } from './dependency-audit-policy.ts'
 import { expect, test } from 'bun:test'
 import path from 'node:path'
 import { generatedArtifacts } from './generated-artifacts.ts'
 import { repositoryRoot } from './root.mts'
-import { acceptedAuditAdvisories, affectedProjects, componentProjects, dependencyAuditCommand, projectDependencyClosure, projectForPath, projects, projectsInTaskGroup, projectTaskNames, taskInputMatches, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
+import { affectedProjects, componentProjects, dependencyAuditCommand, projectDependencyClosure, projectForPath, projects, projectsInTaskGroup, projectTaskNames, taskInputMatches, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
 
 const project = (id: string, dependencies: readonly string[] = []): Project => ({ id, path: id, type: 'library', dependencies, tasks: {}, generatedDirectories: [] })
 

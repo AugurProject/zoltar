@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { isUiAppId, UI_APP_IDS } from './appIds.mts'
 
-const noStoreFiles = new Set(['/index.html', '/mainnet-deployment-addresses.json', '/sepolia-deployment-addresses.json'])
+const noStoreFiles = new Set(['/index.html', '/core-deployments.json'])
 
 export const createAssetHandler = (root: string) => {
 	const resolvedRoot = path.resolve(root)

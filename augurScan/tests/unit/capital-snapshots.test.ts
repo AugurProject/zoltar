@@ -141,11 +141,11 @@ test('a capital ledger snapshot reads its price, totals, feed and last position 
 
 test('fee reads are optional beside the ledger state and skip an unregistered book', async () => {
 	const sample = async (overrides: Outputs) => (await sampleEntityStateWithRead({ entityType: 'capital-ledger', entityIdentity: ledger.toLowerCase(), address: ledger }, reader(overrides))).readResult
-	// A universe without a settlement book has id 0, which the book contract rejects; it is not read.
+	// A universe without a registered settlement book has id 0. Its public getter returns zeros; skip that absent book.
 	const unregistered = await sample({
 		bookIds: [0n],
 		books: () => {
-			throw new Error('Unknown settlement book')
+			throw new Error('Unregistered book must not be read')
 		},
 	})
 	expect(unregistered?.['fees']).toMatchObject({ bookId: '0', annualFeeBps: '200' })

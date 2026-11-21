@@ -1,3 +1,4 @@
+import { writeViewportScreenshot } from '../../../../tooling/ui/chromiumDevTools.mts'
 import { expect } from 'bun:test'
 import { CONFIGURATION_REVISION_CONFLICT } from '@zoltar/bot-shared/config/durable-file'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
@@ -274,7 +275,7 @@ browserTest(
 				expect(await cdp.evaluate("({ stale: document.querySelector('#resume-stale-warning')?.classList.contains('hidden'), disabled: document.querySelector('#confirm-resume')?.disabled })")).toEqual({ stale: false, disabled: true })
 				// No state arrives any more, yet the header age must keep advancing.
 				await cdp.waitFor(`document.querySelector('#last-scan')?.textContent !== ${JSON.stringify(scanAge)} && document.querySelector('#last-scan')?.textContent?.startsWith('Scanned ')`, { message: 'scan age froze while state reads failed' })
-				expect(await cdp.evaluate("document.querySelector('#operator-health')?.textContent?.includes('Not tracked · limit 0.05 ETH per operation')")).toBe(true)
+				expect(await cdp.evaluate("document.querySelector('#operator-health')?.textContent?.includes('Not tracked · limit 0.05 ETH per workflow')")).toBe(true)
 			},
 		)
 	},
@@ -537,4 +538,28 @@ browserTest(
 		)
 	},
 	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 30_000,
+)
+
+browserTest(
+	'names pool and pair lifecycle states in the ecosystem topology',
+	async () => {
+		await withDashboard({ getState: () => state({ topology: { anchorBlock: '123', complete: true, universes: [], pools: [{ address: walletAddress, universeId: '0', systemState: 1 }], reports: [], auctions: [], pairs: [{ address: walletAddress, universeId: '0', status: 6 }] } }) }, '/ecosystem', async cdp => {
+			await cdp.waitFor("document.querySelector('#topology-pools')?.textContent?.includes('Pool forked')", { message: 'pool lifecycle label did not render' })
+			expect(await cdp.evaluate("document.querySelector('#topology-pairs')?.textContent?.includes('Uninitialized')")).toBe(true)
+			for (const [width, height] of [
+				[1440, 900],
+				[390, 844],
+			] as const) {
+				await cdp.command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 600 })
+				expect(await cdp.evaluate('document.body.scrollWidth <= document.documentElement.clientWidth')).toBe(true)
+				const screenshots = process.env['CHAOS_QA_SCREENSHOTS']
+				if (screenshots !== undefined)
+					for (const id of ['topology-pools', 'topology-pairs']) {
+						await cdp.evaluate(`document.getElementById('${id}')?.scrollIntoView({ block: 'center' })`)
+						await writeViewportScreenshot((method, parameters) => cdp.command(method, parameters), `${screenshots}/ecosystem-${id}-${width}x${height}.png`)
+					}
+			}
+		})
+	},
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
 )

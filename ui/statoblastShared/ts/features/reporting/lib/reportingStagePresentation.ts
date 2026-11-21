@@ -80,7 +80,7 @@ export function getReportingStagePresentation({
 				blockedActions: [],
 				detail: forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredReportReason : reportingCopy.forkTriggerInstruction,
 				key: 'escalation-fork-triggered',
-				label: commonCopy.forkTriggered,
+				label: forkAlreadyTriggered ? commonCopy.forkTriggered : reportingCopy.readyToFork,
 				tone: 'default',
 			}
 		case 'Timed Out':

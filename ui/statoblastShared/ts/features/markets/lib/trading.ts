@@ -8,7 +8,7 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import { previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ShareMigrationTarget, ShareMigrationTargetsState, TradingShareBalances } from '../../../types/contracts.js'
@@ -220,8 +220,14 @@ export function parseCompleteSetAmountInput(input: string, decimals: number) {
 	return tryParseDecimalInput(input, decimals)
 }
 
+export function getMintingQuestionEndReason(currentTimestamp: bigint | undefined, questionEndTime: bigint | undefined) {
+	return currentTimestamp !== undefined && questionEndTime !== undefined && currentTimestamp >= questionEndTime ? tradingCopy.mintingClosedAtQuestionEnd : undefined
+}
+
 export function getTradingMintGuardMessage({
 	collateral,
+	currentTimestamp,
+	questionEndTime,
 	accountAddress,
 	escalationGameActive = false,
 	usesSharedBacking = false,
@@ -234,6 +240,8 @@ export function getTradingMintGuardMessage({
 	shareTokenSupplyAttoShares,
 	totalPoolHeldAttoRep,
 }: {
+	currentTimestamp?: bigint | undefined
+	questionEndTime?: bigint | undefined
 	collateral?: { balance: bigint; decimals: number; symbol: string } | undefined
 	accountAddress: Address | undefined
 	/** An open escalation game closes minting; it explains a zero capacity before any capacity message. */
@@ -251,6 +259,8 @@ export function getTradingMintGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('minting complete sets') })
 	if (walletGuardState.blocked) return walletGuardState.reason
+	const questionEndReason = getMintingQuestionEndReason(currentTimestamp, questionEndTime)
+	if (questionEndReason !== undefined) return questionEndReason
 	if (escalationGameActive) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)

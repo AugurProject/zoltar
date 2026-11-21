@@ -1,3 +1,4 @@
+import { liveMarketFixture } from '../support/liveMarketFixture.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -62,7 +63,7 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('invalidates new-risk liquidity operations at the exact end boundary while preserving removal', () => {
-		const market = { endTime: 2_000n, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, tradingStatus: 0 }
+		const market = liveMarketFixture({ endTime: 2_000n })
 		expect(liquidityOperationAvailable('initialize', market, 1_999n)).toBe(true)
 		expect(liquidityOperationAvailable('add', market, 2_000n)).toBe(false)
 		expect(liquidityOperationAvailable('initialize', market, 2_001n)).toBe(false)
@@ -85,7 +86,7 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('validates a registry anchor at the current tip without requesting historical blocks', async () => {
-		const anchor = { blockNumber: 12n, blockHash: `0x${'12'.repeat(32)}` }
+		const anchor = { blockNumber: 12n, blockHash: `0x${'12'.repeat(32)}` } as const
 		let historicalReads = 0
 		expect(
 			await registryBlockAnchorIsCanonical(
@@ -101,7 +102,7 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('accepts an older registry anchor when the deterministic simulator cannot read historical blocks', async () => {
-		const anchor = { blockNumber: 12n, blockHash: `0x${'12'.repeat(32)}` }
+		const anchor = { blockNumber: 12n, blockHash: `0x${'12'.repeat(32)}` } as const
 		expect(await registryBlockAnchorIsCanonical(anchor, async () => ({ blockNumber: 13n, blockHash: `0x${'13'.repeat(32)}` }))).toBe(true)
 	})
 
@@ -140,13 +141,13 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('formats Statoblast settings for display', () => {
-		expect(formatEthAmountPair(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10\u00a0000 / 9\u00a0500 ETH')
+		expect(formatEthAmountPair(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10\u00a0000.00 / 9\u00a0500.00 ETH')
 		expect(formatTrimmedUnits(999_999_996_848_000_000n, 18, 12)).toBe('0.999999996848')
 		expect(formatTrimmedUnits(999_999_977_880_000_000n, 18, 12)).toBe('0.99999997788')
-		expect(formatRoundedUnits(999_999_996_848_000_000n)).toBe('1')
-		expect(formatRoundedUnits(4_999_500_000_000_000n)).toBe('0.005')
-		expect(formatRoundedUnits(4_949_999_999_999_999n)).toBe('0.0049')
-		expect(formatRoundedUnits(-4_999_500_000_000_000n)).toBe('-0.005')
+		expect(formatRoundedUnits(999_999_996_848_000_000n)).toBe('≈ 1.00')
+		expect(formatRoundedUnits(4_999_500_000_000_000n)).toBe('≈ 0.0050')
+		expect(formatRoundedUnits(4_949_999_999_999_999n)).toBe('≈ 0.0049')
+		expect(formatRoundedUnits(-4_999_500_000_000_000n)).toBe('≈ -0.0050')
 		expect(formatRoundedUnits(123n, 18, 18)).toBe('0.000000000000000123')
 	})
 
@@ -161,18 +162,18 @@ describe('standalone trading UI model', () => {
 		expect(collateralAttoEthToAttoShares(1n, rate)).toBe(1n)
 		expect(collateralAttoEthToAttoShares(1n, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 1n })).toBeUndefined()
 		expect(() => attoSharesToCollateralAttoEth(-1n, rate)).toThrow('cannot be negative')
-		expect(formatOutcomeQuantity(10n ** 18n, 'YES')).toBe('1 Yes')
-		expect(formatCompleteSetQuantity(10n ** 18n)).toBe('1 complete set')
+		expect(formatOutcomeQuantity(10n ** 18n, 'YES')).toBe('1.00 Yes')
+		expect(formatCompleteSetQuantity(10n ** 18n)).toBe('1.00 complete set')
 		// Exactly 0.005 ETH of shares under a rate that no longer divides evenly still reads as 0.005, while limits round down.
 		const drifted = { settlementCollateralAttoEth: 9_999_999_999_999_999n, shareTokenSupplyAttoShares: 10n * 10n ** 18n }
 		const shares = collateralAttoEthToAttoShares(5n * 10n ** 15n, drifted)
 		if (shares === undefined) throw new Error('Drifted rate must convert')
-		expect(formatOutcomeQuantity(shares, 'YES')).toBe('5 Yes')
+		expect(formatOutcomeQuantity(shares, 'YES')).toBe('≈ 5.00 Yes')
 		expect(formatOutcomeQuantity(shares, 'YES', 4, 'down')).toBe('5 Yes')
 		expect(formatCollateralEth(shares, drifted, 'down')).toBe('0.0049 ETH')
-		expect(formatCollateralEth(shares, drifted)).toBe('0.005 ETH')
-		expect(formatCompleteSetQuantity(10n ** 18n)).toBe('1 complete set')
-		expect(formatLpQuantity(10n ** 18n)).toBe('1 LP')
+		expect(formatCollateralEth(shares, drifted)).toBe('≈ 0.0050 ETH')
+		expect(formatCompleteSetQuantity(10n ** 18n)).toBe('1.00 complete set')
+		expect(formatLpQuantity(10n ** 18n)).toBe('1.00 LP')
 		expect(averagePriceBps(6n * 10n ** 17n, 10n ** 18n, rate)).toBe(6_666n)
 		expect(averagePriceBps(1n, 0n, rate)).toBeUndefined()
 	})
@@ -415,8 +416,10 @@ describe('standalone trading UI model', () => {
 			const market = { systemState: 0, universeForkTime: 9n, questionOutcome }
 			const balances = { invalid: 5n, yes: 7n, no: 6n }
 			const winningBalances = [balances.invalid, balances.yes, balances.no]
+			const winningBalance = winningBalances[questionOutcome]
+			if (winningBalance === undefined) throw new Error('Invalid outcome fixture')
 			expect(marketSettlementPath(market)).toBe('redeem-winning-shares')
-			expect(settlementAvailability(market, balances)).toEqual({ completeSets: 5n, winningBalance: winningBalances[questionOutcome], canRedeemCompleteSets: false, canRedeemWinningShares: true, canMigrateShares: false })
+			expect(settlementAvailability(market, balances)).toEqual({ completeSets: 5n, winningBalance, canRedeemCompleteSets: false, canRedeemWinningShares: true, canMigrateShares: false })
 			expect(settlementUnavailableReason('migrate-shares', market, balances)).toBe('The question resolved. Redeem your winning shares instead.')
 			expect(settlementUnavailableReason('redeem-complete-set', market, balances)).toBe('The question resolved. Redeem your winning shares instead.')
 			expect(marketSettlementPath({ ...market, systemState: 1 })).toBe('unavailable')
@@ -451,7 +454,7 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('points a closed market at the settlement step its state actually offers', () => {
-		const open = { loadError: undefined, systemState: 0, universeForkTime: 0n, questionOutcome: 3 }
+		const open = { systemState: 0, universeForkTime: 0n, questionOutcome: 3 }
 		expect(marketSettlementPath(open)).toBe('redeem-complete-sets')
 		expect(marketSettlementPath({ ...open, questionOutcome: 1 })).toBe('redeem-winning-shares')
 		expect(marketSettlementPath({ ...open, questionOutcome: 1, universeForkTime: 9n })).toBe('redeem-winning-shares')
@@ -469,7 +472,7 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('names the specific lifecycle or balance reason a settlement action is unavailable', () => {
-		const open = { loadError: undefined, systemState: 0, universeForkTime: 0n, questionOutcome: 3 }
+		const open = { systemState: 0, universeForkTime: 0n, questionOutcome: 3 }
 		const holdings = { invalid: 5n, yes: 7n, no: 6n }
 		const empty = { invalid: 0n, yes: 0n, no: 0n }
 		expect(settlementUnavailableReason('redeem-complete-set', open, holdings)).toBeUndefined()
@@ -487,7 +490,7 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('settlement reasons agree with the availability flags for every operation and lifecycle', () => {
-		const open = { loadError: undefined, systemState: 0, universeForkTime: 0n, questionOutcome: 1 }
+		const open = { systemState: 0, universeForkTime: 0n, questionOutcome: 1 }
 		const balances = { invalid: 5n, yes: 7n, no: 6n }
 		const fixtures = [
 			{ name: 'resolved and operational', market: open, balances },
@@ -519,13 +522,13 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceStatus('disconnected', undefined, unit)).toBe('Connect a wallet to see your balance.')
 		expect(settlementBalanceStatus('loading', 0n, unit)).toBe('Balance: Loading…')
 		expect(settlementBalanceStatus('error', 0n, unit)).toBe('Balance: Unavailable')
-		expect(settlementBalanceStatus('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('Balance: 5 Yes (5 ETH if the question resolves Yes)')
+		expect(settlementBalanceStatus('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('Balance: 5.0000 Yes (5.00 ETH if the question resolves Yes)')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit)).toBe('5 ETH')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 Yes (5 ETH if the question resolves Yes)')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 No (5 ETH if the question resolves No)')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 Invalid (5 ETH if the question resolves Invalid)')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5.0000 Yes (5.00 ETH if the question resolves Yes)')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5.0000 No (5.00 ETH if the question resolves No)')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5.0000 Invalid (5.00 ETH if the question resolves Invalid)')
 		// The settlement panel already says a forked market cannot redeem, so its balance line does not repeat it.
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, { ...unit, questionOutcome: 3, universeForkTime: 1n }, 'YES')).toBe('5 Yes (5 ETH if the question resolves Yes)')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, { ...unit, questionOutcome: 3, universeForkTime: 1n }, 'YES')).toBe('5.0000 Yes (5.00 ETH if the question resolves Yes)')
 	})
 
 	test('blocks duplicate submission when a broadcast receipt is uncertain', () => {

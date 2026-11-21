@@ -26,6 +26,7 @@ test('CI preflight preserves non-UI checks and production bundling without check
 	expect(getCiPreflightTasks([]).map(task => task.command)).toEqual([
 		['run', 'tsc:scripts'],
 		['run', 'tsc:solidity:current'],
+		['run', 'tsc:ui-tests'],
 		['run', 'ui:build:prod:current'],
 	])
 })
@@ -34,6 +35,7 @@ test('the parallel checks job runs both remaining typechecks without producing a
 	expect(getCiPreflightTasks(['--typecheck-only']).map(task => task.command)).toEqual([
 		['run', 'tsc:scripts'],
 		['run', 'tsc:solidity:current'],
+		['run', 'tsc:ui-tests'],
 	])
 })
 

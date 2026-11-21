@@ -18,7 +18,8 @@ import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { buildPoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
 
 const STATOBLAST_NOT_FOUND_LINKS = [
-	{ href: statoblastRouting.getHash('pools'), label: statoblastAppCopy.pools },
+	{ href: statoblastRouting.getHash('pools'), label: statoblastAppCopy.questions },
+	{ href: statoblastRouting.getHash('portfolios'), label: statoblastAppCopy.portfolios },
 	{ href: buildPoolsRouteHash({ view: 'universes' }), label: zoltarCopy.universesTitle },
 	{ href: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports },
 	{ href: statoblastRouting.getHash('deploy'), label: commonCopy.deploy },

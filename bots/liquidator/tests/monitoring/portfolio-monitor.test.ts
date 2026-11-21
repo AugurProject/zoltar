@@ -56,7 +56,7 @@ test('marks unchanged blocked retirement only after repeated observations', asyn
 	const fixture = portfolioClient({ accountOf: { owner: portfolioAddress, batch: 1n, rep: 1n, commitment: 10n ** 18n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, previewRetirement: { status: 3n } })
 	const scope = { ...fixture.observation.nextScope, retirementObservations: [{ id: 1n, batch: 1n, commitment: 10n ** 18n, since: 1n }] }
 	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, scope, 123n)
-	expect(result.positions[0]).toMatchObject({ retirementStatus: 'Earlier requests reserve available capacity', stalledRetirement: true })
+	expect(result.positions[0]).toMatchObject({ retirementStatus: 'Capacity reserved for earlier requests', stalledRetirement: true })
 	const reset = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, { ...scope, retirementObservations: [] }, 123n)
 	expect(reset.positions[0]?.stalledRetirement).toBe(false)
 })

@@ -185,6 +185,14 @@ function sellableShares(market: LiveMarket, side: Side, balances: LiveBalances |
 	return largestTradableSell(market, side, slippageBps, longBalance, balances.invalid)
 }
 
+/** The largest insured exit the current ticket can quote with its price-impact and slippage limits. */
+export function maximumInsuredSellEstimate(market: LiveMarket, side: Side, balances: LiveBalances, slippageBps: bigint) {
+	const amount = sellableShares(market, side, balances, slippageBps)
+	if (amount === undefined || amount === 0n) return undefined
+	const estimated = estimateSell(market, side, amount, slippageBps, side === 'YES' ? balances.yes : balances.no).estimate
+	return estimated?.kind === 'exit' ? estimated : undefined
+}
+
 // Shortcut amounts keep eight decimals, rounded down so they never exceed what can be sold or spent; ETH and shares share the precision.
 // Limits stated in reasons keep six decimals, rounded down so the stated amount is always accepted.
 const LIMIT_DIGITS = 6

@@ -44,7 +44,7 @@ export function parsePortfolioPolicy(value: unknown): PortfolioPolicy {
 		maximumOwnFundingAttoRep: amount('maximumOwnFundingRep', '0'),
 		minimumNetRewardAttoEth: amount('minimumNetRewardEth', '0.001'),
 		walletReserveAttoEth: amount('walletReserveEth', '0.01'),
-		targetHealthFactorBps: BigInt(integer(policy['targetHealthFactorBps'] ?? 15_000, 'portfolioPolicy.targetHealthFactorBps', 10_001, 1_000_000)),
+		targetHealthFactorBps: BigInt(integer(policy['targetHealthFactorBps'] ?? 15_000, 'portfolioPolicy.targetHealthFactorBps', 10_000, 1_000_000)),
 		stalledRetirementSeconds: integer(policy['stalledRetirementSeconds'] ?? 3600, 'portfolioPolicy.stalledRetirementSeconds', 1, 31_536_000),
 	}
 	if (parsed.maximumPrincipalAttoRep > parsed.maximumTotalPrincipalAttoRep) throw new Error('Portfolio principal limit exceeds total portfolio principal limit')

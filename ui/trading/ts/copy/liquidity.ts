@@ -57,3 +57,5 @@ export const initializeEstimateNote = 'Estimate from your price and the current 
 export const initializeLocalEstimateNote = `${initializeEstimateNote} ${recheckedBeforeWallet}`
 
 export const minimumDeposit = 'Minimum Yes / No deposit'
+
+export const maximumDeposit = 'Maximum deposit'

@@ -1,6 +1,5 @@
-import { encodeAbiParameters, getAddress, keccak256, toHex } from '@zoltar/core-shared/evm/ethereum'
-import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
-import { type ReadClient, type WriteClient, writeContractAndWait } from './clients'
+import { encodeAbiParameters, encodeDeployData, getAddress, keccak256, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { createWriteClient, type ReadClient, type WriteClient, writeContractAndWait } from './clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
 import { addressString } from './bigint'
 import { formatStorageSlot, getAddressMappingStorageSlot } from '../../storage'
@@ -8,7 +7,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '../../../abi/abis'
 import type { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import type { QuestionOutcome } from '../types/types'
-import { ReputationToken_ReputationToken, statoblast_WETH9_WETH9 } from '../../../types/contractArtifact'
+import { GenesisReputationToken_GenesisReputationToken, statoblast_WETH9_WETH9 } from '../../../types/contractArtifact'
 export { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 const TOTAL_REP_SUPPLY_ATTO_REP = 11_000_000n * 10n ** 18n
@@ -96,6 +95,21 @@ export const getERC20Balance = async (client: ReadClient, tokenAddress: Address,
 
 export const getETHBalance = async (client: ReadClient, address: Address): Promise<bigint> => requireBigInt(await client.getBalance({ address }), 'ETH balance')
 
+/** Changes the isolated genesis fixture's immutable supply without changing ERC-20 balances. */
+export async function overrideGenesisTheoreticalSupply(mockWindow: AnvilWindowEthereum, client: ReadClient, token: Address, supply: bigint) {
+	const code = await client.getCode({ address: token })
+	if (code === undefined || code === '0x') throw new Error('Genesis fixture code is missing')
+	const references = Object.values(GenesisReputationToken_GenesisReputationToken.evm.deployedBytecode.immutableReferences)
+	if (references.length !== 1) throw new Error('Unexpected genesis fixture immutable layout')
+	const runtime = hexToBytes(code)
+	const value = hexToBytes(toHex(supply, { size: 32 }))
+	for (const reference of references.flat()) {
+		if (reference.length !== value.length) throw new Error('Unexpected genesis supply immutable size')
+		runtime.set(value, reference.start)
+	}
+	await mockWindow.addStateOverrides({ [token]: { code: runtime } })
+}
+
 export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum) => {
 	// Impersonate test accounts so they can send transactions without private keys
 	for (const address of TEST_ADDRESSES) {
@@ -112,14 +126,29 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	// For OpenZeppelin ERC20, _balances mapping is at slot 0 (first state variable)
 	await mintERC20(anvilWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), tokenValues, 0n)
 
-	// Deploy the ReputationToken contract at the genesis address
-	const bytecodeHex = ReputationToken_ReputationToken.evm.deployedBytecode.object
-	const bytes = hexToBytes(bytecodeHex.startsWith('0x') ? bytecodeHex : `0x${bytecodeHex}`)
-	if (!bytes) throw new Error('Failed to convert bytecode to bytes')
+	// Run the approval-only genesis token constructor to bake its immutable supply into the runtime.
+	// A dedicated deployer leaves the test accounts' nonces and ETH balances unchanged.
+	const genesisDeployer = 0xfeedn
+	const genesisDeployerAddress = addressString(genesisDeployer)
+	await anvilWindowEthereum.impersonateAccount(genesisDeployerAddress)
+	await mintETH(anvilWindowEthereum, [{ address: genesisDeployerAddress, amount: ETH_AMOUNT_TO_MINT }])
+	const deploymentClient = createWriteClient(anvilWindowEthereum, genesisDeployer)
+	const hash = await deploymentClient.sendTransaction({
+		data: encodeDeployData({
+			abi: GenesisReputationToken_GenesisReputationToken.abi,
+			bytecode: `0x${GenesisReputationToken_GenesisReputationToken.evm.bytecode.object}`,
+			args: [tokenValues.map(value => value.address), tokenValues.map(value => value.amount)],
+		}),
+	})
+	const receipt = await deploymentClient.waitForTransactionReceipt({ hash })
+	if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Genesis REP fixture deployment failed')
+	const runtime = await deploymentClient.getCode({ address: receipt.contractAddress })
+	if (runtime === undefined || runtime === '0x') throw new Error('Genesis REP fixture runtime is missing')
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
-			code: bytes,
+			code: hexToBytes(runtime),
 			stateDiff: {
+				[formatStorageSlot(2n)]: TOTAL_REP_SUPPLY_ATTO_REP,
 				[formatStorageSlot(3n)]: shortStringStorageValue('Reputation'),
 				[formatStorageSlot(4n)]: shortStringStorageValue('REP'),
 			},
@@ -131,19 +160,6 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(PROXY_DEPLOYER_ADDRESS)]: {
 			code: hexToBytes(proxyDeployerBytecode),
-		},
-	})
-
-	// Set total theoretical supply for REP token.
-	// In the storage layout of ReputationToken (which inherits from ERC20), the variable
-	// `totalTheoreticalSupplyAttoRep` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
-	const theoreticalSupplySlot = `0x${REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT.toString(16).padStart(64, '0')}`
-	await anvilWindowEthereum.addStateOverrides({
-		[addressString(GENESIS_REPUTATION_TOKEN)]: {
-			stateDiff: {
-				[formatStorageSlot(2n)]: TOTAL_REP_SUPPLY_ATTO_REP,
-				[theoreticalSupplySlot]: TOTAL_REP_SUPPLY_ATTO_REP,
-			},
 		},
 	})
 

@@ -3,7 +3,7 @@ import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 const BPS_DENOMINATOR = 10_000n
 
 export const TRADING_PNL_BASIS =
-	'Cost basis includes collateral paid for complete sets minted for this account, directly or through the trading router, plus purchase fees recorded in the funding event; proceeds are the collateral returned when this account’s shares were redeemed, exited through the router, or settled. Router actions are attributed to the account whose shares were minted or burned, because router events are not indexed; a router recipient or payout recipient that differs from that account is not observable. Shares received by plain transfer carry no cost basis. While the market still trades, holdings are valued at the collateral an exit would return at the latest indexed reserves and complete-set exchange rate, and fee accrual after that pool event is not reflected; shares that such an exit cannot convert count as zero, so a partial valuation is a lower bound. After trading closes, holdings are not valued. Realized profit follows cost recovery: it counts only after proceeds exceed the collateral paid in, unless the position is closed.'
+	'Cost basis includes collateral paid for complete sets minted for this account, directly or through the trading router, plus purchase fees recorded in the funding event; proceeds are the collateral returned when this account’s shares were redeemed, exited through the router, or settled. This calculation attributes router actions using funding, pool and share events; it does not use the indexed router events to resolve a differing payout recipient. Shares received by plain transfer carry no cost basis. While the market still trades, holdings are valued at the collateral an exit would return at the latest indexed reserves and complete-set exchange rate, and fee accrual after that pool event is not reflected; shares that such an exit cannot convert count as zero, so a partial valuation is a lower bound. After trading closes, holdings are not valued. Realized profit follows cost recovery: it counts only after proceeds exceed the collateral paid in, unless the position is closed.'
 
 export type TradingHoldings = {
 	readonly invalidShares: bigint
@@ -39,8 +39,8 @@ export const tradingExitAvailability = (lifecycle: TradingLifecycle): { readonly
 	if (lifecycle.questionEndTime === undefined) return { open: false, reason: 'Question end time is not indexed' }
 	if (lifecycle.asOfTimestamp >= lifecycle.questionEndTime) return { open: false, reason: 'Trading has closed because the question ended' }
 	if (lifecycle.universeForked) return { open: false, reason: 'Trading has closed because the universe forked' }
-	if (lifecycle.settlementObserved || lifecycle.resolved) return { open: false, reason: 'Trading has closed because the question resolved' }
 	if ((lifecycle.systemState !== undefined && lifecycle.systemState !== '0') || lifecycle.awaitingForkContinuation) return { open: false, reason: 'Trading has closed because the pool is not operational' }
+	if (lifecycle.settlementObserved || lifecycle.resolved) return { open: false, reason: 'Trading has closed because the question resolved' }
 	return { open: true }
 }
 

@@ -13,7 +13,7 @@ import { marketTicketHref } from '../lib/routeState.js'
 import type { PortfolioActionGroup, PortfolioActionItem, PortfolioOverview, PortfolioRow, PortfolioValuation } from './portfolioModel.js'
 
 function formatPortfolioEth(attoEth: bigint) {
-	return formatEthAmount(formatRoundedUnits(attoEth, 18, 4))
+	return formatEthAmount(formatRoundedUnits(attoEth))
 }
 
 function valuationCaption(valuation: PortfolioValuation) {
@@ -40,7 +40,7 @@ export function PortfolioRowValue({ valuation }: { valuation: PortfolioValuation
 		<div className='portfolio-position-value'>
 			<span className='metric-label'>{portfolioCopy.valueNow}</span>
 			<strong className={valuation.kind === 'unavailable' ? 'is-unpriced' : undefined}>
-				{valuation.kind === 'unavailable' ? <UnpricedValue /> : `${formatCollateralAmount(valuation.attoEth, valuation)}${(valuation.attoRep ?? 0n) === 0n ? '' : portfolioCopy.formatRecoveryRepTail(formatRoundedUnits(valuation.attoRep ?? 0n, 18, 4))}`}
+				{valuation.kind === 'unavailable' ? <UnpricedValue /> : `${formatCollateralAmount(valuation.attoEth, valuation)}${(valuation.attoRep ?? 0n) === 0n ? '' : portfolioCopy.formatRecoveryRepTail(formatRoundedUnits(valuation.attoRep ?? 0n))}`}
 			</strong>
 			<small className='payout-caption'>{valuationCaption(valuation)}</small>
 		</div>

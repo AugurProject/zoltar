@@ -16,7 +16,7 @@
 		{
 			"trigger": "recoverSettledPendingReport",
 			"preconditions": ["latest candidate settled and unprocessed"],
-			"outcomes": ["candidate funding recovered without accepting a price"]
+			"outcomes": ["settled candidate processed and funding recovered; a valid candidate may publish its price"]
 		}
 	],
 	"functions": {
@@ -24,9 +24,6 @@
 		"disputeDelay": "view",
 		"escalationHaltMultiplierBps": "view",
 		"feePercentage": "view",
-		"gasConsumedOpenOracleReportPrice": "view",
-		"gasConsumedSettlement": "view",
-		"gasUnitsForOneDispute": "view",
 		"getRequestPriceCostAttoEth": "view",
 		"getSettlementCallbackGasLimit": "view",
 		"initialReportPriorityFeeAttoEthPerGas": "view",
@@ -38,7 +35,6 @@
 		"minimumToken1ReportAttoEth": "view",
 		"multiplier": "view",
 		"openOracle": "view",
-		"openOracleSecurityMultiplierBps": "view",
 		"pendingReportId": "view",
 		"pendingReportMaxSettlementBaseFeeAttoEthPerGas": "view",
 		"pendingReportSponsor": "view",
@@ -57,17 +53,12 @@
 		"sharedPriceFeed": "view",
 		"syncExposure": "nonpayable",
 		"targetPriceErrorForDispute": "view",
-		"timeType": "view",
-		"trackDisputes": "view",
 		"weth": "view"
 	},
 	"functionSignatures": {
 		"disputeDelay": "disputeDelay()",
 		"escalationHaltMultiplierBps": "escalationHaltMultiplierBps()",
 		"feePercentage": "feePercentage()",
-		"gasConsumedOpenOracleReportPrice": "gasConsumedOpenOracleReportPrice()",
-		"gasConsumedSettlement": "gasConsumedSettlement()",
-		"gasUnitsForOneDispute": "gasUnitsForOneDispute()",
 		"getRequestPriceCostAttoEth": "getRequestPriceCostAttoEth()",
 		"getSettlementCallbackGasLimit": "getSettlementCallbackGasLimit()",
 		"initialReportPriorityFeeAttoEthPerGas": "initialReportPriorityFeeAttoEthPerGas()",
@@ -79,7 +70,6 @@
 		"minimumToken1ReportAttoEth": "minimumToken1ReportAttoEth()",
 		"multiplier": "multiplier()",
 		"openOracle": "openOracle()",
-		"openOracleSecurityMultiplierBps": "openOracleSecurityMultiplierBps()",
 		"pendingReportId": "pendingReportId()",
 		"pendingReportMaxSettlementBaseFeeAttoEthPerGas": "pendingReportMaxSettlementBaseFeeAttoEthPerGas()",
 		"pendingReportSponsor": "pendingReportSponsor()",
@@ -98,9 +88,8 @@
 		"sharedPriceFeed": "sharedPriceFeed()",
 		"syncExposure": "syncExposure()",
 		"targetPriceErrorForDispute": "targetPriceErrorForDispute()",
-		"timeType": "timeType()",
-		"trackDisputes": "trackDisputes()",
-		"weth": "weth()"
+		"weth": "weth()",
+		"collateralToken": "collateralToken()"
 	},
 	"events": ["SecurityPoolSet", "SharedPriceFeedSet"],
 	"eventDeclarations": {

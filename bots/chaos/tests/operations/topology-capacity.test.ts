@@ -15,7 +15,6 @@ const immutableTopologyCapacity = {
 	maxPools: 2,
 	maxQuestions: 3,
 	maxUniverses: 2,
-	maxVaultsPerPool: 2,
 	maximumAggregateItems: 4,
 } as const
 
@@ -90,7 +89,6 @@ describe('immutable topology planning capacity', () => {
 				maxPools: 1,
 				maxQuestions: 20,
 				maxUniverses: 1,
-				maxVaultsPerPool: 1,
 				maximumAggregateItems: 100,
 			},
 		}
@@ -172,7 +170,6 @@ describe('immutable topology planning capacity', () => {
 				maxPools: 1,
 				maxQuestions: 4,
 				maxUniverses: 1,
-				maxVaultsPerPool: 1,
 				maximumAggregateItems: 4,
 			},
 		}
@@ -198,7 +195,6 @@ describe('immutable topology planning capacity', () => {
 				maxPools: 1,
 				maxQuestions: 4,
 				maxUniverses: 2,
-				maxVaultsPerPool: 1,
 				maximumAggregateItems: 4,
 			},
 		}
@@ -223,12 +219,12 @@ describe('immutable topology planning capacity', () => {
 		expect(repeated.eligibility.blockers.join(' ')).toContain('pool discovery resident limit')
 	})
 
-	test('admits pool creation bounded only by the pool, universe, and vault envelopes', () => {
+	test('admits pool creation bounded only by the pool and universe envelopes', () => {
 		const snapshot = snapshotFixture()
 		const maxPools = snapshot.pools.length + 1
 		const options: PlanningOptions = {
 			...capacityOptions,
-			immutableTopologyCapacity: { maxPools, maxQuestions: 1, maxUniverses: 1, maxVaultsPerPool: 1, maximumAggregateItems: maxPools },
+			immutableTopologyCapacity: { maxPools, maxQuestions: 1, maxUniverses: 1, maximumAggregateItems: maxPools },
 		}
 		expect(topologyMutationCapacityBlocker(snapshot, options, { additionalPools: 1, additionalUniverses: 0, label: 'Pool creation' })).toBeUndefined()
 		expect(topologyMutationCapacityBlocker(snapshot, options, { additionalPools: 2, additionalUniverses: 0, label: 'Pool creation' })).toContain('pool discovery resident limit')
@@ -243,7 +239,7 @@ describe('immutable topology planning capacity', () => {
 		const question = snapshot.questions[0]
 		if (question === undefined) throw new Error('Question fixture is missing')
 		snapshot.questions.push({ ...question, id: '78' })
-		for (const dimension of ['maxUniverses', 'maxVaultsPerPool'] as const) {
+		for (const dimension of ['maxUniverses'] as const) {
 			const invalidAggregate: PlanningOptions = {
 				...capacityOptions,
 				immutableTopologyCapacity: {

@@ -16,12 +16,12 @@
 					<p class="lede">Deploys every portfolio from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">SecurityPoolFactory source contract</a></p>
 				</header>
 				<h2 id="read-surface">Read surface</h2>
-				<p>Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. <code>securityPoolDeploymentCount</code> and strict <code>securityPoolDeploymentsRange</code> enumerate canonical question ledgers. <code>isPortfolio</code> is true only for a portfolio this factory deployed, and <code>portfolioCreationCodeHash</code> is the hash of the only creation code it deploys. <code>portfolioCount</code> and strict <code>portfoliosRange</code> enumerate, in registration order, the factory-deployed portfolios that have configured their namespace; a deployed portfolio is listed when its final setup step calls <code>initializePortfolioPriceFeed</code>. <code>getPoolId</code>, <code>getSecurityPool</code>, <code>getSecurityPoolOriginId</code> and <code>getSecurityPoolHasInheritedForkOutcome</code> identify their lineage. <code>getPortfolioOriginId</code> includes the caller portfolio namespace. <code>getSecurityPoolPortfolio</code> returns the factory-deployed portfolio a ledger belongs to; <code>sharedPriceFeeds</code> is indexed by portfolio and universe. <code>getChildPoolCoordinator</code> returns the prepared child coordinator, or zero before preparation. <code>zoltar</code> identifies the protocol root.</p>
+				<p>Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. <code>securityPoolDeploymentCount</code> and strict <code>securityPoolDeploymentsRange</code> enumerate canonical question ledgers. <code>isPortfolio</code> is true only for a portfolio this factory deployed, and <code>portfolioCreationCodeHash</code> is the hash of the only creation code it deploys. <code>portfolioCount</code> and strict <code>portfoliosRange</code> enumerate, in registration order, the factory-deployed portfolios that have configured their namespace; a deployed portfolio is listed when its final setup step calls <code>initializePortfolioPriceFeed</code>. <code>getPoolId</code>, <code>getSecurityPool</code>, <code>getSecurityPoolOriginId</code> and <code>getSecurityPoolHasInheritedForkOutcome</code> identify their lineage. <code>getPortfolioOriginId</code> includes the caller portfolio namespace. <code>getSecurityPoolPortfolio</code> returns the factory-deployed portfolio a ledger belongs to; <code>sharedPriceFeeds</code> is indexed by portfolio and universe. <code>getChildPoolCoordinator</code> returns the prepared child coordinator, or zero before preparation. <code>maximumReportPriorityFeeAttoEthPerGas</code> exposes the configured coordinator-factory ceiling used to reject over-cap portfolio creation before setup. <code>zoltar</code> identifies the protocol root.</p>
 
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns.</p>
-				<!-- Validated read ABI fingerprint: 896ad4b57b32193677e7a8e6ab745bebb78aa8cc10c5060037753b1802304ab3 -->
-				<!-- Validated complete compiled ABI fingerprint: 80647e5bffa52cd141bdde13237ab73104cd8ef447daa1644dd0d4349d341a03 -->
+				<!-- Validated read ABI fingerprint: b614b97269b3eceef7cab1d8c26a5a7a083c25835a2069184404608c8d8062a3 -->
+				<!-- Validated complete compiled ABI fingerprint: b80c65ffc09bee9a03c4f3092442b1c0e8deb8939f902915a3915c23e3e93d24 -->
 				<table>
 					<thead>
 						<tr>
@@ -55,7 +55,7 @@
 							<td>Returns the canonical feed address. A newly deployed feed emits <code>SharedPriceFeedRegistered</code>.</td>
 						</tr>
 						<tr>
-							<td><code>preparePortfolioPriceFeed(source, targetUniverse)</code><wbr /></td>
+							<td><code>preparePortfolioPriceFeed(source, universeId)</code><wbr /></td>
 							<td>Anyone</td>
 							<td>Canonical portfolio source; the portfolio clock recognizes the target; the target REP token exists.</td>
 							<td>Creates or retrieves a target universe feed in the canonical source pool’s portfolio namespace without moving provider capital.</td>

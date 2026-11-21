@@ -1,4 +1,5 @@
 import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
+import { getReportingOutcomeLabel } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { InheritedReporterClaims } from '@zoltar/ui-statoblast-shared/features/reporting/components/InheritedReporterClaims.js'
@@ -165,7 +166,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 												</a>
 											</td>
 											<td role='cell' data-label={copy.outcomeColumn}>
-												{question.questionOutcome}
+												{getReportingOutcomeLabel(question.questionOutcome)}
 											</td>
 										</tr>
 									))}
@@ -216,6 +217,9 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				reportingForm={reporting.reportingForm}
 				reportingResult={reporting.reportingResult}
 				forkAlreadyTriggered={selected.universeHasForked}
+				onOpenForkWorkflow={() => {
+					window.location.hash = `#/portfolios?portfolio=${selected.portfolioAddress}&universe=${selected.universeId}`
+				}}
 				onTriggerZoltarFork={() => void triggerFork()}
 				triggerZoltarForkPending={forkPending.value}
 				showSecurityPoolAddressInput={false}

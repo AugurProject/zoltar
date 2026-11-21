@@ -102,26 +102,58 @@ contract OpenOracleArbitrageExecutorTarget {
 
 	function dispute(
 		uint256,
-		uint128,
-		uint128,
-		address,
-		bool,
-		bool,
+		uint128 newAmount1,
+		uint128 newAmount2,
+		address disputer,
+		bool tryInternalBalance1,
+		bool tryInternalBalance2,
 		IOpenOracleDispute.OracleGame calldata params,
 		IOpenOracleDispute.PreimageHelper calldata,
 		IOpenOracleDispute.TimingBoundaries calldata
 	) external payable {
-		IERC20 token1 = IERC20(params.token1);
-		IERC20 token2 = IERC20(params.token2);
-		uint256 allowance1 = token1.allowance(msg.sender, address(this));
-		uint256 allowance2 = token2.allowance(msg.sender, address(this));
-		if (allowance1 != 0) token1.safeTransferFrom(msg.sender, address(this), allowance1);
-		if (allowance2 != 0) token2.safeTransferFrom(msg.sender, address(this), allowance2);
+		uint256 contribution1;
+		uint256 contribution2;
+		bool swapToken2 = uint256(newAmount2) * params.currentAmount1 > uint256(params.currentAmount2) * newAmount1;
+		if (swapToken2) {
+			contribution1 = newAmount1 > params.currentAmount1 ? newAmount1 - params.currentAmount1 : 0;
+			contribution2 =
+				uint256(newAmount2) +
+				params.currentAmount2 +
+				(uint256(params.currentAmount2) * params.feePercentage) / 1e7 +
+				(uint256(params.currentAmount2) * params.protocolFee) / 1e7;
+		} else {
+			contribution1 =
+				uint256(newAmount1) +
+				params.currentAmount1 +
+				(uint256(params.currentAmount1) * params.feePercentage) / 1e7 +
+				(uint256(params.currentAmount1) * params.protocolFee) / 1e7;
+			contribution2 = newAmount2 > params.currentAmount2 ? newAmount2 - params.currentAmount2 : 0;
+		}
+		_fund(params.token1, disputer, contribution1, tryInternalBalance1);
+		_fund(params.token2, disputer, contribution2, tryInternalBalance2);
+	}
+
+	function _fund(address token, address disputer, uint256 amount, bool tryInternal) private {
+		if (amount == 0) return;
+		if (
+			tryInternal &&
+			tokenHolder[disputer][token] > amount &&
+			(disputer == msg.sender || internalAllowance[disputer][msg.sender][token] >= amount)
+		) {
+			if (disputer != msg.sender && internalAllowance[disputer][msg.sender][token] != type(uint256).max)
+				internalAllowance[disputer][msg.sender][token] -= amount;
+			tokenHolder[disputer][token] -= amount;
+		} else IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+	}
+
+	function _credit(address owner, address token, uint256 amount) private {
+		if (tokenHolder[owner][token] == 0) tokenHolder[owner][token] = 1;
+		tokenHolder[owner][token] += amount;
 	}
 
 	function credit(address token, uint256 amount, address beneficiary) external {
 		IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-		tokenHolder[beneficiary][token] += amount;
+		_credit(beneficiary, token, amount);
 	}
 
 	function approveInternal(address spender, address token, uint256 amount) external {
@@ -129,19 +161,28 @@ contract OpenOracleArbitrageExecutorTarget {
 	}
 
 	function internalTransferFrom(address from, address to, address token, uint128 amount) external {
-		uint256 allowance = internalAllowance[from][msg.sender][token];
-		require(allowance >= amount, 'OpenOracle target internal allowance too low');
-		if (allowance != type(uint256).max) internalAllowance[from][msg.sender][token] = allowance - amount;
-		require(tokenHolder[from][token] >= amount, 'OpenOracle target internal balance too low');
+		require(to != address(0), 'OpenOracle target recipient zero');
+		if (amount == 0) return;
+		if (from != msg.sender) {
+			uint256 allowance = internalAllowance[from][msg.sender][token];
+			require(allowance >= amount, 'OpenOracle target internal allowance too low');
+			if (allowance != type(uint256).max) internalAllowance[from][msg.sender][token] = allowance - amount;
+		}
+		require(tokenHolder[from][token] > amount, 'OpenOracle target internal balance too low');
 		tokenHolder[from][token] -= amount;
-		tokenHolder[to][token] += amount;
+		_credit(to, token, amount);
 	}
 
 	function withdrawTo(address token, uint256 amount, address to) external returns (uint256 sent) {
 		uint256 balance = tokenHolder[msg.sender][token];
-		sent = amount > balance ? balance : amount;
+		require(to != address(0), 'OpenOracle target recipient zero');
+		if (balance <= 1 || amount == 0) return 0;
+		sent = amount > balance - 1 ? balance - 1 : amount;
 		tokenHolder[msg.sender][token] = balance - sent;
-		IERC20(token).safeTransfer(to, sent);
+		if (token == address(0)) {
+			(bool success, ) = to.call{ value: sent }('');
+			require(success, 'OpenOracle target ETH transfer failed');
+		} else IERC20(token).safeTransfer(to, sent);
 	}
 
 	function settle(
@@ -150,8 +191,9 @@ contract OpenOracleArbitrageExecutorTarget {
 		IOpenOracleDispute.PreimageHelper calldata
 	) external {
 		settleCalls += 1;
-		tokenHolder[params.currentReporter][params.token1] += params.currentAmount1;
-		tokenHolder[params.currentReporter][params.token2] += params.currentAmount2;
+		_credit(params.currentReporter, params.token1, params.currentAmount1);
+		_credit(params.currentReporter, params.token2, params.currentAmount2);
+		if (params.settlerRewardAttoEth != 0) _credit(msg.sender, address(0), params.settlerRewardAttoEth);
 	}
 }
 

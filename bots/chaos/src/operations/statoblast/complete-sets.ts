@@ -1,3 +1,4 @@
+import { purchaseFeeBudget } from '../pool-economics.ts'
 import { collateralSpendContinuation } from './collateral-approval.ts'
 import type { EcosystemSnapshot, OperationDefinition, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from '../types.ts'
 
@@ -21,7 +22,7 @@ function purchase(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: Plan
 	const quote = pool.purchaseQuote
 	if (quote === undefined || !inputMatches(options, 'pool', pool.address) || !inputMatches(options, 'amount', quote.mintAttoEth) || !operationalPools(snapshot).includes(pool) || mintDeadline(snapshot, pool, options) === undefined) return undefined
 	const mint = amount(quote.mintAttoEth)
-	const value = mint + amount(quote.feeAttoEth)
+	const value = mint + purchaseFeeBudget(amount(quote.feeAttoEth))
 	if (
 		mint === 0n ||
 		amount(quote.minimumShares) === 0n ||
@@ -79,7 +80,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 			}
 			let args: (bigint | string)[] | undefined
 			if (kind === 'redeem') args = [spend]
-			if (kind === 'create' && quotedPurchase !== undefined) args = [amount(pool.universeId), amount(pool.questionId), spend, snapshot.wallet.address, amount(quotedPurchase.quote.minimumShares), amount(quotedPurchase.quote.feeAttoEth)]
+			if (kind === 'create' && quotedPurchase !== undefined) args = [amount(pool.universeId), amount(pool.questionId), spend, snapshot.wallet.address, amount(quotedPurchase.quote.minimumShares), purchaseFeeBudget(amount(quotedPurchase.quote.feeAttoEth))]
 			const shares = walletShares(snapshot, pool)
 			if (kind !== 'create' && shares === undefined) return undefined
 			let walletAssetDebits: OperationWalletAssetDebit[] = quotedPurchase === undefined ? [] : [erc20WalletDebit(snapshot.deployments.weth, quotedPurchase.value, 'weth')]

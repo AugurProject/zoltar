@@ -34,10 +34,10 @@ export const scopes: Record<PortfolioPriceScope, ScopeCopy> = {
 		title: 'Branch price report',
 		description: 'Fund a challenged REP price for this branch. Reports accepted before branch activation do not start provider fees.',
 		missingTarget: 'Select a fork branch first.',
-		waitForStart: 'Prepare the branch before funding its price report.',
+		waitForStart: 'Start branch migration before funding its price report.',
 		loading: 'Checking branch price requirements…',
 		prepared: 'The branch price feed is already prepared.',
-		prepareFirst: 'Prepare the branch price feed first.',
+		prepareFirst: 'Start branch migration price feed first.',
 		closed: 'The branch price reporting window is closed.',
 		requiredRep: 'Branch REP funding',
 		walletRep: 'Wallet branch REP',
@@ -101,12 +101,12 @@ export const reportHint = 'Leave blank to follow the latest report, or enter an 
 export const reportInvalid = 'Enter a positive report ID.'
 export const noReport = 'No report selected.'
 export const reportState = 'Report state'
-export const states = { pending: 'Challenge period', settle: 'Ready to settle', accepted: 'Accepted', rejected: 'Settled without an accepted price', recovery: 'Settled; callback recovery available' }
+export const states = { pending: 'Dispute window open', settle: 'Ready to settle', accepted: 'Accepted', rejected: 'Settled without an accepted price', recovery: 'Settled; callback recovery available' }
 export const settleAt = 'Settlement available from'
 export const sponsor = 'Funding recipient'
 export const settle = 'Settle price report'
 export const settling = 'Settling price report…'
-export const waitForSettlement = 'Wait until the report challenge period ends.'
+export const waitForSettlement = 'Wait until the report dispute window ends.'
 export const alreadySettled = 'This report is already settled.'
 export const recover = 'Recover settled report'
 export const recovering = 'Recovering settled report…'
@@ -126,4 +126,4 @@ export const formatPriceBelowReferenceWarning = (reference: string, collateral: 
 export const currentExposure = 'Current exposure'
 export const reportCoverage = 'Report coverage'
 export const growthHeadroom = 'Growth headroom'
-export const coverageWarning = 'Growth beyond this coverage before settlement rejects the price and skips its attached operations.'
+export const coverageWarning = 'Growth beyond this coverage before settlement rejects this price. Attached operations may still use a separately accepted fresh price, within their signed bounds.'

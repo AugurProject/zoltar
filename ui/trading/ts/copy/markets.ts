@@ -67,4 +67,5 @@ export const marketsCopy = {
 	poolNotInUniverse: 'Security pool not in this universe',
 	poolNotInUniverseDetail: 'Switch universe to open it, or return to Markets.',
 	switchUniverse: 'Switch universe',
+	defaultOrder: 'Default order',
 } as const

@@ -5,7 +5,7 @@ pushd "%~dp0" || exit /b 1
 
 where bun >nul 2>&1
 if errorlevel 1 (
-    echo Install Bun from https://bun.sh, run bun install in this folder, then run publish.bat again.
+    echo Install Bun from https://bun.sh, run bun install --frozen-lockfile in this folder, then run publish.bat again.
     goto failed
 )
 
