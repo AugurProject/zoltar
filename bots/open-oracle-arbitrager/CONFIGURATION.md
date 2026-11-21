@@ -70,6 +70,7 @@ A key marked **required** has no default in the code; the value shown after it i
 | `connectivity` | object | [shared](../README.md#connectivity) | absent until saved | RPC endpoints and the agreement requirement. |
 | `approvedUniverses` | string array | decimal universe ids below 2^248 | `[]` | Universes whose REP may be traded. |
 | `tokenAddresses` | address array | — | required; `[]` | Additional monitoring-only tokens. |
+| `collateralTokens` | object array | see [collateral tokens](#collateral-tokens) | `[]` | Non-WETH report collateral the bot may price, dispute, and settle. |
 | `deployment.uniswapV2Enabled` | boolean | — | required; `true` | Enables Uniswap V2 (mainnet only). |
 | `deployment.uniswapV3Enabled` | boolean | — | required; `true` | Enables Uniswap V3 with its spot/TWAP check. |
 | `deployment.uniswapV4Enabled` | boolean | — | required; `false` | Enables the V4 PoolManager and Quoter together. |
@@ -78,6 +79,12 @@ A key marked **required** has no default in the code; the value shown after it i
 | `strategy` | object | see [adjust the strategy](#adjust-the-strategy) | required | Opportunity thresholds. |
 | `settlement` | object | see [third-party settlement](#third-party-settlement) | settlement disabled | Third-party settlement policy. |
 | `runtime` | object | see below | required | Process and risk settings. |
+
+### Collateral tokens
+
+Each `collateralTokens` entry is `{ "address": "0x…", "wethPoolFee": 500 }`. `address` is a report `token1` other than WETH; `wethPoolFee` (`100`, `500`, `3000`, or `10000`) selects the canonical Uniswap V3 pool between that token and WETH. The bot values the collateral in WETH through that pool's marginal price, and skips the report while the pool is missing, empty, or outside the `strategy.maxSpotTwapTicks` spot/TWAP limit. WETH itself must not be listed and an address may appear once. Reports collateralized in a token with more than 18 decimals are skipped. The list is read at startup; restart the bot after editing it.
+
+Choose a deep pool: it sets the WETH value used for the profit threshold, the risk limits, and the comparison with REP market consensus. Fund and approve each listed token like WETH, including its OpenOracle internal allowance; see [required ETH, WETH, and tokens](./EXECUTION.md#required-eth-weth-and-tokens).
 
 ### `runtime`
 

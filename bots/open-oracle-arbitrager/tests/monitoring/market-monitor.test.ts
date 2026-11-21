@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Address } from '@zoltar/bot-shared/ethereum'
-import { appendPriceHistory, createTokenCatalogTracker, formatTokenAmount, loadPriceHistory, missingPricePoints, pricePoints, type TokenMarketSnapshot } from '#monitoring/market-monitor'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
+import { appendPriceHistory, createTokenCatalogTracker, scanConfiguredTokens, formatTokenAmount, loadPriceHistory, missingPricePoints, pricePoints, type TokenMarketSnapshot } from '#monitoring/market-monitor'
 import { childPayouts, payoutDistributionHash } from '#monitoring/augur-payouts'
 import { constantProductSpotPriceWeth, poolSpotPriceWeth } from '#monitoring/spot-prices'
 
@@ -95,6 +95,15 @@ describe('Augur REP discovery helpers', () => {
 		expect(catalog.executionTokens).toEqual(execution)
 		expect(catalog.monitoringTokens.slice(0, execution.length)).toEqual(execution)
 		expect(catalog.monitoringTokens).toHaveLength(execution.length + MAX_OBSERVED_MONITORING_TOKENS)
+	})
+
+	test('#1274: allowlisted collateral stays monitored however many permissionless tokens reports reference', async () => {
+		const usdc = getAddress('0x00000000000000000000000000000000000fffff')
+		const observed = Array.from({ length: MAX_OBSERVED_MONITORING_TOKENS + 10 }, (_, index) => `0x${(index + 100).toString(16).padStart(40, '0')}` as Address)
+		const configured = scanConfiguredTokens({ collateralTokens: [{ address: usdc, wethPoolFee: 500 }], tokenAddresses: [] })
+		const catalog = await tokenCatalogForScan([], configured, [...observed, usdc])
+		expect(catalog.monitoringTokens).toContain(usdc)
+		expect(catalog.executionTokens).not.toContain(usdc)
 	})
 })
 

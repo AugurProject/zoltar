@@ -75,6 +75,20 @@ describe('settlement queue', () => {
 		expect(plans.get('11')?.gas).toBe(4_313_492n)
 	})
 
+	test('#1274: settles an allowlisted non-WETH collateral report for its ETH reward and labels its collateral', () => {
+		const usdc = getAddress('0x00000000000000000000000000000000000000c0')
+		const reports = [report(11n, { token1: usdc }), report(12n, { token1: getAddress('0x00000000000000000000000000000000000000c1') })]
+		const symbols = new Map([
+			[rep, 'REP'],
+			[usdc, 'USDC'],
+		])
+		const { plans, queue } = settlementQueue(input({ coordinatorPolicies: [{ ...policy, collateralTokens: [usdc] }], reports, tokenSymbol: token => symbols.get(token) }))
+		expect(queue.map(candidate => candidate.reportId)).toEqual(['11'])
+		expect(queue[0]).toMatchObject({ collateralSymbol: 'USDC', decision: 'eligible', rewardEth: '0.017043310270400101', tokenSymbol: 'REP' })
+		expect(plans.has('11')).toBeTrue()
+		expect(settlementQueue(input({ reports: [report(13n)] })).queue[0]?.collateralSymbol).toBeUndefined()
+	})
+
 	test('explains why a candidate waits and keeps in-flight reports out of the plans', () => {
 		const pending: SettlementRecord = {
 			account: wallet,

@@ -1,6 +1,7 @@
 import { readOwnerFileIfPresent, writeFileAtomically, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import { acquireExecutionSignerLock as acquireSharedExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { parsePositionCollateral, type PositionCollateral } from '#state/position-collateral'
 import { formatDecimalAmount, hash32, parseDecimalAmount, parseSignedDecimalAmount, record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseExecutionRecord, type ExecutionRecord } from '#state/execution-record'
 
@@ -40,6 +41,7 @@ export type PositionRecord = {
 	actualEntryGasCostEth: string
 	capitalAtRiskWeth: string
 	closedAt: string | undefined
+	collateral?: PositionCollateral | undefined
 	direction: 'buy-rep' | 'sell-rep'
 	/** Canonical block of the entry receipt while the entry waits for finality (`open-pending-finality` only). */
 	entryReceiptBlockHash?: Hex | undefined
@@ -210,7 +212,8 @@ function parseExecutionIntent(value: unknown): ExecutionIntent | undefined {
 	if (value === undefined) return undefined
 	const record = validateRecord(value, 'Position journal value', 'Position journal execution intent is invalid')
 	const exactKeys = ['direction', 'estimatedNetProfitWeth', 'estimatedProfitBeforeGasEth', 'pool', 'poolFee', 'reportId', 'requiredToken', 'requiredWeth', 'token', 'tokenSymbol']
-	if (Object.keys(record).length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error('Position journal execution intent fields are invalid')
+	const keys = Object.keys(record).filter(key => key !== 'collateralSymbol')
+	if (keys.length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error('Position journal execution intent fields are invalid')
 	const parsed = parseExecutionRecord({
 		...record,
 		actualGasCostEth: '0',
@@ -373,11 +376,13 @@ function parsePosition(value: unknown): PositionRecord {
 		const hasRealizedPnl = record['realizedNetProfitEth'] !== undefined
 		if ((manualReconciliation.pnlStatus === 'recorded') !== hasRealizedPnl) throw new Error('Position journal manual reconciliation P&L is inconsistent')
 	}
+	const collateral = parsePositionCollateral(record['collateral'])
 	return {
 		account,
 		actualEntryGasCostEth: decimalField(record, 'actualEntryGasCostEth'),
 		capitalAtRiskWeth: decimalField(record, 'capitalAtRiskWeth'),
 		closedAt: record['closedAt'],
+		...(collateral === undefined ? {} : { collateral }),
 		direction: record['direction'],
 		...(entryReceiptBlockHash === undefined ? {} : { entryReceiptBlockHash: hash32(entryReceiptBlockHash, 'Position journal entry receipt block hash') }),
 		...(entryReceiptBlockNumber === undefined ? {} : { entryReceiptBlockNumber }),

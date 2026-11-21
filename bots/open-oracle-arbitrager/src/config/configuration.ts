@@ -5,6 +5,7 @@ import type { MutableStrategy } from '#state/operator-state'
 import type { MutableSettlement } from '#state/settlement-store'
 import { networkConfiguration, type NetworkConfiguration } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
+import type { CollateralToken } from '#core/collateral-valuation'
 import { assertOperatorProfileIsolation, durableJournalPaths, loadOperatorSettingsWithRevision, type PersistedOperatorSettings } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -19,6 +20,8 @@ export function assertDistinctPersistentPaths(settingsFile: string, runtime: Pic
 
 export type Configuration = MutableStrategy & {
 	centralizedMarkets: CentralizedMarketSettings
+	/** Allowlisted non-WETH report collateral; WETH is always supported. Changing it requires a restart. */
+	collateralTokens: readonly CollateralToken[]
 	connectivity: ConnectivitySettings
 	coordinatorAddresses: Address[]
 	execute: boolean
@@ -76,6 +79,7 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 	return {
 		...saved.strategy,
 		centralizedMarkets: saved.centralizedMarkets,
+		collateralTokens: saved.collateralTokens,
 		connectivity: { publicRpcUrls: saved.connectivity.publicRpcUrls, readRpcUrl: saved.connectivity.readRpcUrl },
 		coordinatorAddresses: [...deployment.coordinatorAddresses],
 		execute: saved.runtime.execute,

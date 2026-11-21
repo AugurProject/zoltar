@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, archivedUtcDayGasSpentWeth, emptyPositionJournalArchive, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournalState, type PositionRecord } from '#state/position-store'
+import { parsePositionCollateralAmount, positionCollateralToken, positionCollateralValuation } from '#state/position-collateral'
 import { savePositionJournal } from '../support/position-journal.ts'
 import { executionIntentFixture, openPositionFixture, positionAccount, terminalPositionFixture } from '../support/position-record.ts'
 
@@ -96,6 +97,22 @@ describe('durable OpenOracle position journal', () => {
 		await savePositionJournal(path, [position], 1)
 		expect(await loadPositionJournal(path, 1)).toEqual([position])
 		expect((await readFile(path, 'utf8')).toString()).not.toContain('privateKey')
+	})
+
+	test('#1274: round-trips a non-WETH collateral position and rejects an incomplete collateral record', async () => {
+		const path = await journalPath()
+		const collateral = { decimals: 6, symbol: 'USDC', token: getAddress('0x00000000000000000000000000000000000000c0'), valuationAttoWeth: '1000000000000', valuationUnits: '3000' }
+		const position = openPositionFixture({ collateral, executionIntent: executionIntentFixture({ collateralSymbol: 'USDC', requiredWeth: '6483' }), hedgeWeth: '3900', lockedWeth: '3450.5' })
+		await savePositionJournal(path, [position], 1)
+		const [loaded] = await loadPositionJournal(path, 1)
+		expect(loaded).toEqual(position)
+		if (loaded === undefined) throw new Error('Collateral position did not load')
+		expect(parsePositionCollateralAmount(loaded, loaded.lockedWeth)).toBe(3_450_500_000n)
+		expect(positionCollateralToken(loaded, positionAccount)).toBe(collateral.token)
+		expect(positionCollateralValuation(loaded)).toEqual({ attoWeth: 1_000_000_000_000n, units: 3_000n })
+		expect(positionCollateralToken(openPositionFixture(), positionAccount)).toBe(positionAccount)
+		await expectRawJournalRejected([{ ...position, collateral: { ...collateral, valuationUnits: '0' } }], 'collateral valuationUnits is invalid')
+		await expectRawJournalRejected([{ ...position, collateral: { decimals: 6, symbol: 'USDC', token: collateral.token } }], 'collateral fields are invalid')
 	})
 
 	test('bounds terminal recovery records while retaining their accounting and daily gas totals', async () => {

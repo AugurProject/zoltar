@@ -1,5 +1,6 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 import type { Configuration } from '#config/configuration'
 import { gamePolicyMismatch, type CoordinatorGamePolicy } from '#core/game-policy'
 import { settlementDecision, settlementEconomics, settlementEligibilityMismatch, settlementTiming } from '#core/settlement-strategy'
@@ -44,8 +45,11 @@ export function settlementQueue(input: SettlementQueueInput): SettlementQueue {
 		const withinDailyGasBudget = input.dailyGas.spentAttoWeth + economics.projectedGasCostAttoEth <= input.dailyGas.limitAttoWeth
 		const decision = settlementDecision({ economics, enabled: input.config.settlement.enabled, execute: input.config.execute, executionReady: input.executionReady, inFlight: inFlightReports.has(reportId), paused: input.paused, signerReady: input.signerReady, withinDailyGasBudget })
 		const timing = settlementTiming(game, input.blockNumber, input.blockTimestamp)
+		// Coordinator templates name WETH as token1; any other accepted token1 is allowlisted collateral.
+		const wethCollateral = input.coordinatorPolicies.some(policy => sameAddress(policy.token1, game.token1))
 		queue.push({
 			callbackGasLimit: game.callbackGasLimit.toString(),
+			...(wethCollateral ? {} : { collateralSymbol: input.tokenSymbol(game.token1) ?? 'collateral' }),
 			coordinator: helper.creator,
 			decision,
 			elapsed: timing.elapsed.toString(),

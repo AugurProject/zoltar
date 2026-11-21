@@ -8,7 +8,7 @@ import type { DiscoveredTokenPools } from '#monitoring/market-monitor'
 import { readContractAtBlock, type Address } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
-function meanTick(tickCumulatives: readonly bigint[], seconds: bigint) {
+export function meanTick(tickCumulatives: readonly bigint[], seconds: bigint) {
 	const oldTick = tickCumulatives[0]
 	const newTick = tickCumulatives[1]
 	if (oldTick === undefined || newTick === undefined) throw new Error('Uniswap observation returned fewer than two ticks')
@@ -18,7 +18,7 @@ function meanTick(tickCumulatives: readonly bigint[], seconds: bigint) {
 	return quotient
 }
 
-export async function loadV3Pool(client: ReadClient, address: Address, token: Address, fee: Pool['fee'], twapSeconds: number, blockNumber?: bigint | undefined): Promise<Extract<Pool, { venue: 'uniswap-v3' }> | undefined> {
+export async function loadV3Pool(client: ReadClient, address: Address, token: Address, quoteToken: Address, fee: Pool['fee'], twapSeconds: number, blockNumber?: bigint | undefined): Promise<Extract<Pool, { venue: 'uniswap-v3' }> | undefined> {
 	const liquidityParameters = {
 		address,
 		abi: poolAbi,
@@ -45,6 +45,7 @@ export async function loadV3Pool(client: ReadClient, address: Address, token: Ad
 		address,
 		fee,
 		liquidity,
+		quoteToken,
 		spotTick: requiredBigint(slot0[1], 'Uniswap current tick'),
 		token,
 		twapTick: meanTick(tickCumulatives, BigInt(twapSeconds)),
@@ -53,10 +54,11 @@ export async function loadV3Pool(client: ReadClient, address: Address, token: Ad
 
 /**
  * Builds independent candidates for each enabled venue. V3 candidates require liquidity and TWAP state;
- * V2 reserves and candidate V4 pool keys are checked by their size-specific quotes.
+ * V2 reserves and candidate V4 pool keys are checked by their size-specific quotes. The executor's V4 hedge settles
+ * against native ETH, so only WETH-quoted discoveries produce V4 candidates.
  */
 export async function poolsForTokens(client: BatchReader, config: Pick<Configuration, 'network' | 'router' | 'v2Router' | 'v4PoolManager' | 'v4Quoter' | 'twapSeconds'>, discovered: readonly DiscoveredTokenPools[], blockNumber?: bigint) {
-	const candidates = config.router === undefined ? [] : discovered.flatMap(entry => entry.v3.map(pool => ({ ...pool, token: entry.token })))
+	const candidates = config.router === undefined ? [] : discovered.flatMap(entry => entry.v3.map(pool => ({ ...pool, quoteToken: entry.quoteToken, token: entry.token })))
 	const results = await batchRead(
 		client,
 		config.network.multicall3,
@@ -79,6 +81,7 @@ export async function poolsForTokens(client: BatchReader, config: Pick<Configura
 				address: candidate.address,
 				fee: candidate.fee,
 				liquidity,
+				quoteToken: candidate.quoteToken,
 				spotTick: requiredBigint(slot0[1], 'Uniswap current tick'),
 				token: candidate.token,
 				twapTick: meanTick(requiredBigintArray(observation[0], 'Uniswap tick cumulatives'), BigInt(config.twapSeconds)),
@@ -88,8 +91,8 @@ export async function poolsForTokens(client: BatchReader, config: Pick<Configura
 		}
 	}
 	for (const entry of discovered) {
-		if (config.v2Router !== undefined) for (const pair of entry.constantProduct.filter(pair => pair.kind === 'uniswap-v2')) pools.push({ address: pair.address, fee: 3_000, token: entry.token, venue: 'uniswap-v2' })
-		if (config.v4PoolManager !== undefined && config.v4Quoter !== undefined) for (const fee of STANDARD_UNISWAP_FEES) pools.push({ address: config.v4PoolManager, fee, token: entry.token, venue: 'uniswap-v4' })
+		if (config.v2Router !== undefined) for (const pair of entry.constantProduct.filter(pair => pair.kind === 'uniswap-v2')) pools.push({ address: pair.address, fee: 3_000, quoteToken: entry.quoteToken, token: entry.token, venue: 'uniswap-v2' })
+		if (config.v4PoolManager !== undefined && config.v4Quoter !== undefined && entry.quoteToken.toLowerCase() === config.network.weth.toLowerCase()) for (const fee of STANDARD_UNISWAP_FEES) pools.push({ address: config.v4PoolManager, fee, quoteToken: entry.quoteToken, token: entry.token, venue: 'uniswap-v4' })
 	}
 	return pools
 }

@@ -58,7 +58,7 @@ describe('native portfolio report discovery', () => {
 				}),
 			})
 			const settings = parseOperatorSettings({ ...example, approvedUniverses: [context.universeId.toString()] })
-			const config = { network, openOracle: getInfraContractAddresses().openOracle, operatorSettings: settings, execute: true, connectivity: settings.connectivity, quorumRpcUrls: [], rpcQuorum: 1 as const }
+			const config = { collateralTokens: [], network, openOracle: getInfraContractAddresses().openOracle, operatorSettings: settings, execute: true, connectivity: settings.connectivity, quorumRpcUrls: [], rpcQuorum: 1 as const }
 			const request = async () => {
 				const bounty = await context.owner.readContract({ address: context.feed, abi: sharedPoolPriceFeedAbi, functionName: 'getRequestPriceCostAttoEth' })
 				await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.feed, abi: sharedPoolPriceFeedAbi, functionName: 'requestPortfolioPrice', args: [unit, 10n * unit, bounty], value: bounty }))

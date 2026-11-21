@@ -19,7 +19,7 @@ import type { OperatorState } from '#state/operator-state'
 
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
 
-export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber?: bigint) {
+export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'collateralTokens' | 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber?: bigint) {
 	return Promise.all(
 		config.coordinatorAddresses.map(async coordinator => {
 			const [openOracle, token2, token1, settlementTime, disputeDelay, protocolFee, feePercentage, multiplier, timeType, trackDisputes, protocolFeeRecipient, callbackGasLimit] = await Promise.all([
@@ -41,6 +41,7 @@ export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<C
 			if (!trackDisputes) throw new Error(`Configured coordinator ${coordinator} does not track disputes`)
 			const policy = {
 				callbackGasLimit,
+				collateralTokens: config.collateralTokens.map(collateral => collateral.address),
 				coordinator,
 				disputeDelay,
 				feePercentage,

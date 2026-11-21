@@ -1,16 +1,20 @@
 import type { ArbitrageDirection } from '#core/strategy'
+import { attoWethValue, type CollateralValuation } from '#core/collateral-valuation'
 
-export function hedgedProfitBeforeGasWeth(direction: ArbitrageDirection, actualHedgeAttoWeth: bigint, currentAmount1: bigint, feeAttoWeth: bigint, protocolFeeAttoWeth: bigint) {
-	const openOracleWeth = currentAmount1 + feeAttoWeth + protocolFeeAttoWeth
-	return direction === 'sell-rep' ? actualHedgeAttoWeth - openOracleWeth : currentAmount1 - actualHedgeAttoWeth
+/** The hedged profit in report `token1` (collateral) base units. */
+export function hedgedProfitBeforeGasToken1(direction: ArbitrageDirection, actualHedgeToken1: bigint, currentAmount1: bigint, feeToken1: bigint, protocolFeeToken1: bigint) {
+	const openOracleToken1 = currentAmount1 + feeToken1 + protocolFeeToken1
+	return direction === 'sell-rep' ? actualHedgeToken1 - openOracleToken1 : currentAmount1 - actualHedgeToken1
 }
 
 export function realizedNetProfitWeth(hedgedProfitBeforeGas: bigint, settlerRewardAttoEth: bigint, entryGasCost: bigint, lifecycleGasCost: bigint) {
 	return hedgedProfitBeforeGas + settlerRewardAttoEth - entryGasCost - lifecycleGasCost
 }
 
-export function recoveredHedgedProfitBeforeGasWeth(direction: ArbitrageDirection, quotedProfitBeforeGas: bigint, quotedHedgeAttoWeth: bigint, actualHedgeAttoWeth: bigint) {
-	return direction === 'sell-rep' ? quotedProfitBeforeGas + actualHedgeAttoWeth - quotedHedgeAttoWeth : quotedProfitBeforeGas + quotedHedgeAttoWeth - actualHedgeAttoWeth
+/** Adjusts the quoted atto-WETH profit by the hedge's actual collateral difference, valued at the entry valuation. */
+export function recoveredHedgedProfitBeforeGasWeth(direction: ArbitrageDirection, quotedProfitBeforeGas: bigint, quotedHedgeToken1: bigint, actualHedgeToken1: bigint, valuation: CollateralValuation) {
+	const improvementToken1 = direction === 'sell-rep' ? actualHedgeToken1 - quotedHedgeToken1 : quotedHedgeToken1 - actualHedgeToken1
+	return quotedProfitBeforeGas + attoWethValue(valuation, improvementToken1, 'down')
 }
 
 export function expectedWithdrawalToken2(direction: ArbitrageDirection, currentAmount2: bigint, newAmount2: bigint) {

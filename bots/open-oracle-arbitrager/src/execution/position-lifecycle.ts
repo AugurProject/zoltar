@@ -19,8 +19,8 @@ import { discoverPublicReplacementWithQuorum, expireEntryWithQuorum, finalizeEnt
 import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
 import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfiguredSignedBundle } from '#execution/transaction-submission'
 import { submitContractTransaction, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
-import { parseDecimalWeth } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'
+import { parsePositionCollateralAmount, positionCollateralToken } from '#state/position-collateral'
 import { encodeFunctionData, parseUnits, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
@@ -72,7 +72,8 @@ export async function processPositionLifecycle(
 	const storedSnapshot = await storedReportWithQuorum(readClients, config, id, blockNumber)
 	const report = storedSnapshot.report
 	const game = report.game
-	const balancesBefore = await lifecycleBalancesWithQuorum(readClients, config, account.address, position.token, blockNumber)
+	const collateralToken = positionCollateralToken(position, config.network.weth)
+	const balancesBefore = await lifecycleBalancesWithQuorum(readClients, config, account.address, collateralToken, position.token, blockNumber)
 	if (balancesBefore.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle state reads use different canonical blocks')
 	if (activePosition.entrySubmissionMode === 'public' || activePosition.lifecycleSubmissionMode === 'public') {
 		let pendingKind: 'entry' | 'lifecycle' | undefined
@@ -122,7 +123,7 @@ export async function processPositionLifecycle(
 	if (activePosition.status === 'recovery-required' && activePosition.lifecycleReceiptRecovered) {
 		throw new Error(`Position ${activePosition.reportId} has recovered lifecycle receipts but requires manual residual-asset reconciliation`)
 	}
-	if (game.currentReporter === zeroAddress || game.token1.toLowerCase() !== config.network.weth.toLowerCase() || game.token2.toLowerCase() !== activePosition.token.toLowerCase()) {
+	if (game.currentReporter === zeroAddress || game.token1.toLowerCase() !== collateralToken.toLowerCase() || game.token2.toLowerCase() !== activePosition.token.toLowerCase()) {
 		await persistPosition({ ...activePosition, status: 'recovery-required' })
 		throw new Error(`Open position ${activePosition.reportId} cannot be reconciled with stored OpenOracle state`)
 	}
@@ -133,7 +134,7 @@ export async function processPositionLifecycle(
 		return 'waiting' as const
 	}
 	const tokenDecimals = tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId)
-	const expectedAttoWeth = parseDecimalWeth(activePosition.lockedWeth)
+	const expectedToken1 = parsePositionCollateralAmount(activePosition, activePosition.lockedWeth)
 	const expectedToken = parseUnits(activePosition.lockedToken, tokenDecimals)
 	const block = await client.getBlock({ blockNumber })
 	if (block.hash == null || block.hash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle quote and quorum snapshot use different canonical blocks')
@@ -167,9 +168,9 @@ export async function processPositionLifecycle(
 			oldAmount2: BigInt(activePosition.reportAmount2),
 		})
 		replacementAmount = credit.amount
-		replacementToken = credit.token === 'token1' ? config.network.weth : activePosition.token
-		const holderBalance = credit.token === 'token1' ? balancesBefore.holderAttoWeth : balancesBefore.holderToken
-		const allowance = credit.token === 'token1' ? balancesBefore.internalAllowanceAttoWeth : balancesBefore.internalAllowanceToken
+		replacementToken = credit.token === 'token1' ? collateralToken : activePosition.token
+		const holderBalance = credit.token === 'token1' ? balancesBefore.holderToken1 : balancesBefore.holderToken
+		const allowance = credit.token === 'token1' ? balancesBefore.internalAllowanceToken1 : balancesBefore.internalAllowanceToken
 		if (holderBalance < replacementAmount + 1n) throw new Error(`Position ${activePosition.reportId} replacement credit is not yet available`)
 		if (allowance < replacementAmount) {
 			throw new Error(`Position ${activePosition.reportId} replacement credit exceeds its executor internal allowance`)
@@ -200,16 +201,16 @@ export async function processPositionLifecycle(
 		const withdrawalMismatch = lifecycleWithdrawalMismatch({
 			currentReporter,
 			expectedToken,
-			expectedAttoWeth,
+			expectedToken1,
 			holderToken: balancesBefore.holderToken,
-			holderAttoWeth: balancesBefore.holderAttoWeth,
+			holderToken1: balancesBefore.holderToken1,
 			willSettle,
 		})
 		if (withdrawalMismatch !== undefined) {
 			await persistPosition({ ...activePosition, status: 'recovery-required' })
 			throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${withdrawalMismatch}`)
 		}
-		const allowanceMismatch = lifecycleAllowanceMismatch({ token1: balancesBefore.internalAllowanceAttoWeth, token2: balancesBefore.internalAllowanceToken }, { token1: expectedAttoWeth, token2: expectedToken })
+		const allowanceMismatch = lifecycleAllowanceMismatch({ token1: balancesBefore.internalAllowanceToken1, token2: balancesBefore.internalAllowanceToken }, { token1: expectedToken1, token2: expectedToken })
 		if (allowanceMismatch !== undefined) throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${allowanceMismatch}`)
 		lifecycleCall = {
 			data: encodeFunctionData({
@@ -217,7 +218,7 @@ export async function processPositionLifecycle(
 				functionName: 'settleAndWithdraw',
 				args: [
 					{
-						amount1: expectedAttoWeth,
+						amount1: expectedToken1,
 						amount2: expectedToken,
 						expectedParentBlockHash: storedSnapshot.blockHash,
 						openOracle: config.openOracle,
