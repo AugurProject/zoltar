@@ -43,9 +43,6 @@ concurrency:
   group: test-domains-${{ inputs.invocation || 'direct' }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  FOUNDRY_VERSION: v1.5.1
-
 jobs:
   timing-history-input:
     name: Prepare ${{ matrix.domain }} timing history
@@ -204,7 +201,7 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           profile: root
-          foundry: "false"
+
       - run: bun run test:mutation:smoke
 
   required:

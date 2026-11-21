@@ -18,9 +18,6 @@ concurrency:
   group: browser-transactions-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  FOUNDRY_VERSION: v1.5.1
-
 jobs:
   prepare:
     name: Prepare standalone browser inputs
@@ -31,7 +28,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-ci
         with:
-          foundry: "false"
+
           build-inputs: ${{ inputs.build-inputs }}
       - name: Build production UI once for all browser scenarios
         run: |
@@ -62,7 +59,7 @@ jobs:
           name: domain-production-ui
           path: ui
       - name: Run production browser smoke tier
-        run: bun run test:browser:smoke
+        run: bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/productionBuild.test.ts && bun run test:browser:smoke
         env:
           ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
 

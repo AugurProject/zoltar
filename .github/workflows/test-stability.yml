@@ -10,9 +10,6 @@ concurrency:
   group: test-stability-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  FOUNDRY_VERSION: v1.5.1
-
 jobs:
   repeat-timing-sensitive-tests:
     name: Repeat timing-sensitive tests (${{ matrix.iteration }}/3)
