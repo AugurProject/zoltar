@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { Window } from 'happy-dom'
 import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { evaluateBuyRep, evaluateSellRep } from '#core/strategy'
+import { WETH_VALUATION } from '#core/collateral-valuation'
 import { bigintToSafeNumber } from '@zoltar/bot-shared/ethereum'
 
 const fixture = {
@@ -87,11 +88,11 @@ function verifyRecordedEconomics() {
 		token1: fixture.weth,
 		token2: fixture.rep,
 	}
-	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostAttoWeth)
-	assert.equal(sell.hedgeCostAttoWeth, 826_252_634_985_023_076n)
+	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostAttoWeth, WETH_VALUATION)
+	assert.equal(sell.hedgeCostToken1, 826_252_634_985_023_076n)
 	assert.equal(sell.profitBeforeGasAttoWeth, -255_235_735_754_674_523n)
 
-	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostAttoWeth)
+	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostAttoWeth, WETH_VALUATION)
 	assert.equal(buy.hedgeAmountAttoRep, 2_037_255_704_072_578_672_476n)
 	assert.equal(buy.profitBeforeGasAttoWeth, -626_254_311_426_940_506n)
 	assert(sell.profitBeforeGasAttoWeth < 0n)

@@ -1,8 +1,8 @@
 import { loadBalances } from '#execution/balances'
 import { loadApprovedUniverses } from '#monitoring/approved-universes'
 import { poolsForTokens } from '#monitoring/execution-pools'
-import { discoverTokenPools, loadTokenMarkets } from '#monitoring/market-monitor'
-import { zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { discoverTokenPools, loadTokenMarkets, scanConfiguredTokens } from '#monitoring/market-monitor'
+import { zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { discardDexMarketObservations } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { OperatorContext, OperatorRuntime, ScanBlock } from './operator-runtime.ts'
@@ -29,19 +29,22 @@ export async function loadHeadMarkets(runtime: OperatorRuntime, context: Operato
 	if (stopHead()) return undefined
 	state.universes = universes
 	const observedTokens = [...runtime.reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
-	const { executionTokens, monitoringTokens: discoveredTokens } = await runtime.catalogForScan(config.tokenAddresses, [...universes.map(universe => universe.repToken), ...observedTokens], approvedTokens)
+	const { executionTokens, monitoringTokens: discoveredTokens } = await runtime.catalogForScan(scanConfiguredTokens(config), [...universes.map(universe => universe.repToken), ...observedTokens], approvedTokens)
 	if (stopHead()) return undefined
 	state.tokenAddresses = [...executionTokens]
-	const discoveredPools = await discoverTokenPools(runtime.client, {
-		blockNumber,
-		chainId: config.network.chain.id,
-		factory: config.router === undefined ? undefined : config.network.factory,
-		multicall3: config.network.multicall3,
-		tokens: discoveredTokens,
-		weth: config.network.weth,
-	})
+	const discoverAgainst = (quoteToken: Address) =>
+		discoverTokenPools(runtime.client, {
+			blockNumber,
+			chainId: config.network.chain.id,
+			factory: config.router === undefined ? undefined : config.network.factory,
+			multicall3: config.network.multicall3,
+			quoteToken,
+			tokens: discoveredTokens.filter(token => token.toLowerCase() !== quoteToken.toLowerCase()),
+		})
+	// The market overview prices tokens in WETH; allowlisted collateral adds hedge pools for reports collateralized in it.
+	const [discoveredPools, ...collateralPools] = await Promise.all([discoverAgainst(config.network.weth), ...config.collateralTokens.map(collateral => discoverAgainst(collateral.address))])
 	if (stopHead()) return undefined
-	const pools = await poolsForTokens(runtime.client, config, discoveredPools, blockNumber)
+	const pools = await poolsForTokens(runtime.client, config, [...discoveredPools, ...collateralPools.flat()], blockNumber)
 	const [tokenMarkets, balances] = await Promise.all([
 		loadTokenMarkets(runtime.client, {
 			blockNumber,
@@ -52,7 +55,7 @@ export async function loadHeadMarkets(runtime: OperatorRuntime, context: Operato
 			wallet: runtime.wallet?.account.address,
 			weth: config.network.weth,
 		}),
-		loadBalances(runtime.client, runtime.wallet, config, discoveredTokens, pools, blockNumber),
+		loadBalances(runtime.client, runtime.wallet, config, [...new Set([...discoveredTokens, ...config.collateralTokens.map(collateral => collateral.address)])], pools, blockNumber),
 	])
 	if (stopHead()) return undefined
 	state.tokenMarkets = tokenMarkets

@@ -10,6 +10,8 @@ import type { OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOra
 export type Pool = {
 	address: Address
 	fee: (typeof STANDARD_UNISWAP_FEES)[number]
+	/** The token the hedge trades `token` against: WETH, or an allowlisted report collateral. V4 pools always quote native ETH as WETH. */
+	quoteToken: Address
 	token: Address
 } & ({ venue: 'uniswap-v3'; liquidity: bigint; spotTick: bigint; twapTick: bigint } | { venue: 'uniswap-v2' | 'uniswap-v4' })
 

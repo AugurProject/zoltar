@@ -12,7 +12,7 @@ const network = networkConfiguration('mainnet')
 const token = getAddress('0x0000000000000000000000000000000000000001')
 const address = getAddress('0x0000000000000000000000000000000000000002')
 const config = { network, router: address, v2Router: address, v4PoolManager: undefined, v4Quoter: undefined }
-const amounts = { sellAmount: 150n * unit, buyAmount: 152n * unit, replacementAttoWeth: (1725n * unit) / 1000n }
+const amounts = { sellAmount: 150n * unit, buyAmount: 152n * unit, replacementAmount1: (1725n * unit) / 1000n }
 
 for (const [issue, reserves] of [
 	[1459, [75n * unit, (240n * unit) / 100n]],
@@ -28,8 +28,8 @@ for (const [issue, reserves] of [
 				}),
 			),
 		})
-		const quotes = await quoteVenue(client, config, { venue: 'uniswap-v2', address, token, fee: 3000 }, amounts, 10n)
-		expect(quotes.replacement).toBe((amounts.replacementAttoWeth * reserves[0]) / reserves[1])
+		const quotes = await quoteVenue(client, config, { venue: 'uniswap-v2', address, quoteToken: network.weth, token, fee: 3000 }, amounts, 10n)
+		expect(quotes.replacement).toBe((amounts.replacementAmount1 * reserves[0]) / reserves[1])
 		expect(executableVenueQuotes(quotes)).toBeUndefined()
 	})
 
@@ -47,7 +47,7 @@ test('#1483: fair spot and TWAP cannot admit a shaped V3 full-size replacement',
 			}),
 		),
 	})
-	const quotes = await quoteVenue(client, config, { venue: 'uniswap-v3', address, token, fee: 100, spotTick: 0n, twapTick: 0n, liquidity: unit }, amounts, 10n)
-	expect(quotes.replacement).toBe(amounts.replacementAttoWeth * 100n)
+	const quotes = await quoteVenue(client, config, { venue: 'uniswap-v3', address, quoteToken: network.weth, token, fee: 100, spotTick: 0n, twapTick: 0n, liquidity: unit }, amounts, 10n)
+	expect(quotes.replacement).toBe(amounts.replacementAmount1 * 100n)
 	expect(executableVenueQuotes(quotes)).toBeUndefined()
 })

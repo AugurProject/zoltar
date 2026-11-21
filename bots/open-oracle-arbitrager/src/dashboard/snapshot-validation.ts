@@ -157,6 +157,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 	executionHistory: array(
 		object({
 			actualGasCostEth: stringValue,
+			collateralSymbol: optional(stringValue),
 			direction: oneOf('buy-rep', 'sell-rep'),
 			estimatedNetProfitWeth: stringValue,
 			executedAt: stringValue,
@@ -223,6 +224,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 		union(
 			object({
 				centralizedPriceDeviationBps: optional(stringValue),
+				collateralSymbol: optional(stringValue),
 				decision: oneOf('dry-run-opportunity', 'eligible', 'execution-failed', 'history-unavailable', 'insufficient-inventory', 'market-risk', 'paused', 'risk-limit', 'selected', 'self-report', 'signer-unavailable', 'submitted', 'unprofitable'),
 				direction: oneOf('buy-rep', 'sell-rep'),
 				estimatedNetProfitWeth: stringValue,
@@ -241,6 +243,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 				windowUnit: oneOf('blocks', 'seconds'),
 			}),
 			object({
+				collateralSymbol: optional(stringValue),
 				decision: oneOf('skipped'),
 				reason: stringValue,
 				reasonDetails: optional(stringValue),
@@ -254,6 +257,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 	),
 	positions: array(
 		object({
+			collateralSymbol: optional(stringValue),
 			direction: oneOf('buy-rep', 'sell-rep'),
 			reportId: stringValue,
 			tokenSymbol: stringValue,
@@ -341,6 +345,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 		queue: array(
 			object({
 				callbackGasLimit: stringValue,
+				collateralSymbol: optional(stringValue),
 				coordinator: hexValue,
 				decision: oneOf('disabled', 'dry-run-settlement', 'eligible', 'execution-failed', 'gas-price-cap', 'history-unavailable', 'in-flight', 'paused', 'risk-limit', 'settled', 'signer-unavailable', 'unprofitable'),
 				elapsed: stringValue,

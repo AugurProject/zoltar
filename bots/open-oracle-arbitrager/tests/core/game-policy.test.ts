@@ -120,6 +120,14 @@ describe('trusted coordinator game policy', () => {
 		expect(gamePolicyMismatch({ ...report, game: { ...report.game, flags: noStoredState.flags } }, [noStoredState], openOracle)).toBe('Stored OpenOracle state is required for durable lifecycle recovery')
 	})
 
+	test('#1274: accepts operator-allowlisted collateral as token1 and names any other token1', () => {
+		const usdc = '0x0000000000000000000000000000000000000007' as Address
+		const usdcReport = { ...report, game: { ...report.game, token1: usdc } }
+		expect(gamePolicyMismatch(usdcReport, [{ ...policy, collateralTokens: [usdc] }], openOracle)).toBeUndefined()
+		expect(gamePolicyMismatch(usdcReport, [policy], openOracle)).toBe(`Report token1 ${usdc} is neither WETH nor an allowlisted collateral token`)
+		expect(gamePolicyMismatch({ ...usdcReport, game: { ...usdcReport.game, token2: other } }, [{ ...policy, collateralTokens: [usdc] }], openOracle)).toBe('Token pair differs from the approved coordinator template')
+	})
+
 	test('retains only approved reports in execution mode and bounds diagnostic reports', () => {
 		const reports = new Map([
 			[1n, { latest: report }],

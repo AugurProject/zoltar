@@ -3,6 +3,8 @@ import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 export type ExecutionRecord = {
 	actualGasCostEth: string
 	blockNumber: string
+	/** Symbol of a non-WETH report collateral; `requiredWeth` is then an amount of that token. */
+	collateralSymbol?: string | undefined
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
 	estimatedProfitBeforeGasEth: string
@@ -53,12 +55,14 @@ export function parseExecutionRecord(value: unknown): ExecutionRecord | undefine
 		typeof record['trackedNetProfitEth'] !== 'string' ||
 		!decimal.test(record['trackedNetProfitEth'].replace(/^-/, '')) ||
 		typeof record['transactionHash'] !== 'string' ||
-		!/^0x[0-9a-fA-F]{64}$/.test(record['transactionHash'])
+		!/^0x[0-9a-fA-F]{64}$/.test(record['transactionHash']) ||
+		(record['collateralSymbol'] !== undefined && (typeof record['collateralSymbol'] !== 'string' || record['collateralSymbol'].length === 0))
 	)
 		return undefined
 	return {
 		actualGasCostEth: record['actualGasCostEth'],
 		blockNumber: record['blockNumber'],
+		...(record['collateralSymbol'] === undefined ? {} : { collateralSymbol: record['collateralSymbol'] }),
 		direction: record['direction'],
 		estimatedNetProfitWeth: record['estimatedNetProfitWeth'],
 		estimatedProfitBeforeGasEth: record['estimatedProfitBeforeGasEth'],

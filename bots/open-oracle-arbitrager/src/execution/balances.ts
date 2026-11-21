@@ -49,7 +49,7 @@ export async function loadBalances(client: BatchReader, wallet: Pick<WriteClient
 	let repValueAttoWeth: bigint | undefined
 	if (repAttoRep === 0n) repValueAttoWeth = 0n
 	else {
-		const quotes = await Promise.all(pools.filter(pool => pool.token.toLowerCase() === config.network.rep.toLowerCase()).map(pool => quoteVenue(client, config, pool, { sellAmount: repAttoRep, buyAmount: 1n, replacementAttoWeth: 1n }, blockNumber)))
+		const quotes = await Promise.all(pools.filter(pool => pool.token.toLowerCase() === config.network.rep.toLowerCase() && pool.quoteToken.toLowerCase() === config.network.weth.toLowerCase()).map(pool => quoteVenue(client, config, pool, { sellAmount: repAttoRep, buyAmount: 1n, replacementAmount1: 1n }, blockNumber)))
 		for (const quote of quotes) if (quote.sell !== undefined && (repValueAttoWeth === undefined || quote.sell > repValueAttoWeth)) repValueAttoWeth = quote.sell
 	}
 	const snapshot: BalanceSnapshot = {

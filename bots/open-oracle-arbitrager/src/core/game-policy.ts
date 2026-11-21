@@ -1,5 +1,6 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
+import { unlistedCollateralReason } from '#core/collateral-valuation'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 const MAX_SAFE_CALLBACK_GAS_LIMIT = 10_000_000n
@@ -9,6 +10,11 @@ const MAX_SAFE_MULTIPLIER = 200n
 
 export type CoordinatorGamePolicy = {
 	callbackGasLimit: bigint
+	/**
+	 * Operator-allowlisted report collateral the coordinator may use as `token1` instead of its WETH: shared price feeds
+	 * start each portfolio's report with that portfolio's collateral token.
+	 */
+	collateralTokens?: readonly Address[] | undefined
 	coordinator: Address
 	/** Shared feeds authenticate independently created escrows for exact report IDs. */
 	reportEscrows?: Readonly<Record<string, Address>>
@@ -53,7 +59,8 @@ export function gamePolicyMismatch(report: OpenOracleStatePreimage, policies: re
 	if (!sameAddress(policy.openOracle, expectedOpenOracle)) return 'Coordinator is bound to a different OpenOracle'
 	const game = report.game
 	if (!sameAddress(game.callbackContract, report.helper.creator)) return 'Settlement callback is not the report coordinator'
-	if (!sameAddress(game.token1, policy.token1) || !sameAddress(game.token2, policy.token2)) return 'Token pair differs from the approved coordinator template'
+	if (!sameAddress(game.token2, policy.token2)) return 'Token pair differs from the approved coordinator template'
+	if (!sameAddress(game.token1, policy.token1) && !(policy.collateralTokens ?? []).some(collateral => sameAddress(collateral, game.token1))) return unlistedCollateralReason(game.token1)
 	if (!sameAddress(game.protocolFeeRecipient, policy.protocolFeeRecipient)) return 'Protocol fee recipient differs from the approved coordinator template'
 	const mismatch =
 		callbackGasMismatch(game.callbackGasLimit, policy) ??

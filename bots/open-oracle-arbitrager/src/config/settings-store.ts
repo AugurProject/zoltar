@@ -1,6 +1,7 @@
 import { validateDeploymentSettings, type DeploymentSettings, type StoredDeploymentSettings } from '#config/deployment-settings'
 import { networkDeployment } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
+import { isStandardUniswapFee, type CollateralToken } from '#core/collateral-valuation'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import type { NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -39,6 +40,7 @@ type RuntimeSettings = {
 export type PersistedOperatorSettings = {
 	approvedUniverses: readonly bigint[]
 	centralizedMarkets: CentralizedMarketSettings
+	collateralTokens: readonly CollateralToken[]
 	connectivity: QuorumConnectivitySettings
 	deployment: DeploymentSettings
 	network: NetworkName
@@ -95,6 +97,7 @@ export type StoredCentralizedMarketSettings = Omit<ReturnType<typeof serializeCe
 export type StoredOperatorSettings = {
 	approvedUniverses: readonly string[]
 	centralizedMarkets: StoredCentralizedMarketSettings
+	collateralTokens?: readonly CollateralToken[] | undefined
 	connectivity?: QuorumConnectivitySettings | undefined
 	deployment: StoredDeploymentSettings
 	network?: NetworkName | undefined
@@ -120,7 +123,7 @@ function requiredRecord(value: unknown, name = 'Operator configuration') {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'settlement', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'collateralTokens', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'settlement', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
@@ -136,6 +139,23 @@ function integer(value: unknown, name: string, minimum: number, maximum: number)
 function weth(value: unknown, name: string) {
 	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`${name} must be a nonnegative decimal WETH string with at most 18 decimal places`)
 	return parseDecimalWeth(value)
+}
+
+/** Each non-WETH report collateral the operator lets the arbitrager price and dispute, with the fee of its canonical V3 WETH pool. */
+function parseCollateralTokens(value: unknown, weth: Address): CollateralToken[] {
+	if (!Array.isArray(value)) throw new Error('Operator collateralTokens must be an array')
+	const parsed = value.map((entry, index) => {
+		const collateral = requiredRecord(entry, `Operator collateralTokens[${index.toString()}]`)
+		if (Object.keys(collateral).some(key => key !== 'address' && key !== 'wethPoolFee')) throw new Error('Operator collateral tokens accept only address and wethPoolFee')
+		if (typeof collateral['address'] !== 'string') throw new Error('Operator collateral token address must be an address')
+		const address = getAddress(collateral['address'])
+		if (address === weth) throw new Error('WETH is the native collateral and must not be listed in collateralTokens')
+		const fee = collateral['wethPoolFee']
+		if (typeof fee !== 'number' || !isStandardUniswapFee(fee)) throw new Error('Operator collateral wethPoolFee must be 100, 500, 3000, or 10000')
+		return { address, wethPoolFee: fee }
+	})
+	if (new Set(parsed.map(collateral => collateral.address)).size !== parsed.length) throw new Error('Operator collateralTokens must not repeat an address')
+	return parsed
 }
 
 function filePath(value: unknown, name: string) {
@@ -322,6 +342,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	if (runtime.execute && connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(connectivity.rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	return {
 		centralizedMarkets,
+		collateralTokens: parseCollateralTokens(record['collateralTokens'] ?? [], getAddress(networkDeployment(network).weth)),
 		connectivity,
 		deployment,
 		network,
@@ -342,6 +363,7 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 	const deployment = { uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }
 	return {
 		centralizedMarkets: serializeStoredCentralizedMarkets(settings.centralizedMarkets),
+		collateralTokens: settings.collateralTokens.map(collateral => ({ address: collateral.address, wethPoolFee: collateral.wethPoolFee })),
 		connectivity: settings.networkConfigured ? settings.connectivity : undefined,
 		deployment,
 		network: settings.network,
