@@ -6,6 +6,7 @@ import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 
 interface IAuctionVaultCapital {
 	function materializeAuctionBid(uint256 bidId) external returns (address vault, uint96 positionId);
@@ -21,7 +22,7 @@ interface IAuctionVaultCapital {
 /// the creation code, and the CREATE2 salt is the bid identifier.
 library SecurityPoolAuctionVaultClones {
 	uint256 internal constant BINDINGS_LENGTH = 92;
-	uint256 internal constant RUNTIME_LENGTH = 45 + BINDINGS_LENGTH;
+	uint256 internal constant RUNTIME_LENGTH = SecurityPoolBoundClones.FORWARDER_LENGTH + BINDINGS_LENGTH;
 
 	function runtimeCode(address implementation, address owner, address capital, address auction, uint256 bidId) internal pure returns (bytes memory) {
 		return
@@ -93,9 +94,11 @@ contract SecurityPoolAuctionVault {
 	}
 	function _bindings() private view returns (address owner_, address capital_, address auction_, uint256 bidId_) {
 		_requireClone();
+		uint256 bindingsOffset = SecurityPoolBoundClones.FORWARDER_LENGTH;
+		uint256 bindingsLength = SecurityPoolAuctionVaultClones.BINDINGS_LENGTH;
 		assembly ('memory-safe') {
 			let pointer := mload(0x40)
-			extcodecopy(address(), pointer, 45, 92)
+			extcodecopy(address(), pointer, bindingsOffset, bindingsLength)
 			owner_ := shr(96, mload(pointer))
 			capital_ := shr(96, mload(add(pointer, 20)))
 			auction_ := shr(96, mload(add(pointer, 40)))

@@ -54,7 +54,7 @@ contract EscalationGameFactory {
 	function deployEscalationGame(uint256 startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external returns (EscalationGame) {
 		require(_nonDecisionThresholdAttoRep > 1, 'Escalation threshold too low');
 		if (startBondAttoRep >= _nonDecisionThresholdAttoRep) startBondAttoRep = _nonDecisionThresholdAttoRep - 1;
-		EscalationGame gameImplementation = _deployEscalationGame();
+		EscalationGame gameImplementation = _deployOrReuseEscalationGame(ISecurityPool(payable(msg.sender)));
 		gameImplementation.start(startBondAttoRep, _nonDecisionThresholdAttoRep);
 		return gameImplementation;
 	}
@@ -69,13 +69,40 @@ contract EscalationGameFactory {
 			winnerHaircutPaidByFork = state.winnerHaircutPaidByFork;
 			forkCarryInitialBackingAttoRep = state.balanceAttoRep;
 		}
-		EscalationGame gameImplementation = _deployEscalationGame();
+		EscalationGame gameImplementation = _deployOrReuseEscalationGame(child);
 		gameImplementation.startFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep);
 		return gameImplementation;
 	}
 
-	function _deployEscalationGame() private returns (EscalationGame gameImplementation) {
-		ISecurityPool securityPool = ISecurityPool(payable(msg.sender));
+	/// @notice Deploys `securityPool`'s Escalation Game without starting it, so the first report does not pay
+	/// the deployment gas (#1453). Permissionless: the creation arguments bind the game to `securityPool`, only
+	/// this factory can start it, and its clock starts with the first report, not with this call.
+	function prepareEscalationGame(ISecurityPool securityPool) external returns (EscalationGame) {
+		return _deployOrReuseEscalationGame(securityPool);
+	}
+
+	/// @notice The address at which `securityPool`'s Escalation Game is or will be deployed.
+	function escalationGameAddress(ISecurityPool securityPool) external view returns (EscalationGame) {
+		return EscalationGame(_create2Address(_escalationGameInitCode(securityPool)));
+	}
+
+	function _deployOrReuseEscalationGame(ISecurityPool securityPool) private returns (EscalationGame) {
+		bytes memory initCode = _escalationGameInitCode(securityPool);
+		address prepared = _create2Address(initCode);
+		// A reused game may be unstarted (prepared) or already started; start and startFromFork accept only this
+		// factory, and the game refuses any second start, so reuse can never restart or re-parameterize a game.
+		if (prepared.code.length != 0) return EscalationGame(prepared);
+		address deployed = Create2Deployment.deploy(initCode, 0);
+		require(deployed != address(0x0), 'Escalation game deployment failed');
+		return EscalationGame(deployed);
+	}
+
+	function _create2Address(bytes memory initCode) private view returns (address) {
+		return
+			address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), bytes32(0), keccak256(initCode))))));
+	}
+
+	function _escalationGameInitCode(ISecurityPool securityPool) private view returns (bytes memory) {
 		address partOne = escalationGameCreationCodePartOne;
 		address partTwo = escalationGameCreationCodePartTwo;
 		uint256 partOneLength;
@@ -91,9 +118,7 @@ contract EscalationGameFactory {
 		}
 		// Code storage is cheaper to deploy and read than one storage slot per 32-byte
 		// word, while two fixed parts keep each carrier below EIP-170.
-		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate, depositDelegate));
-		address deployed = Create2Deployment.deploy(initCode, 0);
-		require(deployed != address(0x0), 'Escalation game deployment failed');
-		gameImplementation = EscalationGame(deployed);
+		return
+			abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate, depositDelegate));
 	}
 }

@@ -7,6 +7,7 @@ import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettleme
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { Constants } from '../Constants.sol';
 
 interface IPortfolioPurchaseRoot {
 	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
@@ -24,7 +25,7 @@ interface IPurchaseForkReadiness {
 
 /// @notice Read-only purchase, capacity, and linear fee quotes.
 contract SecurityPoolPortfolioPurchase {
-	uint256 public constant RESOLUTION_WINDOW = 3 days + 7 weeks;
+	uint256 public constant RESOLUTION_WINDOW = Constants.RESOLUTION_PREMIUM_WINDOW;
 	address public immutable portfolio;
 	constructor(address authority) {
 		portfolio = authority;

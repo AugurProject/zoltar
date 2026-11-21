@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { Constants } from '../Constants.sol';
 
 /// @notice Question-owned reporting premiums earn only until their funded finality.
 /// @dev Custody stays with Services. Prefix integrals settle all expired streams
@@ -12,7 +13,7 @@ contract SecurityPoolResolutionPremiumBook {
 	using SecurityPoolMaturityMap for SecurityPoolMaturityMap.Store;
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	uint256 public constant UNIT_SCALE = 1e9;
-	uint48 public constant MAXIMUM_REPORTING_WINDOW = 3 days + 7 weeks;
+	uint48 public constant MAXIMUM_REPORTING_WINDOW = Constants.RESOLUTION_PREMIUM_WINDOW;
 	uint256 private constant MAXIMUM_INHERITED_UNITS_PER_CASH = 1e12;
 	address public immutable services;
 	uint256 public totalCash;
@@ -182,10 +183,10 @@ contract SecurityPoolResolutionPremiumBook {
 			parent.cash -= cash;
 			totalCash -= cash;
 			branchCash[child] = 0;
-			books[child] = Book(0, 0, 0, 0, 0, 0, 0, 0, parent.portfolioTimestamp, parent.portfolioTimestamp + 3 days, parent.refundedBefore, true, false);
+			books[child] = Book(0, 0, 0, 0, 0, 0, 0, 0, parent.portfolioTimestamp, parent.portfolioTimestamp + Constants.FORK_RESPONSE_DELAY, parent.refundedBefore, true, false);
 			return cash;
 		}
-		books[child] = Book(cash, parent.units, 0, 0, parent.refundedPrefix, parent.questionRoot, parent.rateRoot, parent.tailRoot, parent.portfolioTimestamp, parent.portfolioTimestamp + 3 days, parent.refundedBefore, true, false);
+		books[child] = Book(cash, parent.units, 0, 0, parent.refundedPrefix, parent.questionRoot, parent.rateRoot, parent.tailRoot, parent.portfolioTimestamp, parent.portfolioTimestamp + Constants.FORK_RESPONSE_DELAY, parent.refundedBefore, true, false);
 	}
 	function recover(uint248 source, uint256 id, uint256 shares, uint256 supply) external onlyServices returns (uint256 cash) {
 		Book storage book = books[source];

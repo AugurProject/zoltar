@@ -80,9 +80,17 @@ test('Docker defaults match the canonical Bun package manager version', async ()
 	const manifest: unknown = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8'))
 	if (typeof manifest !== 'object' || manifest === null || !('packageManager' in manifest) || typeof manifest.packageManager !== 'string') throw new Error('Missing package manager pin')
 	const version = manifest.packageManager.replace(/^bun@/, '')
+	const digests = new Set<string>()
 	for (const file of ['ui/Dockerfile', 'bots/chaos/Dockerfile', 'bots/liquidator/Dockerfile', 'bots/open-oracle-arbitrager/Dockerfile', 'augurScan/Dockerfile']) {
 		const source = await readFile(join(repositoryRoot, file), 'utf8')
 		expect(source).toContain(`ARG BUN_VERSION=${version}`)
-		expect(source.match(/FROM oven\/bun:[^\s]+/g)?.every(line => line === 'FROM oven/bun:${BUN_VERSION}-alpine')).toBe(true)
+		// #1465: the Bun base image is pinned by digest like every other image, so a re-pushed tag cannot change the build.
+		const digest = source.match(/^ARG BUN_IMAGE_DIGEST=(sha256:[0-9a-f]{64})$/m)?.[1]
+		if (digest === undefined) throw new Error(`${file} does not pin the Bun image digest`)
+		digests.add(digest)
+		const stages = source.match(/FROM oven\/bun:[^\s]+/g) ?? []
+		expect(stages.length).toBeGreaterThan(0)
+		expect(stages.every(line => line === 'FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST}')).toBe(true)
 	}
+	expect(digests.size).toBe(1)
 })

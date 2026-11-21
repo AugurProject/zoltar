@@ -56,13 +56,54 @@ test('reads inventory in one batch, tolerates a reverting token, and values REP 
 		const balances = await loadBalances(client, wallet, config, [healthyToken, revertingToken], pools, 100n)
 		expect(balances?.raw).toEqual({ attoWeth: 10n ** 18n, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 100n * 10n ** 18n, tokens: new Map([[healthyToken.toLowerCase(), 42n]]) })
 		expect(balances?.snapshot).toEqual({ availableEth: '5', availableRep: '100', availableWeth: '1', repValueWeth: '3', totalValueWeth: '9' })
-		// One inventory batch, four quote batches, and four pool-balance diagnostics for failed buy quotes.
-		expect(batches).toBe(9)
+		// One trusted inventory batch, two gas-isolated token reads, four quote batches, and four pool-balance diagnostics for failed buy quotes.
+		expect(batches).toBe(11)
 		expect(blockTags).toHaveLength(25)
 		expect(blockTags.every(blockTag => blockTag === '0x64')).toBeTrue()
 		expect(logged).toHaveBeenCalledTimes(1)
 		expect(String(logged.mock.calls[0]?.[0])).toContain(`token=${revertingToken} balanceUnavailable=`)
 		expect(await loadBalances(client, undefined, config, [healthyToken], pools, 100n)).toBeUndefined()
+	} finally {
+		logged.mockRestore()
+	}
+})
+
+test('#1446: a gas-burning report token cannot fail the wallet inventory read', async () => {
+	const gasBurningToken = getAddress('0xbadbadbadbadbadbadbadbadbadbadbadbadbad0')
+	const provider = multicallProvider(network.multicall3, ({ to }) => {
+		if (to === gasBurningToken) throw new Error('execution reverted: out of gas')
+		if (to.toLowerCase() === network.rep.toLowerCase()) return encodeAbiParameters([{ type: 'uint256' }], [0n])
+		return encodeAbiParameters([{ type: 'uint256' }], [7n])
+	})
+	const client = createPublicClient({
+		chain: network.chain,
+		transport: custom({
+			request: async parameters => {
+				// Multicall3 forwards 63/64 of the remaining gas to each target, so a gas-burning target exhausts the whole aggregate3 call.
+				if (parameters.method === 'eth_call' && Array.isArray(parameters.params)) {
+					const transaction = parameters.params[0]
+					if (
+						typeof transaction === 'object' &&
+						transaction !== null &&
+						'data' in transaction &&
+						typeof transaction.data === 'string' &&
+						transaction.data.toLowerCase().includes(gasBurningToken.slice(2).toLowerCase()) &&
+						'to' in transaction &&
+						typeof transaction.to === 'string' &&
+						transaction.to.toLowerCase() === network.multicall3.toLowerCase()
+					) {
+						throw new Error('out of gas')
+					}
+				}
+				return provider.request(parameters)
+			},
+		}),
+	})
+	const logged = spyOn(console, 'error').mockImplementation(() => {})
+	try {
+		const balances = await loadBalances(client, wallet, config, [healthyToken, gasBurningToken], pools, 100n)
+		expect(balances?.raw.tokens).toEqual(new Map([[healthyToken.toLowerCase(), 7n]]))
+		expect(balances?.raw.attoWeth).toBe(7n)
 	} finally {
 		logged.mockRestore()
 	}

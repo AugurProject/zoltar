@@ -1,6 +1,8 @@
 ARG BUN_VERSION=1.4.4
+# Multi-arch index digest of oven/bun:${BUN_VERSION}-alpine; update it together with BUN_VERSION.
+ARG BUN_IMAGE_DIGEST=sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 
-FROM oven/bun:${BUN_VERSION}-alpine AS shared-builder
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS shared-builder
 
 WORKDIR /source
 
@@ -29,7 +31,7 @@ RUN cd solidity \
 	&& bun tsc --project tsconfig-compile.json \
 	&& bun ./js/compile.js
 
-FROM oven/bun:${BUN_VERSION}-alpine
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST}
 
 ENV BUN_ENV=production
 ENV ZOLTAR_BOT_CONTAINER=true

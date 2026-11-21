@@ -1,9 +1,10 @@
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
-import { parseAbi } from '@zoltar/core-shared/evm/ethereum'
+import { parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
+	statoblast_factories_EscalationGameFactory_EscalationGameFactory as gameFactoryArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
 	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
@@ -261,6 +262,25 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const fullDepthRedemption = await writeContractAndWait(donor, () => donor.writeContract({ abi: poolArtifact.abi, address: victimPool, functionName: 'redeemCompleteSet', args: [unit / 10n], gas: 16_777_216n }))
 		const fullDepthRedemptionGas = (await owner.getTransactionReceipt({ hash: fullDepthRedemption })).gasUsed
 		expect(fullDepthRedemptionGas).toBeLessThan(16_777_216n)
+		// #1453: at full depth the first report used about 95% of the per-transaction cap because it also
+		// deployed the game. Anyone can deploy the unstarted game first, leaving the report a wide margin.
+		const firstReportTarget = streams[0]
+		if (firstReportTarget === undefined) throw new Error('Missing full-depth first report question')
+		const firstReportPool = fixture.poolFor(firstReportTarget).securityPool
+		await mockWindow.setTime(forkAt + 3n * DAY + 1n)
+		const gameFactory = { abi: gameFactoryArtifact.abi, address: await owner.readContract({ abi: poolArtifact.abi, address: firstReportPool, functionName: 'escalationGameFactory' }) }
+		const preparedGame = await owner.readContract({ ...gameFactory, functionName: 'escalationGameAddress', args: [firstReportPool] })
+		const prepareHash = await writeContractAndWait(donor, () => donor.writeContract({ ...gameFactory, functionName: 'prepareEscalationGame', args: [firstReportPool], gas: 16_777_216n }))
+		const prepareGas = (await owner.getTransactionReceipt({ hash: prepareHash })).gasUsed
+		expect(await owner.readContract({ abi: gameArtifact.abi, address: preparedGame, functionName: 'activationTime' })).toBe(0n)
+		expect(await owner.readContract({ abi: poolArtifact.abi, address: firstReportPool, functionName: 'escalationGame' })).toBe(zeroAddress)
+		await approveToken(owner, rep, firstReportPool)
+		const firstReportHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: firstReportPool, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit], gas: 16_777_216n }))
+		const fullDepthFirstReportGas = (await owner.getTransactionReceipt({ hash: firstReportHash })).gasUsed
+		expect(await owner.readContract({ abi: poolArtifact.abi, address: firstReportPool, functionName: 'escalationGame' })).toBe(preparedGame)
+		expect(await owner.readContract({ abi: gameArtifact.abi, address: preparedGame, functionName: 'activationTime' })).toBeGreaterThan(forkAt + 3n * DAY)
+		expect(fullDepthFirstReportGas).toBeLessThan(12_000_000n)
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ prepareGas, fullDepthFirstReportGas })
 		await mockWindow.anvilRevert(fullDepth)
 		await mockWindow.setTime(BigInt(cutoff) - 650n)
 		await fixture.refreshPrice()

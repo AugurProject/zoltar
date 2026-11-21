@@ -198,7 +198,7 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)`',
 			caller: 'Any reporter',
-			effect: 'Transfers accepted wallet REP into separate reporter custody and records the chosen outcome; creates the game if needed.',
+			effect: 'Transfers accepted wallet REP into separate reporter custody and records the chosen outcome; starts the game if needed, deploying it unless `EscalationGameFactory.prepareEscalationGame` already did.',
 			declarations: [
 				{
 					name: 'depositWalletRepToEscalationGame',
