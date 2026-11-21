@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from 'bun:test'
 import { privateKeyToAccount } from '../src/ethereum.ts'
-import { checkPrivateTransactionSubmissionEndpoints, checkPublicTransactionSubmissionEndpoints, checkSubmissionEndpoints, readRpcChainId } from '../src/monitoring/connectivity.ts'
+import { checkPrivateTransactionSubmissionEndpoints, checkPublicTransactionSubmissionEndpoints, checkSubmissionEndpoints, readRpcChainId, validateConnectivitySettings } from '../src/monitoring/connectivity.ts'
 import { validateSubmissionSettings } from '../src/execution/transaction-submission.ts'
 
 for (const probe of ['rpc', 'relay', 'public-transaction', 'private-transaction']) {
@@ -74,4 +74,16 @@ test('arbitrager preflight requires bundle methods as well as private transactio
 	} finally {
 		fetchMock.mockRestore()
 	}
+})
+
+test('accepts only known local node services as non-loopback HTTP RPCs', () => {
+	expect(validateConnectivitySettings({ publicRpcUrls: ['http://anvil:8545'], readRpcUrl: 'http://anvil:8545' })).toEqual({
+		publicRpcUrls: ['http://anvil:8545/'],
+		readRpcUrl: 'http://anvil:8545/',
+	})
+	expect(validateConnectivitySettings({ publicRpcUrls: ['http://reth:8545'], readRpcUrl: 'http://reth:8545' })).toEqual({
+		publicRpcUrls: ['http://reth:8545/'],
+		readRpcUrl: 'http://reth:8545/',
+	})
+	expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://other-service:8545'], readRpcUrl: 'http://other-service:8545' })).toThrow('HTTPS or HTTP on loopback, anvil, or reth')
 })
