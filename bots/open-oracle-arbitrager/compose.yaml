@@ -9,6 +9,7 @@ services:
       dockerfile: bots/open-oracle-arbitrager/Dockerfile
     image: zoltar-open-oracle-arbitrager
     environment:
+      ZOLTAR_BOT_COMPOSE_UI_PORT: "4173"
       # Keep this assertion paired with the host-loopback port mapping below.
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
       # flock coordinates containers on this Docker host through the shared volume.

@@ -72,6 +72,8 @@ Set `OPEN_ORACLE_ARBITRAGER_CONFIG` when the operator file is not at `.state/ope
 
 ## Docker
 
+Compose requires `runtime.uiPort` to remain 4173, matching its internal port mapping and health probe. To use a different listener port, run the bot outside Compose or update the mapping, probe, and `ZOLTAR_BOT_COMPOSE_UI_PORT` together.
+
 Docker Compose builds the image, keeps bot state in a named volume, publishes the dashboard only on host loopback, and starts the bot. From this directory, run:
 
 ```bash
