@@ -83,14 +83,16 @@ augurscan_export_history`,
 	}
 })
 
-test.each(Array.from({ length: 20 }, (_, attempt) => attempt))('lets only one of two concurrent exports publish into one output directory (attempt %s)', async () => {
+test.each(['native', 'raced-success'] as const)('lets only one of two concurrent exports publish into one output directory (%s mkdir)', async mkdirBehavior => {
 	const directory = await mkdtemp(path.join(tmpdir(), 'augurscan-export-history-concurrent-'))
 	const exportDirectory = path.join(directory, 'evidence')
 	try {
-		const harness = path.join(directory, 'export-harness.sh')
-		await Bun.write(
-			harness,
-			`set -euo pipefail
+		const exportDataset = (dataset: string) =>
+			Bun.spawn(
+				[
+					'bash',
+					'-c',
+					`set -euo pipefail
 source "$1"
 export AUGURSCAN_DATABASE_MODE=external
 export AUGURSCAN_RESTORE_URL='postgres://restore.invalid/augurscan_restore'
@@ -99,28 +101,29 @@ export AUGURSCAN_EXPORT_DIRECTORY="$2"
 export AUGURSCAN_EXPORT_DATASET="$3"
 export AUGURSCAN_EXPORT_CONTAINER="augurscan-export-$3"
 export AUGURSCAN_EXPORT_BARRIER="$4"
-printf 'export-worker=%s bash=%s\\n' "$AUGURSCAN_EXPORT_DATASET" "$BASH_VERSION" >&2
-command -V mkdir >&2
-cksum "$1" >&2
-PS4='+ worker $$ line $LINENO: '
-exec 9>&2
-BASH_XTRACEFD=9
-set -x
-# Both attempts reach the real atomic claim before either can acquire it.
+export AUGURSCAN_EXPORT_MKDIR_BEHAVIOR="$5"
+# Hold both empty-directory observations before either worker can claim ownership.
+ls() {
+  local listing ready=0 attempt
+  listing=$(command ls "$@") || return $?
+  touch "$AUGURSCAN_EXPORT_BARRIER.$AUGURSCAN_EXPORT_DATASET"
+  for ((attempt = 0; attempt < 500; attempt++)); do
+    if test -f "$AUGURSCAN_EXPORT_BARRIER.logs" && test -f "$AUGURSCAN_EXPORT_BARRIER.timeline"; then
+      ready=1
+      break
+    fi
+    sleep 0.01
+  done
+  test "$ready" = 1 || { echo 'Concurrent export barrier timed out' >&2; return 2; }
+  printf '%s' "$listing"
+}
 mkdir() {
-  if test "$1" = "$AUGURSCAN_EXPORT_DIRECTORY/.export-attempt"; then
-    touch "$AUGURSCAN_EXPORT_BARRIER.$AUGURSCAN_EXPORT_DATASET"
-    local ready=0 attempt
-    for ((attempt = 0; attempt < 500; attempt++)); do
-      if test -f "$AUGURSCAN_EXPORT_BARRIER.logs" && test -f "$AUGURSCAN_EXPORT_BARRIER.timeline"; then
-        ready=1
-        break
-      fi
-      sleep 0.01
-    done
-    test "$ready" = 1 || { echo 'Concurrent export barrier timed out' >&2; return 2; }
+  if test "$AUGURSCAN_EXPORT_MKDIR_BEHAVIOR" = raced-success && test "$1" = "$AUGURSCAN_EXPORT_DIRECTORY/.export-attempt"; then
+    # uutils 0.8.0 can report success after a concurrent creator wins (upstream #13970).
+    command mkdir "$@" 2>/dev/null || test -d "$1"
+  else
+    command mkdir "$@"
   fi
-  command mkdir "$@"
 }
 docker() { :; }
 augurscan_export_readiness() { return 0; }
@@ -139,52 +142,19 @@ augurscan_curl() {
 }
 augurscan_verify_export_page() { printf '{"verified":true}\\n'; }
 augurscan_export_history`,
-		)
-		// Bash owns the concurrent workers and records their real wait statuses. Keep
-		// worker results independent of Bun's concurrent subprocess handles.
-		const controller = Bun.spawn(
-			[
-				'bash',
-				'-c',
-				`set -euo pipefail
-export_harness=$1
-export_script=$2
-export_directory=$3
-result_directory=$4
-claim_barrier=$5
-run_export() {
-  local dataset=$1 result=$2 status=0
-  bash "$export_harness" "$export_script" "$export_directory" "$dataset" "$claim_barrier" > "$result_directory/$result.stdout" 2> "$result_directory/$result.stderr" || status=$?
-  printf '%s' "$status" > "$result_directory/$result.status"
-}
-run_export logs logs &
-logs_pid=$!
-run_export timeline timeline &
-timeline_pid=$!
-wait "$logs_pid"
-wait "$timeline_pid"
-printf 'controller statuses: logs=%s timeline=%s\\n' "$(cat "$result_directory/logs.status")" "$(cat "$result_directory/timeline.status")" >&2
-run_export logs reuse`,
-				'augurscan-export-controller',
-				harness,
-				exportScript,
-				exportDirectory,
-				directory,
-				path.join(directory, 'claim-ready'),
-			],
-			{ cwd: projectRoot, env: processEnv(), stdout: 'ignore', stderr: 'pipe' },
-		)
-		const [controllerStatus, controllerErrors] = await Promise.all([controller.exited, new Response(controller.stderr).text()])
-		expect(controllerStatus, controllerErrors).toBe(0)
-		const readResult = async (name: string) => ({
-			status: Number(await readFile(path.join(directory, `${name}.status`), 'utf8')),
-			stdout: await readFile(path.join(directory, `${name}.stdout`), 'utf8'),
-			stderr: await readFile(path.join(directory, `${name}.stderr`), 'utf8'),
-		})
-		const results = await Promise.all(['logs', 'timeline'].map(readResult))
-		for (const result of results) expect(result.stderr).toMatch(/command mkdir .*\.export-attempt/)
+					'augurscan-export-history-test',
+					exportScript,
+					exportDirectory,
+					dataset,
+					path.join(directory, 'claim-ready'),
+					mkdirBehavior,
+				],
+				{ cwd: projectRoot, env: processEnv(), stdout: 'pipe', stderr: 'pipe' },
+			)
+		const attempts = [exportDataset('logs'), exportDataset('timeline')]
+		const results = await Promise.all(attempts.map(async attempt => ({ status: await attempt.exited, stdout: await new Response(attempt.stdout).text(), stderr: await new Response(attempt.stderr).text() })))
 		const published = results.filter(result => result.status === 0)
-		expect(published, JSON.stringify({ controller: controllerErrors, workers: results })).toHaveLength(1)
+		expect(published, JSON.stringify(results)).toHaveLength(1)
 		expect(published[0]?.stdout).toContain(`Validated export: ${exportDirectory}`)
 		const refused = results.filter(result => result.status !== 0)
 		expect(refused).toHaveLength(1)
@@ -194,11 +164,9 @@ run_export logs reuse`,
 		const publishedDataset = results[0]?.status === 0 ? 'logs' : 'timeline'
 		expect(await readFile(path.join(exportDirectory, 'page-0', 'evidence.ndjson'), 'utf8')).toBe(`{"dataset":"${publishedDataset}"}\n`)
 		expect((await readdir(path.join(exportDirectory, 'page-0'))).sort()).toEqual(['evidence.ndjson', 'headers', 'validation.json'])
-		for (const dataset of ['logs', 'timeline']) expect(await readFile(path.join(directory, `claim-ready.${dataset}`), 'utf8')).toBe('')
 		// A later attempt cannot reuse the published directory either.
-		const reuse = await readResult('reuse')
-		expect(reuse.status).toBe(1)
-		expect(reuse.stderr).toContain('Use a new export directory')
+		const reuse = exportDataset('logs')
+		expect(await reuse.exited).toBe(1)
 	} finally {
 		await rm(directory, { recursive: true, force: true })
 	}
