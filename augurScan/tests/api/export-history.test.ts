@@ -87,12 +87,10 @@ test('lets only one of two concurrent exports publish into one output directory'
 	const directory = await mkdtemp(path.join(tmpdir(), 'augurscan-export-history-concurrent-'))
 	const exportDirectory = path.join(directory, 'evidence')
 	try {
-		const exportDataset = (dataset: string) =>
-			Bun.spawn(
-				[
-					'bash',
-					'-c',
-					`set -euo pipefail
+		const harness = path.join(directory, 'export-harness.sh')
+		await Bun.write(
+			harness,
+			`set -euo pipefail
 source "$1"
 export AUGURSCAN_DATABASE_MODE=external
 export AUGURSCAN_RESTORE_URL='postgres://restore.invalid/augurscan_restore'
@@ -134,29 +132,64 @@ augurscan_curl() {
 }
 augurscan_verify_export_page() { printf '{"verified":true}\\n'; }
 augurscan_export_history`,
-					'augurscan-export-history-test',
-					exportScript,
-					exportDirectory,
-					dataset,
-					path.join(directory, 'claim-ready'),
-				],
-				{ cwd: projectRoot, env: processEnv(), stdout: 'pipe', stderr: 'pipe' },
-			)
-		const attempts = [exportDataset('logs'), exportDataset('timeline')]
-		const results = await Promise.all(attempts.map(async attempt => ({ status: await attempt.exited, stdout: await new Response(attempt.stdout).text(), stderr: await new Response(attempt.stderr).text() })))
+		)
+		// Bash owns the concurrent workers and records their real wait statuses. Keep
+		// worker results independent of Bun's concurrent subprocess handles.
+		const controller = Bun.spawn(
+			[
+				'bash',
+				'-c',
+				`set -euo pipefail
+export_harness=$1
+export_script=$2
+export_directory=$3
+result_directory=$4
+claim_barrier=$5
+run_export() {
+  local dataset=$1 result=$2 status=0
+  bash "$export_harness" "$export_script" "$export_directory" "$dataset" "$claim_barrier" > "$result_directory/$result.stdout" 2> "$result_directory/$result.stderr" || status=$?
+  printf '%s' "$status" > "$result_directory/$result.status"
+}
+run_export logs logs &
+logs_pid=$!
+run_export timeline timeline &
+timeline_pid=$!
+wait "$logs_pid"
+wait "$timeline_pid"
+run_export logs reuse`,
+				'augurscan-export-controller',
+				harness,
+				exportScript,
+				exportDirectory,
+				directory,
+				path.join(directory, 'claim-ready'),
+			],
+			{ cwd: projectRoot, env: processEnv(), stdout: 'ignore', stderr: 'pipe' },
+		)
+		const [controllerStatus, controllerErrors] = await Promise.all([controller.exited, new Response(controller.stderr).text()])
+		expect(controllerStatus, controllerErrors).toBe(0)
+		const readResult = async (name: string) => ({
+			status: Number(await readFile(path.join(directory, `${name}.status`), 'utf8')),
+			stdout: await readFile(path.join(directory, `${name}.stdout`), 'utf8'),
+			stderr: await readFile(path.join(directory, `${name}.stderr`), 'utf8'),
+		})
+		const results = await Promise.all(['logs', 'timeline'].map(readResult))
 		const published = results.filter(result => result.status === 0)
 		expect(published, JSON.stringify(results)).toHaveLength(1)
 		expect(published[0]?.stdout).toContain(`Validated export: ${exportDirectory}`)
 		const refused = results.filter(result => result.status !== 0)
 		expect(refused).toHaveLength(1)
+		expect(refused[0]?.status).toBe(1)
 		expect(refused[0]?.stdout).not.toContain('Validated export')
 		expect(refused[0]?.stderr).toContain('Use a new export directory')
 		const publishedDataset = results[0]?.status === 0 ? 'logs' : 'timeline'
 		expect(await readFile(path.join(exportDirectory, 'page-0', 'evidence.ndjson'), 'utf8')).toBe(`{"dataset":"${publishedDataset}"}\n`)
 		expect((await readdir(path.join(exportDirectory, 'page-0'))).sort()).toEqual(['evidence.ndjson', 'headers', 'validation.json'])
+		for (const dataset of ['logs', 'timeline']) expect(await readFile(path.join(directory, `claim-ready.${dataset}`), 'utf8')).toBe('')
 		// A later attempt cannot reuse the published directory either.
-		const reuse = exportDataset('logs')
-		expect(await reuse.exited).toBe(1)
+		const reuse = await readResult('reuse')
+		expect(reuse.status).toBe(1)
+		expect(reuse.stderr).toContain('Use a new export directory')
 	} finally {
 		await rm(directory, { recursive: true, force: true })
 	}
