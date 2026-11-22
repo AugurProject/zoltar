@@ -3,6 +3,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioPricePreparationRequest, buildPortfolioPriceRequest, loadPortfolioPriceSnapshot, quotePortfolioPriceFunding } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
+	statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
@@ -103,6 +104,8 @@ describe('Statoblast: child portfolio price preparation', () => {
 		expect(await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'feesEnabled', args: [context.child] })).toBe(false)
 		expect((await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'clocks', args: [context.child] }))[3]).toBe(false)
 		await expect(context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getPool', args: [fixture.base.questionId, context.child] })).rejects.toThrow('Question pool unavailable')
+		const [escrow] = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'reportCandidates', args: [report] })
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
 		expect(await context.balance(context.weth)).toBe(wethBefore)
 		expect(await context.balance(context.token)).toBe(repBefore)
 	})
@@ -121,6 +124,8 @@ describe('Statoblast: child portfolio price preparation', () => {
 		const late = await context.request(2n * unit)
 		await fixture.base.mockWindow.setTime(context.deadline)
 		await openOracleSettle(context.owner, late)
+		const [escrow] = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'reportCandidates', args: [late] })
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'reportOutcome', args: [late] })).toBe(2n)
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'lastPrice' })).toBe(unit)
 		expect(await context.balance(context.weth)).toBe(wethBefore)

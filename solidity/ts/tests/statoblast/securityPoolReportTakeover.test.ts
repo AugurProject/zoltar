@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact } from '../../types/contractArtifact'
+import { statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact, statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact } from '../../types/contractArtifact'
 import { encodeFunctionData, parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../../types/contractArtifact'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -127,7 +127,9 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		await context.finalize()
 		const ledger = { abi: capitalArtifact.abi, address: context.capital }
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ ...ledger, functionName: 'setCommitment', args: [5n * unit] }))
-		await context.report(5n * unit)
+		const reportId = await context.report(5n * unit)
+		const [escrow] = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'reportCandidates', args: [reportId] })
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
 		await context.mock.advanceTime(3601n)
 		const sponsor = createWriteClient(context.mock, TEST_ADDRESSES[2])
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: tokenArtifact.abi, address: context.token, functionName: 'transfer', args: [sponsor.account.address, 150n * unit] }))

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, maxUint256, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -15,11 +15,70 @@ import { applyLibraries, getInfraContractAddresses } from '../../testSupport/sim
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { deployChild, forkUniverse, getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { openOracleSettle } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { openOracleSettle, openOracleSettleWithGasPrice } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('ERC20 portfolio collateral', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
+	test.each(['callback', 'recovery'] as const)('#1502 blocked sponsor refunds cannot roll back %s acceptance', async mode => {
+		const owner = fixture.owner()
+		const other = fixture.other()
+		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: applyLibraries(tokenArtifact.evm.bytecode.object), args: [18] }))
+		const portfolio = await fixture.deployPortfolio(undefined, portfolioEconomics, { collateralToken: token })
+		await fixture.register(fixture.base.questionId, portfolio)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [owner.account.address, 1_000_000n * unit] }))
+		const address = await owner.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+		const feed = { abi: feedArtifact.abi, address }
+		const rep = getRepTokenAddress(fixture.base.genesisUniverse)
+		await approveToken(owner, token, address)
+		await approveToken(owner, rep, address)
+		const batchAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
+		const bounty = 3n * (await owner.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
+		const timestamp = (await owner.getBlock()).timestamp
+		const minimum = await owner.readContract({ ...feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [unit] })
+		await writeContractAndWait(owner, () =>
+			owner.writeContract({
+				abi: batchAbi,
+				address,
+				functionName: 'requestPortfolioPriceWithOperations',
+				args: [unit, minimum + 100n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 2_000n, operations: [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [15_000n] }) }] }],
+				value: bounty,
+			}),
+		)
+		const report = await owner.readContract({ ...feed, functionName: 'pendingReportId' })
+		const [escrow, , , ceiling] = await owner.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })
+		const escrowAbi = parseAbi(['function withdrawTokenFunding(address token,address recipient)'])
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setBlocked', args: [owner.account.address, true] }))
+		await fixture.base.mockWindow.advanceTime(481n)
+		if (mode === 'recovery') await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${(ceiling + 1n).toString(16)}`] })
+		await openOracleSettleWithGasPrice(other, report, mode === 'recovery' ? ceiling + 1n : ceiling)
+		if (mode === 'recovery') {
+			expect(await owner.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(0n)
+			await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+			await writeContractAndWait(other, () => other.writeContract({ ...feed, functionName: 'recoverReport', args: [report], gasPrice: ceiling }))
+		}
+		expect(await owner.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(1n)
+		expect(await owner.readContract({ ...feed, functionName: 'lastPrice' })).toBe(unit)
+		const capital = await owner.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'capitalLedger', args: [fixture.base.genesisUniverse] })
+		expect((await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [owner.account.address] })).targetHealthFactorBps).toBe(15_000n)
+		const withdraw = (sender: typeof owner, asset: typeof token, recipient: typeof token) => writeContractAndWait(sender, () => sender.writeContract({ abi: escrowAbi, address: escrow, functionName: 'withdrawTokenFunding', args: [asset, recipient] }))
+		await expect(withdraw(other, token, other.account.address)).rejects.toThrow('Invalid funding withdrawal')
+		await expect(withdraw(owner, token, zeroAddress)).rejects.toThrow()
+		await expect(withdraw(owner, token, escrow)).rejects.toThrow('Invalid funding withdrawal')
+		await expect(withdraw(owner, portfolio, other.account.address)).rejects.toThrow('Invalid funding withdrawal')
+		await expect(withdraw(owner, token, owner.account.address)).rejects.toThrow()
+		const balance = (asset: typeof token, holder: typeof token) => owner.readContract({ abi: tokenArtifact.abi, address: asset, functionName: 'balanceOf', args: [holder] })
+		const repBefore = await balance(rep, owner.account.address)
+		await withdraw(other, rep, owner.account.address)
+		expect(await balance(rep, owner.account.address)).toBeGreaterThan(repBefore)
+		const before = await balance(token, other.account.address)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [escrow, 7n] }))
+		await withdraw(owner, token, other.account.address)
+		expect(await balance(token, other.account.address)).toBe(before + minimum + 100n * unit + 7n)
+		await withdraw(owner, token, other.account.address)
+		expect(await balance(token, other.account.address)).toBe(before + minimum + 100n * unit + 7n)
+	})
+
 	test('rejects canonical REP collateral before deploying an unusable portfolio', async () => {
 		await expect(fixture.deployPortfolio(undefined, undefined, { collateralToken: getRepTokenAddress(fixture.base.genesisUniverse) })).rejects.toThrow('REP cannot be portfolio collateral')
 	})

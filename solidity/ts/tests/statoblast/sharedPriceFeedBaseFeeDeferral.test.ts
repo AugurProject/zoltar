@@ -117,7 +117,8 @@ describe('Statoblast: shared price feed defers settlements above the report base
 		expect(await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })).toBe(report)
 		expect(await sponsor.readContract({ ...feed, functionName: 'lastSettlementTimestamp' })).toBe(lastSettlementBefore)
 		expect(await freeAttoRep(sponsor.account.address)).toBe(3_000n * unit)
-		// OpenOracle settled the game and the escrow paid the final reporter's funds out.
+		// OpenOracle settled the game; refunds are a separate permissionless action.
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding', gasPrice: spike }))
 		const oracle = await sponsor.readContract({ ...feed, functionName: 'openOracle' })
 		expect(await sponsor.readContract({ abi: oracleArtifact.abi, address: oracle, functionName: 'tokenHolder', args: [escrow, weth] })).toBeLessThanOrEqual(1n)
 		const [, , , , settledAt] = await sponsor.readContract({ abi: oracleArtifact.abi, address: oracle, functionName: 'storedGame', args: [report] })
