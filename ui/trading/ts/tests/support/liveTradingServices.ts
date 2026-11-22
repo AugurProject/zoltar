@@ -1,4 +1,6 @@
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { PublicClient, Address } from '@zoltar/core-shared/evm/ethereum'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import type { MarketRegistry } from '../../features/live/useMarketRegistry.js'
@@ -9,7 +11,7 @@ import type { MarketRegistry } from '../../features/live/useMarketRegistry.js'
  */
 export const offlineControllerServices = {
 	...liveTradingControllerServices,
-	createTradingPublicClient: () => ({}),
+	createTradingPublicClient: () => testDouble<PublicClient>({}),
 	validateLiveDeployment: async () => undefined,
 	discoverTradingMarketPage: async (_client: unknown, _configuration: unknown, requestedUniverseId: bigint | undefined) => discoveryPage([], [requestedUniverseId ?? 0n], requestedUniverseId ?? 0n),
 }
@@ -41,11 +43,16 @@ export function connectedMarketServices(market: LiveMarket, account: Address, ch
 		discoverTradingMarketPage: async () => discoveryPage([{ ...market }]),
 		discoverSavedMarkets: async () => discoveryPage([{ ...market }]),
 		...connectedWalletServices(account, chainId),
-		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
+		createTradingWalletClient: () => testDouble<WriteClient>({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
 	}
 }
 
 /** An injected provider that accepts listeners and answers nothing, so the live controller can subscribe to wallet events. */
 export function installSilentInjectedWallet() {
 	Reflect.set(window, 'ethereum', { request: async () => undefined, on: () => undefined, removeListener: () => undefined })
+}
+
+/** Universe discovery has no loaded markets; individual market discovery supplies them later. */
+export function universeDiscoveryPage(universeIds: bigint[] = [1n], selectedUniverseId = 1n): Awaited<ReturnType<typeof liveTradingControllerServices.discoverUniverses>> {
+	return { ...discoveryPage([], universeIds, selectedUniverseId), markets: [] }
 }

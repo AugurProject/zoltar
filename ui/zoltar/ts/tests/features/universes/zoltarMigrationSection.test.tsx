@@ -265,17 +265,25 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(0)
 		q.getByRole('button', { name: 'Deploy 0 °C universe' }).click()
 		expect(deployments).toEqual([getScalarOutcomeIndex(question, 0n)])
-		await act(() => fireEvent.input(q.getByLabelText('Scalar value'), { target: { value: '100' } }))
+		await act(() => {
+			fireEvent.input(q.getByLabelText('Scalar value'), { target: { value: '100' } })
+		})
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(1)
 		// A scalar outcome's packed index is not shown; its child universe ID identifies it.
 		q.getByRole('button', { name: '100 °C · 0x2' }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [maxIndex] }])
 		expect(q.getByRole('link', { name: 'Open 100 °C universe' }).getAttribute('href')).toBe(getUniverseLinkHref(child.universeId))
-		await act(() => fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '101' } }))
+		await act(() => {
+			fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '101' } })
+		})
 		expect(q.queryByRole('button', { name: /^Deploy .* universe$/ })).toBeNull()
-		await act(() => q.getByRole('textbox', { name: 'Scalar value' }).dispatchEvent(new Event('blur')))
+		await act(() => {
+			q.getByRole('textbox', { name: 'Scalar value' }).dispatchEvent(new Event('blur'))
+		})
 		expect(document.body.textContent).toContain('Enter a value between the minimum and maximum that falls on an increment.')
-		await act(() => fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' })))
+		await act(() => {
+			fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' }))
+		})
 		q.getByRole('button', { name: 'Deploy Invalid universe' }).click()
 		expect(deployments.at(-1)).toBe(0n)
 	})
@@ -290,10 +298,14 @@ describe('ZoltarMigrationSection', () => {
 		const q = within(document.body)
 		expect(q.getByRole('button', { name: 'Deploy 0 °C universe' }).hasAttribute('disabled')).toBe(true)
 		await waitFor(() => expect(reads.at(-1)).toEqual([selectedIndex, getScalarOutcomeIndex(question, 0n)]))
-		await act(() => fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '101' } }))
+		await act(() => {
+			fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '101' } })
+		})
 		await waitFor(() => expect(reads.at(-1)).toEqual([selectedIndex]))
 		expect(q.queryByRole('button', { name: 'Deploy 0 °C universe' })).toBeNull()
-		await act(() => fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' })))
+		await act(() => {
+			fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' }))
+		})
 		await waitFor(() => expect(reads.at(-1)).toEqual([selectedIndex, 0n]))
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(0)
 	})
@@ -321,8 +333,12 @@ describe('ZoltarMigrationSection', () => {
 		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }), zoltarMigrationForm: createForm({ outcomeIndexes: [index] }), onZoltarMigrationFormChange: update => updates.push(update) })))
 		cleanupRenderedComponent = rendered.cleanup
 		const q = within(document.body)
-		await act(() => fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '10' } }))
-		await act(() => fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '1' } }))
+		await act(() => {
+			fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '10' } })
+		})
+		await act(() => {
+			fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '1' } })
+		})
 		expect(q.getByRole('button', { name: 'Remove 50 °C · 0x2' })).toBeTruthy()
 		expect(q.getByRole('button', { name: 'Deploy 5 °C universe' })).toBeTruthy()
 		expect(q.getByText('Not deployed')).toBeTruthy()
@@ -534,7 +550,7 @@ describe('ZoltarMigrationSection', () => {
 	test('offers the network switch fix on Migrate instead of the hint text', async () => {
 		const calls: string[] = []
 		const walletActions = { isConnectingWallet: false, isManagingWallet: false, onConnect: () => calls.push('connect'), onSwitchNetwork: () => calls.push('switch') }
-		const rendered = await renderIntoDocument(h(WalletActionsProvider, { walletActions }, h(ZoltarMigrationSection, createProps({ isOnActiveAppChain: false }))))
+		const rendered = await renderIntoDocument(h(WalletActionsProvider, { walletActions, children: h(ZoltarMigrationSection, createProps({ isOnActiveAppChain: false })) }))
 		cleanupRenderedComponent = rendered.cleanup
 		await openStep('Review')
 		expectTransactionButtonDisabled(document.body, 'Migrate REP')

@@ -1,3 +1,4 @@
+import { isRecoveryWorkflowStatus, obligationRequiresRecovery } from './recovery-status.ts'
 import { quorumRpcRow, renderExecutionMode, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
 import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -50,8 +51,6 @@ function integerAmount(value: string | number | undefined) {
 	const text = value === undefined ? '' : String(value)
 	return /^\d+$/.test(text) ? BigInt(text) : undefined
 }
-
-const ACTIVE_WORKFLOW_STATUSES = new Set(['running', 'waiting-continuation', 'waiting-obligation', 'waiting-transaction'])
 
 /** The reserve rules the operator file enforces for live mode: positive reserves and an ETH floor of one gas budget. */
 function reservePolicyRow(configuration: GoLiveConfiguration): ReadinessRow {
@@ -115,7 +114,7 @@ function readinessRows(snapshot: GoLiveSnapshot, configuration: GoLiveConfigurat
 	if (configuration.networkConfigured === true) rpcDetail = snapshot.rpcHealth.chainReady === true ? `Ready for ${snapshot.network ?? 'the configured chain'}` : 'Read quorum is not healthy yet'
 	let signerDetail = 'Set one under Transaction signer'
 	if (signer) signerDetail = wallet === undefined ? 'Configured' : shorten(wallet)
-	const recovery = snapshot.pendingTransactions.length + snapshot.obligations.length + snapshot.workflows.filter(workflow => workflow.status !== undefined && ACTIVE_WORKFLOW_STATUSES.has(workflow.status)).length
+	const recovery = snapshot.pendingTransactions.length + snapshot.obligations.filter(obligationRequiresRecovery).length + snapshot.workflows.filter(workflow => isRecoveryWorkflowStatus(workflow.status)).length
 	return [
 		{ detail: paused ? 'Paused' : 'Pause the bot before changing execution mode', label: 'Bot paused', ready: paused },
 		{ detail: signerDetail, label: 'Transaction signer', ready: signer },

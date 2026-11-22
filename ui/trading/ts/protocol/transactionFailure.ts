@@ -6,7 +6,7 @@ export type TransactionFailureExplanation = Readonly<{ cause: string; nextStep: 
 
 type RevertExplanation = TransactionFailureExplanation & Readonly<{ reasons: readonly string[] }>
 
-const SLIPPAGE_REASONS = ['Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed estimate no longer satisfies']
+const SLIPPAGE_REASONS = ['Purchase fee exceeds budget', 'Minimum REP output', 'Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed estimate no longer satisfies']
 
 // Contracts revert with plain strings (see solidity/contracts/trading and SecurityPool); each group shares one explanation.
 const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
@@ -20,19 +20,18 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 	// The router refuses an expired or already used liquidity permit before the pair checks the deadline.
 	{ reasons: ['LP permit or allowance'], cause: 'The liquidity permit expired or was already used.', nextStep: 'Try again to sign a new permit, or allow more time in Settings.' },
 	{
-		reasons: ['Question ended', 'Question resolved', 'Universe forked', 'Fork continuation pending', 'Pool inactive', 'Forked', 'Fork await', 'Fork paused'],
+		reasons: ['Question ended', 'Question resolved', 'Universe forked', 'Fork continuation pending', 'Pool inactive', 'Forked', 'Fork await'],
 		cause: 'Trading has ended for this market.',
 		nextStep: 'Reload the market to see its current status.',
 	},
-	{ reasons: ['Over capacity'], cause: 'The security pool does not have enough minting capacity for this size.', nextStep: 'Try a smaller amount.' },
-	{ reasons: ['Collateral low', 'Vault backing insufficient'], cause: 'The security pool does not have enough backing for this size.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Purchase exceeds healthy capacity'], cause: 'The security pool does not have enough minting capacity for this size.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Portfolio backing insufficient'], cause: 'The security pool does not have enough backing for this size.', nextStep: 'Try a smaller amount.' },
 	{
-		reasons: ['Insufficient output', 'Net input is zero', 'Input is zero', 'ETH input is zero', 'Complete set is zero', 'Liquidity rounds to zero', 'Liquidity output is zero', 'Liquidity is zero', 'Initial reserves round to zero', 'Initial liquidity too small'],
+		reasons: ['Insufficient output', 'Net input is zero', 'Input is zero', 'Complete set is zero', 'Exchange rate undefined', 'Liquidity rounds to zero', 'Liquidity output is zero', 'Liquidity is zero', 'Initial reserves round to zero', 'Initial liquidity too small'],
 		cause: 'The amount is too small to trade.',
 		nextStep: 'Enter a larger amount.',
 	},
 	{ reasons: ['Invalid output', 'Balance below reserve'], cause: 'The market does not have enough liquidity for an order this large.', nextStep: 'Try a smaller amount.' },
-	{ reasons: ['Exchange rate undefined'], cause: 'The security pool has no collateral rate yet.', nextStep: 'Wait for the security pool to be funded, then try again.' },
 	{ reasons: ['Already initialized'], cause: 'Someone already added the first liquidity.', nextStep: 'Reload the market and add liquidity instead.' },
 ]
 

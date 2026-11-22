@@ -100,7 +100,6 @@ function prepareProtocolIndexCollections(index: ChaosProtocolIndex) {
 	const prepared: PreparedProtocolIndexCollections = {
 		'auction-bids': prepareCollection('auction-bids', auctionBidRecords(index), budget),
 		'auction-refunds': prepareCollection('auction-refunds', auctionRefundRecords(index), budget),
-		'child-routes': prepareCollection('child-routes', index.childRepSplits, budget),
 		'escalation-deposits': prepareCollection('escalation-deposits', index.escalationDeposits, budget),
 		'migration-routes': prepareCollection('migration-routes', index.migrationRepSplits, budget),
 		reports: prepareCollection('reports', index.reports, budget),
@@ -108,7 +107,6 @@ function prepareProtocolIndexCollections(index: ChaosProtocolIndex) {
 	const commitments: Record<CollectionKind, CollectionCommitment> = {
 		'auction-bids': prepared['auction-bids'].commitment,
 		'auction-refunds': prepared['auction-refunds'].commitment,
-		'child-routes': prepared['child-routes'].commitment,
 		'escalation-deposits': prepared['escalation-deposits'].commitment,
 		'migration-routes': prepared['migration-routes'].commitment,
 		reports: prepared.reports.commitment,
@@ -201,7 +199,6 @@ async function loadProtocolIndexGeneration(statePath: string, reference: Protoco
 		...manifest.identity,
 		auctionBids: auctionBidRecord(loaded.auctionBids),
 		auctionRefunds: auctionRefundRecord(loaded.auctionRefunds),
-		childRepSplits: loaded.childRepSplits,
 		escalationDeposits: loaded.escalationDeposits,
 		migrationRepSplits: loaded.migrationRepSplits,
 		reports: loaded.reports,
@@ -231,7 +228,6 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 	const collections: Record<CollectionKind, CollectionCommitment> = {
 		'auction-bids': preparedCollections['auction-bids'].commitment,
 		'auction-refunds': preparedCollections['auction-refunds'].commitment,
-		'child-routes': preparedCollections['child-routes'].commitment,
 		'escalation-deposits': preparedCollections['escalation-deposits'].commitment,
 		'migration-routes': preparedCollections['migration-routes'].commitment,
 		reports: preparedCollections.reports.commitment,
@@ -240,7 +236,7 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 		chainId: parsed.chainId,
 		cursor: parsed.cursor,
 		openOracle: parsed.openOracle,
-		schemaVersion: 4,
+		schemaVersion: 5,
 		securityPoolForker: parsed.securityPoolForker,
 		startBlock: parsed.startBlock,
 		...(parsed.availableStartBlock === undefined ? {} : { availableStartBlock: parsed.availableStartBlock }),

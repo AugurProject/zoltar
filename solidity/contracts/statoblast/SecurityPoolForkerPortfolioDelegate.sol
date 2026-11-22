@@ -12,6 +12,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
+import { Constants } from '../Constants.sol';
 
 /// @notice Materialize one question directly from its last live source game.
 /// @dev Portfolio assets already migrated at branch level. No per-question collateral
@@ -53,7 +54,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 		if (game.getFinalQuestionResolution() == BinaryOutcomes.BinaryOutcome.None) return;
 		uint248 universe = child.universeId();
 		uint48 finalAfter = portfolio.portfolioTimeForNative(universe, CheckedCast.toUint48(game.getEscalationGameEndDate()));
-		uint48 minimum = portfolio.portfolioTimeForNative(universe, 0) + 3 days;
+		uint48 minimum = portfolio.portfolioTimeForNative(universe, 0) + Constants.FORK_RESPONSE_DELAY;
 		(SecurityPoolReporterLedger.Question memory reporter, ) = SecurityPoolReporterLedger(portfolio.reporterLedger(universe)).question(universe, child.questionId());
 		require(reporter.finalAfter != 0 && (reporter.finalAfter > minimum ? reporter.finalAfter : minimum) == finalAfter, 'Reporter continuation finality mismatch');
 		SecurityPoolPortfolioSettlement settlement = SecurityPoolPortfolioSettlement(portfolio.settlement());
@@ -168,7 +169,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 		require(!isFixed || fixedValue < uint256(BinaryOutcomes.BinaryOutcome.None), 'Unsupported inherited reporter outcome');
 		uint48 anchor = portfolio.portfolioTimeForNative(pool.universeId(), 0);
 		return
-			isFixed && portfolio.portfolioTime(pool.universeId()) > anchor + 3 days
+			isFixed && portfolio.portfolioTime(pool.universeId()) > anchor + Constants.FORK_RESPONSE_DELAY
 				? BinaryOutcomes.BinaryOutcome(fixedValue)
 				: BinaryOutcomes.BinaryOutcome.None;
 	}

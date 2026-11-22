@@ -415,7 +415,7 @@ CREATE TABLE public.pool_snapshots (
     reason integer NOT NULL,
     settlement_collateral_atto_eth numeric(78,0) NOT NULL,
     share_token_supply_atto_shares numeric(78,0) NOT NULL,
-    last_settlement_portfolio_time timestamp with time zone NOT NULL,
+    last_settlement_portfolio_time numeric(78,0) NOT NULL,
     canonical boolean DEFAULT true NOT NULL
 );
 
@@ -823,6 +823,12 @@ ALTER TABLE ONLY public.open_oracle_report_events
 --
 -- Name: pool_snapshots pool_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
+
+ALTER TABLE ONLY public.pool_snapshots
+    ADD CONSTRAINT pool_snapshots_reason_check CHECK (((reason >= 0) AND (reason <= 2)));
+
+ALTER TABLE ONLY public.pool_snapshots
+    ADD CONSTRAINT pool_snapshots_portfolio_time_check CHECK ((last_settlement_portfolio_time >= (0)::numeric));
 
 ALTER TABLE ONLY public.pool_snapshots
     ADD CONSTRAINT pool_snapshots_pkey PRIMARY KEY (chain_id, block_hash, tx_hash, log_index, pool_address);

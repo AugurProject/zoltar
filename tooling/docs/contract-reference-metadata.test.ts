@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
 import { assertAccountingExampleOwnership } from './check-docs-example-ownership.mts'
-import { entrypointSignaturesBySource, fallbackRoutedEntrypointSignatures, interfaceEntrypointExclusionsBySource, readDeclarationExclusionsBySource, stateChangingAbiFingerprintBySource } from './contract-reference-abi-surface.mts'
+import { assertCoordinatorDataFunctionInventory, entrypointSignaturesBySource, fallbackRoutedEntrypointSignatures, interfaceEntrypointExclusionsBySource, readDeclarationExclusionsBySource, stateChangingAbiFingerprintBySource } from './contract-reference-abi-surface.mts'
 import { delegateEventDeclarationMirrors, documentedEventSchemas } from './contract-reference-event-schemas.mts'
 import { renderAccountingExamples } from './contract-reference-examples.mts'
 import { contractReferences } from './contract-reference-metadata.mts'
@@ -26,6 +26,14 @@ test('coordinator metadata retains ABI event indexing and source enum values', (
 	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify(data), artifacts, source)).not.toThrow()
 	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify({ ...data, eventDeclarations: { CoordinatorStateCheckpoint: 'CoordinatorStateCheckpoint(uint256 reportId)' } }), artifacts, source)).toThrow('event declarations')
 	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify(data), artifacts, 'enum Operation { None, Withdraw }')).toThrow('enum values')
+})
+
+test('coordinator function inventory requires every signature and exact mutability', () => {
+	const data = { functions: { collateralToken: 'view' }, functionSignatures: { collateralToken: 'collateralToken()' } }
+	const artifacts = { contracts: { 'contracts/statoblast/OpenOraclePriceCoordinator.sol': { OpenOraclePriceCoordinator: { abi: [{ type: 'function', name: 'collateralToken', stateMutability: 'view', inputs: [] }] } } } }
+	expect(() => assertCoordinatorDataFunctionInventory(JSON.stringify(data), artifacts)).not.toThrow()
+	expect(() => assertCoordinatorDataFunctionInventory(JSON.stringify({ ...data, functionSignatures: {} }), artifacts)).toThrow('signature inventory must exactly match')
+	expect(() => assertCoordinatorDataFunctionInventory(JSON.stringify({ ...data, functions: { collateralToken: 'nonpayable' } }), artifacts)).toThrow('mutability must match')
 })
 
 test('ABI readers reject incomplete artifacts and keep fallback selectors within their body', () => {

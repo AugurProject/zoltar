@@ -32,10 +32,9 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 	const pending = current.pendingOperationReport
 	if (pending === undefined) return 'none'
 	const [amount1, amount2, reporter, reportedAt, settledAt, token1, oppoTime, settlementTime, halt, recipient, bounty, token2, count, delay, fee, multiplier, callback, callbackGas, protocolFee, flags] = pending.game
-	// A settled report past its validity window is retired by recoverReport at any base fee,
-	// releasing the sponsor's escrow, so its recovery never waits for the settlement ceiling.
-	const staleRecovery = settledAt !== 0n && current.snapshot.timestamp >= pending.staleAt
-	if (!staleRecovery && initial.details > pending.maxSettlementBaseFee) return 'waiting'
+	// Recovery can execute canonical operations when a candidate is rejected. Keep its
+	// settlement ceiling even when the candidate's own price window has closed.
+	if (initial.details > pending.maxSettlementBaseFee) return 'waiting'
 	if (!current.selected || !current.approvedUniverse || !settings.runtime.execute || !settings.portfolioPolicy.allowFundedTakeovers) return 'waiting'
 	if (settledAt === 0n && current.snapshot.timestamp < reportedAt + settlementTime) return 'waiting'
 	const request =
@@ -51,13 +50,11 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 					}),
 				}
 	const gas = settledAt !== 0n ? 'estimate' : callbackGas + callbackGas / 63n + 350_000n
-	let label = 'Settle sponsored takeover report'
-	if (staleRecovery) label = 'Retire stale sponsored report'
-	else if (settledAt !== 0n) label = 'Recover settled sponsored report'
+	const label = settledAt === 0n ? 'Settle sponsored takeover report' : 'Recover settled sponsored report'
 	const revalidate = async () => {
 		const refreshed = await refresh()
 		const next = refreshed.observation.pendingOperationReport
-		if (next !== undefined && !staleRecovery && refreshed.details > next.maxSettlementBaseFee) throw new PortfolioOpportunityExpired('Report settlement base fee exceeds its ceiling')
+		if (next !== undefined && refreshed.details > next.maxSettlementBaseFee) throw new PortfolioOpportunityExpired('Report settlement base fee exceeds its ceiling')
 		if (next === undefined || next.id !== pending.id || next.game.some((value, index) => value !== pending.game[index])) throw new PortfolioOpportunityExpired('Sponsored report changed before settlement')
 	}
 	if (current.walletAttoEth < settings.strategy.maximumGasCostAttoEth + settings.portfolioPolicy.walletReserveAttoEth) throw new PortfolioOpportunityExpired('Report settlement would consume ETH reserve')
@@ -69,7 +66,7 @@ export async function executePendingPortfolioReport(wallet: Wallet, settings: Op
 		{
 			...request,
 			gas,
-			maxFeePerGasCap: staleRecovery ? undefined : pending.maxSettlementBaseFee,
+			maxFeePerGasCap: pending.maxSettlementBaseFee,
 			reportOperations: { feed: current.snapshot.priceFeed, reportId: pending.id },
 			label,
 			preSubmit: revalidate,

@@ -77,6 +77,21 @@ describe('routing', () => {
 		expect(routing.getHash('portfolio')).toBe('#/portfolio')
 	})
 
+	test('the mounted route resolves the same normalized hash as the typed router', () => {
+		const routes = [
+			{ hash: '#/zoltar', name: 'zoltar' },
+			{ hash: '#/deploy', name: 'deploy' },
+		] as const
+		const routing = createRouting({ defaultRoute: 'zoltar', routes })
+		installRouting({ defaultRoute: 'zoltar', routes })
+		for (const hash of ['#deploy', '#deploy?simulate=1', '#/deploy', 'deploy']) {
+			window.location.hash = hash
+			expect(getCurrentRoute()).toBe(routing.resolve(hash))
+			expect(getCurrentRoute()).toBe('deploy')
+			expect(getCurrentRouteHash()).toBe('#/deploy')
+		}
+	})
+
 	test('ensureRouteHash seeds default hash when blank', () => {
 		window.location.hash = ''
 		const lengthBefore = window.history.length
@@ -105,6 +120,10 @@ describe('routing', () => {
 
 	test('preserves custom RPC configuration across top-level routes', () => {
 		expect(getTopLevelRouteSearch('deploy', '?rpcUrl=https%3A%2F%2Frpc.example&zoltarView=create')).toBe('?rpcUrl=https%3A%2F%2Frpc.example')
+	})
+
+	test('keeps the simulated wallet mode across top-level routes', () => {
+		expect(getTopLevelRouteSearch('deploy', '?simulate=1&simWallet=disconnected&zoltarView=create')).toBe('?simulate=1&simWallet=disconnected')
 	})
 
 	test('preserves the chosen genesis universe across app routes', () => {

@@ -1,3 +1,4 @@
+import { DEFAULT_SIMULATION_REP_PER_ETH_PRICE, DEFAULT_SIMULATION_USDC_PER_REP_PRICE } from './repPrices.js'
 import type { SimulationEngine } from './simulationEngineTypes.js'
 import { parseScenarioSnapshot } from './preparedScenarioSnapshot.js'
 import {
@@ -31,8 +32,6 @@ import type { SimulationBootstrapParameters, SimulationWorkerState } from './tev
 const QA_ACCOUNTS = [getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000b2'), getAddress('0x00000000000000000000000000000000000000c3')] as const satisfies readonly Address[]
 type RequestArguments = SimulationProviderRequest
 type SerializedTransaction = Parameters<typeof recoverTransactionAddress>[0]['serializedTransaction']
-const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
-const DEFAULT_SIMULATION_REP_PER_USDC_PRICE = 10n ** 6n
 function getInitializationScenario(initialization: SimulationInitialization): SimulationScenario {
 	return initialization.kind === 'scenario' ? initialization.scenario : initialization.envelope.baseScenario
 }
@@ -65,7 +64,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 	let currentTimestamp = 0n
 	let queryDelayMilliseconds = 0
 	let repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
-	let repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
+	let repPerUsdcPrice = DEFAULT_SIMULATION_USDC_PER_REP_PRICE
 	/** The prepared state a scenario bootstrap restored, so a reset restores it again instead of seeding. */
 	let scenarioSnapshot: SavedSimulationStateEnvelopeV1 | undefined
 	let selectedAccount = primaryAccount
@@ -102,7 +101,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 			})
 		})
 	}
-	const patchSimulationGenesisRepToken = async ({ zoltarAddress }: { zoltarAddress: Address }) => {
+	const patchSimulationGenesisRepToken = async ({ repAddress, zoltarAddress }: { repAddress: Address; zoltarAddress: Address }) => {
 		await applyTemporarySimulationAccountChanges(profile, {
 			accountsToCopy: [{ address: zoltarAddress, mode: 'storage' }],
 			chain,
@@ -110,7 +109,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 				await updateZoltarGenesisRepToken({
 					createWriteClient,
 					memoryClient: temporaryMemoryClient,
-					repAddress: profile.genesisRepTokenAddress,
+					repAddress,
 					zoltarAddress,
 				})
 			},
@@ -360,6 +359,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		}
 		if (resetChain) {
 			chain = await createSimulationChain(profile)
+			transactionCountSinceReset = 0n
 			impersonatedAccounts.clear()
 			await initializeSimulationAccounts()
 		}
@@ -516,7 +516,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 					selectedAccount = primaryAccount
 					transactionCountSinceReset = baselineTransactionCount
 					repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
-					repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
+					repPerUsdcPrice = DEFAULT_SIMULATION_USDC_PER_REP_PRICE
 					queryDelayMilliseconds = 0
 					transactionDelayMilliseconds = 1000
 					await refreshSimulationState()
@@ -541,12 +541,12 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 			emitState()
 		},
 		setRepPerEthPrice: value => {
-			if (value <= 0n) throw new Error('Simulation REP/ETH price must be greater than zero')
+			if (value <= 0n) throw new Error('Simulation REP per ETH price must be greater than zero')
 			repPerEthPrice = value
 			emitState()
 		},
 		setRepPerUsdcPrice: value => {
-			if (value <= 0n) throw new Error('Simulation REP/USDC price must be greater than zero')
+			if (value <= 0n) throw new Error('Simulation USDC per REP price must be greater than zero')
 			repPerUsdcPrice = value
 			emitState()
 		},

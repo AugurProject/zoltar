@@ -5,7 +5,10 @@ import {
 	formatAdditionalCurrencyBalance,
 	formatAmount,
 	formatAmountDisplay,
+	formatBlockTimestampWithRelative,
 	formatCeilingAmount,
+	formatCeilingAmountDisplay,
+	formatCeilingApprovalLabel,
 	formatCurrencyBalanceWithUnit,
 	formatCurrencyInputBalance,
 	formatDuration,
@@ -16,6 +19,7 @@ import {
 	formatRoundedCurrencyBalance,
 	formatScaledPercentage,
 	formatTimestamp,
+	formatTimestampWithRelative,
 	formatTrimmedUnits,
 	formatUnitSuffix,
 	formatValueWithUnit,
@@ -40,6 +44,21 @@ void describe('formatting helpers', () => {
 		[2n ** 256n - 1n, 0],
 	])('omits approval amounts beyond compact suffixes instead of using scientific notation: %s', (amount, units) => {
 		expect(formatCeilingAmount(amount, units)).toBeUndefined()
+	})
+
+	test.each([
+		[100001n, 2, '1\u00a0000.01'],
+		[123456n, 2, '1\u00a0234.56'],
+		[123000n, 2, '1.23k'],
+		[450_000n * 10n ** 18n, 18, '450k'],
+		[121_153_846_238_653_846n, 18, '≈ 0.13'],
+		[150n, 2, '1.5'],
+		[1791988085676923080n, 18, '≈ 1.8'],
+	])('names approval %s with %s units without overstating the standard ceiling requirement', (amount, units, label) => {
+		expect(formatCeilingApprovalLabel(amount, units)).toBe(label)
+		const requirement = formatCeilingAmountDisplay(amount, units)
+		const parse = (text: string) => Number.parseFloat(text.replace('≈ ', '').replaceAll('\u00a0', '').replace('k', 'e3'))
+		expect(parse(label)).toBe(parse(requirement))
 	})
 
 	test('rejects invalid approval formatting inputs', () => {
@@ -190,6 +209,13 @@ void describe('formatting helpers', () => {
 			expect(formatUnitSuffix('×')).toBe('×')
 			expect(formatUnitSuffix('ETH')).toBe(' ETH')
 		})
+
+		void test('plain-string units follow the same attachment rule as the suffix helper', () => {
+			expect(formatValueWithUnit('50', '%')).toBe('50%')
+			expect(formatValueWithUnit('2.5', '×')).toBe('2.5×')
+			expect(formatValueWithUnit('50', '')).toBe('50')
+			expect(formatValueWithUnit('50', 'ETH')).toBe('50\u00a0ETH')
+		})
 	})
 
 	void describe('timestamp formatting', () => {
@@ -198,8 +224,8 @@ void describe('formatting helpers', () => {
 		})
 
 		void test('formatLocalTimestamp renders the viewer zone in the UTC layout and nothing when it matches UTC', () => {
-			expect(formatLocalTimestamp(1_700_000_000n, 'America/New_York')).toBe('2023-11-14 17:13:20 EST')
-			expect(formatLocalTimestamp(1_700_000_000n, 'Asia/Kolkata')).toBe('2023-11-15 03:43:20 GMT+5:30')
+			expect(formatLocalTimestamp(1_700_000_000n, 'America/New_York')).toBe('2023-11-14 17:13:20 UTC-5')
+			expect(formatLocalTimestamp(1_700_000_000n, 'Asia/Kolkata')).toBe('2023-11-15 03:43:20 UTC+5:30')
 			expect(formatLocalTimestamp(1_700_000_000n, 'UTC')).toBeUndefined()
 			expect(formatLocalTimestamp(1_700_000_000n, 'Europe/London')).toBeUndefined()
 			expect(formatLocalTimestamp(10n ** 30n, 'America/New_York')).toBeUndefined()
@@ -207,6 +233,12 @@ void describe('formatting helpers', () => {
 
 		void test('formatTimestamp preserves the immediate sentinel', () => {
 			expect(formatTimestamp(0n)).toBe('Immediate')
+		})
+
+		void test('the immediate sentinel carries no relative time, while a literal block timestamp of zero is the epoch', () => {
+			expect(formatTimestampWithRelative(0n, 86_400n)).toBe('Immediate')
+			expect(formatTimestampWithRelative(86_400n, 86_460n)).toBe('1970-01-02 00:00:00 UTC (1m ago)')
+			expect(formatBlockTimestampWithRelative(0n, 86_400n)).toBe('1970-01-01 00:00:00 UTC (1d ago)')
 		})
 
 		void test('formatRelativeTimestamp renders now for an exact match', () => {

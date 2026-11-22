@@ -50,7 +50,7 @@ function createQuestionData(form: MarketFormState): QuestionData {
 			assertNever(form.marketType)
 	}
 	if (questionData.title === '') throw new Error('Title is required.')
-	if (questionData.endTime <= questionData.startTime) throw new Error('End time must be after start time.')
+	if (questionData.endTime < questionData.startTime) throw new Error('End time must be at or after start time.')
 	return questionData
 }
 function normalizeReservedOutcomeLabel(label: string) {
@@ -61,7 +61,7 @@ function normalizeOutcomeLabel(label: string) {
 	return label.trim()
 }
 function getMissingRequiredCategoricalOutcomeLabels(form: MarketFormState) {
-	return [0, 1].filter(index => normalizeOutcomeLabel(form.categoricalOutcomes[index] ?? '') === '').map(index => zoltarCopy.formatUnnamedOutcome(index + 1))
+	return [0].filter(index => normalizeOutcomeLabel(form.categoricalOutcomes[index] ?? '') === '').map(index => zoltarCopy.formatUnnamedOutcome(index + 1))
 }
 function getRequiredCategoricalOutcomeMessage(missingOutcomeLabels: string[]) {
 	if (missingOutcomeLabels.length === 1) return `${missingOutcomeLabels[0]} is required.`
@@ -153,8 +153,8 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			invalidMessages.push(message)
 		}
 	}
-	if (parsedEndTime !== undefined && parsedEndTime <= parsedStartTime) {
-		const message = 'End time must be after start time.'
+	if (parsedEndTime !== undefined && parsedEndTime < parsedStartTime) {
+		const message = 'End time must be at or after start time.'
 		if (startTime !== '') setFieldError(fieldErrors, 'startTime', message)
 		setFieldError(fieldErrors, 'endTime', message)
 		invalidMessages.push(message)

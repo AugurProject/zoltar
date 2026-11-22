@@ -27,7 +27,7 @@
 				<pre class="code-scroll" tabindex="0"><code>docker network inspect zoltar &gt;/dev/null 2&gt;&amp;1 \
   || docker network create zoltar
 docker compose up --build --force-recreate</code></pre>
-				<p>Then open <code>http://localhost:4163/#/market</code>. On Windows, <code>ui/trading/start.bat</code> runs the same Compose command. The final image runs as an unprivileged user and exposes a health check at <code>/</code>. The Docker image copies the core deployment addresses from <code>docs/mainnet-deployment-addresses.json</code> and <code>docs/sepolia-deployment-addresses.json</code>.</p>
+				<p>Then open <code>http://localhost:4163/#/market</code>. On Windows, <code>ui/trading/start.bat</code> runs the same Compose command. The final image runs as an unprivileged user and exposes a health check at <code>/</code>. The Docker image copies all four core deployment manifests: the Yes and No deployments on Mainnet and Sepolia. See <a href="../reference/trading/configuration.html">configuration</a> for their paths.</p>
 			</section>
 			<section id="external-node">
 				<h2>Test transactions against an external node</h2>

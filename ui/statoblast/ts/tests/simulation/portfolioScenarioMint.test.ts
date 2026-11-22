@@ -17,6 +17,8 @@ test('portfolio simulation mints use each funded purchase quote, including fees 
 		readContract: async parameters => {
 			expect(parameters.blockNumber).toBe(52n)
 			switch (parameters.functionName) {
+				case 'questionOriginIds':
+					return hash
 				case 'getPool':
 					return owner
 				case 'capitalLedger':

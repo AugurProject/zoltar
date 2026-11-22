@@ -9,7 +9,7 @@ import { checkSubmissionEndpoints } from '@zoltar/bot-shared/monitoring/connecti
 import { applyExecutionMode, assertLiveExecutionReadiness, parseExecutionRequest } from './execution-mode.ts'
 import { commitSignerMutation } from './signer-mutation.ts'
 
-export const PENDING_SIGNER_RECOVERY = 'Resolve pending transaction and staged-operation recovery before changing the signer'
+export const PENDING_SIGNER_RECOVERY = 'Resolve pending transaction recovery before changing the signer'
 
 export const PENDING_INTENT_MODE_CHANGE = 'The delivery mode cannot change while a pending transaction sent under the current mode awaits recovery'
 
@@ -126,7 +126,7 @@ export function createGoLiveControls({ activePrivateKey, applySigner, locks, per
 				// transaction that was signed for private relays (or vice versa) until that intent has been resolved.
 				const pendingOtherMode = state.pendingTransactions.filter(intent => intent.mode !== submission.mode).length
 				if (pendingOtherMode > 0) throw new Error(PENDING_INTENT_MODE_CHANGE)
-				await checkSubmissionEndpoints(submission, settings().network.chainId)
+				await checkSubmissionEndpoints(submission, settings().network.chainId, ['eth_sendPrivateTransaction'])
 				await persist(current => ({ ...current, submission }))
 				recordActivity(state, {
 					details: `mode=${submission.mode} relays=${submission.relayUrls.length.toString()}`,

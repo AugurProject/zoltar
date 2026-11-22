@@ -6,8 +6,10 @@ import { resolveDevServerPort } from './devServerPort.mts'
 const appId = parseUiAppIdFromProcess('the development server')
 const { appRoot: uiRootDirectory, repositoryRoot: repositoryRootDirectory } = getUiAppPaths(appId)
 
+const coreDeploymentRegistry = appId === 'trading' ? (await import('../../ui/trading/build/core-deployments.mts')).readCoreDeploymentRegistry : undefined
+
 const server = http.createServer()
-server.on('request', createDevServerRequestHandler({ repositoryRootDirectory, uiRootDirectory }))
+server.on('request', createDevServerRequestHandler({ repositoryRootDirectory, uiRootDirectory, coreDeploymentRegistry }))
 
 const port = resolveDevServerPort(appId)
 // Repository files and live reload are intended only for local development.

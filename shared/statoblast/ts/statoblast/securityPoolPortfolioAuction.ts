@@ -42,8 +42,19 @@ export function portfolioAuctionOpeningReason(snapshot: PortfolioAuctionSnapshot
 	const price = auction.price
 	if (price === undefined || price.lastSettlementTimestamp === 0n || price.lastSettlementTimestamp > snapshot.timestamp || price.validUntil <= snapshot.timestamp || price.conservativePrice === 0n) return 'Accept a fresh branch REP price report first.'
 	if (price.exposureLimitAttoEth < price.requiredExposureAttoEth || price.exposureLimitAttoRep < auction.inventoryAttoRep) return 'The price report must cover the branch collateral exposure and auction REP inventory.'
-	const requiredBase = ceilDiv(auction.lotAttoEth * price.conservativePrice, ATTO_UNITS)
-	const requiredCollateral = ceilDiv(ceilDiv(requiredBase * auction.securityMultiplierBps, BPS), auction.repGrid) * auction.repGrid
+	let targetLots = auction.targetLots
+	let lot = auction.lotAttoEth
+	const requiredForLot = () => ceilDiv(ceilDiv(lot * price.conservativePrice, ATTO_UNITS) * auction.securityMultiplierBps, BPS)
+	let required = requiredForLot()
+	while (targetLots > 1n && (ceilDiv(required, auction.repGrid) * auction.repGrid - required) * 100n >= required) {
+		const maximum = targetLots / 2n
+		targetLots = 1n
+		while (targetLots <= maximum / 2n && auction.shortfallAttoEth % (targetLots * 2n) === 0n) targetLots *= 2n
+		const resized = ceilDiv(auction.shortfallAttoEth, targetLots)
+		lot = resized > auction.lotAttoEth ? resized : auction.lotAttoEth
+		required = requiredForLot()
+	}
+	const requiredCollateral = ceilDiv(required, auction.repGrid) * auction.repGrid
 	if (requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one collateral lot at the minimum health target.'
 	return undefined
 }

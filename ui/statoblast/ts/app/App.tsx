@@ -4,7 +4,6 @@ import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
-import { useState } from 'preact/hooks'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
@@ -29,16 +28,14 @@ import { STATOBLAST_ROUTES, type StatoblastRoute } from '@zoltar/ui-statoblast-s
 import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
 import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from './lib/routeValidation.js'
-import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
 import { getHeaderRepPerEthPrice } from './lib/headerRepPrice.js'
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
 import { getStatoblastOverviewUniverse, getStatoblastUniversePresentation } from './lib/overviewUniverse.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
 
 export function App() {
-	const [uiPriceOracle, setUiPriceOracle] = useState(readUiPriceOracle)
 	const urlState = useStatoblastUrlState()
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setSecurityPoolsView } = urlState
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolsView } = urlState
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<StatoblastRoute>(route, 'not-found', STATOBLAST_ROUTES)
 	const repPrices = useRepPrices()
@@ -108,7 +105,7 @@ export function App() {
 			isLoading: isLoadingRepPrices,
 			isRefreshing: isRefreshingRepPrices,
 			onRefresh: refreshRepPrices,
-			...getHeaderRepPerEthPrice({ currentTimestamp, hasSelectedPool: false, repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repPrice: resolveRepPrice({ now: currentTimestamp, setting: uiPriceOracle, uniswapPrice: repPrices.repPerEthPrice }) }),
+			...getHeaderRepPerEthPrice({ currentTimestamp, hasSelectedPool: false, repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repPrice: resolveRepPrice({ now: currentTimestamp, setting: 'uniswap', uniswapPrice: repPrices.repPerEthPrice }) }),
 			repUsdcFailure,
 			repUsdcPrice,
 			repUsdcSource,
@@ -122,7 +119,6 @@ export function App() {
 		pageSearch: window.location.search,
 		resolvedRoute,
 		search: parseRouteHash(window.location.hash).search,
-		selectedPoolView,
 	})
 	const activeRoute = isInvalidStatoblastRouteState(invalidRouteState) ? 'not-found' : resolvedRoute
 	const tabNavigationProps = {
@@ -152,7 +148,6 @@ export function App() {
 						tabNavigation={tabNavigationProps}
 						onEnvironmentChanged={refreshActiveEnvironment}
 						onRefresh={refreshSimulationView}
-						settingsContent={<UiPriceOracleSettings priceOracle={uiPriceOracle} onPriceOracleChange={setUiPriceOracle} />}
 					/>
 				}
 				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}

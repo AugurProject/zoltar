@@ -80,7 +80,7 @@ function formatProfit({ profitAttoEth, returnBps }: { profitAttoEth: bigint; ret
 /** The approximate fee, or the smallest shown amount as an upper bound when the fee rounds to nothing. */
 function formatFeeEth(feeAttoEth: bigint, market: LiveMarket) {
 	const formatted = formatRoundedUnits(feeAttoEth, collateralAsset(market).decimals, ESTIMATE_DIGITS)
-	return feeAttoEth > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, ESTIMATE_DIGITS, ESTIMATE_DIGITS)}` : `≈ ${formatted}`
+	return feeAttoEth > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, ESTIMATE_DIGITS, ESTIMATE_DIGITS)}` : formatted
 }
 
 /**

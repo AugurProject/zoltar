@@ -5,8 +5,9 @@ import { zeroAddress, type Address, type ContractFunctionParameters } from '@zol
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '../contractArtifact.js'
+import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
@@ -183,8 +184,11 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
 		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
 		const startBondAttoRep = nonDecisionThresholdAttoRep > 1n && initialEscalationGameDepositAttoRep >= nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep - 1n : initialEscalationGameDepositAttoRep
+		const inheritedOutcome = parentSecurityPoolAddress !== zeroAddress && (await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'isEscalationResolved' }))
 		const walletReportingState = await loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
 		return {
+			...(inheritedOutcome ? { reportingBlockedReason: reportingCopy.inheritedOutcomeReportingClosed } : {}),
+			canTriggerOwnFork: false,
 			contributionFunding: 'wallet',
 			...walletReportingState,
 			settlementCollateralAttoEth,
@@ -211,6 +215,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		? await Promise.all([
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt', args: [] }),
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkElapsedAtStart', args: [] }),
+				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'fixedQuestionOutcome', args: [] }),
 			])
 		: undefined
 	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
@@ -319,10 +324,17 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	let settlementState: ReportingSettlementState = 'locked'
 	if (normalizedQuestionOutcome !== 'none' && systemState === 'operational') {
 		settlementState = 'resolved'
-	} else if (universeForkTime > 0n && universeForkTime < escalationEndTime && hasReachedNonDecision === false) {
+	} else if (universeForkTime > 0n && universeForkTime <= escalationEndTime && hasReachedNonDecision === false) {
 		settlementState = 'migration-required'
 	}
+	const canTriggerOwnFork = hasReachedNonDecision && (await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'canTriggerOwnFork' }))
+	let reportingBlockedReason: string | undefined
+	if (continuationTiming?.[2] !== undefined && getReportingOutcomeKey(continuationTiming[2]) !== 'none') reportingBlockedReason = reportingCopy.inheritedOutcomeReportingClosed
+	else if (forkContinuationSnapshot && continuationTiming?.[0] === 0n) reportingBlockedReason = reportingCopy.continuationNotResumed
+
 	return {
+		...(reportingBlockedReason === undefined ? {} : { reportingBlockedReason }),
+		canTriggerOwnFork,
 		bindingCapital,
 		contributionFunding: 'wallet',
 		settlementCollateralAttoEth,
@@ -385,11 +397,11 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 	const callParams = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
-		functionName: 'depositWalletRepToEscalationGameWithLead',
+		functionName: requireLead ? 'depositWalletRepToEscalationGameWithLead' : 'depositWalletRepToEscalationGame',
 		...getReportReviewText(outcome, reviewAmountAttoRep, triggersFork),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}
-	client.onTransactionPlan?.([
+	const reportSteps = [
 		{
 			...callParams,
 			contractAddress: securityPoolAddress,
@@ -415,7 +427,10 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 				}
 			},
 		},
-	])
+	] as const
+	const gamePreparation = escalationGameAddress === zeroAddress ? await getEscalationGamePreparation(client, securityPoolAddress) : undefined
+	if (gamePreparation === undefined) client.onTransactionPlan?.(reportSteps)
+	else await runFundingTransactions(client, [gamePreparation], reportSteps[0])
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'reportOutcome',
@@ -424,6 +439,35 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		securityPoolAddress,
 		universeId,
 	} satisfies ReportingActionResult
+}
+
+/**
+ * A question's first report would otherwise also deploy its Escalation Game, which can take the transaction close to
+ * the per-transaction gas cap (#1453). Deploying the game first is permissionless and does not start its clock.
+ */
+async function getEscalationGamePreparation(client: WriteClient, securityPoolAddress: Address): Promise<FundingTransaction | undefined> {
+	// Preparation costs real gas, so offer it only when the first report itself is currently allowed.
+	const [systemState, questionData, questionId] = await Promise.all([
+		client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState' }),
+		client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'questionData' }),
+		client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'questionId' }),
+	])
+	if (getSecurityPoolSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the pool again.')
+	const [endTime, block] = await Promise.all([client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [questionId] }), client.getBlock()])
+	if (block.timestamp < endTime) throw new Error('Reporting opens when the question ends.')
+	const factory = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGameFactory' })
+	const game = await client.readContract({ address: factory, abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, functionName: 'escalationGameAddress', args: [securityPoolAddress] })
+	const isRequired = async () => {
+		const [currentGame, code] = await Promise.all([client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame' }), client.getCode({ address: game })])
+		return currentGame === zeroAddress && (code === undefined || code === '0x')
+	}
+	if (!(await isRequired())) return undefined
+	const callParams = { address: factory, abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, functionName: 'prepareEscalationGame', args: [securityPoolAddress] } as const
+	return {
+		step: { functionName: callParams.functionName, contractAddress: factory, args: callParams.args },
+		isRequired,
+		execute: async () => await writeContractAndWait(client, () => callParams),
+	}
 }
 
 export async function approveReportingRep(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint) {

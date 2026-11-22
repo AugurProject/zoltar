@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { createProjectTaskPlan } from './run-project-tasks.mts'
+import { createProjectTaskPlan, selectProjectIdsFromArguments } from './run-project-tasks.mts'
 import type { Project } from './projects.ts'
 
 test('project task CLI rejects selections that would silently run no checks', async () => {
@@ -70,4 +70,23 @@ test('only dependency audits retry transient registry failures', () => {
 test('project task plans reject unknown projects and unsupported tasks', () => {
 	expect(() => createProjectTaskPlan('build', ['missing'], registry)).toThrow('Unknown project')
 	expect(() => createProjectTaskPlan('test', ['app'], registry)).toThrow('does not support test')
+})
+
+test('component setup combines the repository bootstrap and the component closure into one deduplicated plan', () => {
+	for (const directory of ['augurScan', 'bots/liquidator']) {
+		const plan = createProjectTaskPlan('setup', selectProjectIdsFromArguments('setup', ['repository', '--project-path', directory, '--dependencies']))
+		expect(plan.filter(entry => entry.cwd === '.' && entry.command.join(' ') === 'bun ./tooling/repo/install-frozen.mts')).toHaveLength(1)
+	}
+})
+
+test('project selection arguments keep filter values out of positional project IDs', () => {
+	expect(selectProjectIdsFromArguments('build', [], registry)).toBeUndefined()
+	expect(selectProjectIdsFromArguments('build', ['--project-path', 'app'], registry)).toEqual(['app'])
+	expect(selectProjectIdsFromArguments('build', ['--project-path', 'app', '--dependencies'], registry)).toEqual(['domain', 'app'])
+	expect(selectProjectIdsFromArguments('build', ['app', '--dependencies'], registry)).toEqual(['domain', 'app'])
+	expect(selectProjectIdsFromArguments('build', ['domain', '--project-path', 'domain'], registry)).toEqual(['domain'])
+	// With a filter, --dependencies expands the filtered project, not the positional IDs.
+	expect(selectProjectIdsFromArguments('build', ['app', '--project-path', 'domain', '--dependencies'], registry)).toEqual(['domain', 'app'])
+	expect(() => selectProjectIdsFromArguments('build', ['--group', 'a', '--path-prefix', 'b'], registry)).toThrow('Select only one registry filter')
+	expect(() => selectProjectIdsFromArguments('build', ['missing'], registry)).toThrow('Unknown project: missing')
 })

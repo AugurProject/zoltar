@@ -20,7 +20,7 @@
 		"@zoltar/core-shared": "workspace:1.0.0"
 	},
 	"scripts": {
-		"generate": "bun ../../tooling/contracts/build-app-contracts.mts zoltar && bun ../../tooling/repo/build-shared.mts zoltar && bun ../../tooling/ui/vendor.mts zoltar --scoped-artifacts",
+		"generate": "bun ../../tooling/contracts/build-app-contracts.mts zoltar && bun ../../tooling/repo/build-shared.mts zoltar && bun ../../tooling/ui/vendor.mts zoltar",
 		"vendor": "bun ../../tooling/ui/vendor.mts zoltar",
 		"build:workers": "bun ../../tooling/ui/workers.mts zoltar",
 		"build:tests": "bun ../../tooling/ui/tests.mts zoltar",

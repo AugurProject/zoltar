@@ -136,9 +136,11 @@ export async function loadPortfolioSetup(client: ReadClient, portfolio: Address,
 	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolPortfolioAuctionDeployer)) throw new Error('Portfolio uses an unrecognized auction deployer.')
 	const stage = Number(requireIntegerLikeValue(stageValue, 'setup stage'))
 	if (stage < 0 || stage > 4) throw new Error('Invalid portfolio setup stage.')
+	const originUniverseId = requireBigintValue(originValue, 'origin universe')
+	const originForkTime = requireBigintValue(await client.readContract({ address: infrastructure.zoltar, abi: linksAbi, functionName: 'getForkTime', args: [originUniverseId], blockNumber }), 'origin fork time')
 	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (finalBlock.hash !== block.hash || finalChain !== chainId) throw new Error('Portfolio setup changed. Refresh and retry.')
-	return { portfolio, owner, stage, originUniverseId: requireBigintValue(originValue, 'origin universe'), chainId, blockNumber, blockHash: block.hash }
+	return { portfolio, owner, stage, originUniverseId, originForkTime, chainId, blockNumber, blockHash: block.hash }
 }
 export type PortfolioSetupSnapshot = Awaited<ReturnType<typeof loadPortfolioSetup>>
 export function portfolioPreparationRequest(owner: Address, portfolio: Address): PortfolioTransaction {

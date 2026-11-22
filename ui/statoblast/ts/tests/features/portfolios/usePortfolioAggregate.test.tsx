@@ -197,9 +197,12 @@ test('the retirement review states the immediate cure for a position underwater 
 	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.')
 	expect(requests[0]?.reviewDescription).toContain('The rest waits for spare capacity')
 })
-test('the retirement review queues a full exit whose deficit is below the minimum cure (#1364)', async () => {
+test.each(['0', '5'])('the retirement review queues target %s when the uncovered deficit is below the minimum cure', async remaining => {
 	const snapshot = underwaterSnapshot()
 	const { hook, requests } = await setup({ ...snapshot, economics: { ...snapshot.economics, minimumCommitmentAttoEth: 3n * unit } })
+	await act(() => {
+		hook.state().setRemainingCommitmentAmount(remaining)
+	})
 	await act(() => hook.state().retire(1n))
 	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
 	expect(requests[0]?.reviewDescription).toContain('The reduction waits for spare capacity')
@@ -207,7 +210,7 @@ test('the retirement review queues a full exit whose deficit is below the minimu
 test('the retirement review states six-decimal collateral amounts in collateral units', async () => {
 	const usdc = 10n ** 6n
 	const snapshot = capitalSnapshot()
-	const underwaterUsdc = {
+	const underwaterUsdc: ReturnType<typeof capitalSnapshot> = {
 		...snapshot,
 		collateral: { ...snapshot.collateral, symbol: 'USDC', decimals: 6 },
 		economics: { ...snapshot.economics, minimumCommitmentAttoEth: usdc },
@@ -468,4 +471,18 @@ test('#1448: a position that enters liquidation during review blocks an already 
 	if (request?.validateBeforeSubmit === undefined) throw new Error('Deposit preflight missing')
 	transport.setSnapshot({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, maxHealthyPrice: unit, liquidationStarted: 1n })) })
 	await expect(request.validateBeforeSubmit()).rejects.toThrow('liquidating')
+})
+
+test('re-submits the saved pending target while keeping other retirement values locked', async () => {
+	const snapshot = capitalSnapshot()
+	const pending = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
+	const { hook, requests } = await setup(pending)
+	expect(hook.state().positionReasons(1n, 5n * unit).retire).toBeUndefined()
+	expect(hook.state().positionReasons(1n, 4n * unit).retire).toBe('Retirement already requested.')
+	await act(async () => {
+		await hook.state().retire(1n, 5n * unit)
+	})
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing repeated retirement request')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [5n * unit] })
 })

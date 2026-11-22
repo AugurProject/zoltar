@@ -76,7 +76,9 @@ const identityGeneration = (columnDefinition: string): 'a' | 'd' | '' => {
 }
 
 export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVersion): SchemaLayout => {
-	const currentSchema = schema.replaceAll('\r\n', '\n')
+	const latestSchema = schema.replaceAll('\r\n', '\n')
+	const currentSchema =
+		Number(version) < 10 ? latestSchema.replace('last_settlement_portfolio_time numeric(78,0) NOT NULL', 'last_settlement_portfolio_time timestamp with time zone NOT NULL').replace(/ALTER TABLE ONLY public\.pool_snapshots\s+ADD CONSTRAINT pool_snapshots_(?:reason|portfolio_time)_check [\s\S]*?;\n/g, '') : latestSchema
 	// Older supported databases keep the constant pool columns and the seed price shape that migration 008 removed.
 	const schemaWithRemovedValues = Number(version) < 8 ? currentSchema.replace(/CREATE TABLE public\.rep_eth_price_snapshots \(\n[\s\S]*?\n\);/, REP_ETH_PRICE_SNAPSHOTS_BEFORE_SCHEMA_8).replace('CREATE TABLE public.pools (\n', `CREATE TABLE public.pools (\n${POOL_COLUMNS_REMOVED_IN_SCHEMA_8}`) : currentSchema
 	// Older supported databases keep the accounting tables that migration 007 replaced.

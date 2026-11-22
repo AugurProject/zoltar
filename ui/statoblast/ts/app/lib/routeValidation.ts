@@ -7,14 +7,12 @@ type StatoblastRouteValidationInput = {
 	resolvedRoute: StatoblastRoute
 	/** The hash query. */
 	search: string
-	selectedPoolView: string
 }
 
-/** Pool locations come from the hash path, which the router already rejects when malformed, so only an unknown pool tab, a removed OpenOracle view parameter, or a malformed universe can make an otherwise resolved route invalid. */
-export function getInvalidStatoblastRouteState({ pageSearch, resolvedRoute, search, selectedPoolView }: StatoblastRouteValidationInput) {
+/** Pool locations come from the hash path, which the router already rejects when malformed, so only a removed OpenOracle view parameter or a malformed universe can make an otherwise resolved route invalid. */
+export function getInvalidStatoblastRouteState({ pageSearch, search }: StatoblastRouteValidationInput) {
 	return {
 		hasInvalidOpenOracleView: new URLSearchParams(search).has('openOracleView'),
-		hasInvalidSelectedPoolView: resolvedRoute === 'pools' && selectedPoolView !== '',
 		// A malformed universe would otherwise open Genesis as if the link had named it.
 		hasInvalidUniverse: hasInvalidUniverseQueryParam(search) || hasInvalidUniverseQueryParam(pageSearch),
 	}

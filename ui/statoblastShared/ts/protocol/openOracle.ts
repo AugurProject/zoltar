@@ -1,3 +1,4 @@
+import { resolveOpenOracleDisputeFlows } from './openOracleDisputeFlows.js'
 import { getOpenOracleSettlementGasLimit } from './openOracleSettlementSafety.js'
 import { loadOpenOracleTokenMetadata, type OpenOracleTokenMetadata } from './openOracleTokenMetadata.js'
 import { wrapWeth } from './wethFunding.js'
@@ -505,10 +506,24 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed onchain while the dispute was being prepared. Retry to use the latest state.')
 	const derivedTokenToSwap = getOpenOracleDisputeSwapToken(state.latest.game, newAmount1, newAmount2)
 	if (derivedTokenToSwap.toLowerCase() !== tokenToSwap.toLowerCase()) throw new Error('The dispute price direction does not match the selected swap token.')
+	const game = state.latest.game
+	const flows = resolveOpenOracleDisputeFlows({
+		chargeFees: !hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT) || game.currentAmount1 >= game.escalationHalt,
+		feePercentage: game.feePercentage,
+		protocolFee: game.protocolFee,
+		isSelfDispute: sameAddress(game.currentReporter, client.account.address),
+		oldAmount1: game.currentAmount1,
+		oldAmount2: game.currentAmount2,
+		newAmount1,
+		newAmount2,
+		tokenToSwap: sameAddress(derivedTokenToSwap, game.token1) ? 'token1' : 'token2',
+	})
+	const value = (game.token1 === zeroAddress ? flows.token1Contribution : 0n) + (game.token2 === zeroAddress ? flows.token2Contribution : 0n)
 	const callParams = {
 		address: openOracleAddress,
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'dispute',
+		value,
 		args: [reportId, newAmount1, newAmount2, client.account.address, false, false, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper), [0n, 0n, 0n, 0n]],
 	}
 	client.onTransactionPlan?.([

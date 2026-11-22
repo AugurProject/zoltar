@@ -11,7 +11,7 @@ void describe('zoltar simulation scenarios', () => {
 		expect(getRegisteredSimulationScenarios()).toContain('forked-categorical')
 		expect(getSimulationScenarioLabel('two-questions')).toBe('Two questions')
 		expect(getSimulationScenarioLabel('forked-categorical')).toBe('Forked categorical')
-		expect(getSimulationScenarioDescription('forked-categorical')).toContain('five-way categorical fork')
+		expect(getSimulationScenarioDescription('forked-categorical')).toContain('five named answers plus Invalid')
 		expect(getSimulationScenarioDescription('forked-categorical')).toContain('two child universes are deployed')
 	})
 })

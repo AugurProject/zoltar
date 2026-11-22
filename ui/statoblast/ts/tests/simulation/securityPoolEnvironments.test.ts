@@ -20,8 +20,10 @@ for (const [scenario, count] of [
 				const capitals = await Promise.all(pools.map(pool => client.readContract({ address: pool.securityPoolAddress, abi, functionName: 'portfolioCustody' })))
 				expect(new Set(capitals).size).toBe(1)
 				const capital = capitals[0]
-				if (capital === undefined || capital === zeroAddress) throw new Error('Missing shared portfolio capital')
-				const [rep, commitment] = await client.readContract({ address: capital, abi, functionName: 'totals' })
+				if (typeof capital !== 'string' || !capital.startsWith('0x') || capital === zeroAddress) throw new Error('Missing shared portfolio capital')
+				const totals = await client.readContract({ address: `0x${capital.slice(2)}`, abi, functionName: 'totals' })
+				if (!Array.isArray(totals)) throw new Error('Missing capital totals')
+				const [rep, commitment] = totals
 				expect(rep).toBe(5000n * 10n ** 18n)
 				expect(commitment).toBe(10n * 10n ** 18n)
 				for (const pool of pools) expect(pool.shareTokenSupplyAttoShares).toBeGreaterThan(0n)

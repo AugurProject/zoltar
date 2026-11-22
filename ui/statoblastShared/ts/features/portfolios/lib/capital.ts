@@ -45,8 +45,8 @@ export function capitalRetirementReason(snapshot: PortfolioCapitalSnapshot, id: 
 	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to retirement requests.'
 	const position = snapshot.positions.find(item => item.id === id && item.commitment > 0n)
 	if (position === undefined) return 'Position is no longer live.'
-	if (position.batch !== 0n) return 'Retirement already requested.'
 	if (remaining === undefined || remaining < 0n) return 'Enter the commitment to keep, or zero for full retirement.'
+	if (position.batch !== 0n) return remaining === position.remainingCommitment ? undefined : 'Retirement already requested.'
 	if (remaining >= position.commitment) return 'Choose a smaller remaining commitment.'
 	if (remaining !== 0n && (remaining < snapshot.economics.minimumCommitmentAttoEth || position.commitment - remaining < snapshot.economics.minimumCommitmentAttoEth)) return 'The remaining commitment and reduction must each meet the pool minimum.'
 	return undefined

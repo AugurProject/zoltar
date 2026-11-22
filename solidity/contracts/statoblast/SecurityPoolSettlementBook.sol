@@ -10,6 +10,7 @@ import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
+import { Constants } from '../Constants.sol';
 
 /// @notice Central ETH settlement accounting with distinct internal units and outcome supply.
 /// @dev This contract records liabilities; its authority holds and transfers the actual ETH.
@@ -23,7 +24,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	using SecurityPoolQuestionMap for SecurityPoolQuestionMap.Store;
 	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
-	uint48 public constant MINIMUM_FORK_RESPONSE = 3 days;
+	uint48 public constant MINIMUM_FORK_RESPONSE = Constants.FORK_RESPONSE_DELAY;
 	/// @notice Exclusive bound of every fee-stream end (about year 2242). Streams stop charging after it.
 	uint48 public constant FEE_END_LIMIT = uint48(1) << 33;
 	address public immutable portfolio;
@@ -33,7 +34,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	/// The production daily cadence has at most 17 branch levels.
 	uint48 public immutable feeEndGranularity;
 
-	event SettlementRepaired(uint64 indexed bookId, uint256 cashAttoEth);
+	event SettlementBookRepaired(uint64 indexed bookId, uint256 cashAttoEth);
 	event BookCreated(uint64 indexed bookId, uint64 indexed sourceBookId, uint256 cashAttoEth, uint256 units);
 	event SettlementMinted(uint64 indexed bookId, uint256 indexed questionId, uint256 cashAttoEth, uint256 outcomeShares);
 	event SettlementRedeemed(uint64 indexed bookId, uint256 indexed questionId, uint256 outcomeShares, uint256 units, uint256 cashAttoEth);
@@ -174,7 +175,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		require(cashAttoEth != 0 && cashAttoEth == _missingCash(bookId, book), 'Supply the entire settlement deficit');
 		book.cashAttoEth += cashAttoEth;
 		_syncFeeMode(bookId, book);
-		emit SettlementRepaired(bookId, cashAttoEth);
+		emit SettlementBookRepaired(bookId, cashAttoEth);
 	}
 
 	function mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint48 portfolioTimestamp) external onlyPortfolio returns (uint256) {

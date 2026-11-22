@@ -14,7 +14,6 @@ import { useKeyedConfirmation } from '../hooks/useKeyedConfirmation.js'
 import { getReportingMaxContribution } from '../lib/reportingMaxContribution.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
-import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import * as glossaryCopy from '../../../copy/glossary.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -35,7 +34,7 @@ import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-co
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -47,6 +46,10 @@ import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { EscalationDeposit, ReportingDetails } from '../../../types/contracts.js'
+function formatInheritedAttritionElapsed(elapsed: bigint | undefined) {
+	if (elapsed === undefined) return commonCopy.metricUnavailablePlaceholder
+	return elapsed < 0n ? reportingCopy.attritionBeginsAfter(formatDuration(-elapsed)) : formatDuration(elapsed)
+}
 function formatKnownAmount(amount: bigint | undefined) {
 	return amount === undefined ? commonCopy.metricUnavailablePlaceholder : formatCurrencyBalance(amount)
 }
@@ -166,7 +169,7 @@ export function ReportingSection({
 		reportLifecycleReason = reportingCopy.poolFinalizedReason
 	}
 	const fullReportingLoadingReason = showFullReporting && loadingReportingDetails ? reportingCopy.loadingReportingDetails : undefined
-	const reportControlsLockedReason = showFullReporting ? pickFirstReason(fullReportingLoadingReason, reportActionGuardMessage, lockedReason, reportingStageKey === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
+	const reportControlsLockedReason = showFullReporting ? pickFirstReason(fullReportingLoadingReason, effectiveReportingDetails?.reportingBlockedReason, reportActionGuardMessage, lockedReason, reportingStageKey === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
 	let settlementLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
@@ -175,8 +178,6 @@ export function ReportingSection({
 		settlementLifecycleReason = reportingCopy.refreshFinalizedOutcomeReason
 	} else if (activeReportingDetails?.settlementState === 'migration-required') {
 		settlementLifecycleReason = forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail
-	} else if (activeReportingDetails?.settlementState === 'migration-expired') {
-		settlementLifecycleReason = forkAuctionCopy.unresolvedMigrationExpiredDetail
 	} else if (reportingStageKey === 'activeLocked') {
 		settlementLifecycleReason = reportingCopy.questionFinalizationRequired
 	}
@@ -188,7 +189,6 @@ export function ReportingSection({
 	}
 	let settlementContextMessage: string | undefined
 	if (activeReportingDetails?.settlementState === 'migration-required') settlementContextMessage = forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail
-	else if (activeReportingDetails?.settlementState === 'migration-expired') settlementContextMessage = forkAuctionCopy.unresolvedMigrationExpiredDetail
 	const withdrawControlsLocked = !withdrawEscalationEnabled || withdrawControlsLockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const selectedOutcome = reportingForm.selectedOutcome
@@ -275,7 +275,8 @@ export function ReportingSection({
 		activeReportingDetails !== undefined && effectiveCurrentTimestamp !== undefined && effectiveCurrentTimestamp < activeReportingDetails.earliestForkTime
 			? zoltarCopy.formatParentForkResponseActiveReason(formatTimestamp(activeReportingDetails.earliestForkTime), formatRelativeTimestamp(activeReportingDetails.earliestForkTime, effectiveCurrentTimestamp))
 			: undefined
-	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability?.disabled === true || parentForkResponseReason === undefined ? (triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }) : { disabled: true, reason: parentForkResponseReason }
+	const forkUnavailableReason = activeReportingDetails?.canTriggerOwnFork === false ? reportingCopy.inheritedOutcomeCannotFork : parentForkResponseReason
+	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability?.disabled === true || forkUnavailableReason === undefined ? (triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }) : { disabled: true, reason: forkUnavailableReason }
 	const forkTriggeredActions =
 		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
 			<div className='actions'>
@@ -410,12 +411,23 @@ export function ReportingSection({
 					</div>
 					<ReadOnlyDetailAccordion title={reportingCopy.reportingParameters}>
 						<div className='escalation-metrics'>
-							<MetricField label={reportingCopy.attritionStarts}>
-								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.activationTime} />
-							</MetricField>
-							<MetricField label={reportingCopy.escalationStarted}>
-								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
-							</MetricField>
+							{activeReportingDetails?.forkContinuation ? (
+								<>
+									<MetricField label={reportingCopy.continuationResumed}>
+										{activeReportingDetails.forkResumedAt === 0n ? reportingCopy.continuationNotResumed : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails.forkResumedAt} />}
+									</MetricField>
+									<MetricField label={reportingCopy.inheritedAttritionElapsed}>{formatInheritedAttritionElapsed(activeReportingDetails.forkElapsedAtStart)}</MetricField>
+								</>
+							) : (
+								<>
+									<MetricField label={reportingCopy.attritionStarts}>
+										<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.activationTime} />
+									</MetricField>
+									<MetricField label={reportingCopy.escalationStarted}>
+										<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
+									</MetricField>
+								</>
+							)}
 						</div>
 					</ReadOnlyDetailAccordion>
 				</SectionBlock>

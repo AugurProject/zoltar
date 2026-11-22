@@ -1,3 +1,4 @@
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -13,7 +14,16 @@ import { getTradingEnvironmentLocationKey, installTradingRouting } from '../../l
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 import { offlineControllerServices } from '../support/liveTradingServices.js'
 
-const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+const configuration: DeploymentConfiguration = {
+	zoltar: deploymentConfigurationFixture().zoltar,
+	chainId: 31_337,
+	chainName: 'Local',
+	rpcUrl: 'http://127.0.0.1:8545',
+	securityPoolFactory: `0x${'11'.repeat(20)}`,
+	factory: `0x${'22'.repeat(20)}`,
+	router: `0x${'33'.repeat(20)}`,
+	feeBps: 30,
+}
 
 beforeEach(() => installTradingRouting())
 
@@ -33,8 +43,8 @@ describe('universe directory', () => {
 		const queries = within(rendered.container)
 		await waitFor(() => expect(queries.queryByText('Child universes')).not.toBeNull())
 		expect(rendered.container.querySelector('.route-header')?.textContent).toContain('Universe')
-		expect(rendered.container.querySelectorAll('.entity-card-list .entity-card')).toHaveLength(2)
-		expect(rendered.container.textContent).toContain('Yes')
+		expect(rendered.container.querySelectorAll('.entity-card-list .entity-card')).toHaveLength(3)
+		for (const outcome of ['Invalid', 'Yes', 'No']) expect(queries.getByRole('heading', { name: outcome })).toBeTruthy()
 		expect(rendered.container.textContent).toContain('Not deployed')
 		// Only an existing child can be opened; the link carries the universe parameter every route reads.
 		const selectLinks = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.entity-card .universe-link')).filter(link => link.textContent === 'Open')
@@ -48,7 +58,7 @@ describe('universe directory', () => {
 		const rendered = await renderIntoDocument(<UniverseDirectory configuration={configuration} loadUniverse={async () => createForkedUniverseSummary({ universeId: 0n, parentUniverseId: 0n, hasForked: true })} universeId={2n} />)
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Child universes'))
-		expect(Array.from(rendered.container.querySelectorAll('.entity-card .badge')).map(badge => badge.textContent)).toEqual(['Selected', 'Not deployed'])
+		expect(Array.from(rendered.container.querySelectorAll('.entity-card .badge')).map(badge => badge.textContent)).toEqual(['Not deployed', 'Selected', 'Not deployed'])
 		await rendered.cleanup()
 
 		const genesis = await renderIntoDocument(<UniverseDirectory configuration={configuration} loadUniverse={async () => createForkedUniverseSummary({ universeId: 0n, childUniverses: [] })} universeId={0n} />)
@@ -148,7 +158,7 @@ describe('universe directory', () => {
 		expect(rendered.container.textContent).not.toContain('Child universes')
 		await act(() => render(view('1'), rendered.container))
 		await waitFor(() => expect(rendered.container.textContent).toContain('Child universes'))
-		expect(rendered.container.querySelectorAll('.entity-card-list .entity-card')).toHaveLength(2)
+		expect(rendered.container.querySelectorAll('.entity-card-list .entity-card')).toHaveLength(3)
 	})
 
 	test.each([undefined, '0', '0x0', '00', '1'])('offers Genesis recovery only for a nonzero requested universe (%s)', async selectedUniverseId => {

@@ -2,7 +2,7 @@ import type { AccountDetailOptions, AccountReference, ActivityRecord, CanonicalR
 import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import type { ScannerLiveState } from './scanner-live-state.ts'
-import { historyInvalidationNotice, isHistoryInvalidationReason } from './history-evidence.ts'
+import { historyInvalidationNotice, isHistoryInvalidationReason, liveResetNotice } from './history-evidence.ts'
 import { createLiveRouteRefreshCoordinator, shouldRefreshRouteOnLiveEvent, streamReconnectDelay } from './live-refresh.ts'
 import { activityRefreshRetention } from './refresh-presentation.ts'
 import { renderExplorerPage } from './explorer-page.ts'
@@ -365,9 +365,17 @@ export const createLiveCoordinator = (deps: LiveCoordinatorDeps) => {
 			const notice = historyInvalidationNotice(payload.reason, depth)
 			await refreshCanonicalViews(notice.title, notice.detail)
 		})
-		nextStream.addEventListener('reset', async () => {
+		nextStream.addEventListener('reset', async event => {
+			let reason: unknown
+			try {
+				const payload: unknown = JSON.parse(String(event.data))
+				if (isPlainRecord(payload)) reason = payload['reason']
+			} catch (error) {
+				console.error(`Live reset notification could not be decoded (${error instanceof Error ? error.name : typeof error})`)
+			}
+			const notice = liveResetNotice(reason)
 			deps.clearAddressIdentityCache()
-			await refreshCanonicalViews('Live replay window expired', 'Refreshing views from the current database state.')
+			await refreshCanonicalViews(notice.title, notice.detail)
 		})
 	}
 

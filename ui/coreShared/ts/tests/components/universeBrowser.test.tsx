@@ -103,7 +103,7 @@ describe('UniverseBrowser', () => {
 		const question = createMarketDetails({ description: 'Use the certified result and ignore preliminary tallies.' })
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ forkQuestionDetails: question })} />)).cleanup
 		expect(within(document.body).getByRole('heading', { name: 'Fork question' })).toBeTruthy()
-		for (const text of [question.title, question.description, question.questionId, 'Starts', 'End time', 'Yes, No, Invalid']) expect(document.body.textContent).toContain(text)
+		for (const text of [question.title, question.description, question.questionId, 'Starts', 'End time', 'YesNoInvalid']) expect(document.body.textContent).toContain(text)
 		expect(within(document.body).getAllByRole('link', { name: 'Open' })).toHaveLength(1)
 	})
 
@@ -153,10 +153,10 @@ describe('UniverseBrowser', () => {
 		})
 	}
 
-	test('shows universe and child details without disclosure controls', async () => {
+	test('labels the theoretical REP supply and child details without disclosure controls', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse()} />)).cleanup
-		const field = within(document.body).getByText('REP supply').parentElement
-		expect(field?.textContent).toContain('YESREP')
+		const field = within(document.body).getByText('Theoretical REP supply').parentElement
+		expect(field?.textContent).toContain('1.00 REP')
 		expect(field?.closest('details')).toBeNull()
 		expect(document.body.querySelector('.universe-browser details')).toBeNull()
 		expect(within(document.body).getByText('REPa')).toBeTruthy()

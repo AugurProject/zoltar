@@ -26,6 +26,11 @@ describe('trading UI deployment configuration', () => {
 		expect(() => parseDeploymentSetupInput({ chainId: '1', feeBps: '10000', rpcUrl: 'https://example.test' })).toThrow('fee')
 	})
 
+	test('accepts every loopback HTTP RPC host that the shared RPC settings accept', () => {
+		for (const rpcUrl of ['http://127.0.0.1:8545', 'http://127.0.0.2:8545', 'http://localhost:8545', 'http://[::1]:8545']) expect(parseDeploymentSetupInput({ chainId: '11155111', feeBps: '30', rpcUrl }).rpcUrl).toBe(new URL(rpcUrl).toString())
+		expect(() => parseDeploymentSetupInput({ chainId: '11155111', feeBps: '30', rpcUrl: 'http://example.test' })).toThrow('RPC URL must use HTTPS or loopback HTTP')
+	})
+
 	test('loads ETH and REP from the selected SecurityPool universe', async () => {
 		const account = getAddress(`0x${'45'.repeat(20)}`)
 		const pool = getAddress(`0x${'56'.repeat(20)}`)

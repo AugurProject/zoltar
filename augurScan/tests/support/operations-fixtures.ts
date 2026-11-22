@@ -39,7 +39,7 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 			{ name: 'CommitmentCured', argumentsValue: { positionId: '1', removedCommitment: '10' } },
 			{ name: 'CommitmentTakenOver', argumentsValue: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: 5n.toString() } },
 			// The decoder keeps the uint8 reason as a number.
-			{ name: 'QuestionAccountingCheckpoint', argumentsValue: { reason: 5, settlementCollateralAttoEth: 40n.toString(), shareTokenSupplyAttoShares: 40n.toString(), lastSettlementPortfolioTime: '1767225620' } },
+			{ name: 'QuestionAccountingCheckpoint', argumentsValue: { reason: 2, settlementCollateralAttoEth: 40n.toString(), shareTokenSupplyAttoShares: 40n.toString(), lastSettlementPortfolioTime: '1767225620' } },
 		]
 		const capitalEvents = capitalEvidence.map(({ name, argumentsValue }, index) => ({
 			...decodedLog(hash, index + 2, oracle, name, argumentsValue),
@@ -76,8 +76,8 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 			{ semantic_event_kind: 'QuestionAccountingCheckpoint', entity_type: 'pool', entity_identity: oracle.toLowerCase() },
 		])
 		// The same checkpoint is the pool's accounting snapshot.
-		expect(await database.sql`SELECT reason, settlement_collateral_atto_eth::text, share_token_supply_atto_shares::text, EXTRACT(EPOCH FROM last_settlement_portfolio_time)::bigint::text AS last_settlement FROM pool_snapshots WHERE chain_id = ${operationsChainId}`).toEqual([
-			{ reason: 5, settlement_collateral_atto_eth: '40', share_token_supply_atto_shares: '40', last_settlement: '1767225620' },
+		expect(await database.sql`SELECT reason, settlement_collateral_atto_eth::text, share_token_supply_atto_shares::text, last_settlement_portfolio_time::text AS last_settlement FROM pool_snapshots WHERE chain_id = ${operationsChainId}`).toEqual([
+			{ reason: 2, settlement_collateral_atto_eth: '40', share_token_supply_atto_shares: '40', last_settlement: '1767225620' },
 		])
 		const indexedResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=CommitmentTakenOver`), database.sql)
 		if (indexedResponse === undefined) throw new Error('indexed timeline endpoint did not return a response')

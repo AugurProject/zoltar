@@ -59,6 +59,7 @@ export type MarketSourceRow = {
 }
 
 export type Snapshot = {
+	walletRep?: Record<string, string>
 	activities: Activity[]
 	alerts: { message: string; severity: 'error' | 'warning' }[]
 	centralizedMarket?: CentralizedMarket
@@ -82,7 +83,6 @@ export type Snapshot = {
 		poolCount: number
 		selectedPoolCount: number
 		walletEth: string
-		walletRep: string
 	}
 	network?: 'mainnet' | 'sepolia'
 	paused: boolean
@@ -106,6 +106,8 @@ export type Configuration = {
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 	networkConfigured?: boolean | undefined
 	runtime: { execute: boolean }
+	/** Address of the key saved in the operator file, which live execution requires to match the active signer. */
+	savedSigner?: string | undefined
 	selectedPortfolios: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
 	portfolioPolicy: Record<string, string | number | boolean>
@@ -162,7 +164,8 @@ const snapshot = object<Snapshot>({
 	lastScanAt: optionalString,
 	lastScannedBlock: optionalString,
 	lastScannedTimestamp: optionalString,
-	metrics: object<Snapshot['metrics']>({ approvedUniverseCount: numberValue, assumedOpenInterestEth: stringValue, candidateCount: numberValue, deployedRep: stringValue, eligiblePoolCount: numberValue, poolCount: numberValue, selectedPoolCount: numberValue, walletEth: stringValue, walletRep: stringValue }),
+	walletRep: optional(dictionary(stringValue)),
+	metrics: object<Snapshot['metrics']>({ approvedUniverseCount: numberValue, assumedOpenInterestEth: stringValue, candidateCount: numberValue, deployedRep: stringValue, eligiblePoolCount: numberValue, poolCount: numberValue, selectedPoolCount: numberValue, walletEth: stringValue }),
 	network: optional(network),
 	paused: booleanValue,
 	rpcEndpointHealth: optional(array(object<NonNullable<Snapshot['rpcEndpointHealth']>[number]>({ consecutiveFailures: numberValue, error: optionalString, latencyMilliseconds: optional(numberValue), nextRetryAt: optionalString, status: stringValue, target: stringValue }))),
@@ -186,6 +189,7 @@ const configuration = object<Configuration>({
 	network: optional(object<NonNullable<Configuration['network']>>({ chainId: numberValue, explorerUrl: stringValue, name: network })),
 	networkConfigured: optional(booleanValue),
 	runtime: object<Configuration['runtime']>({ execute: booleanValue }),
+	savedSigner: optional(address),
 	selectedPortfolios: array(object<{ address: string; universeId: string }>({ address: stringValue, universeId: stringValue })),
 	portfolioPolicy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	strategy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),

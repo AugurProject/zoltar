@@ -17,7 +17,7 @@ const ORACLE_REQUEST_DEFINITION_ID = 'statoblast.oracle.request-price'
 const ORACLE_REQUEST_ENVELOPE_VERSION = 1
 
 function canRequestOraclePrice(pool: PoolSnapshot) {
-	return pool.pendingReportId === '0' && (!pool.oraclePriceValid || pool.priceFeed.toLowerCase() !== pool.coordinator.toLowerCase())
+	return pool.pendingReportId === '0'
 }
 
 function oracleRequestMetadata(snapshot: EcosystemSnapshot, pool: PoolSnapshot, prepared: PreparedOracleRequest): OperationPlan['metadata'] {

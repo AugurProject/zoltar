@@ -35,7 +35,7 @@ const lifecycle = installDomTestLifecycle({
 type ScalarQuestion = { answerUnit: string; numTicks: bigint; displayValueMin: bigint; displayValueMax: bigint }
 
 /** Renders a scalar fork whose single outcome page carries `question`; child universes resolve through `loadOutcome`. */
-async function renderScalarFork(question: ScalarQuestion, loadOutcome: Parameters<typeof UniverseOutcomeNavigation>[0]['loadOutcome']) {
+async function renderScalarFork(question: ScalarQuestion, loadOutcome: NonNullable<Parameters<typeof UniverseOutcomeNavigation>[0]['loadOutcome']>) {
 	const loadPage = async () => ({ ...page, choices: [], hasNextPage: false, question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })
 	return lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loadPage} loadOutcome={loadOutcome} />))
 }
@@ -56,7 +56,9 @@ describe('outcome-based universe traversal', () => {
 		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
 		await waitFor(() => expect(starts).toEqual([0n, 10n]))
 		await waitFor(() => expect(q.queryByText('Loading child universes…')).toBeNull())
-		await act(() => appBlockWatcher.invalidate())
+		await act(() => {
+			appBlockWatcher.invalidate()
+		})
 		await waitFor(() => expect(starts).toEqual([0n, 10n, 10n]))
 		expect(q.queryByText('Loading child universes…')).toBeNull()
 		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(false)
@@ -76,7 +78,9 @@ describe('outcome-based universe traversal', () => {
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
-		await act(() => appBlockWatcher.invalidate())
+		await act(() => {
+			appBlockWatcher.invalidate()
+		})
 		await waitFor(() => expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).not.toBeNull())
 		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(false)
 		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
@@ -116,7 +120,7 @@ describe('outcome-based universe traversal', () => {
 			await retry.promise
 		})
 		await waitFor(() => expect(q.queryByText('Gamma')).not.toBeNull())
-		expect(q.queryByText('Alpha')).toBeNull()
+		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
 		expect(q.getByRole('button', { name: 'Open Gamma universe' }).hasAttribute('disabled')).toBe(false)
 		expect(q.getByText('Loading').closest('[aria-hidden]')?.getAttribute('aria-hidden')).toBe('true')
 	})
@@ -137,7 +141,7 @@ describe('outcome-based universe traversal', () => {
 		const descriptionId = unavailable.getAttribute('aria-describedby')
 		if (descriptionId === null) throw new Error('Missing deployment-status description')
 		// The disabled row says why it cannot open: the child universe exists only after a migration creates it.
-		expect(document.getElementById(descriptionId)?.textContent).toBe('Not deployed Created by the first migration into it.')
+		expect(document.getElementById(descriptionId)?.textContent).toBe('Not deployed Deploy it now, or let the first migration deploy it.')
 		expect(q.queryByRole('combobox')).toBeNull()
 		fireEvent.click(open)
 		expect(window.location.hash).toContain('universe=10')
@@ -237,13 +241,15 @@ describe('outcome-based universe traversal', () => {
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
 		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
 		await waitFor(() => expect(calls).toBe(2))
-		await act(() => render(<UniverseOutcomeNavigation universe={universe} loadPage={nextLoader} />, view.container))
-		expect(q.queryByText('Alpha')).toBeNull()
+		await act(() => {
+			render(<UniverseOutcomeNavigation universe={universe} loadPage={nextLoader} />, view.container)
+		})
+		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
 		await act(async () => {
 			old.resolve(page)
 			await old.promise
 		})
-		expect(q.queryByText('Alpha')).toBeNull()
+		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
 		await act(async () => {
 			replacement.resolve({ ...page, choices: [{ label: 'Delta', universeId: 40n, exists: true }] })
 			await replacement.promise
@@ -255,7 +261,9 @@ describe('outcome-based universe traversal', () => {
 		const pending = createDeferred<UniverseOutcomePage>()
 		const loader: LoadUniverseOutcomes = async (_address, id) => (id === 0n ? await pending.promise : { ...page, question: createMarketDetails({ title: 'Child fork' }), choices: [{ label: 'Delta', universeId: 40n, exists: true }] })
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
-		await act(() => render(<UniverseOutcomeNavigation universe={{ ...universe, universeId: 10n }} loadPage={loader} />, view.container))
+		await act(() => {
+			render(<UniverseOutcomeNavigation universe={{ ...universe, universeId: 10n }} loadPage={loader} />, view.container)
+		})
 		await waitFor(() => expect(view.container.textContent).toContain('Child fork'))
 		await act(async () => {
 			pending.resolve(page)
@@ -313,7 +321,9 @@ describe('outcome-based universe traversal', () => {
 		})
 		expect(q.getByRole('button', { name: 'Open 50 °C universe' }).hasAttribute('disabled')).toBe(true)
 		deployed = true
-		await act(() => appBlockWatcher.invalidate())
+		await act(() => {
+			appBlockWatcher.invalidate()
+		})
 		await waitFor(() => expect(q.getByRole('button', { name: 'Open 50 °C universe' }).hasAttribute('disabled')).toBe(false))
 		fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' }))
 		await waitFor(() => expect(q.getByRole('button', { name: 'Open Invalid universe' }).hasAttribute('disabled')).toBe(false))
@@ -332,7 +342,9 @@ describe('outcome-based universe traversal', () => {
 		const slider = q.getByRole('slider', { name: 'Select outcome' })
 		for (const value of ['1', '2', '3']) {
 			fireEvent.input(slider, { target: { value } })
-			await act(async () => await Bun.sleep(30))
+			await act(async () => {
+				await Bun.sleep(30)
+			})
 		}
 		await waitFor(() => expect(q.getByRole('button', { name: 'Open 15 °C universe' }).hasAttribute('disabled')).toBe(false))
 		expect(indexes).toEqual([getScalarOutcomeIndex(question, 0n), getScalarOutcomeIndex(question, 3n)])

@@ -86,9 +86,9 @@ function PolicyPanel() {
 					h(UnitField, { id: 'max-delay', label: 'Maximum random delay', max: '3600', min: '60', unit: 'seconds' }),
 					h(DecimalField, { id: 'reserve-eth', label: 'ETH reserve' }),
 					h(DecimalField, { id: 'reserve-rep', label: 'REP reserve' }),
-					h(DecimalField, { id: 'maximum-eth-operation', label: 'Maximum ETH per operation' }),
+					h(DecimalField, { id: 'maximum-eth-operation', label: 'Maximum ETH per workflow' }),
 					h(DecimalField, { id: 'maximum-gas-cost', label: 'Maximum gas cost (ETH)' }),
-					h(DecimalField, { id: 'maximum-rep-operation', label: 'Maximum REP per operation' }),
+					h(DecimalField, { id: 'maximum-rep-operation', label: 'Maximum REP per workflow' }),
 					h(UnitField, { id: 'workflow-valid-blocks', label: 'Workflow validity', max: '1000000', min: '243', unit: 'blocks' }),
 				),
 				h(

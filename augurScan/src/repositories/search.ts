@@ -5,6 +5,12 @@ import { literalContainsPattern } from './like-pattern.ts'
 const addressPattern = /^0x[0-9a-f]{40}$/i
 const hashPattern = /^0x[0-9a-f]{64}$/i
 
+/** A uint256 identity typed in decimal or in the 0x-prefixed hex the explorer displays, as a decimal string; undefined for anything else. */
+export const numericIdentity = (query: string): string | undefined => {
+	if (/^\d{1,78}$/.test(query)) return query
+	return /^0x[0-9a-f]{1,64}$/i.test(query) ? BigInt(query).toString() : undefined
+}
+
 type SearchItem = { type: string; label: string; href: string; detail?: string }
 
 export const searchNetworkIds = async (sql: SQL): Promise<number[]> => {
@@ -30,16 +36,16 @@ export const searchItems = async (sql: SQL, chainId: number, query: string, limi
 		const blocks = await sql`SELECT number::text, hash FROM blocks WHERE chain_id = ${chainId} AND number = ${query}::bigint AND canonical LIMIT 1`
 		for (const block of blocks) items.push({ type: 'block', label: `Block #${block['number']}`, href: `/block/${block['number']}?chainId=${chainId}`, detail: String(block['hash']) })
 	}
-	const questionId = /^\d{1,78}$/.test(query) ? query : null
-	if (questionId !== null) {
-		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND question_id = ${query}::numeric AND canonical LIMIT 1`
+	const questionId = numericIdentity(query)
+	if (questionId !== undefined) {
+		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND question_id = ${questionId}::numeric AND canonical LIMIT 1`
 		for (const question of questions) items.push({ type: 'question', label: String(question['title']), href: `/question/${question['question_id']}?chainId=${chainId}`, detail: `Question #${query}` })
-		const reports = await sql`SELECT DISTINCT open_oracle_address, report_id::text FROM open_oracle_report_events WHERE chain_id = ${chainId} AND report_id = ${query}::numeric AND canonical LIMIT ${limit}`
+		const reports = await sql`SELECT DISTINCT open_oracle_address, report_id::text FROM open_oracle_report_events WHERE chain_id = ${chainId} AND report_id = ${questionId}::numeric AND canonical LIMIT ${limit}`
 		for (const report of reports) items.push({ type: 'report', label: `Report #${report['report_id']}`, href: `/report/${report['open_oracle_address']}/${report['report_id']}?chainId=${chainId}`, detail: String(report['open_oracle_address']) })
 	}
 	if (query.length >= 2 && !hashPattern.test(query)) {
 		const pattern = literalContainsPattern(query)
-		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND title ILIKE ${pattern} AND canonical AND question_id IS DISTINCT FROM ${questionId}::numeric ORDER BY created_timestamp DESC LIMIT ${limit}`
+		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND title ILIKE ${pattern} AND canonical AND question_id IS DISTINCT FROM ${questionId ?? null}::numeric ORDER BY created_timestamp DESC LIMIT ${limit}`
 		for (const question of questions) items.push({ type: 'question', label: String(question['title']), href: `/question/${question['question_id']}?chainId=${chainId}` })
 	}
 	return items.slice(0, limit)

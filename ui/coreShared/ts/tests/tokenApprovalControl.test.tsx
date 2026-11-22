@@ -83,9 +83,11 @@ describe('TokenApprovalControl', () => {
 		[1000000000000000001n, 18, '≈ 1.01', '1.000000000000000001'],
 		[1n, 18, '≈ 0.01', '0.000000000000000001'],
 		[180n, 2, '1.8', '1.8'],
-		[1234567n, 0, '≈ 1.24M', '1\u00a0234\u00a0567'],
-		[999999n, 0, '≈ 1M', '999\u00a0999'],
-		[1000001n * 10n ** 18n, 18, '≈ 1.01M', '1\u00a0000\u00a0001'],
+		[1234567n, 0, '1\u00a0234\u00a0567.00', '1\u00a0234\u00a0567'],
+		[999999n, 0, '999\u00a0999.00', '999\u00a0999'],
+		[1000001n * 10n ** 18n, 18, '1\u00a0000\u00a0001.00', '1\u00a0000\u00a0001'],
+		[100001n, 2, '1\u00a0000.01', '1\u00a0000.01'],
+		[1200n * 10n ** 18n, 18, '1.2k', '1\u00a0200'],
 		[10n ** 30n + 1n, 0, undefined, '1\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0001'],
 	])('rounds button amounts upward while approving the exact value %s', async (amount, units, label, exact) => {
 		const approvals: (bigint | undefined)[] = []
@@ -108,7 +110,9 @@ describe('TokenApprovalControl', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const button = within(rendered.container).getByRole('button', { name: label === undefined ? 'Approve WETH' : `Approve ${label} WETH` })
 		expect(button.querySelector('[title]')?.getAttribute('title')).toBe(`Approve ${exact}\u00a0WETH`)
-		await act(() => fireEvent.click(button))
+		await act(() => {
+			fireEvent.click(button)
+		})
 		expect(approvals).toEqual([amount])
 	})
 
@@ -191,13 +195,19 @@ describe('TokenApprovalControl', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		const input = within(rendered.container).getByRole('textbox')
-		expect(rendered.container.querySelectorAll('.tx-action-notice').length).toBe(showRequirementNotice ? 1 : 0)
-		await act(() => fireEvent.input(input, { target: { value: '0.5' } }))
+		expect(rendered.container.querySelectorAll<HTMLElement>('.tx-action-notice').length).toBe(showRequirementNotice ? 1 : 0)
+		await act(() => {
+			fireEvent.input(input, { target: { value: '0.5' } })
+		})
 		expect(rendered.container.querySelector('.tx-action-notice')?.textContent).toContain('will still leave')
-		await act(() => fireEvent.input(input, { target: { value: 'invalid' } }))
-		const notices = rendered.container.querySelectorAll('.tx-action-notice')
+		await act(() => {
+			fireEvent.input(input, { target: { value: 'invalid' } })
+		})
+		const notices = rendered.container.querySelectorAll<HTMLElement>('.tx-action-notice')
 		expect(notices.length).toBe(1)
-		expect(input.getAttribute('aria-describedby')).toBe(notices[0]?.id)
+		const notice = notices[0]
+		if (notice === undefined) throw new Error('Expected one approval notice')
+		expect(input.getAttribute('aria-describedby')).toBe(notice.id)
 		expect(notices[0]?.textContent).toBe('Approval amount must be a decimal number.')
 		expect(rendered.container.querySelectorAll('.field-error').length).toBe(0)
 		expect(within(rendered.container).getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
@@ -258,13 +268,19 @@ describe('TokenApprovalControl', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value } }))
+		await act(() => {
+			fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value } })
+		})
 		expect(documentQueries.getByText(error).id).not.toBe('')
 		const approveButton = documentQueries.getByRole('button', { name: 'Approve REP' }) as HTMLButtonElement
 		expect(approveButton.disabled).toBe(true)
-		await act(() => fireEvent.click(approveButton))
+		await act(() => {
+			fireEvent.click(approveButton)
+		})
 		expect(approvals).toEqual([])
-		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: '' } }))
+		await act(() => {
+			fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: '' } })
+		})
 		expect(documentQueries.queryByText(error)).toBeNull()
 		expect((documentQueries.getByRole('button', { name: 'Approve 450k REP' }) as HTMLButtonElement).disabled).toBe(false)
 	})
@@ -275,7 +291,9 @@ describe('TokenApprovalControl', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: (2n ** 256n - 1n).toString() } }))
+		await act(() => {
+			fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: (2n ** 256n - 1n).toString() } })
+		})
 		expect((documentQueries.getByRole('button', { name: 'Approve unlimited REP' }) as HTMLButtonElement).disabled).toBe(false)
 	})
 
@@ -391,10 +409,14 @@ describe('TokenApprovalControl', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: /max/i })).toBeNull()
-		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Approve 1.2k REP' })))
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Approve 1.2k REP' }))
+		})
 		expect(approvals).toEqual([1200n * 10n ** 18n])
 
-		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: 'max' } }))
+		await act(() => {
+			fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: 'max' } })
+		})
 		expect(documentQueries.getByText('Approval amount must be a decimal number.')).not.toBeNull()
 		expect((documentQueries.getByRole('button', { name: 'Approve REP' }) as HTMLButtonElement).disabled).toBe(true)
 	})
@@ -457,7 +479,9 @@ describe('TokenApprovalControl', () => {
 				/>,
 			)
 			cleanupRenderedComponent = view.cleanup
-			await act(() => fireEvent.input(within(view.container).getByPlaceholderText('Blank uses required total'), { target: { value: '30' } }))
+			await act(() => {
+				fireEvent.input(within(view.container).getByPlaceholderText('Blank uses required total'), { target: { value: '30' } })
+			})
 			await act(() =>
 				within(view.container)
 					.getByRole('button', { name: /Approve/ })

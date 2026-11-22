@@ -1,3 +1,4 @@
+import { minimumAfterSlippage } from '../protocol/tradeQuote.js'
 import { collateralAsset, formatCollateralAmount } from '../protocol/collateral.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
@@ -15,7 +16,6 @@ import type { DeploymentConfiguration } from '../protocol/config.js'
 import { largestMigratedShares, loadForkMigrationContext, migratedShareKey, targetMigrationComplete, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
 import { createTradingPublicClient, publicErrorMessage, settlementAvailability, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
-import * as forkCopy from '../copy/forkMigration.js'
 import * as settlementCopy from '../copy/settlement.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { resolvedShareOutcome } from '../protocol/settlement.js'
@@ -63,7 +63,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const [forkContextError, setForkContextError] = useState<string>()
 	const [forkContextNonce, setForkContextNonce] = useState(0)
 	const [selectedForkTargets, setSelectedForkTargets] = useState<readonly ForkTarget[]>([])
-	// Migration moves the whole source balance and locks it in the parent universe, so it needs an explicit acknowledgment of those inputs.
+	// Migration mints the whole balance in each selected child and locks the retained source shares in the parent universe, so it needs an explicit acknowledgment of those inputs.
 	const [migrationAcknowledgedKey, setMigrationAcknowledgedKey] = useState<string>()
 	const forkClient = useMemo(() => services.createPublicClient(configuration), [configuration, services])
 	const availability = settlementAvailability(market, balances)
@@ -87,14 +87,12 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const forkContextKey = `${market.pool}\u0000${market.shareToken}\u0000${market.universeId.toString()}\u0000${account ?? ''}`
 	const currentForkContext = forkContext?.key === forkContextKey ? forkContext.context : undefined
 	const forkContextLoading = forkContextState === 'loading' || forkContextState === 'idle'
-	// A child universe that already holds this share's whole balance would migrate nothing, and the contract reverts.
-	const alreadyMigratedTarget = selectedForkTargets.find(target => targetMigrationComplete(target, sourceOutcome, sourceBalance))
 	let inputBlocker = unavailableReason ?? amountFormatError ?? settlementInputBlocker(operation, unavailableReason, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance, market)
 	if (operation === 'migrate-shares' && operationAvailable) {
 		// The loading line above the picker names what is loading; the action only needs to say it is waiting.
 		if (forkContextLoading) inputBlocker = commonCopy.loadingWithEllipsis
 		else if (forkContextState === 'error' || currentForkContext === undefined) inputBlocker = forkContextError ?? settlementCopy.forkDetailsUnavailable
-		else inputBlocker ??= alreadyMigratedTarget === undefined ? forkMigrationBatchBlocker(selectedForkTargets) : settlementCopy.targetAlreadyMigrated(sourceOutcome, forkCopy.childUniverseName(alreadyMigratedTarget.label))
+		else inputBlocker ??= forkMigrationBatchBlocker(selectedForkTargets)
 	}
 	// A positive migrated amount means the contract locked this source balance in the parent universe.
 	const sourceLocked = currentForkContext !== undefined && largestMigratedShares(currentForkContext.availableTargets)[migratedShareKey(sourceOutcome)] > 0n
@@ -189,7 +187,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		...(winningOutcome === undefined ? [] : [operationOption('redeem-winning-shares', settlementCopy.redeemOutcomeAction(winningOutcome), workflowLocked, undefined)]),
 		operationOption('migrate-shares', settlementCopy.forkMigrationAction, workflowLocked || !forked || winningOutcome !== undefined, forkedResolvedReason ?? (forked ? undefined : settlementCopy.universeNotForkedReason)),
 	]
-	// Shown before the action once there is a balance to move and a branch to move it to.
+	// Shown before the action once there is a balance to mint and a selected child universe.
 	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market, 4, 'nearest', { noteRedemption: false }) : undefined
 	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
 	// Cash-only Max uses six decimals rounded down; baskets use their exact share amount.
@@ -310,7 +308,10 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 						<TransactionReview
 							variant='inline'
 							primary={[{ label: settlementCopy.youReceive, value: formatCollateralAmount(approval.expectedAttoEth, market) }, ...((approval.expectedAttoRep ?? 0n) === 0n ? [] : [{ label: settlementCopy.recoveryRep, value: formatValueWithUnit(formatTrimmedUnits(approval.expectedAttoRep ?? 0n), commonCopy.rep) }])]}
-							details={[{ label: settlementCopy.minimumReceived, value: formatCollateralAmount(approval.minimumAttoEth, market, 4, 'down') }]}
+							details={[
+								{ label: settlementCopy.minimumReceived, value: formatCollateralAmount(approval.minimumAttoEth, market, 4, 'down') },
+								{ label: settlementCopy.minimumRecoveryRep, value: formatValueWithUnit(formatTrimmedUnits(minimumAfterSlippage(approval.expectedAttoRep ?? 0n, approval.slippageBps), 18, 18), commonCopy.rep) },
+							]}
 						/>
 						<UserMessage
 							className='detail trade-estimate-note'

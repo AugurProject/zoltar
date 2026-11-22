@@ -1,11 +1,10 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, keccak256, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
+import { createRpcEndpointPool, createWalletClient, getAddress, keccak256, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { OperatorSettings } from '../../src/config/settings.ts'
-import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
 import { assertRecoverySubmissionMode, pendingIntentRecoveryAction, transactionIsStrictNonceCancellation } from '../../src/execution/recovery-policy.ts'
 import { TransactionAwaitingRecovery } from '../../src/execution/transaction-executor.ts'
@@ -20,8 +19,8 @@ const directories: string[] = []
 const target = getAddress('0x0000000000000000000000000000000000000020')
 const openOracle = getAddress('0x0000000000000000000000000000000000000021')
 const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
-const childRepSplitSignature = 'ChildRepSplit(address,uint256,uint256,uint256)'
-const childRepSplitTopic = keccak256(toHex(childRepSplitSignature))
+const migrationRepSplitSignature = 'MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'
+const migrationRepSplitTopic = keccak256(toHex(migrationRepSplitSignature))
 const recoveryReceiptBlockHash = `0x${'aa'.repeat(32)}` as const
 const recoveryFinalityBlockHash = `0x${'bb'.repeat(32)}` as const
 const recoveryReceiptClockTimestamp = 2_000_000n
@@ -47,7 +46,6 @@ type RecoveryRpcOptions = {
 	gasEstimate?: RecoveryGasEstimateOutcome | undefined
 	head?: bigint | undefined
 	repBalances?: { credit: bigint; wallet: bigint } | undefined
-	vaultBacking?: { amountAttoRep: bigint; vault: `0x${string}` } | undefined
 }
 
 function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${string}`, options: RecoveryRpcOptions = {}) {
@@ -58,8 +56,6 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 	let currentNonce = 3n
 	let ethCallHook: (() => void) | undefined
 	let requestHook: ((method: string) => void) | undefined
-	const vaultCall = options.vaultBacking === undefined ? undefined : encodeFunctionData({ abi: securityPoolAbi, args: [options.vaultBacking.vault], functionName: 'securityVaults' })
-	const backingCall = options.vaultBacking === undefined ? undefined : encodeFunctionData({ abi: securityPoolAbi, args: [10n], functionName: 'backingUnitsToAttoRep' })
 	const server = Bun.serve({
 		port: 0,
 		async fetch(request) {
@@ -107,15 +103,6 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 				case 'eth_getTransactionReceipt':
 					return Response.json({ id, jsonrpc: '2.0', result: null })
 				case 'eth_call':
-					if (options.vaultBacking !== undefined && 'params' in body && Array.isArray(body.params)) {
-						const transaction = rpcRequest(body.params[0])
-						const to = 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : undefined
-						const data = 'data' in transaction && typeof transaction.data === 'string' ? transaction.data.toLowerCase() : undefined
-						if (to === target.toLowerCase() && data === vaultCall) {
-							return Response.json({ id, jsonrpc: '2.0', result: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [10n, 0n, 0n, 0n]) })
-						}
-						if (to === target.toLowerCase() && data === backingCall) return Response.json({ id, jsonrpc: '2.0', result: toHex(options.vaultBacking.amountAttoRep, { size: 32 }) })
-					}
 					if (options.repBalances !== undefined && 'params' in body && Array.isArray(body.params)) {
 						const transaction = rpcRequest(body.params[0])
 						const to = 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : undefined
@@ -240,7 +227,7 @@ function canonicalLifecycleRecoveryPlan(): OperationPlan {
 	return {
 		...plan,
 		classification: 'lifecycle-obligation',
-		definitionId: 'statoblast.fork.migrate-rep',
+		definitionId: 'zoltar.migration.split',
 		ecosystem: 'statoblast',
 		id: 'plan:recovered-migrate-rep',
 		label: 'Fork workflow: migrate-rep',
@@ -252,15 +239,15 @@ function canonicalLifecycleRecoveryPlan(): OperationPlan {
 				...step,
 				evidence: [
 					{
-						abi: 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)',
+						abi: 'event MigrationRepSplit(address indexed migrator, address recipient, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)',
 						canonicalLifecycleConfirmation: true,
 						emitter: target,
 						equals: targetAttoRep,
-						field: 'childPoolRepSplitAttoRep',
-						indexed: { outcomeIndex: '0', parent: target },
+						field: 'childMigrationRepAmountAttoRep',
+						indexed: { universeId: '0', migrator: target },
 						kind: 'decoded-event-field',
-						signature: childRepSplitSignature,
-						topic0: childRepSplitTopic,
+						signature: migrationRepSplitSignature,
+						topic0: migrationRepSplitTopic,
 					},
 				],
 				id: 'migrate-rep',
@@ -289,7 +276,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 			weth: zeroAddress,
 			zoltar: zeroAddress,
 		},
-		discovery: { maxPools: 1, maxQuestions: 1, maxUniverses: 1, maxVaultsPerPool: 1 },
+		discovery: { maxPools: 1, maxQuestions: 1, maxUniverses: 1 },
 		network: { chainId: 1, explorerUrl: '', maximumBlockIntervalSeconds: 15, name: 'mainnet' },
 		networkConfigured: true,
 		paused: false,
@@ -500,7 +487,7 @@ async function finalizedRecoveryEnvironment(mode: FinalizedRecoveryMode, outcome
 	const evidenceByOutcome = {
 		'evidence-unavailable': [{ account: account.address, asset: 'ETH', direction: 'any', kind: 'balance-change' }],
 		revert: step.evidence,
-		'semantic-failure': [{ emitter: target, kind: 'event', signature: childRepSplitSignature, topic0: childRepSplitTopic }],
+		'semantic-failure': [{ emitter: target, kind: 'event', signature: migrationRepSplitSignature, topic0: migrationRepSplitTopic }],
 		success: step.evidence,
 	} as const satisfies Record<FinalizedRecoveryOutcome, PendingTransactionIntent['semanticExpectation']['evidence']>
 	const intent: PendingTransactionIntent = {

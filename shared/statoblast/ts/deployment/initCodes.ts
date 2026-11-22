@@ -1,39 +1,30 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import {
-	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 	ORACLE_DISPUTE_DELAY,
 	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
 	ORACLE_FEE_PERCENTAGE,
-	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
 	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
 	ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
 	ORACLE_MULTIPLIER,
 	ORACLE_PROTOCOL_FEE,
 	ORACLE_PROTOCOL_FEE_RECIPIENT,
-	ORACLE_REPORT_GAS,
-	ORACLE_SETTLEMENT_GAS,
 	ORACLE_SETTLEMENT_TIME,
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-	ORACLE_TIME_TYPE,
-	ORACLE_TRACK_DISPUTES,
 } from '../initialReport/oracleInitialReport.js'
 import { createInfraContractAddressHelper } from './deploymentAddresses.js'
 
 const SECURITY_POOL_UTILS_LIBRARY = 'contracts/statoblast/SecurityPoolUtils.sol:SecurityPoolUtils'
 
 // Constructor parameters shared by the price coordinator and its factory, after their gas parameters.
-const ORACLE_SETTLEMENT_PARAMETER_TYPES = [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }] as const
+const ORACLE_SETTLEMENT_PARAMETER_TYPES = [{ type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }] as const
 const ORACLE_SETTLEMENT_PARAMETERS = [
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 	ORACLE_SETTLEMENT_TIME,
 	ORACLE_DISPUTE_DELAY,
 	ORACLE_PROTOCOL_FEE,
 	ORACLE_FEE_PERCENTAGE,
 	ORACLE_MULTIPLIER,
-	ORACLE_TIME_TYPE,
-	ORACLE_TRACK_DISPUTES,
 	ORACLE_PROTOCOL_FEE_RECIPIENT,
 	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
 	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
@@ -42,10 +33,7 @@ const ORACLE_SETTLEMENT_PARAMETERS = [
 
 /** ABI-encoded OpenOraclePriceCoordinatorFactory constructor arguments. */
 function encodeOpenOraclePriceCoordinatorFactoryArguments(weth: Address, coordinatorWorker: Address, feedWorker: Address): Hex {
-	return encodeAbiParameters(
-		[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES, { type: 'address' }, { type: 'address' }],
-		[weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ...ORACLE_SETTLEMENT_PARAMETERS, coordinatorWorker, feedWorker],
-	)
+	return encodeAbiParameters([{ type: 'address' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES, { type: 'address' }, { type: 'address' }], [weth, ...ORACLE_SETTLEMENT_PARAMETERS, coordinatorWorker, feedWorker])
 }
 
 type PriceCoordinatorArguments = {
@@ -58,10 +46,7 @@ type PriceCoordinatorArguments = {
 
 /** @internal ABI-encoded OpenOraclePriceCoordinator constructor arguments; the contract simulator derives price coordinator addresses from them. */
 export function encodeOpenOraclePriceCoordinatorArguments({ initialReportPriorityFeeAttoEthPerGas, openOracle, repToken, weth, reportDelegate }: PriceCoordinatorArguments): Hex {
-	return encodeAbiParameters(
-		[{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES, { type: 'address' }],
-		[openOracle, repToken, weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, initialReportPriorityFeeAttoEthPerGas, ...ORACLE_SETTLEMENT_PARAMETERS, reportDelegate],
-	)
+	return encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES, { type: 'address' }], [openOracle, repToken, weth, initialReportPriorityFeeAttoEthPerGas, ...ORACLE_SETTLEMENT_PARAMETERS, reportDelegate])
 }
 
 type BytecodeArtifact = Readonly<{ evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>

@@ -1,6 +1,8 @@
 ARG BUN_VERSION=1.4.4
+# Multi-arch index digest of oven/bun:${BUN_VERSION}-alpine; update it together with BUN_VERSION.
+ARG BUN_IMAGE_DIGEST=sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 
-FROM oven/bun:${BUN_VERSION}-alpine AS workspace
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS workspace
 WORKDIR /workspace
 COPY package.json bun.lock ./
 COPY augurScan/package.json ./augurScan/package.json
@@ -38,6 +40,7 @@ RUN bun run --cwd shared/statoblast build
 WORKDIR /workspace/augurScan
 COPY augurScan/browser ./browser
 COPY augurScan/src/collateral.ts ./src/collateral.ts
+COPY augurScan/src/rich-list-limits.ts ./src/rich-list-limits.ts
 COPY augurScan/src/timeline-search.ts ./src/timeline-search.ts
 COPY augurScan/scripts/build-browser.ts ./scripts/build-browser.ts
 COPY augurScan/public ./public
@@ -56,7 +59,7 @@ COPY docs/mainnet-deployment-addresses.json ./docs/mainnet-deployment-addresses.
 COPY docs/sepolia-deployment-addresses.json ./docs/sepolia-deployment-addresses.json
 RUN bun run --cwd augurScan metadata:build
 
-FROM oven/bun:${BUN_VERSION}-alpine AS runtime
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS runtime
 WORKDIR /workspace
 ENV NODE_ENV=production
 COPY --from=dependencies /workspace/node_modules ./node_modules
@@ -82,9 +85,9 @@ COPY shared/core/ts/math/ ./shared/core/ts/math/
 COPY shared/core/ts/monitoring/ ./shared/core/ts/monitoring/
 COPY shared/core/ts/deployment/uniswapDeployments.ts ./shared/core/ts/deployment/uniswapDeployments.ts
 COPY shared/core/ts/validation/guards.ts ./shared/core/ts/validation/guards.ts
-COPY shared/statoblast/ts/statoblast/liquidation.ts ./shared/statoblast/ts/statoblast/liquidation.ts
+COPY shared/statoblast/ts/initialReport/oracleInitialReport.ts ./shared/statoblast/ts/initialReport/oracleInitialReport.ts
 RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan
 USER bun
 EXPOSE 3000
-HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 CMD ["bun", "-e", "const r=await fetch('http://127.0.0.1:3000/health/ready');if(!r.ok)process.exit(1)"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 CMD ["bun", "-e", "const p=process.env.PORT?.trim()||'3000';const r=await fetch('http://127.0.0.1:'+p+'/health/ready');if(!r.ok)process.exit(1)"]
 CMD ["bun", "augurScan/src/server.ts"]

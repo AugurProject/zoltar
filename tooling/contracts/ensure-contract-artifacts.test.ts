@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { pathExists } from '../repo/fs.mts'
-import { getRequiredContractArtifactRelativePaths, getRequiredSharedOutputRelativePaths, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
+import { projectDependencyClosure } from '../repo/projects.ts'
+import { getContractFreshnessInputRelativePaths, getRequiredContractArtifactRelativePaths, getRequiredSharedOutputRelativePaths, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
 
 test('ensure-contract-artifacts requires shared package export outputs', async () => {
 	const requiredSharedOutputs = await getRequiredSharedOutputRelativePaths()
@@ -65,4 +66,13 @@ test('ensure-contract-artifacts removes compiled outputs that can shadow shared 
 	} finally {
 		await rm(repositoryRoot, { force: true, recursive: true })
 	}
+})
+
+test('local contract freshness tracks every CI contract-cache producer input the local compile consumes', () => {
+	const localInputs = getContractFreshnessInputRelativePaths()
+	expect(localInputs).toContain('solidity/ts/contractProjects.ts')
+	const ciContractInputs = projectDependencyClosure(['contracts']).flatMap(project => project.tasks.build?.cacheInputs ?? project.tasks.build?.inputs ?? [])
+	// Plain files under solidity/ts plus the UI artifact producer are inputs to the local compile:current chain.
+	const consumedPlainFiles = ciContractInputs.filter(input => !/[*?[\]{}]/u.test(input) && (input.startsWith('solidity/ts/') || input === 'tooling/ui/projectArtifacts.mts'))
+	for (const input of consumedPlainFiles) expect(localInputs).toContain(input)
 })

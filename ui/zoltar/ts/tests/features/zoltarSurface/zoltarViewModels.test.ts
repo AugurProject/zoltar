@@ -2,7 +2,7 @@
 
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { deriveZoltarOverviewModel, getZoltarUniverseActions, resolveZoltarRouteGate, type ZoltarOverviewInput } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
+import { deriveZoltarOverviewModel, getForkHandoff, getZoltarUniverseActions, resolveZoltarRouteGate, type ZoltarOverviewInput } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
 import { describe, expect, test } from 'bun:test'
 import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
@@ -174,4 +174,10 @@ describe('deriveZoltarOverviewModel', () => {
 		expect(model.status).toBe('loading')
 		expect(model.nextStep).toBeUndefined()
 	})
+})
+
+test('Use for fork waits for the parent response period and opens at its exact boundary', () => {
+	const base = { universe: createUniverse({ hasForked: false, earliestForkTime: 100n }), universeError: undefined, universeState: 'ready' as const }
+	expect(getForkHandoff({ ...base, currentTimestamp: 99n })).toMatchObject({ kind: 'offered', universeReason: expect.stringContaining('parent fork response period') })
+	expect(getForkHandoff({ ...base, currentTimestamp: 100n })).toEqual({ kind: 'offered', universeReason: undefined })
 })

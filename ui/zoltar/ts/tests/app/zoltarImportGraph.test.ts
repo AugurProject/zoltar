@@ -230,6 +230,7 @@ describe('Zoltar production module graph', () => {
 		const visibleShell = appShell.replace(importMapMatch[0], '')
 
 		expect(visibleShell.match(/open(?:\s|-)*oracle|statoblast|@zoltar\/shared\/oracleInitialReport/i)).toBeNull()
+		if (importMap === undefined) throw new Error('Missing import map capture')
 		expect(importMap.match(/@zoltar\/ui-(?:statoblast|trading)\/|(?:^|[./])ui\/(?:statoblast|trading)\/(?:js|ts)\//im)).toBeNull()
 	})
 

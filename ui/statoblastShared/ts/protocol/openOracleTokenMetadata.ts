@@ -2,6 +2,7 @@ import { bigintToSafeNumber, zeroAddress, type Address } from '@zoltar/core-shar
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { tokenDisplayLabel } from '@zoltar/ui-core-shared/lib/tokenLabel.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getGenesisReputationTokenAddress, getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
@@ -51,7 +52,9 @@ async function loadZoltarReputationTokens(client: Pick<ReadClient, 'multicall'>,
 /** Reads every token's metadata with allow-failure calls so one unusable token never rejects the others. */
 export async function loadOpenOracleTokenMetadata(client: Pick<ReadClient, 'multicall'>, tokens: readonly Address[]): Promise<Map<string, OpenOracleTokenMetadata>> {
 	const metadata = new Map<string, OpenOracleTokenMetadata>()
-	const uniqueTokens = tokens.filter((token, index) => tokens.findIndex(other => sameAddress(other, token)) === index)
+	// OpenOracle's ETH_SENTINEL (the zero address) is native ETH, which has no ERC-20 metadata to read.
+	if (tokens.some(token => sameAddress(token, zeroAddress))) metadata.set(zeroAddress, { status: 'success', decimals: 18, label: commonCopy.eth })
+	const uniqueTokens = tokens.filter((token, index) => !sameAddress(token, zeroAddress) && tokens.findIndex(other => sameAddress(other, token)) === index)
 	if (uniqueTokens.length === 0) return metadata
 	const weth = getWethAddress()
 	const genesisRep = getGenesisReputationTokenAddress()
@@ -73,7 +76,7 @@ export async function loadOpenOracleTokenMetadata(client: Pick<ReadClient, 'mult
 		if (decimals === undefined) result = { status: 'failure', message: openOracleCopy.formatTokenDecimalsInvalid(token) }
 		else if (isWeth && (decimals !== 18 || symbol?.trim() !== 'WETH')) result = { status: 'failure', message: openOracleCopy.formatWethMetadataInvalid(token) }
 		else {
-			const verified = token !== zeroAddress && (isWeth || sameAddress(token, genesisRep) || childReputationTokens.has(token.toLowerCase()))
+			const verified = isWeth || sameAddress(token, genesisRep) || childReputationTokens.has(token.toLowerCase())
 			result = { status: 'success', decimals, label: tokenDisplayLabel({ address: token, symbol, verified }) }
 		}
 		metadata.set(token.toLowerCase(), result)

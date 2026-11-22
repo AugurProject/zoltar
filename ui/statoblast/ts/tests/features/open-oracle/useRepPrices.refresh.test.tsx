@@ -61,7 +61,7 @@ describe('useRepPrices refresh races', () => {
 
 	test('times out stalled price quotes and allows a fresh retry without applying late results', async () => {
 		const originalSetTimeout = globalThis.setTimeout
-		spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args))
+		spyOn(globalThis, 'setTimeout').mockImplementation(Object.assign((...[handler, delay, ...args]: Parameters<typeof originalSetTimeout>) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args), originalSetTimeout))
 		const stalled = createDeferred<RepQuote>()
 		let ethCalls = 0
 		const quote = mockQuote(3n)
@@ -87,7 +87,7 @@ describe('useRepPrices refresh races', () => {
 
 	test('uses the V3 quote when the V4 request stalls', async () => {
 		const originalSetTimeout = globalThis.setTimeout
-		spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args))
+		spyOn(globalThis, 'setTimeout').mockImplementation(Object.assign((...[handler, delay, ...args]: Parameters<typeof originalSetTimeout>) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args), originalSetTimeout))
 		const stalled = createDeferred<RepQuote>()
 		const v3Quote = mock(async () => mockQuote(7n))
 		installRepPriceQuoterForTesting({

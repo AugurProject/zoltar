@@ -1,7 +1,7 @@
 import type { RuntimeTopologySummary } from '../state/operator-state.ts'
 import type { CanonicalScanResult } from './canonical-scan.ts'
 
-export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' | 'executionReady' | 'snapshot' | 'topologyCache'>): RuntimeTopologySummary {
+export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' | 'historyComplete' | 'snapshot' | 'topologyCache'>): RuntimeTopologySummary {
 	return {
 		anchor: { blockNumber: scan.anchor.blockNumber, timestamp: scan.anchor.timestamp },
 		auctions: scan.snapshot.auctions.map(auction => ({
@@ -13,7 +13,8 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 			universeId: auction.universeId,
 			startTime: auction.startTime,
 		})),
-		complete: scan.executionReady,
+		// Discovery completeness does not depend on a signer; execution paths check the signer separately.
+		complete: scan.historyComplete,
 		pairs: scan.snapshot.pairs.map(pair => ({ address: pair.address, feeBps: pair.feeBps, pool: pair.pool, status: pair.status, universeId: pair.universeId })),
 		pools: scan.snapshot.pools.map(pool => ({
 			address: pool.address,

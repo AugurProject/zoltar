@@ -4,9 +4,9 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as ts from 'typescript'
 import { getSharedBrowserImports, sharedBrowserArtifactRelativePaths } from './sharedBrowserArtifacts.ts'
-import { assertSuccessfulBuilds, clearVendorOutput, vendor } from './vendor.mts'
+import { assertSuccessfulBuilds, assertVendorCommandArguments, clearVendorOutput, vendor } from './vendor.mts'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, getUiPackageRoot } from './appPaths.mts'
-import { copyProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPaths } from './projectArtifacts.mts'
+import { copyProjectArtifacts, generateCanonicalProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPaths } from './projectArtifacts.mts'
 
 const coreSharedPaths = getUiCoreSharedPaths()
 const repositoryRootPath = coreSharedPaths.repositoryRoot
@@ -455,6 +455,23 @@ test('vendor build failures cannot be silently ignored', () => {
 	expect(() => assertSuccessfulBuilds([{ success: false, logs: [{ message: 'unresolved import' }] }], 'test bundle')).toThrow('test bundle failed:\nunresolved import')
 })
 
+test('vendor command rejects obsolete or unknown options, including every package-local generate script', () => {
+	expect(() => assertVendorCommandArguments([])).not.toThrow()
+	expect(() => assertVendorCommandArguments(['zoltar'])).not.toThrow()
+	expect(() => assertVendorCommandArguments(['zoltar', '--scoped-artifacts'])).toThrow('unexpected argument(s): --scoped-artifacts')
+	expect(() => assertVendorCommandArguments(['--scoped-artifacts'])).toThrow('unexpected option: --scoped-artifacts')
+	for (const app of UI_APP_IDS) {
+		const manifest: unknown = JSON.parse(fs.readFileSync(path.join(repositoryRootPath, 'ui', app, 'package.json'), 'utf8'))
+		const scripts = typeof manifest === 'object' && manifest !== null ? Reflect.get(manifest, 'scripts') : undefined
+		const generate = typeof scripts === 'object' && scripts !== null ? Reflect.get(scripts, 'generate') : undefined
+		if (typeof generate !== 'string') throw new Error(`ui/${app}/package.json has no generate script`)
+		const vendorCommand = generate.split('&&').find(command => command.includes('tooling/ui/vendor.mts'))
+		if (vendorCommand === undefined) throw new Error(`ui/${app} generate script does not run the vendor build`)
+		const vendorArguments = vendorCommand.trim().split(/\s+/).slice(2)
+		expect(() => assertVendorCommandArguments(vendorArguments)).not.toThrow()
+	}
+})
+
 test('project artifact generation writes Trading output only when explicitly requested', async () => {
 	const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'zoltar-project-artifacts-'))
 	const artifactPaths: ProjectArtifactPaths = {
@@ -508,6 +525,13 @@ test('project artifact generation writes Trading output only when explicitly req
 		expect(tradingOutput).toContain('6000')
 		expect(tradingOutput).not.toContain('6001')
 		expect(tradingOutput).not.toContain('storageLayout')
+
+		// The canonical Solidity build writes every artifact its registry entry advertises, Trading included.
+		fs.rmSync(artifactPaths.tradingContractArtifactOutputPath)
+		fs.rmSync(artifactPaths.statoblastContractArtifactOutputPath)
+		await generateCanonicalProjectArtifacts(artifactPaths)
+		expect(fs.readFileSync(artifactPaths.tradingContractArtifactOutputPath, 'utf8')).toContain('contracts/trading/Router.sol')
+		expect(fs.readFileSync(artifactPaths.statoblastContractArtifactOutputPath, 'utf8')).toContain('SecurityPool')
 	} finally {
 		fs.rmSync(temporaryRoot, { force: true, recursive: true })
 	}

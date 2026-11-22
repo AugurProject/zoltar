@@ -220,15 +220,15 @@ test('invariant explorer filters, expands, resets, and opens a fragment target',
 		expect(keyword.value).toBe('')
 		expect(count.textContent).toBe(`${entries.length} of ${entries.length} invariants`)
 
-		const livenessOption = Array.from(typeSelect.options).find(option => option.value === 'Conservation')
-		const toolingOption = Array.from(statusSelect.options).find(option => option.value === 'Contract guard and regression tests')
-		if (livenessOption === undefined || toolingOption === undefined) throw new Error('Invariant explorer facets are missing expected options')
+		const livenessOption = Array.from(typeSelect.options).find(option => option.value === 'Liveness')
+		const guardOption = Array.from(statusSelect.options).find(option => option.value === 'Contract guard')
+		if (livenessOption === undefined || guardOption === undefined) throw new Error('Invariant explorer facets are missing expected options')
 		typeSelect.value = livenessOption.value
 		typeSelect.dispatchEvent(new Event('change'))
 		const livenessCount = entries.filter(entry => !entry.hidden).length
 		expect(livenessCount).toBeGreaterThan(0)
 		expect(count.textContent).toBe(`${livenessCount} of ${entries.length} invariants`)
-		statusSelect.value = toolingOption.value
+		statusSelect.value = guardOption.value
 		statusSelect.dispatchEvent(new Event('change'))
 		expect(count.textContent).toBe(`0 of ${entries.length} invariants`)
 		expect(empty.hidden).toBeFalse()
@@ -456,6 +456,42 @@ test('deployment decoder decodes a mask against the selected network mapping', a
 		expect(input.hasAttribute('aria-invalid')).toBeFalse()
 		expect(bitToggles().every(button => !button.disabled)).toBeTrue()
 		expect(bitToggles().some(button => button.getAttribute('aria-pressed') === 'true')).toBeTrue()
+	} finally {
+		restoreFetch()
+		cleanup()
+	}
+})
+
+test('deployment decoder reads a complete Zoltar-only mask without reporting later steps as missing', async () => {
+	const sepoliaSteps = getDeploymentSteps(SEPOLIA_NETWORK_PROFILE).filter(step => step.id !== 'deploymentStatusOracle')
+	const zoltarPrefixLength = sepoliaSteps.findIndex(step => step.id === 'zoltar') + 1
+	expect(zoltarPrefixLength).toBe(5)
+	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
+	const restoreFetch = installFetch(serveDeploymentAddresses)
+	try {
+		await runGeneratedRuntime('deploymentMaskDecoder')
+		const network = document.querySelector<HTMLSelectElement>('[data-deployment-mask-network]')
+		const oracle = document.querySelector<HTMLSelectElement>('[data-deployment-mask-oracle]')
+		const input = document.querySelector<HTMLInputElement>('#deployment-mask-input')
+		const summary = document.querySelector<HTMLOutputElement>('[data-deployment-mask-summary]')
+		const guidance = document.querySelector<HTMLElement>('[data-deployment-mask-guidance]')
+		if (network === null || oracle === null || input === null || summary === null || guidance === null) throw new Error('Deployment decoder oracle controls are missing')
+		network.value = 'sepolia'
+		network.dispatchEvent(new Event('change'))
+		oracle.value = 'zoltar'
+		oracle.dispatchEvent(new Event('change'))
+		input.value = '31'
+		input.dispatchEvent(new Event('input'))
+		expect(summary.value).toStartWith(`Sepolia Zoltar-only oracle: ${zoltarPrefixLength} of ${zoltarPrefixLength} tracked steps have set bits`)
+		expect(guidance.textContent).toBe('No bits are set above the tracked manifest range.')
+		expect(document.querySelectorAll('[data-deployment-bit-toggle]')).toHaveLength(zoltarPrefixLength)
+		const statuses = Array.from(document.querySelectorAll<HTMLTableCellElement>('#sepolia-deployment-status-bit-mapping [data-deployment-bit-status]'))
+		expect(statuses).toHaveLength(sepoliaSteps.length)
+		expect(statuses.filter(cell => cell.textContent === 'Clear · no code')).toHaveLength(0)
+		expect(statuses.slice(zoltarPrefixLength).every(cell => cell.textContent === 'Not tracked · Zoltar-only oracle')).toBeTrue()
+		oracle.value = 'full'
+		oracle.dispatchEvent(new Event('change'))
+		expect(summary.value).toStartWith(`Sepolia: ${zoltarPrefixLength} of ${sepoliaSteps.length} tracked steps have set bits`)
 	} finally {
 		restoreFetch()
 		cleanup()

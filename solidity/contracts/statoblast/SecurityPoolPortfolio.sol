@@ -140,6 +140,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		// A fee stream ends one vesting duration after its funding time and must fit the uint48 clock.
 		require(config.rewardVestingSeconds >= 1 days && config.rewardVestingSeconds <= MAXIMUM_REWARD_VESTING_SECONDS && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
 		require(origin.reportPriorityFeeAttoEthPerGas > 0, 'Initial priority fee zero');
+		require(origin.reportPriorityFeeAttoEthPerGas <= _factory.maximumReportPriorityFeeAttoEthPerGas(), 'Initial report priority fee exceeds OpenOracle limits');
 		require(origin.securityMultiplierBps >= SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS, 'Multiplier must be at least 10500 BPS');
 		factory = _factory;
 		zoltar = _factory.zoltar();

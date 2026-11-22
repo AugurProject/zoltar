@@ -12,6 +12,7 @@ beforeAll(async () => {
 	await mkdir(path.join(fixtureRoot, 'assets'))
 	await mkdir(path.join(fixtureRoot, 'css'))
 	await writeFile(path.join(fixtureRoot, 'index.html'), '<h1>Zoltar</h1>')
+	await writeFile(path.join(fixtureRoot, 'core-deployments.json'), '{}')
 	await writeFile(path.join(fixtureRoot, 'assets', 'app.js'), 'console.log("loaded")')
 	await writeFile(path.join(fixtureRoot, 'assets', 'tevmWorker.worker.js'), 'postMessage("ready")')
 	await writeFile(path.join(fixtureRoot, 'css', 'index.css'), 'body { color: white; }')
@@ -28,6 +29,7 @@ describe('Docker static UI server', () => {
 		expect(indexResponse.status).toBe(200)
 		expect(indexResponse.headers.get('cache-control')).toBe('no-store')
 		expect(await indexResponse.text()).toBe('<h1>Zoltar</h1>')
+		expect((await serveAsset(new Request('http://localhost:8080/core-deployments.json'))).headers.get('cache-control')).toBe('no-store')
 
 		const assetResponse = await serveAsset(new Request('http://localhost:8080/assets/app.js'))
 		expect(assetResponse.status).toBe(200)

@@ -123,6 +123,11 @@ describe('centralized market observations', () => {
 		).toThrow('distinct exchanges')
 	})
 
+	test('rejects a zero DEX probe before monitoring starts', () => {
+		const serialized = serializeCentralizedMarketSettings(settings)
+		expect(() => parseCentralizedMarketSettings({ ...serialized, venueConsensus: { ...serialized.venueConsensus, dexProbeDepthEth: '0' } })).toThrow('centralizedMarkets.venueConsensus.dexProbeDepthEth must be greater than zero')
+	})
+
 	test('round trips operator-configured CEX and constant-product DEX sources', () => {
 		const configured = parseCentralizedMarketSettings({
 			...serializeCentralizedMarketSettings(settings),

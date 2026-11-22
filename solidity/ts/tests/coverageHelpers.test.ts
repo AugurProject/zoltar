@@ -23,7 +23,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
@@ -1683,7 +1683,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
 				}),
 			),
-			/Escalation game deployment failed/,
+			/Invalid game start/, // A second deployment reuses the pool's canonical game address, which starts only once (#1453).
 		)
 
 		const coordinatorWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.abi, bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.evm.bytecode.object) }))
@@ -1693,7 +1693,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
 				bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
-				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n, coordinatorWorker, feedWorker],
+				args: [zeroAddress, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, 480, 0, 100000, 10000, 115, client.account.address, 100000n, 30000n, 1000n, coordinatorWorker, feedWorker],
 			}),
 		)
 		const deployPriceCoordinatorData = encodeFunctionData({

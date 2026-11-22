@@ -74,21 +74,24 @@ export type CentralizedMarketView = {
 
 /** The public CEX + DEX consensus estimate every bot snapshot carries, as rendered by the dashboard. */
 export type MarketConsensusView = {
-	cex: { sourceCount: number }
+	cex: { sourceCount: number; reliable: boolean }
 	dex: { askDepthEth: string; bidDepthEth: string; priceRepPerEth: string; reliable: boolean; sourceCount: number }
 	priceRepPerEth?: string | undefined
 	reasons: readonly string[]
 	reliable: boolean
 }
 
-function consensusStatusText(consensus: MarketConsensusView | undefined, reliableLabel: string) {
+function consensusStatusText(consensus: MarketConsensusView | undefined) {
 	if (consensus === undefined) return undefined
-	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
+	if (!consensus.reliable) return consensus.reasons.join(' · ')
+	if (consensus.cex.reliable && consensus.dex.reliable) return 'Reliable independent CEX + DEX consensus'
+	const group = consensus.cex.reliable ? 'CEX' : 'DEX'
+	return `Warning: ${group}-only fallback; venue independence is reduced.`
 }
 
 function marketStatus(market: CentralizedMarketView | undefined, consensus: MarketConsensusView | undefined) {
-	if (market === undefined) return consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured'
-	return consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · '))
+	if (market === undefined) return consensusStatusText(consensus) ?? 'No market sources configured'
+	return consensusStatusText(consensus) ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · '))
 }
 
 /** Fills the REP market consensus panel from a snapshot's CEX estimate and CEX + DEX consensus. */

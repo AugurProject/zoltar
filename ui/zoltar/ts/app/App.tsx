@@ -1,3 +1,4 @@
+import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
@@ -23,7 +24,7 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { ZOLTAR_ROUTES, type ZoltarRoute } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { zoltarRouting } from '@zoltar/ui-zoltar-shared/lib/routing.js'
-import { ZOLTAR_TAB_VIEWS, ZOLTAR_VIEWS } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
+import { deriveZoltarOverviewModel, ZOLTAR_TAB_VIEWS, ZOLTAR_VIEWS } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
 import { ZoltarWorkspaceProvider, type ZoltarWorkspace } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
@@ -99,7 +100,7 @@ export function App() {
 		universeError: zoltarUniverseError,
 		universeState: zoltarUniverseState,
 	}
-	const deploymentTab: RouteTabDefinition = { hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }
+	const deploymentTab: RouteTabDefinition = { hash: zoltarRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' }
 	const sectionTabs = withDeploymentTab({ deploymentMissing: applicationDeploymentMissing, deploymentTab, deploymentIncomplete: showDeployTab, route, tabs: [{ hash: zoltarRouting.getHash('zoltar'), label: commonCopy.zoltar, route: 'zoltar' }] })
 	const tabNavigationProps = {
 		// The not-found page marks no section current. When Zoltar is the only section, its views fill the top bar and stay there so the user can recover without the browser's back button.
@@ -112,6 +113,19 @@ export function App() {
 		value: getZoltarTabView(activeZoltarView),
 		onChange: view => setZoltarView(view),
 		options: ZOLTAR_TAB_VIEWS.map(view => ({ href: getZoltarViewHref(view), label: getZoltarTabLabel(view), value: view })),
+	})
+	const migrationOverview = deriveZoltarOverviewModel({
+		account: {
+			address: accountState.address,
+			isOnActiveChain: isActiveAppChain(accountState.chainId),
+			preparedMigrationRepAttoRep: operations.zoltarMigrationPreparedRepBalanceAttoRep,
+			childMigratedAttoRep: operations.zoltarMigrationChildSplitAmountsAttoRep,
+			repBalanceAttoRep: zoltarForkRepBalanceAttoRep,
+		},
+		activeUniverseId,
+		universe: zoltarUniverse,
+		universeError: zoltarUniverseError,
+		universeState: zoltarUniverseState,
 	})
 	const secondaryNavigation = activeRoute === 'not-found' ? { ...zoltarViewNavigation, value: '' } : resolveSecondaryNavigation({ route: activeRoute, secondaryByRoute: { zoltar: zoltarViewNavigation } })
 	const transactionRouteKey = route === 'zoltar' ? `${route}:${activeZoltarView}` : route
@@ -153,6 +167,7 @@ export function App() {
 								universePresentation={universePresentation}
 								universeControl={<UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
 								universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
+								hasRepToMigrate={migrationOverview.nextStep?.kind === 'migrate-rep'}
 							/>
 						)}
 						simulationController={simulationController}

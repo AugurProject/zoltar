@@ -196,7 +196,7 @@ describe('useMarketCreation', () => {
 		await hook.setForm({ endTime: '2026-07-02T00:00:00.000Z', title: 'Question A' })
 
 		let createPromise: Promise<unknown> = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			createPromise = hook.state().createMarket()
 		})
 
@@ -218,7 +218,9 @@ describe('useMarketCreation', () => {
 		const onTransactionFinished = mock(() => undefined)
 		const hook = await renderMarketCreationHook({ createMarket: createMarketTransaction, initialProps: { activeUniverseId: 0n }, parameters: { onTransactionFinished, onTransactionRequested: () => false } })
 
-		await act(async () => await hook.state().createMarket())
+		await act(async () => {
+			await hook.state().createMarket()
+		})
 
 		expect(createMarketTransaction).not.toHaveBeenCalled()
 		expect(onTransactionFinished).not.toHaveBeenCalled()
@@ -294,24 +296,24 @@ describe('useMarketCreation', () => {
 			answerUnit: 'degrees C',
 			categoricalOutcomes: ['Yes', 'No'],
 			description: 'Official station reading',
-			endTime: '2026-08-02T00:00:00.000Z',
+			endTime: '2026-08-02T00:00',
 			marketType: 'scalar',
 			scalarIncrement: '0.1',
 			scalarMax: '60',
 			scalarMin: '-20',
-			startTime: '2026-08-01T00:00:00.000Z',
+			startTime: '2026-08-01T00:00',
 			title: 'Maximum temperature',
 		}
 		const categoricalDraft: MarketFormState = {
 			answerUnit: '',
 			categoricalOutcomes: ['Alpha', 'Beta', 'Gamma'],
 			description: 'Published final result',
-			endTime: '2026-09-02T00:00:00.000Z',
+			endTime: '2026-09-02T00:00',
 			marketType: 'categorical',
 			scalarIncrement: '1',
 			scalarMax: '100',
 			scalarMin: '0',
-			startTime: '2026-09-01T00:00:00.000Z',
+			startTime: '2026-09-01T00:00',
 			title: 'Which team wins?',
 		}
 		await hook.setForm(scalarDraft)
@@ -361,7 +363,7 @@ describe('useMarketCreation', () => {
 		await hook.setForm({ endTime: '2026-10-02T00:00:00.000Z', title: 'Universe A question' })
 
 		let createPromise: Promise<unknown> | undefined
-		await act(() => {
+		await act(async () => {
 			createPromise = hook.state().createMarket()
 		})
 		await act(async () => {

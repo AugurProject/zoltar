@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { createPublicClient, http, getAddress, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openArtifact, statoblast_SecurityPoolFixedAdmissionPolicy_SecurityPoolFixedAdmissionPolicy as fixedArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioAdmission.js'
+import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission, requirePortfolioQuestionEligibility } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioAdmission.js'
 
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const policy = getAddress('0x0000000000000000000000000000000000000022')
@@ -55,4 +55,20 @@ test('policy deployment is separate from portfolio deployment and fixed admissio
 	expect(() => portfolioAdmissionCreationRequest(owner, 'fixed', 7n, [])).toThrow('at least one')
 	expect(() => portfolioAdmissionCreationRequest(owner, 'fixed', 7n, [9n, 1n])).toThrow('increasing unique')
 	await expect(requirePortfolioQuestionAdmission(client('0x', 7n, false), policy, owner, 7n, 1n)).rejects.toThrow('not allowed')
+})
+
+test('registration requires strict escalation headroom above the supply-scaled initial deposit', async () => {
+	const supply = 100_000_000n * 10n ** 18n
+	for (const threshold of [10n * 10n ** 18n, 10n * 10n ** 18n + 1n]) {
+		const client = createMockReadClient(request => {
+			expect(request.blockNumber).toBe(99n)
+			if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+			if (request.functionName === 'getNonDecisionThresholdAttoRep') return threshold
+			if (request.functionName === 'getUniverseTheoreticalSupplyAttoRep') return supply
+			throw new Error(`Unexpected eligibility read ${request.functionName}`)
+		})
+		const checked = requirePortfolioQuestionEligibility(client, 0n, 7n, 99n)
+		if (threshold === 10n * 10n ** 18n) await expect(checked).rejects.toThrow('threshold is too low')
+		else await checked
+	}
 })

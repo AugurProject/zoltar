@@ -39,12 +39,13 @@ export async function discoverUniverses({ context, blockNumber, limits, topology
 		queuedIds.delete(universeId.toString())
 		if (seen.has(universeId.toString())) continue
 		seen.add(universeId.toString())
-		const [raw, threshold, nonDecisionThreshold, migration, universeTheoreticalSupply] = await drainConcurrent([
+		const [raw, threshold, nonDecisionThreshold, migration, universeTheoreticalSupply, earliestForkTime] = await drainConcurrent([
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'universes' }),
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }),
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getNonDecisionThresholdAttoRep' }),
 			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [wallet, universeId], blockNumber, functionName: 'getMigrationRepBalanceAttoRep' }),
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getUniverseTheoreticalSupplyAttoRep' }),
+			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getEarliestForkTime' }),
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
@@ -99,6 +100,7 @@ export async function discoverUniverses({ context, blockNumber, limits, topology
 			}
 		}
 		const snapshot: UniverseSnapshot = {
+			earliestForkTime: earliestForkTime.toString(),
 			forkBurnDivisor: forkBurnDivisor.toString(),
 			forkQuestionId: forkQuestionId.toString(),
 			forkThresholdAttoRep: threshold.toString(),

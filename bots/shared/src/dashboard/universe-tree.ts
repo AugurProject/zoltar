@@ -1,3 +1,6 @@
+import { formatGenesisUniverse, formatUnknownLineageUniverse } from '@zoltar/ui-core-shared/copy/universes.js'
+import { formatShortUniverseId } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 export type UniverseNode = {
 	id: string
 	parentId?: string | undefined
@@ -36,7 +39,16 @@ export function universeLineage(tree: UniverseTree, id: string) {
 }
 
 export function universeLabel(node: UniverseNode) {
-	return node.parentId === undefined ? 'Root universe' : `Outcome ${node.outcomeIndex ?? 'unknown'}`
+	if (node.parentId === undefined) {
+		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE]) {
+			for (const outcome of ['yes', 'no'] as const) {
+				if (getGenesisNetworkProfile(profile, outcome).genesisRepTokenAddress.toLowerCase() === node.repToken?.toLowerCase()) return formatGenesisUniverse(outcome)
+			}
+		}
+		return 'Genesis universe'
+	}
+	// The bot tree has no fork-question labels. An index alone must never be guessed to mean a binary answer.
+	return /^(?:0|[1-9]\d*)$/.test(node.id) ? formatUnknownLineageUniverse(formatShortUniverseId(BigInt(node.id))) : formatUnknownLineageUniverse(node.id)
 }
 
 export function universeApprovalSelection(tree: UniverseTree, approved: ReadonlySet<string>, id: string, checked: boolean) {

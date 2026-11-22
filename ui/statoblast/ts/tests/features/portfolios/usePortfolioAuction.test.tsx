@@ -47,7 +47,7 @@ function firstBid(state: Awaited<ReturnType<typeof setup>>, description: string)
 	return bid
 }
 
-function last(requests: PortfolioTransaction[]) {
+function last<T>(requests: T[]) {
 	const request = requests.at(-1)
 	if (request === undefined) throw new Error('Missing auction transaction')
 	return request

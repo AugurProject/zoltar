@@ -14,7 +14,6 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  * Solidity line counts exclude comment-only lines (NatSpec and plain comments) so documentation never counts toward a contract's allowance.
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
-	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [['bots/chaos/src/monitoring/protocol-index.ts', 635]]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
 		['docs/charts/chartRuntime.ts', 874],
@@ -35,17 +34,17 @@ export const testSourceLineLimit = 1500
  */
 export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Split by behavior area into sibling test files that share a fixture module.', [
-		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3438],
+		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3434],
 		['bots/chaos/tests/execution/transaction-executor.test.ts', 1847],
-		['bots/chaos/tests/monitoring/discovery.test.ts', 1694],
-		['bots/chaos/tests/runtime/dashboard-controller.test.ts', 1666],
-		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2057],
+		['bots/chaos/tests/monitoring/discovery.test.ts', 1757],
+		['bots/chaos/tests/runtime/dashboard-controller.test.ts', 1665],
+		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2088],
 		['bots/open-oracle-arbitrager/tests/dashboard/dashboard-refresh.test.ts', 1576],
 		['shared/core/ts/evm/ethereum.test.ts', 3826],
 		['solidity/ts/tests/coverageHelpers.test.ts', 1778],
 		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
-		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1859],
-		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2339],
-		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3033],
+		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1881],
+		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2371],
+		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3024],
 	]),
 ])

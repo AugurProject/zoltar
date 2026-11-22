@@ -5,7 +5,7 @@ import { canonicalPoolReportRoutes } from '../monitoring/discovery-price-feed.ts
 import { discoveryCoverageIsComplete } from '../monitoring/discovery-coverage.ts'
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../monitoring/carry-proof-storage.ts'
 import { scanCarryStorage } from '../monitoring/carry-storage-scan.ts'
-import { availableHistoryExecutionReady } from './scan-readiness.ts'
+import { canonicalScanReadiness } from './scan-readiness.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from './protocol-index-snapshot.ts'
 import { createPublicClient, createRpcEndpointPool, defineChain, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -46,6 +46,8 @@ export type CanonicalScanResult = {
 	evaluations: EvaluatedOperation[]
 	/** Current state and the available log range are ready for execution. */
 	executionReady: boolean
+	/** Discovery and the index reached the anchor; unlike `executionReady`, this does not require a signer. */
+	historyComplete: boolean
 	index: ChaosProtocolIndex | undefined
 	indexComplete: boolean
 	carryProofsComplete: boolean
@@ -445,7 +447,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 		],
 	}
 	const allIndexesComplete = updated?.complete === true && carryUpdated?.complete === true
-	const executionReady = wallet !== undefined && availableHistoryExecutionReady(updated?.index, anchor.blockNumber, discoveryComplete, carryUpdated?.complete === true)
+	const { executionReady, historyComplete } = canonicalScanReadiness({ anchorBlockNumber: anchor.blockNumber, carryProofsComplete: carryUpdated?.complete === true, discoveryComplete, index: updated?.index, wallet })
 	const evaluated = wallet === undefined ? unavailableOperationCatalog('No execution account configured') : completeOperationCoverage(evaluateOperationCatalog(snapshot, planningOptions(settings, seed)))
 	const lifecyclePresence = wallet === undefined ? [] : canonicalLifecyclePresence(snapshot, planningOptions(settings, seed))
 	const inventory = walletInventory(snapshot)
@@ -461,6 +463,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 		canonicalLifecyclePresenceComplete: discoveryComplete && allIndexesComplete,
 		evaluations,
 		executionReady,
+		historyComplete,
 		index: updated?.index ?? compatibleIndex,
 		indexComplete: updated?.complete === true,
 		inventory,

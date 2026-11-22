@@ -2,6 +2,7 @@ import { PortfolioOpportunityExpired } from '#execution/portfolio-executor'
 import { sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { loadManagedPortfolioObservations, managedPortfolioScopes } from '#monitoring/portfolio-monitor'
 import { shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
+import { recheckStartupConnectivity } from './startup-connectivity.ts'
 import { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { FinalizedTakeoverExpired, OperatorStopping, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
@@ -50,17 +51,30 @@ async function scanExecutionSnapshot(runtime: LiquidatorRuntime, deps: Liquidato
 	return selected.scan
 }
 
+const ONCE_MODE_UNCONFIGURED = 'One-cycle mode requires a saved chain and RPC endpoints; configure them before running with runtime.once'
+
+/**
+ * @internal Tests verify that one-cycle mode never waits. A poll that cannot scan stops the loop in that mode: an
+ * unconfigured network fails, and an undeployed system ends the cycle after reporting it; otherwise the loop waits.
+ */
+export function unscannablePollResult(once: boolean, reason: 'unconfigured' | 'undeployed'): boolean | 'deferred' {
+	if (!once) return reason === 'unconfigured' ? false : 'deferred'
+	if (reason === 'unconfigured') throw new Error(ONCE_MODE_UNCONFIGURED)
+	return true
+}
+
 /** The scan cycle body; resolves to the poll loop's stop decision, or `'deferred'` while the system is undeployed. */
 async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scanReport: ReturnType<typeof createLiquidatorScanReport>, markScanCompleted: () => void): Promise<boolean | 'deferred'> {
 	const { shutdown, state } = deps
 	const currentChain = chainFor(runtime.settings)
 	runtime.chain = currentChain
 	runtime.client = createPrimaryClient(runtime)
+	await recheckStartupConnectivity(runtime)
 	const deploymentStatus = await deps.checkSystemDeployment(runtime.client, runtime.settings.network.chainId, runtime.settings.deployment)
 	runtime.missingDeploymentAddress = recordSystemDeploymentCheck(state, deploymentStatus, runtime.missingDeploymentAddress)
 	if (!deploymentStatus.deployed) {
 		scanReport.update({ status: 'waiting' })
-		return 'deferred'
+		return unscannablePollResult(runtime.settings.runtime.once, 'undeployed')
 	}
 	const primary = await scanExecutionSnapshot(runtime, deps, currentChain)
 	if (shutdown.isRequested()) return true
@@ -165,7 +179,7 @@ export async function runPollCycle(runtime: LiquidatorRuntime, deps: LiquidatorD
 	if (shutdown.isRequested()) return true
 	if (runtime.profileSwitchRequested) return true
 	if (deps.configurationMutationGate.isActive()) return false
-	if (!runtime.settings.networkConfigured) return false
+	if (!runtime.settings.networkConfigured) return unscannablePollResult(runtime.settings.runtime.once, 'unconfigured')
 	const scanReport = createLiquidatorScanReport(runtime.settings.network, () => runtime.client.getBlockNumber(), deps.blockTimeOverrideMs)
 	let scanCompleted = false
 	state.scanning = true

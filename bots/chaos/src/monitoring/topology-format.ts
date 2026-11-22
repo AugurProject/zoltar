@@ -202,7 +202,6 @@ export function assertManifestResidentBounds(manifest: TopologyManifest, limits?
 	requireResidentLimit(limits.maxPools, 'Immutable topology maxPools')
 	requireResidentLimit(limits.maxQuestions, 'Immutable topology maxQuestions')
 	requireResidentLimit(limits.maxUniverses, 'Immutable topology maxUniverses')
-	requireResidentLimit(limits.maxVaultsPerPool, 'Immutable topology maxVaultsPerPool')
 	if (BigInt(manifest.collections['pool-deployments'].recordCount) > BigInt(limits.maxPools)) throw configuredResidentLimitError('Immutable topology manifest exceeds the configured pool resident limit')
 	if (BigInt(manifest.collections.questions.recordCount) > BigInt(limits.maxQuestions)) throw configuredResidentLimitError('Immutable topology manifest exceeds the configured question resident limit')
 	if (BigInt(manifest.collections['universe-children'].recordCount) > BigInt(limits.maxUniverses)) throw configuredResidentLimitError('Immutable topology manifest exceeds the configured universe resident limit')
@@ -210,7 +209,6 @@ export function assertManifestResidentBounds(manifest: TopologyManifest, limits?
 	if (BigInt(manifest.collections.pairs.recordCount) > BigInt(limits.maxPools)) throw configuredResidentLimitError('Immutable topology manifest contains more pairs than the configured pool limit')
 	if (BigInt(manifest.collections['vault-cursors'].recordCount) > BigInt(limits.maxPools)) throw configuredResidentLimitError('Immutable topology manifest contains more vault cursors than the configured pool limit')
 	if (BigInt(manifest.collections.vaults.recordCount) > BigInt(limits.maxPools)) throw configuredResidentLimitError('Immutable topology manifest contains more vault registries than the configured pool limit')
-	if (BigInt(manifest.collections.vaults.itemCount) > BigInt(limits.maxPools) * (BigInt(limits.maxVaultsPerPool) + 1n)) throw configuredResidentLimitError('Immutable topology manifest exceeds the configured aggregate vault resident limit')
 }
 
 type CollectionFiles = Record<CollectionKind, Map<number, { digest: Hex; name: string }>>

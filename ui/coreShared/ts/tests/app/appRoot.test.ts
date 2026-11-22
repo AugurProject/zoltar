@@ -70,7 +70,7 @@ for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Tradin
 		expect(within(document.body).getByRole('heading', { name: 'Universe', level: 2 })).not.toBeNull()
 		expect(within(document.body).getByRole('heading', { name: 'Augur v2 universe', level: 3 })).not.toBeNull()
 		expect(within(document.body).getByText('Forked', { selector: '.decision-heading .badge' })).not.toBeNull()
-		for (const label of ['Universe ID', 'Parent universe', 'REP supply']) expect(within(document.body).queryByText(label)).toBeNull()
+		for (const label of ['Universe ID', 'Parent universe', 'Theoretical REP supply']) expect(within(document.body).queryByText(label)).toBeNull()
 		expect(document.querySelectorAll('.migration-outcome-list .badge')).toHaveLength(0)
 		expect(document.querySelectorAll('.migration-outcome-label')).toHaveLength(2)
 		for (const outcome of ['Yes', 'No']) {
@@ -156,10 +156,14 @@ test('reloads an independent application when its optional REP profile changes a
 	try {
 		await act(async () => await mountApp({ applicationTitle: 'OpenOracle', requireGenesisSelection: false, initialize: async () => undefined, root: () => createElement('p', {}, 'Independent application ready') }))
 		window.history.replaceState({}, '', '/?network=sepolia#/open-oracle?openOracleReportId=12')
-		await act(() => window.dispatchEvent(new Event('hashchange')))
+		await act(() => {
+			window.dispatchEvent(new Event('hashchange'))
+		})
 		expect(reload).not.toHaveBeenCalled()
 		window.history.replaceState({}, '', '/?network=sepolia&genesis=no#/open-oracle?openOracleReportId=12')
-		await act(() => window.dispatchEvent(new Event('hashchange')))
+		await act(() => {
+			window.dispatchEvent(new Event('hashchange'))
+		})
 		expect(reload).toHaveBeenCalledTimes(1)
 	} finally {
 		reload.mockRestore()

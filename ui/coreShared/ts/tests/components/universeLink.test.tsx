@@ -63,7 +63,9 @@ describe('UniverseLink', () => {
 		const link = within(document.body).getByRole('link', { name: 'Open Yes universe' })
 		expect(link.getAttribute('href')).toBe('#/pools/universes?universe=7')
 		const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
-		await act(() => link.dispatchEvent(event))
+		await act(() => {
+			link.dispatchEvent(event)
+		})
 		expect(event.defaultPrevented).toBe(false)
 	})
 

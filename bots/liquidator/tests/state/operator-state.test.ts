@@ -1,3 +1,4 @@
+import { parsePendingTransactionIntent } from '../../src/state/pending-transaction-intent.ts'
 import { describe, expect, test } from 'bun:test'
 import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -22,6 +23,14 @@ async function signedTransfer(privateKey: Hex, nonce = 4n) {
 }
 
 describe('liquidator durable state', () => {
+	test('keeps wallet REP balances separate across universe tokens', () => {
+		const state = initialRuntimeState(false, undefined, 1)
+		state.walletRepByToken.set('0xone', 2n * 10n ** 18n)
+		state.walletRepByToken.set('0xtwo', 3n * 10n ** 18n)
+		const snapshot = operatorSnapshot(state, false)
+		expect(snapshot.metrics).not.toHaveProperty('walletRep')
+		expect(snapshot.walletRep).toEqual({ '0xone': '2', '0xtwo': '3' })
+	})
 	test('reports operator capability only after a complete scan with no unresolved recovery', () => {
 		const state = initialRuntimeState(false, undefined, 1)
 		expect(operatorSnapshot(state, false).operatorCapable).toBe(false)
@@ -167,18 +176,11 @@ describe('liquidator durable state', () => {
 			state.pendingTransactions.push({
 				hash: keccak256(serializedTransaction),
 				kind: 'liquidation',
-				label: 'Queue liquidation',
+				label: 'Take over commitment',
 				maxBlockNumber: 125n,
 				mode: 'private',
 				nonce: 4n,
-				receiptExpectation: {
-					amount: 20n,
-					coordinator: getAddress('0x0000000000000000000000000000000000000020'),
-					operator: account.address,
-					receiver: account.address,
-					target: getAddress('0x0000000000000000000000000000000000000030'),
-					type: 'pending-liquidation',
-				},
+				receiptExpectation: { type: 'transaction' },
 				requiresMarketEvidence: true,
 				sender: account.address,
 				serializedTransaction,
@@ -330,4 +332,25 @@ describe('liquidator durable state', () => {
 			await rm(directory, { force: true, recursive: true })
 		}
 	})
+})
+
+test.each(['staged-success', 'coordinator-operation', 'pending-liquidation'])('rejects a retired receipt expectation at journal load: %s', async type => {
+	const { account, serializedTransaction } = await signedTransfer(`0x${'11'.repeat(32)}`)
+	await expect(
+		parsePendingTransactionIntent(
+			{
+				hash: keccak256(serializedTransaction),
+				kind: 'liquidation',
+				label: 'Retired journal fixture',
+				maxBlockNumber: '125',
+				mode: 'public',
+				nonce: '4',
+				sender: account.address,
+				serializedTransaction,
+				submissionBlock: '100',
+				receiptExpectation: { type, coordinator: account.address, operation: 0, amount: '20', operator: account.address, receiver: account.address, target: account.address },
+			},
+			1,
+		),
+	).rejects.toThrow('invalid receipt expectation')
 })

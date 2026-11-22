@@ -50,7 +50,7 @@ void describe('deployment helpers', () => {
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		writeClient = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		writeClient = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		installInjectedEthereum(mockWindow)
 		readClient = createConnectedReadClient()
 		await setupTestAccounts(mockWindow)

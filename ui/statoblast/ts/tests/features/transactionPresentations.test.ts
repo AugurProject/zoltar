@@ -4,8 +4,6 @@ import { describe, expect, test } from 'bun:test'
 import { createTradingSuccessPresentation, createTradingTransactionIntent } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createReportingSuccessPresentation, createReportingTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
 
-const _transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
-
 describe('transaction presentations', () => {
 	test('uses resolved token symbols in OpenOracle approval and withdrawal titles', () => {
 		const context = {
@@ -46,6 +44,11 @@ describe('transaction presentations', () => {
 		expect(deferred.tone).toBe('warning')
 		expect(deferred.title).toBe('Report settled; price pending recovery')
 		expect(deferred.detail).toContain('33 nanoETH per gas limit')
+	})
+
+	test.each(['Portfolio reporting window closed', 'Report timestamp not newer'])('does not recommend another request for %s', reason => {
+		const presentation = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason } })
+		expect(presentation.detail).not.toContain('Request a new price')
 	})
 
 	test('shows a stale coordinator rejection as a warning after successful report settlement', () => {

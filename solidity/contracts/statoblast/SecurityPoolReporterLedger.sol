@@ -9,6 +9,7 @@ import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolReporterLedger } from './interfaces/ISecurityPoolReporterLedger.sol';
+import { Constants } from '../Constants.sol';
 
 interface IReporterPortfolioClock {
 	function factory() external view returns (ISecurityPoolFactory);
@@ -245,7 +246,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 			zoltar.splitMigrationRep(sourceUniverseId, source.liveAttoRep, outcomes);
 		} else if (address(zoltar.getRepToken(childUniverseId)) == address(0))
 			zoltar.deployChild(sourceUniverseId, outcomeIndex);
-		books[childUniverseId] = Book(source.liveAttoRep, 0, source.questionRoot, source.finalityRoot, source.frozenRoot, source.timestamp, true, false, source.timestamp + 3 days, source.finalizedRepPrefix);
+		books[childUniverseId] = Book(source.liveAttoRep, 0, source.questionRoot, source.finalityRoot, source.frozenRoot, source.timestamp, true, false, source.timestamp + Constants.FORK_RESPONSE_DELAY, source.finalizedRepPrefix);
 		(, uint256 forkQuestionId, , , ) = zoltar.universes(sourceUniverseId);
 		(Question memory fixedQuestion, bool alreadyFinal) = _question(childUniverseId, forkQuestionId);
 		if (!alreadyFinal && fixedQuestion.balanceAttoRep != 0) {

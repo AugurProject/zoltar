@@ -249,7 +249,7 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 			inspectButton.dataset['universeFocus'] = `inspect:${node.id}`
 			inspectButton.setAttribute('aria-label', `Inspect ${universeLabel(node)}, universe ${node.id}`)
 			inspectButton.append(make('span', 'ue-node-title', universeLabel(node)))
-			let description = `#${shorten(node.id)}`
+			let description = `${node.outcomeIndex === undefined ? '' : `Outcome ${node.outcomeIndex} · `}#${shorten(node.id)}`
 			if (visible.filtering || depth > 5) description = universeLineage(tree, node.id).map(universeLabel).join(' › ')
 			inspectButton.append(make('span', 'ue-node-id', description))
 			if (children.length > 0) inspectButton.append(make('span', 'ue-children-count', `${children.length.toLocaleString()} children`))

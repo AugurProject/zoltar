@@ -111,13 +111,13 @@ async function isRepToken(client: ReadClient, token: Address) {
 
 function getMockRepPrice() {
 	const controller = getActiveSimulationController()
-	if (controller === undefined) throw new Error('Simulation REP/ETH mock pricing is unavailable')
+	if (controller === undefined) throw new Error('Simulation REP per ETH mock pricing is unavailable')
 	return controller.repPerEthPrice
 }
 
 function getMockRepUsdcPrice() {
 	const controller = getActiveSimulationController()
-	if (controller === undefined) throw new Error('Simulation REP/USDC mock pricing is unavailable')
+	if (controller === undefined) throw new Error('Simulation USDC per REP mock pricing is unavailable')
 	return controller.repPerUsdcPrice
 }
 
@@ -128,7 +128,7 @@ function calculateMockAmountOut(tokenIn: Address, tokenOut: Address, amountIn: b
 
 	if (tokenInIsEth && !tokenOutIsEth) return (amountIn * repPerEthPrice) / 10n ** 18n
 	if (!tokenInIsEth && tokenOutIsEth) return (amountIn * 10n ** 18n) / repPerEthPrice
-	throw new Error('Simulation REP/ETH mock pricing only supports REP paired with ETH or WETH')
+	throw new Error('Simulation REP per ETH mock pricing only supports REP paired with ETH or WETH')
 }
 
 function calculateMockUsdcAmountOut(tokenIn: Address, tokenOut: Address, amountIn: bigint) {
@@ -138,7 +138,7 @@ function calculateMockUsdcAmountOut(tokenIn: Address, tokenOut: Address, amountI
 
 	if (!tokenInIsUsdc && tokenOutIsUsdc) return (amountIn * repPerUsdcPrice) / 10n ** 18n
 	if (tokenInIsUsdc && !tokenOutIsUsdc) return (amountIn * 10n ** 18n) / repPerUsdcPrice
-	throw new Error('Simulation REP/USDC mock pricing only supports REP paired with USDC')
+	throw new Error('Simulation USDC per REP mock pricing only supports REP paired with USDC')
 }
 
 async function maybeQuoteMockRepPair(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint): Promise<{ amountOut: bigint; source: MockQuoteSource } | undefined> {

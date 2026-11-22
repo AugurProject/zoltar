@@ -12,8 +12,8 @@ function snapshot() {
 	const position = observation.positions[0]
 	if (position === undefined) throw new Error('Fixture position missing')
 	position.stalledRetirement = true
-	position.retirementStatus = 'Earlier requests reserve available capacity'
-	observation.positions.push({ ...position, id: 9n, auctionTarget: { auction: observation.selection.address, bidId: 9n, vault: position.owner }, retirementStatus: 'Not retiring', stalledRetirement: false })
+	position.retirementStatus = 'Capacity reserved for earlier requests'
+	observation.positions.push({ ...position, id: 9n, auctionTarget: { auction: observation.selection.address, bidId: 9n, vault: position.owner }, retirementStatus: 'No pending reduction', stalledRetirement: false })
 	observation.knownAuctionBidCount = 512n
 	observation.nextScope.auctionAfterBidId = 33n
 	state.portfolios = [observation]
@@ -49,8 +49,8 @@ test('portfolio panel shows explicit automation and retirement blockers, empty a
 		renderPortfolios(twoPortfolios)
 		expect(disclosure.open).toBe(true)
 		expect(window.document.body.textContent).not.toContain('Execution reserve')
-		expect(window.document.body.textContent).toContain('Retirement stalled: Earlier requests')
-		expect(window.document.body.textContent).toContain('Automation enabled')
+		expect(window.document.body.textContent).toContain('Retirement stalled: Capacity reserved for earlier requests')
+		expect(window.document.body.textContent).toContain('Automation disabled')
 		expect(window.document.body.textContent).toContain('Independent REP price')
 		expect(window.document.body.textContent).toContain('Auction bid 9 · awaiting individual position')
 		expect(window.document.body.textContent).toContain('Auction bids 512; winner scan after bid 33')
@@ -64,4 +64,25 @@ test('portfolio panel shows explicit automation and retirement blockers, empty a
 		else Reflect.set(globalThis, 'document', previous)
 		await window.happyDOM.close()
 	}
+})
+
+test('automation badges require live mode, selection, universe approval and an unpaused operator', () => {
+	const state = initialRuntimeState(false, ownerAddress, 1)
+	const observation = portfolioObservation()
+	state.portfolios = [observation]
+	const settings = portfolioSettings()
+	settings.runtime.execute = true
+	const enabled = () => portfolioViews(state, settings)[0]?.automation
+	expect(enabled()).toBe(true)
+	settings.runtime.execute = false
+	expect(enabled()).toBe(false)
+	settings.runtime.execute = true
+	observation.selected = false
+	expect(enabled()).toBe(false)
+	observation.selected = true
+	observation.approvedUniverse = false
+	expect(enabled()).toBe(false)
+	observation.approvedUniverse = true
+	state.paused = true
+	expect(enabled()).toBe(false)
 })

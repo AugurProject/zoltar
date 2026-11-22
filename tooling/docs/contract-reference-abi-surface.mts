@@ -117,9 +117,7 @@ export const fallbackRoutedEntrypointSignatures: Record<string, Record<string, R
 		'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol': {
 			depositRepOnOutcomeWithAuthorization: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
 			depositRepOnOutcomeWithPermit: ['public(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
-			depositRepOnOutcomeWithLead: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 			depositRepOnOutcomeWithPermitAndLead: ['external(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
-			depositRepOnOutcomeWithAuthorizationAndLead: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
 		},
 	},
 }
@@ -177,9 +175,11 @@ export function assertCoordinatorDataFunctionInventory(coordinatorData: string, 
 	assert.deepEqual(Object.keys(documentedFunctions).sort(), compiledFunctionNames, 'Coordinator data function inventory must exactly match the compiled ABI')
 	const documentedSignatures = coordinatorIndex['functionSignatures']
 	assert.ok(isPlainRecord(documentedSignatures), 'Coordinator data must provide its documented signatures')
+	assert.deepEqual(Object.keys(documentedSignatures).sort(), compiledFunctionNames, 'Coordinator signature inventory must exactly match the compiled ABI')
 	for (const [name, signature] of Object.entries(documentedSignatures)) {
 		const entry: unknown = abi.find(value => isPlainRecord(value) && value['type'] === 'function' && value['name'] === name)
 		assert.ok(isPlainRecord(entry), `Unknown documented coordinator function: ${name}`)
+		assert.equal(documentedFunctions[name], entry['stateMutability'], `Coordinator mutability must match the compiled ABI: ${name}`)
 		const inputs: unknown = entry['inputs']
 		assert.ok(Array.isArray(inputs))
 		const types = inputs.map((input: unknown) => {

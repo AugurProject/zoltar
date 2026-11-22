@@ -11,6 +11,7 @@ import {
 	getZoltarDeploymentStatusOracleStepAddresses,
 	getZoltarDeploymentStepConstructorArguments,
 	loadDeploymentStatusOracleMaskAtAddress,
+	loadDeploymentStatusSnapshotFromCode,
 	withExpectedDeploymentRuntimeCodeHashes,
 } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import {
@@ -46,25 +47,25 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0x3b0db37eba61cd5a5108d39c52766b7932e279c4740801ceb4b50b1c1f936c05',
-	escalationGameDepositDelegate: '0xeffdfb8ed0de450ec55e80ef66ddd0e96355b86a5429e1ec674bcb322b8279c5',
-	escalationGameFactory: '0x3b3c2ae9f9c2eb84fa301f9526c9984fb213c8a6ffc8ca252e54d3c7ffa2aa4a',
+	escalationGameDepositDelegate: '0x742d36f04e15d871eb347c94ed08321adfc262a10ebcae34ba4aa280cb6f84c3',
+	escalationGameFactory: '0xfba99e5a7f83ed4d1a7d9a3dbbae53c776e85558b59e6361e501f4681fca7259',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0xf189e96bcf54344c43bfb975385d58b0d03310c4d0fc310c36282a9aee6a09bd',
-	priceCoordinatorDeploymentWorker: '0x9f97e2f079558fed174fac4d3b6c31fe50923bae7a832b63a21004fb56ea9b47',
+	openOraclePriceCoordinatorFactory: '0xf677d56b45c874206fc46d0902af62aa0d031b0d837353ee8dfce3377ef3fadd',
+	priceCoordinatorDeploymentWorker: '0x098071f12c722141ed4ae18b7cfdc94c0b912ac4706cce8c129873809c8abe99',
 	securityPoolEventEmitter: '0xd6334e44947bed787f35654d650504061ec1f632f1bf6f7e7370b0e108609e73',
-	securityPoolFactory: '0x374e3870a61e5f9988a63c8dfc78cbcbc16435f35959e5be3478eba6fe1227ce',
-	securityPoolForker: '0x1608606ed897c79710aa1f90888a28c99478bb737eb86c139a938afcb2a6ed49',
+	securityPoolFactory: '0xf0e0250bdc598f1674aee5a7956e55d9ecdaacadfa78ab54407bd01da69482ca',
+	securityPoolForker: '0xc9a3d08eafdb3287bde16783495107739f74ec61cee42d0558c502a49d11959e',
 	securityPoolOperationsDelegate: '0xf36906d0baf47720831d3de59569a335c42978ab78ed3c3c5d534b76f2da157a',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
-	shareTokenFactory: '0x6cdf8480b75b25059c6e572ef018ac5a6509b43232e38acb1c8d1195f9ae4544',
-	sharedPoolPriceFeedDeploymentWorker: '0x7f6e3965592f60cb1aaaa625a02a5517a2f551f3ace340b3336b948a2017899a',
+	shareTokenFactory: '0xb4e59e0a622ddd77664750e3273128809f9f9744ccaa882963b8316f9fce2a1a',
+	sharedPoolPriceFeedDeploymentWorker: '0x914f25b1b3d11e8ef8117b0b880d655b9c055bfb5c79f2c9f9e6170bc8839294',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xa04764c444da097a2055ec70f292f0a4b427fe8bce8390573bf2a9f56cbe42c8',
-	securityPoolForker: '0x50907d4c76f246223885433fb1f5799c5b52aeb5f3991c3d3e3278ba0dd83776',
-	shareTokenFactory: '0x7bb42a69698bb6677d7ec75fc16754de1770548fdf70d7f383573a1b453640e3',
+	securityPoolFactory: '0x4bc0604a623a2911f96e049a2a6a9a368f0813963b1cd3ed0ace8e6149ed0238',
+	securityPoolForker: '0x133643f88a41e79c0a51c9a88a33ca4acb84879a0b51ab92e0b6b5bce9040282',
+	shareTokenFactory: '0xb1467ad71de639e786528fe27938faa8293202cdf1dc1bd904f000c73b9da0d7',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -112,25 +113,25 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0x3b0db37eba61cd5a5108d39c52766b7932e279c4740801ceb4b50b1c1f936c05',
-	escalationGameDepositDelegate: '0xeffdfb8ed0de450ec55e80ef66ddd0e96355b86a5429e1ec674bcb322b8279c5',
-	escalationGameFactory: '0x3b3c2ae9f9c2eb84fa301f9526c9984fb213c8a6ffc8ca252e54d3c7ffa2aa4a',
+	escalationGameDepositDelegate: '0x742d36f04e15d871eb347c94ed08321adfc262a10ebcae34ba4aa280cb6f84c3',
+	escalationGameFactory: '0xfba99e5a7f83ed4d1a7d9a3dbbae53c776e85558b59e6361e501f4681fca7259',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0xa713f8b05a0643f4932a7153f9956aa6f06339469b58a06d6c68f4765a84ec1b',
-	priceCoordinatorDeploymentWorker: '0x9f97e2f079558fed174fac4d3b6c31fe50923bae7a832b63a21004fb56ea9b47',
+	openOraclePriceCoordinatorFactory: '0x74c584fe8c06d443578d4ff446eb8edc4ada7dd7addd8f0327b97a30553a5617',
+	priceCoordinatorDeploymentWorker: '0x098071f12c722141ed4ae18b7cfdc94c0b912ac4706cce8c129873809c8abe99',
 	securityPoolEventEmitter: '0xd6334e44947bed787f35654d650504061ec1f632f1bf6f7e7370b0e108609e73',
-	securityPoolFactory: '0x8ab40368569d3ba8f27f5d6bcb3b8ff8942c4f08d7d4cafddde181be27828194',
-	securityPoolForker: '0x11453be3d8addf665362fcb30670d94c9744821d03dc7f444da237264f02228c',
+	securityPoolFactory: '0x9572ba9a3aff95800e59ee199e7e36648430d20057524714729f4ef016ca8d02',
+	securityPoolForker: '0x2d1f528aaaef475117061be7acc10e2bb9e1e6524c47abed973d2beb115e3f0a',
 	securityPoolOperationsDelegate: '0xf36906d0baf47720831d3de59569a335c42978ab78ed3c3c5d534b76f2da157a',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
-	shareTokenFactory: '0x501f40a814289895eeb33b29b49ee32369b30af02d8c6fed69947b4b1a8b2f26',
-	sharedPoolPriceFeedDeploymentWorker: '0x7f6e3965592f60cb1aaaa625a02a5517a2f551f3ace340b3336b948a2017899a',
+	shareTokenFactory: '0xc5990d66cb44508fae0e32847d4e2281caec62ca54e073ba160f2a4f03589593',
+	sharedPoolPriceFeedDeploymentWorker: '0x914f25b1b3d11e8ef8117b0b880d655b9c055bfb5c79f2c9f9e6170bc8839294',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xd4f9724a31bc51af845fbacee005765d553aef09757e363fd4657ea42510ffc2',
-	securityPoolForker: '0x6607d20765512c020b12f9ea2c9867b31e4da38878822aa970d8b7de270545c1',
-	shareTokenFactory: '0xa04f8c8f0a59d7d8df041b2364bc2d471cea4c1db0e87a247a610a9fa1672116',
+	securityPoolFactory: '0x6baa4abd6ffa7ea99f8b851473fe90bbbd0103e6619ad596550d57e9a0aeb57f',
+	securityPoolForker: '0x11e7c893af7dea8da798ea9d2de1a23fd200edd277164cef3106faddf1de19cb',
+	shareTokenFactory: '0x669c4fba6ff67c823e64d3de80c6661fac64222e50213a5aaef947a592b0ae44',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },
@@ -337,13 +338,8 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 		return buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	}
 	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-	const proxyStep = steps.find(step => step.id === 'proxyDeployer')
-	if (oracleStep === undefined || proxyStep === undefined) throw new Error('Deployment plan is missing required verification steps')
-	if (!assertDeploymentStepRuntimeCode(oracleStep, oracleCode)) {
-		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-		const proxyDeployerDeployed = assertDeploymentStepRuntimeCode(proxyStep, proxyDeployerCode)
-		return buildDeploymentStatusSnapshot(steps, proxyDeployerDeployed ? 1n : 0n, false)
-	}
+	if (oracleStep === undefined) throw new Error('Deployment plan is missing its deployment status oracle step')
+	if (!assertDeploymentStepRuntimeCode(oracleStep, oracleCode)) return await loadDeploymentStatusSnapshotFromCode(client, steps)
 	const snapshot = buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	// The oracle mask only says a step was recorded; a step whose address holds no code is reported as not deployed.
 	const deploymentStatuses = await Promise.all(

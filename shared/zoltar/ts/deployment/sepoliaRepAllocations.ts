@@ -1,4 +1,6 @@
-import { getAddress, parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+
+import { MAX_ATTO_REP } from '../constants.js'
 
 export type SepoliaRepAllocation = {
 	readonly address: Address
@@ -20,8 +22,7 @@ const SEPOLIA_REP_HOLDERS = [
 	getAddress('0xcfCE1cA6166f0089a66A141A794f775d2Ea83817'),
 ] as const
 
-const SEPOLIA_REP_MINT_CAP = parseUnits('11000000', 18)
-const SEPOLIA_REP_AMOUNT_PER_HOLDER = SEPOLIA_REP_MINT_CAP / BigInt(SEPOLIA_REP_HOLDERS.length)
+const SEPOLIA_REP_AMOUNT_PER_HOLDER = MAX_ATTO_REP / BigInt(SEPOLIA_REP_HOLDERS.length)
 
 export const SEPOLIA_REP_ALLOCATIONS = Object.freeze(
 	SEPOLIA_REP_HOLDERS.map(address =>

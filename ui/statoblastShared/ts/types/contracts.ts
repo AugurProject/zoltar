@@ -1,6 +1,6 @@
-import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
 import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
-import type { ForkOutcomeKey, MarketDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type ActionResult = { hash: Hash }
 
@@ -149,12 +149,6 @@ export type ListedSecurityPool = {
 	universeId: bigint
 }
 
-type OwnForkRepBuckets = {
-	vaultRepAtForkAttoRep: bigint
-	escalationChildRepPerSelectedOutcomeAttoRep: bigint
-	escrowSourceRepAtForkAttoRep: bigint
-}
-
 export type TradingShareBalances = {
 	invalidAttoShares: bigint
 	noAttoShares: bigint
@@ -238,7 +232,7 @@ export type EscalationSide = {
 	userDeposits: EscalationDeposit[]
 }
 
-export type ReportingSettlementState = 'locked' | 'resolved' | 'migration-required' | 'migration-expired'
+export type ReportingSettlementState = 'locked' | 'resolved' | 'migration-required'
 
 type EscalationMigrationEntitlementStatus = {
 	initialized: boolean
@@ -247,6 +241,8 @@ type EscalationMigrationEntitlementStatus = {
 }
 
 type ReportingDetailsBase = {
+	reportingBlockedReason?: string
+	canTriggerOwnFork?: boolean
 	contributionFunding?: 'vault' | 'wallet' | undefined
 	settlementCollateralAttoEth: bigint
 	currentTime: bigint
@@ -295,50 +291,6 @@ export type ReportingActionResult = ActionResult & {
 	action: 'approveReportingRep' | 'reportOutcome' | 'withdrawEscalation'
 	outcome: ReportingOutcomeKey
 	securityPoolAddress: Address
-	universeId: bigint
-}
-
-type CollateralRepairAuctionMetrics = {
-	accumulatedBidAttoEth: bigint
-	auctionEndsAt: bigint | undefined
-	clearingPrice: bigint | undefined
-	clearingTick: bigint | undefined
-	bidAtClearingTickAttoEth: bigint
-	attoEthRaiseCap: bigint
-	attoEthRaised: bigint
-	finalized: boolean
-	hitCap: boolean
-	maxAttoRepBeingSold: bigint
-	minBidSizeAttoEth: bigint
-	attoRepPurchasableAtBid: bigint | undefined
-	timeRemaining: bigint | undefined
-	totalAttoRepPurchased: bigint
-	underfunded: boolean
-	underfundedThreshold: bigint | undefined
-	underfundedWinningAttoEth: bigint
-}
-
-export type ForkAuctionDetails = {
-	childHistoryReady?: boolean
-	auctionedUnderwritingLimitAttoEth: bigint
-	claimingAvailable: boolean
-	settlementCollateralAttoEth: bigint
-	currentTime: bigint
-	hasForkActivity: boolean
-	forkOutcome: ForkOutcomeKey
-	forkOwnSecurityPool: boolean
-	marketDetails: MarketDetails
-	migratedAttoRep: bigint
-	migrationEndsAt: bigint | undefined
-	parentSecurityPoolAddress: Address
-	questionOutcome: ReportingOutcomeKey | 'none'
-	ownForkRepBuckets?: OwnForkRepBuckets | undefined
-	auctionableAttoRepAtFork: bigint
-	securityPoolAddress: Address
-	systemState: SecurityPoolSystemState
-	collateralRepairAuction: CollateralRepairAuctionMetrics | undefined
-	collateralRepairAuctionAddress: Address
-	collateralRepairAuctionStartedAt: bigint
 	universeId: bigint
 }
 

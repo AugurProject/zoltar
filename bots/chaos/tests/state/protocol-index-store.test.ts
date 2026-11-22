@@ -79,7 +79,6 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 			[openOracle.toLowerCase()]: { generation: `0x${'33'.repeat(32)}`, pendingAttoEth: 8n.toString() },
 		},
 		chainId: 1,
-		childRepSplits: [{ childPoolRepSplitAttoRep: 45n.toString(), outcomeIndex: '1', pool: openOracle }],
 		cursor: { blockHash: `0x${cursorByte.repeat(32)}`, blockNumber: cursorBlockNumber },
 		escalationDeposits: [
 			{
@@ -96,7 +95,7 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 		migrationRepSplits: [{ childMigrationRepAmountAttoRep: 25n.toString(), childUniverseId: childUniverseId('0', '1'), outcomeIndex: '1', universeId: '0' }],
 		openOracle,
 		reports: [report(openOracle)],
-		schemaVersion: 4,
+		schemaVersion: 5,
 		securityPoolForker: address(30),
 		startBlock: '10',
 		wallet: address(22),
@@ -160,12 +159,11 @@ function largeProtocolIndex(count: number) {
 		const outcomeIndex = position.toString()
 		return { childMigrationRepAmountAttoRep: (position + 1).toString(), childUniverseId: childUniverseId('0', outcomeIndex), outcomeIndex, universeId: '0' }
 	})
-	index.childRepSplits = Array.from({ length: count }, (_, position) => ({ childPoolRepSplitAttoRep: (position + 1).toString(), outcomeIndex: position.toString(), pool: index.openOracle }))
 	return index
 }
 
 describe('protocol-index sidecar generations', () => {
-	test('round-trips more than ten thousand bids, deposits, migration routes, and child routes while the main journal stays bounded', async () => {
+	test('round-trips more than ten thousand bids, deposits, and migration routes while the main journal stays bounded', async () => {
 		const path = await statePath()
 		const count = 10_257
 		const expected = largeProtocolIndex(count)
@@ -182,17 +180,16 @@ describe('protocol-index sidecar generations', () => {
 		expect(restored.protocolIndex?.auctionRefunds).toEqual(expected.auctionRefunds)
 		expect(restored.protocolIndex?.escalationDeposits).toHaveLength(count)
 		expect(restored.protocolIndex?.migrationRepSplits).toHaveLength(count)
-		expect(restored.protocolIndex?.childRepSplits).toHaveLength(count)
 		expect(restored.protocolIndex?.migrationRepSplits.at(-1)?.outcomeIndex).toBe((count - 1).toString())
 		const generationJsonFileCount = (await readdir(await generationPath(path))).filter(name => name.endsWith('.json')).length
-		expect(generationJsonFileCount).toBeGreaterThan((count / MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS) * 4)
+		expect(generationJsonFileCount).toBeGreaterThan((count / MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS) * 3)
 
 		let chunkReadCount = 0
 		const filesystem: StateFilesystem = {
 			link,
 			mkdir,
 			open: async (filePath, flags, mode) => {
-				if (typeof flags === 'number' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes|child-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) chunkReadCount += 1
+				if (typeof flags === 'number' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) chunkReadCount += 1
 				return open(filePath, flags, mode)
 			},
 			readFile,
@@ -248,7 +245,7 @@ describe('protocol-index sidecar generations', () => {
 			link,
 			mkdir,
 			open: async (filePath, flags, mode) => {
-				if (typeof flags === 'number' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes|child-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) chunkReads += 1
+				if (typeof flags === 'number' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) chunkReads += 1
 				return open(filePath, flags, mode)
 			},
 			readFile,
@@ -274,7 +271,7 @@ describe('protocol-index sidecar generations', () => {
 			},
 			mkdir,
 			open: async (filePath, flags, mode) => {
-				if (flags === 'wx' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes|child-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) writtenChunks += 1
+				if (flags === 'wx' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) writtenChunks += 1
 				return open(filePath, flags, mode)
 			},
 			readFile,
@@ -446,7 +443,7 @@ describe('protocol-index sidecar generations', () => {
 		duplicateBid.auctionBids[key] = [bid, { ...bid }]
 		expect(() => snapshotProtocolIndex(duplicateBid, 1)).toThrow('canonical unique route order')
 
-		const many = largeProtocolIndex(Math.floor(MAXIMUM_PROTOCOL_INDEX_RECORDS / 4) + 1)
+		const many = largeProtocolIndex(Math.floor(MAXIMUM_PROTOCOL_INDEX_RECORDS / 3) + 1)
 		expect(() => snapshotProtocolIndex(many, 1)).toThrow('record aggregate safety limit')
 	})
 })

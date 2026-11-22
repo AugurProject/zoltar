@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { UniverseIds } from '../../UniverseIds.sol';
+
 import '../../Constants.sol';
 import './TokenId.sol';
 import '../../Zoltar.sol';
@@ -133,7 +135,7 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function _getChildUniverseId(uint248 universeId, uint256 outcomeIndex) private pure returns (uint248) {
-		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
+		return UniverseIds.child(universeId, outcomeIndex);
 	}
 
 	function totalSupplyForOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) public view returns (uint256 totalSupplyAttoShares) {

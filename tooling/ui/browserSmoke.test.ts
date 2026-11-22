@@ -228,7 +228,12 @@ const createFakeDevToolsServer = (emptyTargetResponses: number) => {
 			const targets = targetRequests <= emptyTargetResponses ? [] : [pageTarget(port)]
 			return Response.json(targets)
 		},
-		websocket: { open: socket => socket.subscribe('events'), message: () => undefined },
+		websocket: {
+			open: socket => {
+				socket.subscribe('events')
+			},
+			message: () => undefined,
+		},
 	})
 	if (server.port === undefined) throw new Error('Expected the fake DevTools server to use a TCP port')
 	port = server.port

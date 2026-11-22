@@ -3,7 +3,7 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { usePortfolioQuestionDetails } from '../hooks/usePortfolioQuestionDetails.js'
 import { useId } from 'preact/hooks'
-import { toHex, formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { toHex, formatUnits, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -11,7 +11,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
-import { buildPoolsRouteHash } from '../../../lib/statoblastLocation.js'
+import { buildQuestionPoolHref } from '../../../lib/routing.js'
 import type { usePortfolio } from '../hooks/usePortfolio.js'
 import type { usePortfolioPurchase } from '../hooks/usePortfolioPurchase.js'
 import * as copy from '../../../copy/portfolio.js'
@@ -78,7 +78,7 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 						{copy.retryQuestionDetails}
 					</button>
 				) : undefined}
-				{purchase.position === undefined ? undefined : <a href={buildPoolsRouteHash({ view: 'operate', securityPoolAddress: purchase.position.pool, tab: 'vaults' })}>{copy.openPrice}</a>}
+				{purchase.position === undefined || purchase.position.pool === zeroAddress ? undefined : <a href={buildQuestionPoolHref(purchase.position.pool)}>{copy.openQuestionShares}</a>}
 				<MetricGrid>
 					<PortfolioInput label={collateralCopy.amount(copy.mintAmount, snapshot?.collateral.symbol ?? collateralCopy.token)} value={purchase.mintAmount} onChange={purchase.setMintAmount} disabled={actions.busy !== undefined} numeric />
 					<PortfolioInput label={collateralCopy.amount(copy.maximumPurchaseFee, snapshot?.collateral.symbol ?? collateralCopy.token)} hint={copy.maximumPurchaseFeeHint} value={purchase.maximumFee} onChange={purchase.setMaximumFee} disabled={actions.busy !== undefined} numeric />

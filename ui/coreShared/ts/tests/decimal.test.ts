@@ -18,7 +18,7 @@ void describe('decimal helpers', () => {
 		expect(() => parseDecimalInput('.', 'Price', 18)).toThrow('Price must be a decimal number')
 		expect(() => parseDecimalInput('-.', 'Price', 18)).toThrow('Price must be a decimal number')
 		expect(() => parseDecimalInput('not-a-number', 'Price', 18)).toThrow('Price must be a decimal number')
-		expect(() => parseDecimalInput('1.0000000000000000001', 'Price', 18)).toThrow('Price must be a decimal number')
+		expect(() => parseDecimalInput('1.0000000000000000001', 'Price', 18)).toThrow('Use no more than 18 decimal places.')
 	})
 
 	void test('parseDecimalInputResult names the rejection reason', () => {

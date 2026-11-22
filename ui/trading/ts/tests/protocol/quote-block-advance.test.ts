@@ -323,7 +323,9 @@ describe('submitting a quote after the chain advances', () => {
 			const transfer = decodeFunctionData({ abi: shareTokenAbi, data })
 			if (transfer.functionName !== 'safeBatchTransferFrom') throw new Error('Expected a share batch transfer')
 			// The receive request is a static tuple whose final word is the minimum REP output.
-			return BigInt(`0x${transfer.args[4].slice(-64)}`)
+			const request = transfer.args[4]
+			if (request === undefined) throw new Error('Missing receive request')
+			return BigInt(`0x${request.slice(-64)}`)
 		}
 		const recovery = { ...market, settlementRecoveryAttoRep: 1_000n }
 		const { chain, client } = createAdvancingChain()

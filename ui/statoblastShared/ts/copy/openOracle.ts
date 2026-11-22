@@ -1,3 +1,4 @@
+import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
@@ -65,14 +66,14 @@ export const wrapEthFailed = 'Failed to wrap ETH'
 export const wrapEthDisputeOnly = 'ETH can only be wrapped for a report that is open to disputes.'
 export const disputeEscalationStopAmountHelpText = 'Base token amount that ends escalation.'
 export const ethSent = 'ETH sent'
-export const formatExactTokenRequiredLabel = (tokenSymbol: string) => `Exact ${tokenSymbol} required`
+export const formatInitialTokenReportLabel = (tokenSymbol: string) => `Initial ${tokenSymbol} report deposit`
 export const exactToken1Report = 'Base token amount'
 export const initialToken2Amount = 'Quote token amount'
 export const identity = 'Identity'
 export const initialEconomics = 'Initial economics'
-export const lastReportOpportunity = 'Last report opportunity'
+export const lastReportOpportunity = 'Last report on opposite clock'
 export const reportLoadRequired = 'Select a report first.'
-export const escalationMultiplierHelpText = 'Each dispute multiplies the base amount by this factor, for example 1.5.'
+export const escalationMultiplierHelpText = 'Below the escalation halt, each dispute multiplies the base amount by this factor. At or above the halt, it adds one raw base-token unit. A zero halt uses that increment from the first dispute.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
 export const formatNewAmountRangeDetail = (tokenSymbol: string, minimumAmount: string, maximumAmount: string) => `New ${tokenSymbol} amount must be between ${minimumAmount} and ${maximumAmount} for this dispute.`
 export const oracleBalances = 'Your oracle balances'
@@ -99,9 +100,7 @@ export const reportBlock = 'Report block'
 export const reportActions = 'Report actions'
 export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
 	if (!timeType) return `Can settle in ${remaining} block${remaining === 1n ? '' : 's'}`
-	if (remaining < 60n) return `Can settle in ${remaining}s`
-	if (remaining < 3600n) return `Can settle in ${remaining / 60n}m ${remaining % 60n}s`
-	return `Can settle in ${remaining / 3600n}h ${(remaining % 3600n) / 60n}m ${remaining % 60n}s`
+	return `Can settle in ${formatDuration(remaining)}`
 }
 export const searchReports = 'Search reports'
 export const reportSearchPlaceholder = 'Report ID, token, or address'
@@ -112,7 +111,7 @@ export const formatReportUpdated = (relativeTime: CopyTemplateValue) => `Updated
 export const settlingReport = 'Settling report…'
 export const settlingReportTitle = 'Settling report'
 export const reportSettled = 'Report settled'
-export const settlerRewardHelpText = 'ETH paid to the settler, sent with the create transaction.'
+export const settlerRewardHelpText = 'ETH credited to the settler’s internal OpenOracle balance, sent with the create transaction. The settler withdraws it separately.'
 export const settlementSummary = 'Settlement summary'
 export const settlementTimestamp = 'Settlement timestamp'
 export const settlementBlock = 'Settlement block'
@@ -122,13 +121,14 @@ export const stateHash = 'State hash'
 export const allStatuses = 'All statuses'
 export const disputed = 'Disputed'
 export const awaitingDisputeWindow = 'Waiting for dispute window'
+export const disputeWindowClosing = 'Dispute window closing'
 export const disputeWindowOpen = 'Dispute window open'
 export const readyToSettle = 'Ready to settle'
 export const reportFiltersEmpty = 'No favorite reports match the current search and status filters.'
 export const refreshReport = 'Refresh report'
 export const reportAmounts = 'Report amounts'
 export const openOracleReportDetails = 'OpenOracle report details'
-export const standaloneOracleWarningDetail = 'Standalone only. Start pool-managed requests from a security pool.'
+export const standaloneOracleWarningDetail = 'Standalone only. Start portfolio-managed requests from the portfolio price panel.'
 export const advancedDisputeAndTimingSettings = 'Advanced dispute & timing settings'
 export const advancedDisputeAndTimingSettingsDetail = 'These values control how challenges escalate and when settlement becomes available. Keep the defaults unless your report requires different economics.'
 export const secondsAbbreviation = 's'
@@ -187,6 +187,8 @@ export const reportPriceRejected = 'Report settled; price rejected'
 export const poolPriceAccepted = 'Pool accepted this price.'
 
 export function formatPriceSettlementRejection(reason: string) {
+	if (reason === 'Portfolio reporting window closed') return 'Reporting is closed in this portfolio universe. Check its fork and branch status.'
+	if (reason === 'Report timestamp not newer') return 'This report did not replace the newer accepted price. Check the accepted price and any attached operation results.'
 	return reason === 'Report stale' ? 'Price expired before settlement. Request a new price.' : `Pool rejected this price: ${reason}. Request a new price.`
 }
 
@@ -206,3 +208,5 @@ export const selectPriceReport = 'Select a price report'
 export const priceReportNotFound = 'Price report not found'
 export const reportAlreadySettled = 'This report is already settled.'
 export const reportMissingInitialReport = 'This report is invalid because its initial report is missing.'
+
+export const formatAbsoluteBlock = (value: bigint) => `Block ${value}`

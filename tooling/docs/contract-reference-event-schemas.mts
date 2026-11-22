@@ -136,4 +136,4 @@ export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArgum
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = '119e7797a4ab20ed5fc7434b1798917ac8b0f766854c8cc600d5c8822e971b04'
+export const referencedEventAbiFingerprint = '48e46bf29dfa6329a566bfb1771c3b52127ca895b4a58fee4448ff6847da11e5'

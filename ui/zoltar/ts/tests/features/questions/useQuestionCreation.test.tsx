@@ -1,7 +1,9 @@
+import type { GlobalTransactionPresentation, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 /// <reference types='bun-types' />
 
 import { getAddress, zeroAddress, zeroHash, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -65,11 +67,11 @@ describe('useQuestionCreation', () => {
 		}))
 		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		const createQuestion = mock(options.createQuestion ?? (async () => CREATION_RESULT))
-		const onTransactionFailed = mock(() => undefined)
+		const onTransactionFailed = mock((_message: string) => undefined)
 		const onTransactionFinished = mock(options.onTransactionFinished ?? (() => undefined))
-		const onTransactionPresented = mock(() => undefined)
+		const onTransactionPresented = mock((_presentation: GlobalTransactionPresentation) => undefined)
 		const onTransactionPrepared = mock(() => undefined)
-		const onTransactionRequested = mock(options.onTransactionRequested ?? (() => undefined))
+		const onTransactionRequested = mock((_intent: TransactionIntent) => options.onTransactionRequested?.())
 		const onTransactionSubmitted = mock(() => undefined)
 		const refreshState = mock(options.refreshState ?? (async () => undefined))
 		let hookState: UseQuestionCreationState | undefined
@@ -139,7 +141,9 @@ describe('useQuestionCreation', () => {
 
 	test('records a successful creation, keeps the chosen fork question, and loads only the created question', async () => {
 		const harness = await renderHook()
-		await act(async () => await harness.hookState().createQuestion())
+		await act(async () => {
+			await harness.hookState().createQuestion()
+		})
 		expect(harness.createQuestion).toHaveBeenCalledTimes(1)
 		expect(harness.hookState().questionResult).toEqual(CREATION_RESULT)
 		expect(harness.hookState().questionFeedback?.status.tone).toBe('success')
@@ -148,8 +152,8 @@ describe('useQuestionCreation', () => {
 		expect(harness.loadCreatedZoltarQuestion).toHaveBeenCalledTimes(1)
 		expect(harness.loadCreatedZoltarQuestion).toHaveBeenCalledWith(QUESTION_ID)
 		expect(harness.onTransactionPresented).toHaveBeenCalledTimes(1)
-		expect(harness.onTransactionRequested.mock.calls[0]?.[0].universeId).toBeUndefined()
-		expect(harness.onTransactionPresented.mock.calls[0]?.[0].universeId).toBeUndefined()
+		expect(harness.onTransactionRequested.mock.calls[0]?.[0]?.universeId).toBeUndefined()
+		expect(harness.onTransactionPresented.mock.calls[0]?.[0]?.universeId).toBeUndefined()
 	})
 
 	test('reports write failures and missing deployment prerequisites', async () => {
@@ -158,13 +162,17 @@ describe('useQuestionCreation', () => {
 				throw new Error('wallet rejected')
 			},
 		})
-		await act(async () => await failed.hookState().createQuestion())
+		await act(async () => {
+			await failed.hookState().createQuestion()
+		})
 		expect(failed.hookState().questionFeedback?.status.tone).toBe('error')
 		expect(failed.onTransactionFailed.mock.calls[0]?.[0]).toContain('wallet rejected')
 		await cleanupRendered()
 
 		const missing = await renderHook({ deploymentStatuses: [] })
-		await act(async () => await missing.hookState().createQuestion())
+		await act(async () => {
+			await missing.hookState().createQuestion()
+		})
 		expect(missing.createQuestion).not.toHaveBeenCalled()
 		expect(missing.hookState().questionFeedback?.status.detail).toContain('Deploy the ZoltarQuestionData contract')
 	})
@@ -172,7 +180,9 @@ describe('useQuestionCreation', () => {
 	test('does not execute or finish a question transaction rejected by the global admission gate', async () => {
 		const harness = await renderHook({ onTransactionRequested: () => false })
 
-		await act(async () => await harness.hookState().createQuestion())
+		await act(async () => {
+			await harness.hookState().createQuestion()
+		})
 
 		expect(harness.createQuestion).not.toHaveBeenCalled()
 		expect(harness.onTransactionPrepared).not.toHaveBeenCalled()
@@ -188,7 +198,9 @@ describe('useQuestionCreation', () => {
 				throw new Error('question refresh unavailable')
 			},
 		})
-		await act(async () => await harness.hookState().createQuestion())
+		await act(async () => {
+			await harness.hookState().createQuestion()
+		})
 		expect(harness.hookState().questionResult).toEqual(CREATION_RESULT)
 		expect(harness.hookState().questionFeedback?.status.tone).toBe('warning')
 		expect(harness.hookState().questionFeedback?.status.detail).toContain('question refresh unavailable')
@@ -198,14 +210,16 @@ describe('useQuestionCreation', () => {
 	test('rejects duplicate submissions and releases the lock after completion', async () => {
 		const deferred = createDeferred<MarketCreationResult & { hash: Hash }>()
 		const harness = await renderHook({ createQuestion: async () => await deferred.promise })
-		let firstSubmission = Promise.resolve()
+		let firstSubmission: ReturnType<UseQuestionCreationState['createQuestion']> = Promise.resolve(undefined)
 		await act(async () => {
 			firstSubmission = harness.hookState().createQuestion()
 			await Promise.resolve()
 			await Promise.resolve()
 		})
 		expect(harness.createQuestion).toHaveBeenCalledTimes(1)
-		await act(async () => await harness.hookState().createQuestion())
+		await act(async () => {
+			await harness.hookState().createQuestion()
+		})
 		expect(harness.createQuestion).toHaveBeenCalledTimes(1)
 		expect(harness.hookState().questionError).toBe('Question creation is already in progress.')
 		await act(async () => {
@@ -217,8 +231,12 @@ describe('useQuestionCreation', () => {
 
 	test('reset clears the form and owner-scoped result state', async () => {
 		const harness = await renderHook()
-		await act(async () => await harness.hookState().createQuestion())
-		await act(async () => harness.hookState().resetQuestion())
+		await act(async () => {
+			await harness.hookState().createQuestion()
+		})
+		await act(async () => {
+			await harness.hookState().resetQuestion()
+		})
 		expect(harness.hookState().questionForm.title).toBe('')
 		expect(harness.hookState().questionResult).toBeUndefined()
 		expect(harness.hookState().questionError).toBeUndefined()
@@ -226,7 +244,9 @@ describe('useQuestionCreation', () => {
 
 	test('hides completed transaction state after the environment changes', async () => {
 		const harness = await renderHook()
-		await act(async () => await harness.hookState().createQuestion())
+		await act(async () => {
+			await harness.hookState().createQuestion()
+		})
 		expect(harness.hookState().questionResult).toEqual(CREATION_RESULT)
 		expect(harness.hookState().questionFeedback?.status.tone).toBe('success')
 
@@ -246,7 +266,7 @@ describe('useQuestionCreation', () => {
 				return await deferred.promise
 			},
 		})
-		let submission = Promise.resolve()
+		let submission: ReturnType<UseQuestionCreationState['createQuestion']> = Promise.resolve(undefined)
 		await act(async () => {
 			submission = harness.hookState().createQuestion()
 			await Promise.resolve()
@@ -283,14 +303,14 @@ describe('useQuestionCreation', () => {
 				return await (requestCount === 1 ? firstDeferred.promise : secondDeferred.promise)
 			},
 		})
-		let firstSubmission = Promise.resolve()
+		let firstSubmission: ReturnType<UseQuestionCreationState['createQuestion']> = Promise.resolve(undefined)
 		await act(async () => {
 			firstSubmission = harness.hookState().createQuestion()
 			await Promise.resolve()
 			await Promise.resolve()
 		})
 		await harness.rerenderEnvironment(1)
-		let secondSubmission = Promise.resolve()
+		let secondSubmission: ReturnType<UseQuestionCreationState['createQuestion']> = Promise.resolve(undefined)
 		await act(async () => {
 			secondSubmission = harness.hookState().createQuestion()
 			await Promise.resolve()
@@ -332,7 +352,7 @@ describe('useQuestionCreation', () => {
 				return true
 			},
 		})
-		let firstSubmission = Promise.resolve()
+		let firstSubmission: ReturnType<UseQuestionCreationState['createQuestion']> = Promise.resolve(undefined)
 		await act(async () => {
 			firstSubmission = harness.hookState().createQuestion()
 			await Promise.resolve()
@@ -344,7 +364,9 @@ describe('useQuestionCreation', () => {
 		await act(async () => {
 			harness.hookState().setQuestionForm(current => ({ ...current, endTime: '2000', startTime: '1000', title: 'Will the replacement account submit?' }))
 		})
-		await act(async () => await harness.hookState().createQuestion())
+		await act(async () => {
+			await harness.hookState().createQuestion()
+		})
 		expect(harness.hookState().questionError).toBeUndefined()
 		expect(requestCount).toBe(1)
 
@@ -354,7 +376,9 @@ describe('useQuestionCreation', () => {
 		})
 		expect(transactionInFlight).toBe(false)
 
-		await act(async () => await harness.hookState().createQuestion())
+		await act(async () => {
+			await harness.hookState().createQuestion()
+		})
 		expect(harness.hookState().questionError).toBeUndefined()
 		expect(requestCount).toBe(2)
 		expect(harness.hookState().questionResult).toEqual(CREATION_RESULT)
@@ -363,7 +387,7 @@ describe('useQuestionCreation', () => {
 	test('does not erase a newer account draft when an older submission completes', async () => {
 		const deferred = createDeferred<MarketCreationResult & { hash: Hash }>()
 		const harness = await renderHook({ createQuestion: async () => await deferred.promise })
-		let submission = Promise.resolve()
+		let submission: ReturnType<UseQuestionCreationState['createQuestion']> = Promise.resolve(undefined)
 		await act(async () => {
 			submission = harness.hookState().createQuestion()
 			await Promise.resolve()
@@ -402,7 +426,9 @@ describe('useQuestionCreation', () => {
 		}
 		const rendered = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 1n }))
 		trackCleanup(rendered.cleanup)
-		await act(async () => requireHookState(hookState).setQuestionForm(current => ({ ...current, title: 'Owner one draft' })))
+		await act(async () => {
+			await requireHookState(hookState).setQuestionForm(current => ({ ...current, title: 'Owner one draft' }))
+		})
 		await act(async () => {
 			render(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 2n }), rendered.container)
 			await Promise.resolve()
@@ -413,5 +439,51 @@ describe('useQuestionCreation', () => {
 			await Promise.resolve()
 		})
 		expect(requireHookState(hookState).questionForm.title).toBe('')
+	})
+
+	test('keeps a reopened draft on the same deadline instant when the browser time zone changes', async () => {
+		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined }),
+		}))
+		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseQuestionCreationState | undefined
+		const Harness = function QuestionDraftZoneHarness() {
+			hookState = useQuestionCreation({
+				accountAddress: WALLET_ADDRESS,
+				activeUniverseId: 1n,
+				autoLoadInitialData: false,
+				deploymentStatuses: [DEPLOYED_QUESTION_DATA],
+				environmentRefreshKey: 0,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			})
+			return <div />
+		}
+		const originalTimeZone = process.env['TZ']
+		try {
+			process.env['TZ'] = 'America/New_York'
+			const drafted = await renderIntoDocument(h(Harness, {}))
+			await act(async () => {
+				await requireHookState(hookState).setQuestionForm(current => ({ ...current, endTime: '2027-06-02T12:00', startTime: '2027-06-01T08:30' }))
+			})
+			const draftedEnd = tryParseTimestampInput('2027-06-02T12:00')
+			const draftedStart = tryParseTimestampInput('2027-06-01T08:30')
+			await drafted.cleanup()
+
+			process.env['TZ'] = 'America/Los_Angeles'
+			const reopened = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(reopened.cleanup)
+			const { endTime, startTime } = requireHookState(hookState).questionForm
+			expect(endTime).toBe('2027-06-02T09:00')
+			expect(startTime).toBe('2027-06-01T05:30')
+			expect(tryParseTimestampInput(endTime)).toBe(draftedEnd)
+			expect(tryParseTimestampInput(startTime)).toBe(draftedStart)
+		} finally {
+			if (originalTimeZone === undefined) delete process.env['TZ']
+			else process.env['TZ'] = originalTimeZone
+		}
 	})
 })

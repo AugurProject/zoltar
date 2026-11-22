@@ -1,6 +1,6 @@
 import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
-import { decodeEventLog, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -42,27 +42,20 @@ describe('Escalation Game: local accounting', () => {
 		client = fixture.client
 	})
 
-	test('charges released surplus only against the new report collateral and cannot dilute earlier reporters', async () => {
+	test('ordinary surplus preserves reporter principal and conserves actual game inventory', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		const yesReporter = client.account.address
 		const noReporter = addressString(TEST_ADDRESSES[1])
 		const invalidReporter = addressString(TEST_ADDRESSES[2])
-		const backing = (vault: Address) => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'getVaultDisputeBackingAttoRep', args: [vault] })
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, yesReporter, QuestionOutcome.Yes, 30n * reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, noReporter, QuestionOutcome.No, 20n * reportBond)
-		assert.strictEqual(await backing(yesReporter), 30n * reportBond)
-		assert.strictEqual(await backing(noReporter), 20n * reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, invalidReporter, QuestionOutcome.Invalid, 10n * reportBond)
-		assert.strictEqual(await backing(yesReporter), 30n * reportBond, 'a third-party report must not remove existing YES collateral credit')
-		assert.strictEqual(await backing(noReporter), 20n * reportBond, 'a third-party report must not remove existing NO collateral credit')
-		assert.strictEqual(await backing(invalidReporter), 0n, 'REP released by this report cannot also back its own underwriting')
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, invalidReporter, QuestionOutcome.Invalid, 15n * reportBond)
-		assert.strictEqual(await backing(invalidReporter), 5n * reportBond, 'only the part retained in escrow creates new collateral credit')
-		assert.strictEqual(
-			(await backing(yesReporter)) + (await backing(noReporter)) + (await backing(invalidReporter)),
-			await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'getDisputeBackingAttoRep' }),
-			'collateral credit must conserve actual funded escrow',
-		)
+		assert.strictEqual(await getEscrowedRepByVault(client, escalationGameAddress, yesReporter), 30n * reportBond)
+		assert.strictEqual(await getEscrowedRepByVault(client, escalationGameAddress, noReporter), 20n * reportBond)
+		assert.strictEqual(await getEscrowedRepByVault(client, escalationGameAddress, invalidReporter), 25n * reportBond)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'creditedSurplusAttoRep' }), 20n * reportBond)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'getDisputeBackingAttoRep' }), 55n * reportBond)
 	})
 
 	test('ordinary finality retires losing principal while retaining winner claims', async () => {

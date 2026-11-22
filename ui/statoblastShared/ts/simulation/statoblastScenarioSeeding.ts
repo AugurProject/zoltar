@@ -1,3 +1,4 @@
+import { DEFAULT_SIMULATION_REP_PER_ETH_PRICE } from '@zoltar/ui-core-shared/simulation/repPrices.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioPriceApprovalRequest, buildPortfolioPriceRequest, buildPortfolioPriceWrapRequest, loadPortfolioPriceSnapshot, quotePortfolioPriceFunding } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -18,6 +19,7 @@ export async function settleSeededOracleReport({
 	poolLabel,
 	readClient,
 	requestedInitialAttoWeth = 0n,
+	repPerCollateralPrice,
 }: {
 	accountAddress: Address
 	createWriteClient: (accountAddress: Address) => WriteClient
@@ -26,6 +28,7 @@ export async function settleSeededOracleReport({
 	poolLabel: string
 	readClient: ReadClient
 	requestedInitialAttoWeth?: bigint
+	repPerCollateralPrice?: bigint
 }) {
 	const client = createWriteClient(accountAddress)
 	const reader = { ...portfolioReadClient(readClient), getBalance: (request: { address: Address; blockNumber: bigint }) => readClient.getBalance(request) }
@@ -33,7 +36,7 @@ export async function settleSeededOracleReport({
 	let price = await load()
 	if (price.observation === undefined) throw new Error('Simulation report collateral is unavailable.')
 	const decimals = Number(await readClient.readContract({ address: price.observation.weth, abi: ABIS.mainnet.erc20, functionName: 'decimals' }))
-	const repPerEth = 3n * 10n ** BigInt(36 - decimals)
+	const repPerEth = repPerCollateralPrice ?? (DEFAULT_SIMULATION_REP_PER_ETH_PRICE * 10n ** BigInt(36 - decimals)) / 10n ** 18n
 	const funding = quotePortfolioPriceFunding(price, repPerEth, requestedInitialAttoWeth)
 	if (funding.wrap > 0n) await sendPortfolioTransaction(client, buildPortfolioPriceWrapRequest(price, funding.wrap), 'Wrap report ETH')
 	await sendPortfolioTransaction(client, buildPortfolioPriceApprovalRequest(price, 'weth', funding.weth), 'Approve report WETH')

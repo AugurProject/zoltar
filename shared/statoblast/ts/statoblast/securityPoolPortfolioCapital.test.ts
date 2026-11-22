@@ -58,6 +58,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		priceValidUntil: 5_000n,
 		isPriceValid: true,
 		demandAttoEth: 40n,
+		availableMintCapacity: 7n,
 		totalFreeAttoRep: 100n,
 		frozen: false,
 		importing: false,
@@ -100,7 +101,7 @@ describe('personal portfolio capital SDK', () => {
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 100n }).data })).toEqual({ functionName: 'setCommitment', args: [100n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 0n }).data })).toEqual({ functionName: 'setCommitment', args: [0n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 100n, reportId: 4n }).data })).toEqual({ functionName: 'setCommitmentWithReport', args: [4n, 100n] })
-		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalTakeOverRequest({ ...base, positionId: 9n, commitment: 17n, minimumAward: 11n, maximumOwnRep: 30n }).data })).toEqual({ functionName: 'takeOver', args: [9n, 17n, 11n, 30n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalTakeOverRequest({ ...base, positionId: 9n, commitment: 17n, minimumAward: 0n, maximumOwnRep: 30n }).data })).toEqual({ functionName: 'takeOver', args: [9n, 17n, 0n, 30n] })
 		expect(() => buildPortfolioCapitalSetHealthRequest({ ...base, targetHealthFactorBps: 9_999n })).toThrow('100%')
 		expect(() => buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: -1n })).toThrow('uint256')
 		expect(() => buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 0n, reportId: 4n })).toThrow('positive')
@@ -115,9 +116,9 @@ describe('personal portfolio capital SDK', () => {
 	})
 	test('keeper takeover binds final exposure, saved target, report epoch and source cohort', () => {
 		const bounds = { maximumOwnerPrincipal: 100n, maximumOwnerCommitment: 40n, expectedTargetHealthFactorBps: 12_000n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n }
-		const parameters = { ...base, positionId: 3n, commitment: 20n, minimumAward: 5n, maximumOwnRep: 30n, bounds }
+		const parameters = { ...base, positionId: 3n, commitment: 20n, minimumAward: 0n, maximumOwnRep: 30n, bounds }
 		const request = buildPortfolioCapitalTakeOverWithBoundsRequest(parameters)
-		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 5n, 30n, bounds] })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 0n, 30n, bounds] })
 		expect(request).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
 		expect(() => buildPortfolioCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedTargetHealthFactorBps: 9_999n } })).toThrow('100%')
 		expect(() => buildPortfolioCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedSourceBatch: 1n << 96n } })).toThrow('uint96')
@@ -146,6 +147,7 @@ describe('personal portfolio capital SDK', () => {
 			totalPledgedAttoRep: 600n,
 			totalCommitmentAttoEth: 60n,
 			healthyCommitmentAttoEth: 50n,
+			availableMintCapacityAttoEth: 7n,
 			currentBatch: 9n,
 			nextBatch: 10n,
 			ownerPrincipalAttoRep: 260n,
@@ -213,4 +215,8 @@ test('live collateral never becomes withdrawable merely because principal exists
 	expect((await loadPortfolioCapitalSnapshot({ client, portfolio, owner })).withdrawableAttoRep).toBe(0n)
 	await expect(loadPortfolioCapitalSnapshot({ client: fixture({ ownerCollateral: [260n, 20n, 261n] }).client, portfolio, owner })).rejects.toThrow('exceeds owner principal')
 	await expect(loadPortfolioCapitalSnapshot({ client: fixture({ accountOf: { owner: portfolio, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n } }).client, portfolio, owner })).rejects.toThrow('another owner')
+})
+
+test('#1495: takeover builders reject a REP award the ledger cannot pay', () => {
+	expect(() => buildPortfolioCapitalTakeOverRequest({ owner, capitalLedger, positionId: 1n, commitment: 1n, minimumAward: 1n, maximumOwnRep: 0n })).toThrow('future income only')
 })

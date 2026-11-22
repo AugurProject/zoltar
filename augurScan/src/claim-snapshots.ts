@@ -212,7 +212,6 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 				principal_atto_rep: leaf.amountAttoRep.toString(),
 				source_principal_atto_rep: allocationReady ? sourcePrincipal.toString() : undefined,
 				retained_principal_atto_rep: allocationReady ? principal.toString() : undefined,
-				auction_haircut_atto_rep: allocationReady ? (sourcePrincipal - principal).toString() : undefined,
 				reward_amount_atto_rep: allocationReady ? rewardAmount.toString() : undefined,
 				reward_cumulative_atto_rep: allocationReady ? rewardCumulative.toString() : undefined,
 				checkpoint_ready: isInherited ? allocationReady : undefined,

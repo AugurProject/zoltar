@@ -38,7 +38,7 @@ type PoolSnapshotProjection = {
 	reason: number
 	settlementCollateralAttoEth: AtomicValue
 	shareTokenSupplyAttoShares: AtomicValue
-	lastSettlementPortfolioTime: Date
+	lastSettlementPortfolioTime: AtomicValue
 }
 
 type PoolStateProjection = { type: 'poolState'; poolAddress: string; eventName: string; state: Readonly<Record<string, unknown>> }
@@ -162,7 +162,7 @@ const strings = (value: unknown, name: string): readonly string[] => {
 // The decoder keeps a uint8 enum as a JavaScript number and wider integers as decimal strings.
 const accountingReason = (value: unknown): number => {
 	const reason = typeof value === 'number' ? value : Number(integerString(value, 'reason'))
-	if (!Number.isSafeInteger(reason) || reason < 0) throw new Error('reason must be a non-negative integer')
+	if (!Number.isSafeInteger(reason) || reason < 0 || reason > 2) throw new Error('accounting reason must be 0, 1 or 2')
 	return reason
 }
 
@@ -353,7 +353,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				reason: accountingReason(args['reason']),
 				settlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
 				shareTokenSupplyAttoShares: integerString(args['shareTokenSupplyAttoShares'], 'shareTokenSupplyAttoShares'),
-				lastSettlementPortfolioTime: timestamp(args['lastSettlementPortfolioTime'], 'lastSettlementPortfolioTime'),
+				lastSettlementPortfolioTime: integerString(args['lastSettlementPortfolioTime'], 'lastSettlementPortfolioTime'),
 			},
 		]
 	}

@@ -128,7 +128,7 @@ describe('settlement panel', () => {
 			await act(() => buttonByLabel('Max').click())
 			expect(amountInput().value).toBe('2')
 			expect(buttonByLabel('Redeem complete sets').disabled).toBe(false)
-			expect(document.querySelector('.trade-estimate')?.textContent?.replaceAll('\u00a0', ' ')).toContain('2 ETH')
+			expect(document.querySelector('.trade-estimate')?.textContent?.replaceAll('\u00a0', ' ')).toContain('2.00 ETH')
 			expect(document.querySelector('.trade-estimate')?.textContent).toContain('Estimate from the current collateral rate. Rechecked before your wallet opens.')
 			expect(document.body.textContent).not.toContain('Getting a quote')
 			await act(async () => await Bun.sleep(400))
@@ -211,7 +211,7 @@ describe('settlement panel', () => {
 	for (const originUniverseId of [undefined, 0n])
 		test(`selects winning redemption and disables migration after a resolved ${originUniverseId === undefined ? 'ordinary' : 'inherited'} pool's universe forks`, async () => {
 			let forkContextLoads = 0
-			const market = { ...closedMarket, originUniverseId, questionOutcome: 1, universeForkTime: 9n, tradingStatus: 4 }
+			const market = { ...closedMarket, ...(originUniverseId === undefined ? {} : { originUniverseId }), questionOutcome: 1, universeForkTime: 9n, tradingStatus: 4 }
 			const rendered = await renderPanel(market, { invalid: 0n, yes: 10n ** 18n, no: 0n }, 100n, DEFAULT_TRADE_SETTINGS, {
 				services: {
 					...services,

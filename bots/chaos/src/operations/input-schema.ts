@@ -6,7 +6,7 @@ import { decodedTransaction } from './transaction-description.ts'
 type InputKind = 'integer' | 'amount' | 'text' | 'list' | 'choice' | 'address'
 export type InputField = { key: string; label: string; kind: InputKind; path: Array<string | number>; method?: string; minimum?: string; maximum?: string; choices?: 'tokens' | 'pools' | 'pairs' | 'universes' | 'questions' | 'auctions'; options?: Array<{ value: string; label: string }> }
 const integer = (key: string, label: string, path: Array<string | number>, minimum = '0', maximum?: string): InputField => ({ key, label, path, kind: 'integer', minimum, ...(maximum === undefined ? {} : { maximum }) })
-const amountField = (path: Array<string | number>, label = 'Token amount', key = 'amount'): InputField => ({ key, label, path, kind: 'amount', minimum: '1' })
+const amountField = (path: Array<string | number>, label = 'Token amount', key = 'amount', minimum = '1'): InputField => ({ key, label, path, kind: 'amount', minimum })
 const selectionKeys = { tokens: 'token', pools: 'pool', pairs: 'pair', universes: 'universeId', questions: 'questionId', auctions: 'auction' }
 const selection = (key: NonNullable<InputField['choices']>, label: string, path: Array<string | number>): InputField => ({ key: selectionKeys[key], label, kind: 'choice', choices: key, path })
 const pool = selection('pools', 'Security pool', ['metadata', 'pool'])
@@ -98,12 +98,13 @@ for (const id of ['trading.pair.create-and-initialize', 'trading.pair.initialize
 	]
 }
 
-schemas['trading.liquidity.remove'] = [pair, amountField(['metadata', 'liquidity'], 'LP tokens'), amountField(['metadata', 'minimumYes'], 'Minimum YES shares', 'minimumYes'), amountField(['metadata', 'minimumNo'], 'Minimum NO shares', 'minimumNo')]
+schemas['trading.liquidity.remove'] = [pair, amountField(['metadata', 'liquidity'], 'LP tokens'), amountField(['metadata', 'minimumYes'], 'Minimum YES shares', 'minimumYes', '0'), amountField(['metadata', 'minimumNo'], 'Minimum NO shares', 'minimumNo', '0')]
 for (const id of ['trading.complete-set.redeem', 'trading.position.exit'])
 	schemas[id] = [
 		pair,
 		amountField(['metadata', 'completeAmount'], 'Complete sets'),
-		amountField(['metadata', 'minimumEthAttoEth'], 'Minimum ETH received', 'minimumEthAttoEth'),
+		amountField(['metadata', 'minimumEthAttoEth'], 'Minimum collateral received', 'minimumEthAttoEth', '0'),
+		amountField(['metadata', 'minimumRepAttoRep'], 'Minimum recovery REP received', 'minimumRepAttoRep', '0'),
 		...(id === 'trading.position.exit'
 			? [
 					{

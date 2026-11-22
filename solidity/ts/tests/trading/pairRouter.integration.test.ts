@@ -579,6 +579,14 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, rate, 1n, account, NO_DEADLINE] }))
 	})
 
+	test('#1495: status and transaction guards agree when an ended question is also inactive', async () => {
+		await initialize()
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionData.abi, address: questionData, functionName: 'setEndTime', args: [question, 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setSystemState', args: [1] }))
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(1n)
+		await expect(client.simulateContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Question ended')
+	})
+
 	test('does not resume trading after lifecycle closure', async () => {
 		await initialize()
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionData.abi, address: questionData, functionName: 'setEndTime', args: [question, 1n] }))

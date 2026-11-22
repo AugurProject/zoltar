@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { approveReportingRep, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { EscalationSide } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
@@ -16,6 +16,9 @@ const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
 const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const repTokenAddress = getAddress('0x00000000000000000000000000000000000000e8')
+const escalationGameFactoryAddress = getAddress('0x00000000000000000000000000000000000000e9')
+const preparedGameCode: Hex = '0x6000'
+const questionEndTime = 1n
 const missingForkContinuationGetterMessage = 'The contract function "forkContinuation" returned no data ("0x"). The contract does not have the function "forkContinuation".'
 const carryLeafAbi = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
 
@@ -66,7 +69,7 @@ function buildCarrySnapshotPeaksForTest(leafHashes: readonly Hex[]) {
 }
 
 // Mocks the reads behind loadReportingDetails for an active escalation game; deposit pages come from the supplied reader.
-function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number, startIndex: bigint) => unknown) {
+function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number, startIndex: bigint) => unknown, continuation?: { resumedAt: bigint; fixedOutcome: number }) {
 	const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 	return testDouble<Parameters<typeof loadReportingDetails>[0]>({
 		getBlock: async () => createBlockWithTimestamp(88n),
@@ -93,12 +96,16 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 			if (request.functionName === 'getQuestionOutcome') return 3
 			if (request.functionName === 'getForkTime') return 0n
 			if (request.functionName === 'getEarliestForkTime') return 4321n
+			if (request.functionName === 'canTriggerOwnFork') return continuation === undefined || continuation.fixedOutcome === 3
 			if (request.functionName === 'hasReachedNonDecision') return true
 			if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 			if (request.functionName === 'getForkThresholdAttoRep') return 100n
 			if (request.functionName === 'escalationGame') return escalationGameAddress
 			if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
-			if (request.functionName === 'forkContinuation') return false
+			if (request.functionName === 'forkContinuation') return continuation !== undefined
+			if (request.functionName === 'forkResumedAt') return continuation?.resumedAt ?? 0n
+			if (request.functionName === 'forkElapsedAtStart') return 0n
+			if (request.functionName === 'fixedQuestionOutcome') return continuation?.fixedOutcome ?? 3
 			if (request.functionName === 'getDepositsByOutcome') {
 				const args = request.args
 				if (!Array.isArray(args) || typeof args[0] !== 'number' || typeof args[1] !== 'bigint') throw new Error('Expected deposit outcome args')
@@ -110,6 +117,68 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 }
 
 describe('reporting protocol client', () => {
+	test('blocks an unresumed continuation and a fixed inherited game', async () => {
+		const waiting = await loadReportingDetails(
+			createActiveReportingClient(() => [], { resumedAt: 0n, fixedOutcome: 3 }),
+			securityPoolAddress,
+			undefined,
+		)
+		expect(waiting.reportingBlockedReason).toBe('Resume the continuation game before reporting.')
+		const fixed = await loadReportingDetails(
+			createActiveReportingClient(() => [], { resumedAt: 10n, fixedOutcome: 1 }),
+			securityPoolAddress,
+			undefined,
+		)
+		expect(fixed.reportingBlockedReason).toBe('This branch inherits a fixed question outcome; new reports are closed.')
+		expect(fixed.canTriggerOwnFork).toBe(false)
+		const resumed = await loadReportingDetails(
+			createActiveReportingClient(() => [], { resumedAt: 10n, fixedOutcome: 3 }),
+			securityPoolAddress,
+			undefined,
+		)
+		expect(resumed.reportingBlockedReason).toBeUndefined()
+	})
+
+	test('blocks the first report when a child inherits its fixed outcome before finalization', async () => {
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
+			getBlock: async () => createBlockWithTimestamp(88n),
+			multicall: createMulticallStub(async request => {
+				if (getContractFunctionName(request.contracts[0]) === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, alternateSecurityPoolAddress]
+				return [questionTuple, 10n]
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'isEscalationResolved') return true
+				throw new Error(`Unexpected read ${request.functionName}`)
+			}),
+		})
+		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		expect(details.status).toBe('not-started')
+		expect(details.questionOutcome).toBe('none')
+		expect(details.reportingBlockedReason).toBe('This branch inherits a fixed question outcome; new reports are closed.')
+	})
+
+	test('requires child settlement when a fork lands exactly at the game end', async () => {
+		const base = createActiveReportingClient(() => [])
+		for (const [forkTime, expectedState] of [
+			[149n, 'migration-required'],
+			[150n, 'migration-required'],
+			[151n, 'locked'],
+		] as const) {
+			const client = {
+				...base,
+				readContract: createReadContractStub(async request => {
+					if (request.functionName === 'getForkTime') return forkTime
+					if (request.functionName === 'hasReachedNonDecision') return false
+					return base.readContract(request)
+				}),
+			}
+			expect((await loadReportingDetails(client, securityPoolAddress, undefined)).settlementState).toBe(expectedState)
+		}
+	})
+
 	test('loads the payout threshold the game recorded instead of the live fork threshold', async () => {
 		const base = createActiveReportingClient(() => [])
 		expect((await loadReportingDetails(base, securityPoolAddress, undefined)).forkThresholdAttoRep).toBe(100n)
@@ -153,6 +222,12 @@ describe('reporting protocol client', () => {
 				async request => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
+					if (request.functionName === 'escalationGameFactory') return escalationGameFactoryAddress
+					if (request.functionName === 'systemState') return 0
+					if (request.functionName === 'questionData') return zoltarAddress
+					if (request.functionName === 'questionId') return 5n
+					if (request.functionName === 'getQuestionEndDate') return questionEndTime
+					if (request.functionName === 'escalationGameAddress') return escalationGameAddress
 					if (request.functionName === 'getEscalationGameEndDate') return 1000n
 					if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
 					if (request.functionName === 'forkContinuation') return false
@@ -162,13 +237,74 @@ describe('reporting protocol client', () => {
 			),
 		)
 		client.getBlock = async () => createBlockWithTimestamp(1n)
+		client.getCode = async () => preparedGameCode
 		client.onTransactionPrepared = preview => previews.push(preview)
 		await approveReportingRep(client, securityPoolAddress, 'yes', 7n)
 		expect(previews[0]?.functionName).toBe('approve')
 		expect(previews[0]?.args).toEqual([securityPoolAddress, 7n])
 		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)
-		expect(previews[1]?.functionName).toBe('depositWalletRepToEscalationGameWithLead')
+		expect(previews[1]?.functionName).toBe('depositWalletRepToEscalationGame')
 		expect(previews[1]?.args).toEqual([1, 7n])
+	})
+
+	test('#1453: a first report deploys the unstarted escalation game in its own transaction, then reports', async () => {
+		const sent: { to: Address | null | undefined; data: Hex | undefined }[] = []
+		let gameCode: Hex = '0x'
+		const steps: string[][] = []
+		const client = asWriteClient(
+			createMockWriteClient(
+				request => {
+					sent.push({ to: request.to, data: request.data })
+					if (request.to === escalationGameFactoryAddress) gameCode = preparedGameCode
+				},
+				async request => {
+					if (request.functionName === 'universeId') return 9n
+					if (request.functionName === 'escalationGame') return zeroAddress
+					if (request.functionName === 'escalationGameFactory') return escalationGameFactoryAddress
+					if (request.functionName === 'systemState') return 0
+					if (request.functionName === 'questionData') return zoltarAddress
+					if (request.functionName === 'questionId') return 5n
+					if (request.functionName === 'getQuestionEndDate') return questionEndTime
+					if (request.functionName === 'escalationGameAddress') {
+						expect(request.args).toEqual([securityPoolAddress])
+						return escalationGameAddress
+					}
+					throw new Error(`Unexpected read: ${request.functionName}`)
+				},
+			),
+		)
+		client.getCode = async () => gameCode
+		client.getBlock = async () => createBlockWithTimestamp(questionEndTime)
+		client.onTransactionPlan = plan => steps.push(plan.map(step => step.functionName))
+		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)
+		expect(steps).toEqual([['prepareEscalationGame', 'depositWalletRepToEscalationGame']])
+		expect(sent.map(transaction => transaction.to)).toEqual([escalationGameFactoryAddress, securityPoolAddress])
+		const prepare = decodeFunctionData({ abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, data: sent[0]?.data ?? '0x' })
+		expect(prepare.functionName).toBe('prepareEscalationGame')
+		expect(prepare.args).toEqual([securityPoolAddress])
+		expect(decodeFunctionData({ abi: statoblast_SecurityPool_SecurityPool.abi, data: sent[1]?.data ?? '0x' }).functionName).toBe('depositWalletRepToEscalationGame')
+	})
+
+	test('#1453: no escalation game is prepared before the question ends', async () => {
+		const sent: (Address | null | undefined)[] = []
+		const client = asWriteClient(
+			createMockWriteClient(
+				request => sent.push(request.to),
+				async request => {
+					if (request.functionName === 'universeId') return 9n
+					if (request.functionName === 'escalationGame') return zeroAddress
+					if (request.functionName === 'systemState') return 0
+					if (request.functionName === 'questionData') return zoltarAddress
+					if (request.functionName === 'questionId') return 5n
+					if (request.functionName === 'getQuestionEndDate') return questionEndTime + 100n
+					throw new Error(`Unexpected read: ${request.functionName}`)
+				},
+			),
+		)
+		client.getBlock = async () => createBlockWithTimestamp(questionEndTime)
+		client.getCode = async () => '0x'
+		await expect(reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)).rejects.toThrow('Reporting opens when the question ends.')
+		expect(sent).toEqual([])
 	})
 
 	test('#1328 a reply can require the reviewed outcome to lead', async () => {
@@ -179,10 +315,18 @@ describe('reporting protocol client', () => {
 				async request => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return zeroAddress
+					if (request.functionName === 'escalationGameFactory') return escalationGameFactoryAddress
+					if (request.functionName === 'systemState') return 0
+					if (request.functionName === 'questionData') return zoltarAddress
+					if (request.functionName === 'questionId') return 5n
+					if (request.functionName === 'getQuestionEndDate') return questionEndTime
+					if (request.functionName === 'escalationGameAddress') return escalationGameAddress
 					throw new Error(`Unexpected read: ${request.functionName}`)
 				},
 			),
 		)
+		client.getCode = async () => preparedGameCode
+		client.getBlock = async () => createBlockWithTimestamp(questionEndTime)
 		client.onTransactionPrepared = preview => previews.push(preview)
 		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'wallet', false, true)
 		expect(previews[0]?.functionName).toBe('depositWalletRepToEscalationGameWithLead')
@@ -243,7 +387,7 @@ describe('reporting protocol client', () => {
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGameWithLead')
+		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGame')
 		expect(decodedCall.args).toEqual([1n, 7n])
 		expect(result).toMatchObject({ action: 'reportOutcome', securityPoolAddress, universeId: 9n })
 	})
@@ -282,7 +426,7 @@ describe('reporting protocol client', () => {
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
 		await withdrawEscalationFromSecurityPool(writeClient, securityPoolAddress, 'no', [0n], 0n)
 		expect(previews[0]?.reviewTitle).toBe('Clear No deposits (worth 0 REP)')
-		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Removes these losing deposits from your vault’s dispute-staked REP so you can redeem your vault REP from this pool.')
+		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Ordinary losing deposits retire automatically at finality.')
 		await withdrawEscalationFromSecurityPool(writeClient, securityPoolAddress, 'yes', [0n], 4n)
 		expect(previews[1]?.reviewDescription).toBeUndefined()
 	})
@@ -298,6 +442,7 @@ describe('reporting protocol client', () => {
 			async request => {
 				if (request.functionName === 'universeId') return 9n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'fixedQuestionOutcome') return 3
 				if (request.functionName === 'forkResumedAt') return 100n
 				if (request.functionName === 'forkElapsedAtStart') return 0n
 				if (request.functionName === 'getEscalationGameEndDate') return 1000n
@@ -314,7 +459,7 @@ describe('reporting protocol client', () => {
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGameWithLead')
+		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGame')
 		expect(decodedCall.args).toEqual([2n, 11n])
 	})
 
@@ -352,6 +497,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 0n
 				if (request.functionName === 'getEarliestForkTime') return 0n
+				if (request.functionName === 'canTriggerOwnFork') return true
 				if (request.functionName === 'hasReachedNonDecision') return true
 				if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
 				if (request.functionName === 'forkContinuation') return false
@@ -378,8 +524,8 @@ describe('reporting protocol client', () => {
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
 		expect(details.contributionFunding).toBe('wallet')
-		expect(details.viewerVaultDisputeStakedAttoRep).toBeUndefined()
-		expect(details.viewerPoolHeldVaultRepBackingAttoRep).toBeUndefined()
+		expect('viewerVaultDisputeStakedAttoRep' in details).toBe(false)
+		expect('viewerPoolHeldVaultRepBackingAttoRep' in details).toBe(false)
 		expect(details.viewerEscalationMigrationEntitlement).toBeUndefined()
 		const yesSide = details.sides.find(side => side.key === 'yes')
 		if (yesSide === undefined) throw new Error('Expected yes side')
@@ -601,7 +747,7 @@ describe('reporting protocol client', () => {
 
 		expect(details.status).toBe('not-started')
 		expect(details.contributionFunding).toBe('wallet')
-		expect(details.viewerVaultExists).toBeUndefined()
+		expect('viewerVaultExists' in details).toBe(false)
 		expect(details.viewerWalletRepBalanceAttoRep).toBe(100n)
 		expect(details.viewerWalletRepAllowanceAttoRep).toBe(0n)
 		expect(details.questionOutcome).toBe('yes')

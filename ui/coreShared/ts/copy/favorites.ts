@@ -7,7 +7,6 @@ export const favorites = 'Favorites'
 export const downloaded = 'Downloaded'
 export const formatCollectionTab = (label: CopyTemplateValue, count: CopyTemplateValue) => `${label} (${count})`
 export const collectionAriaLabel = 'Favorites collection'
-export const recentlySaved = 'Recently added'
 export const discoverMore = 'Show more'
 export const discovering = 'Loading…'
 export const formatDiscoveredProgress = (discovered: CopyTemplateValue, total: CopyTemplateValue, noun: CopyTemplateValue) => `${discovered} of ${total} ${noun} checked`

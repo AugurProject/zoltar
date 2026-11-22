@@ -11,7 +11,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { ZoltarRoutes } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarRoutes.js'
-import { ZoltarWorkspaceProvider } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
+import { ZoltarWorkspaceProvider, type ZoltarWorkspace } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
@@ -31,8 +31,28 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 }
 
 /** The operation slice the Zoltar route containers read; each test overrides the universe and view. */
-function createOperations(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined = undefined) {
+function createOperations(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined = undefined): ZoltarWorkspace['operations'] {
 	return {
+		questionFeedback: undefined,
+		zoltarChildUniverseFeedback: undefined,
+		zoltarMigrationFeedback: undefined,
+		zoltarForkFeedback: undefined,
+		zoltarForkResult: undefined,
+		ensureZoltarUniverse: async () => {
+			if (universe === undefined) throw new Error('Missing universe fixture')
+			return universe
+		},
+		loadZoltarUniverse: async () => universe,
+		refreshZoltarUniverse: async () => universe,
+		selectScalarOutcomeIndexes: () => undefined,
+		zoltarUniverseLoadedId: universe?.universeId,
+		zoltarUniverseResolvedId: universe?.universeId,
+		zoltarUniverseMissing: false,
+		loadingZoltarQuestionCount: false,
+		loadZoltarQuestionCount: async () => undefined,
+		loadCreatedZoltarQuestion: async () => undefined,
+		loadZoltarQuestions: async () => undefined,
+		zoltarQuestionCount: 0n,
 		approveZoltarForkRep: async () => undefined,
 		createChildUniverse: async () => undefined,
 		createQuestion: async () => undefined,
@@ -124,7 +144,9 @@ describe('ZoltarRoutes', () => {
 			viewChanges,
 			update: async (next: Partial<ReturnType<typeof createOperations>>) => {
 				workspace.operations = { ...workspace.operations, ...next }
-				await act(() => render(tree(), rendered.container))
+				await act(() => {
+					render(tree(), rendered.container)
+				})
 			},
 		}
 	}
@@ -249,7 +271,9 @@ describe('ZoltarRoutes', () => {
 		})
 		expect(document.querySelector('.migration-wizard')).toBeNull()
 		expect(queries.getByText('Failed to load Zoltar universe. Reason: RPC unavailable.')).toBeTruthy()
-		await act(() => queries.getByRole('button', { name: 'Retry' }).click())
+		await act(() => {
+			queries.getByRole('button', { name: 'Retry' }).click()
+		})
 		expect(reads).toEqual([{ clearCurrentState: false }])
 	})
 

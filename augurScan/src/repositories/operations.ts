@@ -149,6 +149,10 @@ export const escalationCatalogData = async (sql: SQL, chainId: number, snapshotB
 			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
 		)
 		SELECT game.game_address,
+			EXISTS (SELECT 1 FROM escalation_game_events conclusion
+				WHERE conclusion.chain_id = ${chainId} AND conclusion.game_address = game.game_address
+					AND conclusion.canonical AND conclusion.block_number <= ${snapshotBlock}
+					AND conclusion.event_name IN ('NonDecisionReached', 'InheritedThresholdTie', 'OrdinarySettlementInitialized')) AS concluded,
 			latest.event_name, latest.event_data, latest.block_number::text AS block_number, latest.block_hash, latest.tx_hash, latest.log_index,
 			snapshot.read_result->'outcomeBalancesAttoRep'->>0 AS invalid_stake_atto_rep,
 			snapshot.read_result->'outcomeBalancesAttoRep'->>1 AS yes_stake_atto_rep,

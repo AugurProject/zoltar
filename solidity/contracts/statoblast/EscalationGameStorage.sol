@@ -5,6 +5,7 @@ import { EscalationClaimBundle, Node, NonDecisionState, OutcomeState } from './E
 import { EscalationClaimCheckpoint } from './EscalationClaimCheckpointTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { DelegateCall } from './DelegateCall.sol';
+import { Constants } from '../Constants.sol';
 
 /// @dev EscalationGame owns this storage and routes mutations through delegatecall.
 /// DepositDelegate writes deposits, carry initialization and escrow; ClaimDelegate
@@ -12,7 +13,7 @@ import { DelegateCall } from './DelegateCall.sol';
 /// Pool/custody bindings and authorization live in the host context: delegates
 /// execute with the original caller and the host's storage, not their own accounts.
 abstract contract EscalationGameStorage {
-	uint256 internal constant ACTIVATION_DELAY = 3 days;
+	uint256 internal constant ACTIVATION_DELAY = Constants.FORK_RESPONSE_DELAY;
 	uint256 public activationTime;
 	uint256 public nonDecisionThresholdAttoRep;
 	uint256 public startBondAttoRep;
@@ -31,8 +32,6 @@ abstract contract EscalationGameStorage {
 		uint256 unresolvedAttoRep;
 		// Original unconsumed principal indexed by BinaryOutcome (Invalid, Yes, No).
 		uint256[3] localUnresolvedPrincipalByOutcome;
-		// Only the new report generating surplus relinquishes this collateral credit.
-		uint256 collateralBackingAttoRep;
 	}
 	mapping(address => VaultAccounting) internal vaultAccounting;
 

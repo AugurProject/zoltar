@@ -52,7 +52,7 @@ describe('AmountField', () => {
 		const input = within(document.body).getByLabelText('Deposit amount')
 		if (!(input instanceof HTMLInputElement)) throw new Error('Expected an input element')
 		expect(input.inputMode).toBe('decimal')
-		expect(input.getAttribute('pattern')).toBe('[0-9 ]*[.,]?[0-9]*')
+		expect(input.getAttribute('pattern')).toBe('[0-9\\s]*[.,]?[0-9\\s]*')
 		expect(input.getAttribute('autocomplete')).toBe('off')
 		const adornment = renderedComponent.container.querySelector('.form-input-adornment')
 		const hint = within(document.body).getByText('Balance: 1 200 REP', { selector: 'p.field-hint' })
@@ -67,7 +67,7 @@ describe('AmountField', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const input = getInput()
-		const liveRegion = renderedComponent.container.querySelector('.field-error-live-region')
+		const liveRegion = renderedComponent.container.querySelector<HTMLElement>('.field-error-live-region')
 		expect(liveRegion?.getAttribute('aria-live')).toBe('polite')
 		expect(liveRegion?.childElementCount).toBe(0)
 

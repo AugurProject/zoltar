@@ -20,6 +20,7 @@ const amountFields = [
 	['walletReserveEth', 'Wallet ETH reserve', 'ETH'],
 ] as const
 const integerFields = [
+	['takeoverIncomeHorizonSeconds', 'Takeover income horizon', 'seconds'],
 	['targetHealthFactorBps', 'Target health', 'bps'],
 	['maximumPositionsPerScan', 'Positions per scan', 'positions'],
 	['stalledRetirementSeconds', 'Stalled retirement', 'seconds'],

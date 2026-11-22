@@ -71,7 +71,6 @@ const PROHIBITED_OPERATIONS = [
 	'trading.genesis-uniswap.add-liquidity',
 	'trading.liquidity.add-eth',
 	'trading.liquidity.add-shares',
-	'trading.lp.approve',
 	'trading.pair.create',
 	'trading.pair.create-and-initialize',
 	'trading.pair.initialize-eth',
@@ -108,7 +107,8 @@ const dispositions = new Map<string, RetirementOperationDisposition>([
 const unclassifiedCatalogOperations = CHAOS_OPERATION_CATALOG.map(definition => definition.id).filter(id => !dispositions.has(id))
 if (unclassifiedCatalogOperations.length > 0) throw new Error(`Retirement policy has no disposition for catalog operations: ${unclassifiedCatalogOperations.join(', ')}`)
 
-function operationAllowedDuringRetirement(operationId: string, policies: Pick<DurableRetirementState['policies'], 'exitUnmatchedShares' | 'maximumExitLossBps' | 'migrateExistingClaims'>) {
+function operationAllowedDuringRetirement(operationId: string, policies: Pick<DurableRetirementState['policies'], 'exitUnmatchedShares' | 'maximumExitLossBps' | 'migrateExistingClaims' | 'unwrapWeth'>) {
+	if (operationId === 'open-oracle.weth.unwrap' && !policies.unwrapWeth) return false
 	const disposition = dispositions.get(operationId)
 	if (disposition === 'recovery') return true
 	if (disposition === 'claim-linked-migration') return policies.migrateExistingClaims

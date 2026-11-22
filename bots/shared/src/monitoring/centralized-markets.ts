@@ -211,6 +211,7 @@ export function parseCentralizedMarketSettings(value: unknown): CentralizedMarke
 						minimumTotalSourceCount: integer(consensus['minimumTotalSourceCount'], 'centralizedMarkets.venueConsensus.minimumTotalSourceCount', 2, 200),
 					}
 				})()
+	if (venueConsensus !== undefined && venueConsensus.dexProbeDepthAttoEth <= 0n) throw new Error('centralizedMarkets.venueConsensus.dexProbeDepthEth must be greater than zero')
 	if (settings['requiredForExecution'] && venueConsensus !== undefined) {
 		if (venueConsensus.minimumDexSourceCount < 2) throw new Error('Required venue consensus needs at least two independent DEX sources')
 		if (venueConsensus.dexSources.length < venueConsensus.minimumDexSourceCount) throw new Error('Required venue consensus needs enough configured DEX sources to satisfy minimumDexSourceCount')

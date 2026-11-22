@@ -87,3 +87,31 @@ for (const portKind of ['custom', 'ephemeral'] as const) {
 		}
 	})
 }
+
+test('Trading development serves both genesis deployments for each public network without a production build', async () => {
+	const child = spawn(process.execPath, [fileURLToPath(new URL('./dev-server.ts', import.meta.url)), 'trading'], {
+		env: { ...process.env, UI_DEV_SERVER_PORT: '0' },
+		stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+	})
+	const liveReload = createDevServerLiveReload()
+	try {
+		const endpoint = await liveReload.connect(child)
+		if (endpoint === undefined) throw new Error('Development endpoint unavailable')
+		const response = await fetch(new URL('/core-deployments.json', endpoint))
+		expect(response.status).toBe(200)
+		expect(response.headers.get('cache-control')).toBe('no-store')
+		const body: unknown = await response.json()
+		if (!Array.isArray(body)) throw new Error('Expected a deployment registry array')
+		expect(body).toHaveLength(4)
+		for (const chainId of [1, 11_155_111]) {
+			for (const genesisOutcome of ['yes', 'no']) expect(body).toContainEqual(expect.objectContaining({ chainId, genesisOutcome }))
+		}
+	} finally {
+		liveReload.stop()
+		if (child.exitCode === null && child.signalCode === null) {
+			const exited = once(child, 'exit')
+			child.kill('SIGTERM')
+			await exited
+		}
+	}
+})

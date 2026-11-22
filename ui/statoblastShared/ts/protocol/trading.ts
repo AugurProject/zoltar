@@ -5,7 +5,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { requireAddressValue, requireBigintValue } from './decoders.js'
 import { loadCentralPortfolioQuestion } from './securityPoolPortfolioState.js'
-import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
 import { encodeFunctionData, getAddress, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
@@ -137,7 +137,7 @@ export async function quoteTradingCollateral(client: ReadClient, collateral: Awa
 	onRecoveryRequirement?.(required)
 	const recovery = await loadRecoveryMintFunding(client, collateral.portfolio, universeId, collateral.owner, required)
 	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error('Invalid collateral fee quote.')
-	return { amount, maximumFee: (result[0] * 10_100n + 9_999n) / 10_000n, recovery }
+	return { amount, fee: result[0], recovery }
 }
 
 function getShareMigrationOutcomeValue(outcome: ReportingOutcomeKey) {
@@ -231,6 +231,7 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 			args: [],
 		}),
 	])
+	const collateral = migratedAttoShares === undefined ? undefined : await loadTradingCollateralIdentity(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
 		address: shareTokenAddress,
 		abi: statoblast_tokens_ShareToken_ShareToken.abi,
@@ -238,7 +239,7 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 		args: [getShareTokenId(universeId, shareOutcome), sortedTargetOutcomeIndexes],
 		reviewTitle: tradingCopy.formatMigrateSharesReviewTitle(shareOutcomeLabel),
 		reviewDescription: tradingCopy.formatMigrateSharesReviewDescription(shareOutcomeLabel),
-		...(migratedAttoShares === undefined ? {} : { reviewAmount: formatCurrencyBalanceWithUnit(migratedAttoShares, tradingCopy.formatMigrateSharesReviewUnit(shareOutcomeLabel)) }),
+		...(migratedAttoShares === undefined ? {} : { reviewAmount: formatCurrencyBalanceWithUnit(migratedAttoShares, tradingCopy.formatMigrateSharesReviewUnit(shareOutcomeLabel), collateral?.decimals) }),
 	}))
 	return {
 		action: 'migrateShares',
@@ -310,10 +311,10 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 			contractAddress: callParams.address,
 			validateBeforeSubmit: async () => {
 				const latest = await loadTradingCollateral(client, securityPoolAddress, client.account.address)
-				if (latest.allowance < amount + maximumFee) throw new Error(collateralCopy.approvalRequired)
-				if (latest.balance < amount + maximumFee) throw new Error('Insufficient collateral for minting and purchase fees.')
 				const fresh = await quote()
 				if (fresh.fee > maximumFee) throw new Error('Purchase fee changed. Review the amount again.')
+				if (latest.allowance < amount + fresh.fee) throw new Error(collateralCopy.approvalRequired)
+				if (latest.balance < amount + fresh.fee) throw new Error('Insufficient collateral for minting and purchase fees.')
 				if (fresh.recoveryAttoRep > maximumRecoveryAttoRep) throw new Error('Recovery REP quote changed. Review the amount again.')
 				const recovery = await loadRecoveryMintFunding(client, portfolio, universeId, client.account.address, fresh.recoveryAttoRep)
 				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)

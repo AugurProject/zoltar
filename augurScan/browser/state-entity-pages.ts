@@ -1,10 +1,11 @@
-import { questionIdHex } from './identifier-format.ts'
+import { shortUniverseId, protocolIdHex as formatProtocolId } from './identifier-format.ts'
+import { protocolIdHex } from './identifier-format.ts'
 import { semanticFields } from './semantic-evidence.ts'
 import type { EntityHistory, QuestionRecord, StateCatalog, StateEntity, StateTab, UniverseRecord } from './browser-types.ts'
 import { exactUnit, utcDateTime } from './format.ts'
-import { short, shortIdentifier } from './identifier-format.ts'
+import { short } from './identifier-format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
-import { questionDateLabel, questionStatus } from './question-time.ts'
+import { questionAnswerType, questionDateLabel, questionStartLabel, questionStatus } from './question-time.ts'
 import type { createStateComponents } from './state-components.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -51,9 +52,9 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 		resolutionPanel.append(row)
 	}
 	if (history.pools.length === 0) resolutionPanel.append(element('p', 'data-note', 'No linked pool resolution evidence is available.'))
-	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
+	const kind = questionAnswerType(question)
 	const fragment = document.createDocumentFragment()
-	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(questionIdHex(question.question_id), 10, 8)}`, `${kind} · Time window ${questionStatus(question)}`))
+	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(protocolIdHex(question.question_id))}`, `${kind} · Time window ${questionStatus(question)}`))
 	const canonicalQuestionRoute = location.pathname.startsWith('/question/')
 	const questionTab = pageUrl.searchParams.get('tab') === 'usage' ? 'usage' : 'overview'
 	if (canonicalQuestionRoute) {
@@ -91,7 +92,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	const timeline = element('div', 'timeline')
 	for (const [label, value] of [
 		['Created', utcDateTime(question.created_timestamp)],
-		['Starts', questionDateLabel(question.start_time)],
+		['Starts', questionStartLabel(question.start_time)],
 		['Ends', questionDateLabel(question.end_time)],
 	] as const)
 		timeline.append(element('div', 'timeline-step', `${label} · ${value}`))
@@ -100,7 +101,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	const usage = element('section', 'static-card')
 	usage.append(element('h4', '', 'Protocol usage'))
 	const grid = element('div', 'static-grid')
-	grid.append(staticField('Pool deployments', number(question.pool_count)), staticField('Universe forks using this question', number(question.fork_count)), staticField('Question ID', questionIdHex(question.question_id)), staticField('Created block evidence', `#${number(question.block_number)}`))
+	grid.append(staticField('Pool deployments', number(question.pool_count)), staticField('Universe forks using this question', number(question.fork_count)), staticField('Question ID', protocolIdHex(question.question_id)), staticField('Created block evidence', `#${number(question.block_number)}`))
 	usage.append(grid)
 	if (!canonicalQuestionRoute || questionTab === 'usage') fragment.append(usage)
 	$('#state-detail').replaceChildren(fragment)
@@ -167,7 +168,7 @@ const renderLineage = (counted: StateEntityDeps['counted'], universes: UniverseR
 		const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 		label.setAttribute('x', '10')
 		label.setAttribute('y', '20')
-		label.textContent = universe.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(universe.universe_id, 7, 5)}`
+		label.textContent = universe.universe_id === '0' ? 'Genesis universe' : `Universe ${shortUniverseId(universe.universe_id)}`
 		const meta = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 		meta.setAttribute('class', 'node-meta')
 		meta.setAttribute('x', '10')
@@ -184,8 +185,8 @@ export const renderUniverseDetailPage = async (deps: StateEntityDeps, universe: 
 	const history = suppliedHistory ?? (await fetchEntityHistory('universes', universe))
 	if (!isCurrent()) return
 	const fragment = document.createDocumentFragment()
-	const title = universe.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(universe.universe_id, 12, 8)}`
-	fragment.append(stateHeader('Zoltar universe', title, `Outcome ${universe.forking_outcome_index} · parent ${shortIdentifier(universe.parent_universe_id, 8, 6)}`, universe.active_fork_time ? 'Forked' : 'Active'))
+	const title = universe.universe_id === '0' ? 'Genesis universe' : `Universe ${shortUniverseId(universe.universe_id)}`
+	fragment.append(stateHeader('Zoltar universe', title, `Outcome ${universe.forking_outcome_index} · parent ${shortUniverseId(universe.parent_universe_id)}`, universe.active_fork_time ? 'Forked' : 'Active'))
 	fragment.append(historyCoverageNotice(history, 'universes', universe))
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
@@ -217,11 +218,12 @@ export const renderUniverseDetailPage = async (deps: StateEntityDeps, universe: 
 	identity.append(element('h4', '', 'Immutable universe identity'))
 	const grid = element('div', 'static-grid')
 	grid.append(
-		staticField('Universe ID', universe.universe_id),
-		staticField('Parent universe', universe.parent_universe_id),
+		staticField('Universe ID', formatProtocolId(universe.universe_id)),
+		staticField('Parent universe', formatProtocolId(universe.parent_universe_id)),
 		staticField('Forking outcome', universe.forking_outcome_index),
+		staticField('Parent fork question', protocolIdHex(universe.inherited_fork_question_id)),
 		staticAddressField('REP token', universe.reputation_token_address, universe.chain_id),
-		staticField('Fork question', questionIdHex(universe.active_fork_question_id)),
+		staticField('Fork question', protocolIdHex(universe.active_fork_question_id)),
 		staticField('Fork time', universe.active_fork_time ? utcDateTime(universe.active_fork_time) : 'Not forked'),
 		staticAddressField('Fork initiator', universe.forker_address, universe.chain_id),
 		staticField('Fork threshold', exactUnit(universe.fork_threshold_atto_rep, 18, 'REP')),

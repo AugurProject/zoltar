@@ -55,30 +55,6 @@ const packageInstallTask = (projectPath: string, groups?: readonly string[]): Pr
 	...(groups === undefined ? {} : { groups }),
 })
 
-/**
- * Advisories every dependency audit accepts, each with the reason it cannot be fixed by an upgrade or override. Remove an
- * entry as soon as a patched release exists.
- *
- * GHSA-vfj7-8cjw-p6xm: braces <= 3.0.3 exhausts the stack on deeply nested brace patterns and has no patched release. Its
- * only path is @tevm/compiler > solc-typed-ast > findup-sync > micromatch, and the only caller is solc-typed-ast's import
- * resolver, which passes the constant pattern `node_modules/`. No pattern from this repository, a user, or a remote party
- * reaches braces.
- *
- * GHSA-mrhx-c7xc-m3w5: the remaining Zod 3.25.76 copy has no patched v3 release; Web3 validator requires its v3 API.
- * It is used only by @tevm/compiler > solc-typed-ast > web3-eth-abi / web3-utils > web3-validator. The repository does
- * not import that compiler chain, and the four production simulation workers contain only patched Zod v4. The audit
- * runner enforces the inspected legacy versions and dependency paths and rejects vulnerable runtime Zod copies before
- * ignoring this advisory. Recheck reachability if compiler imports change; do not replace v3 with an incompatible v4.
- *
- * GHSA-fc5q-39xc-vjpf: picomatch 4.0.7 and 2.3.2 have no patched release. The v4 copy is used by Knip and
- * transitive Vitest/Vite/unplugin build tooling; repository source imports none of those glob tools, and none appears
- * in the four production simulation-worker source maps. Knip reads repository-owned configuration. The v2 copy is
- * restricted to the same constant-pattern compiler import resolver described above. The audit runner pins these
- * copies, their tooling versions and parent paths, and rejects direct workspace use except the existing Knip dev
- * dependencies. Recheck reachability when build imports change; remove this exception when a patch is released.
- */
-export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5', 'GHSA-fc5q-39xc-vjpf'] as const
-
 export const dependencyAuditCommand: readonly string[] = ['bun', path.join(defaultRepositoryRoot, 'tooling/repo/audit-dependencies.mts')]
 
 const packageAuditTask = (projectPath: string, groups?: readonly string[]): ProjectTask => ({ ...packageTask(projectPath, 'audit'), command: dependencyAuditCommand, ...(groups === undefined ? {} : { groups }) })
@@ -90,6 +66,8 @@ const botAudit = dependencyAuditCommand
 /**
  * Canonical project ownership and build graph. All packages share the root workspace lockfile.
  */
+// Every app's vendor step writes the shared stylesheet's fonts beside ui/coreShared/css rather than into the app vendor directory.
+const sharedVendoredFontsDirectory = 'ui/coreShared/vendor/fonts'
 export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json']
 
 export const projects: readonly Project[] = [
@@ -104,15 +82,35 @@ export const projects: readonly Project[] = [
 			check: {
 				...rootTask(
 					['bun', 'run', 'check:complete'],
-					['package.json', 'bun.lock', 'biome.json', 'knip.ts', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'tooling/**', 'docs/**', 'shared/*/ts/**', 'solidity/**', 'ui/**', 'bots/**', 'augurScan/**'],
+					[
+						'package.json',
+						'bun.lock',
+						'biome.json',
+						'knip.ts',
+						'.prettierrc.json',
+						'.coverage-policy.json',
+						'.vscode/**',
+						'tsconfig.json',
+						'tsconfig.scripts.json',
+						'tsconfig.ui-tests.json',
+						'bun-test-setup*.ts',
+						'scripts/**',
+						'tooling/**',
+						'docs/**',
+						'shared/*/ts/**',
+						'solidity/**',
+						'ui/**',
+						'bots/**',
+						'augurScan/**',
+					],
 				),
 				covers: ['lint'],
 			},
 			lint: rootTask(
 				['bun', 'run', 'check:static'],
-				['package.json', 'biome.json', 'knip.ts', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'docs/**', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**'],
+				['package.json', 'biome.json', 'knip.ts', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'tsconfig.ui-tests.json', 'bun-test-setup*.ts', 'scripts/**', 'docs/**', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**'],
 			),
-			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'knip.ts', 'shared/tsconfig*.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
+			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'knip.ts', 'shared/tsconfig*.json', 'tsconfig.scripts.json', 'tsconfig.ui-tests.json', 'docs/tsconfig.json', 'tooling/**']),
 			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.ts', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
 			audit: rootTask(dependencyAuditCommand, ['package.json', 'bun.lock', 'tooling/repo/audit-dependencies.mts', 'tooling/repo/projects.ts'], ['core-audit']),
 		},
@@ -219,13 +217,13 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('ui/zoltar'),
 			build: { ...packageTask('ui/zoltar', 'build', { groups: ['ui'], outputs: ['ui/zoltar/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
-			vendor: { ...packageTask('ui/zoltar', 'vendor', { cacheInputs: [...packageInputs('ui/zoltar'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/zoltar/vendor'] },
+			vendor: { ...packageTask('ui/zoltar', 'vendor', { cacheInputs: [...packageInputs('ui/zoltar'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/zoltar/vendor', sharedVendoredFontsDirectory] },
 			'test-build': { ...packageTask('ui/zoltar', 'build:tests'), outputs: ['ui/zoltar/js/tests'] },
 			workers: packageTask('ui/zoltar', 'build:workers'),
 			typecheck: { ...packageTask('ui/zoltar', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/zoltar', ['core-audit']),
 		},
-		generatedDirectories: ['ui/zoltar/js', 'ui/zoltar/dist', 'ui/zoltar/vendor'],
+		generatedDirectories: ['ui/zoltar/js', 'ui/zoltar/dist', 'ui/zoltar/vendor', sharedVendoredFontsDirectory],
 		ci: { scope: 'core', artifactOutputs: ['ui/zoltar/js', 'ui/zoltar/dist'] },
 	},
 	{
@@ -236,13 +234,13 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('ui/statoblast'),
 			build: { ...packageTask('ui/statoblast', 'build', { groups: ['ui'], outputs: ['ui/statoblast/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
-			vendor: { ...packageTask('ui/statoblast', 'vendor', { cacheInputs: [...packageInputs('ui/statoblast'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/statoblast/vendor'] },
+			vendor: { ...packageTask('ui/statoblast', 'vendor', { cacheInputs: [...packageInputs('ui/statoblast'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/statoblast/vendor', sharedVendoredFontsDirectory] },
 			'test-build': { ...packageTask('ui/statoblast', 'build:tests'), outputs: ['ui/statoblast/js/tests'] },
 			workers: packageTask('ui/statoblast', 'build:workers'),
 			typecheck: { ...packageTask('ui/statoblast', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/statoblast', ['core-audit']),
 		},
-		generatedDirectories: ['ui/statoblast/js', 'ui/statoblast/dist', 'ui/statoblast/vendor'],
+		generatedDirectories: ['ui/statoblast/js', 'ui/statoblast/dist', 'ui/statoblast/vendor', sharedVendoredFontsDirectory],
 		ci: { scope: 'core', artifactOutputs: ['ui/statoblast/js', 'ui/statoblast/dist'] },
 	},
 	{
@@ -253,13 +251,13 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('ui/openoracle'),
 			build: { ...packageTask('ui/openoracle', 'build', { groups: ['ui'], outputs: ['ui/openoracle/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
-			vendor: { ...packageTask('ui/openoracle', 'vendor', { cacheInputs: [...packageInputs('ui/openoracle'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/openoracle/vendor'] },
+			vendor: { ...packageTask('ui/openoracle', 'vendor', { cacheInputs: [...packageInputs('ui/openoracle'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/openoracle/vendor', sharedVendoredFontsDirectory] },
 			'test-build': { ...packageTask('ui/openoracle', 'build:tests'), outputs: ['ui/openoracle/js/tests'] },
 			workers: packageTask('ui/openoracle', 'build:workers'),
 			typecheck: { ...packageTask('ui/openoracle', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/openoracle', ['core-audit']),
 		},
-		generatedDirectories: ['ui/openoracle/js', 'ui/openoracle/dist', 'ui/openoracle/vendor'],
+		generatedDirectories: ['ui/openoracle/js', 'ui/openoracle/dist', 'ui/openoracle/vendor', sharedVendoredFontsDirectory],
 		ci: { scope: 'core', artifactOutputs: ['ui/openoracle/js', 'ui/openoracle/dist'] },
 	},
 	{
@@ -271,14 +269,14 @@ export const projects: readonly Project[] = [
 			setup: packageInstallTask('ui/trading'),
 			build: { ...packageTask('ui/trading', 'build', { groups: ['ui'], outputs: ['ui/trading/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
 			test: packageTask('ui/trading', 'test'),
-			vendor: { ...packageTask('ui/trading', 'vendor', { cacheInputs: [...packageInputs('ui/trading'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/trading/vendor'] },
+			vendor: { ...packageTask('ui/trading', 'vendor', { cacheInputs: [...packageInputs('ui/trading'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/trading/vendor', sharedVendoredFontsDirectory] },
 			'test-build': { ...packageTask('ui/trading', 'build:tests'), outputs: ['ui/trading/js/tests'] },
 			workers: packageTask('ui/trading', 'build:workers'),
 			typecheck: { ...packageTask('ui/trading', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			knip: rootTask(['bun', 'x', 'knip', '--production', '--workspace', 'ui/trading', '--include', 'files'], ['knip.ts', 'ui/trading/**']),
 			audit: packageAuditTask('ui/trading', ['core-audit']),
 		},
-		generatedDirectories: ['ui/trading/js', 'ui/trading/dist', 'ui/trading/vendor'],
+		generatedDirectories: ['ui/trading/js', 'ui/trading/dist', 'ui/trading/vendor', sharedVendoredFontsDirectory],
 		ci: { scope: 'core', artifactOutputs: ['ui/trading/js', 'ui/trading/dist'] },
 	},
 	{
@@ -357,7 +355,7 @@ export const projects: readonly Project[] = [
 			build: packageTask('augurScan', 'build', {
 				outputs: [...augurScanMetadataOutputs, 'augurScan/public/app.js'],
 				groups: ['generated'],
-				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'docs/*-deployment-addresses.json'],
+				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'augurScan/src/**', 'docs/*-deployment-addresses.json'],
 			}),
 			test: packageTask('augurScan', 'test:ci', { groups: ['complete-validation'] }),
 			check: packageTask('augurScan', 'check', { covers: ['lint'] }),

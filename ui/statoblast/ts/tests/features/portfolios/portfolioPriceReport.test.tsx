@@ -223,7 +223,7 @@ test('a custom approval amount survives block reloads and a folded report', asyn
 			?.querySelector('input')
 	await act(() => {
 		const input = approval()
-		if (input === undefined) throw new Error('Missing WETH approval amount')
+		if (input === undefined || input === null) throw new Error('Missing WETH approval amount')
 		input.value = '7'
 		input.dispatchEvent(new Event('input', { bubbles: true }))
 	})

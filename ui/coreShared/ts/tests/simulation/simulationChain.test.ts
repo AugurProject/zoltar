@@ -124,7 +124,7 @@ describe('simulation chain', () => {
 		const [, pinned] = await Promise.all([chain.sendTransaction({ data: '0x', from: SENDER, gas, to: RECIPIENT, value: 9n }, 'queued transfer'), chain.request({ method: 'eth_call', params: [{ data: balanceCall(RECIPIENT), to: multicall }, toHex(headBefore)] })])
 		expect(BigInt(pinned as Hex)).toBe(balanceBefore)
 		expect(await chain.memoryClient.getBalance({ address: RECIPIENT })).toBe(balanceBefore + 9n)
-		expect(rawRequests.mock.calls.some(([request]) => request.method === 'eth_call')).toBe(true)
+		expect(rawRequests.mock.calls.some(([request]) => typeof request === 'object' && request !== null && 'method' in request && request.method === 'eth_call')).toBe(true)
 		rawRequests.mockRestore()
 	})
 

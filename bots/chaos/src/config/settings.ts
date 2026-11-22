@@ -39,7 +39,6 @@ type DiscoverySettings = {
 	maxPools: number
 	maxQuestions: number
 	maxUniverses: number
-	maxVaultsPerPool: number
 }
 
 export const MAXIMUM_DISCOVERY_AGGREGATE_ITEMS = 10_000
@@ -177,16 +176,14 @@ function parseNetwork(value: unknown): OperatorSettings['network'] {
 
 function parseDiscovery(value: unknown): DiscoverySettings {
 	const discovery = requiredRecord(value, 'discovery')
-	const keys = ['maxPools', 'maxQuestions', 'maxUniverses', 'maxVaultsPerPool'] as const
+	const keys = ['maxPools', 'maxQuestions', 'maxUniverses'] as const
 	assertExactKeys(discovery, keys, [], 'discovery')
 	const parsed = {
 		maxPools: integer(discovery['maxPools'], 'discovery.maxPools', 1, 10_000),
 		maxQuestions: integer(discovery['maxQuestions'], 'discovery.maxQuestions', 1, 10_000),
 		maxUniverses: integer(discovery['maxUniverses'], 'discovery.maxUniverses', 1, 10_000),
-		maxVaultsPerPool: integer(discovery['maxVaultsPerPool'], 'discovery.maxVaultsPerPool', 1, 10_000),
 	}
 	if (parsed.maxPools * parsed.maxUniverses > MAXIMUM_DISCOVERY_AGGREGATE_ITEMS) throw new Error(`discovery.maxPools × discovery.maxUniverses must not exceed ${MAXIMUM_DISCOVERY_AGGREGATE_ITEMS.toString()} aggregate entries`)
-	if (parsed.maxPools * parsed.maxVaultsPerPool > MAXIMUM_DISCOVERY_AGGREGATE_ITEMS) throw new Error(`discovery.maxPools × discovery.maxVaultsPerPool must not exceed ${MAXIMUM_DISCOVERY_AGGREGATE_ITEMS.toString()} aggregate entries`)
 	return parsed
 }
 

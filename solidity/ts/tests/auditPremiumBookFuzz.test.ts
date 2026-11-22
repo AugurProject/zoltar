@@ -361,7 +361,7 @@ describe('audit fuzz: resolution premium book against an eager reference model',
 		const address: Address = receipt.contractAddress
 		const target = { abi: artifact.abi, address }
 		const transact = async (data: Hex) => {
-			const request = { from: client.account.address, to: address, data, gas: '0x1c9c380', gasPrice: '0x0' }
+			const request = { from: client.account.address, to: address, data, gas: '0x1000000', gasPrice: '0x0' }
 			const hash = await ethereum.requestRaw({ method: 'eth_sendTransaction', params: [request] })
 			for (let attempt = 0; attempt < 20_000; attempt++) {
 				const mined = await ethereum.requestRaw({ method: 'eth_getTransactionReceipt', params: [hash] }).catch(() => undefined)

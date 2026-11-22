@@ -140,8 +140,8 @@ export const feeEconomicsSummary = (item: Readonly<Record<string, unknown>>): { 
 	const fees = isPlainRecord(item['fees']) ? item['fees'] : undefined
 	const rate = (value: unknown) => (integer(value) === undefined ? 'unavailable' : percentFromBps(String(value)))
 	return {
-		rates: fees === undefined ? 'Rates unavailable' : `${rate(fees['annualFeeBps'])} annual fee · ${rate(fees['purchaseFeeBps'])} purchase fee · ${cash(fees['vestingOutstandingAttoEth'])} vesting to owners`,
-		flows: `${cash(item['accrued_atto_eth'])} annual fees accrued · ${cash(item['purchase_fees_atto_eth'])} purchase fees, ${cash(item['earnings_funded_atto_eth'])} to owners · ${cash(item['claimed_atto_eth'])} and ${amount(item['claimed_atto_rep'], 18, 'REP')} claimed · ${cash(item['burned_atto_eth'])} and ${amount(item['burned_atto_rep'], 18, 'REP')} burned unassigned`,
+		rates: fees === undefined ? 'Rates unavailable' : `${rate(fees['annualFeeBps'])} annual holding fee · ${rate(fees['purchaseFeeBps'])} base purchase fee · ${cash(fees['vestingOutstandingAttoEth'])} vesting to owners`,
+		flows: `${cash(item['accrued_atto_eth'])} holding fees accrued · ${cash(item['purchase_fees_atto_eth'])} purchase charges, ${cash(item['earnings_funded_atto_eth'])} to owners · ${cash(item['claimed_atto_eth'])} and ${amount(item['claimed_atto_rep'], 18, 'REP')} claimed · ${cash(item['burned_atto_eth'])} and ${amount(item['burned_atto_rep'], 18, 'REP')} burned unassigned`,
 	}
 }
 

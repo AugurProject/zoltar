@@ -64,7 +64,7 @@ export function createDashboardTopologyView({ elements }: { elements: DashboardE
 		renderTopologyGroup(elements.topologyPools, value.pools, source =>
 			topologyRow(topologyIdentifier(stringValue(source['address']), 'Pool unavailable', 'security pool address'), [
 				`universe ${String(source['universeId'] ?? '—')}`,
-				`state ${String(source['systemState'] ?? '—')}`,
+				['Operational', 'Pool forked', 'Fork migration'][Number(source['systemState'] ?? NaN)] ?? `Unknown pool state (${String(source['systemState'] ?? 'unavailable')})`,
 				`Portfolio ${String(source['portfolio'] ?? 'unavailable')}${source['awaitingForkContinuation'] === true ? ' · fork continuation pending' : ''}`,
 			]),
 		)
@@ -88,7 +88,7 @@ export function createDashboardTopologyView({ elements }: { elements: DashboardE
 			topologyRow(topologyIdentifier(stringValue(source['address']), 'Pair unavailable', 'trading pair address'), [
 				topologyIdentifierFact('Pool', stringValue(source['pool']), 'trading pair pool address'),
 				`universe ${String(source['universeId'] ?? '—')}`,
-				`status ${String(source['status'] ?? '—')}`,
+				['Open', 'Question ended', 'Pool inactive', 'Awaiting fork continuation', 'Universe forked', 'Question resolved', 'Uninitialized'][Number(source['status'] ?? NaN)] ?? `Unknown trading status (${String(source['status'] ?? 'unavailable')})`,
 				`${String(source['feeBps'] ?? '—')} bps`,
 			]),
 		)

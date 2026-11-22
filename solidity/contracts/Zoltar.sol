@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { UniverseIds } from './UniverseIds.sol';
+
 import './Constants.sol';
 import './IERC20.sol';
 import './IExternalGenesisReputationToken.sol';
@@ -190,7 +192,7 @@ contract Zoltar {
 
 	/// @notice Returns the deterministic child universe id for `outcomeIndex`.
 	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
-		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
+		return UniverseIds.child(universeId, outcomeIndex);
 	}
 
 	/// @notice Deploys the child universe and REP token for a valid outcome of a forked universe; callable by anyone.

@@ -18,13 +18,16 @@ const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
 const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
 
-function decodeReceiveRequest(data: Hex) {
+function decodeReceiveRequest(data: Hex | undefined) {
+	if (data === undefined) throw new Error('Missing receive request')
 	// The router request is a static tuple, so its fields decode as flat ABI outputs.
-	return decodeFunctionResult({
+	const result = decodeFunctionResult({
 		abi: [{ type: 'function', name: 'receiveRequest', stateMutability: 'view', inputs: [], outputs: receiveRequestParameter.components }],
 		functionName: 'receiveRequest',
 		data,
 	})
+	if (!Array.isArray(result)) throw new Error('Expected receive request tuple')
+	return result
 }
 
 const market = forkedMarketFixture({ pool, shareToken, description: 'Encoding fixture' })
@@ -152,7 +155,9 @@ describe('live settlement contract encoding', () => {
 		expect(transactionData).toHaveLength(3)
 		expect(transactionData[1]).toBe(transactionData[0])
 		expect(transactionData[2]).toBe(transactionData[0])
-		const decodedTransfer = decodeFunctionData({ abi: shareTokenAbi, data: transactionData[0] })
+		const firstTransfer = transactionData[0]
+		if (firstTransfer === undefined) throw new Error('Missing share transfer')
+		const decodedTransfer = decodeFunctionData({ abi: shareTokenAbi, data: firstTransfer })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
 		expect(decodedTransfer.functionName).toBe('safeBatchTransferFrom')
 		expect(decodedTransfer.args.slice(0, 4)).toEqual([account, configuration.router, [1792n, 1793n, 1794n], [10n, 10n, 10n]])

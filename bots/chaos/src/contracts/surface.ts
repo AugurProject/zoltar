@@ -133,6 +133,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolForker', 'forkZoltarWithOwnEscalationGame', 'selectable', 'statoblast.fork.own-question'),
 
 	entry('EscalationGameFactory', 'deployEscalationGame', 'excluded-dangerous', undefined, 'A direct caller would deploy an orphan game whose security-pool identity is not registered by SecurityPoolFactory.'),
+	entry('EscalationGameFactory', 'prepareEscalationGame', 'excluded-dangerous', undefined, 'Chaos reports through depositWalletRepToEscalationGame, which deploys or reuses the same unstarted game; separate preparation has no distinct ecosystem postcondition.'),
 	entry('EscalationGameFactory', 'deployEscalationGameFromFork', 'excluded-dangerous', undefined, 'A direct caller would deploy an orphan continuation game outside canonical child-pool initialization.'),
 	entry('EscalationGame', 'start', 'role-restricted', undefined, 'Only the deploying factory starts a game.'),
 	entry('EscalationGame', 'startFromFork', 'role-restricted', undefined, 'Only a canonical child pool starts an inherited game.'),
@@ -197,7 +198,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('ShareToken', 'safeBatchTransferFrom', 'excluded-dangerous', undefined, 'Raw share transfers may strand positions.', ['safeBatchTransferFrom(address,address,uint256[],uint256[])', 'safeBatchTransferFrom(address,address,uint256[],uint256[],bytes)']),
 
 	entry('TwoWayConstantProductFactory', 'createPair', 'selectable', 'trading.pair.create'),
-	entry('TwoWayConstantProductPair', 'approve', 'prerequisite', 'trading.lp.approve'),
+	entry('TwoWayConstantProductPair', 'approve', 'excluded-dangerous', undefined, 'Direct liquidity removal burns wallet LP without an allowance; raw LP approvals grant unused spending authority.'),
 	entry('TwoWayConstantProductPair', 'permit', 'excluded-dangerous', undefined, 'Chaos does not originate durable LP permit signatures.'),
 	entry('TwoWayConstantProductPair', 'transfer', 'excluded-dangerous', undefined, 'Raw LP transfers have no ecosystem postcondition.'),
 	entry('TwoWayConstantProductPair', 'transferFrom', 'excluded-dangerous', undefined, 'Delegated raw LP transfers are not chaos workflows.'),

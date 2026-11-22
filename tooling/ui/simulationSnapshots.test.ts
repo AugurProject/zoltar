@@ -95,7 +95,10 @@ describe('simulation snapshots', () => {
 		expect(await getSimulationSnapshotStatus(paths, 'key', ['baseline', 'deployed'])).toBe('stale')
 		await fs.rm(path.join(paths.directory, 'baseline.json'))
 		expect(await getSimulationSnapshotStatus(paths, 'key', ['baseline'])).toBe('stale')
-		expect(await pruneStaleSimulationSnapshots(paths, 'key')).toBe('current')
+		// The worker agrees with the checker: a manifest naming only missing files is not kept as current.
+		expect(await pruneStaleSimulationSnapshots(paths, 'key')).toBe('pruned')
+		expect(await readSimulationSnapshotManifest(paths)).toBeUndefined()
+		await writeManifest(paths, 'key', ['baseline'])
 
 		expect(await pruneStaleSimulationSnapshots(paths, 'other')).toBe('pruned')
 		expect(await readSimulationSnapshotManifest(paths)).toBeUndefined()
@@ -131,9 +134,9 @@ describe('simulation snapshots', () => {
 
 	test('lists the core scenarios before each app scenario', async () => {
 		expect(await getSimulationSnapshotScenarios('zoltar')).toEqual(['baseline', 'deployed', 'two-questions', 'forked-categorical'])
-		expect((await getSimulationSnapshotScenarios('statoblast')).slice(0, 3)).toEqual(['baseline', 'deployed', 'portfolio'])
+		expect((await getSimulationSnapshotScenarios('statoblast')).slice(0, 3)).toEqual(['baseline', 'deployed', 'portfolio-auction'])
 		expect(await getSimulationSnapshotScenarios('openoracle')).toEqual(await getSimulationSnapshotScenarios('statoblast'))
-		expect(await getSimulationSnapshotScenarios('trading')).toEqual(['baseline', 'deployed', 'trading-funded', 'trading-forked'])
+		expect(await getSimulationSnapshotScenarios('trading')).toEqual(['baseline', 'deployed', 'trading-funded', 'trading-usdc', 'trading-forked'])
 	})
 
 	test('compiles the key into a bundle where the worker reads it', async () => {
@@ -146,6 +149,37 @@ describe('simulation snapshots', () => {
 		const output = await result.outputs[0]?.text()
 		expect(output).toContain('"abc123"')
 		expect(output).not.toContain('SIMULATION_SNAPSHOT_KEY')
+	})
+
+	test('pruning drops manifest entries whose snapshot file is missing and keeps the rest', async () => {
+		const paths = await createTemporaryPaths()
+		await writeManifest(paths, 'key', ['baseline', 'deployed'])
+		expect(await pruneStaleSimulationSnapshots(paths, 'key')).toBe('current')
+		await fs.rm(path.join(paths.directory, 'deployed.json'))
+		expect(await getSimulationSnapshotStatus(paths, 'key', ['baseline', 'deployed'])).toBe('stale')
+		expect(await pruneStaleSimulationSnapshots(paths, 'key')).toBe('pruned')
+		expect(Object.keys((await readSimulationSnapshotManifest(paths))?.scenarios ?? {})).toEqual(['baseline'])
+		expect(await getSimulationSnapshotStatus(paths, 'key', ['baseline'])).toBe('current')
+	})
+
+	test('concurrent targeted regenerations under the same key keep every scenario in the manifest', async () => {
+		const paths = await createTemporaryPaths()
+		const appPaths = getUiAppPaths('zoltar')
+		// Both runs read the (absent) manifest before either finishes seeding.
+		let releaseSeeding: () => void = () => undefined
+		const seedingGate = new Promise<void>(resolve => {
+			releaseSeeding = resolve
+		})
+		let started = 0
+		const exportSnapshot = async (_appId: string, scenario: string) => {
+			started += 1
+			if (started === 2) releaseSeeding()
+			await seedingGate
+			return JSON.stringify({ scenario })
+		}
+		await Promise.all([generateSimulationSnapshots(appPaths, paths, 'same-key', { concurrency: 1, exportSnapshot, scenarios: ['baseline'] }), generateSimulationSnapshots(appPaths, paths, 'same-key', { concurrency: 1, exportSnapshot, scenarios: ['deployed'] })])
+		expect(Object.keys((await readSimulationSnapshotManifest(paths))?.scenarios ?? {})).toEqual(['baseline', 'deployed'])
+		expect(await getSimulationSnapshotStatus(paths, 'same-key', ['baseline', 'deployed'])).toBe('current')
 	})
 
 	test('a targeted regeneration keeps the other scenarios of a manifest made under the same key', async () => {

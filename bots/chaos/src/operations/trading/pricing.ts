@@ -46,7 +46,7 @@ export function removableLiquidity(pair: PairSnapshot) {
 	const totalSupply = amount(pair.totalSupply)
 	const liquidity = amount(pair.walletLiquidity) > MAXIMUM_TRADING_SPEND ? MAXIMUM_TRADING_SPEND : amount(pair.walletLiquidity)
 	if (liquidity === 0n || totalSupply === 0n) return 0n
-	if ((amount(pair.effectiveYesReserve) * liquidity) / totalSupply === 0n || (amount(pair.effectiveNoReserve) * liquidity) / totalSupply === 0n) return 0n
+	if ((amount(pair.effectiveYesReserve) * liquidity) / totalSupply === 0n && (amount(pair.effectiveNoReserve) * liquidity) / totalSupply === 0n) return 0n
 	return liquidity
 }
 
@@ -55,7 +55,7 @@ export function removableLiquidityQuote(pair: PairSnapshot, liquidity: bigint) {
 	if (liquidity <= 0n || totalSupply <= 0n) return undefined
 	const yesOut = (amount(pair.effectiveYesReserve) * liquidity) / totalSupply
 	const noOut = (amount(pair.effectiveNoReserve) * liquidity) / totalSupply
-	return yesOut > 0n && noOut > 0n ? { noOut, yesOut } : undefined
+	return yesOut > 0n || noOut > 0n ? { noOut, yesOut } : undefined
 }
 
 export function proportionalLiquidity(pair: PairSnapshot, maxYes: bigint, maxNo: bigint) {
@@ -73,8 +73,8 @@ export function proportionalLiquidity(pair: PairSnapshot, maxYes: bigint, maxNo:
 
 export function minimumPositivePayoutShares(pool: PoolSnapshot) {
 	const supply = amount(pool.shareTokenSupplyAttoShares)
-	const collateral = amount(pool.projectedSettlementCollateralAttoEth)
-	return supply <= 0n || collateral <= 0n ? undefined : ceilDiv(supply, collateral)
+	const backing = [amount(pool.projectedSettlementCollateralAttoEth), amount(pool.projectedSettlementRecoveryAttoRep)].filter(value => value > 0n)
+	return supply <= 0n || backing.length === 0 ? undefined : minimumOf(backing.map(value => ceilDiv(supply, value)))
 }
 
 export const minimumOf = (values: readonly bigint[]) => values.reduce((minimum, value) => (value < minimum ? value : minimum))

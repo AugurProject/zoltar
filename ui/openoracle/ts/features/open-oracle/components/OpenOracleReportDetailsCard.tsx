@@ -315,7 +315,7 @@ export function OpenOracleReportDetailsCard({
 				<ReadOnlyDetailAccordion title={openOracleCopy.economics}>
 					{renderReportSection(openOracleCopy.reportAmounts, [
 						{
-							label: openOracleCopy.formatExactTokenRequiredLabel(openOracleReportDetails.token1Symbol),
+							label: openOracleCopy.formatInitialTokenReportLabel(openOracleReportDetails.token1Symbol),
 							value: <CurrencyValue value={openOracleReportDetails.exactToken1Report} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} />,
 						},
 						{

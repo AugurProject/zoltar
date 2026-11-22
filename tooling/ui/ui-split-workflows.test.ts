@@ -280,7 +280,8 @@ ${command}`,
 		const workflow = await readWorkflow(browserWorkflowPath)
 		expect(workflow['name']).toBe('Production Browser Workflow')
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
-		expect(steps.some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
+		const smoke = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('bun run test:browser:smoke'))
+		expect(smoke?.['run']).toContain('tooling/ui/productionBuild.test.ts')
 		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
 		const ciWorkflow = await readWorkflow(ciWorkflowPath)
 		const ciJobs = workflowJobs(ciWorkflow)
@@ -408,8 +409,8 @@ ${command}`,
 					DOMAIN_TESTS_SELECTED: String(core || infrastructure),
 					INFRA_CHECKS_SELECTED: String(infrastructure && !core),
 				})
-				const selected = ['CHANGES_RESULT']
-				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'BROWSER_WORKFLOW_RESULT', 'CHECKS_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
+				const selected = ['CHANGES_RESULT', 'CHECKS_RESULT']
+				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'BROWSER_WORKFLOW_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
 				if (core || infrastructure) selected.push('DOMAIN_TESTS_RESULT', 'BUILD_INPUTS_RESULT')
 				if (infrastructure && !core) selected.push('INFRA_RESULT')
 				for (const key of selected) env[key] = 'success'
@@ -497,7 +498,8 @@ ${command}`,
 			expect(spawnSync('bash', ['-e', '-c', validation], { env: { PROFILE: profile, VERIFY_GENERATED: 'false', BUILD_INPUTS: 'ci-build-inputs' } }).status).toBe(profile === 'root' ? 1 : 0)
 			expect(spawnSync('bash', ['-e', '-c', validation], { env: { PROFILE: profile, VERIFY_GENERATED: 'true', BUILD_INPUTS: 'ci-build-inputs' } }).status).not.toBe(0)
 		}
-		expect(steps.find(step => step['name'] === 'Setup Foundry / Anvil')?.['if']).toBe("inputs.foundry == 'true' && inputs.profile != 'root'")
+		expect(requireRecord(action['inputs'], 'setup inputs')).not.toHaveProperty('foundry')
+		expect(steps.some(step => String(step['uses'] ?? '').startsWith('foundry-rs/foundry-toolchain@'))).toBe(false)
 		expect(steps.find(step => step['name'] === 'Cache generated project outputs')?.['if']).toBe("inputs.profile != 'root' && inputs.build-inputs == ''")
 		const cache = requireRecord(steps.find(step => step['name'] === 'Cache generated project outputs')?.['with'], 'cache inputs')
 		expect(cache['key']).toContain('${{ inputs.profile }}')
@@ -536,7 +538,11 @@ ${command}`,
 			if (name === 'domain-tests') expect(requireRecord(consumer['with'], 'domain inputs')['build-inputs']).toBe(artifactName)
 			else {
 				const consumerSteps = workflowSteps(consumer)
-				expect(consumerSteps.some(step => isPlainRecord(step['with']) && (step['with']['build-inputs'] === artifactName || step['with']['name'] === artifactName))).toBe(true)
+				if (name === 'checks') {
+					expect(consumer['if']).toBe("always() && needs.changes.result == 'success'")
+					const setup = consumerSteps.find(step => step['uses'] === './.github/actions/setup-ci')
+					expect(requireRecord(setup?.['with'], 'check build inputs')['build-inputs']).toBe("${{ needs.build-inputs.result == 'success' && (needs.changes.outputs.core == 'true' || needs.changes.outputs.docs == 'true') && 'ci-build-inputs' || '' }}")
+				} else expect(consumerSteps.some(step => isPlainRecord(step['with']) && (step['with']['build-inputs'] === artifactName || step['with']['name'] === artifactName))).toBe(true)
 			}
 		}
 		for (const name of ['application-tests', 'browser-workflow']) expect(requireRecord(requireRecord(jobs[name], name)['with'], 'reusable inputs')['build-inputs']).toBe(upload['name'])
@@ -547,9 +553,9 @@ ${command}`,
 		expect(cache['path']).toContain('steps.projects.outputs.full_only_cache_paths')
 		const contractCache = setup.find(step => step['name'] === 'Cache contract build inputs')
 		expect(contractCache?.['if']).toBe("inputs.profile == 'full' && inputs.build-inputs == ''")
-		expect(requireRecord(contractCache?.['with'], 'contract cache')['restore-keys']).toBe('${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-')
+		expect(requireRecord(contractCache?.['with'], 'contract cache')['restore-keys']).toBe('${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-')
 		expect(cache).not.toHaveProperty('restore-keys')
-		expect(requireRecord(contractCache?.['with'], 'contract cache')['key']).toBe('${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ steps.projects.outputs.contract_cache_key }}')
+		expect(requireRecord(contractCache?.['with'], 'contract cache')['key']).toBe('${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.contract_cache_key }}')
 		expect(setup.find(step => step['name'] === 'Generate and verify generated artifacts')?.['if']).toContain("inputs.profile == 'full' && steps.contract-cache.outputs.cache-hit != 'true'")
 		const verification = String(setup.find(step => step['name'] === 'Verify transferred build inputs')?.['run'])
 		expect(verification).toContain('ensure-contract-artifacts.mts --headless')
@@ -715,6 +721,69 @@ ${command}`,
 		for (const source of activeSources) {
 			expect(source).not.toMatch(/\(cd ui &&|ui\/bun\.lock|ui\/package\.json|ui\/dist(?:\s|$)|ui\/ts\//)
 		}
+	})
+
+	test('rerunning a release refreshes generated notes and keeps operator notes', async () => {
+		const jobs = workflowJobs(await readWorkflow(versionDeployWorkflowPath))
+		const step = workflowSteps(jobs['deploy']).find(step => step['name'] === 'Create or update GitHub release')
+		const command = step?.['run']
+		if (typeof command !== 'string') throw new Error('Missing release command')
+		const replay = (existingBody: string | undefined, cid: string) => {
+			const result = spawnSync(
+				'bash',
+				[
+					'-e',
+					'-o',
+					'pipefail',
+					'-c',
+					`
+ workdir=$(mktemp -d)
+ trap 'rm -rf "$workdir"' EXIT
+ cd "$workdir"
+ gh() {
+     case "$1 $2" in
+         'api --method') echo 'Generated changelog' ;;
+         'release view')
+             [ -n "\${EXISTING_BODY+set}" ] || return 1
+             if [ "$4" = '--json' ]; then printf '%s' "$EXISTING_BODY"; fi ;;
+         'release edit'|'release create') cat "$7" ;;
+         *) return 1 ;;
+     esac
+ }
+ ${command}
+ `,
+				],
+				{
+					encoding: 'utf8',
+					env: {
+						...(existingBody === undefined ? {} : { EXISTING_BODY: existingBody }),
+						GITHUB_REF_NAME: 'v12',
+						GITHUB_REPOSITORY: 'example/repo',
+						OPENORACLE_IPFS_CID: `${cid}d`,
+						PATH: process.env['PATH'] ?? '',
+						STATOBLAST_IPFS_CID: `${cid}b`,
+						TRADING_IPFS_CID: `${cid}c`,
+						ZOLTAR_IPFS_CID: `${cid}a`,
+					},
+				},
+			)
+			expect(result.stderr).toBe('')
+			expect(result.status).toBe(0)
+			return result.stdout
+		}
+		const created = replay(undefined, 'bafyfirst')
+		expect(created).toContain('ipfs://bafyfirsta/')
+		expect(created).toContain('Generated changelog')
+		const operatorNote = '`?simulate=1` is a browser-local sandbox.'
+		const edited = `${created.trimEnd()}\r\n\r\n${operatorNote}\r\n`
+		const rerun = replay(edited, 'bafysecond')
+		expect(rerun).toContain(operatorNote)
+		expect(rerun).toContain('ipfs://bafyseconda/')
+		expect(rerun).not.toContain('bafyfirst')
+		expect(rerun.match(/## IPFS applications/g)).toHaveLength(1)
+		const unmarked = replay(operatorNote, 'bafythird')
+		expect(unmarked).toContain(operatorNote)
+		expect(unmarked).toContain('ipfs://bafythirda/')
 	})
 
 	test('release reads and validates each app CID from the publisher image', async () => {

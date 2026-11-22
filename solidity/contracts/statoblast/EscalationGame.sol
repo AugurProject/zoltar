@@ -84,7 +84,9 @@ contract EscalationGame is EscalationGameSettlement {
 
 	function _initializeStartParams(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) private {
 		if (owner != msg.sender) revert('Only owner');
-		require(activationTime == 0 && _nonDecisionThresholdAttoRep > _startBondAttoRep && _startBondAttoRep > 0, 'Invalid game start');
+		// Both start paths set a positive start bond, so a zero bond marks an unstarted game. The factory reuses a
+		// prepared game at its CREATE2 address, so the game itself must refuse a second start of either kind.
+		require(startBondAttoRep == 0 && activationTime == 0 && _nonDecisionThresholdAttoRep > _startBondAttoRep && _startBondAttoRep > 0, 'Invalid game start');
 		startBondAttoRep = _startBondAttoRep;
 		nonDecisionThresholdAttoRep = _nonDecisionThresholdAttoRep;
 		lnRatioScaled = proofVerifier.computeLnRatioScaled(_startBondAttoRep, _nonDecisionThresholdAttoRep);
@@ -102,9 +104,7 @@ contract EscalationGame is EscalationGameSettlement {
 		// Right-aligned selector words compare directly against `shr(224, calldataload(0))`.
 		uint256 depositWithPermitSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermit.selector);
 		uint256 depositWithAuthorizationSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorization.selector);
-		uint256 depositWithLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithLead.selector);
 		uint256 depositWithPermitAndLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermitAndLead.selector);
-		uint256 depositWithAuthorizationAndLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorizationAndLead.selector);
 		assembly ('memory-safe') {
 			let selector := shr(224, calldataload(0))
 			let delegate := claimDelegateAddress
@@ -112,13 +112,7 @@ contract EscalationGame is EscalationGameSettlement {
 			// delegate. Other selectors remain on the claim delegate's narrow surface.
 			if or(
 				or(eq(selector, depositWithPermitSelector), eq(selector, depositWithAuthorizationSelector)),
-				or(
-					eq(selector, depositWithLeadSelector),
-					or(
-						eq(selector, depositWithPermitAndLeadSelector),
-						eq(selector, depositWithAuthorizationAndLeadSelector)
-					)
-				)
+				eq(selector, depositWithPermitAndLeadSelector)
 			) {
 				delegate := depositDelegateAddress
 			}

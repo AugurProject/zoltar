@@ -102,7 +102,8 @@ export type PendingTransactionIntent = {
 	portfolioFunding?: PortfolioFundingEffect | undefined
 	portfolioInstruction?: InstructionIdentity | undefined
 	hash: Hex
-	kind: 'deployment' | 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
+	/** What the transaction does to the operator's funds; `configuration` changes vault settings without moving tokens. */
+	kind: 'configuration' | 'deployment' | 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
 	label: string
 	/** Renewable relay envelope deadline; not calldata validity. */
 	maxBlockNumber: bigint
@@ -111,7 +112,7 @@ export type PendingTransactionIntent = {
 	reconciliationReason?: string | undefined
 	mode: 'private' | 'public'
 	nonce: bigint
-	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'coordinator-operation' | 'staged-success' } | { amount: bigint; coordinator: Address; operator: Address; receiver: Address; target: Address; type: 'pending-liquidation' }
+	receiptExpectation: { type: 'transaction' }
 	requiresMarketEvidence: boolean
 	sender: Address
 	serializedTransaction: Hex
@@ -226,7 +227,6 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	const marketConfigurationFor = (asset: Address) => configurations.find(configuration => configuration.assetAddress.toLowerCase() === asset.toLowerCase())
 	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.vaultAttoRepBacking, 0n)
 	const assumedOpenInterestAttoEth = state.pools.reduce((total, pool) => total + pool.botVault.openInterestAttoEth, 0n)
-	const walletRep = [...state.walletRepByToken.values()].reduce((total, amount) => total + amount, 0n)
 	const rootConfiguration = configurations[0]
 	const discoveredRepAssets = new Set(state.pools.map(pool => pool.repToken.toLowerCase()))
 	const alerts: { message: string; severity: 'error' | 'warning' }[] = []
@@ -325,7 +325,6 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			poolCount: state.pools.length,
 			selectedPoolCount: state.pools.filter(pool => pool.selected).length,
 			walletEth: formatDecimalAmount(state.walletAttoEth),
-			walletRep: formatDecimalAmount(walletRep),
 		},
 		paused: state.paused,
 		rpcEndpointHealth: state.rpcEndpointHealth,

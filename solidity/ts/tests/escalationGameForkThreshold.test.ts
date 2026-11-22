@@ -1,5 +1,3 @@
-import { formatStorageSlot } from '../testSupport/storage'
-import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
@@ -16,7 +14,7 @@ import { withdrawFromEscalationGame } from '../testSupport/simulator/utils/contr
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, makeQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { approveToken, getERC20Balance, overrideGenesisTheoreticalSupply as overrideGenesisFixtureSupply } from '../testSupport/simulator/utils/utilities'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
@@ -45,8 +43,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let questionId: bigint
 
 	const overrideGenesisTheoreticalSupply = async (totalSupply: bigint) => {
-		const genesisSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
-		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: { stateDiff: { [genesisSupplySlot]: totalSupply } } })
+		await overrideGenesisFixtureSupply(mockWindow, client, addressString(GENESIS_REPUTATION_TOKEN), totalSupply)
 	}
 
 	beforeEach(async () => {

@@ -141,11 +141,11 @@ test('a capital ledger snapshot reads its price, totals, feed and last position 
 
 test('fee reads are optional beside the ledger state and skip an unregistered book', async () => {
 	const sample = async (overrides: Outputs) => (await sampleEntityStateWithRead({ entityType: 'capital-ledger', entityIdentity: ledger.toLowerCase(), address: ledger }, reader(overrides))).readResult
-	// A universe without a settlement book has id 0, which the book contract rejects; it is not read.
+	// A universe without a registered settlement book has id 0. Its public getter returns zeros; skip that absent book.
 	const unregistered = await sample({
 		bookIds: [0n],
 		books: () => {
-			throw new Error('Unknown settlement book')
+			throw new Error('Unregistered book must not be read')
 		},
 	})
 	expect(unregistered?.['fees']).toMatchObject({ bookId: '0', annualFeeBps: '200' })
@@ -243,7 +243,8 @@ test('an owner without a position or a price has principal but no health factor'
 	const calls: string[] = []
 	const idle = reader({ ownerAccount: [{ freeAttoRep: 70n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n }], ownerCollateral: [70n, 0n, 70n] }, calls)
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, idle)
-	expect(snapshot.readResult).toMatchObject({ positionId: '0', principalAttoRep: '70', commitmentAttoEth: '0', pledgedAttoRep: '0' })
+	// A stored zero target is the ledger's default 100% target, not 0%.
+	expect(snapshot.readResult).toMatchObject({ positionId: '0', principalAttoRep: '70', commitmentAttoEth: '0', pledgedAttoRep: '0', targetHealthFactorBps: '10000' })
 	expect(snapshot.readResult?.['healthFactorBps']).toBeUndefined()
 	expect(snapshot.readResult?.['maxHealthyPrice']).toBeUndefined()
 	// Neither the index position nor the pure requirement formula is read for an idle owner.

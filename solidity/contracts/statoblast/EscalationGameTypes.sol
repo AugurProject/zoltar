@@ -2,8 +2,9 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { Constants } from '../Constants.sol';
 
-uint256 constant ESCALATION_TIME_LENGTH = 7 weeks;
+uint256 constant ESCALATION_TIME_LENGTH = Constants.ESCALATION_TIME_LENGTH;
 uint256 constant SCALE = 1e6;
 uint256 constant LN2_SCALED = 693147;
 uint256 constant MAX_ATANH_ITERATIONS = 16;
@@ -37,7 +38,7 @@ struct OutcomeState {
 	// currentNullifierRoot tracks which inherited proof indexes have been consumed in this instance.
 	// currentLeafCount/currentPeaks are the descendant export snapshot, updated incrementally as local carry changes.
 	// localHeadNodeId/localUnresolvedTotalAttoRep track local carry added after the inherited snapshot.
-	// Cumulative resolution balance: inherited fork-time balance in continuation games (scaled by any collateral-repair-auction haircut) plus accepted local deposits; claims and settlement do not reduce it.
+	// Cumulative resolution balance: full inherited fork-time principal in continuation games plus accepted local deposits; claims and settlement do not reduce it.
 	uint256 balanceAttoRep;
 	// Local deposits are represented by localNodeIds and the authoritative nodes mapping.
 	// The inherited carry snapshot this escalation game started with for this outcome.

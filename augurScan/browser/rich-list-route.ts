@@ -6,6 +6,7 @@ import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-re
 import { paginationRequestAllowed, queuedPaginationPresentation, refreshPresentation, retainedPaginationAvailable } from './refresh-presentation.ts'
 import { decodeItemsPage, isRichListRecord } from './api-decoding.ts'
 import { clearRetryStatus } from './app-presentation.ts'
+import { richListContinuationAvailable } from '../src/rich-list-limits.ts'
 import { renderRichListPage } from './rich-list-page.ts'
 
 interface RichListRouteDeps {
@@ -129,7 +130,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 			richListTotal = nextTotal
 			if (unchanged) {
 				$('#richlist-rows').setAttribute('aria-busy', 'false')
-				more.hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalState.refreshRequired)
+				more.hidden = !retainedPaginationAvailable(richListContinuationAvailable(richListItems.length, richListTotal), canonicalState.refreshRequired)
 			} else renderRichList()
 			richListRendered = true
 			clearRetryStatus(status)
@@ -140,7 +141,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 			$('#richlist-rows').setAttribute('aria-busy', 'false')
 			const failureStatus = append ? paginationStatus : status
 			renderRetryStatus(failureStatus, richListError(errorMessage(error), append, richListItems.length === 0), () => retryCanonicalViewOr(() => loadRichList({ append })))
-			more.hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalState.refreshRequired)
+			more.hidden = !retainedPaginationAvailable(richListContinuationAvailable(richListItems.length, richListTotal), canonicalState.refreshRequired)
 			if (append) more.hidden = true
 			if (richListItems.length === 0) $('#richlist-summary').textContent = ''
 			return false

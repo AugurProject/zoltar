@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, maxUint256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -10,7 +10,17 @@ import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
 import { toTokenAccessReadResult, type OpenOracleRawReadResult, type OpenOracleTokenAccessLoadResult, type RefreshOpenOracleTokenAccessOptions, type TokenAccessLoadResult } from '../lib/openOracleTokenAccess.js'
 import { toReadError, type OptionalReadResult } from '@zoltar/ui-core-shared/lib/optionalReadResult.js'
 
-export function useOpenOracleTokenAccess({ accountAddress, isSelectedReportCurrent, readOptionalMulticall }: { accountAddress: Address | undefined; isSelectedReportCurrent: (reportIdInput: string) => boolean; readOptionalMulticall: (contracts: readonly unknown[]) => Promise<readonly OpenOracleRawReadResult[]> }) {
+export function useOpenOracleTokenAccess({
+	accountAddress,
+	isSelectedReportCurrent,
+	readOptionalMulticall,
+	readNativeBalance,
+}: {
+	accountAddress: Address | undefined
+	readNativeBalance: (address: Address) => Promise<bigint>
+	isSelectedReportCurrent: (reportIdInput: string) => boolean
+	readOptionalMulticall: (contracts: readonly unknown[]) => Promise<readonly OpenOracleRawReadResult[]>
+}) {
 	const openOracleTokenAccessLoad = useLoadController()
 	const openOracleToken1Approval = useSignal<TokenApprovalState>({
 		error: undefined,
@@ -124,7 +134,7 @@ export function useOpenOracleTokenAccess({ accountAddress, isSelectedReportCurre
 							token1BalanceResult: { amount: undefined, error: undefined },
 							token2BalanceResult: { amount: undefined, error: undefined },
 						} satisfies OpenOracleTokenAccessLoadResult
-					const tokenAccessReadResults = await readOptionalMulticall([
+					const contracts = [
 						{
 							abi: ABIS.mainnet.erc20,
 							functionName: 'allowance',
@@ -149,14 +159,30 @@ export function useOpenOracleTokenAccess({ accountAddress, isSelectedReportCurre
 							address: currentDetails.token2,
 							args: [accountAddress],
 						},
-					]).catch(error => {
+					]
+					const erc20Results = await readOptionalMulticall(contracts.filter(contract => contract.address !== zeroAddress)).catch(error => {
 						const failureResult = {
 							error: toReadError(error),
 							status: 'failure',
 						} satisfies OptionalReadResult<bigint>
-						return [failureResult, failureResult, failureResult, failureResult]
+						return contracts.filter(contract => contract.address !== zeroAddress).map(() => failureResult)
 					})
-					const [token1ApprovalReadResult, token2ApprovalReadResult, token1BalanceReadResult, token2BalanceReadResult] = tokenAccessReadResults.map(toTokenAccessReadResult)
+					const nativeBalance: OpenOracleRawReadResult | undefined = contracts.some(contract => contract.address === zeroAddress)
+						? await readNativeBalance(accountAddress).then(
+								result => ({ result, status: 'success' as const }),
+								error => ({ error, status: 'failure' as const }),
+							)
+						: undefined
+					let erc20Index = 0
+					const tokenAccessReadResults = contracts.map(contract => {
+						if (contract.address !== zeroAddress) return erc20Results[erc20Index++]
+						return contract.functionName === 'allowance' ? { result: maxUint256, status: 'success' as const } : nativeBalance
+					})
+					if (tokenAccessReadResults.some(result => result === undefined)) throw new Error('Unexpected token access response')
+					const [token1ApprovalReadResult, token2ApprovalReadResult, token1BalanceReadResult, token2BalanceReadResult] = tokenAccessReadResults.map(result => {
+						if (result === undefined) throw new Error('Unexpected token access response')
+						return toTokenAccessReadResult(result)
+					})
 					if (token1ApprovalReadResult === undefined || token2ApprovalReadResult === undefined || token1BalanceReadResult === undefined || token2BalanceReadResult === undefined) throw new Error('Unexpected token access response')
 
 					return {

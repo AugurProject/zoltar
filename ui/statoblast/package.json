@@ -23,7 +23,7 @@
 		"@zoltar/statoblast-shared": "workspace:1.0.0"
 	},
 	"scripts": {
-		"generate": "bun ../../tooling/contracts/build-app-contracts.mts statoblast && bun ../../tooling/repo/build-shared.mts statoblast && bun ../../tooling/ui/vendor.mts statoblast --scoped-artifacts",
+		"generate": "bun ../../tooling/contracts/build-app-contracts.mts statoblast && bun ../../tooling/repo/build-shared.mts statoblast && bun ../../tooling/ui/vendor.mts statoblast",
 		"vendor": "bun ../../tooling/ui/vendor.mts statoblast",
 		"build:workers": "bun ../../tooling/ui/workers.mts statoblast",
 		"build:tests": "bun ../../tooling/ui/tests.mts statoblast",

@@ -7,6 +7,7 @@ export const uniswapV4PoolConfigurations = [
 	{ fee: 500, tickSpacing: 10 },
 	{ fee: 3_000, tickSpacing: 60 },
 	{ fee: 10_000, tickSpacing: 200 },
+	{ fee: 10_001, tickSpacing: 200 },
 ] as const
 
 export const uniswapV4PoolId = (reputationToken: Address, fee: number, tickSpacing: number, quoteToken: Address = zeroAddress): Hex => {

@@ -387,12 +387,33 @@ async function readPriceHistoryTail(path: string, maximumBytes: number) {
 	}
 }
 
+async function endsWithIncompleteLine(path: string) {
+	let handle: Awaited<ReturnType<typeof open>>
+	try {
+		handle = await open(path, 'r')
+	} catch (error) {
+		if (isErrorCode(error, 'ENOENT')) return false
+		throw error
+	}
+	try {
+		const { size } = await handle.stat()
+		if (size === 0) return false
+		const last = Buffer.alloc(1)
+		await handle.read(last, 0, 1, size - 1)
+		return last[0] !== 0x0a
+	} finally {
+		await handle.close()
+	}
+}
+
 export async function appendPriceHistory(path: string, points: readonly MarketPricePoint[], chainId: number, options?: PriceHistoryLimits) {
 	if (points.length === 0) return
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Price history chain ID must be a positive integer')
 	const limits = priceHistoryLimits(options)
 	await mkdir(dirname(path), { mode: 0o700, recursive: true })
-	await appendFile(path, `${points.map(point => JSON.stringify({ chainId, point })).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 })
+	// A torn final record has no newline; terminate it so the new samples start on their own line instead of joining it.
+	const separator = (await endsWithIncompleteLine(path)) ? '\n' : ''
+	await appendFile(path, `${separator}${points.map(point => JSON.stringify({ chainId, point })).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 })
 	const handle = await open(path, 'r')
 	let size: number
 	try {

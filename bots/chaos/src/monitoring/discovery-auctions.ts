@@ -28,6 +28,15 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 		requireGraphEdge(getAddress(portfolio), pool.portfolio, 'Auction portfolio binding')
 		requireGraphEdge(getAddress(authority), controller, 'Auction fork authority binding')
 		if (universeId.toString() !== pool.universeId) throw new Error('Auction universe binding mismatch')
+		let openingExpectedSuccess = false
+		if (!opened && !finalized) {
+			try {
+				await client.simulateContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, ...(wallet === undefined ? {} : { account: wallet }), functionName: 'open', blockNumber })
+				openingExpectedSuccess = true
+			} catch (error) {
+				if (!contractSimulationReverted(error)) throw error
+			}
+		}
 		const collateralToken = getAddress(await client.readContract({ abi: abis.securityPoolPortfolioAbi, address: pool.portfolio, functionName: 'collateralToken', blockNumber }))
 		const [walletCollateral, collateralAllowance] =
 			wallet === undefined
@@ -65,6 +74,7 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 		const indexedRefund = context.indexedAuctionRefunds?.[engine.toLowerCase()]
 		const generation = pendingRefund > 0n && indexedRefund !== undefined && BigInt(indexedRefund.pendingAttoEth) === pendingRefund ? indexedRefund.generation : undefined
 		auctions.push({
+			openingExpectedSuccess,
 			address,
 			engine,
 			portfolio: pool.portfolio,

@@ -1,14 +1,7 @@
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as pricingCopy from '../../../copy/pricing.js'
 
-const UI_PRICE_ORACLES = ['uniswap', 'open-oracle', 'open-oracle-fallback'] as const
-
-export type UiPriceOracle = (typeof UI_PRICE_ORACLES)[number]
-
-/** Narrows untrusted text, such as a stored setting or select value, to a known price oracle setting. */
-export function parseUiPriceOracle(value: string | null | undefined) {
-	return UI_PRICE_ORACLES.find(priceOracle => priceOracle === value)
-}
+export type UiPriceOracle = 'uniswap' | 'open-oracle' | 'open-oracle-fallback'
 
 type RepPriceSource = 'uniswap' | 'open-oracle'
 
@@ -41,7 +34,7 @@ type OpenOracleReading = {
 }
 
 /**
- * The single REP/ETH price resolver behind every price-derived Statoblast figure: vault health, withdrawable REP, and liquidation.
+ * Resolves display-only REP quotes. Capital health, withdrawal limits and liquidation use canonical contract prices.
  * Oracle-manager details are fresher than the pool listing, so they win when both are present.
  */
 export function resolveRepPrice({ now, oracleManager, poolOracle, setting, uniswapPrice }: { now: bigint | undefined; oracleManager?: OpenOracleReading | undefined; poolOracle?: OpenOracleReading | undefined; setting: UiPriceOracle; uniswapPrice: bigint | undefined }): ResolvedRepPrice {

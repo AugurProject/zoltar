@@ -177,6 +177,7 @@ describe('migration wizard helpers', () => {
 			// Invisible and direction-changing characters are shown, never passed through to the page.
 			expect(row).not.toMatch(/[\u2063\u202E]/u)
 		}
+		if (rows[1] === undefined || rows[2] === undefined || rows[3] === undefined) throw new Error('Missing outcome rows')
 		expect(rows[2]).toContain('\\u{2063}')
 		expect(rows[3]).toContain('\\u{202E}seY')
 		// The review lists each selected child universe with its own index and ID, so a comma in a label cannot add an outcome.

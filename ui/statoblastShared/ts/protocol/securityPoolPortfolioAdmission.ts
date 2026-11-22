@@ -1,7 +1,7 @@
 import { encodeDeployData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openArtifact, statoblast_SecurityPoolFixedAdmissionPolicy_SecurityPoolFixedAdmissionPolicy as fixedArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../contractArtifact.js'
-import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { verifyRuntimeCode, type PortfolioTransaction } from './securityPoolPortfolio.js'
 import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { requireBigintValue } from './decoders.js'
@@ -72,4 +72,20 @@ export async function requirePortfolioQuestionHorizon(client: Pick<ReadClient, '
 
 export async function requirePortfolioQuestionAdmission(client: Pick<ReadClient, 'readContract'>, policy: Address, portfolio: Address, universeId: bigint, questionId: bigint, blockNumber?: bigint) {
 	if ((await client.readContract({ address: policy, abi: admissionAbi, functionName: 'isQuestionAllowed', args: [portfolio, universeId, questionId], blockNumber })) !== true) throw new Error('This question is not allowed by the portfolio admission policy.')
+}
+
+/** Checks the factory's binary question shape and minimum escalation headroom at one block. */
+export async function requirePortfolioQuestionEligibility(client: Pick<ReadClient, 'readContract'>, universeId: bigint, questionId: bigint, blockNumber?: bigint) {
+	const addresses = getZoltarContractAddresses()
+	const [labels, thresholdValue, supplyValue] = await Promise.all([
+		client.readContract({ address: addresses.zoltarQuestionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'getOutcomeLabels', args: [questionId, 0n, 3n], blockNumber }),
+		client.readContract({ address: addresses.zoltar, abi: Zoltar_Zoltar.abi, functionName: 'getNonDecisionThresholdAttoRep', args: [universeId], blockNumber }),
+		client.readContract({ address: addresses.zoltar, abi: Zoltar_Zoltar.abi, functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [universeId], blockNumber }),
+	])
+	if (!Array.isArray(labels) || labels.length !== 2 || labels[0] !== 'Yes' || labels[1] !== 'No') throw new Error('Registration supports only Yes/No binary questions.')
+	const threshold = requireBigintValue(thresholdValue, 'non-decision threshold')
+	const supply = requireBigintValue(supplyValue, 'universe theoretical REP supply')
+	const supplyBasedDeposit = supply / 10_000_000n
+	const initialDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
+	if (threshold <= initialDeposit) throw new Error('The universe escalation threshold is too low to register a pool.')
 }

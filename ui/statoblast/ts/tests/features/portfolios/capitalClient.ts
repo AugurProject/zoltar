@@ -118,6 +118,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				priceValidUntil: snapshot.priceValidUntil,
 				isPriceValid: snapshot.priceValid,
 				demandAttoEth: snapshot.demandAttoEth,
+				availableMintCapacity: snapshot.availableMintCapacityAttoEth,
 				totalFreeAttoRep: snapshot.totalFreeAttoRep,
 				frozen: snapshot.frozen,
 				importing: snapshot.importing,
@@ -138,6 +139,9 @@ export function capitalClient(initial = capitalSnapshot()) {
 				balanceOf: request.address === snapshot.collateralToken ? snapshot.walletCollateral : snapshot.walletAttoRep,
 				allowance: request.address === snapshot.collateralToken ? snapshot.collateralAllowance : snapshot.allowanceAttoRep,
 				portfolioCount: 0n,
+				getOutcomeLabels: ['Yes', 'No'],
+				getNonDecisionThresholdAttoRep: 2n * 10n ** 18n,
+				getUniverseTheoreticalSupplyAttoRep: 1_000_000n * 10n ** 18n,
 				...overrides,
 			}
 			if (request.functionName === 'portfolio') {

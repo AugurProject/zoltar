@@ -34,11 +34,8 @@ function createModuleMockScope(resolveModuleSpecifier: ResolveModuleSpecifier): 
 	return {
 		mockModule: async (specifier, factory) => {
 			const modulePath = fileURLToPath(resolveModuleSpecifier(specifier))
-			let actualExports = actualExportsByPath.get(modulePath)
-			if (actualExports === undefined) {
-				actualExports = { ...(await import(modulePath)) }
-				actualExportsByPath.set(modulePath, actualExports)
-			}
+			const actualExports: ModuleExports = actualExportsByPath.get(modulePath) ?? { ...(await import(modulePath)) }
+			actualExportsByPath.set(modulePath, actualExports)
 			const overrides = factory(actualExports)
 			mock.module(modulePath, () => ({ ...actualExports, ...overrides }))
 		},

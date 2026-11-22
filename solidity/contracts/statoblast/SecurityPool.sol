@@ -33,7 +33,7 @@ import { SecurityPoolLinearFees } from './SecurityPoolLinearFees.sol';
 import { SecurityPoolPortfolioAccountingDelegate } from './SecurityPoolPortfolioAccountingDelegate.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
 
-// Security pool for one question, one universe, one denomination (ETH)
+// Security pool for one question and one universe, settled in its configured collateral token.
 contract SecurityPool is SecurityPoolStorage {
 	using SafeERC20Ops for IERC20;
 	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime);
@@ -283,10 +283,10 @@ contract SecurityPool is SecurityPoolStorage {
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		if (
 			forkTime > 0 &&
-			forkTime < escalationGame.getEscalationGameEndDate() &&
+			forkTime <= escalationGame.getEscalationGameEndDate() &&
 			!escalationGame.hasReachedNonDecision()
 		) {
-			revert('Migrate deposits first');
+			revert('Deposits carry to child games');
 		}
 		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		address beneficiary = address(0x0);

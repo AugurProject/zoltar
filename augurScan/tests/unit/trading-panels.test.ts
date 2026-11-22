@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { tradingActivitySummary, tradingActivityTitle, tradingPnlHoldings, tradingPnlSummary } from '../../browser/trading-panels.ts'
+import { sharePositionSummary, tradingActivitySummary, tradingActivityTitle, tradingPnlHoldings, tradingPnlSummary } from '../../browser/trading-panels.ts'
 
 test('labels trading activity by kind, side, and ETH direction', () => {
 	const enter = { collateral: { symbol: 'ETH', decimals: 18 }, kind: 'enter', side: 'YES', shares: '16000000000000000000', eth_in_atto_eth: '10000000000000000000', eth_out_atto_eth: '0', timestamp_seconds: '1767225600' }
@@ -11,6 +11,13 @@ test('labels trading activity by kind, side, and ETH direction', () => {
 	expect(tradingActivitySummary({ collateral: { symbol: 'ETH', decimals: 18 }, kind: 'swap', side: 'NO', shares: '2000000000000000000', eth_in_atto_eth: null, eth_out_atto_eth: null }, 'ETH')).toBe('2 NO shares · No ETH moved')
 	expect(tradingActivitySummary({ collateral: { symbol: 'SepoliaETH', decimals: 18 }, kind: 'remove-liquidity', side: null, shares: '3000000000000000000' }, 'SepoliaETH')).toBe('3 LP tokens · No SepoliaETH moved')
 	expect(tradingActivityTitle({ kind: 'settlement', side: null })).toBe('Settlement redemption')
+})
+
+test('share positions use the collateral token precision, not 18 decimals', () => {
+	const position = { invalid_atto_shares: '0', yes_atto_shares: '1000000', no_atto_shares: '2500000', complete_sets_atto_shares: '0', migration_locked: false }
+	expect(sharePositionSummary({ ...position, collateral: { symbol: 'USDC', decimals: 6 } })).toBe('0 INVALID · 1 YES · 2.5 NO · 0 complete sets')
+	// Without sampled collateral metadata the shares stay in raw units.
+	expect(sharePositionSummary(position)).toBe('0 INVALID · 1,000,000 YES · 2,500,000 NO · 0 complete sets')
 })
 
 test('summarizes profit and loss with signed results and unavailable valuations', () => {

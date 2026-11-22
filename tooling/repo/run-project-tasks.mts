@@ -35,41 +35,53 @@ export async function runProjectTaskPlan(plan: readonly ProjectTaskPlanEntry[], 
 	return 0
 }
 
-if (import.meta.main) {
-	const [taskName, ...args] = process.argv.slice(2)
-	if (!projectTaskNames.includes(taskName as ProjectTaskName)) throw new Error(`Task must be one of: ${projectTaskNames.join(', ')}`)
-	const groupIndex = args.indexOf('--group')
-	const pathIndex = args.indexOf('--project-path')
-	const prefixIndex = args.indexOf('--path-prefix')
+/**
+ * Resolves CLI selection arguments to the project IDs a task runs for, or undefined for the task's default membership.
+ * Positional project IDs may be combined with one registry filter so that a single plan, and its setup deduplication,
+ * covers both, for example `setup repository --project-path augurScan --dependencies`. With a filter, `--dependencies`
+ * expands only the filtered project; without one, it expands the positional IDs.
+ */
+export function selectProjectIdsFromArguments(taskName: ProjectTaskName, args: readonly string[], registry: readonly Project[] = projects): string[] | undefined {
+	const filterOptions: readonly string[] = ['--group', '--project-path', '--path-prefix']
+	const [groupIndex = -1, pathIndex = -1, prefixIndex = -1] = filterOptions.map(option => args.indexOf(option))
+	const filterIndexes = [groupIndex, pathIndex, prefixIndex].filter(index => index >= 0)
+	if (filterIndexes.length > 1) throw new Error('Select only one registry filter')
 	const withDependencies = args.includes('--dependencies')
-	if ([groupIndex, pathIndex, prefixIndex].filter(index => index >= 0).length > 1) throw new Error('Select only one registry filter')
-	let selected: readonly Project[] | undefined
+	const filterValueIndexes = new Set(filterIndexes.map(index => index + 1))
+	const projectIds = args.filter((argument, index) => argument !== '--dependencies' && !filterOptions.includes(argument) && !filterValueIndexes.has(index))
+	const unknownProjectId = projectIds.find(projectId => !registry.some(project => project.id === projectId))
+	if (unknownProjectId !== undefined) throw new Error(`Unknown project: ${unknownProjectId}`)
+	const expand = (ids: readonly string[], includeDependencies: boolean) => {
+		createProjectTaskPlan(taskName, ids, registry)
+		return includeDependencies ? projectDependencyClosure(ids, registry) : registry.filter(project => ids.includes(project.id))
+	}
+	let filtered: readonly Project[] = []
 	if (groupIndex >= 0) {
 		const group = args[groupIndex + 1]
 		if (group === undefined) throw new Error('--group requires a task group')
-		selected = projectsInTaskGroup(taskName as ProjectTaskName, group)
+		filtered = projectsInTaskGroup(taskName, group, registry)
 	} else if (pathIndex >= 0) {
 		const projectPath = args[pathIndex + 1]
 		if (projectPath === undefined) throw new Error('--project-path requires a registered path')
-		const selectedProject = projects.find(project => project.path === projectPath)
+		const selectedProject = registry.find(project => project.path === projectPath)
 		if (selectedProject === undefined) throw new Error(`Unknown project path: ${projectPath}`)
-		createProjectTaskPlan(taskName as ProjectTaskName, [selectedProject.id])
-		selected = withDependencies ? projectDependencyClosure([selectedProject.id]) : [selectedProject]
+		filtered = expand([selectedProject.id], withDependencies)
 	} else if (prefixIndex >= 0) {
 		const prefix = args[prefixIndex + 1]
 		if (prefix === undefined) throw new Error('--path-prefix requires a path prefix')
-		selected = projects.filter(project => project.path.startsWith(prefix))
-	} else {
-		const projectIds = args.filter(argument => argument !== '--dependencies')
-		const unknownProjectId = projectIds.find(projectId => !projects.some(project => project.id === projectId))
-		if (unknownProjectId !== undefined) throw new Error(`Unknown project: ${unknownProjectId}`)
-		if (projectIds.length > 0) {
-			createProjectTaskPlan(taskName as ProjectTaskName, projectIds)
-			selected = withDependencies ? projectDependencyClosure(projectIds) : projects.filter(project => projectIds.includes(project.id))
-		}
+		filtered = registry.filter(project => project.path.startsWith(prefix))
+	} else if (projectIds.length === 0) {
+		return undefined
 	}
-	const selectedIds = selected?.filter(project => project.tasks[taskName as ProjectTaskName] !== undefined).map(project => project.id)
-	if (selectedIds?.length === 0) throw new Error(`No projects support ${taskName} for the requested selection`)
-	const exitCode = await runProjectTaskPlan(createProjectTaskPlan(taskName as ProjectTaskName, selectedIds))
+	const selected = [...filtered, ...(projectIds.length > 0 ? expand(projectIds, withDependencies && filterIndexes.length === 0) : [])]
+	const selectedIds = [...new Set(selected.filter(project => project.tasks[taskName] !== undefined).map(project => project.id))]
+	if (selectedIds.length === 0) throw new Error(`No projects support ${taskName} for the requested selection`)
+	return selectedIds
+}
+
+if (import.meta.main) {
+	const [taskName, ...args] = process.argv.slice(2)
+	if (!projectTaskNames.includes(taskName as ProjectTaskName)) throw new Error(`Task must be one of: ${projectTaskNames.join(', ')}`)
+	const exitCode = await runProjectTaskPlan(createProjectTaskPlan(taskName as ProjectTaskName, selectProjectIdsFromArguments(taskName as ProjectTaskName, args)))
 	if (exitCode !== 0) process.exit(exitCode)
 }

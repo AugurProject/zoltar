@@ -58,13 +58,19 @@ test('keeps a failed transaction visible until dismissal before a fresh submissi
 		const queries = within(rendered.container)
 		const submit = queries.getByRole('button', { name: 'Deposit REP into vault' })
 		submit.focus()
-		await act(() => fireEvent.click(submit))
+		await act(() => {
+			fireEvent.click(submit)
+		})
 		expect(queries.getByRole('dialog').textContent).toContain('nonce too low')
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Close' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Close' }))
+		})
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		expect(transactionSteps.value).toBeUndefined()
 		expect(document.activeElement).toBe(submit)
-		await act(() => fireEvent.click(submit))
+		await act(() => {
+			fireEvent.click(submit)
+		})
 		expect(attempts).toBe(2)
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 	} finally {
@@ -121,7 +127,7 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 		expect(queries.getByText('6 REP')).not.toBeNull()
 		expect(rendered.container.querySelector('details')).toBeNull()
 		expect(queries.getByRole('button', { name: /Approve WETH spending/ })).not.toBeNull()
-		expect(queries.getByRole<HTMLButtonElement>('button', { name: 'Wrap ETH into WETH' }).disabled).toBe(true)
+		expect(queries.getByRole('button', { name: 'Wrap ETH into WETH' }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByText('Not needed')).not.toBeNull()
 		expect(queries.getByText('3 REP')).not.toBeNull()
 		expect(queries.getByText('1 WETH')).not.toBeNull()
@@ -129,7 +135,9 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 		expect(queries.queryByText(/Request refund/)).toBeNull()
 		expect(queries.getByRole('button', { name: /Request price/ })).not.toBeNull()
 		expect(confirmed).toBe(false)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: /Approve REP spending/ })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: /Approve REP spending/ }))
+		})
 		await review
 		expect(confirmed).toBe(true)
 		expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
@@ -152,7 +160,9 @@ test('keeps confirmed wrap and approval steps visible while the final request aw
 	const rendered = await renderIntoDocument(<TransactionStepsContent contextKey='price-confirmations' />)
 	try {
 		const queries = within(rendered.container)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: /Wrap ETH into WETH/ })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: /Wrap ETH into WETH/ }))
+		})
 		await wrapReview
 		await act(() => {
 			controller.submitted('0x1111111111111111111111111111111111111111111111111111111111111111')
@@ -163,7 +173,9 @@ test('keeps confirmed wrap and approval steps visible while the final request aw
 			approvalReview = controller.review(1)
 		})
 		expect(queries.getByRole('button', { name: 'Approve 3 WETH' }).hasAttribute('disabled')).toBe(false)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve 3 WETH' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Approve 3 WETH' }))
+		})
 		await approvalReview
 		await act(() => {
 			controller.submitted('0x2222222222222222222222222222222222222222222222222222222222222222')
@@ -225,7 +237,9 @@ test('explains a step without token funding using its description, the operation
 		expect(rendered.container.querySelector('details dd .address-value-full')?.textContent).toBe(contractAddress)
 		expect(queries.getByRole('button', { name: `Copy address ${contractAddress}` })).not.toBeNull()
 		expect(rendered.container.querySelector(`details a[href="https://sepolia.etherscan.io/address/${contractAddress}"]`)).not.toBeNull()
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Create question and security pool' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Create question and security pool' }))
+		})
 		await review
 	} finally {
 		await rendered.cleanup()
@@ -332,13 +346,18 @@ for (const choice of ['default', 'buffered', 'custom'] as const) {
 			expect(funding.textContent).toContain('3\u00a0REP')
 			expect(funding.textContent).toContain('1\u00a0WETH')
 			expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(true)
-			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
+			if (choice === 'custom')
+				await act(() => {
+					fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } })
+				})
 			expect(queries.queryByRole('button', { name: /Max/ })).toBeNull()
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
 			const expectedAmount = { default: 3n, buffered: 6n, custom: 9n }[choice]
 			const approveLabel = new RegExp(`Approve ${expectedAmount} REP`)
 			expect(queries.getByRole('button', { name: approveLabel }).hasAttribute('disabled')).toBe(false)
-			await act(() => fireEvent.click(queries.getByRole('button', { name: approveLabel })))
+			await act(() => {
+				fireEvent.click(queries.getByRole('button', { name: approveLabel }))
+			})
 			expect(await review).toBe(expectedAmount)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
@@ -356,7 +375,9 @@ for (const choice of ['default', 'buffered', 'custom'] as const) {
 			const nextReview = controller.review()
 			await act(() => undefined)
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
-			await act(() => fireEvent.click(queries.getByRole('button', { name: /Request price/ })))
+			await act(() => {
+				fireEvent.click(queries.getByRole('button', { name: /Request price/ }))
+			})
 			await nextReview
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
 		} finally {
@@ -380,7 +401,9 @@ for (const purpose of [undefined, 'Vault deposit']) {
 		const rendered = await renderIntoDocument(<TransactionStepsModal contextKey={`approval-purpose-${purpose ?? 'report'}`} />)
 		try {
 			const queries = within(rendered.container)
-			await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '2' } }))
+			await act(() => {
+				fireEvent.input(queries.getByRole('textbox'), { target: { value: '2' } })
+			})
 			// Only report funding is described as funding the report; any other approval names no action it does not unlock.
 			const expectedAction = purpose === undefined ? 'funding the report' : 'continuing'
 			const text = rendered.container.textContent?.replaceAll('\u00a0', ' ')
@@ -412,9 +435,13 @@ for (const result of ['success', 'reverted'] as const) {
 			expect(button('Wrap ETH').hasAttribute('disabled')).toBe(false)
 			expect(button('Approve REP').hasAttribute('disabled')).toBe(true)
 			expect(button('Request price').hasAttribute('disabled')).toBe(true)
-			await act(() => fireEvent.click(button('Request price')))
+			await act(() => {
+				fireEvent.click(button('Request price'))
+			})
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
-			await act(() => fireEvent.click(button('Wrap ETH')))
+			await act(() => {
+				fireEvent.click(button('Wrap ETH'))
+			})
 			await firstReview
 			expect(button('Approve REP').hasAttribute('disabled')).toBe(true)
 			expect(button('Request price').hasAttribute('disabled')).toBe(true)
@@ -429,7 +456,9 @@ for (const result of ['success', 'reverted'] as const) {
 				expect(button('Wrapped ETH ✓').hasAttribute('disabled')).toBe(true)
 				expect(button('Approve REP').hasAttribute('disabled')).toBe(false)
 				expect(button('Request price').hasAttribute('disabled')).toBe(true)
-				await act(() => fireEvent.click(button('Approve REP')))
+				await act(() => {
+					fireEvent.click(button('Approve REP'))
+				})
 				await secondReview
 			} else {
 				expect(queries.getByRole('dialog') !== undefined).toBe(true)
@@ -453,7 +482,9 @@ test('both insufficient approvals are enabled independently while the report wai
 		const queries = within(rendered.container)
 		for (const token of ['REP', 'WETH']) expect(queries.getByRole('button', { name: `Approve 3 ${token}` }).hasAttribute('disabled')).toBe(false)
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(true)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve 3 WETH' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Approve 3 WETH' }))
+		})
 		expect(await choosing).toEqual({ index: 1, amount: 3n })
 		expect(queries.getByRole('button', { name: /Approve (3 )?REP/ }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(true)
@@ -477,7 +508,9 @@ test('enables the final request after approval and already satisfied funding ste
 	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='satisfied-funding' />)
 	let request: Promise<bigint | undefined> | undefined
 	try {
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: /Approve (100 )?REP/ })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: /Approve (100 )?REP/ }))
+		})
 		await approval
 		await act(async () => {
 			const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
@@ -526,7 +559,9 @@ test('a confirmed approval keeps the batch review open for its final request', a
 		const queries = within(document.body)
 		expect(queries.queryByRole('dialog') !== null).toBe(true)
 		expect(queries.getByRole('button', { name: 'Submit vault operations' }).hasAttribute('disabled')).toBe(false)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Submit vault operations' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Submit vault operations' }))
+		})
 		await next
 		expect(transactionSteps.value?.steps[1]?.phase).toBe('wallet')
 	} finally {
@@ -648,7 +683,7 @@ test('uses noun-first result titles for shared deployment, transfer and dispute 
 		['Deploy shared proxy', 'Shared proxy deployed', 'Deploying shared proxy…'],
 		['Transfer ETH', 'ETH transferred', 'Transferring ETH…'],
 		['Dispute report', 'Report disputed', 'Disputing report…'],
-	]) {
+	] as const) {
 		expect(completedAction(title ?? '')).toBe(completed)
 		expect(formatPendingAction(title ?? '')).toBe(pending)
 	}

@@ -9,13 +9,16 @@ function revertError(reason: string) {
 
 describe('transaction failure explanations', () => {
 	test.each([
+		['Purchase fee exceeds budget', 'The price moved past your slippage limit.'],
+		['Minimum REP output', 'The price moved past your slippage limit.'],
+		['Exchange rate undefined', 'The amount is too small to trade.'],
 		['Minimum long shares', 'The price moved past your slippage limit.'],
 		['Liquidity price slippage', 'The price moved past your slippage limit.'],
 		['Deadline expired', 'The transaction deadline passed.'],
 		['LP permit or allowance', 'The liquidity permit expired or was already used.'],
 		['Question ended', 'Trading has ended for this market.'],
-		['Over capacity', 'The security pool does not have enough minting capacity for this size.'],
-		['Vault backing insufficient', 'The security pool does not have enough backing for this size.'],
+		['Purchase exceeds healthy capacity', 'The security pool does not have enough minting capacity for this size.'],
+		['Portfolio backing insufficient', 'The security pool does not have enough backing for this size.'],
 		['Net input is zero', 'The amount is too small to trade.'],
 		['Already initialized', 'Someone already added the first liquidity.'],
 	])('explains the %s revert string with a cause and a next step', (reason, cause) => {
@@ -40,6 +43,8 @@ describe('transaction failure explanations', () => {
 
 	test('refreshes only slippage failures, excluding wallet cancellations and RPC failures', () => {
 		expect(isSlippageFailure(revertError('Swap slippage'))).toBeTrue()
+		expect(isSlippageFailure(revertError('Purchase fee exceeds budget'))).toBeTrue()
+		expect(isSlippageFailure(revertError('Minimum REP output'))).toBeTrue()
 		expect(isSlippageFailure(new Error('Refreshed estimate no longer satisfies the approved maximum NO deposit'))).toBeTrue()
 		expect(isSlippageFailure(Object.assign(new Error('Swap slippage'), { code: 4001 }))).toBeFalse()
 		expect(isSlippageFailure(new Error('RPC timed out'))).toBeFalse()

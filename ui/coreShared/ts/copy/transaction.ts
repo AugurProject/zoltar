@@ -34,7 +34,7 @@ export const parentPoolSharesMigratedDetail = 'Child universe shares were create
 export const shareOutcome = 'Share outcome'
 export const targetOutcomeIndexes = 'Target outcome indexes'
 export const reportingContributionSuccessDetail = 'Your selected REP was committed to the chosen escalation side.'
-export const reportingRepApprovalSuccessDetail = 'The escalation game can now transfer the approved REP from your wallet.'
+export const reportingRepApprovalSuccessDetail = 'The security pool can now transfer the approved REP from your wallet.'
 export const escalationDepositsSettledDetail = 'Selected escalation deposits were settled against the current finalized outcome.'
 const priceRequested = 'Price requested'
 export const transactionStatus = 'Transaction status'
@@ -69,6 +69,7 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	depositRepOnOutcome: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	depositRepOnOutcomeWithLead: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	depositWalletRepToEscalationGameWithLead: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
+	prepareEscalationGame: { title: 'Prepare reporting', completedTitle: 'Reporting prepared', description: 'Set up reporting for this question. This does not start the reporting clock.' },
 	depositWalletRepToEscalationGame: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	withdrawFromEscalationGame: { title: settleEscalationDeposits, completedTitle: escalationDepositsSettled, description: 'Settle the selected deposits after resolution.' },
 	settle: { title: 'Settle report', completedTitle: 'Report settled', description: 'Settle the completed oracle report.' },

@@ -3,8 +3,11 @@ import { assertNever } from '../lib/assert.js'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatTrimmedUnits, formatValueWithUnit, withApproximateMarker } from '../lib/formatters.js'
 import { type DecimalSeparator, getDecimalSeparatorError, parseDecimalInputResult } from './decimal.js'
 
-/** Accepts digits with one optional period or comma; `parseDecimalInputResult` decides whether the comma is a decimal separator in the user's locale. */
-export const AMOUNT_INPUT_PATTERN = '[0-9 ]*[.,]?[0-9]*'
+/**
+ * Accepts digits with one optional period or comma; `parseDecimalInputResult` decides whether the comma is a decimal separator in the user's locale.
+ * Any whitespace may separate digit groups, like `normalizeNumericInput`, so an amount copied from the display with its no-break grouping still passes.
+ */
+export const AMOUNT_INPUT_PATTERN = '[0-9\\s]*[.,]?[0-9\\s]*'
 
 const DISPLAY_FRACTION_DIGITS = 4
 

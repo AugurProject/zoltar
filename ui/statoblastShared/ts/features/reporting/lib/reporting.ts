@@ -62,7 +62,7 @@ export function deriveReportingStage({ reportingDetails, reportingReady }: { rep
 			return 'timedOut'
 		case 'Pending Start':
 		case 'Active':
-			if (reportingDetails.settlementState === 'migration-required' || reportingDetails.settlementState === 'migration-expired') return 'forkTriggered'
+			if (reportingDetails.settlementState === 'migration-required') return 'forkTriggered'
 			return reportingDetails.parentWithdrawalEnabled ? 'activeWithdrawable' : 'activeLocked'
 		default:
 			return assertNever(escalationPhase)

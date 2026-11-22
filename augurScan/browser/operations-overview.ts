@@ -1,12 +1,13 @@
+import { shortUniverseId, protocolIdHex as formatProtocolId } from './identifier-format.ts'
 import { collateralUnit } from '../src/collateral.ts'
-import { semanticSummary, timelineEntityPath } from './semantic-evidence.ts'
+import { timelineEntityPath, timelineTransitionSummary } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { NetworkRecord, OperationsCatalogSection, OperationsRenderContext, PagedOperationsCatalogSection } from './browser-types.ts'
 import { operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
 import { evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationReasonLabel, timelineEntityTypeLabel, timelineOccurrenceFields } from './history-evidence.ts'
 import { capitalLedgerSummary, capitalPositionListLabel, capitalPositionPath, feeEconomicsSummary, questionFeeStreamSummary, capitalPositionSummary, liquidationSummary, liquidationTitle } from './capital-presentation.ts'
-import { operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness } from './operations-presentation.ts'
-import { exactUnit, percentFromBps, utcDateTime } from './format.ts'
+import { isConcludedEscalation, operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness } from './operations-presentation.ts'
+import { exactUnit, utcDateTime } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import { captureViewState, replaceChildrenKeeping, restoreViewState } from './view-state.ts'
@@ -72,14 +73,14 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationCard('Block timestamp', asOf['blockTimestamp'] === undefined ? 'Unavailable' : utcDateTime(Number(asOf['blockTimestamp']) * 1_000)),
 	)
 	const metrics = element('div', 'operations-metrics')
-	const settleableShown = reports.filter(item => isPlainRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Settleable').length
+	const settleableShown = reports.filter(item => isPlainRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Ready to settle').length
 	const openAuctionsShown = auctions.filter(item => item['status'] === 'Open').length
 	metrics.append(
 		operationCard(
 			'OpenOracle reports',
 			operationNumber(totals['reports'] ?? reports.length),
 			`${number(settleableShown)} settleable among ${number(reports.length)} shown`,
-			changes.filter(item => item['entity_type'] === 'report'),
+			changes.filter(item => item['entity_type'] === 'open-oracle-report'),
 		),
 		operationCard(
 			'Escalation games',
@@ -130,15 +131,8 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		),
 	)
 	const poolRiskRows = pools.map(item => {
-		const capacity = isPlainRecord(item['capacity']) ? item['capacity'] : {}
 		const riskPresentation = operationsRiskPresentation(item['protocol_state'], item['scanner_severity'])
-		return operationRow(
-			'Pool accounting',
-			`${riskPresentation.scannerAssessment} · ${percentFromBps(typeof capacity['utilizationBps'] === 'string' ? capacity['utilizationBps'] : undefined)} utilized · ${String(item['scanner_reason'] ?? '')}`,
-			String(item['pool_address'] ?? ''),
-			item['block_number'],
-			operationsHref(`/operations/risk/pool/${encodeURIComponent(String(item['pool_address'] ?? ''))}`),
-		)
+		return operationRow('Pool accounting', `${riskPresentation.scannerAssessment} · ${String(item['scanner_reason'] ?? '')}`, String(item['pool_address'] ?? ''), item['block_number'], operationsHref(`/operations/risk/pool/${encodeURIComponent(String(item['pool_address'] ?? ''))}`))
 	})
 	const nativeSymbol = nativeSymbolFor(requiredChainId())
 	// Underwriting capital is held per owner in one ledger per portfolio universe, so its risk is listed beside the pools.
@@ -156,7 +150,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	})
 	const capitalLedgerRows = capitalLedgers.map(item => {
 		const state = isPlainRecord(item['read_result']) ? item['read_result'] : undefined
-		return operationRow(`Universe ${shortIdentifier(String(item['universe_id'] ?? 'unread'), 9, 6)}`, state === undefined ? 'Awaiting the first tagged ledger read' : capitalLedgerSummary(state, item['owner_count']), String(item['ledger_address'] ?? ''), item['block_number'])
+		return operationRow(`Universe ${shortUniverseId(String(item['universe_id'] ?? 'unread'))}`, state === undefined ? 'Awaiting the first tagged ledger read' : capitalLedgerSummary(state, item['owner_count']), String(item['ledger_address'] ?? ''), item['block_number'])
 	})
 	const liquidationRows = recentLiquidations.map(item => {
 		const eventData = isPlainRecord(item['event_data']) ? item['event_data'] : {}
@@ -170,13 +164,13 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	// Fees are accounted per universe: the settlement book accrues the annual fee, purchases fund the owners' vesting stream.
 	const feeRows = operationRecords(risk['feeEconomics'] ?? data['feeEconomics']).flatMap(item => {
 		const summary = feeEconomicsSummary(item)
-		const universe = `Universe ${shortIdentifier(String(item['universe_id'] ?? 'unread'), 9, 6)}`
+		const universe = `Universe ${shortUniverseId(String(item['universe_id'] ?? 'unread'))}`
 		return [operationRow(`${universe} · rates`, summary.rates, String(item['ledger_address'] ?? ''), item['block_number']), operationRow(`${universe} · fees to date`, summary.flows, undefined, undefined)]
 	})
 	const asOfTimestamp = asOf['blockTimestamp']
 	const asOfSeconds = typeof asOfTimestamp === 'string' && /^\d+$/.test(asOfTimestamp) ? BigInt(asOfTimestamp) : undefined
 	const feeStreamRows = operationRecords(risk['questionFeeStreams']).map(item =>
-		operationRow(String(item['question_title'] ?? `Question ${shortIdentifier(String(item['question_id'] ?? ''), 9, 6)}`), `${questionFeeStreamSummary(item, asOfSeconds)} · universe ${shortIdentifier(String(item['universe_id'] ?? ''), 9, 6)}`, String(item['tx_hash'] ?? ''), item['block_number']),
+		operationRow(String(item['question_title'] ?? `Question ${shortIdentifier(formatProtocolId(String(item['question_id'] ?? '')))}`), `${questionFeeStreamSummary(item, asOfSeconds)} · universe ${shortUniverseId(String(item['universe_id'] ?? ''))}`, String(item['tx_hash'] ?? ''), item['block_number']),
 	)
 	const atRiskCapitalRows = capitalPositionRows.filter((_, index) => ['critical', 'warning'].includes(String(capitalPositions[index]?.['scanner_severity'])))
 	const tradingRows = trading.map(item => {
@@ -196,8 +190,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			...timelineOccurrenceFields(item),
 			['Evidence status code', rawEvidenceStatus],
 			['Invalidation reason code', item['invalidation_reason']],
-			// Auction amounts are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
-			['Transition', semanticSummary(item, nativeSymbol, item['entity_type'] === 'auction' ? collateralUnit(item) : undefined)],
+			['Transition', timelineTransitionSummary(item, nativeSymbol)],
 			['Related entities', Array.isArray(item['related_entities']) ? item['related_entities'].join(' · ') : undefined],
 		])
 		const path = timelineEntityPath(item)
@@ -237,7 +230,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const forkRows = forks.map(item =>
 		operationRow(
 			`Universe ${String(item['universe_identity'] ?? '—')} fork`,
-			`${operationsForkChildCount(operationNumber(item['child_count']), item['child_count'])} · ${operationCounted(item['migrator_count'], 'migrator')} · ${exactUnit(String(item['migrated_atto_rep'] ?? '0'), 18, 'REP')} migrated · ${operationCounted(item['portfolio_fork_events'], 'portfolio fork event')}`,
+			`${operationsForkChildCount(operationNumber(item['child_count']), item['child_count'])} · ${operationCounted(item['migrator_count'], 'migrator')} · ${exactUnit(String(item['migrated_atto_rep'] ?? '0'), 18, 'REP')} minted across child universes · ${operationCounted(item['portfolio_fork_events'], 'portfolio fork event')}`,
 			undefined,
 			item['block_number'],
 			operationsHref(`/operations/fork/${encodeURIComponent(String(item['universe_identity'] ?? ''))}`),
@@ -248,13 +241,12 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	for (const [index, item] of reports.entries()) {
 		const lifecycle = isPlainRecord(item['lifecycle']) ? item['lifecycle'] : {}
 		const row = reportRows[index]
-		if ((lifecycle['state'] === 'Dispute window open' || lifecycle['state'] === 'Settleable') && row !== undefined) attentionReportRows.push(row)
+		if ((lifecycle['state'] === 'Dispute window open' || lifecycle['state'] === 'Ready to settle') && row !== undefined) attentionReportRows.push(row)
 	}
-	const concludedEscalationEvents = new Set(['NonDecisionReached', 'GameContinuedFromFork', 'InheritedThresholdTie', 'OrdinarySettlementInitialized'])
 	const activeEscalationRows: HTMLElement[] = []
 	for (const [index, item] of escalations.entries()) {
 		const row = escalationRows[index]
-		if (!concludedEscalationEvents.has(String(item['event_name'] ?? '')) && row !== undefined) activeEscalationRows.push(row)
+		if (!isConcludedEscalation(item) && row !== undefined) activeEscalationRows.push(row)
 	}
 	const activeAuctionRows: HTMLElement[] = []
 	for (const [index, item] of auctions.entries()) {
@@ -276,7 +268,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 				}),
 				operationsPanel('Capital ledgers', capitalLedgerRows, 'No capital ledger is indexed.'),
 				operationsPanel('Liquidation feed', liquidationRows, 'No take-over, cure or report operation matches this view.', { label: 'Latest 25 · attributed to universe and owner, not to a question pool' }),
-				operationsPanel('Fee economics', feeRows, 'No capital ledger is indexed.'),
+				operationsPanel('Fee economics', feeRows, 'No capital ledger has been read yet.'),
 				operationsPanel('Question fee streams', feeStreamRows, 'No question fee stream has been set.', { label: 'Latest 25 changes' }),
 				riskPoolPanel,
 			],
@@ -357,7 +349,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationsPanel('Active escalations', activeEscalationRows, `No active escalation games among ${number(escalations.length)} shown.`),
 		operationsPanel('Active auctions', activeAuctionRows, `No active auctions among ${number(auctions.length)} shown.`),
 		operationsPanel('Capital positions at risk', atRiskCapitalRows.slice(0, 5), `No capital position at risk among ${number(capitalPositions.length)} shown.`),
-		operationsPanel('Fee economics', feeRows, 'No capital ledger is indexed.'),
+		operationsPanel('Fee economics', feeRows, 'No capital ledger has been read yet.'),
 		operationsPanel('Pool risk', poolRiskRows, 'No risk snapshots are available.'),
 		operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
 		operationsPanel('REP prices', [operationRow('Capital ledgers', 'See the accepted REP price for each ledger.', undefined, undefined, operationsHref('/operations/risk'))], ''),

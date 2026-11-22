@@ -135,6 +135,8 @@ export function createDeploymentBudget(maxTotalCost: bigint) {
 
 type DeploymentBudget = ReturnType<typeof createDeploymentBudget>
 
+const MINIMUM_SIGNABLE_MAX_FEE_PER_GAS = 1n
+
 export function createBudgetedTransactionSender(wallet: BudgetedWallet, account: Account, limits: { budget?: DeploymentBudget; maxFeePerGas: bigint; maxTotalCost: bigint }, log: (message: string) => void = () => undefined) {
 	const budget = limits.budget ?? createDeploymentBudget(limits.maxTotalCost)
 	const sendTransaction: WriteClient['sendTransaction'] = async transaction => {
@@ -145,7 +147,10 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 		if (baseFeePerGas > limits.maxFeePerGas) throw new Error(`Current base fee ${baseFeePerGas.toString()} attoETH per gas exceeds the authorized maximum ${limits.maxFeePerGas.toString()} attoETH per gas`)
 		if (gasPrice > limits.maxFeePerGas) throw new Error(`RPC suggested gas price ${gasPrice.toString()} attoETH per gas exceeds the authorized maximum ${limits.maxFeePerGas.toString()} attoETH per gas`)
 		const maxPriorityFeePerGas = gasPrice > baseFeePerGas ? gasPrice - baseFeePerGas : 0n
-		const candidateMaxFeePerGas = baseFeePerGas * 2n + maxPriorityFeePerGas
+		// The signer rejects a zero fee cap, which a zero-fee development node
+		// (testnetwork/) would otherwise produce; 1 attoETH costs nothing there.
+		const doubledBaseFeeCap = baseFeePerGas * 2n + maxPriorityFeePerGas
+		const candidateMaxFeePerGas = doubledBaseFeeCap < MINIMUM_SIGNABLE_MAX_FEE_PER_GAS ? MINIMUM_SIGNABLE_MAX_FEE_PER_GAS : doubledBaseFeeCap
 		const maxFeePerGas = candidateMaxFeePerGas > limits.maxFeePerGas ? limits.maxFeePerGas : candidateMaxFeePerGas
 		log(
 			formatDeploymentLogBranch('Estimate transaction', [
@@ -472,11 +477,13 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!canonicalCreate2Installed || !proxyInstalled)) {
 		throw new Error(`MAX_FEE_PER_GAS_NANO_ETH authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
-	await ensurePublishedContracts(client, createDevelopmentNodeRpc(rpcUrl), chainId, uniswap.publishedContracts, log)
 	const plan = createDualGenesisDeploymentPlan(profile, uniswap)
 	const knownInstalledAddresses = new Set<Address>()
-	if (canonicalCreate2Installed || (await resolveCanonicalCreate2DeployerForPreflight(client))) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
+	if (canonicalCreate2Installed) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
 	if (proxyInstalled) knownInstalledAddresses.add(PROXY_DEPLOYER_ADDRESS)
+	// The cost preflight runs before any state change, including the
+	// development-node replay of published contracts, so a rejected budget
+	// leaves the chain untouched.
 	const estimate = await preflightDeploymentPlan(plan, client, CONSERVATIVE_DEPLOYMENT_GAS, authorizedMaxFeePerGas, authorizedMaxTotalCost, knownInstalledAddresses)
 	log(
 		formatLogSection('Preflight', [
@@ -499,6 +506,10 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 			}
 		}
 	}
+
+	await ensurePublishedContracts(client, createDevelopmentNodeRpc(rpcUrl), chainId, uniswap.publishedContracts, log)
+	// Replaying a published CREATE2 deployment can install the canonical CREATE2 deployer.
+	if (!canonicalCreate2Installed && (await resolveCanonicalCreate2DeployerForPreflight(client))) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
 
 	log(
 		formatLogSection('Network', [

@@ -11,7 +11,7 @@ import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types
 import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
-import { h, render } from 'preact'
+import { h, render, type ComponentChildren } from 'preact'
 import { act } from 'preact/test-utils'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
@@ -22,7 +22,7 @@ const REPORT_ID = 1n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000bb')
 const TOKEN1_ADDRESS = getAddress('0x00000000000000000000000000000000000000c1')
 const TOKEN2_ADDRESS = getAddress('0x00000000000000000000000000000000000000c2')
-const STATE_HASH = '0x1111111111111111111111111111111111111111111111111111111111111111'
+const STATE_HASH: `0x${string}` = '0x1111111111111111111111111111111111111111111111111111111111111111'
 
 type OpenOracleApprovalTestCase = {
 	action: 'approveToken1' | 'approveToken2'
@@ -200,6 +200,36 @@ async function invokeOpenOracleApproval(state: UseOpenOracleOperationsState, act
 describe('useOpenOracleOperations', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
+	for (const nativeSide of ['token1', 'token2'] as const) {
+		test(`loads native ${nativeSide} balance without ERC-20 reads or an approval requirement`, async () => {
+			const report = createOpenOracleReportDetails({ [nativeSide]: zeroAddress })
+			const readOptionalMulticall = mock(async (contracts: readonly unknown[]) => {
+				for (const contract of contracts) {
+					if (typeof contract !== 'object' || contract === null || !('address' in contract)) throw new Error('Missing token address')
+					expect(contract.address).not.toBe(zeroAddress)
+				}
+				return contracts.map(() => ({ result: 1_000n, status: 'success' as const }))
+			})
+			const dependencies = createOpenOracleOperationsDependencies({
+				loadOpenOracleReportDetails: async () => report,
+				readOptionalMulticall,
+				createConnectedReadClient: () => ({ getBalance: async () => 500n, getBlockNumber: async () => 0n, readContract: async () => 18 }),
+			})
+			let state: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(dependencies, next => {
+				state = next
+			})
+			const rendered = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(rendered.cleanup)
+			await act(async () => {
+				await requireHookState(state).loadOracleReport(REPORT_ID.toString())
+			})
+			await waitFor(() => expect(nativeSide === 'token1' ? requireHookState(state).openOracleTokenAccessState.token1Balance : requireHookState(state).openOracleTokenAccessState.token2Balance).toBe(500n))
+			const access = requireHookState(state).openOracleTokenAccessState
+			expect(nativeSide === 'token1' ? access.token1Balance : access.token2Balance).toBe(500n)
+			expect(nativeSide === 'token1' ? access.token1Approval.value : access.token2Approval.value).toBe(2n ** 256n - 1n)
+		})
+	}
 	test('uses consistent OpenOracle capitalization in disconnected-wallet recovery', async () => {
 		const dependencies = createOpenOracleOperationsDependencies()
 		let hookState: UseOpenOracleOperationsState | undefined
@@ -246,7 +276,7 @@ describe('useOpenOracleOperations', () => {
 		const settleOracleReport = mock(async () => ({ action: 'settle' as const, hash: STATE_HASH }))
 		const dependencies = createOpenOracleOperationsDependencies({ loadOpenOracleReportDetails: async () => report, settleOracleReport })
 		const onTransactionRequested = mock((_intent: TransactionIntent) => undefined)
-		let successTitle: string | undefined
+		let successTitle: ComponentChildren
 		let state: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(
 			dependencies,
@@ -262,7 +292,9 @@ describe('useOpenOracleOperations', () => {
 			},
 		)
 		trackCleanup((await renderIntoDocument(<Harness />)).cleanup)
-		await act(() => requireHookState(state).setOpenOracleForm(current => ({ ...current, reportId: '07' })))
+		await act(() => {
+			requireHookState(state).setOpenOracleForm(current => ({ ...current, reportId: '07' }))
+		})
 		expect(requireHookState(state).openOracleForm.reportId).toBe('07')
 		await act(async () => {
 			await requireHookState(state).settleReport()
@@ -338,7 +370,7 @@ describe('useOpenOracleOperations', () => {
 		trackCleanup(renderedComponent.cleanup)
 
 		let firstLoadPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			firstLoadPromise = requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 		})
 		await waitFor(() => expect(requireHookState(hookState).openOracleReportLookupState).toBe('loading'))
@@ -349,7 +381,7 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
 
 		let secondLoadPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			secondLoadPromise = requireHookState(hookState).loadOracleReport(secondReportId.toString())
 		})
 		await waitFor(() => expect(requireHookState(hookState).openOracleReportLookupState).toBe('loading'))
@@ -418,7 +450,7 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID)
 
 		let replacementLoadPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			replacementLoadPromise = requireHookState(hookState).loadOracleReport(secondReportId.toString())
 		})
 		await waitFor(() => expect(requireHookState(hookState).openOracleReportLookupState).toBe('loading'))
@@ -1067,7 +1099,7 @@ describe('useOpenOracleOperations', () => {
 		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID))
 
 		let settlePromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			settlePromise = requireHookState(hookState).settleReport()
 		})
 
@@ -1151,7 +1183,7 @@ describe('useOpenOracleOperations', () => {
 		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID))
 
 		let settlePromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			settlePromise = requireHookState(hookState).settleReport()
 		})
 
@@ -1275,7 +1307,7 @@ describe('useOpenOracleOperations', () => {
 		currentBalances = { ...currentBalances, token1: 125n }
 		deferBalanceRefresh = true
 		let withdrawalPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			withdrawalPromise = requireHookState(hookState).withdrawBalance('token1', 100n)
 		})
 		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(true))
@@ -1357,7 +1389,7 @@ describe('useOpenOracleOperations', () => {
 
 		deferBalanceRefresh = true
 		let withdrawalPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			withdrawalPromise = requireHookState(hookState).withdrawBalance('token1', 100n)
 		})
 		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(true))
@@ -1374,7 +1406,7 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(false)
 
 		let settlementPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			settlementPromise = requireHookState(hookState).settleReport()
 		})
 		await waitFor(() => expect(settleOracleReport).toHaveBeenCalledTimes(1))
@@ -1441,7 +1473,7 @@ describe('useOpenOracleOperations', () => {
 
 		deferBalanceRefresh = true
 		let withdrawalPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			withdrawalPromise = requireHookState(hookState).withdrawBalance('token1', 100n)
 		})
 		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(true))
@@ -1502,7 +1534,7 @@ describe('useOpenOracleOperations', () => {
 
 		deferBalanceRefresh = true
 		let withdrawalPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			withdrawalPromise = requireHookState(hookState).withdrawBalance('token1', 100n)
 		})
 		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(true))
@@ -1589,7 +1621,7 @@ describe('useOpenOracleOperations', () => {
 		})
 
 		let disputePromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			disputePromise = requireHookState(hookState).disputeReport()
 		})
 
@@ -2005,7 +2037,7 @@ describe('useOpenOracleOperations', () => {
 		})
 
 		let createPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			createPromise = requireHookState(hookState).createOpenOracleGame()
 		})
 
@@ -2066,7 +2098,7 @@ describe('useOpenOracleOperations', () => {
 		})
 
 		let createPromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			createPromise = requireHookState(hookState).createOpenOracleGame()
 		})
 		await act(async () => {
@@ -2271,7 +2303,7 @@ describe('useOpenOracleOperations', () => {
 		})
 
 		let disputePromise = Promise.resolve()
-		await act(() => {
+		await act(async () => {
 			disputePromise = requireHookState(hookState).disputeReport()
 		})
 

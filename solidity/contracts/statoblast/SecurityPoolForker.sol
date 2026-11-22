@@ -19,7 +19,7 @@ contract SecurityPoolForker {
 		portfolioDelegate = _portfolioDelegate;
 	}
 
-	/// @notice Activates fork mode on a pool in a forked universe and locks its REP and unresolved escrow REP into Zoltar migration; callable by anyone.
+	/// @notice Freezes question accounting in a forked universe; reporter and capital migration follow their separate ledgers. Callable by anyone.
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external {
 		require(zoltar.getForkTime(securityPool.universeId()) != 0, 'Universe has not forked');
 		require(SecurityPoolForkerPortfolioDelegate(portfolioDelegate).getQuestionOutcome(securityPool) == BinaryOutcomes.BinaryOutcome.None, 'Question finalized before fork');
@@ -30,7 +30,7 @@ contract SecurityPoolForker {
 		return DelegateCall.invoke(delegate, callData);
 	}
 
-	/// @notice Deploys the child universe (if needed) and child pool for `outcomeIndex` during the migration window; reverts if the pool exists.
+	/// @notice Prepares a question pool in an eligible target universe; returns the existing child when it is already prepared.
 	function preparePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) external returns (ISecurityPool) {
 		return
 			abi.decode(DelegateCall.invoke(portfolioDelegate, abi.encodeCall(SecurityPoolForkerPortfolioDelegate.preparePortfolioQuestion, (source, targetUniverse))), (ISecurityPool));
@@ -45,7 +45,7 @@ contract SecurityPoolForker {
 		_delegateMigrationCall(portfolioDelegate, abi.encodeCall(SecurityPoolForkerPortfolioDelegate.materializeImmediatePortfolioChild, (securityPool, outcomeIndex)));
 	}
 
-	/// @notice Forks the universe on the pool's own question once its escalation game allows it, using pool-held and escrowed REP; callable by anyone.
+	/// @notice Forks the universe on the pool's own question once its escalation game allows it, burning reporter-ledger REP; callable by anyone.
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external {
 		ISecurityPoolPortfolioNative(securityPool.securityPoolFactory().getSecurityPoolPortfolio(securityPool)).forkWithReporterQuestion(securityPool);
 		securityPool.activateForkMode();

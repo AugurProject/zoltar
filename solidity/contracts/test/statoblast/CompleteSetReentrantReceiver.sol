@@ -14,6 +14,7 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 	uint256 public immutable questionId;
 	uint256 public reentrantValue;
 	uint256 public reentryCount;
+	string public reentryRevertReason;
 
 	constructor(SecurityPoolPortfolio root, uint248 universe, uint256 question) {
 		portfolio = root;
@@ -25,8 +26,10 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 		reentrantValue = nestedValue;
 		(uint256 fee, ) = portfolio.purchaseQuote(universeId, questionId, initialValue);
 		IERC20 collateral = portfolio.collateralToken();
-		IWeth9(address(collateral)).deposit{value: initialValue + fee}();
-		collateral.safeApprove(address(portfolio.services()), initialValue + fee);
+		(uint256 nestedFee, ) = portfolio.purchaseQuote(universeId, questionId, nestedValue);
+		uint256 total = initialValue + fee + nestedValue + nestedFee;
+		IWeth9(address(collateral)).deposit{value: total}();
+		collateral.safeApprove(address(portfolio.services()), total);
 		portfolio.createCompleteSet(universeId, questionId, initialValue, address(this), 0, fee);
 	}
 
@@ -42,7 +45,11 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 		if (reentryCount == 0 && reentrantValue > 0) {
 			reentryCount = 1;
 			(uint256 fee, ) = portfolio.purchaseQuote(universeId, questionId, reentrantValue);
-			portfolio.createCompleteSet(universeId, questionId, reentrantValue, address(this), 0, fee);
+			try
+				portfolio.createCompleteSet(universeId, questionId, reentrantValue, address(this), 0, fee)
+			{} catch Error(string memory reason) {
+				reentryRevertReason = reason;
+			}
 		}
 		return IERC1155Receiver.onERC1155BatchReceived.selector;
 	}

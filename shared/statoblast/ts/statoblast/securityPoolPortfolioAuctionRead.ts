@@ -186,7 +186,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 			read(engine, 'bidderBidCount', [bidder]),
 			read(engine, 'refundCreditAttoEth', [bidder]),
 		])
-		if (decodeAddress(engineController, 'Engine controller') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== (opened && finalized)) throw new Error('Auction engine identity or state is inconsistent.')
+		if (decodeAddress(engineController, 'Engine controller') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('Auction engine identity or state is inconsistent.')
 		const terms = {
 			address: auctionAddress,
 			engine,

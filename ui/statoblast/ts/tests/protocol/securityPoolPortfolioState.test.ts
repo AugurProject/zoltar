@@ -6,6 +6,10 @@ import { centralPortfolioRead, owner, portfolio, capital, type CentralPortfolioM
 test.each<CentralPortfolioMode>(['active', 'stale', 'runoff', 'sealed', 'disabled', 'frozen', 'basket'])('bound question previews use native fee time and central inherited supply while %s', async mode => {
 	const blocks: (bigint | undefined)[] = []
 	const client = createMockLoaderClient({
+		getBlock: async () => ({ timestamp: 5_000n }),
+		readContract: request => {
+			throw new Error(`Unexpected direct read ${request.functionName}`)
+		},
 		multicall: async request => {
 			blocks.push(request.blockNumber)
 			return request.contracts.map(call => centralPortfolioRead(call.functionName, mode))
@@ -32,6 +36,10 @@ test.each<CentralPortfolioMode>(['active', 'stale', 'runoff', 'sealed', 'disable
 
 test('cash funding is read from the ledger predicate independently of its internal unit index', async () => {
 	const client = createMockLoaderClient({
+		getBlock: async () => ({ timestamp: 5_000n }),
+		readContract: request => {
+			throw new Error(`Unexpected direct read ${request.functionName}`)
+		},
 		multicall: async request =>
 			request.contracts.map(call => {
 				if (call.functionName !== 'books') return centralPortfolioRead(call.functionName, 'active')

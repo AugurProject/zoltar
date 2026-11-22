@@ -1,3 +1,4 @@
+import { formatTimestamp, formatRelativeTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
@@ -44,10 +45,12 @@ export function resolveZoltarRouteGate({ universe, universeError, universeState,
  */
 export type ForkHandoff = Readonly<{ kind: 'omitted' }> | Readonly<{ kind: 'forked' }> | Readonly<{ kind: 'offered'; universeReason: string | undefined }>
 
-export function getForkHandoff({ universe, universeError, universeState }: { universe: Pick<ZoltarUniverseSummary, 'hasForked'> | undefined; universeError: string | undefined; universeState: LoadableValueState }): ForkHandoff {
+export function getForkHandoff({ universe, universeError, universeState, currentTimestamp }: { universe: Pick<ZoltarUniverseSummary, 'hasForked' | 'earliestForkTime'> | undefined; universeError: string | undefined; universeState: LoadableValueState; currentTimestamp: bigint | undefined }): ForkHandoff {
 	if (universeState === 'missing') return { kind: 'omitted' }
 	if (universe === undefined) return { kind: 'offered', universeReason: isUniverseUnavailable(universeError, universeState) ? zoltarCopy.universeUnavailableDetail : commonCopy.loadingUniverseDetails }
 	if (universe.hasForked) return { kind: 'forked' }
+	if (universe.earliestForkTime !== undefined && currentTimestamp !== undefined && currentTimestamp < universe.earliestForkTime)
+		return { kind: 'offered', universeReason: zoltarCopy.formatParentForkResponseActiveReason(formatTimestamp(universe.earliestForkTime), formatRelativeTimestamp(universe.earliestForkTime, currentTimestamp)) }
 	return { kind: 'offered', universeReason: undefined }
 }
 

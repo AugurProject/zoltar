@@ -1,3 +1,4 @@
+import { compactDurableState } from '../../src/state/durable-compaction.ts'
 import { chmod, link, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,7 +34,6 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 		},
 		auctionRefunds: {},
 		chainId: 1,
-		childRepSplits: [{ childPoolRepSplitAttoRep: 45n.toString(), outcomeIndex: '1', pool: emitter }],
 		cursor: { blockHash: topic0, blockNumber: '50' },
 		escalationDeposits: [
 			{
@@ -86,7 +86,7 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 				token2: getAddress('0x0000000000000000000000000000000000000027'),
 			},
 		],
-		schemaVersion: 4,
+		schemaVersion: 5,
 		securityPoolForker: getAddress('0x0000000000000000000000000000000000000030'),
 		startBlock: '10',
 		wallet: getAddress('0x0000000000000000000000000000000000000022'),
@@ -99,15 +99,15 @@ function workflow(): DurableWorkflow {
 		classification: 'selectable',
 		createdAtBlock: '1',
 		createdAt,
-		ecosystem: 'open-oracle',
+		ecosystem: 'statoblast',
 		id: 'workflow:one',
-		label: 'Initialize OpenOracle dust',
+		label: 'Advance portfolio setup',
 		metadata: { reportId: '7' },
 		obligation: false,
-		operationId: 'open-oracle.dust',
+		operationId: 'statoblast.portfolio.setup',
 		planId: 'plan:one',
 		planningSeed: 1,
-		postconditions: ['Dust is initialized'],
+		postconditions: ['Setup advanced'],
 		priority: 'random',
 		risk: 'low',
 		semanticDeadlineBlockNumber: '144',
@@ -117,19 +117,19 @@ function workflow(): DurableWorkflow {
 				data: '0x1234',
 				evidence: [
 					{
-						abi: '[{"type":"event","name":"DustInitialized"}]',
+						abi: 'event SetupAdvanced(uint8 stage)',
 						emitter,
-						equals: true,
-						field: 'initialized',
-						indexed: { account: emitter },
+						equals: '1',
+						field: 'stage',
+						indexed: {},
 						kind: 'decoded-event-field',
-						signature: 'DustInitialized(address,bool)',
+						signature: 'SetupAdvanced(uint8)',
 						topic0,
 					},
 				],
 				gasLimit: '12000000',
-				id: 'dust',
-				label: 'Initialize dust',
+				id: 'setup',
+				label: 'Advance setup',
 				preflightCalls: [
 					{
 						caller: getAddress('0x0000000000000000000000000000000000000021'),
@@ -179,11 +179,11 @@ async function pendingIntent(): Promise<PendingTransactionIntent> {
 		data: '0x1234',
 		hash: keccak256(serializedTransaction),
 		id: 'intent:one',
-		label: 'Initialize dust',
+		label: 'Advance setup',
 		maxBlockNumber: 120n,
 		mode: 'public',
 		nonce: 3n,
-		operationId: 'open-oracle.dust',
+		operationId: 'statoblast.portfolio.setup',
 		semanticExpectation: {
 			balanceBaselines: [{ account: account.address, asset: 'ETH', balance: '1000000000000000000' }],
 			evidence: [
@@ -198,14 +198,14 @@ async function pendingIntent(): Promise<PendingTransactionIntent> {
 					relation: 'changed',
 				},
 			],
-			postconditions: ['The dust sentinel is initialized'],
+			postconditions: ['The portfolio setup stage advanced'],
 			storageBaselines: [{ args: [account.address, emitter], contract: emitter, functionName: 'tokenHolder', value: '9' }],
 		},
 		sender: account.address,
 		serializedTransaction,
 		signedAt: createdAt,
 		status: 'signed',
-		stepId: 'dust',
+		stepId: 'setup',
 		to: emitter,
 		value: 7n,
 		workflowId: 'workflow:one',
@@ -447,7 +447,7 @@ describe('chaos-bot durable state', () => {
 			lastDelaySeconds: 60,
 			lastRunAt: createdAt,
 			nextRunAt: '2026-08-24T00:01:00.000Z',
-			selectedOperationId: 'open-oracle.dust',
+			selectedOperationId: 'statoblast.portfolio.setup',
 			status: 'running',
 		}
 		const state = initialRuntimeState(false, undefined, 1, durable)
@@ -460,7 +460,7 @@ describe('chaos-bot durable state', () => {
 			lastDelaySeconds: 60,
 			lastRunAt: createdAt,
 			nextRunAt: '2026-08-24T00:01:00.000Z',
-			selectedOperationId: 'open-oracle.dust',
+			selectedOperationId: 'statoblast.portfolio.setup',
 			status: 'running',
 		}
 		const state = initialRuntimeState(false, undefined, 1, durable)
@@ -476,7 +476,7 @@ describe('chaos-bot durable state', () => {
 			data: '0x1234',
 			maxBlockNumber: 120n,
 			nonce: 3n,
-			operationId: 'open-oracle.dust',
+			operationId: 'statoblast.portfolio.setup',
 			to: emitter,
 			value: 7n,
 			workflowId: 'workflow:one',
@@ -485,13 +485,13 @@ describe('chaos-bot durable state', () => {
 		expect(restored.pendingTransactions[0]?.semanticExpectation.storageBaselines).toEqual([{ args: [privateKeyToAccount(`0x${'11'.repeat(32)}`).address, emitter], contract: emitter, functionName: 'tokenHolder', value: '9' }])
 		expect(restored.workflows[0]?.semanticDeadlineBlockNumber).toBe('144')
 		expect(restored.workflows[0]?.steps[0]?.evidence[0]).toEqual({
-			abi: '[{"type":"event","name":"DustInitialized"}]',
+			abi: 'event SetupAdvanced(uint8 stage)',
 			emitter,
-			equals: true,
-			field: 'initialized',
-			indexed: { account: emitter },
+			equals: '1',
+			field: 'stage',
+			indexed: {},
 			kind: 'decoded-event-field',
-			signature: 'DustInitialized(address,bool)',
+			signature: 'SetupAdvanced(uint8)',
 			topic0,
 		})
 		expect(restored.workflows[0]?.steps[0]?.preflightCalls).toEqual([
@@ -789,7 +789,6 @@ describe('chaos-bot durable state', () => {
 		expect(restored.protocolIndex?.auctionBids[emitter.toLowerCase()]?.[0]).toEqual({ bidId: '2', vault: emitter, lots: '25', minimumAttoRepPerLot: 7n.toString(), targetHealthBps: '15000', settled: false })
 		expect(restored.protocolIndex?.escalationDeposits[0]).toMatchObject({ depositIndex: '3', parentDepositIndex: '8', claimed: false })
 		expect(restored.protocolIndex?.migrationRepSplits[0]?.childMigrationRepAmountAttoRep).toBe('25')
-		expect(restored.protocolIndex?.childRepSplits[0]).toMatchObject({ childPoolRepSplitAttoRep: 45n.toString(), outcomeIndex: '1', pool: emitter })
 	})
 
 	test('rejects forged and unordered durable migration progress', () => {
@@ -898,6 +897,29 @@ describe('chaos-bot durable state', () => {
 
 	const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
 
+	test('retains failed workflows and obligations until an operator resolves them', () => {
+		const state = initialDurableState(1)
+		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => ({ ...workflow(), id: `failed:${index}`, status: 'failed', updatedAt: new Date(index * 1000).toISOString() }))
+		state.obligations = state.workflows.map(item => ({
+			automaticRetryCount: 0,
+			attemptCount: 1,
+			blockers: [],
+			createdAt,
+			ecosystem: 'statoblast',
+			id: `obligation:${item.id}`,
+			label: 'Retry settlement',
+			metadata: { reportId: '1' },
+			operationId: item.operationId,
+			status: 'failed',
+			updatedAt: item.updatedAt,
+			workflowId: item.id,
+		}))
+		compactDurableState(state)
+		expect(state.obligations).toHaveLength(MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2)
+		expect(state.workflows).toHaveLength(MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2)
+		expect(state.obligationTombstones).toEqual([])
+	})
+
 	test('bounds terminal workflow history for indefinite operation', async () => {
 		const state = initialDurableState(1)
 		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => terminalWorkflow('completed', `workflow:history-${index.toString()}`, new Date(index * 1_000).toISOString()))
@@ -926,7 +948,7 @@ describe('chaos-bot durable state', () => {
 				blockers: [],
 				completedAt: createdAt,
 				createdAt,
-				ecosystem: 'open-oracle',
+				ecosystem: 'statoblast',
 				id: 'obligation:test',
 				label: 'Settle report',
 				metadata: { reportId: '1' },

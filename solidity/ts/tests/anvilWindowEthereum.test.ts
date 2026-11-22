@@ -117,7 +117,7 @@ test('normalizeAnvilTransactionParams forces legacy zero-gas pricing for send tr
 		{
 			from: '0x1234',
 			to: '0x5678',
-			gas: '0x1c9c380',
+			gas: '0x1000000',
 			gasPrice: '0x0',
 			value: '0x0',
 		},

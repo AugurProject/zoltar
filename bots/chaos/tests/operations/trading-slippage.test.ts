@@ -16,7 +16,7 @@ function openTradingSnapshot() {
 	if (pool === undefined) throw new Error('Trading pool fixture is missing')
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
 	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
-	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 1000000000000n.toString(), feeAttoEth: 10000000000n.toString(), premiumAttoEth: 20000000000n.toString(), minimumShares: '1000000000000' }
+	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 1000000000000n.toString(), feeAttoEth: 30000000000n.toString(), premiumAttoEth: 20000000000n.toString(), minimumShares: '1000000000000' }
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'
 	shares.isApprovedForAll = Object.fromEntries(Object.keys(shares.isApprovedForAll).map(operator => [operator, true]))
 	const lp = snapshot.wallet.lpTokens[0]
@@ -80,4 +80,25 @@ describe('trading economic bounds', () => {
 		positive(router.args[6], 'router initialization minimum NO deposit')
 		positive(router.args[7], 'router initialization minimum liquidity')
 	})
+})
+
+// One side may round to zero: the pair permits any nonzero aggregate payout.
+test.each([
+	['1', '1000', 0n, 9n],
+	['1000', '1', 9n, 0n],
+] as const)('dust LP can exit reserves %s/%s', (yesReserve, noReserve, minYes, minNo) => {
+	const snapshot = openTradingSnapshot()
+	const pair = snapshot.pairs[0]
+	if (pair === undefined) throw new Error('Missing pair fixture')
+	Object.assign(pair, { totalSupply: '1000', walletLiquidity: '10', effectiveYesReserve: yesReserve, effectiveNoReserve: noReserve })
+	const remove = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: planData('trading.liquidity.remove', snapshot) })
+	expect(remove.args.slice(0, 3)).toEqual([10n, minYes, minNo])
+})
+
+test('dust LP stays unavailable when both outputs round to zero', () => {
+	const snapshot = openTradingSnapshot()
+	const pair = snapshot.pairs[0]
+	if (pair === undefined) throw new Error('Missing pair fixture')
+	Object.assign(pair, { totalSupply: '1000', walletLiquidity: '10', effectiveYesReserve: '1', effectiveNoReserve: '1' })
+	expect(eligibleOperationPlans(snapshot, options).some(plan => plan.definitionId === 'trading.liquidity.remove')).toBe(false)
 })

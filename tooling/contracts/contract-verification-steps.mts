@@ -13,6 +13,19 @@ type StepDefinition = {
 	linksLibraries?: boolean
 }
 
+// Manifest derivedContracts that no proxy-deployer step creates. Each is
+// created with CREATE by another deployed contract's constructor, so its
+// address is the creator's CREATE address at the given nonce.
+export const CREATE_DERIVED_CONTRACTS: Readonly<Record<string, StepDefinition & { createdBy: string; createNonce: bigint }>> = {
+	escalationGameProofVerifier: {
+		artifactPath: 'contracts/statoblast/EscalationGameProofVerifier.sol',
+		compilerProfile: 'main',
+		contractName: 'EscalationGameProofVerifier',
+		createdBy: 'escalationGameFactory',
+		createNonce: 1n,
+	},
+}
+
 export const UNVERIFIABLE_STEPS: Readonly<Record<string, string>> = {
 	proxyDeployer: 'raw EVM deterministic proxy with no Solidity source',
 }

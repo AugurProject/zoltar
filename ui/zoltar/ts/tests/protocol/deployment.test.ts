@@ -247,6 +247,29 @@ describe('contract deployment internals', () => {
 		}
 	})
 
+	test('reports shared steps installed by the other genesis root before this root has a status oracle', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+		try {
+			const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
+			const questionDataStep = steps.find(step => step.id === 'zoltarQuestionData')
+			if (questionDataStep === undefined) throw new Error('Expected the question data deployment step')
+			const questionDataRuntimeCode = `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}` as Hex
+			const snapshot = await loadDeploymentStatusOracleSnapshot(
+				createMockReadClient({
+					getCode: async ({ address }) => {
+						if (address === PROXY_DEPLOYER_ADDRESS) return PROXY_DEPLOYER_RUNTIME_CODE
+						if (address === questionDataStep.address) return questionDataRuntimeCode
+						return '0x'
+					},
+				}) as ReadClient,
+			)
+			expect(snapshot.deploymentStatuses.filter(step => step.deployed).map(step => step.id)).toEqual(['proxyDeployer', 'zoltarQuestionData'])
+			expect(snapshot.applicationDeploymentComplete).toBe(false)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
 	test('explicit public profiles produce isolated addresses and init code when runtime uses the opposite network', async () => {
 		const captureDeployData = async (steps: ReturnType<typeof getDeploymentSteps>, stepId: 'zoltar') => {
 			const step = steps.find(candidate => candidate.id === stepId)
@@ -565,12 +588,14 @@ describe('contract deployment internals', () => {
 
 		let plannedFunctions: string[] = []
 		const client = asWriteClient({
-			onTransactionPlan: reviewed
-				? steps => {
-						expect(preparedPreviews).toHaveLength(0)
-						plannedFunctions = steps.map(step => step.functionName)
+			...(reviewed
+				? {
+						onTransactionPlan: (steps: Parameters<NonNullable<WriteClient['onTransactionPlan']>>[0]) => {
+							expect(preparedPreviews).toHaveLength(0)
+							plannedFunctions = steps.map(step => step.functionName)
+						},
 					}
-				: undefined,
+				: {}),
 			getBalance: async () => 0n,
 			getCode: async () => (proxyInstalled ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
 			onTransactionPrepared: preview => {

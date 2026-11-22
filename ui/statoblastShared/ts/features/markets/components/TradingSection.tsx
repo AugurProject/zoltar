@@ -45,6 +45,7 @@ import {
 	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 	getPoolMintingCapacityAttoEth,
+	getMintingQuestionEndReason,
 	hasShares,
 	MINTING_PAUSED_DURING_DISPUTE_MESSAGE,
 	parseCompleteSetAmountInput,
@@ -130,6 +131,8 @@ export function TradingSection({
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const maximumMintAmount = usesSharedBacking ? undefined : getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
 	const mintGuardMessage = getTradingMintGuardMessage({
+		currentTimestamp,
+		questionEndTime: selectedPool?.marketDetails.endTime,
 		accountAddress: accountState.address,
 		usesSharedBacking,
 		collateral: collateralFunding?.collateral,
@@ -175,6 +178,8 @@ export function TradingSection({
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
+		const questionEndReason = getMintingQuestionEndReason(currentTimestamp, selectedPool?.marketDetails.endTime)
+		if (questionEndReason !== undefined) return questionEndReason
 		if (mintingPausedByEscalation) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 		// A pool stage that closes minting explains it before any capacity figure, which a stale escalation flag can zero.
 		if (!mintEnabled) return tradingCopy.actionUnavailableReason

@@ -104,12 +104,8 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
 		viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
-		viewerVaultExists: true,
-		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
-		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -152,12 +148,8 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
 		viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
-		viewerVaultExists: true,
-		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
-		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 	}
 
 	return {
@@ -189,12 +181,8 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
 		viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
-		viewerVaultExists: true,
-		viewerVaultDisputeStakedAttoRep: 0n,
-		viewerVaultRepBackingAttoRep: 10n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -450,7 +438,7 @@ describe('ReportingSection', () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
 		expect(settlementButtonLabel('Yes')).toBe('Clear Yes deposits (worth 0 REP)…')
-		expect(document.body.textContent).toContain('Losing deposits return no REP. Clearing them costs gas and is only needed before you redeem your vault REP from this pool: until then they still count as your dispute-staked REP, which blocks redemption.')
+		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from portfolio capital.')
 	})
 
 	describe('fork-triggering reports', () => {
@@ -589,7 +577,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Response window')
-		expect(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum first report)/ })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: /^Max reward/ })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
@@ -765,7 +753,7 @@ describe('ReportingSection', () => {
 		expect(metricsQueries.getByText('Non-decision threshold')).not.toBeNull()
 		expect(metricsQueries.getByText('Response window ends')).not.toBeNull()
 		expect(metricsQueries.getByText('Escalation started')).not.toBeNull()
-		expect(metricsQueries.getByText('Minimum first report')).not.toBeNull()
+		expect(metricsQueries.getByText('Minimum report')).not.toBeNull()
 	})
 
 	test('shows the exact one-attoREP difference between a not-started threshold and normalized bond', async () => {
@@ -787,6 +775,14 @@ describe('ReportingSection', () => {
 		expect(metricsText).toContain('5 REP')
 		expect(metricsText).toContain('4.999999999999999999 REP')
 		expect(metricsText).not.toContain('≈')
+	})
+
+	test('shows continuation timing instead of zero-valued ordinary activation times', async () => {
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ activationTime: 0n, forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 20n }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('Continuation resumed')
+		expect(document.body.textContent).toContain('Inherited attrition elapsed')
+		expect(document.body.textContent).not.toContain('Immediate')
 	})
 
 	test('shows escalation started time as activation time minus the initial delay', async () => {
@@ -927,9 +923,6 @@ describe('ReportingSection', () => {
 					},
 					reportingDetails: (status === 'active' ? createReportingDetails : createNotStartedReportingDetails)({
 						contributionFunding: 'wallet',
-						viewerPoolHeldVaultRepBackingAttoRep: 0n,
-						viewerVaultExists: false,
-						viewerVaultRepBackingAttoRep: 0n,
 						viewerWalletRepAllowanceAttoRep: 0n,
 						viewerWalletRepBalanceAttoRep: rep(10n),
 					}),
@@ -1029,9 +1022,6 @@ describe('ReportingSection', () => {
 				initialProps={{
 					reportingDetails: createReportingDetails({
 						contributionFunding: 'wallet',
-						viewerPoolHeldVaultRepBackingAttoRep: 0n,
-						viewerVaultExists: false,
-						viewerVaultRepBackingAttoRep: 0n,
 						viewerWalletRepAllowanceAttoRep: rep(10n),
 						viewerWalletRepBalanceAttoRep: rep(10n),
 					}),
@@ -1439,7 +1429,7 @@ describe('ReportingSection', () => {
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('textbox', { name: /^Report amount/ }) as HTMLInputElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max' }) as HTMLButtonElement).disabled).toBe(true)
-		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum first report)/ })).disabled).toBe(true)
+		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).disabled).toBe(true)
 		expect(requireButton(documentQueries.getByRole('button', { name: /^Max reward/ })).disabled).toBe(true)
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'))
 	})
@@ -1475,14 +1465,14 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
-		expect(lifecycleBannerQueries.queryByText('Continue in Fork & migration')).toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork choices and recovery')).toBeNull()
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), forkTriggeredReason)
 		const reportButton = documentQueries.getByRole('button', { name: /^Report Yes ·/ })
 		const reportDescription = document.getElementById(reportButton.getAttribute('aria-describedby') ?? '')
 		expect(reportDescription?.textContent).toContain(forkTriggeredReason)
 	})
 
-	test('shows Continue in Fork & migration in the lifecycle banner after the fork has already been triggered', async () => {
+	test('shows Continue in Fork choices and recovery in the lifecycle banner after the fork has already been triggered', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1500,8 +1490,8 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = document.body.querySelector('.escalation-phase')
 		if (!(lifecycleBanner instanceof HTMLElement)) throw new Error('Expected phase stepper')
 		const lifecycleBannerQueries = within(lifecycleBanner)
-		expect(document.body.textContent?.includes('Escalation ended without a decision and the universe fork has already been triggered for this pool. Continue in Fork & migration.')).toBe(true)
-		expect(lifecycleBannerQueries.queryByText('Continue in Fork & migration')).toBeNull()
+		expect(document.body.textContent?.includes('Escalation ended without a decision and the universe fork has already been triggered for this pool. Continue in Fork choices and recovery.')).toBe(true)
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork choices and recovery')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
 	})
 
@@ -1593,7 +1583,7 @@ describe('ReportingSection', () => {
 		const metricsSection = getEscalationMetricsSection()
 		const reportOutcomeSection = getReportOutcomeSection()
 		expect(documentQueries.queryByRole('heading', { name: 'First Report Starts Escalation' })).toBeNull()
-		expect(document.body.textContent).toContain('The first report starts the game. Minimum first report: 3 REP.')
+		expect(document.body.textContent).toContain('The first report starts the game. Minimum report: 3 REP.')
 		expect(document.body.querySelector('.notice.success')).toBeNull()
 		expect(reportOutcomeSection.textContent?.includes('Your deposits:')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected payout for current amount')).toBe(false)
@@ -1803,7 +1793,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: /^(Min to lead|Minimum first report)/ }))
+			fireEvent.click(within(document.body).getByRole('button', { name: /^(Min to lead|Minimum report)/ }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -1868,7 +1858,6 @@ describe('ReportingSection', () => {
 							{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						startBondAttoRep: rep(1n),
-						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
@@ -1898,7 +1887,6 @@ describe('ReportingSection', () => {
 						],
 						nonDecisionThresholdAttoRep: rep(20n),
 						startBondAttoRep: rep(1n),
-						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
@@ -1922,8 +1910,6 @@ describe('ReportingSection', () => {
 				initialProps={{
 					reportingDetails: createNotStartedReportingDetails({
 						nonDecisionThresholdAttoRep: rep(6n),
-						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
-						viewerVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
@@ -1946,7 +1932,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Minimum first report (3.00 REP)' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Minimum report (3.00 REP)' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -1981,7 +1967,6 @@ describe('ReportingSection', () => {
 					reportingDetails: createNotStartedReportingDetails({
 						nonDecisionThresholdAttoRep: rep(20n),
 						startBondAttoRep: rep(1n),
-						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						reportAmount: '25',
@@ -2008,7 +1993,6 @@ describe('ReportingSection', () => {
 						],
 						nonDecisionThresholdAttoRep: rep(20n),
 						startBondAttoRep: rep(1n),
-						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						reportAmount: '5',
@@ -2041,7 +2025,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const settlementReason = 'Escalation ended without a decision, so deposits stay locked until someone triggers the universe fork. Settle them in Fork & migration afterwards.'
+		const settlementReason = 'Escalation ended without a decision, so deposits stay locked until someone triggers the universe fork. Settle them in Fork choices and recovery afterwards.'
 		expect(document.body.textContent?.includes(settlementReason)).toBe(true)
 		expect(document.body.textContent?.split(settlementReason)).toHaveLength(2)
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
@@ -2049,7 +2033,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('shares one workflow lock reason across reporting and settlement actions', async () => {
-		const sharedLockReason = 'This parent pool is forked. Continue in Fork & migration for migration and settlement.'
+		const sharedLockReason = 'This parent pool is forked. Continue in Fork choices and recovery for migration and settlement.'
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -2078,24 +2062,19 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('checkbox')).toBeNull()
 	})
 
-	test('shows when the unresolved escalation migration window has closed', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					forkAlreadyTriggered: true,
-					reportingDetails: createReportingDetails({
-						settlementState: 'migration-expired',
-						systemState: 'poolForked',
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+	for (const reason of ['This branch inherits a fixed question outcome; new reports are closed.', 'Resume the continuation game before reporting.']) {
+		test(`blocks reports when ${reason}`, async () => {
+			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ reportingBlockedReason: reason }), reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' }) })))
+			cleanupRenderedComponent = rendered.cleanup
+			expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'))
+			expect(document.body.textContent).toContain(reason)
+		})
+	}
 
-		expect(document.body.textContent?.includes('The window for the optional cleanup of unresolved parent deposits has closed. Nothing is lost: your child-pool backing and winning claims are unchanged.')).toBe(true)
-		expect(document.body.textContent?.includes('must migrate in Fork & migration')).toBe(false)
-		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(false)
+	test('disables triggering a fork from a fixed inherited game', async () => {
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ onTriggerZoltarFork: () => undefined, reportingDetails: createReportingDetails({ hasReachedNonDecision: true, canTriggerOwnFork: false }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, 'Trigger universe fork')
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks escalation deposits', async () => {
@@ -2124,7 +2103,7 @@ describe('ReportingSection', () => {
 		expect(triggerZoltarForkCalls).toBe(1)
 	})
 
-	test('keeps only Open fork & migration visible after a fork-triggered pool has already entered its fork workflow', async () => {
+	test('keeps only Open fork choices and recovery visible after a fork-triggered pool has already entered its fork workflow', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -2143,8 +2122,8 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Open fork & migration' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this pool, so continue in Fork & migration.')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Open fork choices and recovery' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this pool, so continue in Fork choices and recovery.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {
@@ -2313,7 +2292,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum first report)/ })).disabled).toBe(true)
+		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).disabled).toBe(true)
 		expect(requireButton(documentQueries.getByRole('button', { name: /^Max reward/ })).disabled).toBe(true)
 		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(false)
 	})
@@ -2342,7 +2321,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		const blocker = documentQueries.getByText('The selected side has no remaining capacity.')
-		const minimumButton = requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum first report)/ }))
+		const minimumButton = requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ }))
 		const maxProfitButton = requireButton(documentQueries.getByRole('button', { name: /^Max reward/ }))
 		expect(minimumButton.disabled).toBe(true)
 		expect(maxProfitButton.disabled).toBe(true)
@@ -2522,7 +2501,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: /^(Min to lead|Minimum first report)/ }))
+			fireEvent.click(within(document.body).getByRole('button', { name: /^(Min to lead|Minimum report)/ }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -2580,7 +2559,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const minButton = requireButton(within(document.body).getByRole('button', { name: /^(Min to lead|Minimum first report)/ }))
+		const minButton = requireButton(within(document.body).getByRole('button', { name: /^(Min to lead|Minimum report)/ }))
 		expect(minButton.disabled).toBe(true)
 		expect(minButton.title).toBe('Selected side already leads.')
 		expect(document.body.textContent?.includes('Selected side already leads.')).toBe(true)
@@ -2746,7 +2725,7 @@ describe('ReportingSection', () => {
 			}
 			expect(status?.classList.contains('notice')).toBe(false)
 			expect(status?.querySelector('strong:not(.notice-title)')?.textContent).toBe(winning ? 'You’re leading on Yes.' : 'You’re behind on Yes.')
-			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. A report that raises the middle of the three balances can extend the response window (up to 7 weeks after the game starts).`)
+			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. A report that raises the middle of the three balances can extend the response window (up to 7 weeks after activation, following the initial 3-day delay).`)
 			expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
 			if (!winning) {
 				const input = document.getElementById('reporting-contribution-amount')
@@ -2755,7 +2734,9 @@ describe('ReportingSection', () => {
 				input.scrollIntoView = () => {
 					scrolled = true
 				}
-				await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Take the lead' })))
+				await act(() => {
+					fireEvent.click(within(document.body).getByRole('button', { name: 'Take the lead' }))
+				})
 				expect(input.value).toBe('7.000000000000000001')
 				expect(scrolled).toBe(true)
 				expect(within(document.body).getByRole('radio', { name: /^Yes/ }).getAttribute('aria-checked')).toBe('true')
@@ -2814,7 +2795,9 @@ describe('ReportingSection', () => {
 		expect(movedNotice?.getAttribute('role')).toBe('status')
 		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
 		expect(document.body.textContent).toContain('The response window now ends')
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss response window notice' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss response window notice' }))
+		})
 		expect(within(document.body).queryByRole('button', { name: 'Update your reminder (.ics)' })).toBeNull()
 		expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
 		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
@@ -2859,7 +2842,9 @@ describe('ReportingSection', () => {
 		try {
 			const rendered = await renderIntoDocument(h(ReportingSection, createProps()))
 			cleanupRenderedComponent = rendered.cleanup
-			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })))
+			await act(() => {
+				fireEvent.click(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' }))
+			})
 			const calendar = await calendarBlob?.text()
 			expect(calendar).toContain('DTSTAMP:20260924T000000Z\r\n')
 			expect(calendar).toContain('DTSTART:19691231T230500Z\r\n')
@@ -2903,7 +2888,9 @@ describe('ReportingSection', () => {
 			cleanupRenderedComponent = rendered.cleanup
 			const fix = expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Connect wallet')
 			expect(document.body.textContent).not.toContain('Connect a wallet before reporting on a question.')
-			await act(() => fireEvent.click(fix))
+			await act(() => {
+				fireEvent.click(fix)
+			})
 			expect(calls).toEqual(['connect'])
 		})
 
@@ -2934,7 +2921,7 @@ describe('ReportingSection', () => {
 			const accountState = signal<AccountState>(createAccountState({ address: undefined }))
 			const walletActions = { isConnectingWallet: false, isManagingWallet: false, onConnect: () => undefined, onSwitchNetwork: () => undefined }
 			const props = createProps({
-				reportingDetails: createReportingDetails({ contributionFunding: 'vault', viewerPoolHeldVaultRepBackingAttoRep: rep(6n), viewerVaultExists: true }),
+				reportingDetails: createReportingDetails({ contributionFunding: 'vault' }),
 				reportingForm: createReportingForm({ contributionFunding: 'vault', reportAmount: '5', selectedOutcome: 'yes' }),
 			})
 			const Harness = () => (
@@ -2946,7 +2933,9 @@ describe('ReportingSection', () => {
 			cleanupRenderedComponent = rendered.cleanup
 			const fix = expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Connect wallet')
 			fix.focus()
-			await act(() => fireEvent.click(fix))
+			await act(() => {
+				fireEvent.click(fix)
+			})
 			fix.blur()
 			await act(() => {
 				accountState.value = createAccountState()
@@ -2967,7 +2956,9 @@ describe('ReportingSection', () => {
 			cleanupRenderedComponent = rendered.cleanup
 			const fix = within(document.body).getByRole('button', { name: 'Connect wallet' })
 			fix.focus()
-			await act(() => fireEvent.click(fix))
+			await act(() => {
+				fireEvent.click(fix)
+			})
 			fix.blur()
 			await act(() => {
 				accountState.value = createAccountState()

@@ -472,9 +472,6 @@ const KNOWN_REVERTS = [
 	'Adverse observation missing',
 	'Position does not need takeover',
 	'Invalid takeover commitment',
-	'Take entire residual commitment',
-	'Takeover below economic minimum',
-	'Takeover award below minimum',
 	'Takeover price epoch changed',
 	'Takeover owner target changed',
 	'Takeover source cohort changed',
@@ -582,7 +579,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 		const ethereum = getEthereum()
 		const next = (await latestTimestamp()) + 1n
 		await ethereum.request({ method: 'evm_setNextBlockTimestamp', params: [`0x${next.toString(16)}`] })
-		const transaction = { from: call.from, to: call.to, data: call.data, value: `0x${(call.value ?? 0n).toString(16)}`, gas: '0x1c9c380', gasPrice: '0x0' }
+		const transaction = { from: call.from, to: call.to, data: call.data, value: `0x${(call.value ?? 0n).toString(16)}`, gas: '0x1000000', gasPrice: '0x0' }
 		const hash = await ethereum.requestRaw({ method: 'eth_sendTransaction', params: [transaction] })
 		for (let attempt = 0; attempt < 20_000; attempt++) {
 			const receipt = await ethereum.request({ method: 'eth_getTransactionReceipt', params: [hash] })

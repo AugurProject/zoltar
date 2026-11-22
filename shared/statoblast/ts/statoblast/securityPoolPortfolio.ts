@@ -1,3 +1,4 @@
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '../initialReport/oracleInitialReport.js'
 export { portfolioTakeoverSource } from './securityPoolPortfolioTakeover.js'
 import { type Address, type Hex, encodeAbiParameters, encodeFunctionData, isAddress, isHex, getAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
@@ -29,6 +30,7 @@ export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
 	if (config.purchaseFeeBps > 10_000n) throw new Error('Purchase fee cannot exceed 100%.')
 	if (config.annualFeeBps > 10_000n) throw new Error('Annual fee cannot exceed 100%.')
 	if (config.minimumCommitmentAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment and fee vesting duration must be positive.')
+	if (config.rewardVestingSeconds > 3650n * 86_400n) throw new Error('Fee vesting duration cannot exceed 3650 days.')
 	if (config.rewardVestingSeconds < 86_400n) throw new Error('Fee vesting duration must be at least 24 hours.')
 	if (config.minimumOutcomeRate === 0n || config.minimumOutcomeRate > 10n ** 18n) throw new Error('Minimum outcome exchange rate must be positive and at most one.')
 }
@@ -52,6 +54,7 @@ export function buildPortfolioDeploymentRequest(parameters: { owner: Address; fa
 	uint(parameters.origin.securityMultiplierBps, 256, 'Security multiplier')
 	uint(parameters.origin.reportPriorityFeeAttoEthPerGas, 256, 'Report priority fee')
 	if (parameters.origin.securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 10500 BPS.')
+	if (parameters.origin.reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Initial report priority fee exceeds OpenOracle limits.')
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas === 0n) throw new Error('Report priority fee must be positive.')
 	address(parameters.questionAdmissionPolicy, 'Question admission policy')
 	uint(parameters.maximumQuestionHorizonSeconds, 48, 'Question horizon')
@@ -89,7 +92,7 @@ export function portfolioAddressFromDeploymentLogs(logs: readonly { address: Add
 	throw new Error('Portfolio deployment event is missing.')
 }
 
-/** Each call completes one immutable setup stage; anyone can resume an interrupted setup. */
+/** Each call completes one immutable setup stage; anyone can resume an interrupted setup until the origin universe forks. */
 export function buildPortfolioPrepareNextRequest(parameters: { caller: Address; portfolio: Address }) {
 	address(parameters.caller, 'Caller')
 	address(parameters.portfolio, 'Portfolio')

@@ -46,7 +46,7 @@
 					<li><code>simulateWithDeadline(client, expiry, simulate, resolveDeadline?)</code> does the same and also resolves <code>expiry</code>, a <code>TransactionExpiry</code> that is either an absolute deadline or <code>{ validityMinutes }</code> between 1 and 1,440 (<code>requireTransactionValidityMinutes</code>), against the pinned block's timestamp. The optional <code>resolveDeadline(block, requestedDeadline)</code> can replace that deadline, and <code>simulate</code> receives <code>(block, deadline)</code>.</li>
 					<li><code>retainApprovedMinimum(approved, refreshed, label)</code> and <code>retainApprovedMaximum(approved, refreshed, label)</code> return the approved bound, or throw when the submission-time simulation no longer satisfies it.</li>
 				</ul>
-				<p>Pure math is a responsive preview only. A quote does not expire when a new block arrives: immediately before wallet submission the client simulates the actual call again at the latest block, and submits with the bounds and deadline approved in the quote only if that simulation succeeds within them.</p>
+				<p>Pure math is a responsive preview only. A quote does not expire when a new block arrives: immediately before wallet submission the client simulates the actual call again at the latest block, and submits only if that simulation still satisfies the approved bounds. Trade quotes retain their approved deadline. Liquidity and settlement submissions resolve a fresh deadline from the latest block and the selected validity period.</p>
 			</section>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

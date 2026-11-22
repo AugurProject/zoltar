@@ -14,6 +14,8 @@ const quantity = (value: unknown, name: string): bigint => {
 	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
 	throw new Error(`${name} returned an invalid value`)
 }
+/** The health target the ledger enforces: a stored zero is the default 100% target (`_target` in SecurityPoolCapitalState). */
+const effectiveTargetHealthFactorBps = (stored: bigint): bigint => (stored === 0n ? BPS : stored)
 const flag = (value: unknown, name: string): boolean => {
 	if (typeof value !== 'boolean') throw new Error(`${name} returned an invalid value`)
 	return value
@@ -275,8 +277,8 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 			liquidationStartedAt: liquidationStartedAt.toString(),
 			belowLiquidationPrice,
 			// What a take-over needs before the ledger cures: a fresh price, an open universe (`_requireOpen`) and an adverse observation.
-			// The ledger then cures the position first and still rejects the take-over when spare commitment covers the deficit; that
-			// outcome depends on the ledger's private minimum commitment and cannot be read. A cohort is taken over per bid, never as a whole.
+			// The ledger first attempts an unpaid cure; if it restores health, the call succeeds with zero transfer.
+			// Cure eligibility also uses the public minimum commitment. A cohort is taken over per bid, never as a whole.
 			takeoverPreconditionsMet: cohortId === 0n && belowLiquidationPrice && liquidationStartedAt !== 0n && state.priceValid && !state.frozen && !state.importing && !state.universeForked,
 		}
 	}
@@ -293,7 +295,7 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 		withdrawableAttoRep: quantity(collateral[2], 'ownerCollateral.withdrawable').toString(),
 		freeAttoRep: freeAttoRep.toString(),
 		pledgedAttoRep: pledged.toString(),
-		targetHealthFactorBps: quantity(account['targetHealthFactorBps'], 'ownerAccount.targetHealthFactorBps').toString(),
+		targetHealthFactorBps: effectiveTargetHealthFactorBps(quantity(account['targetHealthFactorBps'], 'ownerAccount.targetHealthFactorBps')).toString(),
 		unclaimedFeesAttoEth: unclaimedEth.toString(),
 		unclaimedFeesAttoRep: unclaimedRep.toString(),
 		ownerConservativePrice: quantity(ownerPrice, 'ownerConservativePrice').toString(),

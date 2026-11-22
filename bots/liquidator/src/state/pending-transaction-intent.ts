@@ -7,27 +7,9 @@ type ReceiptExpectation = PendingTransactionIntent['receiptExpectation']
 
 const isSerializedTransaction = (value: unknown): value is Hex => typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})+$/.test(value)
 
-function parseStagedOperation(value: unknown): 0 | 1 {
-	if (value === 0 || value === 1) return value
-	throw new Error('Pending transaction intent has invalid staged operation')
-}
-
 function parseReceiptExpectation(rawExpectation: object): ReceiptExpectation {
 	const expectationType = Reflect.get(rawExpectation, 'type')
 	if (expectationType === 'transaction') return { type: 'transaction' }
-	if (expectationType === 'coordinator-operation' || expectationType === 'staged-success') {
-		return { coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))), operation: parseStagedOperation(Reflect.get(rawExpectation, 'operation')), type: expectationType }
-	}
-	if (expectationType === 'pending-liquidation') {
-		return {
-			amount: BigInt(String(Reflect.get(rawExpectation, 'amount'))),
-			coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))),
-			operator: getAddress(String(Reflect.get(rawExpectation, 'operator'))),
-			receiver: getAddress(String(Reflect.get(rawExpectation, 'receiver'))),
-			target: getAddress(String(Reflect.get(rawExpectation, 'target'))),
-			type: 'pending-liquidation',
-		}
-	}
 	throw new Error('Pending transaction intent has invalid receipt expectation')
 }
 
@@ -70,7 +52,7 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 	const submissionBlock = Reflect.get(intent, 'submissionBlock')
 	if (!isHash32(hash) || !isSerializedTransaction(serializedTransaction)) throw new Error('Pending transaction intent has invalid transaction hex')
 	if (keccak256(serializedTransaction).toLowerCase() !== hash.toLowerCase()) throw new Error('Pending transaction intent hash does not match its serialized transaction')
-	if (typeof label !== 'string' || (kind !== 'deployment' && kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
+	if (typeof label !== 'string' || (kind !== 'configuration' && kind !== 'deployment' && kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
 	if (mode !== 'private' && mode !== 'public') throw new Error('Pending transaction intent has invalid mode')
 	if (typeof nonce !== 'string' || typeof maxBlockNumber !== 'string' || typeof submissionBlock !== 'string') throw new Error('Pending transaction intent has invalid numeric metadata')
 	if (typeof sender !== 'string') throw new Error('Pending transaction intent is missing sender')

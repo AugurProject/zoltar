@@ -11,3 +11,7 @@ test('classifies wallet cancellation before filtering technical provider detail'
 	expect(publicErrorMessage(new Error('call args: private payload'), 'Transaction failed.')).toBe('Transaction failed.')
 	expect(publicErrorMessage('not an error', 'Transaction failed')).toBe('Transaction failed.')
 })
+
+test('#1495: ShareToken contract reverts retain their actionable explanation', () => {
+	expect(publicErrorMessage(new Error('ShareToken universe has not forked'), 'Migration failed')).toBe('ShareToken universe has not forked.')
+})

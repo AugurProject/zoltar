@@ -166,7 +166,9 @@ describe('OpenOracle application navigation', () => {
 		const query = within(document.body)
 		expect(query.getByRole('link', { name: 'Browse reports' }).getAttribute('aria-current')).toBe('page')
 		expect(query.queryByRole('button', { name: 'Create standalone OpenOracle report' })).toBeNull()
-		await act(() => fireEvent.click(query.getByRole('link', { name: 'Create report' })))
+		await act(() => {
+			fireEvent.click(query.getByRole('link', { name: 'Create report' }))
+		})
 		expect(window.location.hash).toBe('#/open-oracle?openOracleView=create')
 		expect(query.getByRole('link', { name: 'Create report' }).getAttribute('aria-current')).toBe('page')
 		expect(query.getByRole('button', { name: 'Create standalone OpenOracle report' })).toBeTruthy()
@@ -181,7 +183,9 @@ describe('OpenOracle application navigation', () => {
 		expect(query.getByRole('link', { name: 'View report' }).getAttribute('aria-current')).toBe('page')
 		await waitFor(() => expect(document.body.textContent).toContain('Report read unavailable'))
 		const historyLength = window.history.length
-		await act(() => fireEvent.click(query.getByRole('button', { name: 'Open report' })))
+		await act(() => {
+			fireEvent.click(query.getByRole('button', { name: 'Open report' }))
+		})
 		await waitFor(() => expect(loadReport).toHaveBeenCalledTimes(2))
 		expect(window.history.length).toBe(historyLength)
 	})
@@ -189,8 +193,12 @@ describe('OpenOracle application navigation', () => {
 	test('loads a newly submitted report once and records its selected-report URL', async () => {
 		await renderApp('#/open-oracle?openOracleView=selected-report')
 		const query = within(document.body)
-		await act(() => fireEvent.input(query.getByLabelText('Report ID'), { target: { value: '8' } }))
-		await act(() => fireEvent.click(query.getByRole('button', { name: 'Open report' })))
+		await act(() => {
+			fireEvent.input(query.getByLabelText('Report ID'), { target: { value: '8' } })
+		})
+		await act(() => {
+			fireEvent.click(query.getByRole('button', { name: 'Open report' }))
+		})
 		await waitFor(() => expect(loadReport).toHaveBeenCalled())
 		expect(window.location.hash).toBe('#/open-oracle?openOracleView=selected-report&openOracleReportId=8')
 		expect(loadReport).toHaveBeenCalledTimes(1)
@@ -203,7 +211,9 @@ describe('OpenOracle application navigation', () => {
 		setEntityFavorite(scope, '7', true)
 		await renderApp('#/open-oracle')
 		const historyLength = window.history.length
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Open report: REP / WETH · report #7' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open report: REP / WETH · report #7' }))
+		})
 		await waitFor(() => expect(loadReport).toHaveBeenCalledTimes(1))
 		expect(window.history.length).toBe(historyLength + 1)
 		expect(window.location.hash).toContain('openOracleReportId=7')
@@ -224,7 +234,9 @@ describe('OpenOracle application navigation', () => {
 		const query = within(document.body)
 		await waitFor(() => expect(query.getByRole('button', { name: 'Refresh report' })).toBeTruthy())
 		const historyLength = window.history.length
-		await act(() => fireEvent.click(query.getByRole('button', { name: 'Refresh report' })))
+		await act(() => {
+			fireEvent.click(query.getByRole('button', { name: 'Refresh report' }))
+		})
 		await waitFor(() => expect(loadReport).toHaveBeenCalledTimes(2))
 		expect(window.history.length).toBe(historyLength)
 		expect(window.location.hash).toBe(hash)
@@ -236,9 +248,13 @@ describe('OpenOracle application navigation', () => {
 		await renderApp('#/open-oracle?openOracleView=browse&openOracleReportId=7')
 		await waitFor(() => expect(loadReport).toHaveBeenCalledTimes(1))
 		const query = within(document.body)
-		await act(() => fireEvent.input(query.getByLabelText('Search reports'), { target: { value: '7' } }))
+		await act(() => {
+			fireEvent.input(query.getByLabelText('Search reports'), { target: { value: '7' } })
+		})
 		const historyLength = window.history.length
-		await act(() => fireEvent.click(query.getByRole('button', { name: 'Open report #7' })))
+		await act(() => {
+			fireEvent.click(query.getByRole('button', { name: 'Open report #7' }))
+		})
 		expect(query.getByRole('link', { name: 'View report' }).getAttribute('aria-current')).toBe('page')
 		expect(window.history.length).toBe(historyLength + 1)
 	})
@@ -246,11 +262,15 @@ describe('OpenOracle application navigation', () => {
 	test('clears the selected report when switching views and restores a report on history navigation', async () => {
 		await renderApp('#/open-oracle?openOracleReportId=7')
 		await waitFor(() => expect(loadReport).toHaveBeenCalledTimes(1))
-		await act(() => fireEvent.click(within(document.body).getByRole('link', { name: 'Create report' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('link', { name: 'Create report' }))
+		})
 		expect(window.location.hash).not.toContain('openOracleReportId')
 		// Reproduce the browser's notification when Back/Forward restores a selected report entry.
 		window.history.replaceState(undefined, '', '#/open-oracle?openOracleReportId=9')
-		await act(() => window.dispatchEvent(new Event('popstate')))
+		await act(() => {
+			window.dispatchEvent(new Event('popstate'))
+		})
 		await waitFor(() => expect(loadReport.mock.calls.at(-1)?.[2]).toBe(9n))
 		expect(within(document.body).getByRole('link', { name: 'View report' }).getAttribute('aria-current')).toBe('page')
 	})

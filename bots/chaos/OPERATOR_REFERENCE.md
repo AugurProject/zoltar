@@ -101,7 +101,7 @@ Before discovery, Chaos checks for code at the expected addresses using the RPC 
 At every canonical scan anchor, the bot authenticates the configured graph before assets can become eligible:
 
 - Zoltar must name the configured QuestionData, SecurityPoolForker must name Zoltar, TradingFactory must name SecurityPoolFactory, and TradingRouter must name TradingFactory.
-- Every security pool must come from the configured factory registry. Its factory, forker, Zoltar, QuestionData, coordinator, share token, collateral repair auction, universe, and question must agree with the registry and configured graph. Its coordinator must point back to it.
+- Every security pool must come from the configured factory registry. Its factory, forker, Zoltar, QuestionData, coordinator, share token, universe, and question must agree with the registry and configured graph. Its coordinator must point back to it.
 - Each pool must use its universe's canonical REP. The pool and coordinator must use the configured OpenOracle; the coordinator must use the configured WETH and canonical REP.
 - Every trading pair must name the configured factory, source pool, share token, universe, and question.
 
@@ -161,7 +161,7 @@ Every canonical mutating or special entry is classified as selectable random wor
 | Ecosystem | Supported permissionless families |
 | --- | --- |
 | Zoltar | Create binary, categorical, and scalar questions; approve REP; deploy child universes; fork universes; prepare, split, and continue REP migration; optional direct REP burn |
-| Statoblast | Deploy pools; deposit, withdraw, and redeem vault REP; update or redeem fees; create and redeem complete sets; redeem winning shares; vault-backed and direct wallet-funded escalation deposits and withdrawals; pool forks and vault migrations; collateral-repair-auction bid, refund, finalize, and settle; permissionless lifecycle maintenance |
+| Statoblast | Deploy pools; deposit, withdraw, and redeem vault REP; update or redeem fees; create and redeem complete sets; redeem winning shares; wallet-funded escalation deposits and withdrawals; pool forks and vault migrations; collateral-repair-auction bid, refund, finalize, and settle; permissionless lifecycle maintenance |
 | OpenOracle | Wrap and unwrap WETH; report, randomly selected dispute, and lifecycle settlement; canonical WETH/REP ERC-20 deposit; WETH/REP withdrawal, self-recipient `withdrawTo`, both push-or-credit overloads, wallet-to-self internal allowance management, and dust initialization |
 | Trading | Create and initialize pairs; create, initialize, and seed canonical child-universe REP/WETH Uniswap V3 pools; enter and exit YES or NO; add and remove liquidity; exact-input and exact-output swaps with 1% quote protection; approvals; synchronization; complete-set redemption; fork share migration |
 
@@ -177,7 +177,7 @@ The configured scheduler bounds must be inclusive values within 60–3,600 secon
 
 ### Discovery and cache safety envelopes
 
-The four `discovery` fields ship at `100` and accept safe integers from `1` through `10,000`. Each configured maximum bounds one cycle of work and the corresponding complete topology retained for execution. Counted question, pool-deployment, and per-pool vault registries additionally persist their authenticated cursor, commitment, exact canonical total, and progress across restarts. Universe traversal is a bounded scan rather than a counted durable cursor. Partial or oversized results are never executable topology.
+The three `discovery` fields ship at `100` and accept safe integers from `1` through `10,000`. Each configured maximum bounds one cycle of work and the corresponding complete topology retained for execution. Counted question and pool-deployment registries additionally persist their authenticated cursor, commitment, exact canonical total, and progress across restarts. Universe traversal is a bounded scan rather than a counted durable cursor. Partial or oversized results are never executable topology.
 
 At every complete anchor, Uniswap discovery derives exactly one configured 1% fee-tier REP/WETH identity for each retained canonical universe. It queries the authenticated factory mapping and verifies any returned pool's factory, token pair, and immutable fee before the pool can become executable topology. Missing child-universe pools make `trading.universe-uniswap.create-pool` eligible; existing uninitialized pools make `trading.universe-uniswap.initialize-pool` eligible; initialized pools with zero active liquidity make `trading.universe-uniswap.seed-pool` eligible. These are ordinary selectable operations and therefore remain subject to the ecosystem switch, allowlist, randomized scheduler, inventory reserves, per-workflow principal limits, gas limit, and live-execution controls. The deterministic policy uses the same 1:1 initial square-root price and bounded full-range wallet-owned liquidity as genesis initialization. Existing nonzero-liquidity pools are discovered but are not reseeded.
 
@@ -186,20 +186,22 @@ Planning reserves the complete post-transaction topology for every route that ma
 
 | Envelope | Exact limit | Failure behavior |
 | --- | --- | --- |
-| Configured discovery fields | `maxPools`, `maxQuestions`, `maxUniverses`, and `maxVaultsPerPool` are each `1`–`10,000` | The configuration is rejected outside the range. Reaching a configured work or resident bound keeps discovery incomplete and execution paused. |
-| Configured aggregate products | Each of `maxPools × maxUniverses` and `maxPools × maxVaultsPerPool` must be at most `10,000` | The configuration is rejected before it can be activated. |
+| Configured discovery fields | `maxPools`, `maxQuestions`, and `maxUniverses` are each `1`–`10,000` | The configuration is rejected outside the range. Reaching a configured work or resident bound keeps discovery incomplete and execution paused. |
+| Configured aggregate products | `maxPools × maxUniverses` must be at most `10,000` | The configuration is rejected before it can be activated. |
 | Actual share-inventory fan-out | At most `10,000` approval and fork-migration relations | Discovery warns before issuing the fan-out RPCs; indexing, lifecycle completion, and execution remain paused. |
 | Outcome labels for one question | At most `4,096` labels and `4 MiB` total label UTF-8 bytes | Question discovery fails closed. |
 | All resident question snapshots and outcome labels | At most `10,000` items and `32 MiB` of serialized snapshots | The question registry switches to overflow mode, retains no partial executable registry, and reports the exact total and progress. |
 | Discovery RPC work | Per configured reader: `12` active requests and at most `48` queued requests. For `N = 1 + quorumRpcUrls.length`, the aggregate ceilings are `12 × N` active and `48 × N` queued; at the nine-reader maximum these are `108` and `432`. | Additional queued work fails the scan; bounded mappers stop assigning new work and drain the workers they already started. |
 | Immutable topology cache | At most `100,000` resident items and `64 MiB` of committed chunk data; each chunk has at most `256` records and `32 MiB`; its manifest is at most `64 KiB` | Loading and writing validate these limits incrementally and reject the cache before retaining excess data. |
 | One immutable topology record | At most `33,553,408` bytes (`32 MiB - 1 KiB`); a cached question still has the independent `4 MiB` outcome-label limit | The record is rejected before it can enter the resident cache. |
-| Protocol event index | At most `100,000` records, `512` chunks, and `64 MiB` of chunk payload across all six collections. Each chunk contains at most `256` records and `1 MiB`; the authenticated manifest is at most `64 KiB`. | A scan that would cross the envelope is rejected before replacing the last persistable in-memory index. Unchanged content-addressed chunks are hard-linked into the new generation, while every loaded byte, count, digest, owner, mode, and path remains validated. |
+| Protocol event index | At most `100,000` records, `512` chunks, and `64 MiB` of chunk payload across all five collections. Each chunk contains at most `256` records and `1 MiB`; the authenticated manifest is at most `64 KiB`. | A scan that would cross the envelope is rejected before replacing the last persistable in-memory index. Unchanged content-addressed chunks are hard-linked into the new generation, while every loaded byte, count, digest, owner, mode, and path remains validated. |
 | Carry storage reconstruction | At most `10,000` work items across storage reads and reconstructed evidence; stored leaves and consumed indexes are paged in batches of `30`. | Reads share one canonical anchor. Invalid ancestry, exhausted limits, or evidence that does not reproduce the on-chain snapshot and nullifier roots rejects the scan. |
 | Carry proof page | At most `32` inherited-deposit proofs are generated and simulated per scan. | The page rotates with the canonical anchor. The complete lightweight set of known unconsumed wallet identities remains available for lifecycle tracking, including off-page claims. |
 | Unplanned lifecycle-presence guard | At most `1,000,000` raw identities are deduplicated and at most `256` active obligations are materialized. Raw presence retains identity and tombstones; a separate complete canonical phase set marks only identities that are currently due. Every bounded deposit or bid call contributes all deterministic batches. Unrepresented due identities are reduced to one fixed-size count, commitment, reason, provenance flag, and bounded first-item summary in the main state. | Exceeding the raw identity limit, exhausting the active-obligation budget, or finding an actionable plan outside either set fails novel work closed without growing the main journal without bound. Latent identities do not stop unrelated work. An incomplete scan may latch but never clear the guard; only complete canonical coverage can recompute, clear, or defer it. A completed identity that returns after confirmed absence is classified as a possible canonical reorganization and requires explicit reconciliation or a later complete absence. Actionable materialized obligations retain priority. |
 
 Raise a configured bound only while paused. A newly sufficient bound may restart an affected counted cursor rather than trust a formerly nonresident prefix, so leave execution disabled until a warning-free canonical scan finishes. Counted registry warnings expose exact totals and progress; universe warnings expose only the retained count at the limit; share fan-out warnings expose a conservative lower bound. If an exact counted total exceeds `10,000`, required configured values violate an aggregate product, or a non-counted scan still exceeds a fixed question, RPC, record, fan-out, cache, or carry-storage envelope, no supported setting can make that deployment executable. Keep the bot paused and in dry-run mode; do not bypass an envelope. For a carry-capacity failure, inspect the storage reconstruction limit reported by the scan. Rebuilding is not a general recovery mechanism; use a reviewed software/storage design change or a fresh deployment when the canonical retained state itself exceeds the supported envelope.
+
+The protocol event index uses schema version `5` and sidecar manifest version `2`. Its five collections track reports, auction bids, refunds, escalation deposits and migration routes; there is no synthetic child-REP-split collection. Older index formats are rejected rather than silently dropping recorded progress. Reconcile incompatible persisted state before restarting live execution; do not discard the operator journal or pending transaction history to bypass the version check.
 
 ### Runtime controls
 
@@ -233,13 +235,12 @@ For dry-run validation, resume with `runtime.execute: false`, observe several ra
 **Principal caps.**
 
 - Each ETH or REP principal cap applies separately to one workflow and is cumulative across all of that workflow's steps; the cap resets for every later workflow.
-- Wallet, WETH, REP, OpenOracle internal-credit, and SecurityPool vault-backed REP debits contribute to the relevant cap.
+- Wallet, WETH, REP and OpenOracle internal-credit debits contribute to the relevant cap.
 - Repeated workflows can consume additional principal down to the reserves, so the dedicated account's holdings, not a per-workflow cap, are the total asset-risk envelope.
 
 **Escalation deposits.**
 
-- Vault-backed escalation deposits are rechecked against fresh canonical vault backing before signing or resubmission.
-- A direct wallet-funded escalation deposit is eligible only for an already registered wallet vault when one full start bond is accepted exactly and reaches the non-decision threshold. If its allowance is insufficient, it approves only that exact amount.
+- A direct wallet-funded escalation deposit is eligible when one full start bond is accepted exactly and reaches the non-decision threshold. If its allowance is insufficient, it approves only that exact amount.
 - Any same-outcome predecessor then fills the threshold and makes the bot's call revert instead of accepting a smaller transfer. After approval, any changed quote, registration, or policy converts the workflow to an exact allowance revocation.
 
 **Gas.**
@@ -249,7 +250,7 @@ For dry-run validation, resume with `runtime.execute: false`, observe several ra
 
 ### Drain and retirement controls
 
-Drain is a persisted deployment-profile state machine: `inactive` → `requested` → `draining`, `waiting`, or `blocked` → `drained` or `drained-with-residuals`. It is not a normal execution policy. Once active, the operator evaluates a separate, explicit fail-closed recovery catalog with stable ordering, stops every new exposure, and converts any disallowed partial workflow with a canonical continuation into cleanup-only mode. Safety pause still prevents signing. Pending transaction recovery and canonical scanning continue while paused, so waiting and blocker state is durably refreshed before an early return. Failed semantic postconditions remain blocking unresolved workflows until the paused workflow-reconciliation control records an explicit operator disposition. Both terminal states require block-bound completion evidence with every proof count at zero; `drained` requires no residuals, while `drained-with-residuals` requires at least one classified residual.
+Drain is a persisted deployment-profile state machine: `inactive` → `requested` → `draining`, `waiting`, or `blocked` → `drained` or `drained-with-residuals`. It is not a normal execution policy. Once active, the operator evaluates a separate, explicit fail-closed recovery catalog with stable ordering, stops every new exposure, and converts any disallowed partial workflow with a canonical continuation into cleanup-only mode. Safety pause still prevents signing. Pending transaction recovery and canonical scanning continue while paused, so waiting and blocker state is durably refreshed before an early return. Failed semantic postconditions remain blocking unresolved workflows until the paused workflow-reconciliation control records an explicit operator disposition. If known claims have been recovered but discovery history is incomplete, status is `known-claims-recovered`; this is not proof of a complete drain. Both terminal states require block-bound completion evidence with every proof count at zero; `drained` requires no residuals, while `drained-with-residuals` requires at least one classified residual.
 
 Each cycle executes at most one workflow and rescans from a canonical anchor. Completion requires zero pending transactions, partial workflows, actionable obligations, claimable assets, known approvals, owned V3 liquidity, and collectable V3 amounts; an empty generated plan is insufficient. Incomplete topology, lifecycle, carry-proof, share, position, or receipt discovery prevents retirement execution as well as completion. Time-locked obligations and unresolved shares remain `waiting`. Disabled asset consolidation or WETH unwrapping, losing shares, zero-payout dust, and protocol sentinels are recorded as typed residuals. Signer-held ETH is expected inventory; signer-held REP is expected inventory when `sweepAssets` is enabled and an operator-accepted residual when it is disabled. `recoveredBalances` accumulates positive balance deltas between canonical scans and survives restart together with the last observation baseline.
 
@@ -295,9 +296,8 @@ The operator file is `version: 2`. Every key is required unless the Default colu
 | `maxPools` | number | 1–10,000 | `100` | Pools scanned and retained. |
 | `maxQuestions` | number | 1–10,000 | `100` | Questions scanned and retained. |
 | `maxUniverses` | number | 1–10,000 | `100` | Universes scanned and retained. |
-| `maxVaultsPerPool` | number | 1–10,000 | `100` | Vaults per pool. |
 
-`maxPools` multiplied by each of `maxUniverses` and `maxVaultsPerPool` must not exceed 10,000. See [discovery and cache safety envelopes](#discovery-and-cache-safety-envelopes).
+`maxPools` multiplied by `maxUniverses` must not exceed 10,000. See [discovery and cache safety envelopes](#discovery-and-cache-safety-envelopes).
 
 ### `runtime`
 
@@ -357,7 +357,7 @@ Mutation outcomes have three distinct recovery paths:
 - Chaos reads but ignores `ZOLTAR_BOT_DASHBOARD_PASSWORD` and `ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY`, which enable HTTP Basic authentication only in the liquidator and OpenOracle arbitrager dashboards; setting them cannot protect a chaos listener.
 - A `runtime.uiHost` of `0.0.0.0` stops startup unless `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED=true` asserts that the container port is published only on host loopback, as the shipped Compose service does.
 
-The dashboard reads through `GET /api/state`, `/api/configuration`, and `/api/configuration-document`. Every other `/api/*` route is a mutation that the dashboard forms call: `/api/settings`, `/api/connectivity`, `/api/signer`, `/api/execution`, `/api/paused`, `/api/schedule`, `/api/selection`, `/api/operation`, `/api/retirement`, and the `/api/reconciliation/*` recovery controls. They are not a stable external interface.
+The dashboard reads through `GET /api/state`, `/api/configuration`, `/api/configuration-document`, and `/api/deployment-archives`. Every other `/api/*` route is a mutation that the dashboard forms call: `/api/settings`, `/api/connectivity`, `/api/signer`, `/api/execution`, `/api/paused`, `/api/schedule`, `/api/selection`, `/api/operation`, `/api/retirement`, `/api/deployment-archive`, and the `/api/reconciliation/*` recovery controls. They are not a stable external interface.
 
 ### Launch preflight
 
@@ -443,7 +443,7 @@ Treat the main runtime state and its companion stores as one backup unit:
 
 **Integrity.** The main runtime state is atomically written, structurally validated, owner-only, and symlink-rejecting; it does not have a whole-file checksum. The companion protocol index and topology cache add checksummed content tied to the deployment identity. Cursor-hash or identity mismatches fail closed or rebuild only the derived cache. Live balances and lifecycle state are always refreshed from the canonical anchor.
 
-**Scope.** A state path is scoped to its chain ID, all eight deployment roots, the Uniswap V3 factory, and first signer. The factory is written into new state.
+**Scope.** A state path is scoped to its chain ID, all nine deployment roots, the Uniswap V3 factory, and first signer. The factory is written into new state.
 
 - A changed chain or signer requires a separate state path.
 - An operated deployment profile also requires a separate state path unless completed retirement authorizes replacement on the same path.
@@ -475,10 +475,10 @@ Treat the main runtime state and its companion stores as one backup unit:
 
 ## Upgrading
 
-Before starting an older configuration, replace `strategy.selectableOperationAllowlist: null` with an explicit array of the operation IDs you want to enable, or `[]` to start with no random operations. See [selection rules](#scheduler-and-execution-controls). The following earlier formats remain supported:
+Before starting an older configuration, replace `strategy.selectableOperationAllowlist: null` with an explicit array of the operation IDs you want to enable, or `[]` to start with no random operations. See [selection rules](#scheduler-and-execution-controls). The following compatibility and deployment boundaries apply:
 
 - **Operator file `version: 1`.** Its `runtime.lifecyclePollMilliseconds` becomes `runtime.pollMilliseconds`, and the next save writes version 2.
 - **Saved `deployment` fields.** They are obsolete: they are ignored and removed when settings are saved.
-- **Sepolia state from the earlier core deployment manifest.** It is recognized from its durable profile ID and pinned on direct restart when the configuration has no `deploymentPin`.
-- **State without a recorded Uniswap V3 factory.** It can bind only when its profile has an explicit historical deployment mapping. The current manifest alone cannot prove the factory used by an older operated journal, so other missing-factory states fail closed.
+- **State from an earlier deployment.** Startup does not infer a historical pin. Restore the exact old deployment pin to operate its journal, then drain it before switching deployments, or configure a distinct state file for the new deployment.
+- **State without a recorded Uniswap V3 factory.** Operated journals fail closed because the current manifest cannot prove their historical factory. Restore the original deployment and factory binding before recovery. Pristine or unoperated signerless state may bind through the guarded upgrade path.
 - **The shipped zero-root configuration.** An upgrade from it permits migration when no execution or recovery state exists and the audit contains only configuration, wallet, or failed scan entries. That migration preserves the signer and audit entries, retains unrelated safety stops, and clears only the previous missing-root safety latch.

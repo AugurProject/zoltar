@@ -3,8 +3,10 @@
 # ---------------------------------------------
 
 ARG BUN_VERSION=1.4.4
+# Multi-arch index digest of oven/bun:${BUN_VERSION}-alpine; update it together with BUN_VERSION.
+ARG BUN_IMAGE_DIGEST=sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 
-FROM oven/bun:${BUN_VERSION}-alpine AS common-builder
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS common-builder
 
 WORKDIR /source
 
@@ -78,7 +80,7 @@ COPY ./ui/zoltar/ts/ /source/ui/zoltar/ts/
 RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts zoltar
 
 # Local runtime images contain only the selected application artifact.
-FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-zoltar
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS local-runtime-zoltar
 
 WORKDIR /app
 COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
@@ -88,7 +90,7 @@ USER bun
 EXPOSE 8012
 ENV UI_APP=zoltar
 ENV PORT=8012
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8012/'); process.exit(response.ok ? 0 : 1)" ]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:' + (process.env.PORT || '8012') + '/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # Extend the common Zoltar libraries only for downstream applications.
@@ -113,7 +115,7 @@ COPY ./ui/statoblast/favicon.svg /source/ui/statoblast/favicon.svg
 COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
 RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts statoblast
 
-FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-statoblast
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS local-runtime-statoblast
 
 WORKDIR /app
 COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
@@ -123,7 +125,7 @@ USER bun
 EXPOSE 8011
 ENV UI_APP=statoblast
 ENV PORT=8011
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8011/'); process.exit(response.ok ? 0 : 1)" ]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:' + (process.env.PORT || '8011') + '/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 FROM statoblast-dependencies AS openoracle-builder
@@ -135,7 +137,7 @@ COPY ./ui/openoracle/favicon.svg /source/ui/openoracle/favicon.svg
 COPY ./ui/openoracle/ts/ /source/ui/openoracle/ts/
 RUN cd /source/ui/openoracle && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts openoracle
 
-FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-openoracle
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS local-runtime-openoracle
 
 WORKDIR /app
 COPY --from=openoracle-builder --chown=bun:bun /source/ui/openoracle/dist/ /app/ui/openoracle/
@@ -145,7 +147,7 @@ USER bun
 EXPOSE 4143
 ENV UI_APP=openoracle
 ENV PORT=4143
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:4143/'); process.exit(response.ok ? 0 : 1)" ]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:' + (process.env.PORT || '4143') + '/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # Build Trading as an application leaf.
@@ -163,7 +165,7 @@ COPY ./ui/trading/build/ /source/ui/trading/build/
 RUN bun ./tooling/ui/vendor.mts trading
 RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts trading
 
-FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-trading
+FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS local-runtime-trading
 
 WORKDIR /app
 COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/
@@ -173,7 +175,7 @@ USER bun
 EXPOSE 8080
 ENV UI_APP=trading
 ENV PORT=8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:' + (process.env.PORT || '8080') + '/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # The publisher intentionally includes every independently built application.

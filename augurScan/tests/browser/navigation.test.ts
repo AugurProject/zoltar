@@ -102,7 +102,7 @@ browserTest(
 			expect(await evaluate(`document.querySelector('#state-detail')?.textContent`)).toContain('Entity not found in this network.')
 			await session.send('Page.navigate', { url: `${origin}/universe/4102938471029384710293847?demo=1` })
 			await waitFor(`new URL(location.href).searchParams.get('chainId') === '1' && document.querySelector('#state-detail')?.getAttribute('aria-busy') === 'false'`)
-			expect(await evaluate(`document.querySelector('#state-detail')?.textContent`)).toContain('4102938471029384710293847')
+			expect(await evaluate(`document.querySelector('#state-detail')?.textContent`)).toContain(`0x${4102938471029384710293847n.toString(16)}`)
 			expect(await evaluate(`document.querySelector('#state-detail .state-detail-title')?.textContent`)).not.toBe('Genesis universe')
 		})
 	},

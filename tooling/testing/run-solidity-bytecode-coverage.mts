@@ -157,15 +157,39 @@ export async function createSolidityBytecodeTestShards(repositoryRoot = process.
 	return createBalancedTestShards(weightedFiles, shardCount).map(shard => shard.files)
 }
 
+/**
+ * Returns the 1-based shard requested with `--shard N` or `--shard=N`, or undefined to run every shard.
+ * An incomplete or malformed selector is rejected rather than silently widening or narrowing coverage.
+ */
+export function parseCoverageShardNumber(args: readonly string[], shardCount: number) {
+	let shardValue: string | undefined
+	for (const [index, arg] of args.entries()) {
+		let value: string | undefined
+		if (arg === '--shard') {
+			value = args[index + 1]
+			if (value === undefined || value.startsWith('-')) throw new Error('--shard requires a shard number')
+		} else if (arg.startsWith('--shard=')) {
+			value = arg.slice('--shard='.length)
+		} else {
+			continue
+		}
+		if (shardValue !== undefined) throw new Error('--shard may be given only once')
+		shardValue = value
+	}
+	if (shardValue === undefined) return undefined
+	if (!/^[1-9][0-9]*$/.test(shardValue)) throw new Error(`Invalid Solidity bytecode coverage shard: ${shardValue}`)
+	const shardNumber = Number(shardValue)
+	if (shardNumber > shardCount) throw new Error(`Unknown Solidity bytecode coverage shard: ${shardValue} (expected 1-${shardCount.toString()})`)
+	return shardNumber
+}
+
 if (import.meta.main) {
 	const testShards = await createSolidityBytecodeTestShards()
-	const shardArgumentIndex = process.argv.findIndex(argument => argument === '--shard')
-	const shardNumberArgument = shardArgumentIndex === -1 ? undefined : process.argv[shardArgumentIndex + 1]
-	const shardNumber = shardNumberArgument === undefined ? undefined : Number.parseInt(shardNumberArgument, 10)
+	const shardNumber = parseCoverageShardNumber(process.argv.slice(2), testShards.length)
 	let selectedShards = testShards
 	if (shardNumber !== undefined) {
 		const selectedShard = testShards[shardNumber - 1]
-		if (selectedShard === undefined) throw new Error(`Unknown Solidity bytecode coverage shard: ${shardNumberArgument}`)
+		if (selectedShard === undefined) throw new Error(`Unknown Solidity bytecode coverage shard: ${shardNumber.toString()}`)
 		selectedShards = [selectedShard]
 	}
 

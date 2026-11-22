@@ -229,6 +229,9 @@ export const createDemoCatalogFixtures = (context: DemoContext) => {
 		},
 	]
 
+	for (const pool of demoPools) pool.child_count = String(demoPools.filter(child => child.chain_id === pool.chain_id && child.parent_address === pool.pool_address).length)
+	for (const universe of demoUniverses) universe.child_count = String(demoUniverses.filter(child => child.chain_id === universe.chain_id && child.universe_id !== universe.universe_id && child.parent_universe_id === universe.universe_id).length)
+
 	const demoCatalog = {
 		catalogVersion: '0'.repeat(32),
 		questions: demoQuestions,

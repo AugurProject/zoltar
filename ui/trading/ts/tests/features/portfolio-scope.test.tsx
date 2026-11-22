@@ -127,7 +127,7 @@ describe('live portfolio scope', () => {
 		expect(redemption).toBeDefined()
 		expect(redemption?.closest('details')).toBeNull()
 		expect(rendered.container.querySelector('details')?.open).toBe(false)
-		expect(rendered.container.textContent).toContain('Maximum insured Yes exit0 ETH')
+		expect(rendered.container.textContent).not.toContain('Maximum insured Yes exit')
 		expect(rendered.container.textContent).not.toContain('Transferring LP tokens')
 		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
@@ -165,7 +165,7 @@ describe('live portfolio scope', () => {
 		expect(unavailable.container.textContent).not.toContain('0.9842 ETH')
 		await unavailable.cleanup()
 		const zero = await renderIntoDocument(<OutcomeHolding amount={0n} outcome='YES' market={valuedMarket} />)
-		expect(zero.container.textContent).toBe('0 Yes 0 ETH')
+		expect(zero.container.textContent).toBe('0 Yes 0.00 ETH')
 		await zero.cleanup()
 	})
 
@@ -176,9 +176,9 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<TradeEstimatePanel estimate={estimate} market={valued} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain('1.987158 Yes')
-		expect(rendered.container.textContent).toContain('1.9558 ETH if the question resolves Yes')
+		expect(rendered.container.textContent).toContain('1.96 ETH if the question resolves Yes')
 		// The payout is stated once, on the line under the quantity it belongs to.
-		expect(rendered.container.querySelector('.transaction-review-primary .trade-estimate-value-detail')?.textContent).toBe('1.9558 ETH if the question resolves Yes · 0 ETH if No')
+		expect(rendered.container.querySelector('.transaction-review-primary .trade-estimate-value-detail')?.textContent).toBe('≈ 1.96 ETH if the question resolves Yes · 0.00 ETH if No')
 		expect(rendered.container.textContent).not.toContain('sale')
 	})
 
@@ -191,10 +191,10 @@ describe('live portfolio scope', () => {
 	})
 
 	for (const [holdings, expected] of [
-		[{ yes: 5n, no: 5n, invalid: 15n, lp: 0n }, '10% · 0.25 ETH–0.75 ETH depending on outcome'],
-		[{ yes: 2n, no: 2n, invalid: 2n, lp: 0n }, '10% · 0.1 ETH'],
-		[{ yes: 0n, no: 0n, invalid: 0n, lp: 0n }, '10% · 0 ETH'],
-		[{ yes: 0n, no: 0n, invalid: 2n, lp: 1n }, '10% · 0.1 ETH–0.15 ETH depending on outcome'],
+		[{ yes: 5n, no: 5n, invalid: 15n, lp: 0n }, '10% · 0.250000 ETH–0.750000 ETH depending on outcome'],
+		[{ yes: 2n, no: 2n, invalid: 2n, lp: 0n }, '10% · 0.100000 ETH'],
+		[{ yes: 0n, no: 0n, invalid: 0n, lp: 0n }, '10% · 0.000000 ETH'],
+		[{ yes: 0n, no: 0n, invalid: 2n, lp: 1n }, '10% · 0.100000 ETH–0.150000 ETH depending on outcome'],
 	] as const) {
 		test(`shows the fee on wallet outcome holdings and LP claims: ${expected}`, async () => {
 			const valued = { ...market, shareTokenSupplyAttoShares: 2n * 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, yesReserve: 4n * 10n ** 18n, noReserve: 6n * 10n ** 18n, lpTotalSupply: 2n * 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n } }
@@ -206,10 +206,10 @@ describe('live portfolio scope', () => {
 	}
 
 	for (const [questionOutcome, projected, amount, expected] of [
-		[1, 9n * 10n ** 17n, 2n * 10n ** 18n, '10% · 0.2 ETH'],
-		[2, 9n * 10n ** 17n, 2n * 10n ** 18n, '10% · 0 ETH'],
-		[3, 10n ** 18n, 2n * 10n ** 18n, '0% · 0 ETH'],
-		[1, 9n * 10n ** 17n, 10n, '10% · <0.000001 ETH'],
+		[1, 9n * 10n ** 17n, 2n * 10n ** 18n, '10% · 0.200000 ETH'],
+		[2, 9n * 10n ** 17n, 2n * 10n ** 18n, '10% · 0.000000 ETH'],
+		[3, 10n ** 18n, 2n * 10n ** 18n, '0% · 0.000000 ETH'],
+		[1, 9n * 10n ** 17n, 10n, '10% · 0.000000000000000001 ETH'],
 	] as const) {
 		test(`handles resolved, ended, and tiny holding fees: ${expected}`, async () => {
 			const valued = { ...market, questionOutcome, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: projected } }
@@ -225,7 +225,7 @@ describe('live portfolio scope', () => {
 		const balances = { scope: shareBalanceScope(valued), yes: 10n ** 18n, no: 10n ** 18n, invalid: 10n ** 18n, lp: 0n }
 		const rendered = await renderIntoDocument(<MarketPosition market={valued} holdings={{ balances, balanceState: 'ready', balanceError: undefined, retry: async () => undefined }} wallet={{ networkMismatchReason: undefined }} disabled={false} ownsBalanceError={false} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.textContent).toContain('Holding fee on your holdings over next 30 days10% · 0.1 ETH')
+		expect(rendered.container.textContent).toContain('Holding fee on your holdings over next 30 days10% · 0.100000 ETH')
 	})
 
 	test('does not show fees for holdings from another market', async () => {
@@ -238,7 +238,9 @@ describe('live portfolio scope', () => {
 
 	for (const unavailable of [{ loadError: 'RPC unavailable' }, { valuation: undefined }, { shareTokenSupplyAttoShares: 0n }, { settlementCollateralAttoEth: 0n }]) {
 		test(`does not invent a holding fee when ${Object.keys(unavailable)[0]} is unavailable`, async () => {
-			const rendered = await renderIntoDocument(<BackingDetails market={{ ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n }, ...unavailable }} />)
+			const base = { ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n }
+			const selected: LiveMarket = 'valuation' in unavailable ? base : { ...base, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n }, ...unavailable }
+			const rendered = await renderIntoDocument(<BackingDetails market={selected} />)
 			cleanupRendered = rendered.cleanup
 			expect(rendered.container.textContent).toBe('')
 		})
@@ -284,7 +286,7 @@ describe('live portfolio scope', () => {
 	test('does not present placeholder operational facts when live pool reads fail', async () => {
 		let retries = 0
 		const failedMarket: LiveMarket = { ...market, loadError: 'pool RPC failed' }
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} retry={() => retries++} workflowLocked={false} />)
+		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} retry={() => retries++} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool details could not be loaded: pool RPC failed')
 		expect(rendered.container.textContent).toContain(pool)
@@ -302,13 +304,13 @@ describe('live portfolio scope', () => {
 
 	test('uses one truthful recovery state across failed pool retry combinations', async () => {
 		const failedMarket: LiveMarket = { ...market, loadError: 'pool RPC failed' }
-		const refreshing = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} refreshing retry={() => undefined} workflowLocked={false} />)
+		const refreshing = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} refreshing retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
 		expect(refreshing.container.querySelector('[role="status"]')?.textContent).toContain('Retrying security pool details')
 		expect(refreshing.container.textContent).not.toContain('last successful result')
 		expect(refreshing.container.querySelectorAll('button:not([aria-label^="Copy"]):not(.favorite-toggle)')).toHaveLength(0)
 		await refreshing.cleanup()
 
-		const failedRetry = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} refreshError='factory RPC failed' retry={() => undefined} workflowLocked={false} />)
+		const failedRetry = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} refreshError='factory RPC failed' retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = failedRetry.cleanup
 		expect(failedRetry.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool details could not be loaded: pool RPC failed. Latest retry failed: factory RPC failed')
 		expect(failedRetry.container.textContent).not.toContain('last successful result')
@@ -317,7 +319,7 @@ describe('live portfolio scope', () => {
 
 	test('identifies stale pool details and offers recovery after refresh fails', async () => {
 		let retries = 0
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshError='factory RPC failed' retry={() => retries++} workflowLocked={false} />)
+		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshError='factory RPC failed' retry={() => retries++} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool refresh failed; showing the last successful result: factory RPC failed')
 		expect(rendered.container.textContent).toContain('Security pool stateOperational')
@@ -328,7 +330,7 @@ describe('live portfolio scope', () => {
 	})
 
 	test('keeps stale pool details identified while a refresh is pending', async () => {
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshing retry={() => undefined} workflowLocked={false} />)
+		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshing retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing security pool; showing the last successful result.')
 		expect(rendered.container.querySelector('[aria-busy="true"]')).not.toBeNull()

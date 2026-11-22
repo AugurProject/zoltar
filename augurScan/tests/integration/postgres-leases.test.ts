@@ -171,6 +171,51 @@ postgresTest('terminates the expected lock holder when release runs on a differe
 	}
 })
 
+postgresTest('degrades health for an enabled network that never started and ignores a disabled one', async () => {
+	const postgresUrl = requirePostgresUrl()
+	const database = new ScannerDatabase(postgresUrl)
+	const enabledChainId = chainId + 80 + process.pid
+	const disabledChainId = chainId + 90 + process.pid
+	const network = (id: number) =>
+		({
+			id: `enabled-health-${id}`,
+			name: 'Enabled health',
+			chainId: id,
+			rpcUrls: ['http://127.0.0.1:8545'],
+			startBlock: 0n,
+			explorerBaseUrl: 'https://example.invalid',
+			nativeSymbol: 'ETH',
+			confirmationDepth: 0n,
+			contracts: [],
+		}) satisfies NetworkConfig
+	const health = async (enabled: readonly NetworkConfig[]) => await database.read(async sql => await readIndexerHealth(sql, async () => [], enabled, 60_000), 3_000)
+	try {
+		await initializeSchema(database.sql)
+		// The configured indexer has not recorded its network yet.
+		const unstarted = await health([network(enabledChainId)])
+		expect(unstarted.status).toBe('degraded')
+		expect(unstarted.networks).toHaveLength(0)
+		expect(unstarted.missingNetworks).toEqual([{ id: network(enabledChainId).id, chainId: enabledChainId }])
+
+		await database.seedNetwork(network(enabledChainId))
+		await database.seedNetwork(network(disabledChainId))
+		await database.sql`UPDATE networks SET last_success_at = now() WHERE chain_id = ${enabledChainId}`
+		await database.sql`UPDATE networks SET last_success_at = now() - interval '1 day' WHERE chain_id = ${disabledChainId}`
+		await database.recordIndexerOwnership(enabledChainId, network(enabledChainId).id, 'released', undefined, undefined)
+		// Retained rows of the disabled network neither appear nor keep health degraded.
+		const current = await health([network(enabledChainId)])
+		expect(current.status).toBe('healthy')
+		expect(current.networks.map(row => Number(row['chain_id']))).toEqual([enabledChainId])
+		expect(current.staleChainIds).toEqual([])
+		expect(current.missingNetworks).toEqual([])
+		expect((await health([network(enabledChainId), network(disabledChainId)])).staleChainIds).toEqual([disabledChainId])
+	} finally {
+		await database.sql`DELETE FROM indexer_ownership WHERE chain_id IN (${enabledChainId}, ${disabledChainId})`
+		await database.sql`DELETE FROM networks WHERE chain_id IN (${enabledChainId}, ${disabledChainId})`
+		await database.close()
+	}
+})
+
 postgresTest('reconciles cross-process ownership heartbeats with the advisory-lock backend', async () => {
 	const postgresUrl = requirePostgresUrl()
 	const database = new ScannerDatabase(postgresUrl)
@@ -193,17 +238,17 @@ postgresTest('reconciles cross-process ownership heartbeats with the advisory-lo
 		lease = await database.tryAcquireIndexerLock(ownershipChainId)
 		if (lease === undefined) throw new Error('ownership writer did not acquire its lock')
 		await database.recordIndexerOwnership(ownershipChainId, network.id, 'owned', lease.backendPid, undefined)
-		const owned = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), 60_000), 3_000)
+		const owned = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), [network], 60_000), 3_000)
 		expect(owned.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('owned')
 
 		await database.sql`UPDATE indexer_ownership SET heartbeat_at = now() - interval '2 minutes' WHERE chain_id = ${ownershipChainId}`
-		const stale = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), 60_000), 3_000)
+		const stale = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), [network], 60_000), 3_000)
 		expect(stale.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('stale-owner')
 
 		await lease.release()
 		lease = undefined
 		await database.recordIndexerOwnership(ownershipChainId, network.id, 'released', undefined, undefined)
-		const standby = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), 60_000), 3_000)
+		const standby = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), [network], 60_000), 3_000)
 		expect(standby.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('standby')
 	} finally {
 		await lease?.release().catch(() => undefined)
@@ -254,7 +299,7 @@ postgresTest('prevents standby and stale release writers from clobbering a curre
 		expect(rows).toEqual([{ state: 'owned', backend_pid: restartedLease.backendPid }])
 
 		await restarted.recordIndexerOwnership(ownershipChainId, network.id, 'release-failed', restartedLease.backendPid, undefined)
-		const health = await owner.read(async sql => await readIndexerHealth(sql, transaction => owner.auditIntegrity(transaction), 60_000), 3_000)
+		const health = await owner.read(async sql => await readIndexerHealth(sql, transaction => owner.auditIntegrity(transaction), [network], 60_000), 3_000)
 		expect(health.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('release-failed')
 	} finally {
 		await ownerLease?.release().catch(() => undefined)

@@ -8,7 +8,7 @@ import { walkFiles } from '../repo/walk.mts'
 import { isTestSourceFile } from './test-discovery.mts'
 import { isScreenshotSourcePath, screenshotAppIds } from '../docs/ui-screenshots.mts'
 
-// The production workflows boot the Statoblast `portfolio` and `portfolio-auction` simulation scenarios, which every module in this directory seeds or registers.
+// The production workflows boot the Statoblast `securitypoolx2` and `portfolio-auction` simulation scenarios, which every module in this directory seeds or registers.
 const WORKFLOW_SIMULATION_SCENARIO_DIRECTORY = 'ui/statoblastShared/ts/simulation/'
 
 export type TestImpactRecommendation = {
@@ -59,6 +59,7 @@ const SCREENSHOT_RULES: readonly TestImpactRule[] = screenshotAppIds().map(appId
 const DOCUMENTATION_CONSUMER_RULES: readonly TestImpactRule[] = documentationConsumers.flatMap(consumer => [...groupedTestCommands(consumer.tests ?? []), ...(consumer.checks ?? [])].map(command => ({ command, reason: consumer.reason, matches: (filePath: string) => documentationConsumerMatches(consumer, filePath) })))
 
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
+	{ command: 'bun ./tooling/testing/bun-test.mts tooling/testing/testnetwork.test.ts', reason: 'testnetwork launch and configuration', matches: filePath => filePath.startsWith('testnetwork/') },
 	...SCREENSHOT_RULES,
 	{
 		command: 'bun ./tooling/testing/bun-test.mts tooling/contracts/format-solidity-one-line.test.ts',
@@ -292,7 +293,7 @@ function groupedTestCommands(testFiles: readonly string[]) {
 				group = `bots/${botMatch[1]}`
 				commandPath = botMatch[2]
 			} else if (filePath.startsWith('solidity/ts/')) group = 'solidity'
-			else if (filePath.startsWith('ui/')) group = 'ui'
+			else if (filePath.startsWith('ui/') || filePath.startsWith('tooling/ui/')) group = 'ui'
 		}
 		const files = groups.get(group) ?? []
 		files.push(commandPath)

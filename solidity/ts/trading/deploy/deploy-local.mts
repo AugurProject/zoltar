@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../types/contractArtifact'
-import { parseCoreDeploymentManifest, requireAddress, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from './manifest'
+import { parseCoreDeploymentManifest, parseTradingFeeBps, requireAddress, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from './manifest'
 import { parseRpcResponse } from './rpc'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -50,8 +50,7 @@ if (typeof code !== 'string' || code === '0x') throw new Error('Configured Secur
 const accounts = await rpc('eth_accounts', [])
 if (!Array.isArray(accounts) || accounts.length === 0) throw new Error('RPC exposes no unlocked deployment account')
 const deployer = requireAddress(process.env.TRADING_DEPLOYER ?? accounts[0], 'TRADING_DEPLOYER')
-const feeBps = BigInt(process.env.TRADING_FEE_BPS ?? '30')
-if (feeBps < 0n || feeBps >= 10_000n) throw new Error('TRADING_FEE_BPS must be between 0 and 9999')
+const feeBps = parseTradingFeeBps(process.env.TRADING_FEE_BPS)
 const manifestFeeBps = Number.parseInt(feeBps.toString(), 10)
 const artifactDocument: unknown = JSON.parse(await fs.readFile(path.join(projectRoot, 'artifacts/Contracts.json'), 'utf8'))
 const factoryContract = trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory

@@ -1,12 +1,12 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const oracleMarketContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: 'da22986690d7acacbc4520f6620f2e8f6246a794effd69e88f1084843c2440e2',
+		compiledAbiFingerprint: '4bec387c51f0e08af8b07d4b8f35af30f2fce89bab990a4dab47c3eff0fe74e8',
 		name: 'OpenOraclePriceCoordinator',
-		purpose: 'Per-question adapter to the portfolio universe\u2019s shared collateral/REP feed. It exposes reporting and canonical price reads without staging capital operations.',
-		readAbiFingerprint: 'a9ae0df17c5fadf1119fce59c68a4e0ed9b9fd49db9fadc8f35f9268e9a3c30a',
+		purpose: 'Per-question adapter to the portfolio universe\u2019s shared REP-per-collateral feed. It exposes reporting and canonical price reads without staging capital operations.',
+		readAbiFingerprint: '57561ab6a60dd586366a6da6ceb4eeeef28f14eb09d5a1a710d7c6edfc1e9e1f',
 		readSurface:
-			'`priceFeed` and `sharedPriceFeed` identify the shared universe feed. It owns accepted price, freshness and report candidates. `lastSettlementTimestamp` records settlement eligibility, not delayed execution time. `isPriceValid` checks the accepted price and canonical `priceValidUntil`; pending or rejected reports do not extend expiry. `pendingReportId` and `pendingReportSponsor` identify the latest candidate, without blocking independent candidates. Reports use separate escrows. `reportDelegate` implements authenticated shared report creation. `securityPool` is bound once by the coordinator factory. Capital operations may execute directly against an accepted price or as a sponsor-bound batch submitted through the shared feed. Additional validated getters: `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getSettlementCallbackGasLimit`, `reputationToken`, `openOracle`, `collateralToken`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `minLiquidationPriceDistanceBps`.',
+			'`priceFeed` and `sharedPriceFeed` identify the shared universe feed. It owns accepted price, freshness and report candidates. `lastSettlementTimestamp` records settlement eligibility, not delayed execution time. `isPriceValid` checks the accepted price and canonical `priceValidUntil`; pending or rejected reports do not extend expiry. `pendingReportId` and `pendingReportSponsor` identify the latest candidate, without blocking independent candidates. Reports use separate escrows. `reportDelegate` implements authenticated shared report creation. `securityPool` is bound once by the coordinator factory. Capital operations may execute directly against an accepted price or as a sponsor-bound batch submitted through the shared feed. Additional validated getters: `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getSettlementCallbackGasLimit`, `reputationToken`, `openOracle`, `collateralToken`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `minLiquidationPriceDistanceBps`.',
 		securityBoundary:
 			'Report liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). When `lastPrice` is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.',
 		readDeclarations: [
@@ -82,27 +82,11 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 			},
 			{
-				name: 'gasConsumedOpenOracleReportPrice',
-				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
-			},
-			{
-				name: 'gasConsumedSettlement',
-				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
-			},
-			{
-				name: 'gasUnitsForOneDispute',
-				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
-			},
-			{
 				name: 'initialReportPriorityFeeAttoEthPerGas',
 				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 			},
 			{
 				name: 'targetPriceErrorForDispute',
-				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
-			},
-			{
-				name: 'openOracleSecurityMultiplierBps',
 				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 			},
 			{
@@ -123,14 +107,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'multiplier',
-				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
-			},
-			{
-				name: 'timeType',
-				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
-			},
-			{
-				name: 'trackDisputes',
 				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 			},
 			{
@@ -155,7 +131,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)` with report funding',
 				caller: 'Anyone; shared candidates may coexist and renew before the accepted price expires',
-				effect: 'Opens and atomically funds a fresh collateral/REP report without staging a new operation, retains the whole committed bounty as the settler reward, then refunds any ETH above the bounty through a low-level caller callback. Callback rejection rolls back the report and initial position.',
+				effect: 'Opens and atomically funds a fresh REP-per-collateral report without staging a new operation, retains the whole committed bounty as the settler reward, then refunds any ETH above the bounty through a low-level caller callback. Callback rejection rolls back the report and initial position.',
 				declarations: [
 					{
 						name: 'requestPrice',
@@ -196,7 +172,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				call: '`syncExposure()`',
 				caller: 'Anyone; pool accounting checkpoints also invoke it',
-				effect: 'Reads the live portfolio aggregate, max(standing commitments, funded demand), and emits a checkpoint if it changed. Question finality does not independently clear this shared exposure.',
+				effect: 'Reads the live portfolio aggregate, max(standing commitments, branch-auction commitment, funded demand), and emits a checkpoint if it changed. Question finality does not independently clear this shared exposure.',
 				declarations: [
 					{
 						name: 'syncExposure',

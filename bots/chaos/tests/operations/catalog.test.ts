@@ -17,7 +17,6 @@ const permissiveOptions = {
 		maxPools: 100,
 		maxQuestions: 100,
 		maxUniverses: 100,
-		maxVaultsPerPool: 100,
 		maximumAggregateItems: 10_000,
 	},
 	maximumBlockIntervalSeconds: 15,
@@ -179,6 +178,7 @@ describe('chaos operation catalog', () => {
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		pool.pendingReportId = '42'
+		pool.reportEscrows = { '42': address(87) }
 		snapshot.reports = [
 			{
 				currentAmount1: '1000',
@@ -187,8 +187,8 @@ describe('chaos operation catalog', () => {
 				disputeDelay: '60',
 				escalationHalt: '100000',
 				flags: 7,
-				game: { callbackContract: pool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-				helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: pool.coordinator },
+				game: { callbackContract: address(87), callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+				helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: address(87) },
 				multiplier: 140,
 				openOracle: snapshot.deployments.openOracle,
 				reportId: '42',
@@ -211,6 +211,7 @@ describe('chaos operation catalog', () => {
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		pool.pendingReportId = '42'
+		pool.reportEscrows = { '42': address(87) }
 		const candidate = {
 			currentAmount1: '1000',
 			currentAmount2: '1000',
@@ -218,8 +219,8 @@ describe('chaos operation catalog', () => {
 			disputeDelay: '1',
 			escalationHalt: '100000',
 			flags: 7,
-			game: { callbackContract: pool.coordinator, callbackGasLimit: 8_000_001, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-			helper: { blockNumber: '1', blockTimestamp: '1', creator: pool.coordinator },
+			game: { callbackContract: address(87), callbackGasLimit: 8_000_001, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+			helper: { blockNumber: '1', blockTimestamp: '1', creator: address(87) },
 			multiplier: 140,
 			openOracle: snapshot.deployments.openOracle,
 			reportId: '42',
@@ -284,6 +285,26 @@ describe('chaos operation catalog', () => {
 		expect(rebuilt.plan).toEqual(plan)
 	})
 
+	test('fork selection respects the earliest child fork time and skips child REP approvals', () => {
+		const snapshot = snapshotFixture()
+		const universe = snapshot.universes[0]
+		if (universe === undefined) throw new Error('Missing universe fixture')
+		universe.id = '7'
+		universe.forkThresholdAttoRep = '1000'
+		universe.earliestForkTime = (BigInt(snapshot.anchor.timestamp) + 1n).toString()
+		const fork = CHAOS_OPERATION_CATALOG.find(operation => operation.id === 'zoltar.universe.fork')
+		if (fork === undefined) throw new Error('Missing fork operation')
+		expect(fork.buildPlan(snapshot, permissiveOptions)).toBeUndefined()
+		universe.earliestForkTime = snapshot.anchor.timestamp
+		const plan = fork.buildPlan(snapshot, permissiveOptions)
+		expect(plan?.steps.map(step => step.id)).toEqual(['fork-universe'])
+		if (plan === undefined) throw new Error('Missing child fork plan')
+		const continuation = fork.buildContinuationPlan?.(snapshot, permissiveOptions, { previousPlan: { ...plan, planningSeed: permissiveOptions.seed }, confirmedStepIds: [] })
+		expect(continuation?.steps.map(step => step.id)).toEqual(['fork-universe'])
+		universe.earliestForkTime = (BigInt(snapshot.anchor.timestamp) + 1n).toString()
+		expect(fork.buildContinuationPlan?.(snapshot, permissiveOptions, { previousPlan: { ...plan, planningSeed: permissiveOptions.seed }, confirmedStepIds: [] })).toBeUndefined()
+	})
+
 	test('continues the exact selectable instance after candidate removal and prerequisite confirmation', () => {
 		const snapshot = snapshotFixture()
 		const universe = snapshot.universes[0]
@@ -332,8 +353,9 @@ describe('chaos operation catalog', () => {
 		const firstPool = snapshot.pools[0]
 		if (firstPool === undefined) throw new Error('OpenOracle dispute fixture is missing its first pool')
 		firstPool.pendingReportId = '41'
+		firstPool.reportEscrows = { '41': address(87) }
 		const secondCoordinator = address(91)
-		snapshot.pools.push({ ...firstPool, address: address(90), coordinator: secondCoordinator, priceFeed: secondCoordinator, pendingReportId: '42' })
+		snapshot.pools.push({ ...firstPool, address: address(90), coordinator: secondCoordinator, priceFeed: address(81), pendingReportId: '42', reportEscrows: { '42': address(88) } })
 		const report = {
 			currentAmount1: '1000',
 			currentAmount2: '1000',
@@ -341,8 +363,8 @@ describe('chaos operation catalog', () => {
 			disputeDelay: '60',
 			escalationHalt: '100000',
 			flags: 7,
-			game: { callbackContract: firstPool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-			helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: firstPool.coordinator },
+			game: { callbackContract: address(87), callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+			helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: address(87) },
 			multiplier: 140,
 			openOracle: snapshot.deployments.openOracle,
 			reportId: '41',
@@ -367,8 +389,8 @@ describe('chaos operation catalog', () => {
 
 		const competingReport = {
 			...report,
-			game: { ...report.game, callbackContract: secondCoordinator },
-			helper: { ...report.helper, creator: secondCoordinator },
+			game: { ...report.game, callbackContract: address(88) },
+			helper: { ...report.helper, creator: address(88) },
 			reportId: '42',
 			stateHash: hash(42),
 		}
@@ -505,7 +527,7 @@ describe('chaos operation catalog', () => {
 		expect(push?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ emitter: snapshot.deployments.weth, equals: '1000', field: 'value', indexed: { from: snapshot.deployments.openOracle, to: snapshot.wallet.address }, kind: 'decoded-event-field' }))
 	})
 
-	test('uses terminal evidence for both winning and losing escalation withdrawals', () => {
+	test('skips ordinary losing deposits and requires terminal evidence for continuation losses and winners', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Fixture pool missing')
@@ -521,6 +543,8 @@ describe('chaos operation catalog', () => {
 			vault: snapshot.wallet.address,
 		}
 		snapshot.escalationDeposits = [deposit]
+		expect(urgentOperationPlans(snapshot, permissiveOptions).some(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')).toBe(false)
+		pool.escalationForkContinuation = true
 		const losing = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')
 		expect(losing?.steps[0]?.evidence[0]).toMatchObject({ signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)' })
 
@@ -852,6 +876,7 @@ describe('chaos operation catalog', () => {
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		pool.pendingReportId = '42'
+		pool.reportEscrows = { '42': address(87) }
 		snapshot.reports.push({
 			currentAmount1: '1000',
 			currentAmount2: '1000',
@@ -861,8 +886,8 @@ describe('chaos operation catalog', () => {
 			disputeDelay: '60',
 			escalationHalt: '100000',
 			flags: 7,
-			game: { callbackContract: pool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-			helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: pool.coordinator },
+			game: { callbackContract: address(87), callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+			helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: address(87) },
 			multiplier: 140,
 			openOracle: snapshot.deployments.openOracle,
 			reportId: '42',
@@ -1091,6 +1116,7 @@ describe('chaos operation catalog', () => {
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		pool.pendingReportId = '42'
+		pool.reportEscrows = { '42': address(87) }
 		snapshot.reports.push({
 			currentAmount1: '1000',
 			currentAmount2: '1000',
@@ -1100,8 +1126,8 @@ describe('chaos operation catalog', () => {
 			disputeDelay: '60',
 			escalationHalt: '100000',
 			flags: 7,
-			game: { callbackContract: pool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-			helper: { blockNumber: '99', blockTimestamp: '1999999880', creator: pool.coordinator },
+			game: { callbackContract: address(87), callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+			helper: { blockNumber: '99', blockTimestamp: '1999999880', creator: address(87) },
 			multiplier: 140,
 			openOracle: snapshot.deployments.openOracle,
 			reportId: '42',

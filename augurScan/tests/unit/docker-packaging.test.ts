@@ -52,11 +52,14 @@ describe('Docker packaging', () => {
 				}
 			}
 			const probe = join(runtime, 'augurScan/probe.ts')
-			await Bun.write(probe, "import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'\nconsole.log(getLiquidationMigrationSecurityMultiplierBps(12000n))\n")
+			await Bun.write(
+				probe,
+				"import { calculateOracleSettlementBountyAttoEth } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'\nconsole.log(calculateOracleSettlementBountyAttoEth({ baseFeePerGas: 0n, initialReportPriorityFeeAttoEthPerGas: 1n, settlementCallbackGasLimit: 0n, maxSettlementBaseFeeMultiplierBps: 10000n }))\n",
+			)
 			const result = Bun.spawnSync([process.execPath, '--no-install', probe], { cwd: runtime, stdout: 'pipe', stderr: 'pipe' })
 			expect(result.stderr.toString()).toBe('')
 			expect(result.exitCode).toBe(0)
-			expect(result.stdout.toString().trim()).toBe('11000n')
+			expect(result.stdout.toString().trim()).toBe('392101n')
 		} finally {
 			await rm(runtime, { recursive: true, force: true })
 			await rm(dependencies, { recursive: true, force: true })
@@ -180,7 +183,7 @@ describe('Docker packaging', () => {
 		expect(source).toContain('FROM workspace AS browser-build')
 		expect(source).toContain('COPY augurScan/browser ./browser')
 		expect(source).toContain('RUN bun run build:browser')
-		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine AS runtime'))
+		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS runtime'))
 		expect(runtimeStage).toContain('COPY --from=browser-build /workspace/augurScan/public ./augurScan/public')
 		expect(runtimeStage).toContain('COPY augurScan/schema.sql ./augurScan/schema.sql')
 		expect(runtimeStage).toContain('COPY augurScan/migrations ./augurScan/migrations')
@@ -190,7 +193,7 @@ describe('Docker packaging', () => {
 
 	test('packages source-provenance inputs beside the runtime server', async () => {
 		const source = await readFile(dockerfile, 'utf8')
-		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine AS runtime'))
+		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS runtime'))
 		expect(runtimeStage).toContain('COPY augurScan/package.json ./augurScan/')
 		expect(runtimeStage).toContain('COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compose-source.ts')
 		expect(runtimeStage).toContain('COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts')
@@ -207,6 +210,31 @@ describe('Docker packaging', () => {
 		expect(composeSource).toContain('indexer:')
 		expect(composeSource).toContain('augurscan-logs:')
 		expect(gitIgnorePatterns).toContain('/augurScan/logs/')
+	})
+
+	test('probes readiness on the port the server listens on', async () => {
+		const healthCheck = dockerInstructions(requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'runtime'), 'HEALTHCHECK')[0]
+		const probe = healthCheck === undefined ? undefined : /CMD (\[.*\])$/u.exec(healthCheck)?.[1]
+		if (probe === undefined) throw new Error('The runtime image must declare an exec-form health check')
+		const command: unknown = JSON.parse(probe)
+		if (!Array.isArray(command) || !command.every(part => typeof part === 'string')) throw new Error('The health check must be a string array')
+		const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: request => new Response(undefined, { status: new URL(request.url).pathname === '/health/ready' ? 200 : 404 }) })
+		try {
+			const run = async (port: string) => {
+				const child = Bun.spawn(
+					command.map(part => (part === 'bun' ? process.execPath : part)),
+					{ env: { ...process.env, PORT: port }, stdout: 'pipe', stderr: 'pipe' },
+				)
+				return await child.exited
+			}
+			expect(await run(String(server.port ?? ''))).toBe(0)
+			const unused = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response() })
+			const unusedPort = String(unused.port ?? '')
+			await unused.stop(true)
+			expect(await run(unusedPort)).not.toBe(0)
+		} finally {
+			await server.stop(true)
+		}
 	})
 
 	test('runs the web app separately from the indexer in Compose', async () => {

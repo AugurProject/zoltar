@@ -34,7 +34,7 @@ test('derives OpenOracle boundaries with the report clock selected by flags', ()
 			indexedBlock: '130',
 			indexedTimestamp: '1',
 		}),
-	).toMatchObject({ state: 'Settleable', settlementBoundary: '130' })
+	).toMatchObject({ state: 'Ready to settle', settlementBoundary: '130' })
 })
 
 test('keeps settlement and unavailable evidence explicit', () => {
@@ -82,6 +82,10 @@ test('derives auction lifecycle at exact boundaries', () => {
 	expect(auctionLifecycle({ started: true, finalized: true, indexedTimestamp: '20', bidCount: 2, settlementCount: 1 })).toBe('Bid settlements outstanding')
 })
 
+test('an auction finalized without opening is fully settled', () => {
+	expect(auctionLifecycle({ started: false, finalized: true, indexedTimestamp: '20', bidCount: 0, settlementCount: 0 })).toBe('Fully settled')
+})
+
 test('reconstructs pre-swap reserves and exact price impact from Swap evidence', () => {
 	expect(
 		swapAnalytics({
@@ -98,7 +102,7 @@ test('reconstructs pre-swap reserves and exact price impact from Swap evidence',
 		reserveOutBefore: '1000',
 		spotPriceBefore: { numerator: '1000', denominator: '1000' },
 		executionPrice: { numerator: '90', denominator: '100' },
-		priceImpact: { state: 'Available', numerator: '1', denominator: '10', bps: '1000' },
+		priceImpact: { state: 'Available', numerator: '1', denominator: '11', bps: '909' },
 	})
 })
 

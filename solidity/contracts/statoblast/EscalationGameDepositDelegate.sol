@@ -265,16 +265,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			nonDecisionTimestamp = block.timestamp;
 			emit NonDecisionReached(nonDecisionTimestamp);
 		}
-		_accrueOrdinarySurplus(depositor, amountAttoRep);
+		_accrueOrdinarySurplus();
 	}
 
-	function _accrueOrdinarySurplus(address depositor, uint256 depositedAttoRep) private {
+	function _accrueOrdinarySurplus() private {
 		if (forkContinuation) return;
 		uint256 minimumBalance = outcomeState[0].balanceAttoRep;
 		if (outcomeState[1].balanceAttoRep < minimumBalance) minimumBalance = outcomeState[1].balanceAttoRep;
 		if (outcomeState[2].balanceAttoRep < minimumBalance) minimumBalance = outcomeState[2].balanceAttoRep;
 		uint256 amount = minimumBalance - creditedSurplusAttoRep;
-		vaultAccounting[depositor].collateralBackingAttoRep += depositedAttoRep - amount;
 		if (amount == 0) return;
 		creditedSurplusAttoRep = minimumBalance;
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));

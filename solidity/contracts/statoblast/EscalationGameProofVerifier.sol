@@ -13,6 +13,7 @@ import {
 	SCALE
 } from './EscalationGameTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { Constants } from '../Constants.sol';
 
 contract EscalationGameProofVerifier {
 	function computeIterativeAttritionCostAttoRep(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 lnRatioScaled, uint256 timeSinceStart, uint256 escalationTimeLength) external pure returns (uint256) {
@@ -84,9 +85,13 @@ contract EscalationGameProofVerifier {
 			if (rewardEligibleDepositAttoRep > depositAmountAttoRep)
 				rewardEligibleDepositAttoRep = depositAmountAttoRep;
 			uint256 bonusAttoRep =
-				(rewardEligibleDepositAttoRep * ((bindingCapitalAttoRep * 3) / 5)) / rewardEligiblePrincipalAttoRep;
+				(rewardEligibleDepositAttoRep *
+					((bindingCapitalAttoRep * Constants.ESCALATION_WINNER_BONUS_NUMERATOR) /
+						Constants.ESCALATION_PAYOUT_DENOMINATOR)) / rewardEligiblePrincipalAttoRep;
 			burnAmountAttoRep =
-				(rewardEligibleDepositAttoRep * ((bindingCapitalAttoRep * 2) / 5)) / rewardEligiblePrincipalAttoRep;
+				(rewardEligibleDepositAttoRep *
+					((bindingCapitalAttoRep * Constants.ESCALATION_BURN_NUMERATOR) /
+						Constants.ESCALATION_PAYOUT_DENOMINATOR)) / rewardEligiblePrincipalAttoRep;
 			amountToWithdrawAttoRep = principalAttoRep + bonusAttoRep;
 		}
 		if (actualForkThresholdAttoRep < nonDecisionThresholdAttoRep) {

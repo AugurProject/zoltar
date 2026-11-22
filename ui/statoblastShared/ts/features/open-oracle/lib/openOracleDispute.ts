@@ -1,3 +1,4 @@
+import { resolveOpenOracleDisputeFlows } from '../../../protocol/openOracleDisputeFlows.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -8,7 +9,7 @@ import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage }
 import { getOpenOracleDisputeSwapTokenKey } from '../../../protocol/openOracleMath.js'
 import { calculateOpenOraclePrice } from '../../../protocol/openOracle.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
-import { OPEN_ORACLE_MULTIPLIER_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION } from '../../../protocol/openOracleValidation.js'
+import { OPEN_ORACLE_MULTIPLIER_PRECISION } from '../../../protocol/openOracleValidation.js'
 import { getOpenOracleDisputeAvailability, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleGateMessage } from './openOracle.js'
 
 function createHiddenLoadingGateMessage(message: string): OpenOracleGateMessage {
@@ -68,38 +69,6 @@ function getOpenOracleDisputeWrapBlockMessage({
 }
 function formatOpenOracleDisputeInsufficientBalanceMessage({ available, required, tokenDecimals, tokenLabel }: { available: bigint; required: bigint; tokenDecimals: number | undefined; tokenLabel: string }) {
 	return `Insufficient ${tokenLabel} balance for this dispute. Need ${formatCurrencyBalance(required, tokenDecimals ?? 18)}, wallet has ${formatCurrencyBalance(available, tokenDecimals ?? 18)}.`
-}
-// Mirrors OpenOracle.dispute fee and contribution math; chargeFees is false before the halt when FLAG_FEES_ONLY_AT_HALT is set.
-function getOpenOracleDisputeFees(oldAmount: bigint, { chargeFees, feePercentage, protocolFee }: { chargeFees: boolean; feePercentage: bigint; protocolFee: bigint }) {
-	if (!chargeFees) return { fee: 0n, protocolFeeAmount: 0n }
-	return { fee: (oldAmount * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION, protocolFeeAmount: (oldAmount * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION }
-}
-type OpenOracleDisputeContributionParameters = { chargeFees: boolean; feePercentage: bigint; isSelfDispute: boolean; newAmount1: bigint; newAmount2: bigint; oldAmount1: bigint; oldAmount2: bigint; protocolFee: bigint; tokenToSwap: 'token1' | 'token2' }
-/** Token amounts the disputer pays, the fees inside them, and the quote tokens credited back to the disputer's oracle balance. */
-function resolveOpenOracleDisputeFlows({ chargeFees, feePercentage, isSelfDispute, newAmount1, newAmount2, oldAmount1, oldAmount2, protocolFee, tokenToSwap }: OpenOracleDisputeContributionParameters) {
-	if (tokenToSwap === 'token1') {
-		const { fee, protocolFeeAmount } = getOpenOracleDisputeFees(oldAmount1, { chargeFees, feePercentage, protocolFee })
-		return {
-			disputeFeeAmount: isSelfDispute ? 0n : fee,
-			protocolFeeAmount,
-			token1Contribution: isSelfDispute ? newAmount1 - oldAmount1 + protocolFeeAmount : newAmount1 + oldAmount1 + fee + protocolFeeAmount,
-			token2Contribution: newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0n,
-			token2Credit: newAmount2 < oldAmount2 ? oldAmount2 - newAmount2 : 0n,
-		}
-	}
-	const { fee, protocolFeeAmount } = getOpenOracleDisputeFees(oldAmount2, { chargeFees, feePercentage, protocolFee })
-	const token1Contribution = newAmount1 > oldAmount1 ? newAmount1 - oldAmount1 : 0n
-	if (isSelfDispute) {
-		const token2Needed = newAmount2 + protocolFeeAmount
-		return {
-			disputeFeeAmount: 0n,
-			protocolFeeAmount,
-			token1Contribution,
-			token2Contribution: token2Needed >= oldAmount2 ? token2Needed - oldAmount2 : 0n,
-			token2Credit: token2Needed < oldAmount2 ? oldAmount2 - token2Needed : 0n,
-		}
-	}
-	return { disputeFeeAmount: fee, protocolFeeAmount, token1Contribution, token2Contribution: newAmount2 + oldAmount2 + fee + protocolFeeAmount, token2Credit: 0n }
 }
 function isOpenOracleDisputeAmount1Allowed(report: Pick<OpenOracleReportDetails, 'escalationHalt' | 'flexibleEscalation'>, expectedNewAmount1: bigint, newAmount1: bigint) {
 	if (newAmount1 === expectedNewAmount1) return true

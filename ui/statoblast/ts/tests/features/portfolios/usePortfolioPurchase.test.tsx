@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, parseAbi, zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
@@ -83,6 +83,21 @@ test('a post-review capacity reduction or closed question stops submission', asy
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('minting has closed')
 })
 
+test('a wallet that covers the collateral and quoted fee can purchase without funding the unused fee cap', async () => {
+	// Quoted fee 0.01 against a 0.02 cap: 1.01 is what the contract pulls, so 1.01 of balance and allowance suffice.
+	const snapshot = capitalSnapshot({ walletCollateral: unit + unit / 100n, collateralAllowance: unit + unit / 100n })
+	const { hook, requests } = await setup(snapshot)
+	expect(hook.state().requiredCollateral).toBe(unit + unit / 100n)
+	expect(hook.state().reason).toBeUndefined()
+	await act(() => hook.state().buy())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing purchase')
+	expect(decodeFunctionData({ abi, data: request.data }).args[5]).toBe(unit / 50n)
+	await request.validateBeforeSubmit?.()
+	await hook.setProps({ snapshot: { ...snapshot, collateralAllowance: unit, blockNumber: 11n } })
+	await waitFor(() => expect(hook.state().reason).toBe('Collateral approval required.'))
+})
+
 test('USDC purchases parse six decimals and require a separate token approval', async () => {
 	const collateralToken = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as const
 	const snapshot = capitalSnapshot({ collateralToken, collateral: { address: collateralToken, symbol: 'USDC', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 0n })
@@ -91,17 +106,17 @@ test('USDC purchases parse six decimals and require a separate token approval', 
 	source.setRead('quoteQuestionMint', 2_000_000n)
 	await act(() => hook.state().setMintAmount('2'))
 	await waitFor(() => expect(hook.state().quote?.purchaseFeeAttoEth).toBe(1_000n))
-	expect(hook.state().requiredCollateral).toBe(2_020_000n)
+	expect(hook.state().requiredCollateral).toBe(2_001_000n)
 	expect(hook.state().reason).toBe('Collateral approval required.')
-	await act(() => hook.state().approve(2_020_000n))
+	await act(() => hook.state().approve(2_001_000n))
 	expect(requests).toHaveLength(1)
 	const approval = requests[0]
 	if (approval === undefined) throw new Error('Missing collateral approval')
 	expect(approval.to).toBe(collateralToken)
 	expect(approval.value).toBe(0n)
-	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: approval.data })).toEqual({ functionName: 'approve', args: [snapshot.services, 2_020_000n] })
+	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: approval.data })).toEqual({ functionName: 'approve', args: [snapshot.services, 2_001_000n] })
 	expect(hook.state().reason).toBe('Collateral approval required.')
-	await hook.setProps({ snapshot: { ...snapshot, collateralAllowance: 2_020_000n, blockNumber: 11n } })
+	await hook.setProps({ snapshot: { ...snapshot, collateralAllowance: 2_001_000n, blockNumber: 11n } })
 	await waitFor(() => expect(hook.state().reason).toBeUndefined())
 	await act(() => hook.state().buy())
 	const purchase = requests[1]
@@ -189,4 +204,23 @@ test('a positive quote makes recovery controls applicable even when its first fu
 	expect(hook.state().quote).toBeUndefined()
 	expect(hook.state().recovery).toBeUndefined()
 	expect(hook.state().recoveryError).toContain('Recovery REP funding is unavailable.')
+})
+
+test('the first origin purchase registers an eligible question in the same transaction', async () => {
+	const { hook, source, requests } = await setup()
+	source.setRead('questionOriginIds', zeroHash)
+	source.setRead('isQuestionAllowed', true)
+	source.setRead('maximumQuestionHorizonSeconds', 365n * 86_400n)
+	source.setSnapshot(capitalSnapshot({ blockNumber: 11n, blockHash: `0x${'22'.repeat(32)}` }))
+	await hook.setProps({ snapshot: capitalSnapshot({ blockNumber: 11n, blockHash: `0x${'22'.repeat(32)}` }) })
+	await waitFor(() => expect(hook.state().quote?.pool).toBe(zeroAddress))
+	expect(hook.state().reason).toBeUndefined()
+	await act(() => hook.state().buy())
+	expect(requests).toHaveLength(1)
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing first purchase')
+	expect(decodeFunctionData({ abi, data: request.data }).functionName).toBe('createCompleteSet')
+	await request.validateBeforeSubmit?.()
+	source.setRead('isQuestionAllowed', false)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('admission policy')
 })

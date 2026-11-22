@@ -1,4 +1,4 @@
-import { buildRouteHref, createRouting, getCurrentRouteHash, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { buildRouteHref, createRouting, getCurrentRouteHash, getRouteHashSearch, getTopLevelRouteSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
@@ -14,11 +14,10 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 		const params = new URLSearchParams(getRouteHashSearch())
 		const rememberedAddress = current === undefined ? (params.get('securityPool') ?? '') : ''
 		const address = current?.view === 'operate' ? current.securityPoolAddress : rememberedAddress
-		const tab = current?.view === 'operate' ? current.tab : (params.get('selectedPoolView') ?? '')
 
 		const nextSearch = updateSearchParams(search, next => next.delete('poolsView'))
 		if (route === 'pools') {
-			if (isHexAddressInput(address)) return buildRouteHref(buildPoolsRouteHash({ securityPoolAddress: address, tab, view: 'operate' }), nextSearch)
+			if (isHexAddressInput(address)) return buildRouteHref(buildPoolsRouteHash({ securityPoolAddress: address, view: 'operate' }), nextSearch)
 			const rememberedView = resolveEnumValue(params.get('poolsView') ?? '', 'browse', ['browse', 'create', 'universes', 'migrate'])
 			const view = current !== undefined && current.view !== 'operate' ? current.view : rememberedView
 			return buildRouteHref(buildPoolsRouteHash({ view }), nextSearch)
@@ -28,7 +27,6 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 			updateSearchParams(nextSearch, next => {
 				if (isHexAddressInput(address)) {
 					next.set('securityPool', address)
-					if (tab !== '') next.set('selectedPoolView', tab)
 				} else if (current !== undefined && current.view !== 'operate') {
 					next.set('poolsView', current.view)
 				} else {
@@ -52,4 +50,9 @@ export const statoblastRouting = createRouting(STATOBLAST_ROUTING_CONFIG)
 
 export function installStatoblastRouting() {
 	installRouting(STATOBLAST_ROUTING_CONFIG)
+}
+
+/** A question pool page that keeps the shared context (simulation, genesis, network, universe) of the current page. */
+export function buildQuestionPoolHref(securityPoolAddress: string) {
+	return buildRouteHref(buildPoolsRouteHash({ securityPoolAddress, view: 'operate' }), getTopLevelRouteSearch('pools'))
 }

@@ -87,7 +87,7 @@
 							<td><code>depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)</code><wbr /></td>
 							<td>Any reporter</td>
 							<td>Valid outcome, wallet allowance and balance, operational reporting window; no inherited fixed outcome.</td>
-							<td>Transfers accepted wallet REP into separate reporter custody and records the chosen outcome; creates the game if needed.</td>
+							<td>Transfers accepted wallet REP into separate reporter custody and records the chosen outcome; starts the game if needed, deploying it unless <code>EscalationGameFactory.prepareEscalationGame</code> already did.</td>
 							<td><code>EscalationGameSet</code> when the game is created, followed by reporter deposit and REP transfer events.</td>
 						</tr>
 						<tr>

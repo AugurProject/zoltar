@@ -1141,6 +1141,10 @@
 		"./tests/universeIdentity.test.js": {
 			"bun": "./ts/tests/universeIdentity.test.tsx",
 			"default": "./js/tests/universeIdentity.test.js"
+		},
+		"./copy/universes.js": {
+			"bun": "./ts/copy/universes.ts",
+			"default": "./js/copy/universes.js"
 		}
 	},
 	"version": "1.0.0"

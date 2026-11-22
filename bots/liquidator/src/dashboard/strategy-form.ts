@@ -69,6 +69,7 @@ function readStrategyForm(form: HTMLFormElement, saved: Configuration): Strategy
 				...fields,
 				allowFundedTakeovers: checkboxChecked(form, 'allowFundedTakeovers'),
 				targetHealthFactorBps: Number(data.get('targetHealthFactorBps')),
+				takeoverIncomeHorizonSeconds: Number(data.get('takeoverIncomeHorizonSeconds')),
 				maximumPositionsPerScan: Number(data.get('maximumPositionsPerScan')),
 				stalledRetirementSeconds: Number(data.get('stalledRetirementSeconds')),
 			}),

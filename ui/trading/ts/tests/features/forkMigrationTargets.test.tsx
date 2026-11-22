@@ -118,7 +118,9 @@ describe('fork migration target selection', () => {
 		await input(valueInput, '51')
 		expect(valueInput.value).toBe('51')
 		expect(buttonByText(rendered.container, 'Add target').disabled).toBeTrue()
-		await act(() => valueInput.dispatchEvent(new Event('blur', { bubbles: true })))
+		await act(() => {
+			valueInput.dispatchEvent(new Event('blur', { bubbles: true }))
+		})
 		expect(rendered.container.textContent).toContain('Enter a value between the minimum and maximum that falls on an increment.')
 		expect(valueInput.value).toBe('51')
 		expect(buttonByText(rendered.container, 'Add target').disabled).toBeTrue()

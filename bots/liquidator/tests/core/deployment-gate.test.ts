@@ -1,3 +1,4 @@
+import { unscannablePollResult } from '../../src/runtime/scan-cycle.ts'
 import { recordSystemDeploymentCheck } from '../../src/core/deployment-observation.ts'
 import { initialRuntimeState, operatorSnapshot } from '../../src/state/operator-state.ts'
 import { blockStatusText, scanStatusText } from '../../src/dashboard/block-status.ts'
@@ -140,4 +141,11 @@ test('publishes the checked block without claiming a completed or executable sca
 	expect(state.deploymentCheckedBlock).toBeUndefined()
 	expect(state.deploymentMissingName).toBeUndefined()
 	expect(blockStatusText(operatorSnapshot(state, false))).toBe('Block — · waiting for first observation')
+})
+
+test('one-cycle mode never waits for configuration or deployment', () => {
+	expect(unscannablePollResult(false, 'unconfigured')).toBe(false)
+	expect(unscannablePollResult(false, 'undeployed')).toBe('deferred')
+	expect(() => unscannablePollResult(true, 'unconfigured')).toThrow('One-cycle mode requires a saved chain and RPC endpoints')
+	expect(unscannablePollResult(true, 'undeployed')).toBe(true)
 })

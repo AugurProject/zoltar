@@ -445,7 +445,7 @@ describe('injected backend read transport', () => {
 
 test('times out wallet-backed reads while leaving wallet approval requests unbounded', async () => {
 	const originalSetTimeout = globalThis.setTimeout
-	spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args))
+	spyOn(globalThis, 'setTimeout').mockImplementation(Object.assign((...[handler, delay, ...args]: Parameters<typeof originalSetTimeout>) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args), originalSetTimeout))
 	let resolveApproval: ((value: unknown) => void) | undefined
 	const backend = createInjectedBackend({
 		provider: {

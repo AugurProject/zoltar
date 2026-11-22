@@ -38,7 +38,7 @@ describe('useStatoblastUrlState', () => {
 
 	beforeEach(() => {
 		installStatoblastRouting()
-		cleanupDom = installDomEnvironment(`http://localhost/#/pools/${POOL_A}/vaults?universe=1`).cleanup
+		cleanupDom = installDomEnvironment(`http://localhost/#/pools/${POOL_A}?universe=1`).cleanup
 	})
 
 	afterEach(async () => {
@@ -89,7 +89,6 @@ describe('useStatoblastUrlState', () => {
 		expect(state().activeUniverseId).toBe(1n)
 		expect(state().securityPoolsView).toBe('operate')
 		expect(state().securityPoolAddress).toBe(POOL_A)
-		expect(state().selectedPoolView).toBe('vaults')
 	})
 
 	test('rewrites legacy security pool links onto the pool path', async () => {
@@ -98,9 +97,8 @@ describe('useStatoblastUrlState', () => {
 			window.location.hash = `#/security-pools?securityPool=${POOL_B}&securityPoolsView=operate&selectedPoolView=reporting&universe=2`
 			window.dispatchEvent(new Event('hashchange'))
 		})
-		expect(window.location.hash).toBe(`#/pools/${POOL_B}/reporting?universe=2`)
+		expect(window.location.hash).toBe(`#/pools/${POOL_B}?universe=2`)
 		expect(state().securityPoolAddress).toBe(POOL_B)
-		expect(state().selectedPoolView).toBe('reporting')
 		expect(state().activeUniverseId).toBe(2n)
 	})
 
@@ -108,16 +106,11 @@ describe('useStatoblastUrlState', () => {
 		const state = await renderHarness()
 
 		await act(() => state().setActiveUniverseId(7n))
-		expect(window.location.hash).toBe(`#/pools/${POOL_A}/vaults?universe=7`)
-
-		await act(() => state().setSelectedPoolView('trading'))
-		expect(window.location.hash).toBe(`#/pools/${POOL_A}/trading?universe=7`)
-		expect(state().selectedPoolView).toBe('trading')
+		expect(window.location.hash).toBe(`#/pools/${POOL_A}?universe=7`)
 
 		await act(() => state().setSecurityPoolAddress(POOL_C))
 		expect(window.location.hash).toBe(`#/pools/${POOL_C}?universe=7`)
 		expect(state().securityPoolAddress).toBe(POOL_C)
-		expect(state().selectedPoolView).toBe('')
 
 		await act(() => state().setSecurityPoolsView('operate'))
 		expect(state().securityPoolAddress).toBe(POOL_C)
@@ -211,7 +204,9 @@ describe('useStatoblastUrlState', () => {
 	test('keeps the price-request selection in the query of the current route', async () => {
 		const state = await renderHarness()
 		window.location.hash = '#/open-oracle'
-		await act(() => window.dispatchEvent(new Event('hashchange')))
+		await act(() => {
+			window.dispatchEvent(new Event('hashchange'))
+		})
 
 		const historyLength = window.history.length
 		await act(() => state().setOpenOracleReport('555', 'replace'))

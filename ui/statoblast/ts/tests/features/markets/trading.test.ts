@@ -228,7 +228,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: undefined,
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n,
@@ -244,7 +244,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n,
@@ -260,7 +260,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n,
@@ -278,7 +278,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: undefined,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -294,7 +294,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 10n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -310,7 +310,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -326,7 +326,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -342,7 +342,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 8n * 10n ** 17n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -358,7 +358,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 5n * 10n ** 17n,
@@ -376,7 +376,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 2n * 10n ** 18n,
@@ -394,7 +394,7 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
+
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 4n * 10n ** 17n,
 				ethBalanceAttoEth: 2n * 10n ** 18n,
@@ -642,7 +642,7 @@ void describe('trading helpers', () => {
 			shareBalances,
 			tradingForkUniverse: binaryForkUniverse,
 		} as const
-		const freshForkTargets = [
+		const freshForkTargets: ShareMigrationTarget[] = [
 			{ outcomeIndex: 0n, canonicalPool: pool, migratedAttoShares: noMigratedShares },
 			{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
 			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
@@ -654,7 +654,7 @@ void describe('trading helpers', () => {
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe security pools unavailable. Refresh pool to retry.' }, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Child universe security pools unavailable. Refresh pool to retry.')
 
 		const migratedYes = { ...noMigratedShares, yesAttoShares: shareBalances.yesAttoShares }
-		const migratedTargets = [
+		const migratedTargets: ShareMigrationTarget[] = [
 			{ outcomeIndex: 0n, canonicalPool: pool, migratedAttoShares: migratedYes },
 			{ outcomeIndex: 1n, canonicalPool: pool, migratedAttoShares: migratedYes },
 			{ outcomeIndex: 2n, canonicalPool: pool, migratedAttoShares: noMigratedShares },
@@ -715,12 +715,12 @@ void describe('trading helpers', () => {
 			targetOutcomeIndexesInput: '',
 			tradingForkUniverse: binaryForkUniverse,
 		} as const
-		const everyChildMigrated = [
+		const everyChildMigrated: ShareMigrationTarget[] = [
 			{ outcomeIndex: 0n, canonicalPool: pool, migratedAttoShares: migratedYes },
 			{ outcomeIndex: 1n, canonicalPool: pool, migratedAttoShares: migratedYes },
 			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: migratedYes },
 		]
-		const noChildPools = [
+		const noChildPools: ShareMigrationTarget[] = [
 			{ outcomeIndex: 0n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
 			{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
 			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
@@ -854,6 +854,7 @@ test('stablecoin mint-capacity errors use collateral units and precision', () =>
 			totalPoolHeldAttoRep: 0n,
 			mintingCapacityAttoEth: 1_000_000n,
 			mintAmountInput: '2',
+			ethBalanceAttoEth: undefined,
 			collateral: { symbol: 'USDC', decimals: 6, balance: 3_000_000n },
 		}),
 	).toBe('Max mint capacity is 1\u00a0USDC.')
@@ -870,6 +871,7 @@ test('a stablecoin mint above the wallet balance names the collateral token, as 
 			totalPoolHeldAttoRep: 0n,
 			mintingCapacityAttoEth: 10_000_000n,
 			mintAmountInput: '4',
+			ethBalanceAttoEth: undefined,
 			collateral: { symbol: 'USDC', decimals: 6, balance: 3_000_000n },
 		}),
 	).toBe('Insufficient USDC balance.')
@@ -880,4 +882,21 @@ test('central mint previews divide fixed-point fee rates before applying cash li
 		estimatedRetentionFeeAttoEth: 19n,
 		settlementCollateralAfterFeesAttoEth: 81n,
 	})
+})
+
+test('minting closes at the exact question end date', () => {
+	const input = {
+		accountAddress: '0x1234567890123456789012345678901234567890',
+		hasSelectedPool: true,
+		isOnActiveAppChain: true,
+		settlementCollateralAttoEth: 0n,
+		shareTokenSupplyAttoShares: 0n,
+		totalPoolHeldAttoRep: 0n,
+		mintingCapacityAttoEth: 10n * TOKEN_PRECISION,
+		ethBalanceAttoEth: 10n * TOKEN_PRECISION,
+		mintAmountInput: '1',
+		questionEndTime: 200n,
+	} as const
+	expect(getTradingMintGuardMessage({ ...input, currentTimestamp: 199n })).toBeUndefined()
+	for (const currentTimestamp of [200n, 201n]) expect(getTradingMintGuardMessage({ ...input, currentTimestamp })).toBe('Minting closed when the question ended.')
 })

@@ -27,6 +27,8 @@ function sqrtRatio(sqrtPriceX96: bigint, tokenIsFirst: boolean) {
 
 /** Replacement reports use the marginal reserve/slot0 price, never an impact-inclusive swap output. Quotes are in `pool.quoteToken` units. */
 export async function quoteVenue(client: BatchReader, config: QuoteConfiguration, pool: Pool, amounts: QuoteAmounts, blockNumber: bigint) {
+	const maximumBps = config.maxPriceImpactBps ?? 100n
+	if (maximumBps < 0n || maximumBps > 1_000n) throw new Error('Maximum price impact must be from 0 to 1000 bps')
 	let failure: string | undefined
 	const settle = (read: () => bigint) => {
 		try {
@@ -111,8 +113,6 @@ export async function quoteVenue(client: BatchReader, config: QuoteConfiguration
 		failure = errorMessage(error)
 	}
 	if (ratio !== undefined && ratio.quoteUnits > 0n && ratio.tokenUnits > 0n) replacement = settle(() => (amounts.replacementAmount1 * ratio.tokenUnits) / ratio.quoteUnits)
-	const maximumBps = config.maxPriceImpactBps ?? 100n
-	if (maximumBps < 0n || maximumBps > 10_000n) throw new Error('Maximum price impact must be from 0 to 10000 bps')
 	const withinPriceImpact =
 		ratio !== undefined &&
 		replacement !== undefined &&

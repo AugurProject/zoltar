@@ -96,7 +96,7 @@ describe('useTransactionTrayController', () => {
 
 		await act(() => {
 			previousGeneration.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
-			previousGeneration.onTransactionPresented({ action: 'createMarket', source: 'zoltar', status: { badgeLabel: 'Created', badgeTone: 'success', detail: 'Created', key: 'created' }, submittedTitle: 'Question created' })
+			previousGeneration.onTransactionPresented({ title: 'Question created', tone: 'success' })
 			previousGeneration.resetForEnvironment()
 		})
 		expect(previousGeneration.transactionState.value.active).toBeUndefined()
@@ -168,7 +168,7 @@ describe('useTransactionTrayController', () => {
 			const controller = await mountRecordingController()
 			const approvalHash = '0x1111000000000000000000000000000000000000000000000000000000000000'
 			const depositHash = '0x2222000000000000000000000000000000000000000000000000000000000000'
-			const preview = { account: '0x00000000000000000000000000000000000000a1', args: undefined, chainName: 'Ethereum', contractAddress: '0x00000000000000000000000000000000000000b2', functionName: 'approve', value: 0n }
+			const preview = { account: '0x00000000000000000000000000000000000000a1', args: undefined, chainName: 'Ethereum', contractAddress: '0x00000000000000000000000000000000000000b2', functionName: 'approve', value: 0n } as const
 			await act(() => {
 				const key = controller.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' })
 				const requestKey = typeof key === 'string' ? key : undefined
@@ -239,6 +239,7 @@ describe('useTransactionTrayController', () => {
 			controller.onTransactionFinished(typeof secondKey === 'string' ? secondKey : undefined)
 		})
 
+		if (typeof firstKey !== 'string') throw new Error('Expected the first request to be admitted')
 		const state = controller.transactionState.value
 		expect(state.entries.map(entry => [entry.key, entry.lifecycle])).toEqual([[firstKey, { phase: 'pending', hash: firstHash }]])
 		expect(transactionActivity.value.entries.map(entry => [entry.hash, entry.status])).toEqual([

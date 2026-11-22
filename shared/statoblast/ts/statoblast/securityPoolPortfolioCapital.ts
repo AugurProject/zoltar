@@ -6,6 +6,7 @@ import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityP
 const abi = parseAbi([
 	'function originUniverseId() view returns (uint248)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
+	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
 	'function zoltar() view returns (address)',
 	'function getForkTime(uint248 universeId) view returns (uint256)',
 	'function getForkChoiceDeadline(uint248 universeId) view returns (uint256)',
@@ -116,6 +117,8 @@ export type PortfolioCapitalSnapshot = {
 	totalPledgedAttoRep: bigint
 	totalCommitmentAttoEth: bigint
 	healthyCommitmentAttoEth: bigint
+	/** Purchasable capacity after retirement reservations and cash-backing checks. */
+	availableMintCapacityAttoEth: bigint
 	totalFreeAttoRep: bigint
 	currentBatch: bigint
 	nextBatch: bigint
@@ -207,8 +210,9 @@ export function buildPortfolioCapitalDepositAndSetHealthRequest(parameters: Capi
 	return request(parameters, 'depositAndSetHealthTarget', [amountAttoRep, healthTarget(parameters.targetHealthFactorBps)])
 }
 /**
- * Sets the owner's whole commitment. Raising or keeping it applies at once; lowering it cures any unbacked part at once and
- * queues the rest for retirement. A report id prices growth only.
+ * Sets the owner's whole commitment. Raising or keeping it applies at once. Lowering can cure an uncovered deficit
+ * at a fresh price when it meets the economic minimum and capacity permits; a smaller deficit queues the whole reduction,
+ * for partial and full exits alike. A report id prices growth only.
  */
 export function buildPortfolioCapitalSetCommitmentRequest(parameters: CapitalRequest & { commitment: bigint; reportId?: bigint }) {
 	const commitment = decodeUint(parameters.commitment, 'Commitment')
@@ -221,8 +225,13 @@ export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalReq
 	return request(parameters, 'claimEarnings')
 }
 /** @public Keeper takeover: a new receiver commits all idle principal within maximumOwnRep; an existing receiver must be active or share the target cohort. */
+function noRepairAward(value: bigint) {
+	if (decodeUint(value, 'Minimum REP award') !== 0n) throw new Error('Repairs pay future income only.')
+	return 0n
+}
+
 export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint }) {
-	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), decodeUint(parameters.minimumAward, 'Minimum REP award'), decodeUint(parameters.maximumOwnRep, 'Maximum own REP')])
+	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), noRepairAward(parameters.minimumAward), decodeUint(parameters.maximumOwnRep, 'Maximum own REP')])
 }
 
 /** Bind an automated acquisition to its quoted price epoch, owner policy and final exposure. */
@@ -233,7 +242,7 @@ export function buildPortfolioCapitalTakeOverWithBoundsRequest(parameters: Capit
 	return request(parameters, 'takeOverWithBounds', [
 		positive(parameters.positionId, 'Position id', 96),
 		positive(parameters.commitment, 'Takeover commitment'),
-		decodeUint(parameters.minimumAward, 'Minimum REP award'),
+		noRepairAward(parameters.minimumAward),
 		decodeUint(parameters.maximumOwnRep, 'Maximum own REP'),
 		[decodeUint(bounds.maximumOwnerPrincipal, 'Maximum owner principal'), decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), expectedTargetHealthFactorBps, decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), decodeUint(bounds.expectedSourceBatch, 'Expected source cohort', 96)],
 	])
@@ -295,7 +304,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	])
 	const capitalLedger = decodeAddress(ledgerValue, 'Capital ledger')
 	const zoltar = decodeAddress(zoltarValue, 'Zoltar')
-	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue, conservative, liquidation, exposureLimit, ownerPrice] = await Promise.all([
+	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue, conservative, liquidation, exposureLimit, ownerPrice, availableCapacity] = await Promise.all([
 		read(capitalLedger, 'commitmentIndex'),
 		read(capitalLedger, 'repToken'),
 		read(decodeAddress(settlementValue, 'Settlement engine'), 'ledger'),
@@ -317,6 +326,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		read(capitalLedger, 'liquidationPrice'),
 		feedValue === zeroAddress ? 0n : read(decodeAddress(feedValue, 'Shared price feed'), 'acceptedExposureLimitAttoEth'),
 		read(capitalLedger, 'ownerConservativePrice', [owner]),
+		read(portfolio, 'availableMintCapacity', [universeId]),
 	])
 	const commitmentIndex = decodeAddress(indexValue, 'Commitment index')
 	const account = ownerAccount(ownerValue)
@@ -380,6 +390,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		totalPledgedAttoRep: decodeUint(totalRep, 'Total pledged REP'),
 		totalCommitmentAttoEth: decodeUint(totalK, 'Total commitment'),
 		healthyCommitmentAttoEth: decodeUint(healthyK, 'Healthy commitment'),
+		availableMintCapacityAttoEth: decodeUint(availableCapacity, 'Available mint capacity'),
 		totalFreeAttoRep: decodeUint(free, 'Total free REP'),
 		currentBatch: decodeUint(current, 'Current cohort', 96),
 		nextBatch: decodeUint(next, 'Next cohort', 96),

@@ -1,4 +1,5 @@
-export const CURRENT_SCHEMA_VERSION = '9'
+export const CURRENT_SCHEMA_VERSION = '10'
+export const BOUNDED_READ_SCHEMA_VERSION = '9'
 export const STALE_CONTRACT_VALUES_SCHEMA_VERSION = '8'
 const SUPPORTED_POSTGRES_VERSION = '17.11'
 
@@ -33,6 +34,7 @@ export type SupportedSchemaVersion =
 	| typeof COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION
 	| typeof CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION
 	| typeof STALE_CONTRACT_VALUES_SCHEMA_VERSION
+	| typeof BOUNDED_READ_SCHEMA_VERSION
 
 type SchemaMigration = { readonly version: SupportedSchemaVersion; readonly file: string; readonly description: string }
 
@@ -45,7 +47,8 @@ const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = [
 	{ version: COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION, file: '006-collateral-repair-auctions.sql', description: 'Collateral repair auction storage names' },
 	{ version: CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION, file: '007-current-contract-events.sql', description: 'Storage for events the current contracts emit' },
 	{ version: STALE_CONTRACT_VALUES_SCHEMA_VERSION, file: '008-stale-contract-values.sql', description: 'Removal of values no current contract supplies' },
-	{ version: CURRENT_SCHEMA_VERSION, file: '009-bounded-read-indexes.sql', description: 'Selective address and report reads' },
+	{ version: BOUNDED_READ_SCHEMA_VERSION, file: '009-bounded-read-indexes.sql', description: 'Selective address and report reads' },
+	{ version: CURRENT_SCHEMA_VERSION, file: '010-accounting-clock-and-reasons.sql', description: 'Exact portfolio accounting clock and current reason enum' },
 ]
 
 /** Migrations that upgrade a database at `startingVersion` to the current schema, in application order. */
@@ -67,8 +70,9 @@ export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, com
 	}
 }
 
-export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'migrate-from-5' | 'migrate-from-6' | 'migrate-from-7' | 'migrate-from-8' | 'current' => {
+export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'migrate-from-5' | 'migrate-from-6' | 'migrate-from-7' | 'migrate-from-8' | 'migrate-from-9' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
+	if (markerVersion === BOUNDED_READ_SCHEMA_VERSION) return 'migrate-from-9'
 	if (markerVersion === STALE_CONTRACT_VALUES_SCHEMA_VERSION) return 'migrate-from-8'
 	if (markerVersion === CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION) return 'migrate-from-7'
 	if (markerVersion === COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION) return 'migrate-from-6'

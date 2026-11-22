@@ -142,21 +142,74 @@ export async function getSimulationSnapshotStatus(paths: SimulationSnapshotPaths
 	return 'current'
 }
 
-/** Removes snapshots whose key no longer matches the worker sources; the worker build runs this after every bundle. */
+async function pathExists(filePath: string) {
+	return await fs
+		.access(filePath)
+		.then(() => true)
+		.catch(() => false)
+}
+
+/** The manifest entries whose snapshot files are still on disk. */
+async function existingScenarioEntries(paths: SimulationSnapshotPaths, scenarios: SimulationSnapshotManifest['scenarios']): Promise<SimulationSnapshotManifest['scenarios']> {
+	const present = await Promise.all(Object.entries(scenarios).map(async ([scenario, entry]) => ({ entry, exists: await pathExists(path.join(paths.directory, entry.file)), scenario })))
+	return Object.fromEntries(present.filter(candidate => candidate.exists).map(candidate => [candidate.scenario, candidate.entry]))
+}
+
+/** Replaces the manifest in one rename so a browser never reads a partially written file. */
+async function writeSimulationSnapshotManifest(paths: SimulationSnapshotPaths, manifest: SimulationSnapshotManifest) {
+	const temporaryPath = `${paths.manifest}.${process.pid.toString()}.${Date.now().toString()}.tmp`
+	await fs.writeFile(temporaryPath, `${JSON.stringify(manifest, undefined, '\t')}\n`)
+	await fs.rename(temporaryPath, paths.manifest)
+}
+
+const MANIFEST_LOCK_TIMEOUT_MILLISECONDS = 60_000
+
+/** Serializes manifest read-modify-write across processes, so concurrent targeted generators cannot drop each other's scenarios. */
+async function withSimulationSnapshotManifestLock<TValue>(paths: SimulationSnapshotPaths, run: () => Promise<TValue>): Promise<TValue> {
+	const lockPath = `${paths.directory}.lock`
+	await fs.mkdir(path.dirname(lockPath), { recursive: true })
+	const deadline = Date.now() + MANIFEST_LOCK_TIMEOUT_MILLISECONDS
+	for (;;) {
+		try {
+			await fs.mkdir(lockPath)
+			break
+		} catch (error) {
+			if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
+			if (Date.now() > deadline) throw new Error(`Timed out waiting for the simulation snapshot manifest lock at ${lockPath}; remove it if no snapshot generator is running`)
+			await new Promise(resolve => setTimeout(resolve, 25))
+		}
+	}
+	try {
+		return await run()
+	} finally {
+		await fs.rm(lockPath, { recursive: true, force: true })
+	}
+}
+
+/**
+ * Removes snapshots whose key no longer matches the worker sources, and manifest entries whose snapshot file is gone
+ * (so browsers seed those scenarios live instead of requesting a missing file); the worker build runs this after every bundle.
+ */
 export async function pruneStaleSimulationSnapshots(paths: SimulationSnapshotPaths, key: string): Promise<'absent' | 'current' | 'pruned'> {
 	const manifest = await readSimulationSnapshotManifest(paths).catch(() => undefined)
 	if (manifest === undefined) {
-		const exists = await fs
-			.access(paths.directory)
-			.then(() => true)
-			.catch(() => false)
-		if (!exists) return 'absent'
+		if (!(await pathExists(paths.directory))) return 'absent'
 		await fs.rm(paths.directory, { recursive: true, force: true })
 		return 'pruned'
 	}
-	if (manifest.key === key) return 'current'
-	await fs.rm(paths.directory, { recursive: true, force: true })
-	return 'pruned'
+	if (manifest.key !== key) {
+		await fs.rm(paths.directory, { recursive: true, force: true })
+		return 'pruned'
+	}
+	return await withSimulationSnapshotManifestLock(paths, async () => {
+		const latest = await readSimulationSnapshotManifest(paths).catch(() => undefined)
+		if (latest === undefined || latest.key !== key) return 'current'
+		const scenarios = await existingScenarioEntries(paths, latest.scenarios)
+		if (Object.keys(scenarios).length === Object.keys(latest.scenarios).length) return 'current'
+		if (Object.keys(scenarios).length === 0) await fs.rm(paths.directory, { recursive: true, force: true })
+		else await writeSimulationSnapshotManifest(paths, { ...latest, scenarios })
+		return 'pruned'
+	})
 }
 
 /** Every scenario the app can bootstrap, in the order they are presented. */
@@ -172,8 +225,8 @@ export async function getSimulationSnapshotScenarios(appId: UiAppId): Promise<re
 			return [...CORE_SCENARIOS, ...STATOBLAST_SCENARIOS]
 		}
 		case 'trading': {
-			const { DEPLOYED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } = await import('../../ui/trading/ts/simulation/index.ts')
-			return ['baseline', DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO]
+			const { DEPLOYED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, USDC_TRADING_SIMULATION_SCENARIO } = await import('../../ui/trading/ts/simulation/index.ts')
+			return ['baseline', DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, USDC_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO]
 		}
 		default:
 			return appId satisfies never
@@ -182,6 +235,8 @@ export async function getSimulationSnapshotScenarios(appId: UiAppId): Promise<re
 
 export type GenerateSimulationSnapshotsOptions = {
 	concurrency?: number
+	/** Seeds a scenario and returns its serialized state; defaults to a fresh in-process simulation backend. */
+	exportSnapshot?: (appId: UiAppId, scenario: string) => Promise<string>
 	log?: (message: string) => void
 	scenarios?: readonly string[]
 }
@@ -207,27 +262,38 @@ async function runWithConcurrency<TItem>(items: readonly TItem[], concurrency: n
 
 /**
  * Seeds the scenarios in their own workers and writes the snapshots with a manifest keyed by the current sources. A
- * targeted run keeps the other scenarios of a manifest generated under the same key.
+ * targeted run keeps the other scenarios of a manifest generated under the same key, including scenarios a concurrent
+ * targeted run recorded while this one was seeding: the manifest is re-read and merged under a lock before it is written.
  */
-export async function generateSimulationSnapshots(appPaths: UiAppPaths, paths: SimulationSnapshotPaths, key: string, { concurrency = defaultConcurrency(), log = () => undefined, scenarios }: GenerateSimulationSnapshotsOptions = {}) {
+export async function generateSimulationSnapshots(appPaths: UiAppPaths, paths: SimulationSnapshotPaths, key: string, { concurrency = defaultConcurrency(), exportSnapshot = exportScenarioSnapshot, log = () => undefined, scenarios }: GenerateSimulationSnapshotsOptions = {}) {
 	const scenarioIds = scenarios ?? (await getSimulationSnapshotScenarios(appPaths.appId))
 	const existing = await readSimulationSnapshotManifest(paths).catch(() => undefined)
-	const keepsExisting = existing !== undefined && existing.key === key && scenarios !== undefined
-	if (!keepsExisting) await fs.rm(paths.directory, { recursive: true, force: true })
+	// A targeted run never clears snapshots made under its own key, nor a directory a concurrent run is still filling.
+	const clearsExisting = scenarios === undefined || (existing !== undefined && existing.key !== key)
+	if (clearsExisting) await fs.rm(paths.directory, { recursive: true, force: true })
 	await fs.mkdir(paths.directory, { recursive: true })
-	const manifest: SimulationSnapshotManifest = { generatedAt: new Date().toISOString(), key, scenarios: keepsExisting ? { ...existing.scenarios } : {} }
+	const generated: SimulationSnapshotManifest['scenarios'] = {}
 	await runWithConcurrency(scenarioIds, concurrency, async scenario => {
 		const startedAt = performance.now()
-		const serialized = await exportScenarioSnapshot(appPaths.appId, scenario)
+		const serialized = await exportSnapshot(appPaths.appId, scenario)
 		const file = `${scenario}.json`
 		await fs.writeFile(path.join(paths.directory, file), serialized)
-		manifest.scenarios[scenario] = { file }
+		generated[scenario] = { file }
 		log(`[simulation snapshots] ${appPaths.appId}/${scenario}: ${(serialized.length / 1024 / 1024).toFixed(1)} MiB in ${((performance.now() - startedAt) / 1000).toFixed(1)}s`)
 	})
 	const order = await getSimulationSnapshotScenarios(appPaths.appId)
-	manifest.scenarios = Object.fromEntries([...order, ...Object.keys(manifest.scenarios)].map(scenario => [scenario, manifest.scenarios[scenario]]).filter((entry): entry is [string, { file: string }] => entry[1] !== undefined))
-	await fs.writeFile(paths.manifest, `${JSON.stringify(manifest, undefined, '\t')}\n`)
-	return manifest
+	return await withSimulationSnapshotManifestLock(paths, async () => {
+		const latest = await readSimulationSnapshotManifest(paths).catch(() => undefined)
+		const kept = scenarios !== undefined && latest !== undefined && latest.key === key ? await existingScenarioEntries(paths, latest.scenarios) : {}
+		const merged: SimulationSnapshotManifest['scenarios'] = { ...kept, ...generated }
+		const manifest: SimulationSnapshotManifest = {
+			generatedAt: new Date().toISOString(),
+			key,
+			scenarios: Object.fromEntries([...order, ...Object.keys(merged)].map(scenario => [scenario, merged[scenario]]).filter((entry): entry is [string, { file: string }] => entry[1] !== undefined)),
+		}
+		await writeSimulationSnapshotManifest(paths, manifest)
+		return manifest
+	})
 }
 
 function defaultConcurrency() {

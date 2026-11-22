@@ -2,7 +2,7 @@ import { decodeNetworkResponse } from './api-decoding.ts'
 import type { ScannerContext } from './app-context.ts'
 import { element, historyRangeElements, lookup } from './app-dom.ts'
 import { exactTimestamp, setLiveRecord } from './app-presentation.ts'
-import { loadRouteAfterNetworkChange, loadRouteAfterNetworkSelection, selectSystemRouteEntity } from './app-routing.ts'
+import { loadRouteAfterNetworkChange, loadRouteAfterNetworkSelection, selectSystemRouteEntity, syncSectionLinks } from './app-routing.ts'
 import { abortActivityRequests, clearLiveTimers, invalidateStateRequestVersions } from './app-state.ts'
 import { hideCanonicalDialogStatus, updateConnectionStatus, updateFreshness } from './app-status.ts'
 import type { ScannerViews } from './app-views.ts'
@@ -114,6 +114,7 @@ export const resetSelectedNetworkContext = (context: ScannerContext, views: Scan
 	if (elements.dialog.open) views.detail.account.closeDetail({ preservePendingCanonicalAccount: true })
 	const url = networkSwitchUrl(new URL(location.href), { keepBlockNumbers })
 	history.replaceState(null, '', url)
+	syncSectionLinks()
 	state.pageUrl = url
 	if (!keepBlockNumbers) {
 		const historyRange = historyRangeElements()

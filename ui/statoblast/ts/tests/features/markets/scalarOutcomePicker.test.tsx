@@ -192,14 +192,22 @@ describe('ScalarOutcomePicker', () => {
 		expect(q.queryByText('Selected tick')).toBeNull()
 		expect(document.querySelector('.scalar-exact-tick-input')).toBeNull()
 		expect(scalarValueInput.value).toBe(UNSAFE_TICK_COUNT.toString())
-		await act(() => fireEvent.input(scalarValueInput, { target: { value: '25' } }))
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '25' } })
+		})
 		expect(scalarValueInput.value).toBe('25')
-		await act(() => fireEvent.input(scalarValueInput, { target: { value: '-' } }))
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '-' } })
+		})
 		expect(scalarValueInput.value).toBe('-')
 		expect(scalarValueInput.getAttribute('aria-invalid')).toBeNull()
-		await act(() => scalarValueInput.dispatchEvent(new Event('blur')))
+		await act(() => {
+			scalarValueInput.dispatchEvent(new Event('blur'))
+		})
 		expect(scalarValueInput.getAttribute('aria-invalid')).toBe('true')
-		await act(() => fireEvent.input(scalarValueInput, { target: { value: '26' } }))
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '26' } })
+		})
 		expect(scalarValueInput.value).toBe('26')
 		expect(scalarValueInput.getAttribute('aria-invalid')).not.toBe('true')
 	})
@@ -224,16 +232,24 @@ describe('ScalarOutcomePicker', () => {
 		const q = within(document.body)
 		const input = q.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
 		const slider = q.getByRole('slider', { name: 'Temperature' }) as HTMLInputElement
-		await act(() => fireEvent.input(input, { target: { value: '-2.5' } }))
+		await act(() => {
+			fireEvent.input(input, { target: { value: '-2.5' } })
+		})
 		expect(input.value).toBe('-2.5')
 		expect(slider.value).toBe('25')
 		// The iOS decimal keypad has no minus key, so a range with negative values keeps the full keyboard.
 		expect(input.getAttribute('inputmode')).toBeNull()
-		await act(() => fireEvent.input(input, { target: { value: '-2.55' } }))
-		await act(() => input.dispatchEvent(new Event('blur')))
+		await act(() => {
+			fireEvent.input(input, { target: { value: '-2.55' } })
+		})
+		await act(() => {
+			input.dispatchEvent(new Event('blur'))
+		})
 		expect(input.getAttribute('aria-invalid')).toBe('true')
 		expect(q.getByText('Enter a value from -5 to 5 in steps of 0.1.')).not.toBeNull()
-		await act(() => fireEvent.input(input, { target: { value: '5' } }))
+		await act(() => {
+			fireEvent.input(input, { target: { value: '5' } })
+		})
 		expect(slider.value).toBe('100')
 		expect(input.getAttribute('aria-invalid')).not.toBe('true')
 	})

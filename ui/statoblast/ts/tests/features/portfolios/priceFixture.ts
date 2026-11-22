@@ -1,3 +1,5 @@
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { loadPortfolioForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -55,6 +57,8 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 	let wethAllowanceAttoEth = 0n
 	let repAllowanceAttoRep = 0n
 	let baseFeePerGas = 0n
+	let recoveryCallFailure: Error | undefined
+	const recoveryCalls: Parameters<ReadClient['simulateContract']>[0][] = []
 	const game: OpenOracleStatePreimage['game'] = {
 		callbackContract: priceEscrow,
 		callbackGasLimit: 1_000_000n,
@@ -100,7 +104,12 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 		}),
 	)
 	const pricedClient = client.extend(() => ({
-		getBlock: async (parameters: Parameters<typeof client.getBlock>[0]) => ({ ...(await client.getBlock(parameters)), baseFeePerGas }),
+		simulateContract: testDouble<ReadClient['simulateContract']>(async (request: Parameters<ReadClient['simulateContract']>[0]) => {
+			recoveryCalls.push(request)
+			if (recoveryCallFailure !== undefined) throw recoveryCallFailure
+			return { result: undefined }
+		}),
+		getBlock: async () => ({ ...(await client.getBlock()), baseFeePerGas }),
 	}))
 	const backend = { ...source.backend, createReadClient: () => pricedClient }
 	installActiveEnvironmentForTesting(backend)
@@ -118,6 +127,10 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 		setAllowances: (weth: bigint, rep: bigint) => {
 			wethAllowanceAttoEth = weth
 			repAllowanceAttoRep = rep
+		},
+		recoveryCalls,
+		setRecoveryCallFailure: (failure: Error | undefined) => {
+			recoveryCallFailure = failure
 		},
 		setBaseFee: (fee: bigint) => {
 			baseFeePerGas = fee

@@ -48,7 +48,7 @@
 						</tr>
 					</tbody>
 				</table>
-				<p><code>TRADING_FEE_BPS</code> must be a whole number from 0 to 9999. The script stops when the RPC chain ID differs from the core manifest's, when the manifest's <code>SecurityPoolFactory</code> has no code on that chain, or when the RPC exposes no account. Manifests must not contain secrets.</p>
+				<p><code>TRADING_FEE_BPS</code> must be a whole number from 0 to 9999; only an unset variable selects the default, and an empty value stops the script. The script stops when the RPC chain ID differs from the core manifest's, when the manifest's <code>SecurityPoolFactory</code> has no code on that chain, or when the RPC exposes no account. Manifests must not contain secrets.</p>
 			</section>
 			<section id="manifest">
 				<h2>Deployment manifest</h2>

@@ -21,12 +21,9 @@ export type QuestionAccountingReplay = {
 
 export type PoolStateReplay = {
 	shareTokenSupplyAttoShares?: bigint
-	totalRepBackingUnits?: bigint
 	systemState?: bigint
 	awaitingForkContinuation?: boolean
 	escalationGame?: Address
-	forkModeActive?: boolean
-	repTransferredAtFork?: bigint
 }
 
 export type AuctionBidReplay = {
@@ -746,11 +743,7 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 		state.completeSetSupplies.set(log.emitter, shareTokenSupplyAttoShares)
 		return
 	}
-	if (log.eventName === 'TotalRepBackingUnitsSet') {
-		poolState.totalRepBackingUnits = requireBigInt(log.args, 'totalRepBackingUnits')
-		state.poolStates.set(log.emitter, poolState)
-		return
-	}
+
 	if (log.eventName === 'SystemStateSet') {
 		poolState.systemState = requireBigInt(log.args, 'systemState')
 		state.poolStates.set(log.emitter, poolState)
@@ -763,13 +756,6 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 	}
 	if (log.eventName === 'EscalationGameSet') {
 		poolState.escalationGame = requireAddress(log.args, 'escalationGame')
-		state.poolStates.set(log.emitter, poolState)
-		return
-	}
-	if (log.eventName === 'PoolForkModeActivated') {
-		poolState.forkModeActive = true
-		poolState.repTransferredAtFork = requireBigInt(log.args, 'repTransferredAttoRep')
-		poolState.systemState = requireBigInt(log.args, 'systemState')
 		state.poolStates.set(log.emitter, poolState)
 		return
 	}

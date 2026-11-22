@@ -62,7 +62,7 @@ export const shareBackingDetail = 'Collateral values assume the outcome wins; th
 
 export const actionUnavailableReason = 'This action is unavailable in the current pool state.'
 export const formatMaxKeepsGasReserveHint = (gasReserve: string) => `Max keeps ${gasReserve} in your wallet for gas.`
-export const mintingPausedDuringDispute = 'Minting is paused while the outcome is disputed.'
+export const mintingPausedDuringDispute = 'Minting is closed for this question once reporting starts.'
 export const formatNoWinningSharesReason = (outcomeLabel: string) => `You hold no winning ${outcomeLabel} shares to redeem.`
 export const formatWinningOutcomeShares = (outcomeLabel: string) => `Winning ${outcomeLabel} shares`
 export const expectedCollateralPayout = 'Expected collateral payout'
@@ -75,9 +75,11 @@ export const formatMigratingShares = (amount: string, outcomeLabel: string) => `
 export const shareMigrationIrreversible = 'Migration cannot be undone.'
 export const formatMigrateSharesReviewTitle = (outcomeLabel: string) => `Migrate ${outcomeLabel} shares`
 export const formatMigrateSharesReviewUnit = (outcomeLabel: string) => `${outcomeLabel} shares`
-export const formatMigrateSharesReviewDescription = (outcomeLabel: string) => `Moves your whole ${outcomeLabel} balance into the selected child universes. ${shareMigrationIrreversible}`
+export const formatMigrateSharesReviewDescription = (outcomeLabel: string) => `Creates your whole ${outcomeLabel} balance in each selected child universe and keeps the source balance locked. ${shareMigrationIrreversible}`
 export const mintAmountRequired = 'Enter a mint amount.'
 export const redeemAmountRequired = 'Enter a redeem amount.'
 
 export const sharedPoolCapacityAtReview = 'Quoted before submission'
 export const sharedPoolPurchaseDetail = 'Purchases use shared REP backing. The transaction includes the quoted purchase fee in addition to this mint amount.'
+
+export const mintingClosedAtQuestionEnd = 'Minting closed when the question ended.'

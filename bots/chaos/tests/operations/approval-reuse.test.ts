@@ -30,18 +30,18 @@ function fixture(definitionId: string) {
 		snapshot.anchor.baseFeePerGas = '1'
 		pool.oracleRequestFunding = {
 			escalationHaltMultiplierBps: '10000',
-			feePercentage: '0',
-			gasConsumedOpenOracleReportPrice: '3',
-			gasUnitsForOneDispute: '1',
+			minimumReportCollateral: '5',
+			minimumRepReportAttoRep: 0n.toString(),
+			settlementBountyMultiplierBps: '10000',
+
 			initialReportPriorityFeeAttoEthPerGas: 1n.toString(),
-			openOracleSecurityMultiplierBps: '10000',
-			protocolFee: '0',
+
 			settlementCallbackGasLimit: '2',
-			targetPriceErrorForDispute: '5000000',
 		}
 		pool.minimumToken1ReportAttoEth = '6'
-		pool.requestPriceCostAttoEth = '400105'
+		pool.requestPriceCostAttoEth = '784107'
 		pool.settlementCollateralAttoEth = '100'
+		pool.oracleExposureAttoEth = '100'
 	}
 	snapshot.deployments.uniswapV3Factory = address(40)
 	snapshot.genesisUniswap = { factory: true, initialized: true, liquidity: definitionId.endsWith('add-liquidity') ? '1' : '0', pool: address(41), proxy: true, seeder: true }

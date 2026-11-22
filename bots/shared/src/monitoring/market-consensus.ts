@@ -238,7 +238,7 @@ function groupEstimate(kind: MarketVenueKind, observations: readonly MarketConse
 	const minimumPriceRepPerEth = prices.reduce((minimum, price) => (price < minimum ? price : minimum), prices[0] ?? 0n)
 	const maximumPriceRepPerEth = prices.reduce((maximum, price) => (price > maximum ? price : maximum), prices[0] ?? 0n)
 	if (observations.length < minimumSources) reasons.push(`Only ${observations.length.toString()} independent ${kind.toUpperCase()} source(s); ${minimumSources.toString()} required`)
-	if (priceRepPerEth > 0n && deviationBps(maximumPriceRepPerEth, minimumPriceRepPerEth) > settings.maximumVenueDispersionBps) reasons.push(`${kind.toUpperCase()} venue dispersion exceeds the configured limit`)
+	if (priceRepPerEth > 0n && ((maximumPriceRepPerEth - minimumPriceRepPerEth) * BPS) / priceRepPerEth > settings.maximumVenueDispersionBps) reasons.push(`${kind.toUpperCase()} venue dispersion exceeds the configured limit`)
 	const bidDepthAttoEth = observations.reduce((total, observation) => total + observation.bidDepthAttoEth, 0n)
 	const askDepthAttoEth = observations.reduce((total, observation) => total + observation.askDepthAttoEth, 0n)
 	if (kind === 'dex' && observations.some(observation => observation.bidDepthAttoEth < settings.minimumBidDepthAttoEthPerSource)) reasons.push('DEX bid depth is below the per-source minimum')

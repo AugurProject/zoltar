@@ -16,9 +16,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  FOUNDRY_VERSION: v1.5.1
-
 jobs:
   changes:
     name: Classify changes
@@ -69,7 +66,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-ci
         with:
-          foundry: "false"
+
           build-inputs: ci-build-inputs
       - run: bun run docs:check:current
       - if: needs.changes.outputs.core != 'true'
@@ -89,7 +86,7 @@ jobs:
         with:
           profile: ${{ (needs.changes.outputs.core == 'true' || needs.changes.outputs.docs == 'true') && 'full' || 'contracts' }}
           verify-generated: ${{ needs.changes.outputs.core == 'true' && 'true' || 'false' }}
-          foundry: "false"
+
       - name: Read canonical artifact metadata
         id: projects
         run: bun ./tooling/repo/query-projects.mts --github-output
@@ -123,7 +120,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-ci
         with:
-          foundry: "false"
+
           build-inputs: ci-build-inputs
       - name: Verify pre-task worktree cleanliness
         run: bash tooling/repo/check-worktree-clean.sh pre-task
@@ -210,7 +207,7 @@ jobs:
   checks:
     name: Repository checks
     needs: [changes, build-inputs]
-    if: needs.changes.outputs.core == 'true'
+    if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -219,8 +216,8 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-ci
         with:
-          foundry: "false"
-          build-inputs: ci-build-inputs
+
+          build-inputs: ${{ needs.build-inputs.result == 'success' && (needs.changes.outputs.core == 'true' || needs.changes.outputs.docs == 'true') && 'ci-build-inputs' || '' }}
       - run: bun run format:check
       - run: bun run ci:typecheck:current
       - run: bun run check:static && bun run check:repository:current
@@ -234,7 +231,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-ci
         with:
-          foundry: "false"
+
           build-inputs: ci-build-inputs
       - run: bun run knip
 
@@ -261,7 +258,7 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           profile: contracts
-          foundry: "false"
+
           build-inputs: ci-contract-inputs
       - run: bun run check:solidity-format
       - run: bun run tsc:solidity:current
@@ -314,7 +311,7 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           profile: contracts
-          foundry: "false"
+
           build-inputs: ci-contract-inputs
       - run: bun run test:integration
         working-directory: augurScan
@@ -371,7 +368,8 @@ jobs:
           require_result "${PACKAGES_SELECTED}" "${PACKAGES_RESULT}" packages
           require_result "${INTEGRATION_SELECTED}" "${INTEGRATION_RESULT}" augurScan-integration
           require_result "${CORE_SELECTED}" "${KNIP_RESULT}" knip
-          for result in PREPARE_RESULT APPLICATION_TESTS_RESULT BROWSER_SMOKE_RESULT BROWSER_WORKFLOW_RESULT CHECKS_RESULT AUDIT_RESULT; do
+          require_result "true" "${CHECKS_RESULT}" checks
+          for result in PREPARE_RESULT APPLICATION_TESTS_RESULT BROWSER_SMOKE_RESULT BROWSER_WORKFLOW_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
           if [[ "${FORCED_FULL}" == "true" && "${ALL_SCOPES_SELECTED}" != "true" ]]; then

@@ -452,6 +452,14 @@
 		"./features/portfolios/hooks/usePortfolioQuestionDetails.js": {
 			"bun": "./ts/features/portfolios/hooks/usePortfolioQuestionDetails.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolioQuestionDetails.js"
+		},
+		"./features/portfolios/components/PortfolioSharedFork.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioSharedFork.tsx",
+			"default": "./js/features/portfolios/components/PortfolioSharedFork.js"
+		},
+		"./copy/portfolioSharedFork.js": {
+			"bun": "./ts/copy/portfolioSharedFork.ts",
+			"default": "./js/copy/portfolioSharedFork.js"
 		}
 	},
 	"version": "1.0.0"

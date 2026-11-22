@@ -318,8 +318,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(noBalance == expected[2], 'Router NO residue');
 	}
 
-	/// @dev A nonzero `conditionalYesBpsValue` initializes an empty pair at that price; otherwise, and whenever
-	/// the pair already has liquidity, complete sets are added proportionally at the pair's own price.
+	/// @dev An empty pair requires a nonzero `conditionalYesBpsValue` to initialize at that price.
+	/// An initialized pair adds complete sets proportionally at the pair's own price.
 	function _provideLiquidity(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minYesUsed, uint256 minNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) private returns (LiquidityResult memory result) {
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();

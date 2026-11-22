@@ -63,9 +63,13 @@ describe('GlobalTransactionDialog', () => {
 
 			initiating.focus()
 			const dismiss = queries.getByRole('button', { name: 'Dismiss' })
-			await act(() => dismiss.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true, relatedTarget: initiating })))
+			await act(() => {
+				dismiss.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true, relatedTarget: initiating }))
+			})
 			dismiss.focus()
-			await act(() => fireEvent.keyDown(dismiss, { key: 'Escape' }))
+			await act(() => {
+				fireEvent.keyDown(dismiss, { key: 'Escape' })
+			})
 			expect(rendered.container.querySelector('.global-transaction-dialog')).toBeNull()
 			expect(document.activeElement).toBe(initiating)
 		} finally {

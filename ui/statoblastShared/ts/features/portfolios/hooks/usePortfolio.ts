@@ -65,6 +65,8 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		const current = () => active.current && id === generation.current && environment.isCurrent() && portfolioBackendReady(getActiveBackend())
 		loading.value = true
 		error.value = undefined
+		// Setup reads only portfolio state, so a failed read of one owner's account keeps the shared setup visible.
+		let loadedSetup: PortfolioSetupSnapshot | undefined
 		try {
 			const portfolio = getAddress(managerOverride.trim())
 			const owner = getAddress(ownerOverride.trim())
@@ -72,6 +74,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 			if (universeId === undefined) throw new Error('Enter a valid universe ID.')
 			const client = createConnectedReadClient()
 			const preparation = await loadPortfolioSetup(client, portfolio, owner)
+			loadedSetup = preparation
 			const next = preparation.stage === 4 ? await loadPortfolioAccount(client, portfolio, owner, universeId, questionStart.value, admissionStart.value) : undefined
 			if (!current()) return
 			setup.value = preparation
@@ -90,7 +93,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 			if (current()) {
 				snapshot.value = undefined
 				presentationSnapshot.value = undefined
-				setup.value = undefined
+				setup.value = loadedSetup
 				error.value = getErrorMessage(failure, 'Unable to load the portfolio account.')
 			}
 		} finally {

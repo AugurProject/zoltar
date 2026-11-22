@@ -53,7 +53,7 @@ export const currentTargetSatisfied = 'The current commitment already fits this 
 export const activeCommitment = 'Active position commitment (collateral)'
 export const requiredCollateral = 'Required REP at saved target'
 export const minimumCommitment = 'Minimum commitment (collateral)'
-export const minimumCommitmentHint = 'Also the collateral lot size for fork auction bids.'
+export const minimumCommitmentHint = 'The minimum collateral commitment; fork auction lots may be larger.'
 export const positions = 'Your commitment position'
 export const positionsHint = 'Retirement uses spare healthy capacity and reserves capacity for earlier requests. A partial request reserves only its reduction; the commitment you keep can still back purchases.'
 export const noPositions = 'No pledged commitments'
@@ -68,7 +68,7 @@ export const belowTarget = 'Below your saved health target. Add REP or request a
 export const liquidationHealth = 'Liquidation boundary'
 export const liquidationHealthy = 'Above boundary'
 export const liquidationUnhealthy = 'Below boundary'
-export const liquidationHint = 'Liquidation uses the protocol backing requirement and oracle price bound. Keeper rewards come from this position’s REP.'
+export const liquidationHint = 'Liquidation uses the protocol backing requirement and oracle price bound. Repairs retain source principal and pay no keeper REP award; funded receivers earn future fees.'
 export const liquidationSince = 'Below liquidation boundary since'
 export const noLiquidationInterval = 'No observed adverse interval'
 export const liquidationTimingHint = 'This marks the accepted adverse price observation, not a guaranteed grace period.'
@@ -99,17 +99,17 @@ export const retirementSpare = 'Spare healthy commitment'
 export const retirementAhead = 'Reserved for earlier requests'
 export const retirementReduction = 'Your requested reduction'
 export const rewardVesting = 'Reward vesting (hours)'
-export const outcomeRate = 'Minimum settlement units per outcome'
+export const outcomeRate = 'Minimum collateral reserved per share'
 export const outcomeRateHint = 'Holding fees stop before reducing backing below this rate. Fixed at creation; fork recovery can pay less.'
 
 export const prepareTitle = 'Complete portfolio setup'
-export const prepareHint = 'Each stage is one transaction with bounded deployment work. Anyone can resume setup before deposits and purchases open.'
+export const prepareHint = 'Each stage is one transaction with bounded deployment work. Until the origin universe forks, anyone can resume setup before deposits and purchases open.'
 export const prepareStages = ['1. Prepare settlement', '2. Prepare reporting and forks', '3. Prepare capital ledger', '4. Activate portfolio']
 export const prepareProgress = (stage: number) => `${stage} of 4 setup stages complete`
 export const prepareProgressUnknown = 'Setup progress appears once the portfolio account loads.'
 export const preparing = 'Preparing modules…'
 
-export const annualFee = 'Annual time fee (%)'
+export const annualFee = 'Annual holding fee (%)'
 export const annualFeeHint = 'Fixed for this portfolio. Accrues over time against question backing while the price is fresh and settlement is fully funded.'
 
 export const reportId = 'Funded report ID (optional)'
@@ -124,3 +124,6 @@ export const lastConfirmed = 'Last confirmed balances. Account refresh pending.'
 export const auctionVaultOwnership = 'This auction vault has separate collateral and obligations. Your connected wallet controls it, funds deposits and receives withdrawals.'
 
 export const depositLiquidating = 'This position is liquidating. REP top-ups are unavailable.'
+
+export const resubmitRetirement = 'Re-submit retirement request'
+export const resubmittingRetirement = 'Re-submitting retirement…'

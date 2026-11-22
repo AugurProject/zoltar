@@ -244,7 +244,7 @@ describe('zoltar contract helpers', () => {
 
 	test('reads only explicitly selected scalar children, including Invalid and the maximum tick', async () => {
 		const numTicks = 10n ** 25n
-		const lastIndex = getScalarOutcomeIndex({ numTicks }, numTicks)
+		const lastIndex = getScalarOutcomeIndex({ numTicks, answerUnit: '', displayValueMin: 0n, displayValueMax: numTicks }, numTicks)
 		const client = createReadClient({
 			multicallResponses: [
 				[REP_TOKEN, [0n, 55n, 2n, REP_TOKEN, 77n], 15n, 5n, 5n],

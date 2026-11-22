@@ -1,3 +1,4 @@
+import { deriveChildUniverseId } from '../support/universe.ts'
 import { synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
 import { preflightOperationPreview } from '../../src/execution/operation-preview.ts'
 import { processRetirementCycle, retirementPositionsForScan } from '../../src/runtime/retirement-runner.ts'
@@ -34,8 +35,8 @@ const sender = getAddress('0x0000000000000000000000000000000000000001')
 const caller = getAddress('0x0000000000000000000000000000000000000002')
 const target = getAddress('0x0000000000000000000000000000000000000003')
 const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
-const childRepSplitSignature = 'ChildRepSplit(address,uint256,uint256,uint256)'
-const childRepSplitTopic = keccak256(toHex(childRepSplitSignature))
+const migrationRepSplitSignature = 'MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'
+const migrationRepSplitTopic = keccak256(toHex(migrationRepSplitSignature))
 
 afterEach(async () => {
 	for (const server of servers.splice(0)) server.stop(true)
@@ -72,7 +73,6 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 			maxPools: 1,
 			maxQuestions: 1,
 			maxUniverses: 1,
-			maxVaultsPerPool: 1,
 		},
 		network: { chainId: 1, explorerUrl: '', maximumBlockIntervalSeconds: 15, name: 'mainnet' },
 		networkConfigured: true,
@@ -695,7 +695,7 @@ function canonicalLifecyclePlan(): OperationPlan {
 	return {
 		...base,
 		classification: 'lifecycle-obligation',
-		definitionId: 'statoblast.fork.migrate-rep',
+		definitionId: 'zoltar.migration.split',
 		id: 'plan:migrate-rep-receipt',
 		label: 'Fork workflow: migrate-rep',
 		metadata: { outcome: '0', pool: target, targetAttoRep },
@@ -706,15 +706,15 @@ function canonicalLifecyclePlan(): OperationPlan {
 				...step,
 				evidence: [
 					{
-						abi: 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)',
+						abi: 'event MigrationRepSplit(address indexed migrator, address recipient, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)',
 						canonicalLifecycleConfirmation: true,
 						emitter: target,
 						equals: targetAttoRep,
-						field: 'childPoolRepSplitAttoRep',
-						indexed: { outcomeIndex: '0', parent: target },
+						field: 'childMigrationRepAmountAttoRep',
+						indexed: { universeId: '0', migrator: target },
 						kind: 'decoded-event-field',
-						signature: childRepSplitSignature,
-						topic0: childRepSplitTopic,
+						signature: migrationRepSplitSignature,
+						topic0: migrationRepSplitTopic,
 					},
 				],
 				id: 'migrate-rep',
@@ -1142,7 +1142,7 @@ describe('atomic receipt disposition persistence', () => {
 		const plan = executablePlan()
 		const action = plan.steps[0]
 		if (action === undefined) throw new Error('Execution test plan has no action')
-		action.evidence = [{ emitter: target, kind: 'event', signature: childRepSplitSignature, topic0: childRepSplitTopic }]
+		action.evidence = [{ emitter: target, kind: 'event', signature: migrationRepSplitSignature, topic0: migrationRepSplitTopic }]
 
 		await expect(executeOperationPlan(environment, plan)).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
 
@@ -1164,12 +1164,12 @@ describe('canonical lifecycle receipt disposition', () => {
 		expect((await loadDurableState(stateFile, 1)).workflows[0]?.status).toBe('waiting-obligation')
 	})
 
-	test('completes immediately from an exact ChildRepSplit event', async () => {
+	test('completes immediately from an exact MigrationRepSplit event', async () => {
 		const { environment, stateFile } = await finalizedExecutionFixture([
 			{
 				address: target,
-				data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [100n, 0n]),
-				topics: [childRepSplitTopic, toHex(BigInt(target), { size: 32 }), toHex(0n, { size: 32 })],
+				data: encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [target, 0n, 100n, 100n]),
+				topics: [migrationRepSplitTopic, toHex(BigInt(target), { size: 32 }), toHex(0n, { size: 32 }), toHex(deriveChildUniverseId(0n, 0n), { size: 32 })],
 			},
 		])
 

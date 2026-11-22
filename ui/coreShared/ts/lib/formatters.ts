@@ -121,17 +121,17 @@ function formatUtcTimestamp(timestamp: bigint) {
 
 /**
  * The timestamp in the viewer's time zone, or `timeZone`, in the same layout as the UTC form, such as
- * `2023-11-14 17:13:20 EST`. Undefined when that zone shows the same wall-clock time as UTC, so callers add nothing.
+ * `2023-11-14 17:13:20 UTC-5`. Undefined when that zone shows the same wall-clock time as UTC, so callers add nothing.
  */
 export function formatLocalTimestamp(timestamp: bigint, timeZone?: string) {
 	const utcTimestamp = formatUtcTimestamp(timestamp)
 	if (utcTimestamp === undefined) return undefined
 	const date = new Date(bigintToSafeNumber(timestamp * BigInt(MILLISECONDS_PER_SECOND), 'Timestamp'))
-	const parts = new Intl.DateTimeFormat('en-US', { day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', second: '2-digit', timeZone, timeZoneName: 'short', year: 'numeric' }).formatToParts(date)
+	const parts = new Intl.DateTimeFormat('en-US', { day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', second: '2-digit', timeZone, timeZoneName: 'shortOffset', year: 'numeric' }).formatToParts(date)
 	const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(candidate => candidate.type === type)?.value ?? ''
 	const wallClock = `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}:${part('second')}`
 	if (`${wallClock} UTC` === utcTimestamp) return undefined
-	return `${wallClock} ${part('timeZoneName')}`
+	return `${wallClock} ${part('timeZoneName').replace(/^GMT/, 'UTC')}`
 }
 
 export function formatTimestampDateTime(timestamp: bigint) {
@@ -158,14 +158,18 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 	return formatDecimalString(formattedValue)
 }
 
-/** Separates a unit from its amount with a space, except the percent and multiplier signs, which attach directly. */
-export function formatUnitSuffix(unit: string) {
-	if (unit === '') return ''
-	return unit === '%' || unit === MULTIPLIER_SIGN ? unit : ` ${unit}`
+function attachesDirectly(unit: string) {
+	return unit === '' || unit === '%' || unit === MULTIPLIER_SIGN
 }
 
+/** Separates a unit from its amount with a space, except the percent and multiplier signs, which attach directly. */
+export function formatUnitSuffix(unit: string) {
+	return attachesDirectly(unit) ? unit : ` ${unit}`
+}
+
+/** The plain-string form of `formatUnitSuffix`: a no-break space keeps the unit on the amount's line, and `%` and `×` still attach directly. */
 export function formatValueWithUnit(value: string, unit: string) {
-	return `${value}\u00a0${unit}`
+	return attachesDirectly(unit) ? `${value}${unit}` : `${value}\u00a0${unit}`
 }
 
 export function formatCurrencyBalanceWithUnit(value: bigint | undefined, unit: string, units: number = 18) {
@@ -302,6 +306,19 @@ export function formatCeilingAmountDisplay(value: bigint, units = 18) {
 	return (value * scale) % base === 0n ? text : `${APPROXIMATE_MARKER}${text}`
 }
 
+/**
+ * The amount an approval button names: the compact form while it reads the same quantity as the standard ceiling the
+ * requirement shows, and that standard ceiling once compact rounding up would overstate it (1 000.01 reads `1 000.01`,
+ * never `≈ 1.01k`). Undefined beyond the SI suffix range, where the button names no amount.
+ */
+export function formatCeilingApprovalLabel(value: bigint, units = 18) {
+	const amount = formatCeilingAmount(value, units)
+	if (amount === undefined) return undefined
+	const base = 10n ** BigInt(units)
+	const compact = (value * 100n + roundingOffset(base, 'up')) / base >= COMPACT_NOTATION_THRESHOLD_UNITS * 100n
+	return amount.approximate && compact ? formatCeilingAmountDisplay(value, units) : withApproximateMarker(amount)
+}
+
 export function formatAdditionalCeilingAmount(value: bigint, unit: string, units = 18) {
 	return `${formatCeilingAmountDisplay(value, units)}\u00a0more\u00a0${unit}`
 }
@@ -346,8 +363,16 @@ export function getWallClockTimestamp() {
 	return BigInt(Math.floor(Date.now() / 1_000))
 }
 
+/** Zero is the immediate sentinel, as in `TimestampValue`, so it carries no relative time. */
 export function formatTimestampWithRelative(timestamp: bigint, currentTimestamp = getWallClockTimestamp()) {
+	if (timestamp === 0n) return formatTimestamp(timestamp)
 	return `${formatTimestamp(timestamp)} (${formatRelativeTimestamp(timestamp, currentTimestamp)})`
+}
+
+/** A literal chain time such as a block timestamp, where zero is the Unix epoch rather than the immediate sentinel. */
+export function formatBlockTimestampWithRelative(timestamp: bigint, currentTimestamp = getWallClockTimestamp()) {
+	const absoluteTimestamp = formatUtcTimestamp(timestamp) ?? `Invalid timestamp (${timestamp.toString()})`
+	return `${absoluteTimestamp} (${formatRelativeTimestamp(timestamp, currentTimestamp)})`
 }
 
 function formatDurationUnits(largest: bigint, largestUnit: string, next: bigint, nextUnit: string) {

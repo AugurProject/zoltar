@@ -109,6 +109,7 @@ function state(
 		rpcEndpointHealth?: { consecutiveFailures: number; latencyMilliseconds?: number; status: string; target: string }[]
 		universes?: DashboardUniverse[]
 		wallet?: string
+		walletRep?: Record<string, string>
 	} = {},
 ) {
 	const botVault: { address: string; capacityOwnershipEth: string; claimableFeesEth: string; healthBps?: string; openInterestDisplay: string; vaultRepBacking: string } = { address: '0x2', capacityOwnershipEth: '0', openInterestDisplay: '0', vaultRepBacking: '0', claimableFeesEth: '0' }
@@ -132,8 +133,8 @@ function state(
 			poolCount: 1,
 			selectedPoolCount: 1,
 			walletEth: '1',
-			walletRep: '2',
 		},
+		walletRep: options.walletRep,
 		network: options.network ?? 'mainnet',
 		paused: options.paused ?? false,
 		pendingTransactions: options.pendingTransactions ?? [],
@@ -989,7 +990,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	test('prunes approved descendants when changing or clearing a truth path', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2'), universe('4', '2', '1')]
 		const siblingPage = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
-		expect(siblingPage.window.document.querySelector('.ue-detail-title')?.textContent).toBe('Root universe')
+		expect(siblingPage.window.document.querySelector('.ue-detail-title')?.textContent).toBe('Genesis universe')
 		const sibling = siblingPage.window.document.querySelector('input[value="3"]')
 		if (!(sibling instanceof siblingPage.window.HTMLInputElement)) throw new Error('Expected sibling truth control')
 		sibling.click()
@@ -1347,6 +1348,26 @@ describe('liquidator go-live settings', () => {
 		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ allowFundedTakeovers: true, maximumPrincipalRep: '5', maximumTotalPrincipalRep: '10', maximumCommitmentEth: '2', maximumOwnFundingRep: '3' }) })])
 	})
 
+	test('reviews and saves the takeover income horizon in seconds', async () => {
+		const page = await dashboard(mainnetConfiguration(), state())
+		const form = page.window.document.getElementById('strategy-form')
+		const input = form?.querySelector('[name="takeoverIncomeHorizonSeconds"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(input instanceof page.window.HTMLInputElement)) throw new Error('Missing takeover income horizon field')
+		expect(input.value).toBe('0')
+		input.value = '86400'
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = page.window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = page.window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review?.textContent).toContain('Takeover income horizon')
+		expect(review?.textContent).toContain('0 seconds→86400 seconds')
+		await page.confirmOperatorAction()
+		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
+		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ takeoverIncomeHorizonSeconds: 86_400 }) })])
+	})
+
 	test('keeps saved policy settings that the policy form does not edit', async () => {
 		const saved = mainnetConfiguration()
 		saved.portfolioPolicy = { ...saved.portfolioPolicy, takeoverIncomeHorizonSeconds: 86_400 }
@@ -1679,7 +1700,7 @@ test('keeps a large universe registry compact and finds collapsed descendants wi
 	const inspect = page.window.document.querySelector('.ue-node')
 	if (!(inspect instanceof page.window.HTMLButtonElement)) throw new Error('Expected matching universe')
 	inspect.click()
-	expect(page.window.document.querySelector('.ue-lineage')?.textContent).toBe('Root universe › Outcome 1 › Outcome 2')
+	expect(page.window.document.querySelector('.ue-lineage')?.textContent).toBe('Genesis universe › Universe 0x1 › Universe 0x1770')
 	const approval = page.window.document.querySelector('.ue-approve')
 	if (!(approval instanceof page.window.HTMLInputElement)) throw new Error('Expected approval control')
 	approval.click()
@@ -2030,7 +2051,7 @@ describe('liquidator dashboard operator safeguards', () => {
 		const page = await dashboard(saved, state())
 		expect(page.window.document.querySelector('#portfolio-selection-form')?.textContent).toContain('Universe ID')
 		expect(page.window.document.getElementById('recheck-recovery')?.textContent).toBe('Refresh')
-		expect(Array.from(page.window.document.querySelectorAll('#activity-filter option'), option => option.getAttribute('value'))).toEqual(['all', 'failed', 'pending', 'confirmed', 'reverted', 'dry-run', 'info'])
+		expect(Array.from(page.window.document.querySelectorAll('#activity-filter option'), option => option.getAttribute('value'))).toEqual(['all', 'failed', 'pending', 'confirmed', 'dry-run', 'info'])
 		expect(Array.from(page.window.document.querySelectorAll('#metrics dt'), term => term.textContent).slice(0, 2)).toEqual(['Managed portfolios', 'Selected portfolios'])
 	})
 })
@@ -2054,4 +2075,14 @@ test('adds exact portfolio/universe scopes and preserves entered values after a 
 	await page.waitUntilComplete()
 	expect(page.supportedPoolRequests.at(-1)).toEqual({ address: address.value, universeId: '7', supported: true, chainId: 1 })
 	expect(page.window.document.querySelector('#portfolio-selections')?.textContent).toContain('universe 7')
+})
+
+test('shows independent wallet REP balances for distinct tokens without summing them', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(undefined, [], { walletRep: { '0x1111111111111111111111111111111111111111': '2', '0x2222222222222222222222222222222222222222': '3' } }))
+	const labels = Array.from(page.window.document.querySelectorAll('#wallet-metrics dt'), node => node.textContent).filter(label => label?.startsWith('Wallet REP'))
+	expect(labels).toEqual([expect.stringContaining('1111'), expect.stringContaining('2222')])
+	const wallet = page.window.document.querySelector('#wallet-metrics')?.textContent
+	expect(wallet).toContain('2 REP')
+	expect(wallet).toContain('3 REP')
+	expect(wallet).not.toContain('5 REP')
 })

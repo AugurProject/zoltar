@@ -14,11 +14,14 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 	if (signature === selector('redeemShares()')) return '0x'
 	if (signature === selector('aggregate3((address,bool,bytes)[])')) {
 		const decoded = decodeFunctionData({ abi: aggregateAbi, data })
+		const calls = decoded.args[0]
+		if (!Array.isArray(calls)) throw new Error('Missing multicall calls')
 		return encodeAbiParameters(
 			[{ type: 'tuple[]', components: [boolean, { type: 'bytes' }] }],
 			[
-				decoded.args[0].map(call => {
-					const result = feeAccountingRpcResult(call.callData, market, timestamp)
+				calls.map((call: unknown) => {
+					if (typeof call !== 'object' || call === null || !('callData' in call) || typeof call.callData !== 'string' || !/^0x[0-9a-fA-F]*$/.test(call.callData)) throw new Error('Invalid multicall call')
+					const result = feeAccountingRpcResult(`0x${call.callData.slice(2)}`, market, timestamp)
 					if (result === undefined) throw new Error(`Unexpected portfolio multicall ${call.callData}`)
 					return [true, result]
 				}),

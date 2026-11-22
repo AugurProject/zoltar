@@ -95,7 +95,7 @@ describe('audit fuzz: constant-product trading math and pair', () => {
 	let coreFactory: Address
 	const raw = (method: string, params: unknown[]) => getAnvilWindowEthereum().requestRaw({ method, params })
 	const sendRaw = async (to: Address | undefined, data: Hex) => {
-		const hash = await raw('eth_sendTransaction', [to === undefined ? { from: account, data, gas: '0x1c9c380' } : { from: account, to, data, gas: '0x1c9c380' }])
+		const hash = await raw('eth_sendTransaction', [to === undefined ? { from: account, data, gas: '0x1000000' } : { from: account, to, data, gas: '0x1000000' }])
 		let receipt: unknown
 		for (let attempt = 0; attempt < 2000 && (typeof receipt !== 'object' || receipt === null); attempt++) {
 			try {

@@ -3,7 +3,7 @@ import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportLifecycleEventName, reportRoundChanges } from '../operations.ts'
 import { auctionCollateral } from '../repositories/auction-collateral.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
-import { ApiConflictError, ApiRequestError, hasCursorSnapshot, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, routeInteger } from './shared.ts'
+import { ApiConflictError, ApiRequestError, hasCursorSnapshot, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, postgresBigint, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
 
 export const snapshotBoundary = (asOf: Record<string, unknown>): readonly [string, string, string, string, string, string] => [
@@ -148,6 +148,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 		sql,
 		chainId,
 		[cursor, decisionCursor].flatMap(item => (item === undefined ? [] : [{ parts: item, offset: 3 }])),
+		postgresBigint(url.searchParams.get('atBlock'), 'atBlock'),
 	)
 	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, 'report', identity, asOf, cursor)
@@ -158,7 +159,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 	const decisionCursorBlock = decisionPage.cursor?.[9] ?? String(asOf['blockNumber'])
 	const decisionCursorTx = decisionPage.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const decisionCursorLog = decisionPage.cursor?.[11] ?? 2_147_483_647
-	const { rows, current, coordinatorDecisions } = await reportDetailData(sql, {
+	const { rows, current, round, coordinatorDecisions } = await reportDetailData(sql, {
 		chainId,
 		snapshotBlock,
 		openOracleAddress,
@@ -168,15 +169,16 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 	})
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'Report not found' }, 404)
 	const currentData = jsonRecord(current?.['report_data'])
+	const roundData = jsonRecord(round?.['report_data'])
 	const lifecycle =
 		current === undefined
 			? undefined
 			: reportLifecycle({
 					eventName: reportLifecycleEventName(current['event_name']),
-					flags: typeof currentData['flags'] === 'string' ? currentData['flags'] : undefined,
-					reportTimestamp: typeof currentData['reportTimestamp'] === 'string' ? currentData['reportTimestamp'] : undefined,
-					disputeDelay: typeof currentData['disputeDelay'] === 'string' ? currentData['disputeDelay'] : undefined,
-					settlementTime: typeof currentData['settlementTime'] === 'string' ? currentData['settlementTime'] : undefined,
+					flags: typeof roundData['flags'] === 'string' ? roundData['flags'] : undefined,
+					reportTimestamp: typeof roundData['reportTimestamp'] === 'string' ? roundData['reportTimestamp'] : undefined,
+					disputeDelay: typeof roundData['disputeDelay'] === 'string' ? roundData['disputeDelay'] : undefined,
+					settlementTime: typeof roundData['settlementTime'] === 'string' ? roundData['settlementTime'] : undefined,
 					indexedBlock: String(asOf['blockNumber']),
 					indexedTimestamp: String(asOf['blockTimestamp']),
 				})
@@ -198,7 +200,7 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 	const address = parts[1]?.toLowerCase()
 	if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-f]{40}$/.test(address)) return json({ error: `Invalid ${domain} identifier` }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, domain, address)
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, domain, address, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
@@ -230,8 +232,8 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 		result['finalization'] = finalization
 		result['collateral'] = collateral ?? null
 	} else {
-		result['deposits'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'DepositOnOutcome' || row['event_name'] === 'LocalDepositAppended')
-		result['claims'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => String(row['event_name']).includes('Claim'))
+		result['deposits'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'LocalDepositAppended')
+		result['claims'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'ClaimDeposit')
 	}
 	return json({ chainId, asOf, data: result })
 }
@@ -241,7 +243,7 @@ export const forkDetailResponse = async (sql: SQL, parts: readonly string[], url
 	const identity = parts[1] === undefined ? undefined : decodeURIComponent(parts[1]).toLowerCase()
 	if (parts.length !== 2 || chainId === undefined || identity === undefined || identity.length === 0 || identity.length > 128) return json({ error: 'Invalid fork identifier' }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, 'fork', identity)
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, 'fork', identity, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])

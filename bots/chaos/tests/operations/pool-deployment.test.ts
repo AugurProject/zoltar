@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { deployPool } from '../../src/operations/statoblast/vaults.ts'
 import { snapshotFixture } from './fixture.ts'
 
-const options = { maximumBlockIntervalSeconds: 15, seed: 42, immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxUniverses: 100, maxVaultsPerPool: 100, maximumAggregateItems: 10_000 } }
+const options = { maximumBlockIntervalSeconds: 15, seed: 42, immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxUniverses: 100, maximumAggregateItems: 10_000 } }
 
 test('offers admission only for questions accepted by the anchored portfolio simulation', () => {
 	const snapshot = snapshotFixture()

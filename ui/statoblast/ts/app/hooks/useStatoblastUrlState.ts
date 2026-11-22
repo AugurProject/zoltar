@@ -15,7 +15,6 @@ type StatoblastUrlState = {
 	activeUniverseId: bigint
 	openOracleReportId: string
 	securityPoolsView: string
-	selectedPoolView: string
 	securityPoolAddress: string
 	securityPoolQuestionId: string
 }
@@ -31,7 +30,6 @@ function readStatoblastUrlState(search: string, routeHash: string): StatoblastUr
 		activeUniverseId: readUniverseQueryParam(search) ?? readUniverseQueryParam(window.location.search) ?? 0n,
 		openOracleReportId: readOpenOracleReportIdQueryParam(search) ?? '',
 		securityPoolsView: poolsLocation?.view ?? 'browse',
-		selectedPoolView: poolsLocation?.view === 'operate' ? poolsLocation.tab : '',
 		securityPoolAddress: poolsLocation?.view === 'operate' ? poolsLocation.securityPoolAddress : '',
 		securityPoolQuestionId: readSecurityPoolQuestionIdQueryParam(search) ?? '',
 	}
@@ -71,7 +69,7 @@ export function useStatoblastUrlState() {
 			const currentAddress = current?.view === 'operate' ? current.securityPoolAddress : ''
 			const currentIsPartial = currentAddress !== '' && !isHexAddressInput(currentAddress)
 			const nextAddress = securityPoolAddress.trim()
-			navigatePools(nextAddress === '' ? { view: 'browse' } : { securityPoolAddress: nextAddress, tab: '', view: 'operate' }, currentIsPartial ? 'replace' : 'push')
+			navigatePools(nextAddress === '' ? { view: 'browse' } : { securityPoolAddress: nextAddress, view: 'operate' }, currentIsPartial ? 'replace' : 'push')
 		},
 		[navigatePools],
 	)
@@ -79,7 +77,7 @@ export function useStatoblastUrlState() {
 	const openSecurityPoolInUniverse = useCallback(
 		(universeId: bigint, securityPoolAddress: string) => {
 			const nextAddress = securityPoolAddress.trim()
-			const location: PoolsLocation = nextAddress === '' ? { view: 'browse' } : { securityPoolAddress: nextAddress, tab: '', view: 'operate' }
+			const location: PoolsLocation = nextAddress === '' ? { view: 'browse' } : { securityPoolAddress: nextAddress, view: 'operate' }
 			navigateUrl(buildPoolsRouteHash(location), writeUniverseQueryParam(writePoolsLocationSearch(getRouteHashSearch(), parsePoolsRouteHash(getCurrentRouteHash()), location), universeId))
 		},
 		[navigateUrl],
@@ -113,14 +111,6 @@ export function useStatoblastUrlState() {
 		},
 		[navigatePools],
 	)
-	const setSelectedPoolView = useCallback(
-		(view: string | undefined) => {
-			const current = parsePoolsRouteHash(getCurrentRouteHash())
-			if (current?.view !== 'operate') return
-			navigatePools({ securityPoolAddress: current.securityPoolAddress, tab: view ?? '', view: 'operate' })
-		},
-		[navigatePools],
-	)
 
 	return {
 		...state,
@@ -131,7 +121,6 @@ export function useStatoblastUrlState() {
 		setVaultView,
 		setOpenOracleReport,
 		setSecurityPoolsView,
-		setSelectedPoolView,
 		setSecurityPoolAddress,
 		setSecurityPoolQuestionId,
 	}

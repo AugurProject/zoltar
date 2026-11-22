@@ -90,7 +90,6 @@ describe('liquidator dashboard server', () => {
 					poolCount: 1,
 					selectedPoolCount: 1,
 					walletEth: '4',
-					walletRep: '5',
 				},
 				operatorPath: protectedPath,
 				paused: false,
@@ -518,7 +517,7 @@ describe('liquidator dashboard server', () => {
 		failure = 'The saved key differs from the active signer; return to dry run and save or remove the conflicting saved key before rearming live execution'
 		expect(await request()).toBe(failure)
 		for (const endpoint of ['/api/signer', '/api/paused']) expect(await request(endpoint)).toBe(failure)
-		failure = 'Resolve pending transaction and staged-operation recovery before changing the signer'
+		failure = 'Resolve pending transaction recovery before changing the signer'
 		expect(await request('/api/signer')).toBe(failure)
 		failure = 'Execution signer 0x1111111111111111111111111111111111111111 on chain 1 is already locked (pid 4242 on host-a). Stop the other process before removing /workspace/.state/locks/signer.lock.'
 		expect(await request()).toBe('The signer is reserved by another liquidator process. Stop it or choose another signer before going live.')
@@ -623,4 +622,17 @@ test('#1480: lookup requires configured network and same-origin request', async 
 	const foreign = await fetch(new URL('/api/universe-lookup', server.url), { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://foreign.example' }, body: '{}' })
 	expect(foreign.status).toBe(403)
 	expect(reads).toBe(0)
+})
+
+test('publishes wallet REP separately for each token and filters arbitrary map entries', async () => {
+	const firstToken = '0x1111111111111111111111111111111111111111'
+	const secondToken = '0x2222222222222222222222222222222222222222'
+	const secretMarker = 'private-wallet-field-marker'
+	const server = startServer({ getState: () => ({ metrics: { walletRep: '5' }, walletRep: { [firstToken]: '2', [secondToken]: '3', protected: secretMarker, '0x3333333333333333333333333333333333333333': secretMarker } }) })
+	const response = await fetch(new URL('/api/state', server.url))
+	const body = await response.text()
+	const snapshot: unknown = JSON.parse(body)
+	expect(snapshot).toMatchObject({ metrics: {}, walletRep: { [firstToken]: '2', [secondToken]: '3' } })
+	expect(body).not.toContain(secretMarker)
+	expect(body).not.toContain('"walletRep":"5"')
 })

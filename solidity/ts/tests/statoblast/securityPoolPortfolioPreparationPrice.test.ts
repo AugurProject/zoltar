@@ -201,7 +201,7 @@ describe('Statoblast: child portfolio price preparation', () => {
 		const repBefore = await balance(rep)
 		const pendingBefore = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'pendingReportId' })
 		const bounty = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'getRequestPriceCostAttoEth' })
-		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: feedArtifact.abi, address: feed, functionName: 'requestPortfolioPrice', args: [unit, budget, bounty], value: bounty }))).rejects.toThrow('Report funding exceeds approved budget')
+		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: feedArtifact.abi, address: feed, functionName: 'requestPortfolioPrice', args: [unit, budget, bounty], value: bounty }))).rejects.toThrow('Report funding below minimum')
 		expect(await balance(weth)).toBe(wethBefore)
 		expect(await balance(rep)).toBe(repBefore)
 		expect(await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'pendingReportId' })).toBe(pendingBefore)

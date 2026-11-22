@@ -1,6 +1,7 @@
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { createInjectedBackend } from '../wallet/chainBackend.js'
 import { getErrorMessage } from './errors.js'
+import { clearSessionLocalEntities } from './localEntityStore.js'
 import { formatSavedStateGenesisMismatchDetail } from '../copy/simulation.js'
 import { getGenesisNetworkProfile, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getDefaultNetworkProfile, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from '../wallet/networkProfile.js'
 import { readGenesisOutcomeFromLocation } from '../navigation/genesisNavigation.js'
@@ -168,6 +169,8 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	activeEnvironmentGeneration += 1
 	setRuntimeNetworkProfile(simulationBackend.profile)
 	activeSimulationController = simulationBackend
+	// A new simulation chain shares no entities with the one it replaces, even for the same genesis root.
+	clearSessionLocalEntities()
 	if (previousSimulationController !== undefined && previousSimulationController !== simulationBackend) {
 		try {
 			await previousSimulationController.dispose()

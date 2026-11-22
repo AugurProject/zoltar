@@ -37,6 +37,7 @@ test('earned fees are claimed in a single transaction only when claim cost is co
 	const f = fixture()
 	await expect(f.run(true)).rejects.toThrow('cover claim gas')
 	f.observation.snapshot.ownerAccount.feesAttoEth = unit
+	f.observation.snapshot.accruedFeesAttoEth = unit
 	await f.run(true)
 	expect(f.calls).toHaveLength(1)
 	const call = f.calls[0]
@@ -48,6 +49,7 @@ test('earned fees are claimed in a single transaction only when claim cost is co
 test('earned REP counts for collection only with current independent market evidence', async () => {
 	const f = fixture()
 	f.observation.snapshot.ownerAccount.feesAttoRep = unit
+	f.observation.snapshot.accruedFeesAttoRep = unit
 	await expect(f.run(false)).rejects.toThrow('cover claim gas')
 	f.observation.snapshot.priceValid = false
 	await expect(f.run(true)).rejects.toThrow('cover claim gas')
@@ -59,6 +61,7 @@ test('earned REP counts for collection only with current independent market evid
 test('earnings collection never runs during pending recovery', async () => {
 	const f = fixture()
 	f.observation.snapshot.ownerAccount.feesAttoEth = unit
+	f.observation.snapshot.accruedFeesAttoEth = unit
 	f.state.pendingTransactions.push({
 		hash: `0x${'ab'.repeat(32)}`,
 		kind: 'deposit',
@@ -74,4 +77,11 @@ test('earnings collection never runs during pending recovery', async () => {
 	})
 	await expect(f.run(true)).rejects.toThrow('Pending recovery')
 	expect(f.calls).toHaveLength(0)
+})
+
+test('#1496: uncredited position earnings cover the claim cost', async () => {
+	const f = fixture()
+	f.observation.snapshot.accruedFeesAttoEth = unit
+	await f.run(true)
+	expect(f.calls).toHaveLength(1)
 })

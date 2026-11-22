@@ -1,3 +1,4 @@
+import type { SerializedSimulationReceipt } from '../../simulation/savedStates.js'
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
@@ -52,10 +53,10 @@ describe('saved simulation states', () => {
 
 	test('accepts saved block history and rejects malformed blocks', () => {
 		const envelope = parseSavedSimulationStateEnvelope(createSerializedSavedState({ name: 'History', savedAt: '2026-06-02T12:34:56.000Z' }))
-		const receipt = { cumulativeGasUsed: '0x5208', logs: [['0x00000000000000000000000000000000000000b2', [`0x${'11'.repeat(32)}`], '0x1234']], logsBloom: `0x${'00'.repeat(256)}`, status: 1 }
+		const receipt: SerializedSimulationReceipt = { cumulativeGasUsed: '0x5208', logs: [['0x00000000000000000000000000000000000000b2', [`0x${'11'.repeat(32)}`], '0x1234']], logsBloom: `0x${'00'.repeat(256)}`, status: 1 }
 		expect(() => serializeSavedSimulationStateEnvelope({ ...envelope, state: { ...envelope.state, blocks: [{ block: '0xf90100', receipts: [receipt], senders: ['0x00000000000000000000000000000000000000a1'] }] } })).not.toThrow()
-		expect(() => serializeSavedSimulationStateEnvelope({ ...envelope, state: { ...envelope.state, blocks: [{ block: 'f901', receipts: [], senders: [] }] } })).toThrow('invalid block history')
-		expect(() => serializeSavedSimulationStateEnvelope({ ...envelope, state: { ...envelope.state, blocks: [{ block: '0xf90100', receipts: [{ ...receipt, status: 2 }], senders: [] }] } })).toThrow('invalid block history')
+		expect(() => Reflect.apply(serializeSavedSimulationStateEnvelope, undefined, [{ ...envelope, state: { ...envelope.state, blocks: [{ block: 'f901', receipts: [], senders: [] }] } }])).toThrow('invalid block history')
+		expect(() => Reflect.apply(serializeSavedSimulationStateEnvelope, undefined, [{ ...envelope, state: { ...envelope.state, blocks: [{ block: '0xf90100', receipts: [{ ...receipt, status: 2 }], senders: [] }] } }])).toThrow('invalid block history')
 	})
 
 	test('serializes and parses a versioned simulation state envelope', () => {
@@ -258,6 +259,19 @@ describe('saved simulation states', () => {
 					rawValue: '{bad json',
 				}),
 			])
+		})
+
+		test.each([
+			['malformed storage', '{bad json'],
+			['a corrupted record', JSON.stringify([{ baseScenario: 'baseline', id: 'broken-state', name: 'Broken state', savedAt: '2026-06-02T12:35:56.000Z', serialized: '{bad json' }])],
+		])('backs up %s before an ordinary save replaces it', (_label, rawValue) => {
+			window.localStorage.setItem(SAVED_STATES_KEY, rawValue)
+			expect(getSavedSimulationStateStorageSummary().warning).toBeDefined()
+
+			const saved = persistSavedSimulationState(createSerializedSavedState({ name: 'Fresh save', savedAt: '2026-06-03T12:34:56.000Z' }))
+
+			expect(listSavedSimulationStateRecordIds()).toEqual([saved.id])
+			expect(readBackups()).toEqual([expect.objectContaining({ rawValue })])
 		})
 
 		test('keeps a bounded history of malformed saved-state storage backups', () => {

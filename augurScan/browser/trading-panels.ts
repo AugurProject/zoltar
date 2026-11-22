@@ -96,6 +96,13 @@ export const tradingPnlSummary = (item: JsonRecord, _nativeSymbol: string): stri
 	].join(' · ')
 }
 
+/** One share-token position: outcome shares in the collateral token's precision, raw units when its metadata is unsampled. */
+export const sharePositionSummary = (position: JsonRecord): string => {
+	const asset = collateralUnit(position)
+	const shares = (key: string, unit: string) => exactUnit(text(position[key]) ?? '0', asset.decimals, unit)
+	return `${shares('invalid_atto_shares', 'INVALID')} · ${shares('yes_atto_shares', 'YES')} · ${shares('no_atto_shares', 'NO')} · ${shares('complete_sets_atto_shares', 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}${position['recovery_locked'] === true ? ' · Recovery-spent source shares locked' : ''}`
+}
+
 /** @internal Exported for presentation unit tests. */
 export const tradingPnlHoldings = (item: JsonRecord): string => {
 	const asset = collateralUnit(item)
@@ -128,8 +135,8 @@ export const tradingPnlPanel = (
 			copy?.insertBefore(element('span', '', tradingPnlHoldings(item)), copy.querySelector('code'))
 			return row
 		}),
-		'No trading positions or ETH flows are indexed for this address.',
-		{ label: `Indexed ETH flows${record['truncated'] === true ? ' · first 250 markets shown' : ''}` },
+		'No trading positions or collateral flows are indexed for this address.',
+		{ label: `Indexed collateral flows${record['truncated'] === true ? ' · first 250 markets shown' : ''}` },
 	)
 	if (typeof record['basis'] === 'string') {
 		const method = element('details', 'operations-raw-evidence')

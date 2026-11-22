@@ -18,7 +18,7 @@
 			<section id="before-you-start">
 				<h2>Before you start</h2>
 				<p>Trading is an exchange for <a href="../explanation/statoblast.html">Statoblast</a> outcome shares: each market trades the Yes and No shares of one <a href="../reference/glossary.html#security-pool">SecurityPool</a> in a constant-product <a href="../reference/glossary.html#trading-pool">trading pool</a>.</p>
-				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code data-simulation-security-pool="market-url">http://localhost:4163/?simulate=1&amp;genesis=yes#/market/0xf6020c1444FE4F09190eA968752F7F0aa4b59287</code>. The browser-local simulator is labeled at the top of the page, starts with one funded market, and never reflects live chain state; the screenshots below come from it. To trade for real, open the UI on a supported network as described in <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a> and connect a wallet.</p>
+				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code data-simulation-security-pool="market-url">http://localhost:4163/?simulate=1&amp;genesis=yes#/market/0xaA621B8806a2a162893f159A0f7fA2466070C337</code>. The browser-local simulator is labeled at the top of the page, starts with one funded market, and never reflects live chain state; the screenshots below come from it. To trade for real, open the UI on a supported network as described in <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a> and connect a wallet.</p>
 			</section>
 			<section id="choose">
 				<h2>Choose a market</h2>
@@ -40,7 +40,7 @@
 				<h2>Buy Yes</h2>
 				<ol>
 					<li>In the market's <strong>Trade</strong> tab, select <strong>Buy</strong> and <strong>Yes</strong>.</li>
-					<li>Enter <code>0.002</code> in <strong>You pay</strong>. This small simulated trade includes the pool’s minimum minting fee; review its negative profit estimate before continuing. The estimate appears below the field: <strong>You receive ≈</strong> shows the Yes and its payout if the question resolves Yes (0 ETH if it resolves No), with your <strong>Invalid insurance</strong> beside it. Below them are <strong>Average price</strong>, <strong>Profit if the question resolves Yes</strong>, and <strong>Minimum received</strong>, and <strong>Trade details</strong> lists the <strong>Trading fee</strong>.</li>
+					<li>Enter <code>0.002</code> in <strong>You pay</strong>. This small simulated trade includes the pool’s minimum minting fee; review its negative profit estimate before continuing. The estimate appears below the field: <strong>You receive</strong> shows the Yes and its payout if the question resolves Yes (0 ETH if it resolves No), with your <strong>Invalid insurance</strong> beside it. Below them are <strong>Average price</strong>, <strong>Profit if the question resolves Yes</strong>, and <strong>Minimum received</strong>, and <strong>Trade details</strong> lists the <strong>Trading fee</strong>.</li>
 					<li>Check the <strong>Price impact</strong>: it reads 4.93%, with a note that smaller trades get a better average price. Larger impacts need a confirmation or are refused; the <a href="../reference/trading/configuration.html#client">Trading configuration</a> lists the thresholds.</li>
 					<li>Select <strong>Buy Yes</strong> and confirm the single <code>enterPosition</code> transaction in your wallet. The client checks the price again before the wallet opens.</li>
 				</ol>
@@ -54,7 +54,7 @@
 				<h2>Sell Yes</h2>
 				<ol>
 					<li>Select <strong>Sell</strong> and <strong>Yes</strong>, then enter <code>0.001</code> in <strong>Shares to sell</strong>. The <strong>25%</strong>, <strong>50%</strong>, and <strong>Max</strong> buttons fill in larger amounts.</li>
-					<li>Read the estimate: <strong>You sell</strong>, <strong>You receive ≈</strong> in ETH, <strong>Average price</strong>, <strong>Minimum received</strong>, and <strong>Invalid used</strong>.</li>
+					<li>Read the estimate: <strong>You sell</strong>, <strong>You receive</strong> in ETH, <strong>Average price</strong>, <strong>Minimum received</strong>, and <strong>Invalid used</strong>.</li>
 					<li>Select <strong>Sell Yes</strong> and confirm. No approval is needed: the sale is one ShareToken transfer of your Yes and Invalid to the <a href="../reference/glossary.html#trading-router">router</a>.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-sell" aria-labelledby="fig-trading-sell-caption">

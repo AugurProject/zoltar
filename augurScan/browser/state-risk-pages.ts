@@ -1,9 +1,9 @@
+import { shortUniverseId } from './identifier-format.ts'
 import { collateralUnit } from '../src/collateral.ts'
-import { questionIdHex } from './identifier-format.ts'
+import { protocolIdHex } from './identifier-format.ts'
 import type { EntityHistory, PoolRecord, StateEntity, StateTab } from './browser-types.ts'
 import { uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
 import { exactUnit, percentFromBps } from './format.ts'
-import { shortIdentifier } from './identifier-format.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import type { createStateComponents } from './state-components.ts'
 
@@ -45,7 +45,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const latestRepEthPrice = repEthPrices.at(-1)
 	const latestUniswapPrice = uniswapChart.latestObservation
 	const fragment = document.createDocumentFragment()
-	fragment.append(stateHeader('Security pool', poolItem.question_title ?? 'Unknown question', `${poolItem.pool_address} · universe ${shortIdentifier(poolItem.universe_id, 8, 6)}`, 'Latest available'))
+	fragment.append(stateHeader('Security pool', poolItem.question_title ?? 'Unknown question', `${poolItem.pool_address} · universe ${shortUniverseId(poolItem.universe_id)}`, 'Latest available'))
 	const canonicalPool = element('a', 'back-link', 'Open pool page →')
 	canonicalPool.href = operationsHref(`/pool/${poolItem.pool_address}`)
 	fragment.append(canonicalPool)
@@ -139,13 +139,13 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	staticCard.append(element('h4', '', 'Immutable deployment configuration'))
 	const grid = element('div', 'static-grid')
 	grid.append(
-		staticField('Question ID', questionIdHex(poolItem.question_id)),
+		staticField('Question ID', protocolIdHex(poolItem.question_id)),
 		staticAddressField('Parent pool', poolItem.parent_address, poolItem.chain_id),
 		staticAddressField('Share token', poolItem.share_token_address, poolItem.chain_id),
 		staticAddressField('Price coordinator', poolItem.coordinator_address, poolItem.chain_id),
 		history.market === undefined || history.market === null ? staticField('Augur AMM pair', 'Unavailable') : staticAddressField('Augur AMM pair', history.market.pair_address, poolItem.chain_id),
 		staticField('Augur AMM fee', history.market === undefined || history.market === null ? '—' : percentFromBps(history.market.fee_bps)),
-		staticField('Security multiplier', percentFromBps(poolItem.security_multiplier_bps)),
+		staticField('Security multiplier', exactUnit(poolItem.security_multiplier_bps, 4, '×')),
 		staticField('Initial priority fee', exactUnit(poolItem.initial_priority_fee_atto_eth_per_gas, 9, 'nanoETH')),
 		staticField('Child pools', number(poolItem.child_count)),
 	)
