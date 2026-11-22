@@ -70,7 +70,8 @@ const DEFAULT_ANVIL_TRANSACTION_GAS = '0x1000000' // The EIP-7825 per-transactio
 // CI can keep Anvil receipts pending well past a minute when multiple shards
 // are driving simulator-backed transactions concurrently.
 const SEND_TRANSACTION_RECEIPT_TIMEOUT_MS = 180_000
-const SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS = 100
+const SEND_TRANSACTION_RECEIPT_INITIAL_POLL_MS = 5
+const SEND_TRANSACTION_RECEIPT_MAX_POLL_MS = 100
 const SEND_TRANSACTION_RECEIPT_BLOCK_ADVANCE_INTERVAL_MS = 1_000
 const RECEIPT_DIAGNOSTIC_RPC_TIMEOUT_MS = 1_000
 
@@ -344,6 +345,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		const waitForReceiptStatus = async (hash: string) => {
 			const deadline = Date.now() + SEND_TRANSACTION_RECEIPT_TIMEOUT_MS
 			let lastBlockAdvanceAttempt = Date.now()
+			let pollInterval = SEND_TRANSACTION_RECEIPT_INITIAL_POLL_MS
 			while (Date.now() < deadline) {
 				const receipt = await request({
 					method: 'eth_getTransactionReceipt',
@@ -357,7 +359,8 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					lastBlockAdvanceAttempt = now
 					await includePendingTransactions()
 				}
-				await new Promise(resolve => setTimeout(resolve, SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS))
+				await new Promise(resolve => setTimeout(resolve, pollInterval))
+				pollInterval = Math.min(SEND_TRANSACTION_RECEIPT_MAX_POLL_MS, pollInterval * 2)
 			}
 			return undefined
 		}
@@ -438,12 +441,8 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				},
 				...(receipt !== undefined ? { receipt } : {}),
 			}
-			if (receiptResult?.status !== undefined) {
-				await collectBytecodeCoverageForTransaction({
-					...requestOptions,
-				})
-			}
-			if (receiptResult?.status === '0x0') {
+			await collectBytecodeCoverageForTransaction(requestOptions)
+			if (receiptResult.status === '0x0') {
 				const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
 				if (latestBlockTimestamp !== undefined) currentTimestamp = latestBlockTimestamp
 				await request({ method: 'eth_call', params: [params[0], 'latest'], skipCoverage: true })

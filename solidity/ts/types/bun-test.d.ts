@@ -3,6 +3,7 @@ declare module 'bun:test' {
 	type EachCallback<TestCase> = (testCase: TestCase) => void | Promise<void>
 	type TestFunction = {
 		(label: string, fn: TestCallback): void
+		skipIf: (condition: boolean) => (label: string, fn: TestCallback) => void
 		each: <TestCase>(cases: readonly TestCase[]) => (label: string, fn: EachCallback<TestCase>) => void
 	}
 

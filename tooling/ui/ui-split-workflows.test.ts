@@ -106,7 +106,7 @@ describe('split UI workflow definitions (pending updates when present)', () => {
 		expect(unpinned).toEqual([])
 	})
 
-	test('workflows have no time-based triggers', async () => {
+	test('only the coverage baseline and stability workflows run on a schedule', async () => {
 		const directory = join(repositoryRoot, '.github', 'workflows')
 		const scheduled = []
 		for (const name of await readdir(directory)) {
@@ -114,7 +114,7 @@ describe('split UI workflow definitions (pending updates when present)', () => {
 			const triggers = requireRecord((await readWorkflow(workflowDefinitionPath(name)))['on'], `${name} triggers`)
 			if ('schedule' in triggers) scheduled.push(name)
 		}
-		expect(scheduled).toEqual([])
+		expect(scheduled.sort()).toEqual(['coverage.yml', 'test-stability.yml'])
 	})
 
 	test('IPFS publication pins CI and manual dispatch revisions even if the branch advances during validation', async () => {
@@ -291,10 +291,10 @@ ${command}`,
 		expect(requireRecord(ciJobs['required'], 'required CI result')['needs']).toContain('browser-smoke')
 	})
 
-	test('coverage runs only through direct manual dispatch and retains the canonical policy report', async () => {
+	test('manual coverage retains the canonical policy and scheduled coverage publishes separate reports', async () => {
 		const workflow = await readWorkflow(coverageWorkflowPath)
 		const triggers = requireRecord(workflow['on'], 'coverage triggers')
-		expect(Object.keys(triggers)).toEqual(['workflow_dispatch'])
+		expect(Object.keys(triggers)).toEqual(['workflow_dispatch', 'schedule'])
 		const ciJobs = workflowJobs(await readWorkflow(ciWorkflowPath))
 		expect(ciJobs).not.toHaveProperty('coverage')
 		const required = requireRecord(ciJobs['required'], 'required CI gate')
@@ -302,7 +302,10 @@ ${command}`,
 		const gate = workflowSteps(required)[0]
 		expect(requireRecord(gate?.['env'], 'required CI gate environment')).not.toHaveProperty('COVERAGE_RESULT')
 		expect(gate?.['run']).not.toContain('COVERAGE_RESULT')
-		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
+		const jobs = workflowJobs(workflow)
+		expect(requireRecord(jobs['coverage'], 'policy coverage')['if']).toBe("github.event_name == 'workflow_dispatch'")
+		expect(requireRecord(jobs['coverage-baseline'], 'coverage baselines')['if']).toBe("github.event_name == 'schedule'")
+		const steps = workflowSteps(jobs['coverage'])
 		expect(steps.some(step => step['run'] === 'bun run coverage')).toBe(false)
 		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
 		const publisher = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('coverage/coverage-summary.md'))
@@ -421,7 +424,7 @@ ${command}`,
 		const domainJobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
 		const domainGate = requireRecord(domainJobs['required'], 'domain gate')
 		expect(domainGate['if']).toBe('always()')
-		expect(domainGate['needs']).toEqual(['prepare', 'application-tests', 'solidity-tests', 'timing-history', 'mutation-smoke'])
+		expect(domainGate['needs']).toEqual(['prepare', 'application-tests', 'solidity-tests', 'timing-history', 'mutation-smoke', 'solidity-trace-smoke'])
 		const domainStep = workflowSteps(domainGate)[0]
 		expect(requireRecord(domainStep?.['env'], 'domain gate environment')['APPLICATION_SELECTED']).toBe('${{ inputs.application }}')
 		const domainCommand = domainStep?.['run']
@@ -437,6 +440,7 @@ ${command}`,
 						APPLICATION_RESULT: application ? 'success' : 'skipped',
 						MUTATION_RESULT: application ? 'success' : 'skipped',
 						SOLIDITY_RESULT: solidity ? 'success' : 'skipped',
+						TRACE_RESULT: solidity ? 'success' : 'skipped',
 						TIMING_RESULT: 'success',
 					}
 					const success = spawnSync('bash', ['-e', '-c', domainCommand], { env }).status
@@ -445,7 +449,7 @@ ${command}`,
 						continue
 					}
 					expect(success).toBe(0)
-					for (const key of ['SOLIDITY_RESULT', 'TIMING_RESULT', 'PREPARE_RESULT', 'APPLICATION_RESULT', 'MUTATION_RESULT']) {
+					for (const key of ['SOLIDITY_RESULT', 'TRACE_RESULT', 'TIMING_RESULT', 'PREPARE_RESULT', 'APPLICATION_RESULT', 'MUTATION_RESULT']) {
 						for (const result of ['failure', 'cancelled']) expect(spawnSync('bash', ['-e', '-c', domainCommand], { env: { ...env, [key]: result } }).status).not.toBe(0)
 					}
 					for (const [key, expected] of Object.entries(env).filter(([key]) => key.endsWith('_RESULT'))) expect(spawnSync('bash', ['-e', '-c', domainCommand], { env: { ...env, [key]: expected === 'success' ? 'skipped' : 'success' } }).status).not.toBe(0)

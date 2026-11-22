@@ -9,6 +9,7 @@ const CONTENT_TYPES = new Map([
 const root = path.resolve(import.meta.dir, '../public')
 const server = Bun.serve({
 	port: Number(process.env['PORT'] ?? '3001'),
+	hostname: '127.0.0.1',
 	async fetch(request, server) {
 		const url = new URL(request.url)
 		if (url.pathname === '/health/live') return Response.json({ status: 'ok' })

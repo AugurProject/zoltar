@@ -20,6 +20,7 @@ export type CiChangeClassification = {
 	readonly augurScanIntegration: boolean
 	readonly artifactInputs: boolean
 	readonly reason: string
+	readonly shadowSolidityRoute: 'full' | 'application-only'
 }
 
 const packageEntries = new Map<CiScope, PackageMatrixEntry>(
@@ -106,7 +107,9 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 	if (changedFiles.length === 0) reason = 'No changed paths were detected; using the safe full-run fallback.'
 	if (options.full === true) reason = 'A full run was explicitly requested.'
 	if (options.fallbackReason !== undefined) reason = options.fallbackReason
-	return { changedFiles, directScopes, expandedScopes, packageMatrix, packageMatrixJson, hasPackages: packageMatrix.length > 0, forcedFull, allScopesSelected: ciScopes.every(scope => expanded.has(scope)), augurScanIntegration, artifactInputs: packageMatrix.some(entry => entry.artifacts), reason }
+	const uiApp = runtimeFiles.length > 0 ? projectForPath(runtimeFiles[0] ?? '') : undefined
+	const shadowSolidityRoute = !forcedFull && uiApp !== undefined && ['ui-zoltar', 'ui-statoblast', 'ui-openoracle'].includes(uiApp.id) && runtimeFiles.every(file => file.startsWith(`${uiApp.path}/ts/`) && /\.tsx?$/.test(file) && !file.includes('/tests/') && !file.includes('/generated/')) ? 'application-only' : 'full'
+	return { shadowSolidityRoute, changedFiles, directScopes, expandedScopes, packageMatrix, packageMatrixJson, hasPackages: packageMatrix.length > 0, forcedFull, allScopesSelected: ciScopes.every(scope => expanded.has(scope)), augurScanIntegration, artifactInputs: packageMatrix.some(entry => entry.artifacts), reason }
 }
 
 function writeGitHubOutput(classification: CiChangeClassification): void {
@@ -119,9 +122,10 @@ function writeGitHubOutput(classification: CiChangeClassification): void {
 	)
 	const summaryPath = process.env['GITHUB_STEP_SUMMARY']
 	if (summaryPath === undefined) return
+	const requiredSolidityRoute = classification.expandedScopes.some(scope => scope === 'core' || scope === 'infrastructure') ? 'full' : 'not selected'
 	appendFileSync(
 		summaryPath,
-		`### CI change classification\n\n${classification.reason}\n\n**Changed files:** ${classification.changedFiles.length === 0 ? '_unavailable_' : classification.changedFiles.map(path => `\`${path}\``).join(', ')}\n\n**Direct scopes:** ${classification.directScopes.join(', ') || '_none_'}\n\n**Dependency-expanded scopes:** ${classification.expandedScopes.join(', ')}\n\n**Selected package jobs:** ${classification.packageMatrix.map(entry => entry.package).join(', ') || '_none_'}\n\n**augurScan PostgreSQL integration:** ${classification.augurScanIntegration ? 'selected' : 'not selected'}\n`,
+		`### CI change classification\n\n${classification.reason}\n\n**Changed files:** ${classification.changedFiles.length === 0 ? '_unavailable_' : classification.changedFiles.map(path => `\`${path}\``).join(', ')}\n\n**Direct scopes:** ${classification.directScopes.join(', ') || '_none_'}\n\n**Dependency-expanded scopes:** ${classification.expandedScopes.join(', ')}\n\n**Selected package jobs:** ${classification.packageMatrix.map(entry => entry.package).join(', ') || '_none_'}\n\n**augurScan PostgreSQL integration:** ${classification.augurScanIntegration ? 'selected' : 'not selected'}\n\n**Required Solidity route:** ${requiredSolidityRoute}\n\n**Proposed Solidity route (shadow):** ${classification.shadowSolidityRoute}\n`,
 	)
 }
 
