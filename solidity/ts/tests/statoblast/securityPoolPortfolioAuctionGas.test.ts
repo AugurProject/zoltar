@@ -10,6 +10,8 @@ import { addRepToMigrationBalance, forkUniverse, getZoltarForkThreshold, splitMi
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import {
 	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction as auctionArtifact,
+	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
+	statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
@@ -46,6 +48,12 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		test(`a ${bookSize}-bid tied book keeps bidding, refunds, vault, fee, retirement, liquidation and fork paths bounded`, async () => {
 			const context = await preparePortfolioCollateralRepairAuction(fixture)
 			const { owner, other, mock } = context
+			const renewDistressedPrice = async () => {
+				const reportId = await context.report(20n * unit, 5n * unit)
+				const [escrow] = await owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'reportCandidates', args: [reportId] })
+				// Recycling report inventory is a separate action from accepting its price.
+				await writeContractAndWait(owner, () => owner.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
+			}
 			const filler = createWriteClient(mock, TEST_ADDRESSES[2])
 			const keeper = createWriteClient(mock, TEST_ADDRESSES[3])
 			const stranger = createWriteClient(mock, TEST_ADDRESSES[4])
@@ -217,14 +225,14 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'transfer', args: [keeper.account.address, 60n * unit] }))
 			await approveToken(keeper, context.token, context.capital)
 			await gasOf('liquidation: keeper deposits principal', keeper, () => keeper.writeContract({ ...capital, functionName: 'depositFor', args: [keeper.account.address, 60n * unit] }))
-			await context.report(20n * unit, 5n * unit)
+			await renewDistressedPrice()
 			const distressStart = await owner.readContract({ ...capital, functionName: 'liquidationStarted', args: [cohort[1]] })
 			expect(distressStart).toBeGreaterThan(0n)
 			// One hour of uninterrupted distress earns the full award; the price
 			// observation must be refreshed because the feed window is shorter.
 			for (let renewal = 0; renewal < 6; renewal++) {
 				await mock.advanceTime(120n)
-				await context.report(20n * unit, 5n * unit)
+				await renewDistressedPrice()
 			}
 			expect(await owner.readContract({ ...capital, functionName: 'liquidationStarted', args: [cohort[1]] })).toBe(distressStart)
 			const totalCommitment = (await owner.readContract({ ...capital, functionName: 'totals' }))[1]
