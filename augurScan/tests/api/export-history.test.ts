@@ -83,7 +83,7 @@ augurscan_export_history`,
 	}
 })
 
-test('lets only one of two concurrent exports publish into one output directory', async () => {
+test.each(Array.from({ length: 20 }, (_, attempt) => attempt))('lets only one of two concurrent exports publish into one output directory (attempt %s)', async () => {
 	const directory = await mkdtemp(path.join(tmpdir(), 'augurscan-export-history-concurrent-'))
 	const exportDirectory = path.join(directory, 'evidence')
 	try {
@@ -99,6 +99,13 @@ export AUGURSCAN_EXPORT_DIRECTORY="$2"
 export AUGURSCAN_EXPORT_DATASET="$3"
 export AUGURSCAN_EXPORT_CONTAINER="augurscan-export-$3"
 export AUGURSCAN_EXPORT_BARRIER="$4"
+printf 'export-worker=%s bash=%s\\n' "$AUGURSCAN_EXPORT_DATASET" "$BASH_VERSION" >&2
+command -V mkdir >&2
+cksum "$1" >&2
+PS4='+ worker $$ line $LINENO: '
+exec 9>&2
+BASH_XTRACEFD=9
+set -x
 # Both attempts reach the real atomic claim before either can acquire it.
 mkdir() {
   if test "$1" = "$AUGURSCAN_EXPORT_DIRECTORY/.export-attempt"; then
@@ -156,6 +163,7 @@ run_export timeline timeline &
 timeline_pid=$!
 wait "$logs_pid"
 wait "$timeline_pid"
+printf 'controller statuses: logs=%s timeline=%s\\n' "$(cat "$result_directory/logs.status")" "$(cat "$result_directory/timeline.status")" >&2
 run_export logs reuse`,
 				'augurscan-export-controller',
 				harness,
@@ -174,8 +182,9 @@ run_export logs reuse`,
 			stderr: await readFile(path.join(directory, `${name}.stderr`), 'utf8'),
 		})
 		const results = await Promise.all(['logs', 'timeline'].map(readResult))
+		for (const result of results) expect(result.stderr).toMatch(/command mkdir .*\.export-attempt/)
 		const published = results.filter(result => result.status === 0)
-		expect(published, JSON.stringify(results)).toHaveLength(1)
+		expect(published, JSON.stringify({ controller: controllerErrors, workers: results })).toHaveLength(1)
 		expect(published[0]?.stdout).toContain(`Validated export: ${exportDirectory}`)
 		const refused = results.filter(result => result.status !== 0)
 		expect(refused).toHaveLength(1)
