@@ -129,6 +129,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const { game } = (await loadOpenOracleEventState(owner, id)).latest
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, id)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
 		for (const token of [game.token1, game.token2]) {
 			const balance = (address: typeof escrow) => owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })
 			const before = await balance(owner.account.address)
@@ -171,6 +172,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.base.mockWindow.advanceTime(381n)
 		await openOracleSettle(other, secondId)
 		expect(await owner.readContract({ abi: oracleArtifact.abi, address: oracle, functionName: 'tokenHolder', args: [firstEscrow, first.game.token1] })).toBe(firstCredit)
+		expect(await other.readContract({ abi: tokenArtifact.abi, address: second.game.token1, functionName: 'balanceOf', args: [other.account.address] })).toBe(otherWeth)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: escrowArtifact.abi, address: secondEscrow, functionName: 'withdrawFunding' }))
 		expect(await other.readContract({ abi: tokenArtifact.abi, address: second.game.token1, functionName: 'balanceOf', args: [other.account.address] })).toBe(otherWeth + second.game.currentAmount1)
 		const ownerWeth = await owner.readContract({ abi: tokenArtifact.abi, address: first.game.token1, functionName: 'balanceOf', args: [owner.account.address] })
 		await writeContractAndWait(other, () => other.writeContract({ abi: escrowArtifact.abi, address: firstEscrow, functionName: 'withdrawFunding' }))
