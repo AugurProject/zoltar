@@ -185,6 +185,8 @@ For safe testnet redeployment, drain the old profile, review any residuals, pres
 
 ## Run with Docker
 
+Compose requires `runtime.uiPort` to remain 4193, matching its internal port mapping and health probe. To use a different listener port, run the bot outside Compose or update the mapping, probe, and `ZOLTAR_BOT_COMPOSE_UI_PORT` together.
+
 The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4193`, and persists `.state` in the private `chaos-state` volume.
 
 ```sh

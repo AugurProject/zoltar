@@ -22,6 +22,8 @@ Behaviour shared with the other bots (environment variables, the signer lock, th
 
 ### Docker Compose
 
+Compose requires `runtime.uiPort` to remain 4183, matching its internal port mapping and health probe. To use a different listener port, run the bot outside Compose or update the mapping, probe, and `ZOLTAR_BOT_COMPOSE_UI_PORT` together.
+
 From this directory, build and start the bot:
 
 ```bash

@@ -142,3 +142,14 @@ describe('bot dashboard server', () => {
 		expect(await (await fetch(`http://127.0.0.1:${server.port}/`)).text()).toBe('<html><body data-page="overview"><header>$& costs $$5 $\' $`</header><main></main></body></html>')
 	})
 })
+
+test('rejects a listener that disagrees with the Compose port', async () => {
+	const original = process.env['ZOLTAR_BOT_COMPOSE_UI_PORT']
+	process.env['ZOLTAR_BOT_COMPOSE_UI_PORT'] = '4183'
+	try {
+		await expect(startServer({ port: 4184 })).rejects.toThrow('runtime.uiPort must be 4183 in Compose')
+	} finally {
+		if (original === undefined) delete process.env['ZOLTAR_BOT_COMPOSE_UI_PORT']
+		else process.env['ZOLTAR_BOT_COMPOSE_UI_PORT'] = original
+	}
+})
