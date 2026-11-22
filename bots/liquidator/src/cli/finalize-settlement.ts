@@ -54,11 +54,11 @@ for await (const candidate of scanSettlementFinalizations(client, portfolio, min
 	const { account, wallet, maximumTransactions, maximumGas, maximumGasPrice } = sender
 	const latest = await client.getBlock()
 	if (latest.number === undefined) throw new Error('Settlement execution requires a numbered block')
-	const current = await settlementFinalizationCandidate(client, portfolio, { ...candidate, securityPool: candidate.pool }, minimumCash, latest.number)
+	const current = await settlementFinalizationCandidate(client, portfolio, candidate, minimumCash, latest.number)
 	if (current === undefined) continue
 	const gasPrice = await client.getGasPrice()
 	if (gasPrice > maximumGasPrice) break
-	const request = finalizationRequest(current.pool)
+	const request = finalizationRequest(current)
 	const estimate = await client.estimateContractGas({ ...request, account: account.address })
 	const gas = (estimate * 120n + 99n) / 100n
 	if (gas > maximumGas) continue
