@@ -507,8 +507,8 @@ void describe('OpenOracleSection', () => {
 			const documentQueries = within(document.body)
 			expect(documentQueries.getByText('Report block')).not.toBeNull()
 			expect(documentQueries.getByText('Settlement block')).not.toBeNull()
-			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
-			expect(documentQueries.getByText('234 blocks')).not.toBeNull()
+			expect(documentQueries.getByText('Block 123')).not.toBeNull()
+			expect(documentQueries.getByText('Block 234')).not.toBeNull()
 		} finally {
 			await rendered.cleanup()
 			domEnvironment.cleanup()
@@ -564,8 +564,8 @@ void describe('OpenOracleSection', () => {
 			expect(searchInput.placeholder).toBe('Report ID, token, or address')
 			expect(documentQueries.getByText('Report block')).not.toBeNull()
 			expect(documentQueries.getByText('Settlement block')).not.toBeNull()
-			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
-			expect(documentQueries.getByText('234 blocks')).not.toBeNull()
+			expect(documentQueries.getByText('Block 123')).not.toBeNull()
+			expect(documentQueries.getByText('Block 234')).not.toBeNull()
 		} finally {
 			await browse.cleanup()
 		}
@@ -629,7 +629,7 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test('opens a cached report ID from empty favorites without a downloaded shortcut', async () => {
-		const onLoadOracleReport = mock(async (_reportId: string) => undefined)
+		const onLoadOracleReport = mock(async (_reportId?: string) => undefined)
 		const browse = await renderBrowseSection({ onLoadOracleReport }, () => {
 			openOracleReportDownloadStore.record(getLocalEntityScope('openoracle', 'oracleReport'), [{ data: createReportSummary(4n), id: '4' }])
 		})
@@ -900,8 +900,8 @@ void describe('OpenOracleSection', () => {
 		const disputeButton = requireButton(disputeSection, 'Dispute & swap')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Sepolia.')
-		expect(disputeButton.props.showDisabledReason).toBe(false)
-		expect(disputeButton.props.disabledReasonElementId).toContain('open-oracle-dispute-approval-guard-')
+		expect(disputeButton.props['showDisabledReason']).toBe(false)
+		expect(disputeButton.props['disabledReasonElementId']).toContain('open-oracle-dispute-approval-guard-')
 
 		const settleSection = renderSettleActionSection({ isOnActiveAppChain: false })
 		const settleButton = requireButton(settleSection, 'Settle report #7')

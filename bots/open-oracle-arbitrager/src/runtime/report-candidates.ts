@@ -5,6 +5,7 @@ import { logMarketDiscoveryFailure } from '#monitoring/market-discovery-status'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { candidateRiskMismatch } from '#monitoring/opportunity-evaluation'
 import { inspectReport } from '#monitoring/report-inspection'
+import { executableDexPriceRepPerEth } from '#core/strategy'
 import { decimalSignedEth, recordOperation, type OperatorState } from '#state/operator-state'
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import { archivedUtcDayGasSpentWeth } from '#state/position-store'
@@ -42,6 +43,7 @@ export async function inspectActiveReports(runtime: OperatorRuntime, context: Op
 				try {
 					const metadata = markets.tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token2.toLowerCase())
 					if (metadata === undefined) throw new Error('Token metadata is unavailable')
+					const collateralMetadata = markets.tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token1.toLowerCase())
 					const evaluated = await inspectReport(
 						runtime.client,
 						runtime.wallet,
@@ -67,6 +69,7 @@ export async function inspectActiveReports(runtime: OperatorRuntime, context: Op
 								reason,
 								reportId,
 							}),
+						collateralMetadata,
 					)
 					return { evaluated, report }
 				} catch (error) {
@@ -85,8 +88,7 @@ function gateCandidate(runtime: OperatorRuntime, context: OperatorContext, evalu
 	const { config, state } = context
 	const candidate = evaluated.candidate
 	if (candidate === undefined) return undefined
-	const referenceWeth = candidate.quote.direction === 'sell-rep' ? candidate.quote.grossProceedsAttoWeth : candidate.quote.hedgeCostAttoWeth
-	const dexPriceRepPerEth = referenceWeth === 0n ? 0n : (candidate.quote.hedgeAmountAttoRep * 10n ** 18n) / referenceWeth
+	const dexPriceRepPerEth = executableDexPriceRepPerEth(candidate.quote)
 	const primaryRep = candidate.report.game.token2.toLowerCase() === config.network.rep.toLowerCase()
 	evaluated.opportunity.centralizedPriceDeviationBps = state.centralizedMarket === undefined ? undefined : centralizedPriceDeviationBps(dexPriceRepPerEth, state.centralizedMarket, candidate.report.game.token2)?.toString()
 	const venueConsensus = config.centralizedMarkets.venueConsensus

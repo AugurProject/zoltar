@@ -31,7 +31,9 @@ Reference documents:
 
 ## Supported collateral
 
-The reference arbitrager supports WETH as report `token1`. It does not dispute or settle reports for portfolios with USDC or another non-WETH collateral token: funding, hedging and recovery all use WETH. Such portfolios need a separate corrector and settler; running this bot does not satisfy that requirement for them.
+WETH is always supported as report `token1`. Portfolios collateralized in another token, such as USDC or USDT, are supported only for tokens listed in [`collateralTokens`](./CONFIGURATION.md#collateral-tokens); the bot skips every other `token1` and records the token in the skip reason. Unlisted portfolios still need a separate corrector and settler.
+
+For an allowlisted collateral, the bot hedges REP against that collateral through Uniswap V3 or V2 pools that pair REP with it; Uniswap V4 pools settle against native ETH and are used only for WETH. Profit, capital at risk, and the market-consensus check stay in WETH, valued through the collateral's configured Uniswap V3 WETH pool; [collateral tokens](./CONFIGURATION.md#collateral-tokens) describes that valuation and its limits. Funding, settlement, and withdrawal use the collateral itself, so the wallet holds and approves that token instead of WETH for those reports.
 
 ## How the flow works
 
@@ -98,11 +100,11 @@ Set `runtime.execute` to `false`. Set `runtime.once` to `true` for one scan, or 
 bun run run
 ```
 
-Then open `http://127.0.0.1:4173`. Dry-run opportunities are evaluated exactly like execution opportunities, but no approvals or disputes are sent. Without an approved coordinator, dry-run still synchronizes a bounded sample for diagnostics but refuses to classify any report as an executable opportunity.
+Then open `http://127.0.0.1:4173`. Dry run prices opportunities without sending approvals or disputes. It uses one RPC reader and skips execution-only signer, inventory, pause, history and execution-allowlist gates. Without an approved coordinator, dry-run still synchronizes a bounded sample for diagnostics but refuses to classify any report as an executable opportunity.
 
 When network settings exist, startup and dashboard RPC changes validate `eth_chainId`. An initially unconfigured bot keeps its paused dashboard available without making RPC calls. It will not scan until a verified chain and endpoint set has been saved. A configured bot also keeps the dashboard available when RPC validation is temporarily unavailable, reports `connectivity-degraded`, and retries with bounded backoff. The bot checks the chain whenever it validates a new endpoint set.
 
-A head watcher polls `eth_blockNumber` once per second. Outside failure backoff, a new head wakes the scan immediately; a completed scan logs `scanBlock=<number> durationMs=<duration>`. Scan reads are batched through the canonical Multicall3 deployment at one pinned block, with bounded batches; RPC work still grows with the active authenticated reports and markets evaluated. Centralized-exchange sampling runs on its own timer; after the first sample it no longer sits in the block-scan path.
+A head watcher polls `eth_blockNumber` once per second. Outside failure backoff, a new head wakes the scan immediately; a completed scan logs `<timestamp> <bot> <block>: ProcessedMs=<duration> …`. Scan reads are batched through the canonical Multicall3 deployment at one pinned block, with bounded batches; RPC work still grows with the active authenticated reports and markets evaluated. Centralized-exchange sampling runs on its own timer; after the first sample it no longer sits in the block-scan path.
 
 For approved universes, each new head scans the OpenOracle report counter and stored report metadata: up to 128 historical IDs, 128 queued new IDs, and the latest 128 IDs, with duplicates removed. Historical backfill continues across polls and restarts after a canonical-head replacement. Previously discovered unsettled reports are refreshed separately. Every report creator must resolve to a feed registered by the canonical factory for that portfolio and universe, and the feed must bind the report ID to the exact escrow. This discovers concurrent reports and portfolios with no questions, without scanning the question registry or depending on the diagnostic log lookback. Execution requires RPC quorum agreement on the pinned block and authenticated reports. A restart can require several polls to discover older active reports; it does not silently discard them because of a log-window cutoff.
 

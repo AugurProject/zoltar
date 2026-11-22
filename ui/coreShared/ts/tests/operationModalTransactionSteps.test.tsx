@@ -19,7 +19,7 @@ import { isTransactionReviewCancellation } from '../lib/errors.js'
 installDomTestLifecycle()
 
 const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
-const step = { title: 'Send withdrawal', description: 'Withdraw REP.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+const step = { contractLabel: undefined, title: 'Send withdrawal', description: 'Withdraw REP.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
 
 test('returns an embedded failed transaction to its form for review before resubmission', async () => {
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
@@ -52,12 +52,16 @@ test('returns an embedded failed transaction to its form for review before resub
 	try {
 		const queries = within(document.body)
 		const submit = queries.getByRole('button', { name: 'Deposit REP' })
-		await act(() => fireEvent.click(submit))
+		await act(() => {
+			fireEvent.click(submit)
+		})
 		expect(queries.queryByRole('alert')).toBeNull()
 		expect(queries.getByRole('dialog', { name: 'Deposit REP' }).querySelector('.operation-modal-transaction-notice')).toBeNull()
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		expect(submit.hasAttribute('disabled')).toBe(false)
-		await act(() => fireEvent.click(submit))
+		await act(() => {
+			fireEvent.click(submit)
+		})
 		expect(attempts).toBe(2)
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 	} finally {
@@ -101,7 +105,9 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 			const dialog = queries.getByRole('dialog', { name: 'Withdraw REP' })
 			const form = () => dialog.querySelector('.operation-modal-body')
 			const steps = () => dialog.querySelector('.operation-modal-steps')
-			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review withdrawal' })))
+			await act(() => {
+				fireEvent.click(queries.getByRole('button', { name: 'Review withdrawal' }))
+			})
 			expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
 			expect(form()?.hasAttribute('inert')).toBe(showsReview)
 			expect(steps() !== null).toBe(showsReview)
@@ -110,7 +116,9 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 			expect(queries.getByRole('textbox', { name: 'Amount' }).getAttribute('value')).toBe('42')
 			if (controller === undefined) throw new Error('Missing transaction controller')
 			if (outcome === 'cancel') {
-				await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' })))
+				await act(() => {
+					fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+				})
 				await review
 				expect(queries.getByRole('dialog')).toBe(dialog)
 				expect(steps()).toBeNull()
@@ -118,12 +126,17 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 				expect(transactionSteps.value).toBeUndefined()
 				return
 			}
-			if (showsReview) await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Approve REP' })))
+			if (showsReview)
+				await act(() => {
+					fireEvent.click(within(dialog).getByRole('button', { name: 'Approve REP' }))
+				})
 			await review
 			// Only the open wallet prompt holds the dialog.
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 			expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
-			await act(() => fireEvent.keyDown(dialog, { key: 'Escape' }))
+			await act(() => {
+				fireEvent.keyDown(dialog, { key: 'Escape' })
+			})
 			expect(queries.getByRole('dialog')).toBe(dialog)
 			const firstHash = outcome === 'multi-step' ? '0x2222222222222222222222222222222222222222222222222222222222222222' : hash
 			await act(() => {
@@ -140,14 +153,16 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 					review = controller?.review(1).catch(() => undefined)
 				})
 				expect(steps()).not.toBeNull()
-				for (const unrelatedHash of [undefined, '0x33']) {
+				for (const unrelatedHash of [undefined, '0x33'] as const) {
 					await act(() => {
 						presentation.value = { tone: 'success', title: 'Unrelated transaction confirmed', ...(unrelatedHash === undefined ? {} : { hash: unrelatedHash }), operationKey: 'unrelated' }
 					})
 					expect(transactionSteps.value?.steps[1]?.phase).toBe('review')
 				}
 				expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
-				await act(() => fireEvent.click(queries.getByRole('button', { name: 'Send withdrawal' })))
+				await act(() => {
+					fireEvent.click(queries.getByRole('button', { name: 'Send withdrawal' }))
+				})
 				await review
 				await act(() => controller?.submitted(hash))
 			}
@@ -169,7 +184,9 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 				expect(form()?.hasAttribute('inert')).toBe(false)
 				expect(queries.getByRole('textbox', { name: 'Amount' }).getAttribute('value')).toBe('42')
 				expect(transactionSteps.value).toBeUndefined()
-				await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Close' })))
+				await act(() => {
+					fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+				})
 				expect(queries.queryByRole('dialog')).toBeNull()
 			}
 		} finally {
@@ -208,7 +225,9 @@ test('sends an approval-only workflow from the form control without a separate r
 	try {
 		const queries = within(document.body)
 		const dialog = queries.getByRole('dialog', { name: 'Deposit REP' })
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve REP' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Approve REP' }))
+		})
 		expect(await review).toBeUndefined()
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
@@ -227,7 +246,9 @@ test('sends an approval-only workflow from the form control without a separate r
 		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
 		expect(dialog.querySelector('.operation-modal-transaction-notice')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve REP' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Approve REP' }))
+		})
 		expect(await review).toBeUndefined()
 		expect(transactionSteps.value).not.toBe(failedWorkflow)
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
@@ -265,8 +286,12 @@ test("ignores another transaction's failure while its own multi-step review runs
 	try {
 		const queries = within(document.body)
 		const dialog = queries.getByRole('dialog', { name: 'Withdraw REP' })
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Withdraw' })))
-		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Approve REP' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Withdraw' }))
+		})
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Approve REP' }))
+		})
 		await review
 		await act(() => {
 			controller?.submitted(approvalHash)
@@ -324,14 +349,16 @@ test('keeps the initiating action row in place and disabled while transaction st
 	try {
 		const queries = within(document.body)
 		const dialog = queries.getByRole('dialog', { name: 'Withdraw REP' })
-		const formActions = dialog.querySelector('.operation-modal-body .tx-action-group')
+		const formActions = dialog.querySelector<HTMLElement>('.operation-modal-body .tx-action-group')
 		if (!(formActions instanceof HTMLElement)) throw new Error('Expected the form action row')
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Withdraw' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Withdraw' }))
+		})
 		const steps = dialog.querySelector('.operation-modal-steps')
 		if (!(steps instanceof HTMLElement)) throw new Error('Expected the review below the form')
 		// The initiating controls remain in the same row while distinct transaction buttons run below.
 		expect(formActions.hidden).toBe(false)
-		expect(formActions).toBe(dialog.querySelector('.operation-modal-body .tx-action-group'))
+		expect(formActions === dialog.querySelector<HTMLElement>('.operation-modal-body .tx-action-group')).toBe(true)
 		expect(formActions.querySelector('button')?.matches(':disabled')).toBe(true)
 		expect(formActions.tagName).toBe('FIELDSET')
 		expect(formActions.hasAttribute('disabled')).toBe(true)
@@ -341,7 +368,9 @@ test('keeps the initiating action row in place and disabled while transaction st
 		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(true)
 		expect(dialog.querySelectorAll('[inert]')).toHaveLength(1)
 		expect(queries.getByRole('textbox', { name: 'Amount' }).closest('[inert]')).not.toBeNull()
-		await act(() => fireEvent.click(within(steps).getByRole('button', { name: 'Send withdrawal' })))
+		await act(() => {
+			fireEvent.click(within(steps).getByRole('button', { name: 'Send withdrawal' }))
+		})
 		await review
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		await act(() => {
@@ -383,10 +412,14 @@ test('closing the dialog during preparation cancels its captured scope before a 
 	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Withdraw REP' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Withdraw REP' }))
+		})
 		await preparing.promise
 		expect(transactionSteps.value).toBeUndefined()
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Close' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Close' }))
+		})
 		resume.resolve()
 		expect(isTransactionReviewCancellation(await completion)).toBe(true)
 		expect(queries.queryByRole('dialog')).toBeNull()
@@ -443,7 +476,9 @@ test('direct wallet actions retain the initiating form without a second confirma
 	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const page = within(document.body)
-		await act(() => fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' })))
+		await act(() => {
+			fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		})
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(document.querySelector('.operation-modal-steps')).toBeNull()
 		expect(page.queryByRole('button', { name: 'Send withdrawal' })).toBeNull()

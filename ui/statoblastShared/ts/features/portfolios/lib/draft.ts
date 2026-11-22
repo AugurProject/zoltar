@@ -1,4 +1,4 @@
-import { parseUnits } from '@zoltar/core-shared/evm/ethereum'
+import { tryParseDecimalInput, type DecimalSeparator } from '@zoltar/ui-core-shared/forms/decimal.js'
 
 export function parsePortfolioAmount(value: string) {
 	const amount = portfolioAmountOrUndefined(value)
@@ -6,9 +6,9 @@ export function parsePortfolioAmount(value: string) {
 	return amount
 }
 
-export function portfolioAmountOrUndefined(value: string, decimals = 18) {
-	if (!new RegExp(`^(\\d+)(\\.\\d{0,${decimals}})?$`).test(value.trim())) return undefined
-	return parseUnits(value.trim(), decimals)
+export function portfolioAmountOrUndefined(value: string, decimals = 18, decimalSeparator?: DecimalSeparator) {
+	const amount = tryParseDecimalInput(value, decimals, decimalSeparator)
+	return amount !== undefined && amount >= 0n ? amount : undefined
 }
 
 export function portfolioUnsignedId(value: string, bits = 256) {

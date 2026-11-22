@@ -1,5 +1,7 @@
-import { securityPoolFactoryAbi, securityPoolPortfolioAbi, securityPoolCapitalLedgerAbi, securityPoolCommitmentIndexAbi, securityPoolPortfolioForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
-import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { collectCountedPages } from './discovery-registry.ts'
+import { limitsWithDefaults } from './discovery-context.ts'
+import { zoltarAbi, securityPoolFactoryAbi, securityPoolPortfolioAbi, securityPoolCapitalLedgerAbi, securityPoolCommitmentIndexAbi, securityPoolPortfolioForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { loadPortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { canonicalUintString } from '../core/units.ts'
 import type { PortfolioCapitalSnapshot } from '../operations/portfolio-types.ts'
@@ -8,28 +10,56 @@ import type { EcosystemDiscoveryContext } from './discovery-context.ts'
 import { requireGraphEdge } from './discovery-graph.ts'
 import { contractSimulationReverted } from './discovery-client.ts'
 
-/** Questions authenticate portfolio ownership; capital is read once per universe. */
+/** Question bindings authenticate active scopes; the factory registry supplies questionless origins. Capital is read once per universe. */
 export async function discoverPortfolioCapital(context: EcosystemDiscoveryContext, pools: readonly Pick<PoolSnapshot, 'address' | 'portfolio' | 'universeId' | 'questionId' | 'repToken'>[], blockNumber: bigint, questions: readonly QuestionSnapshot[] = []): Promise<PortfolioCapitalSnapshot[]> {
 	const { client, deployments, wallet } = context
 	if (wallet === undefined) return []
 	const scopes = new Map<string, { portfolio: `0x${string}`; universeId: bigint; repToken: `0x${string}` }>()
+	const authenticated = new Set<string>()
+	const authenticatePortfolio = async (portfolio: Address) => {
+		const key = portfolio.toLowerCase()
+		if (authenticated.has(key)) return
+		const [factory, zoltar] = await Promise.all([client.readContract({ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'factory', blockNumber }), client.readContract({ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'zoltar', blockNumber })])
+		requireGraphEdge(getAddress(factory), deployments.securityPoolFactory, 'Portfolio factory binding')
+		requireGraphEdge(getAddress(zoltar), deployments.zoltar, 'Portfolio protocol binding')
+		authenticated.add(key)
+	}
 	for (const pool of pools) {
 		const portfolio = getAddress(await client.readContract({ address: deployments.securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'getSecurityPoolPortfolio', args: [pool.address], blockNumber }))
 		if (portfolio === zeroAddress) throw new Error(`Question ${pool.address} has no portfolio`)
 		const universeId = BigInt(pool.universeId)
 		const registered = await client.readContract({ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'getPool', args: [BigInt(pool.questionId), universeId], blockNumber })
 		requireGraphEdge(getAddress(registered), pool.address, 'Portfolio question binding')
+		await authenticatePortfolio(portfolio)
 		const key = `${portfolio.toLowerCase()}:${universeId}`
 		const previous = scopes.get(key)
 		if (previous !== undefined) requireGraphEdge(previous.repToken, pool.repToken, 'Portfolio universe REP binding')
 		else scopes.set(key, { portfolio, universeId, repToken: pool.repToken })
 	}
+	// The factory registry also contains completed portfolios before their first question is admitted.
+	const count = await client.readContract({ address: deployments.securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'portfolioCount', blockNumber })
+	const maximum = limitsWithDefaults(context.limits).maxPools
+	if (count > BigInt(maximum)) throw new Error(`Portfolio registry exceeds discovery limit ${maximum}`)
+	const page = await collectCountedPages({
+		count,
+		start: 0n,
+		maximumItems: maximum,
+		pageSize: 32,
+		label: 'Portfolio registry',
+		readPage: async (start, requested) => await client.readContract({ address: deployments.securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'portfoliosRange', args: [start, requested], blockNumber }),
+	})
+	for (const portfolio of page.values) {
+		await authenticatePortfolio(portfolio)
+		const setup = await client.readContract({ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'setupStage', blockNumber })
+		if (setup !== 4n) continue
+		const universeId = await client.readContract({ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'originUniverseId', blockNumber })
+		const key = `${portfolio.toLowerCase()}:${universeId}`
+		if (scopes.has(key)) continue
+		const repToken = await client.readContract({ address: deployments.zoltar, abi: zoltarAbi, functionName: 'getRepToken', args: [universeId], blockNumber })
+		scopes.set(key, { portfolio, universeId, repToken })
+	}
 	const result: PortfolioCapitalSnapshot[] = []
 	for (const scope of scopes.values()) {
-		const factory = await client.readContract({ address: scope.portfolio, abi: securityPoolPortfolioAbi, functionName: 'factory', blockNumber })
-		const zoltar = await client.readContract({ address: scope.portfolio, abi: securityPoolPortfolioAbi, functionName: 'zoltar', blockNumber })
-		requireGraphEdge(getAddress(factory), deployments.securityPoolFactory, 'Portfolio factory binding')
-		requireGraphEdge(getAddress(zoltar), deployments.zoltar, 'Portfolio protocol binding')
 		const capital = await loadPortfolioCapitalSnapshot({ client, portfolio: scope.portfolio, universeId: scope.universeId, owner: wallet, blockNumber })
 		const ledgerPortfolio = await client.readContract({ address: capital.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'portfolio', blockNumber })
 		const indexLedger = await client.readContract({ address: capital.commitmentIndex, abi: securityPoolCommitmentIndexAbi, functionName: 'capitalLedger', blockNumber })

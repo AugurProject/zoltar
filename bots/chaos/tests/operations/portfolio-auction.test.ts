@@ -112,3 +112,14 @@ test('#1371 excluded bid prices do not produce an unattended approval or bid pla
 	const options = planningOptionsFixture({ maxEthSpendAttoEth: 2000n.toString(), operationInputs: { lots: '2', minimumAttoRepPerLot: 15n.toString(), healthFactorBps: '10000' } })
 	expect(auctionDefinition('bid').buildPlan(snapshot, options)).toBeUndefined()
 })
+
+test('auction opening requires a successful anchored simulation of inventory, universe and funding guards', () => {
+	const snapshot = snapshotFixture()
+	const auction = auctionFixture()
+	auction.opened = false
+	auction.openingExpectedSuccess = false
+	snapshot.auctions = [auction]
+	expect(startCollateralRepairAuction.buildPlan(snapshot, planningOptionsFixture())).toBeUndefined()
+	auction.openingExpectedSuccess = true
+	expect(startCollateralRepairAuction.buildPlan(snapshot, planningOptionsFixture())).toBeDefined()
+})

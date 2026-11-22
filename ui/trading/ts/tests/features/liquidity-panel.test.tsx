@@ -1,4 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { createWalletClient, custom, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -23,7 +27,7 @@ const services: LiveLiquidityServices = {
 	},
 }
 
-function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalances | undefined = undefined, quoteServices = services, walletClient: ReturnType<typeof createWalletClient> | undefined = undefined) {
+function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalances | undefined = undefined, quoteServices = services, walletClient: Parameters<typeof LiveLiquidityControls>[0]['walletClient'] = undefined) {
 	return renderIntoDocument(
 		<LiveLiquidityControls
 			{...passthroughWorkflowPanelProps}
@@ -88,7 +92,7 @@ function amountErrorText() {
 }
 
 describe('liquidity panel', () => {
-	installDomTestLifecycle()
+	installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 
 	test('explains token funding blocked by a disconnected wallet with the shared reason, not the connect button label', async () => {
 		const tokenMarket = etherScaleMarketFixture({ collateral: { token: `0x${'55'.repeat(20)}`, symbol: 'USDC', decimals: 6, native: false } })
@@ -100,6 +104,25 @@ describe('liquidity panel', () => {
 			expect(approval.disabled).toBe(true)
 			const description = approval.getAttribute('aria-describedby')
 			expect(description === null ? undefined : document.getElementById(description)?.textContent).toBe('Connect wallet to continue.')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('marks a USDC liquidity amount against its token balance at both the field and action', async () => {
+		installActiveEnvironmentForTesting({
+			...createFakeBackend(),
+			createReadClient: () => testDouble<ReadClient>({ readContract: async () => 1_000_000n }),
+		})
+		const market = etherScaleMarketFixture({ collateral: { token: `0x${'55'.repeat(20)}`, symbol: 'USDC', decimals: 6, native: false } })
+		const rendered = await renderPanel(market, true, undefined, services, offlineWalletClient())
+		try {
+			await typeAmount('2')
+			expect(amountErrorText()).toContain('USDC')
+			expect(amountInput().getAttribute('aria-invalid')).toBe('true')
+			expect(Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Add liquidity')?.disabled).toBe(true)
+			await typeAmount('0.5')
+			expect(amountInput().getAttribute('aria-invalid')).not.toBe('true')
 		} finally {
 			await rendered.cleanup()
 		}
@@ -144,7 +167,7 @@ describe('liquidity panel', () => {
 		const rendered = await renderPanel({ ...openMarket, pair: undefined, lpTotalSupply: 0n }, true, undefined, services, walletClient)
 		try {
 			await typeAmount('0.1')
-			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('0.1 Invalid')
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('0.1000 Invalid')
 			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('Estimate from your price and the current collateral rate. Rechecked before your wallet opens.')
 			expect(document.body.textContent).not.toContain('Getting a quote…')
 			await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
@@ -232,6 +255,7 @@ describe('liquidity panel', () => {
 			await typeAmount('0.1')
 			// 0.1 ETH mints 0.1 LP; the 0.5% default slippage makes 0.0995 LP the signed minimum.
 			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('Minimum received0.0995 LP')
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('Maximum deposit0.1005 Yes / 0.1005 No')
 		} finally {
 			await rendered.cleanup()
 		}
@@ -277,7 +301,7 @@ describe('liquidity panel', () => {
 			await typeAmount('1')
 			const estimate = document.querySelector('section[aria-label="Liquidity estimate"]')
 			expect(estimate?.textContent).toContain('1 LP')
-			expect(estimate?.textContent).toContain('1 Invalid')
+			expect(estimate?.textContent).toContain('1.0000 Invalid')
 			expect(estimate?.textContent).toContain('Estimate from the current trading pool state.')
 			expect(estimate?.textContent).not.toContain('Connect a wallet to submit.')
 			await act(() => operationButton('Remove').click())
@@ -286,9 +310,9 @@ describe('liquidity panel', () => {
 			expect(removal?.textContent).toContain('5 Yes')
 			expect(removal?.textContent).toContain('5 No')
 			// Each received share states its payout as a caption under the amount, like the LP it is paid from.
-			expect(removal?.querySelector('.portfolio-holding-yes .payout-caption')?.textContent?.trim()).toBe('5 ETH if the question resolves Yes')
+			expect(removal?.querySelector('.portfolio-holding-yes .payout-caption')?.textContent?.trim()).toBe('5.00 ETH if the question resolves Yes')
 			expect(removal?.textContent).not.toContain('5 Yes (')
-			expect(removal?.textContent).toContain('Worth about 5 ETH at the current trading pool price')
+			expect(removal?.textContent).toContain('Worth about 5.00 ETH at the current trading pool price')
 			expect(document.body.textContent).toContain('Removing liquidity returns Yes and No shares to your wallet, not collateral. Next, sell them on the Trade tab')
 			expect(document.body.textContent).not.toContain('raw Yes and No')
 		} finally {

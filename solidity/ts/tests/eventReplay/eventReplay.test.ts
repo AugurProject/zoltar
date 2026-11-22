@@ -697,10 +697,9 @@ describe('event-only replay', () => {
 				},
 			}),
 			createReplayLog({ emitter: pool, eventName: 'ShareTokenSupplySet', logIndex: 1, args: { shareTokenSupplyAttoShares: 40n } }),
-			createReplayLog({ emitter: pool, eventName: 'TotalRepBackingUnitsSet', logIndex: 2, args: { totalRepBackingUnits: 50n } }),
 			createReplayLog({ emitter: pool, eventName: 'AwaitingForkContinuationSet', logIndex: 3, args: { awaitingForkContinuation: true } }),
 			createReplayLog({ emitter: pool, eventName: 'EscalationGameSet', logIndex: 4, args: { escalationGame: game } }),
-			createReplayLog({ emitter: pool, eventName: 'PoolForkModeActivated', logIndex: 5, args: { repTransferredAttoRep: 60n, systemState: 1n } }),
+			createReplayLog({ emitter: pool, eventName: 'SystemStateSet', logIndex: 5, args: { systemState: 1n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs)
@@ -708,11 +707,9 @@ describe('event-only replay', () => {
 		if (replayed.completeSetSupplies.get(pool) !== 40n) throw new Error('child share-token supply mismatch')
 		const poolState = replayed.poolStates.get(pool)
 		if (poolState?.shareTokenSupplyAttoShares !== 40n) throw new Error('child pool share-token state mismatch')
-		if (poolState.totalRepBackingUnits !== 50n) throw new Error('child backingUnits denominator mismatch')
-		if (poolState.systemState !== 1n || !poolState.forkModeActive) throw new Error('child system state mismatch')
+		if (poolState.systemState !== 1n) throw new Error('child system state mismatch')
 		if (poolState.awaitingForkContinuation !== true) throw new Error('child continuation state mismatch')
 		if (poolState.escalationGame !== game) throw new Error('child escalation-game relationship mismatch')
-		if (poolState.repTransferredAtFork !== 60n) throw new Error('child fork activation state mismatch')
 	})
 
 	test('escalation reducers track stable leaves, escrow, claims, and accrued surplus', () => {
@@ -1312,4 +1309,10 @@ describe('event-only replay', () => {
 			strictEqualTypeSafe(migrationBalance, await getMigrationRepBalanceAttoRep(client, fixture.genesisUniverse, migrator), `migration balance replay mismatch for ${migrator}`)
 		}
 	})
+})
+
+test('retired pool event names do not invent current accounting state', () => {
+	const pool = '0x1111111111111111111111111111111111111111'
+	const state = replayZoltarEvents([createReplayLog({ emitter: pool, eventName: 'TotalRepBackingUnitsSet', logIndex: 0, args: { totalRepBackingUnits: 50n } }), createReplayLog({ emitter: pool, eventName: 'PoolForkModeActivated', logIndex: 1, args: { repTransferredAttoRep: 60n, systemState: 1n } })])
+	expect(state.poolStates.has(pool)).toBe(false)
 })

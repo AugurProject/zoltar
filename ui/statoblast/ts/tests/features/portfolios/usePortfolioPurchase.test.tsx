@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, parseAbi, zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
@@ -204,4 +204,23 @@ test('a positive quote makes recovery controls applicable even when its first fu
 	expect(hook.state().quote).toBeUndefined()
 	expect(hook.state().recovery).toBeUndefined()
 	expect(hook.state().recoveryError).toContain('Recovery REP funding is unavailable.')
+})
+
+test('the first origin purchase registers an eligible question in the same transaction', async () => {
+	const { hook, source, requests } = await setup()
+	source.setRead('questionOriginIds', zeroHash)
+	source.setRead('isQuestionAllowed', true)
+	source.setRead('maximumQuestionHorizonSeconds', 365n * 86_400n)
+	source.setSnapshot(capitalSnapshot({ blockNumber: 11n, blockHash: `0x${'22'.repeat(32)}` }))
+	await hook.setProps({ snapshot: capitalSnapshot({ blockNumber: 11n, blockHash: `0x${'22'.repeat(32)}` }) })
+	await waitFor(() => expect(hook.state().quote?.pool).toBe(zeroAddress))
+	expect(hook.state().reason).toBeUndefined()
+	await act(() => hook.state().buy())
+	expect(requests).toHaveLength(1)
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing first purchase')
+	expect(decodeFunctionData({ abi, data: request.data }).functionName).toBe('createCompleteSet')
+	await request.validateBeforeSubmit?.()
+	source.setRead('isQuestionAllowed', false)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('admission policy')
 })

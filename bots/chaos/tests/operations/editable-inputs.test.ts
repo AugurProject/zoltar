@@ -26,7 +26,7 @@ const options = {
 	maxRepSpendAttoRep: 1000000000000000n.toString(),
 	minimumEthReserveAttoEth: 10000000000000000n.toString(),
 	minimumRepReserveAttoRep: 1000000000000000000n.toString(),
-	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxUniverses: 100, maxVaultsPerPool: 100, maximumAggregateItems: 10000 },
+	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxUniverses: 100, maximumAggregateItems: 10000 },
 }
 
 function editableSnapshot() {
@@ -40,7 +40,7 @@ function editableSnapshot() {
 	question.endTime = (BigInt(snapshot.anchor.timestamp) + 10000n).toString()
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
 	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
-	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 10000n.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '10000' }
+	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 10000n.toString(), feeAttoEth: 300n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '10000' }
 	snapshot.portfolioCapital = [capitalFixture(snapshot)]
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'
 	for (const token of snapshot.wallet.tokens) token.openOracleCredit = '1000000000000000000'
@@ -120,7 +120,7 @@ test('decimal amount controls preserve single base units and large integers exac
 test('exact principal changes ETH value, approvals, debits, and decoded token arguments', () => {
 	expect(transaction(build('open-oracle.weth.wrap', { amount: '10000' })).value).toBe('10000')
 	expect(transaction(build('statoblast.complete-set.create', { amount: '10000' })).value).toBe('0')
-	for (const id of ['trading.liquidity.add-eth', 'trading.position.enter']) expect(transaction(build(id, { amount: '10000' })).value, id).toBe('10300')
+	for (const id of ['trading.liquidity.add-eth', 'trading.position.enter']) expect(transaction(build(id, { amount: '10000' })).value, id).toBe('10303')
 	for (const id of ['open-oracle.weth.unwrap', 'open-oracle.withdraw', 'open-oracle.withdraw-to', 'open-oracle.push-or-credit', 'zoltar.rep.burn', 'statoblast.complete-set.redeem']) {
 		const plan = build(id, { amount: '10000' })
 		const field = operationInputSchema(id).find(field => field.key === 'amount')

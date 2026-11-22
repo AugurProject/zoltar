@@ -7,7 +7,7 @@ import { MAINNET_WETH_ADDRESS, setRuntimeNetworkProfile, type NetworkProfile } f
 import { initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import { withTimeout } from '../lib/promise.js'
-import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
+import { MAX_ATTO_REP, REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 export type TevmLikeClient = ReturnType<typeof createMemoryClient>
@@ -22,7 +22,6 @@ const WETH_NAME_SLOT = 0n
 const WETH_SYMBOL_SLOT = 1n
 const WETH_DECIMALS_SLOT = 2n
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ZOLTAR_UNIVERSES_SLOT = 0n
 
 async function yieldToBrowser() {
@@ -71,10 +70,6 @@ async function deployContract(writeClient: WriteClient, address: Address, label:
 
 function getZoltarUniverseBaseSlot(universeId: bigint) {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [universeId, ZOLTAR_UNIVERSES_SLOT])))
-}
-
-function getZoltarUniverseTheoreticalSupplyAttoRepSlot(universeId: bigint) {
-	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [universeId, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT])))
 }
 
 async function seedAccountBalances(memoryClient: TevmLikeClient, accounts: readonly Address[], onProgress?: BootstrapProgressHandler) {
@@ -142,23 +137,14 @@ async function seedGenesisRepTokenState({
 export async function updateZoltarGenesisRepToken({ createWriteClient, memoryClient, repAddress, zoltarAddress }: { createWriteClient: (accountAddress: Address) => WriteClient; memoryClient: TevmLikeClient; repAddress: Address; zoltarAddress: Address }) {
 	const universeBaseSlot = getZoltarUniverseBaseSlot(GENESIS_UNIVERSE_ID)
 	const readClient = createWriteClient(zoltarAddress)
-	const genesisTheoreticalSupply = await readClient.readContract({
-		address: repAddress,
-		abi: ReputationToken_ReputationToken.abi,
-		functionName: 'getTotalTheoreticalSupply',
-		args: [],
-	})
 
 	await memoryClient.setStorageAt({
 		address: zoltarAddress,
 		index: storageIndex(universeBaseSlot + ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET),
 		value: storageValue(BigInt(repAddress)),
 	})
-	await memoryClient.setStorageAt({
-		address: zoltarAddress,
-		index: storageIndex(getZoltarUniverseTheoreticalSupplyAttoRepSlot(GENESIS_UNIVERSE_ID)),
-		value: storageValue(genesisTheoreticalSupply),
-	})
+	// Live genesis supply subtracts protocol burns; after a fork its supply is frozen.
+	// Updating the token pointer must preserve both forms of protocol accounting.
 
 	const patchedRepToken = await readClient.readContract({
 		address: zoltarAddress,
@@ -168,16 +154,6 @@ export async function updateZoltarGenesisRepToken({ createWriteClient, memoryCli
 	})
 	if (patchedRepToken.toLowerCase() !== repAddress.toLowerCase()) {
 		throw new Error(`Failed to patch simulation Zoltar genesis REP token. Expected ${repAddress}, received ${patchedRepToken}.`)
-	}
-
-	const patchedTheoreticalSupply = await readClient.readContract({
-		address: zoltarAddress,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getUniverseTheoreticalSupplyAttoRep',
-		args: [GENESIS_UNIVERSE_ID],
-	})
-	if (patchedTheoreticalSupply !== genesisTheoreticalSupply) {
-		throw new Error(`Failed to patch simulation Zoltar theoretical supply. Expected ${genesisTheoreticalSupply.toString()}, received ${patchedTheoreticalSupply.toString()}.`)
 	}
 }
 
@@ -190,16 +166,17 @@ export async function mintSimulationGenesisRep({ accountAddress, amount, createW
 	try {
 		await withSimulationAuthorityAccount(memoryClient, zoltarAddress, async () => {
 			const zoltarWriteClient = createWriteClient(zoltarAddress)
-			const totalSupply = await zoltarWriteClient.readContract({
+			const theoreticalSupply = await zoltarWriteClient.readContract({
 				address: repAddress,
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'totalSupply',
+				functionName: 'getTotalTheoreticalSupply',
 				args: [],
 			})
+			if (theoreticalSupply + amount > MAX_ATTO_REP) throw new Error('Simulation REP supply cannot exceed 11 million REP')
 			await memoryClient.setStorageAt({
 				address: repAddress,
 				index: storageIndex(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT),
-				value: storageValue(totalSupply + amount),
+				value: storageValue(theoreticalSupply + amount),
 			})
 			const mintHash = await zoltarWriteClient.writeContract({
 				address: repAddress,
@@ -443,6 +420,6 @@ export async function bootstrapSimulationChain({
 			scenario,
 		}))
 	if (!scenarioApplied) throw new Error(`Unknown simulation scenario: ${scenario}`)
-	await reportBootstrapProgress(onProgress, 'Saving simulation snapshot', 0.99)
+	await reportBootstrapProgress(onProgress, 'Completing simulation setup', 0.99)
 	await reportBootstrapProgress(onProgress, 'Simulation scenario ready', 1)
 }

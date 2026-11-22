@@ -99,7 +99,7 @@ export function renderReportFields(
 export function OpenOracleClockValue({ currentTimestamp, timeType, value, zeroText }: { currentTimestamp?: bigint; timeType: boolean; value: bigint; zeroText?: ComponentChildren }) {
 	if (timeType) return <TimestampValue timestamp={value} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} {...(zeroText === undefined ? {} : { zeroText })} />
 	if (value === 0n && zeroText !== undefined) return <span className='timestamp-value zero'>{zeroText}</span>
-	return <span className='timestamp-value'>{openOracleCopy.formatTimingValue(value.toString(), openOracleCopy.blocks)}</span>
+	return <span className='timestamp-value'>{openOracleCopy.formatAbsoluteBlock(value)}</span>
 }
 
 export function getOpenOracleClockLabel(timeType: boolean, timestampLabel: string, blockLabel: string) {

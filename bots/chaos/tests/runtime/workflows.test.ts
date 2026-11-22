@@ -1,3 +1,4 @@
+import { keccak256, toHex } from '@zoltar/bot-shared/ethereum'
 import { describe, expect, test } from 'bun:test'
 import type { OperationPlan } from '../../src/operations/types.ts'
 import {
@@ -105,15 +106,15 @@ function canonicalConfirmationPlan(position: 'prerequisite' | 'terminal' = 'term
 						...step,
 						evidence: [
 							{
-								abi: 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)',
+								abi: 'event MigrationRepSplit(address indexed migrator, address recipient, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)',
 								canonicalLifecycleConfirmation: true,
 								emitter: '0x0000000000000000000000000000000000000001',
 								equals: '100',
-								field: 'childPoolRepSplitAttoRep',
-								indexed: { outcomeIndex: '0', parent: '0x0000000000000000000000000000000000000002' },
+								field: 'childMigrationRepAmountAttoRep',
+								indexed: { universeId: '0', migrator: '0x0000000000000000000000000000000000000002' },
 								kind: 'decoded-event-field',
-								signature: 'ChildRepSplit(address,uint256,uint256,uint256)',
-								topic0: '0x1111111111111111111111111111111111111111111111111111111111111111',
+								signature: 'MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)',
+								topic0: keccak256(toHex('MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)')),
 							},
 						],
 					}

@@ -170,6 +170,19 @@ describe('Escalation math parity', () => {
 		}
 	})
 
+	test('a sub-bond threshold remainder still requires an offer of the full start bond', async () => {
+		const { escalationGameAddress: game, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep - 1n)
+		const balances = await getBalances(client, game)
+		const project = (amountAttoRep: bigint) => projectEscalationDeposit({ amountAttoRep, balancesAttoRep: [balances.invalid, balances.yes, balances.no], nonDecisionThresholdAttoRep, outcome: 'yes', startBondAttoRep: reportBond })
+		assert.strictEqual(project(1n), undefined)
+		await assert.rejects(readPreviewDepositOnOutcome(game, QuestionOutcome.Yes, 1n), /Invalid deposit preview/)
+		const [accepted, cumulative] = await readPreviewDepositOnOutcome(game, QuestionOutcome.Yes, reportBond)
+		assert.strictEqual(accepted, project(reportBond)?.acceptedAmountAttoRep)
+		assert.strictEqual(accepted, 1n)
+		assert.strictEqual(cumulative, nonDecisionThresholdAttoRep)
+	})
+
 	test('shared deposit projection matches previewDepositOnOutcome and projected end time', async () => {
 		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 9n * reportBond)

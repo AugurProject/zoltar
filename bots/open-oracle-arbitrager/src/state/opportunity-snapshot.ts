@@ -6,6 +6,8 @@ export type OpportunityDecision = 'dry-run-opportunity' | 'eligible' | 'executio
 
 export type EvaluatedOpportunitySnapshot = {
 	centralizedPriceDeviationBps: string | undefined
+	/** Symbol of a non-WETH report collateral; `requiredWeth` is then an amount of that token. */
+	collateralSymbol?: string | undefined
 	decision: OpportunityDecision
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
@@ -26,6 +28,8 @@ export type EvaluatedOpportunitySnapshot = {
 
 /** A live report the scan declined before any venue priced it; it stays visible with the concrete reason instead of surviving only in the log. */
 export type SkippedOpportunitySnapshot = {
+	/** Symbol of a non-WETH report collateral. */
+	collateralSymbol?: string | undefined
 	decision: 'skipped'
 	reason: string
 	reasonDetails?: string | undefined
@@ -42,6 +46,7 @@ export type OpportunitySnapshot = EvaluatedOpportunitySnapshot | SkippedOpportun
 export function publicOpportunity(opportunity: OpportunitySnapshot): OpportunitySnapshot {
 	if (opportunity.decision === 'skipped') {
 		return {
+			...(opportunity.collateralSymbol === undefined ? {} : { collateralSymbol: opportunity.collateralSymbol }),
 			decision: opportunity.decision,
 			reason: opportunity.reason,
 			...(opportunity.reasonDetails === undefined ? {} : { reasonDetails: publicInformationalOperationValue(opportunity.reasonDetails) }),
@@ -54,6 +59,7 @@ export function publicOpportunity(opportunity: OpportunitySnapshot): Opportunity
 	}
 	return {
 		centralizedPriceDeviationBps: opportunity.centralizedPriceDeviationBps,
+		...(opportunity.collateralSymbol === undefined ? {} : { collateralSymbol: opportunity.collateralSymbol }),
 		decision: opportunity.decision,
 		direction: opportunity.direction,
 		estimatedNetProfitWeth: opportunity.estimatedNetProfitWeth,

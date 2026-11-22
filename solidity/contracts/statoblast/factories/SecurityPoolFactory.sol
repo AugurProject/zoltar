@@ -171,6 +171,10 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	/// @dev A portfolio's modules hold provider REP and trader collateral, and each fork
 	/// child gets fresh ones from the same deployers. Fixing the code and the deployers
 	/// here is what lets pools, the forker and exchanges trust a registered portfolio.
+	function maximumReportPriorityFeeAttoEthPerGas() external view override returns (uint256) {
+		return openOraclePriceCoordinatorFactory.maximumReportPriorityFeeAttoEthPerGas();
+	}
+
 	function deployPortfolio(bytes calldata creationCode, bytes calldata configuration) external returns (address portfolio) {
 		require(keccak256(creationCode) == portfolioCreationCodeHash, 'Portfolio creation code is not canonical');
 		require(configuration.length == PORTFOLIO_CONFIGURATION_BYTES, 'Portfolio configuration length invalid');

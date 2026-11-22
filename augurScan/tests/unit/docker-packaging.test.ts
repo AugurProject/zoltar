@@ -52,11 +52,14 @@ describe('Docker packaging', () => {
 				}
 			}
 			const probe = join(runtime, 'augurScan/probe.ts')
-			await Bun.write(probe, "import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'\nconsole.log(getLiquidationMigrationSecurityMultiplierBps(12000n))\n")
+			await Bun.write(
+				probe,
+				"import { calculateOracleSettlementBountyAttoEth } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'\nconsole.log(calculateOracleSettlementBountyAttoEth({ baseFeePerGas: 0n, initialReportPriorityFeeAttoEthPerGas: 1n, settlementCallbackGasLimit: 0n, maxSettlementBaseFeeMultiplierBps: 10000n }))\n",
+			)
 			const result = Bun.spawnSync([process.execPath, '--no-install', probe], { cwd: runtime, stdout: 'pipe', stderr: 'pipe' })
 			expect(result.stderr.toString()).toBe('')
 			expect(result.exitCode).toBe(0)
-			expect(result.stdout.toString().trim()).toBe('11000n')
+			expect(result.stdout.toString().trim()).toBe('392101n')
 		} finally {
 			await rm(runtime, { recursive: true, force: true })
 			await rm(dependencies, { recursive: true, force: true })

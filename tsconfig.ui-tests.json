@@ -1,0 +1,10 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"types": ["bun-types", "node"],
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
+		"tsBuildInfoFile": "./.tsbuildinfo"
+	},
+	"include": ["ui/*/ts/tests/**/*.ts", "ui/*/ts/tests/**/*.tsx"]
+}

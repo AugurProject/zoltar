@@ -1,3 +1,4 @@
+import { sharesToProjectedEth, sharesToProjectedRep } from '../operations/pool-economics.ts'
 import type { Address, Hash } from '@zoltar/bot-shared/ethereum'
 import { buildRetirementLiquidityRemovalPlan } from '../operations/retirement-liquidity.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
@@ -56,8 +57,7 @@ function classifyShares(snapshot: EcosystemSnapshot) {
 			const balance = balances[outcome]
 			if (balance === undefined || BigInt(balance) === 0n) continue
 			if (outcome !== pool.questionOutcome) residuals.push({ amount: balance, asset: `${shares.shareToken}:${outcome.toString()}`, category: 'losing-share', reason: 'The canonical pool resolution makes this outcome share nonredeemable' })
-			else if (BigInt(pool.shareTokenSupplyAttoShares) === 0n || (BigInt(balance) * BigInt(pool.settlementCollateralAttoEth)) / BigInt(pool.shareTokenSupplyAttoShares) === 0n)
-				residuals.push({ amount: balance, asset: `${shares.shareToken}:${outcome.toString()}`, category: 'accepted-dust', reason: 'The canonical winning-share payout rounds to zero' })
+			else if (sharesToProjectedEth(pool, BigInt(balance)) === 0n && sharesToProjectedRep(pool, BigInt(balance)) === 0n) residuals.push({ amount: balance, asset: `${shares.shareToken}:${outcome.toString()}`, category: 'accepted-dust', reason: 'The canonical winning-share payout rounds to zero' })
 		}
 	}
 	return { blockers, residuals }
@@ -79,7 +79,7 @@ function canonicalClaimableAssetCount(snapshot: EcosystemSnapshot, retirement: D
 		const balances = [BigInt(shares.invalid), BigInt(shares.yes), BigInt(shares.no)]
 		if (pool.systemState === 0 && balances.every(value => value > 0n)) count += 1
 		const winning = balances[pool.questionOutcome]
-		if (pool.systemState === 0 && pool.questionOutcome !== 3 && winning !== undefined && winning > 0n && BigInt(pool.shareTokenSupplyAttoShares) > 0n && (winning * BigInt(pool.settlementCollateralAttoEth)) / BigInt(pool.shareTokenSupplyAttoShares) > 0n) count += 1
+		if (pool.systemState === 0 && pool.questionOutcome !== 3 && winning !== undefined && winning > 0n && BigInt(pool.shareTokenSupplyAttoShares) > 0n && (sharesToProjectedEth(pool, winning) > 0n || sharesToProjectedRep(pool, winning) > 0n)) count += 1
 	}
 	return count
 }

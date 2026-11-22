@@ -1,3 +1,7 @@
+import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { marketDownloadStore } from '../../lib/favoriteMarkets.js'
@@ -19,7 +23,7 @@ import { largestExitForLongShares, quoteEnterPosition } from '@zoltar/trading-sh
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel, waitForDom } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
-import { connectedWalletServices, discoveryPage, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
+import { connectedWalletServices, discoveryPage, universeDiscoveryPage, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -59,7 +63,7 @@ function walletHolding(label: string) {
 }
 
 async function renderDiscoveryController(
-	services: Parameters<typeof useLiveTradingController>[0]['services'],
+	services: NonNullable<Parameters<typeof useLiveTradingController>[0]['services']>,
 	initialRoute = 'portfolio',
 	onRender?: (route: string, discovery: ReturnType<typeof useLiveTradingController>['discovery']) => void,
 	onUniversesChange: Parameters<typeof useLiveTradingController>[0]['onUniversesChange'] = () => undefined,
@@ -71,12 +75,12 @@ async function renderDiscoveryController(
 			configuration,
 			configurationError: undefined,
 			selectedUniverseId: '1',
+			urlUniverseId: undefined,
 			onUniversesChange,
 			onWorkflowLockChange: () => undefined,
 			onWalletSummaryChange: () => undefined,
 			walletSummaryRetryNonce: 0,
-			defaultSlippage: '0.5',
-			defaultValidityMinutes: '20',
+			settings: DEFAULT_TRADE_SETTINGS,
 			services,
 		})
 		onRender?.(route, controller.discovery)
@@ -91,7 +95,10 @@ async function renderDiscoveryController(
 	const rendered = await renderIntoDocument(<Harness />)
 	return {
 		...rendered,
-		navigate: async (route: string) => await act(() => render(<Harness route={route} />, rendered.container)),
+		navigate: async (route: string) =>
+			await act(() => {
+				render(<Harness route={route} />, rendered.container)
+			}),
 		state: () => {
 			if (controller === undefined) throw new Error('Controller has not rendered')
 			return controller
@@ -154,7 +161,9 @@ describe('live market refresh', () => {
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => snapshots.length === 1, 'saved pools')
 		expect(snapshots[0]).toEqual([other.pool, market.pool])
-		await act(() => setEntityFavorite(poolScope, other.pool, false))
+		await act(() => {
+			setEntityFavorite(poolScope, other.pool, false)
+		})
 		await waitForDom(() => snapshots.length === 2, 'removed saved pool')
 		expect(snapshots[1]).toEqual([market.pool])
 	})
@@ -235,12 +244,14 @@ describe('live market refresh', () => {
 			},
 		)
 		cleanupRendered = harness.cleanup
-		await waitForDom(() => harness.state().discovery.discoveryState === 'not-found')
+		await waitForDom(() => harness.state().discovery.discoveryState === 'not-found', 'missing first route')
 		await harness.navigate(nextRoute)
 		expect(observations[0]).toBe('loading')
 		expect(observations).not.toContain('not-found')
-		await act(async () => pending.resolve(discoveryPage([{ ...market, pool: nextPool }])))
-		await waitForDom(() => harness.state().discovery.selected?.pool === nextPool)
+		await act(async () => {
+			await pending.resolve(discoveryPage([{ ...market, pool: nextPool }]))
+		})
+		await waitForDom(() => harness.state().discovery.selected?.pool === nextPool, 'new route discovery')
 	})
 
 	test('explicit invalidation retains first-load rows and reruns foreground progress', async () => {
@@ -259,7 +270,9 @@ describe('live market refresh', () => {
 		cleanupRendered = rendered.cleanup
 		try {
 			await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 1, 'first row')
-			await act(() => invalidateAppData())
+			await act(() => {
+				invalidateAppData()
+			})
 			await waitForDom(() => reads === 2, 'foreground rerun')
 			expect(rendered.state().discovery.visibleMarkets).toEqual([market])
 			progress.resolve()
@@ -297,7 +310,9 @@ describe('live market refresh', () => {
 		})
 		await waitForDom(() => reads === 2, 'manual refresh')
 		try {
-			await act(() => invalidateAppData())
+			await act(() => {
+				invalidateAppData()
+			})
 			await waitForDom(() => reads === 3, 'explicit refresh')
 			await waitForDom(() => document.body.textContent?.includes('Explicitly refreshed') === true, 'new state')
 			await act(async () => {
@@ -327,10 +342,14 @@ describe('live market refresh', () => {
 				try {
 					await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 1, 'partial row')
 					if (supersede) {
-						await act(() => invalidateAppData())
+						await act(() => {
+							invalidateAppData()
+						})
 						await waitForDom(() => reads === 2, 'replacement discovery')
 					}
-					await act(() => rendered.state().workflow.updateLiquidityWorkflowLock(true))
+					await act(() => {
+						rendered.state().workflow.updateLiquidityWorkflowLock(true)
+					})
 					await act(async () => {
 						finish.resolve()
 						await Bun.sleep(0)
@@ -356,8 +375,8 @@ describe('live market refresh', () => {
 		const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverSavedMarkets: discover })
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 2, 'initial unsaved holdings')
-		let refresh: Promise<void> | undefined
-		await act(() => {
+		let refresh: Promise<boolean> | undefined
+		await act(async () => {
 			refresh = rendered.state().discovery.refresh(undefined, 0n, undefined, { background: true, explicit: true })
 		})
 		try {
@@ -392,12 +411,12 @@ describe('live market refresh', () => {
 				configuration,
 				configurationError: undefined,
 				selectedUniverseId: '1',
+				urlUniverseId: undefined,
 				onUniversesChange: () => undefined,
 				onWorkflowLockChange: () => undefined,
 				onWalletSummaryChange: () => undefined,
 				walletSummaryRetryNonce: 0,
-				defaultSlippage: '0.5',
-				defaultValidityMinutes: '20',
+				settings: DEFAULT_TRADE_SETTINGS,
 				services,
 			})
 			return (
@@ -460,12 +479,13 @@ describe('live market refresh', () => {
 				return discoveryPage([{ ...discoveredMarket }])
 			},
 			...connectedWalletServices(account, configuration.chainId),
-			createTradingWalletClient: () => walletClient,
+			createTradingWalletClient: () => testDouble<WriteClient>(walletClient),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				balanceLoads += 1
 				return { scope: shareBalanceScope(selected), invalid: 3n * 10n ** 18n, yes: yesBalance, no: 3n * 10n ** 18n, lp: 0n }
 			},
 			simulateEntry: async () => ({
+				mintAttoEth: 10n ** 16n,
 				blockNumber: 1n,
 				blockHash: `0x${'aa'.repeat(32)}` as const,
 				amount: 10n ** 16n,
@@ -474,7 +494,7 @@ describe('live market refresh', () => {
 				deadline: 2n ** 40n,
 				slippageBps: 50n,
 				minimumLongShares: 1n,
-				result: { completeSetShares: 10n ** 16n, oppositeSharesSwapped: 10n ** 16n, additionalLongShares: 10n ** 16n, totalLongShares: 2n * 10n ** 16n, invalidInsurance: 10n ** 16n, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
+				result: { ethSpent: 10n ** 16n, completeSetShares: 10n ** 16n, oppositeSharesSwapped: 10n ** 16n, additionalLongShares: 10n ** 16n, totalLongShares: 2n * 10n ** 16n, invalidInsurance: 10n ** 16n, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
 			}),
 			simulateExit: async (_client: unknown, _configuration: unknown, selected: LiveMarket, _account: unknown, _side: unknown, completeSets: bigint) => {
 				exitRequests.push(completeSets)
@@ -487,6 +507,7 @@ describe('live market refresh', () => {
 					market: selected,
 					deadline: 2n ** 40n,
 					slippageBps: 50n,
+					longBalance: yesBalance,
 					maximumLongShares: 2n * completeSets,
 					minimumEth: 1n,
 					expectedAttoRep: 0n,
@@ -499,7 +520,9 @@ describe('live market refresh', () => {
 		stopBlocks = produceBlocks(40)
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onWalletSummaryChange={observeWallet} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await act(async () => buttonByLabel('Connect wallet').click())
+		await act(async () => {
+			await buttonByLabel('Connect wallet').click()
+		})
 		await waitForDom(() => walletHolding('Wallet Yes') === '3 Yes 3 ETH if the question resolves Yes', 'wallet balances shown as collateral value')
 		// The lookup instruction belongs to the landing list, not to an opened market.
 		expect(document.body.textContent).not.toContain('Open a market by security pool address')
@@ -546,7 +569,9 @@ describe('live market refresh', () => {
 		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent !== estimateBeforeMove, 'estimate re-priced after reserve change')
 
 		// Sells are entered in shares, with shortcuts, and priced locally before the chain is asked.
-		await act(async () => buttonByLabel('Sell').click())
+		await act(async () => {
+			await buttonByLabel('Sell').click()
+		})
 		expect(amountInput.value).toBe('')
 		expect(document.body.textContent).toContain('You hold 3 Yes')
 		expect(['25%', '50%', 'Max'].every(label => buttonByLabel(label) instanceof HTMLButtonElement)).toBeTrue()
@@ -558,7 +583,9 @@ describe('live market refresh', () => {
 		const discoveriesBeforeSubmit = discoveries
 		const discoveryRelease = createDeferred<void>()
 		heldDiscovery = discoveryRelease.promise
-		await act(async () => buttonByLabel('Sell Yes').click())
+		await act(async () => {
+			await buttonByLabel('Sell Yes').click()
+		})
 		await waitForDom(() => exitRequests.length === 1 && discoveries > discoveriesBeforeSubmit, 'stopped submission re-reading the market')
 		expect(exitRequests).toEqual([expectedCompleteSets])
 		// Until the market has been re-read the stop is not reported and the ticket stays locked, so pressing again cannot reuse the old estimate.
@@ -585,7 +612,9 @@ describe('live market refresh', () => {
 		// Simulation failures stay beside the action instead of only at the top of the route.
 		failExitSimulation = true
 		await typeAmount('0.25')
-		await act(async () => buttonByLabel('Sell Yes').click())
+		await act(async () => {
+			await buttonByLabel('Sell Yes').click()
+		})
 		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error')?.textContent?.includes('receiver rejected tokens') === true, 'simulation failure beside the action')
 		// The failure is announced once beside the action; no route-level or status duplicate repeats it.
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
@@ -602,19 +631,32 @@ describe('live market refresh', () => {
 			...offlineControllerServices,
 			discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
 			...connectedWalletServices(account, configuration.chainId),
-			createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
+			createTradingWalletClient: () => testDouble<WriteClient>({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				balanceLoads += 1
 				if (heldBalances !== undefined) await heldBalances
 				return { scope: shareBalanceScope(selected), invalid: yesBalance, yes: yesBalance, no: 0n, lp: 0n }
 			},
 			// Prices like the router so the pre-signing check agrees with the ticket's estimate.
-			simulateEntry: async (_client: unknown, _configuration: unknown, quoted: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => ({ blockNumber: 1n, amount, side, market: quoted, deadline: 2n ** 40n, slippageBps: 50n, minimumLongShares: 1n, result: quoteEnterPosition(side, amount, quoted) }),
+			simulateEntry: async (_client: unknown, _configuration: unknown, quoted: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => ({
+				blockNumber: 1n,
+				blockHash: `0x${'aa'.repeat(32)}` as const,
+				mintAttoEth: amount,
+				amount,
+				side,
+				market: quoted,
+				deadline: 2n ** 40n,
+				slippageBps: 50n,
+				minimumLongShares: 1n,
+				result: { ...quoteEnterPosition(side, amount, quoted), ethSpent: amount },
+			}),
 			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, _quote: unknown, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => await guardedWrite(async () => `0x${'88'.repeat(32)}` as Hash),
 		}
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await act(async () => buttonByLabel('Connect wallet').click())
+		await act(async () => {
+			await buttonByLabel('Connect wallet').click()
+		})
 		await waitForDom(() => document.body.textContent?.includes('Wallet: 5 ETH') === true, 'wallet ETH in the ticket')
 		const amountInput = document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')
 		if (amountInput === null) throw new Error('Amount input is unavailable')
@@ -628,13 +670,15 @@ describe('live market refresh', () => {
 		heldBalances = balanceRelease.promise
 		yesBalance = 2n * 10n ** 16n
 		const loadsBeforeTrade = balanceLoads
-		await act(async () => buttonByLabel('Buy Yes').click())
+		await act(async () => {
+			await buttonByLabel('Buy Yes').click()
+		})
 		await waitForDom(() => document.body.textContent?.includes('Buy Yes confirmed.') === true && balanceLoads > loadsBeforeTrade, 'confirmed trade re-reading balances')
 		await settle(50)
 		// The form stays locked and says why until the new balances arrive, so nothing is checked against the old ones.
 		expect(document.body.textContent).toContain('Refreshing wallet balances…')
 		expect(amountInput.disabled).toBeTrue()
-		expect(walletHolding('Wallet Yes')).toBe('0 Yes 0 ETH')
+		expect(walletHolding('Wallet Yes')).toBe('0 Yes 0.00 ETH')
 		heldBalances = undefined
 		balanceRelease.resolve()
 		await waitForDom(() => amountInput.disabled === false, 'ticket unlocked after the balance read')
@@ -652,23 +696,27 @@ describe('live market refresh', () => {
 				return discoveryPage([{ ...market }])
 			},
 			...connectedWalletServices(account, configuration.chainId),
-			createTradingWalletClient: () => ({}),
+			createTradingWalletClient: () => testDouble<WriteClient>({}),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => ({ scope: shareBalanceScope(selected), invalid: 0n, yes: 0n, no: 0n, lp: 0n }),
 			// The chain quotes far fewer shares than the estimate's minimum, so the submission stops before the wallet opens.
 			simulateEntry: async (_client: unknown, _configuration: unknown, quoted: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => ({
 				blockNumber: 1n,
+				blockHash: `0x${'aa'.repeat(32)}` as const,
+				mintAttoEth: amount,
 				amount,
 				side,
 				market: quoted,
 				deadline: 2n ** 40n,
 				slippageBps: 50n,
 				minimumLongShares: 1n,
-				result: { ...quoteEnterPosition(side, amount, quoted), totalLongShares: 1n },
+				result: { ...quoteEnterPosition(side, amount, quoted), ethSpent: amount, totalLongShares: 1n },
 			}),
 		}
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await act(async () => buttonByLabel('Connect wallet').click())
+		await act(async () => {
+			await buttonByLabel('Connect wallet').click()
+		})
 		await waitForDom(() => document.body.textContent?.includes('Wallet: 5 ETH') === true, 'wallet ETH in the ticket')
 		const amountInput = document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')
 		if (amountInput === null) throw new Error('Amount input is unavailable')
@@ -679,7 +727,9 @@ describe('live market refresh', () => {
 		await waitForDom(() => buttonByLabel('Buy Yes').disabled === false, 'buy ready')
 		// The re-read after the price move fails, so the estimate on screen is still the old one.
 		failDiscovery = true
-		await act(async () => buttonByLabel('Buy Yes').click())
+		await act(async () => {
+			await buttonByLabel('Buy Yes').click()
+		})
 		await waitForDom(() => document.querySelector('.trade-requote-notice') !== null, 'price-moved notice')
 		const notice = document.querySelector('.trade-requote-notice')?.textContent
 		expect(notice).toContain('The price moved since your estimate')
@@ -698,7 +748,7 @@ describe('live market refresh', () => {
 			...offlineControllerServices,
 			discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
 			...connectedWalletServices(account, configuration.chainId),
-			createTradingWalletClient: () => ({}),
+			createTradingWalletClient: () => testDouble<WriteClient>({}),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				balanceLoads += 1
 				await gate
@@ -709,7 +759,9 @@ describe('live market refresh', () => {
 		stopBlocks = produceBlocks(30)
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await act(async () => buttonByLabel('Connect wallet').click())
+		await act(async () => {
+			await buttonByLabel('Connect wallet').click()
+		})
 		await waitForDom(() => walletHolding('Wallet Yes') === '—' && document.body.textContent?.includes('Loading balances…') === true && balanceLoads > 0, 'first balance read in flight')
 		await settle(150)
 		expect(balanceLoads).toBe(1)
@@ -734,7 +786,9 @@ describe('live market refresh', () => {
 		await waitForDom(() => document.body.textContent?.includes('Portfolio market 1') === true, 'initial portfolio discovery')
 		await settle(150)
 		expect(discoveries).toBe(1)
-		await act(() => buttonByLabel('Refresh portfolio').click())
+		await act(() => {
+			buttonByLabel('Refresh portfolio').click()
+		})
 		await waitForDom(() => document.body.textContent?.includes('Portfolio market 2') === true, 'manual refresh')
 		await settle(150)
 		expect(discoveries).toBe(2)
@@ -747,20 +801,24 @@ describe('live market refresh', () => {
 		const rendered = await renderDiscoveryController({
 			...offlineControllerServices,
 			...connectedWalletServices(account, configuration.chainId),
-			createTradingWalletClient: () => ({}),
+			createTradingWalletClient: () => testDouble<WriteClient>({}),
 			discoverSavedMarkets: async () => {
 				discoveries += 1
-				return discoveryPage([{ ...market, loadError: failMarketRead ? 'Pool read failed' : undefined }])
+				return discoveryPage([{ ...market, ...(failMarketRead ? { loadError: 'Pool read failed' } : {}) }])
 			},
 			loadLiveBalances: async (_client, selected) => ({ scope: shareBalanceScope(selected), invalid: 1n, yes: 1n, no: 0n, lp: 0n }),
 		})
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => rendered.state().discovery.discoveryState === 'ready', 'failed pool snapshot')
-		await act(() => rendered.state().wallet.connect())
+		await act(async () => {
+			await rendered.state().wallet.connect()
+		})
 		await waitForDom(() => rendered.state().balances.portfolioBalanceState === 'ready', 'failed pool balance state')
 		const beforeRetry = discoveries
 		failMarketRead = false
-		await act(() => rendered.state().balances.retryPortfolioBalances())
+		await act(async () => {
+			await rendered.state().balances.retryPortfolioBalances()
+		})
 		expect(discoveries).toBe(beforeRetry + 1)
 		await waitForDom(() => rendered.state().balances.visiblePortfolioEntries[0]?.balances?.yes === 1n, 'recovered pool balances')
 	})
@@ -798,7 +856,9 @@ describe('live market refresh', () => {
 		cleanupRendered = rendered.cleanup
 		try {
 			await waitForDom(() => document.body.textContent?.includes('Previous second pool') === true, 'initial portfolio')
-			await act(() => buttonByLabel('Refresh portfolio').click())
+			await act(() => {
+				buttonByLabel('Refresh portfolio').click()
+			})
 			await waitForDom(() => document.body.textContent?.includes('Refreshed first pool') === true, 'first refresh result')
 			expect(document.body.textContent).toContain('Previous second pool')
 			expect(buttonByLabel('Refreshing…').disabled).toBe(true)
@@ -817,7 +877,7 @@ describe('live market refresh', () => {
 			...offlineControllerServices,
 			discoverUniverses: async () => {
 				universeReads += 1
-				return discoveryPage([])
+				return universeDiscoveryPage()
 			},
 			discoverTradingMarketPage: async () => {
 				pairPageReads += 1
@@ -837,7 +897,9 @@ describe('live market refresh', () => {
 			cleanupRendered = rendered.cleanup
 			await waitForDom(() => universeReads > 0, 'universe discovery')
 			await settle(50)
-			await act(() => appBlockWatcher.reportBlock((appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n))
+			await act(() => {
+				appBlockWatcher.reportBlock((appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n)
+			})
 			await settle(50)
 			expect(pairPageReads).toBe(expectedPairPageReads)
 			expect(poolPageReads).toBe(0)
@@ -853,21 +915,29 @@ describe('live market refresh', () => {
 	test('opening an address saves it for local browsing; unfavoriting removes it without scanning', async () => {
 		const unrelated = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Unfavorited cache entry' }
 		marketDownloadStore.record(getLocalEntityScope('trading', 'market'), [{ id: unrelated.pool, data: unrelated }])
-		const services = { ...offlineControllerServices, discoverUniverses: async () => discoveryPage([]), discoverAddressedMarket: async () => discoveryPage([{ ...market }]) }
+		const services = { ...offlineControllerServices, discoverUniverses: async () => universeDiscoveryPage(), discoverAddressedMarket: async () => discoveryPage([{ ...market }]) }
 		const view = (route: 'market' | `market/${Address}`, universe = '1') => <LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId={universe} onWorkflowLockChange={() => undefined} controllerServices={services} />
 		const rendered = await renderIntoDocument(view(`market/${pool}`))
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => marketDownloadStore.read(getLocalEntityScope('trading', 'market')).some(entry => entry.id === pool.toLowerCase()), 'opened market cached')
-		await act(() => render(view('market'), rendered.container))
+		await act(() => {
+			render(view('market'), rendered.container)
+		})
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 1, 'favorite market')
 		expect(document.body.textContent).not.toContain(unrelated.title)
 		expect(document.querySelector('.market-record .freshness-indicator')).not.toBeNull()
-		await act(() => render(view('market', '2'), rendered.container))
+		await act(() => {
+			render(view('market', '2'), rendered.container)
+		})
 		expect(document.querySelectorAll('.market-record')).toHaveLength(0)
-		await act(() => render(view('market'), rendered.container))
+		await act(() => {
+			render(view('market'), rendered.container)
+		})
 		const star = document.querySelector<HTMLButtonElement>('.market-record .favorite-toggle')
 		if (star === null) throw new Error('Favorite control missing')
-		await act(() => star.click())
+		await act(() => {
+			star.click()
+		})
 		expect(document.querySelectorAll('.market-record')).toHaveLength(0)
 		// The registry lists no market in this universe either, so the list says so and points to creating one.
 		await waitForDom(() => document.body.textContent?.includes('No markets in this universe yet') === true, 'empty market list')
@@ -878,7 +948,7 @@ describe('live market refresh', () => {
 		const requests: Array<{ universe: bigint | undefined; start: bigint }> = []
 		const services = {
 			...offlineControllerServices,
-			discoverUniverses: async () => discoveryPage([]),
+			discoverUniverses: async () => universeDiscoveryPage(),
 			discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
 			discoverTradingMarketPage: async (_client: unknown, _configuration: unknown, universe: bigint | undefined, start = 0n) => {
 				requests.push({ universe, start })
@@ -893,12 +963,16 @@ describe('live market refresh', () => {
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'first registry page')
 		expect(requests).toEqual([{ universe: 1n, start: 0n }])
 		expect(document.body.textContent).toContain('Markets 1–2 of 26')
-		await act(async () => buttonByLabel('Next page').click())
+		await act(async () => {
+			await buttonByLabel('Next page').click()
+		})
 		await waitForDom(() => document.querySelector('.market-record')?.textContent?.includes('Registry market 26') === true, 'second registry page')
 		expect(requests.at(-1)).toEqual({ universe: 1n, start: 25n })
 		// An addressed market reads only its own pool.
 		const requestsBeforeMarket = requests.length
-		await act(() => render(view(`market/${pool}`), rendered.container))
+		await act(() => {
+			render(view(`market/${pool}`), rendered.container)
+		})
 		await waitForDom(() => document.querySelector('.market-ticket__panel') !== null, 'addressed market')
 		expect(requests).toHaveLength(requestsBeforeMarket)
 	})
@@ -911,7 +985,9 @@ describe('live market refresh', () => {
 		// Until discovery names the universe, the list waits for it with its loading rows.
 		await settle()
 		expect(document.querySelector('.skeleton-list')?.textContent).toBe('Loading markets…')
-		await act(async () => universes.reject(new Error('RPC unavailable')))
+		await act(async () => {
+			await universes.reject(new Error('RPC unavailable'))
+		})
 		await waitForDom(() => document.body.textContent?.includes('Security pool discovery failed: RPC unavailable') === true, 'discovery failure')
 		expect(document.querySelector('.skeleton-list')).toBeNull()
 		expect(document.body.textContent).not.toContain('Loading markets…')
@@ -923,7 +999,7 @@ describe('live market refresh', () => {
 		const scope = getLocalEntityScope('trading', 'pool')
 		marketDownloadStore.record(scope, [{ id: ended.pool, data: ended }])
 		setEntityFavorite(scope, ended.pool, true)
-		const services = { ...offlineControllerServices, discoverUniverses: async () => discoveryPage([]) }
+		const services = { ...offlineControllerServices, discoverUniverses: async () => universeDiscoveryPage() }
 		const rendered = await renderIntoDocument(<LiveTrading route='create-market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => document.querySelector('.market-record') !== null, 'saved pool')
@@ -943,15 +1019,21 @@ describe('live market refresh', () => {
 			marketDownloadStore.record(scope, [{ id: market.pool, data: { ...market, pair: kind === 'pool' ? undefined : market.pair } }])
 			setEntityFavorite(scope, market.pool, true)
 		}
-		const services = { ...offlineControllerServices, discoverUniverses: async () => discoveryPage([]) }
+		const services = { ...offlineControllerServices, discoverUniverses: async () => universeDiscoveryPage() }
 		const view = (route: 'market' | 'create-market') => <LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />
 		const rendered = await renderIntoDocument(view('market'))
 		cleanupRendered = rendered.cleanup
-		await act(() => document.querySelector<HTMLButtonElement>('.enum-dropdown-trigger')?.click())
-		await act(() => [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === 'Liquidity')?.click())
+		await act(() => {
+			document.querySelector<HTMLButtonElement>('.enum-dropdown-trigger')?.click()
+		})
+		await act(() => {
+			;[...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === 'Liquidity')?.click()
+		})
 		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity')
-		await act(() => render(view('create-market'), rendered.container))
-		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Recently added')
+		await act(() => {
+			render(view('create-market'), rendered.container)
+		})
+		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Default order')
 	})
 
 	test('the liquidity route exposes its controls on narrow screens without opening a dialog', async () => {
@@ -994,9 +1076,13 @@ describe('live market refresh', () => {
 		expect(document.querySelector('.trade-ticket-switchers .view-tabs:not(.outcome-picker) button[aria-pressed="true"]')?.textContent).toBe('Sell')
 		// The selection stays in the hash, so a refresh restores it.
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&ticket=sell-no`)
-		await act(async () => buttonByLabel('Yes 50.0%').click())
+		await act(async () => {
+			await buttonByLabel('Yes 50.0%').click()
+		})
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&ticket=sell-yes`)
-		await act(async () => buttonByLabel('Buy').click())
+		await act(async () => {
+			await buttonByLabel('Buy').click()
+		})
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1`)
 		// The reading column carries the question description as text, with contract addresses behind a disclosure.
 		expect(document.querySelector('.market-description__text')?.textContent).toBe('Resolves YES when the bridge opens.\n<b>not markup</b>')
@@ -1021,7 +1107,9 @@ describe('live market refresh', () => {
 		// The ended market keeps its last price, labelled and muted, and the outcome buttons drop a price that no longer trades.
 		expect(document.querySelector('.probability--last .probability__caption')?.textContent).toBe('Last price if not Invalid')
 		expect(Array.from(document.querySelectorAll('.outcome-picker button')).map(button => button.textContent)).toEqual(['Yes', 'No'])
-		await act(async () => buttonByLabel('Open settlement').click())
+		await act(async () => {
+			await buttonByLabel('Open settlement').click()
+		})
 		expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Settlement')
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&view=settlement`)
 	})
@@ -1035,14 +1123,15 @@ describe('live market refresh', () => {
 		installSilentInjectedWallet()
 		const services = {
 			...offlineControllerServices,
-			createTradingPublicClient: () => ({ getBlock: async () => ({ number: blockNumber, hash: `0x${'ab'.repeat(32)}`, timestamp: clock }) }),
+			createTradingPublicClient: () => testDouble<PublicClient>({ getBlock: async () => ({ number: blockNumber, hash: `0x${'ab'.repeat(32)}`, timestamp: clock }) }),
 			discoverAddressedMarket: async () => discoveryPage([{ ...closingMarket }]),
 			...connectedWalletServices(account, configuration.chainId),
 			// The receipt never arrives, so the trade stays pending.
-			createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => await new Promise<never>(() => undefined) }),
+			createTradingWalletClient: () => testDouble<WriteClient>({ waitForTransactionReceipt: async () => await new Promise<never>(() => undefined) }),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => ({ scope: shareBalanceScope(selected), invalid: 0n, yes: 0n, no: 0n, lp: 0n }),
 			simulateEntry: async (_client: unknown, _configuration: unknown, selected: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => ({
 				blockNumber: 1n,
+				mintAttoEth: amount,
 				blockHash: `0x${'aa'.repeat(32)}` as const,
 				amount,
 				side,
@@ -1050,14 +1139,16 @@ describe('live market refresh', () => {
 				deadline: 2n ** 40n,
 				slippageBps: 50n,
 				minimumLongShares: 1n,
-				result: { completeSetShares: amount, oppositeSharesSwapped: amount, additionalLongShares: amount, totalLongShares: 2n * amount, invalidInsurance: amount, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
+				result: { ethSpent: amount, completeSetShares: amount, oppositeSharesSwapped: amount, additionalLongShares: amount, totalLongShares: 2n * amount, invalidInsurance: amount, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
 			}),
 			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, _quote: unknown, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => await guardedWrite(async () => pendingHash),
 		}
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => document.querySelector('[role="tabpanel"] input[name="amount"]') !== null, 'trade ticket')
-		await act(async () => buttonByLabel('Connect wallet').click())
+		await act(async () => {
+			await buttonByLabel('Connect wallet').click()
+		})
 		const amountInput = document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')
 		if (amountInput === null) throw new Error('Amount input is unavailable')
 		await act(() => {
@@ -1065,14 +1156,18 @@ describe('live market refresh', () => {
 			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
 		})
 		await waitForDom(() => !buttonByLabel('Buy Yes').disabled, 'enabled buy')
-		await act(async () => buttonByLabel('Buy Yes').click())
+		await act(async () => {
+			await buttonByLabel('Buy Yes').click()
+		})
 		await waitForDom(() => document.querySelector('[role="tabpanel"]')?.textContent?.includes(pendingHash.slice(0, 6)) === true, 'pending trade hash')
 		const ticket = document.querySelector('[role="tabpanel"] .position-controls')
 		if (ticket === null) throw new Error('Trade ticket is unavailable')
 		// The question ends while the trade is pending: the market stops trading, but the ticket with its pending trade stays on screen.
 		clock = closingMarket.endTime + 1n
 		blockNumber += 1n
-		await act(async () => await appBlockWatcher.refresh())
+		await act(async () => {
+			await appBlockWatcher.refresh()
+		})
 		await waitForDom(() => document.querySelector('[role="tab"][aria-selected="true"]') !== null && document.querySelectorAll('[role="tab"]').length === 3, 'closed market views')
 		expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Trade')
 		expect(document.querySelector('[role="tabpanel"]')?.textContent).toContain(pendingHash.slice(0, 6))
@@ -1096,7 +1191,9 @@ describe('live market refresh', () => {
 			cleanupRendered = rendered.cleanup
 			await waitForDom(() => document.body.textContent?.includes('This security pool could not be loaded') === true, 'unavailable market')
 			window.location.hash = `#/market/${pool}`
-			await act(() => render(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container))
+			await act(() => {
+				render(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container)
+			})
 			await waitForDom(() => document.querySelector('.market-ticket__panel') !== null, 'visible ticket')
 			expect(document.querySelector('.market-ticket__panel')?.hasAttribute('hidden')).toBe(false)
 			expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('Yes 50.0%')

@@ -91,6 +91,7 @@ function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongC
 
 async function configuration() {
 	return {
+		collateralTokens: [],
 		network,
 		openOracle: settings.deployment.openOracle,
 		operatorSettings: settings,

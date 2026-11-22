@@ -12,7 +12,7 @@ import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 type ObservedReport = { reportId: bigint; creator: Address }
 const escrowFeedAbi = [{ type: 'function', name: 'feed', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }] as const
 
-type DiscoveryConfiguration = Pick<Configuration, 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>
+type DiscoveryConfiguration = Pick<Configuration, 'collateralTokens' | 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>
 
 /** Authenticate indexed reports through the canonical portfolio/universe feed binding, independent of question count. */
 export async function discoverCoordinatorPolicies(clients: readonly ReadClient[], config: DiscoveryConfiguration, blockNumber: bigint, blockHash: Hex, _retainedReportIds: readonly bigint[] = [], observedReports: readonly ObservedReport[] = []) {
@@ -82,7 +82,7 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 					}
 					for (const reportId of byCreator.get(creator) ?? []) observedIds.get(key)?.add(reportId)
 				}
-				const templates = await loadCoordinatorPolicies(client, { network: config.network, openOracle: config.openOracle, coordinatorAddresses: [...priceFeeds].sort() }, blockNumber)
+				const templates = await loadCoordinatorPolicies(client, { collateralTokens: config.collateralTokens, network: config.network, openOracle: config.openOracle, coordinatorAddresses: [...priceFeeds].sort() }, blockNumber)
 				const policies: CoordinatorGamePolicy[] = await Promise.all(
 					templates.map(async policy => {
 						if (!sharedFeeds.has(policy.coordinator.toLowerCase())) return policy

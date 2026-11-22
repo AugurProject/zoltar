@@ -90,6 +90,7 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
+	function maximumReportPriorityFeeAttoEthPerGas() external view returns (uint256);
 	function zoltar() external view returns (Zoltar);
 	function preparePortfolioPriceFeed(ISecurityPool source, uint248 universeId) external returns (address);
 

@@ -51,6 +51,7 @@
 	"selectedPortfolios": [],
 	"portfolioPolicy": {
 		"allowFundedTakeovers": false,
+		"takeoverIncomeHorizonSeconds": 0,
 		"maximumPositionsPerScan": 32,
 		"maximumPrincipalRep": "0",
 		"maximumTotalPrincipalRep": "0",

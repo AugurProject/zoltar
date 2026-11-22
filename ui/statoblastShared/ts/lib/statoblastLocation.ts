@@ -11,8 +11,8 @@ const POOLS_PATH_PREFIX = `${POOLS_ROUTE_HASH}/`
 const QUESTION_ID_QUERY_PARAM = 'questionId'
 const LEGACY_POOL_QUERY_PARAMS = ['securityPool', 'securityPoolsView', 'selectedPoolView'] as const
 
-/** A location inside the Pools route: the address entry, browse list, create and universe views, or one pool page with an optional tab. */
-export type PoolsLocation = { view: 'browse' } | { view: 'create' } | { view: 'universes' } | { view: 'migrate' } | { view: 'operate'; securityPoolAddress: string; tab: string }
+/** A location inside the Pools route: the address entry, browse list, create and universe views, or one pool page without per-pool tabs. */
+export type PoolsLocation = { view: 'browse' } | { view: 'create' } | { view: 'universes' } | { view: 'migrate' } | { view: 'operate'; securityPoolAddress: string }
 
 function decodeSegment(segment: string) {
 	try {
@@ -27,17 +27,17 @@ function decodeSegment(segment: string) {
 /** Path segments that name a list view (or the pool page itself) and are never read as a pool address. */
 const RESERVED_POOLS_SEGMENTS = new Set(['browse', 'create', 'operate', 'universes', 'migrate'])
 
-/** Parses `#/pools`, `#/pools/browse`, `#/pools/create`, `#/pools/universes`, and `#/pools/<address>[/<tab>]`; returns `undefined` for any other hash. */
+/** Parses `#/pools`, `#/pools/browse`, `#/pools/create`, `#/pools/universes`, and `#/pools/<address>`; returns `undefined` for any other hash. */
 export function parsePoolsRouteHash(routeHash: string): PoolsLocation | undefined {
 	if (routeHash === POOLS_ROUTE_HASH || routeHash === POOLS_PATH_PREFIX) return { view: 'browse' }
 	if (!routeHash.startsWith(POOLS_PATH_PREFIX)) return undefined
 	const segments = routeHash.slice(POOLS_PATH_PREFIX.length).replace(/\/$/, '').split('/').map(decodeSegment)
-	if (segments.length > 2 || segments.some(segment => segment === undefined || segment.trim() === '')) return undefined
-	const [first = '', tab = ''] = segments.map(segment => segment?.trim() ?? '')
-	if (first === 'browse' || first === 'create' || first === 'universes' || first === 'migrate') return tab === '' ? { view: first } : undefined
+	if (segments.length > 1 || segments.some(segment => segment === undefined || segment.trim() === '')) return undefined
+	const [first = ''] = segments.map(segment => segment?.trim() ?? '')
+	if (first === 'browse' || first === 'create' || first === 'universes' || first === 'migrate') return { view: first }
 	// `operate` is the pool page's internal view name, not an address; a hand-written `#/pools/operate` link is unroutable.
 	if (RESERVED_POOLS_SEGMENTS.has(first)) return undefined
-	return { securityPoolAddress: first, tab, view: 'operate' }
+	return { securityPoolAddress: first, view: 'operate' }
 }
 
 export function buildPoolsRouteHash(location: PoolsLocation) {
@@ -51,8 +51,7 @@ export function buildPoolsRouteHash(location: PoolsLocation) {
 		case 'operate': {
 			const address = location.securityPoolAddress.trim()
 			if (address === '') return POOLS_ROUTE_HASH
-			const tab = location.tab.trim()
-			return `${POOLS_PATH_PREFIX}${encodeURIComponent(address)}${tab === '' ? '' : `/${encodeURIComponent(tab)}`}`
+			return `${POOLS_PATH_PREFIX}${encodeURIComponent(address)}`
 		}
 		default:
 			return assertNever(location)
@@ -61,7 +60,7 @@ export function buildPoolsRouteHash(location: PoolsLocation) {
 
 /**
  * Maps the legacy `#/security-pools?securityPoolsView=…&securityPool=…&selectedPoolView=…` links onto the path routes so
- * bookmarked pool links and the documented simulator entry points keep opening the same pool, tab, or view.
+ * bookmarked pool links and the documented simulator entry points keep opening the same pool or list view.
  */
 export function mapLegacyStatoblastHash(hash: string): string | undefined {
 	const { routeHash, search } = parseRouteHash(hash)
@@ -69,9 +68,8 @@ export function mapLegacyStatoblastHash(hash: string): string | undefined {
 	const params = new URLSearchParams(search)
 	const view = params.get('securityPoolsView')?.trim() ?? ''
 	const securityPoolAddress = params.get('securityPool')?.trim() ?? ''
-	const tab = params.get('selectedPoolView')?.trim() ?? ''
 	const location: PoolsLocation = (() => {
-		if (securityPoolAddress !== '' && view !== 'browse' && view !== 'create' && view !== 'universes') return { securityPoolAddress, tab, view: 'operate' }
+		if (securityPoolAddress !== '' && view !== 'browse' && view !== 'create' && view !== 'universes') return { securityPoolAddress, view: 'operate' }
 		if (view === 'create' || (view === '' && params.has(QUESTION_ID_QUERY_PARAM))) return { view: 'create' }
 		if (view === 'universes' || view === 'universe') return { view: 'universes' }
 		return { view: 'browse' }

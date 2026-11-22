@@ -7,6 +7,7 @@ import { getDevServerMimeType } from './devServerMimeTypes.mts'
 type DevServerRoots = {
 	readonly repositoryRootDirectory: string
 	readonly uiRootDirectory: string
+	readonly coreDeploymentRegistry?: (() => Promise<unknown>) | undefined
 }
 
 const isErrorWithCode = (error: unknown, codes: readonly string[]) => error instanceof Error && 'code' in error && typeof error.code === 'string' && codes.includes(error.code)
@@ -89,6 +90,12 @@ export const createDevServerRequestHandler = (roots: DevServerRoots) => {
 			const requestPath = requestUrl.pathname
 			if (requestPath === '/__live-reload') {
 				liveReload.handle(request, response, requestUrl)
+				return
+			}
+			if (requestPath === '/core-deployments.json' && roots.coreDeploymentRegistry !== undefined) {
+				const deployments = await roots.coreDeploymentRegistry()
+				response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+				response.end(JSON.stringify(deployments))
 				return
 			}
 			const candidateFilePaths = getServedFilePaths(requestPath, roots)

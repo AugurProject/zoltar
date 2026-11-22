@@ -70,14 +70,14 @@ export function fundingTransactionPlan(allowances: { token1: bigint; token2: big
 }
 
 export function lifecycleAllowanceMismatch(allowances: { token1: bigint; token2: bigint }, withdrawals: { token1: bigint; token2: bigint }) {
-	if (allowances.token1 < withdrawals.token1) return 'OpenOracle internal WETH allowance to the executor is too low'
+	if (allowances.token1 < withdrawals.token1) return 'OpenOracle internal collateral allowance to the executor is too low'
 	if (allowances.token2 < withdrawals.token2) return 'OpenOracle internal report-token allowance to the executor is too low'
 	return undefined
 }
 
-export function lifecycleWithdrawalMismatch(parameters: { currentReporter: boolean; expectedToken: bigint; expectedAttoWeth: bigint; holderToken: bigint; holderAttoWeth: bigint; willSettle: boolean }) {
+export function lifecycleWithdrawalMismatch(parameters: { currentReporter: boolean; expectedToken: bigint; expectedToken1: bigint; holderToken: bigint; holderToken1: bigint; willSettle: boolean }) {
 	if (!parameters.currentReporter) return 'Position was replaced; exact returned assets require manual reconciliation'
-	if (!parameters.willSettle && (parameters.holderAttoWeth <= parameters.expectedAttoWeth || parameters.holderToken <= parameters.expectedToken)) {
+	if (!parameters.willSettle && (parameters.holderToken1 <= parameters.expectedToken1 || parameters.holderToken <= parameters.expectedToken)) {
 		return 'Position does not have its exact withdrawable OpenOracle balances'
 	}
 	return undefined

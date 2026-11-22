@@ -1,4 +1,7 @@
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../../types/contractArtifact'
+import { zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
+import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { describe, expect, test } from 'bun:test'
 import { buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetCommitmentRequest, buildPortfolioCapitalWithdrawPrincipalRequest, buildPortfolioMintRequest, loadPortfolioCapitalSnapshot, loadPortfolioMintQuote } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
@@ -10,6 +13,29 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 
 describe('Statoblast: central capital SDK against production contracts', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
+	test('an unregistered origin question is quoted and purchased without a separate registration', async () => {
+		const client = fixture.owner()
+		await fixture.prepare()
+		const question = makeQuestion('SDK first atomic purchase', fixture.secondEndTime)
+		await createQuestion(client, question, fixture.base.outcomes)
+		const questionId = getQuestionId(question, fixture.base.outcomes)
+		expect(await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'questionOriginIds', args: [questionId] })).toBe(zeroHash)
+		const quote = await loadPortfolioMintQuote({ client, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId, mintAttoEth: 10n * unit })
+		expect(quote.pool).toBe(zeroAddress)
+		expect(quote.shares).toBe(10n * unit)
+		const collateral = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		const services = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
+		await approveToken(client, collateral, services)
+		await writeContractAndWait(client, () =>
+			client.sendTransaction(
+				buildPortfolioMintRequest({ trader: client.account.address, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId, mintAttoEth: 10n * unit, recipient: client.account.address, minimumShares: quote.shares, maximumPurchaseFeeAttoEth: quote.maximumPurchaseFeeAttoEth }),
+			),
+		)
+		expect(await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'questionOriginIds', args: [questionId] })).not.toBe(zeroHash)
+		const pool = fixture.poolFor(questionId)
+		expect(await balanceOfShares(client, pool.shareToken, fixture.base.genesisUniverse, client.account.address)).toEqual([quote.shares, quote.shares, quote.shares])
+	})
+
 	test('snapshot and request builders preserve individual principal through authorize, mint, return and retirement', async () => {
 		const client = fixture.owner()
 		const owner = client.account.address

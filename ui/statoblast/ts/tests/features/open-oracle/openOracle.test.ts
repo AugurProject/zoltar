@@ -30,8 +30,6 @@ import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-cor
 
 // Anvil installs this REP fixture; mainnet supplies the WETH and Uniswap quote addresses.
 const REP_ADDRESS = getAddress(addressString(GENESIS_REPUTATION_TOKEN))
-const _USDC_ADDRESS = MAINNET_NETWORK_PROFILE.usdcAddress
-const _UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
@@ -64,7 +62,6 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress
 
 const genesisUniverse = 0n
 const statoblastSecurityMultiplierBps = 20_000n
-const _DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 5n * 60n
 const outcomes = ['Yes', 'No']
 
 function createOpenOracleLifecycleReport(
@@ -120,7 +117,7 @@ function createDisputeSubmissionPreviewReport() {
 		timeType: true,
 		token1: REP_ADDRESS,
 		token1Symbol: 'REP',
-		token2: WETH_ADDRESS,
+		token2: getAddress(WETH_ADDRESS),
 		token2Symbol: 'WETH',
 	}
 }
@@ -152,12 +149,11 @@ describe('OpenOracle helpers', () => {
 	let client: WriteClient
 	let uiReadClient: ReturnType<typeof createConnectedReadClient>
 	let uiWriteClient: ReturnType<typeof createWalletWriteClient>
-	let _managerAddress: Address
 
 	async function installSepoliaClients() {
 		mockWindow = getAnvilWindowEthereum()
 		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], SEPOLIA_NETWORK_PROFILE.chain)
 		installInjectedEthereum(mockWindow)
 		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, genesisRepTokenAddress: REP_ADDRESS, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
 		uiReadClient = {
@@ -194,8 +190,7 @@ describe('OpenOracle helpers', () => {
 		}
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		const portfolio = await deployTestPortfolio(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-		_managerAddress = portfolio.openOraclePriceCoordinator
+		await deployTestPortfolio(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		await setBaselineSnapshot()
 	})
 
@@ -229,7 +224,12 @@ describe('OpenOracle helpers', () => {
 						expect(preparedFunctions).toHaveLength(0)
 						plannedFunctions = steps.map(step => step.functionName)
 						plannedTokenOrder = steps.at(-1)?.tokenFunding?.map(token => token.tokenAddress) ?? []
-						plannedApprovalOrder = steps.filter(step => step.functionName === 'approve').map(step => step.contractAddress)
+						plannedApprovalOrder = steps
+							.filter(step => step.functionName === 'approve')
+							.map(step => {
+								if (step.contractAddress === undefined) throw new Error('Approval must identify its token contract')
+								return step.contractAddress
+							})
 					},
 					onTransactionPrepared: preview => preparedFunctions.push(preview.functionName),
 				},
@@ -800,9 +800,16 @@ describe('OpenOracle helpers', () => {
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement callback failed'))).toBe('Transaction failed while settling the report. Reason: settlement callback failed.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: AlreadySettled()'))).toBe('This report is already settled.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: NoReportYet()'))).toBe('This report is invalid because its initial report is missing.')
-		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute.')
-		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle report instead.')
-		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: report settled'))).toBe('This report is already settled.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: DisputeTooEarly()'))).toBe('This report is not ready to dispute.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: DisputeTooLate()'))).toBe('Dispute window closed. Settle report instead.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: AlreadySettled()'))).toBe('This report is already settled.')
+		for (const [selector, expected] of [
+			['0x058009cb', 'This report is not ready to dispute.'],
+			['0x6aeec261', 'Dispute window closed. Settle report instead.'],
+			['0x560ff900', 'This report is already settled.'],
+			['0x833b7496', 'This report is invalid because its initial report is missing.'],
+		] as const)
+			expect(formatOpenOracleDisputeWriteErrorMessage(new Error(`execution reverted: ${selector}`))).toBe(expected)
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {

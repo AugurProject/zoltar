@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test'
-import { formatRep } from './contract-reference-rules.mts'
+import { computeOrdinaryWinningWithdrawal, escalationPayoutExample } from './contract-reference-rules.mts'
 
-test('formats attoREP amounts with full precision, including negative values', () => {
-	expect(formatRep(15n * 10n ** 18n)).toBe('15')
-	expect(formatRep(10n ** 18n + 1n)).toBe('1.000000000000000001')
-	expect(formatRep(-1n)).toBe('-0.000000000000000001')
-	expect(formatRep(-(10n ** 18n) - 5n * 10n ** 17n)).toBe('-1.5')
-	expect(formatRep(0n)).toBe('0')
+test('ordinary withdrawals partition the cumulative payout and burn without losing dust', () => {
+	const end = computeOrdinaryWinningWithdrawal(escalationPayoutExample)
+	const start = computeOrdinaryWinningWithdrawal({ ...escalationPayoutExample, cumulativeAmountAttoRep: 10n ** 19n, depositAmountAttoRep: 10n ** 19n })
+	const whole = computeOrdinaryWinningWithdrawal({ ...escalationPayoutExample, depositAmountAttoRep: 15n * 10n ** 18n })
+	expect(end.burnAttoRep).toBe(1_333_333_333_333_333_334n)
+	expect(start.burnAttoRep + end.burnAttoRep).toBe(whole.burnAttoRep)
+	expect(start.scaledPayoutAttoRep + end.scaledPayoutAttoRep).toBe(whole.scaledPayoutAttoRep)
 })

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
-	computeEscalationBindingCapitalAttoRep,
+	computeEscalationAttritionCostAttoRep,
 	computeEscalationCurveAttoRep,
 	computeEscalationFinalityElapsed,
 	ESCALATION_ACTIVATION_DELAY,
@@ -23,8 +23,8 @@ describe('escalation math', () => {
 			[bond, bond + 10n ** 12n, bond + 1n],
 		] as const) {
 			const elapsed = computeEscalationFinalityElapsed(start, threshold, binding)
-			expect(computeEscalationBindingCapitalAttoRep(start, threshold, elapsed)).toBeLessThanOrEqual(binding)
-			expect(computeEscalationBindingCapitalAttoRep(start, threshold, elapsed + 1n)).toBeGreaterThan(binding)
+			expect(computeEscalationAttritionCostAttoRep(start, threshold, elapsed)).toBeLessThanOrEqual(binding)
+			expect(computeEscalationAttritionCostAttoRep(start, threshold, elapsed + 1n)).toBeGreaterThan(binding)
 		}
 		expect(computeEscalationFinalityElapsed(bond, 10n * bond, 0n)).toBe(0n)
 		expect(computeEscalationFinalityElapsed(bond, 10n * bond, 10n * bond)).toBe(ESCALATION_TIME_LENGTH)
@@ -45,8 +45,8 @@ describe('escalation math', () => {
 	test('maps a zero-log curve to its terminal step without an early projected deadline', () => {
 		const bond = 10n ** 18n
 		const threshold = bond + 10n ** 12n
-		expect(computeEscalationBindingCapitalAttoRep(bond, threshold, ESCALATION_TIME_LENGTH - 1n)).toBe(bond)
-		expect(computeEscalationBindingCapitalAttoRep(bond, threshold, ESCALATION_TIME_LENGTH)).toBe(threshold)
+		expect(computeEscalationAttritionCostAttoRep(bond, threshold, ESCALATION_TIME_LENGTH - 1n)).toBe(bond)
+		expect(computeEscalationAttritionCostAttoRep(bond, threshold, ESCALATION_TIME_LENGTH)).toBe(threshold)
 		for (const [cost, expectedTime] of [
 			[0n, 0n],
 			[bond, ESCALATION_TIME_LENGTH - 1n],
@@ -61,9 +61,9 @@ describe('escalation math', () => {
 	})
 
 	test('shares the contract forward curve and deposit projection', () => {
-		expect(computeEscalationBindingCapitalAttoRep(1n, 8n, 0n)).toBe(1n)
-		expect(computeEscalationBindingCapitalAttoRep(1n, 8n, ESCALATION_TIME_LENGTH / 3n)).toBe(2n)
-		expect(computeEscalationBindingCapitalAttoRep(1n, 8n, ESCALATION_TIME_LENGTH)).toBe(8n)
+		expect(computeEscalationAttritionCostAttoRep(1n, 8n, 0n)).toBe(1n)
+		expect(computeEscalationAttritionCostAttoRep(1n, 8n, ESCALATION_TIME_LENGTH / 3n)).toBe(2n)
+		expect(computeEscalationAttritionCostAttoRep(1n, 8n, ESCALATION_TIME_LENGTH)).toBe(8n)
 		expect(projectEscalationDeposit({ amountAttoRep: 1n, balancesAttoRep: [0n, 1n, 1n], nonDecisionThresholdAttoRep: 3n, outcome: 'yes', startBondAttoRep: 1n })).toMatchObject({ acceptedAmountAttoRep: 1n, projectedBalancesAttoRep: [0n, 2n, 1n], tieAdjusted: false })
 	})
 
@@ -108,4 +108,14 @@ describe('escalation math', () => {
 
 void test('inherited rewards retain the canonical principal after distinct ancestry haircuts', () => {
 	expect(getWinningImportedEscalationDepositClaimAmount({ bindingCapitalAttoRep: 100n, depositAmountAttoRep: 10n, principalAttoRep: 4n, postDepositCumulativeAmountAttoRep: 10n, forkThresholdAttoRep: 100n, nonDecisionThresholdAttoRep: 100n, winningOutcomeBalanceAttoRep: 100n })).toBe(10n)
+})
+
+test('the offered deposit must meet the start bond even when only a smaller threshold remainder fits', () => {
+	const base = { balancesAttoRep: [0n, 99n, 4n], nonDecisionThresholdAttoRep: 100n, outcome: 'yes', startBondAttoRep: 10n } as const
+	expect(projectEscalationDeposit({ ...base, amountAttoRep: 1n })).toBeUndefined()
+	expect(projectEscalationDeposit({ ...base, amountAttoRep: 10n })).toMatchObject({ acceptedAmountAttoRep: 1n, projectedBalancesAttoRep: [0n, 100n, 4n] })
+})
+
+test('a tie adjustment that consumes the whole offered amount is rejected like the contract preview', () => {
+	expect(projectEscalationDeposit({ amountAttoRep: 1n, balancesAttoRep: [0n, 0n, 1n], nonDecisionThresholdAttoRep: 100n, outcome: 'yes', startBondAttoRep: 1n })).toBeUndefined()
 })

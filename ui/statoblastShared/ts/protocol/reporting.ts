@@ -184,8 +184,11 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
 		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
 		const startBondAttoRep = nonDecisionThresholdAttoRep > 1n && initialEscalationGameDepositAttoRep >= nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep - 1n : initialEscalationGameDepositAttoRep
+		const inheritedOutcome = parentSecurityPoolAddress !== zeroAddress && (await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'isEscalationResolved' }))
 		const walletReportingState = await loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
 		return {
+			...(inheritedOutcome ? { reportingBlockedReason: reportingCopy.inheritedOutcomeReportingClosed } : {}),
+			canTriggerOwnFork: false,
 			contributionFunding: 'wallet',
 			...walletReportingState,
 			settlementCollateralAttoEth,
@@ -212,6 +215,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		? await Promise.all([
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt', args: [] }),
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkElapsedAtStart', args: [] }),
+				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'fixedQuestionOutcome', args: [] }),
 			])
 		: undefined
 	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
@@ -320,10 +324,17 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	let settlementState: ReportingSettlementState = 'locked'
 	if (normalizedQuestionOutcome !== 'none' && systemState === 'operational') {
 		settlementState = 'resolved'
-	} else if (universeForkTime > 0n && universeForkTime < escalationEndTime && hasReachedNonDecision === false) {
+	} else if (universeForkTime > 0n && universeForkTime <= escalationEndTime && hasReachedNonDecision === false) {
 		settlementState = 'migration-required'
 	}
+	const canTriggerOwnFork = hasReachedNonDecision && (await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'canTriggerOwnFork' }))
+	let reportingBlockedReason: string | undefined
+	if (continuationTiming?.[2] !== undefined && getReportingOutcomeKey(continuationTiming[2]) !== 'none') reportingBlockedReason = reportingCopy.inheritedOutcomeReportingClosed
+	else if (forkContinuationSnapshot && continuationTiming?.[0] === 0n) reportingBlockedReason = reportingCopy.continuationNotResumed
+
 	return {
+		...(reportingBlockedReason === undefined ? {} : { reportingBlockedReason }),
+		canTriggerOwnFork,
 		bindingCapital,
 		contributionFunding: 'wallet',
 		settlementCollateralAttoEth,
@@ -386,7 +397,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 	const callParams = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
-		functionName: 'depositWalletRepToEscalationGameWithLead',
+		functionName: requireLead ? 'depositWalletRepToEscalationGameWithLead' : 'depositWalletRepToEscalationGame',
 		...getReportReviewText(outcome, reviewAmountAttoRep, triggersFork),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}

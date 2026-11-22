@@ -302,7 +302,8 @@ export async function storedReportWithQuorum(clients: readonly ReadClient[], con
 	)
 }
 
-export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[], config: RecoveryConfiguration, account: Address, token: Address, blockNumber: bigint) {
+/** Reads the account's OpenOracle holdings and executor allowances for the position's collateral (`token1`) and report token. */
+export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[], config: RecoveryConfiguration, account: Address, token1: Address, token: Address, blockNumber: bigint) {
 	const executor = config.executor
 	if (executor === undefined) throw new Error('Lifecycle balance reads require the authenticated executor')
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
@@ -312,23 +313,23 @@ export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[]
 			const endpoint = endpointLabel(endpoints[index] ?? '')
 			const snapshot = await canonicalBlockSnapshot(client, endpoint, blockNumber, 'position lifecycle balance snapshot', () =>
 				Promise.all([
-					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, config.network.weth] }, blockNumber),
+					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, token1] }, blockNumber),
 					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, token] }, blockNumber),
-					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, config.network.weth] }, blockNumber),
+					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, token1] }, blockNumber),
 					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, token] }, blockNumber),
 					readContractAtBlock(client, { address: token, abi: erc20Abi, functionName: 'decimals' }, blockNumber),
 				]),
 			)
-			const [rawHolderWeth, rawHolderToken, rawAllowanceWeth, rawAllowanceToken, rawTokenDecimals] = snapshot.value
+			const [rawHolderToken1, rawHolderToken, rawAllowanceToken1, rawAllowanceToken, rawTokenDecimals] = snapshot.value
 			return {
 				endpoint,
 				value: {
 					blockHash: snapshot.blockHash,
 					blockTimestamp: snapshot.blockTimestamp,
 					internalAllowanceToken: requiredBigint(rawAllowanceToken, 'OpenOracle token internal allowance'),
-					internalAllowanceAttoWeth: requiredBigint(rawAllowanceWeth, 'OpenOracle WETH internal allowance'),
+					internalAllowanceToken1: requiredBigint(rawAllowanceToken1, 'OpenOracle collateral internal allowance'),
 					holderToken: requiredBigint(rawHolderToken, 'OpenOracle token holder balance'),
-					holderAttoWeth: requiredBigint(rawHolderWeth, 'OpenOracle WETH holder balance'),
+					holderToken1: requiredBigint(rawHolderToken1, 'OpenOracle collateral holder balance'),
 					tokenDecimals: requiredBigint(rawTokenDecimals, 'Position token decimals'),
 				},
 			}

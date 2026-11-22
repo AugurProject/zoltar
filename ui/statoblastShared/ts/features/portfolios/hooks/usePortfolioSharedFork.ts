@@ -121,7 +121,12 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		if (reason !== undefined) throw new Error(reason)
 	}
 	const startReason = branchReason ?? (state && migrationReason(state))
-	const finalizeReason = branchReason ?? (!state?.branch?.started ? 'Start branch migration first.' : undefined) ?? (state !== undefined && state.timestamp < state.activationDeadline ? 'Wait until the activation deadline.' : undefined) ?? (state?.branch?.ready ? 'This branch is already active.' : undefined)
+	const activationReason = (selected: PortfolioForkSnapshot) => {
+		if (!selected.branch?.prepared) return 'Prepare branch capital first.'
+		if (selected.timestamp < selected.activationDeadline) return 'Wait until the earliest activation time.'
+		return selected.branch.ready ? 'This branch is already active.' : undefined
+	}
+	const finalizeReason = branchReason ?? (state && activationReason(state))
 	const sourceReason =
 		forkReason ??
 		(questionId === undefined ? 'Enter a question ID.' : undefined) ??
@@ -246,10 +251,16 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 				recheckStage(migrationReason),
 			),
 		finalize: () =>
-			run('finalizePortfolioFork', 'Activate fork branch', finalizeReason, selected => {
-				if (selected.branch === undefined) throw new Error('Select a branch.')
-				return { ...buildPortfolioForkFinalizeRequest({ ...base(selected), universeId: selected.branch.universeId }), reviewDescription: 'Activate this branch’s funded ETH and REP claim basket and chosen underwriting positions.' }
-			}),
+			run(
+				'finalizePortfolioFork',
+				'Activate fork branch',
+				finalizeReason,
+				selected => {
+					if (selected.branch === undefined) throw new Error('Select a branch.')
+					return { ...buildPortfolioForkFinalizeRequest({ ...base(selected), universeId: selected.branch.universeId }), reviewDescription: 'Start migration if needed, then activate this branch’s collateral and REP claim basket and chosen underwriting positions.' }
+				},
+				recheckStage(activationReason),
+			),
 		prepare: () =>
 			run('preparePortfolioRecovery', 'Prepare source question', prepareReason, selected => {
 				if (recovery === undefined) throw new Error('Source question unavailable.')

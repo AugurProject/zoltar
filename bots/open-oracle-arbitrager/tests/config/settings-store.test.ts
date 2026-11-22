@@ -24,6 +24,7 @@ afterEach(async () => {
 function settings(privateKeyValue: Hex | undefined) {
 	return {
 		approvedUniverses: [],
+		collateralTokens: [],
 		centralizedMarkets: {
 			assetAddress: canonicalNetworkDeployment(mainnet).rep,
 			assetChainId: 1,
@@ -193,6 +194,34 @@ describe('operator settings version 4 migration', () => {
 		expect(() => parseOperatorSettings({ ...current, strategy: { ...current.strategy, minimumProfitBps: '100' } })).toThrow('Minimum return must be an integer from 0 to 100000')
 		expect(() => parseOperatorSettings({ ...current, strategy: { ...current.strategy, pollMilliseconds: 1_000 } })).toThrow('Unknown strategy setting: pollMilliseconds')
 		for (const version of [3, 6, '5']) expect(() => parseOperatorSettings({ ...current, version })).toThrow('unsupported version')
+	})
+})
+
+describe('#1274: allowlisted non-WETH collateral settings', () => {
+	const usdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+	const stored = (collateralTokens: unknown) => ({ ...serializeOperatorSettings(settings(undefined)), collateralTokens })
+
+	test('round-trips the allowlist and defaults a file without it to WETH only', () => {
+		const parsed = parseOperatorSettings(stored([{ address: usdc.toLowerCase(), wethPoolFee: 500 }]))
+		expect(parsed.collateralTokens).toEqual([{ address: usdc, wethPoolFee: 500 }])
+		expect(serializeOperatorSettings(parsed).collateralTokens).toEqual([{ address: usdc, wethPoolFee: 500 }])
+		const { collateralTokens: _omitted, ...withoutAllowlist } = serializeOperatorSettings(settings(undefined))
+		expect(parseOperatorSettings(withoutAllowlist).collateralTokens).toEqual([])
+	})
+
+	test('rejects WETH, repeated tokens, non-standard pool fees, and unknown fields', () => {
+		expect(() => parseOperatorSettings(stored([{ address: canonicalNetworkDeployment(mainnet).weth, wethPoolFee: 500 }]))).toThrow('WETH is the native collateral')
+		expect(() =>
+			parseOperatorSettings(
+				stored([
+					{ address: usdc, wethPoolFee: 500 },
+					{ address: usdc.toLowerCase(), wethPoolFee: 3000 },
+				]),
+			),
+		).toThrow('must not repeat an address')
+		expect(() => parseOperatorSettings(stored([{ address: usdc, wethPoolFee: 250 }]))).toThrow('wethPoolFee must be 100, 500, 3000, or 10000')
+		expect(() => parseOperatorSettings(stored([{ address: usdc, wethPoolFee: 500, maxLocked: '1' }]))).toThrow('accept only address and wethPoolFee')
+		expect(() => parseOperatorSettings(stored({ address: usdc, wethPoolFee: 500 }))).toThrow('collateralTokens must be an array')
 	})
 })
 
@@ -478,4 +507,9 @@ test('replacement-price impact defaults to 100 bps and validates configured limi
 	expect(parseOperatorSettings({ ...current, runtime }).runtime.maxPriceImpactBps).toBe(100n)
 	expect(parseOperatorSettings({ ...current, runtime: { ...runtime, maxPriceImpactBps: 25 } }).runtime.maxPriceImpactBps).toBe(25n)
 	for (const invalid of [-1, 1001, 1.5, '100']) expect(() => parseOperatorSettings({ ...current, runtime: { ...runtime, maxPriceImpactBps: invalid } })).toThrow('Runtime maxPriceImpactBps')
+})
+
+test('risk-limit validation names the operator file keys', () => {
+	const current = serializeOperatorSettings(settings(undefined))
+	expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, riskLimits: { ...current.runtime.riskLimits, maxPositionNotionalWeth: '11', maxTotalLockedWeth: '10' } } })).toThrow('Runtime maxPositionNotionalWeth cannot exceed maxTotalLockedWeth')
 })

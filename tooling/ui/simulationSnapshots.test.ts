@@ -134,9 +134,9 @@ describe('simulation snapshots', () => {
 
 	test('lists the core scenarios before each app scenario', async () => {
 		expect(await getSimulationSnapshotScenarios('zoltar')).toEqual(['baseline', 'deployed', 'two-questions', 'forked-categorical'])
-		expect((await getSimulationSnapshotScenarios('statoblast')).slice(0, 3)).toEqual(['baseline', 'deployed', 'portfolio'])
+		expect((await getSimulationSnapshotScenarios('statoblast')).slice(0, 3)).toEqual(['baseline', 'deployed', 'portfolio-auction'])
 		expect(await getSimulationSnapshotScenarios('openoracle')).toEqual(await getSimulationSnapshotScenarios('statoblast'))
-		expect(await getSimulationSnapshotScenarios('trading')).toEqual(['baseline', 'deployed', 'trading-funded', 'trading-forked'])
+		expect(await getSimulationSnapshotScenarios('trading')).toEqual(['baseline', 'deployed', 'trading-funded', 'trading-usdc', 'trading-forked'])
 	})
 
 	test('compiles the key into a bundle where the worker reads it', async () => {

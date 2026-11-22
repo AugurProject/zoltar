@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
+import { OraclePriceMath } from '../OraclePriceMath.sol';
 import { IWeth9 } from '../interfaces/IWeth9.sol';
 import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
@@ -110,49 +111,42 @@ contract OpenOraclePriceCoordinatorFactory {
 	/// @dev Coordinator deployers own independent portfolio namespaces.
 	mapping(address => mapping(address => SharedPoolPriceFeed)) public sharedPriceFeedImplementations;
 	IWeth9 public immutable weth;
-	uint256 public immutable gasConsumedOpenOracleReportPrice;
-	uint32 public immutable gasConsumedSettlement;
-	uint256 public immutable gasUnitsForOneDispute;
 	uint256 public immutable targetPriceErrorForDispute;
-	uint256 public immutable openOracleSecurityMultiplierBps;
 	uint48 public immutable settlementTime;
 	uint24 public immutable disputeDelay;
 	uint24 public immutable protocolFee;
 	uint24 public immutable feePercentage;
 	uint16 public immutable multiplier;
-	bool public immutable timeType;
-	bool public immutable trackDisputes;
 	address public immutable protocolFeeRecipient;
 	uint256 public immutable escalationHaltMultiplierBps;
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public immutable minLiquidationPriceDistanceBps;
 
-	constructor(IWeth9 _weth, uint256 _gasConsumedOpenOracleReportPrice, uint32 _gasConsumedSettlement, uint256 _gasUnitsForOneDispute, uint256 _targetPriceErrorForDispute, uint256 _openOracleSecurityMultiplierBps, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, bool _timeType, bool _trackDisputes, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps, PriceCoordinatorDeploymentWorker _priceCoordinatorDeploymentWorker, SharedPoolPriceFeedDeploymentWorker _sharedPoolPriceFeedDeploymentWorker) {
+	constructor(IWeth9 _weth, uint256 _targetPriceErrorForDispute, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps, PriceCoordinatorDeploymentWorker _priceCoordinatorDeploymentWorker, SharedPoolPriceFeedDeploymentWorker _sharedPoolPriceFeedDeploymentWorker) {
 		require(address(_priceCoordinatorDeploymentWorker).code.length != 0 && address(_sharedPoolPriceFeedDeploymentWorker).code.length != 0, 'Deployment workers missing');
 		priceCoordinatorDeploymentWorker = _priceCoordinatorDeploymentWorker;
 		sharedPoolPriceFeedDeploymentWorker = _sharedPoolPriceFeedDeploymentWorker;
 		weth = _weth;
-		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
-		gasConsumedSettlement = _gasConsumedSettlement;
-		gasUnitsForOneDispute = _gasUnitsForOneDispute;
 		targetPriceErrorForDispute = _targetPriceErrorForDispute;
-		openOracleSecurityMultiplierBps = _openOracleSecurityMultiplierBps;
 		settlementTime = _settlementTime;
 		disputeDelay = _disputeDelay;
 		protocolFee = _protocolFee;
 		feePercentage = _feePercentage;
 		multiplier = _multiplier;
-		timeType = _timeType;
-		trackDisputes = _trackDisputes;
 		protocolFeeRecipient = _protocolFeeRecipient;
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
 		maxSettlementBaseFeeMultiplierBps = _maxSettlementBaseFeeMultiplierBps;
 		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
 	}
 
+	function maximumReportPriorityFeeAttoEthPerGas() external view returns (uint256) {
+		return
+			OraclePriceMath.maximumPriorityFee(targetPriceErrorForDispute, protocolFee, feePercentage, escalationHaltMultiplierBps);
+	}
+
 	function deployOpenOraclePriceCoordinator(OpenOracle _openOracle, ReputationToken _reputationToken, uint256 _initialReportPriorityFeeAttoEthPerGas, bytes32 salt) external returns (OpenOraclePriceCoordinator) {
 		bytes32 deploymentSalt = keccak256(abi.encode(msg.sender, salt));
-		OpenOraclePriceCoordinator coordinator = priceCoordinatorDeploymentWorker.deploy(abi.encode(_openOracle, _reputationToken, weth, gasConsumedOpenOracleReportPrice, gasConsumedSettlement, gasUnitsForOneDispute, _initialReportPriorityFeeAttoEthPerGas, targetPriceErrorForDispute, openOracleSecurityMultiplierBps, settlementTime, disputeDelay, protocolFee, feePercentage, multiplier, timeType, trackDisputes, protocolFeeRecipient, escalationHaltMultiplierBps, maxSettlementBaseFeeMultiplierBps, minLiquidationPriceDistanceBps), deploymentSalt);
+		OpenOraclePriceCoordinator coordinator = priceCoordinatorDeploymentWorker.deploy(abi.encode(_openOracle, _reputationToken, weth, _initialReportPriorityFeeAttoEthPerGas, targetPriceErrorForDispute, settlementTime, disputeDelay, protocolFee, feePercentage, multiplier, protocolFeeRecipient, escalationHaltMultiplierBps, maxSettlementBaseFeeMultiplierBps, minLiquidationPriceDistanceBps), deploymentSalt);
 		coordinatorDeployers[address(coordinator)] = msg.sender;
 		return coordinator;
 	}

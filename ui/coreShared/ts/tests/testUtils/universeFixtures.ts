@@ -18,12 +18,13 @@ export function createUniverseSummary(overrides: Partial<ZoltarUniverseSummary> 
 	}
 }
 
-/** Universe 1 after a Yes/No fork: the Yes child (universe 2) is deployed and the No child (universe 3) is not. */
+/** Binary fork: Invalid=0, Yes=1 and No=2; the Yes child is deployed. */
 export function createForkedUniverseSummary(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return createUniverseSummary({
 		childUniverses: [
-			{ exists: true, forkTime: 1n, outcomeIndex: 0n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 2n },
-			{ exists: false, forkTime: 1n, outcomeIndex: 1n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n },
+			{ exists: false, forkTime: 1n, outcomeIndex: 0n, outcomeLabel: 'Invalid', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 4n },
+			{ exists: true, forkTime: 1n, outcomeIndex: 1n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 2n },
+			{ exists: false, forkTime: 1n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n },
 		],
 		forkTime: 1n,
 		hasForked: true,

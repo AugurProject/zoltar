@@ -186,8 +186,8 @@ const expectMigratedTimelineEvidence = async (database: ScannerDatabase, migrati
 	expect((await database.sql`SELECT to_regclass('public.indexer_ownership')::text AS relation`)[0]?.['relation']).toBe('indexer_ownership')
 	const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
 	expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
-	const appliedMigrations = await database.sql`SELECT schema_version FROM augurscan_schema_migrations ORDER BY schema_version`
-	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }, { schema_version: '7' }, { schema_version: '8' }, { schema_version: '9' }])
+	const appliedMigrations = await database.sql`SELECT schema_version FROM augurscan_schema_migrations ORDER BY schema_version::integer`
+	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }, { schema_version: '7' }, { schema_version: '8' }, { schema_version: '9' }, { schema_version: '10' }])
 	const migratedTimeline = await database.sql`
 		SELECT entity_identity, source_event, canonical FROM protocol_timeline_entries
 		WHERE chain_id = ${migrationChainId} ORDER BY block_number
@@ -443,7 +443,7 @@ postgresTest('replaces v6 accounting storage and keeps the logs a projection reb
 		const txHash = blockHash('accounting-storage-transaction')
 		await database.sql`INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES (${migrationChainId}, 1, ${hash}, ${blockHash('accounting-storage-parent')}, now(), true)`
 		await database.sql`INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, receipt, canonical) VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', '{}'::jsonb, true)`
-		const checkpoint = JSON.stringify({ reason: 5, settlementCollateralAttoEth: 7n.toString(), shareTokenSupplyAttoShares: 9n.toString(), lastSettlementPortfolioTime: '100' })
+		const checkpoint = JSON.stringify({ reason: 2, settlementCollateralAttoEth: 7n.toString(), shareTokenSupplyAttoShares: 9n.toString(), lastSettlementPortfolioTime: '100' })
 		await database.sql`
 			INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
 			VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x', 'QuestionAccountingCheckpoint', (${checkpoint}::text)::jsonb, 'decoded', 'QuestionAccountingCheckpoint', true)
@@ -474,11 +474,28 @@ postgresTest('replaces v6 accounting storage and keeps the logs a projection reb
 		// The replaced table accepts the projection of the retained checkpoint log.
 		await database.sql`
 			INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, settlement_collateral_atto_eth, share_token_supply_atto_shares, last_settlement_portfolio_time, canonical)
-			VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, 1, ${address.toLowerCase()}, 5, 7, 9, to_timestamp(100), true)
+			VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, 1, ${address.toLowerCase()}, 2, 7, 9, 100, true)
 		`
 		// A second startup must accept the migrated layout without replaying DDL.
 		await initializeSchema(database.sql)
 		expect(await database.sql`SELECT settlement_collateral_atto_eth::text, share_token_supply_atto_shares::text FROM pool_snapshots WHERE chain_id = ${migrationChainId}`).toEqual([{ settlement_collateral_atto_eth: '7', share_token_supply_atto_shares: '9' }])
+		// A v9 timestamp stores portfolio-clock seconds, including orphaned evidence.
+		await database.sql`UPDATE pool_snapshots SET canonical = false WHERE chain_id = ${migrationChainId}`
+		await database.sql.unsafe('ALTER TABLE public.pool_snapshots DROP CONSTRAINT pool_snapshots_reason_check, DROP CONSTRAINT pool_snapshots_portfolio_time_check, ALTER COLUMN last_settlement_portfolio_time TYPE timestamp with time zone USING to_timestamp(last_settlement_portfolio_time::double precision)')
+		await database.sql`UPDATE augurscan_schema SET schema_version = '9' WHERE singleton`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version = '10'`
+		await database.sql`UPDATE pool_snapshots SET reason = 3 WHERE chain_id = ${migrationChainId}`
+		await expect(initializeSchema(database.sql)).rejects.toThrow('pool_snapshots_reason_check')
+		expect(await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`).toEqual([{ schema_version: '9' }])
+		expect(await database.sql`SELECT reason FROM pool_snapshots WHERE chain_id = ${migrationChainId}`).toEqual([{ reason: 3 }])
+		await database.sql`UPDATE pool_snapshots SET reason = 2 WHERE chain_id = ${migrationChainId}`
+		await initializeSchema(database.sql)
+		expect(await database.sql`SELECT last_settlement_portfolio_time::text AS clock, reason, canonical FROM pool_snapshots WHERE chain_id = ${migrationChainId}`).toEqual([{ clock: '100', reason: 2, canonical: false }])
+		await expect(database.sql`UPDATE pool_snapshots SET reason = 3 WHERE chain_id = ${migrationChainId}`).rejects.toThrow('pool_snapshots_reason_check')
+		await expect(database.sql`UPDATE pool_snapshots SET last_settlement_portfolio_time = -1 WHERE chain_id = ${migrationChainId}`).rejects.toThrow('pool_snapshots_portfolio_time_check')
+		const maximumClock = ((1n << 48n) - 1n).toString()
+		await database.sql`UPDATE pool_snapshots SET last_settlement_portfolio_time = ${maximumClock} WHERE chain_id = ${migrationChainId}`
+		expect(await database.sql`SELECT last_settlement_portfolio_time::text AS clock FROM pool_snapshots WHERE chain_id = ${migrationChainId}`).toEqual([{ clock: maximumClock }])
 	} finally {
 		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await database.close()
@@ -518,7 +535,7 @@ postgresTest('removes v7 seed prices and constant pool columns while keeping acc
 				(${migrationChainId}, ${hash}, ${txHash}, 2, 1, ${coordinator}, 'PriceReported', 42, 19, to_timestamp(2000), true)
 		`
 		await database.sql`UPDATE augurscan_schema SET schema_version = '7' WHERE singleton`
-		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version IN ('8', '9')`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version IN ('8', '9', '10')`
 		await initializeSchema(database.sql)
 		expect(await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
 		expect(await database.sql`SELECT description FROM augurscan_schema_migrations WHERE schema_version = '8'`).toEqual([{ description: 'Removal of values no current contract supplies' }])

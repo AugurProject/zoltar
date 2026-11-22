@@ -4,7 +4,7 @@ import { canonicalSecurityPoolFactory } from '#config/network'
 import { requiredDeploymentRoles, type DeploymentRole } from '#config/deployment-roles'
 import { rpcFailureWithContext, type Address, type TransactionLog } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
+import { sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
@@ -19,28 +19,29 @@ import type { OperatorState } from '#state/operator-state'
 
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
 
-export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber?: bigint) {
+export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'collateralTokens' | 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber?: bigint) {
 	return Promise.all(
 		config.coordinatorAddresses.map(async coordinator => {
 			const [openOracle, token2, token1, settlementTime, disputeDelay, protocolFee, feePercentage, multiplier, timeType, trackDisputes, protocolFeeRecipient, callbackGasLimit] = await Promise.all([
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'openOracle' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'reputationToken' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'weth' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'settlementTime' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'disputeDelay' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'protocolFee' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'feePercentage' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'multiplier' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'timeType' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'trackDisputes' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'protocolFeeRecipient' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'openOracle' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'reputationToken' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'weth' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'settlementTime' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'disputeDelay' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'protocolFee' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'feePercentage' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'multiplier' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'timeType' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'trackDisputes' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'protocolFeeRecipient' }),
+				client.readContract({ address: coordinator, abi: sharedPoolPriceFeedAbi, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
 			])
 			if (openOracle.toLowerCase() !== config.openOracle.toLowerCase()) throw new Error(`Configured coordinator ${coordinator} uses OpenOracle ${openOracle}, not ${config.openOracle}`)
 			if (token1.toLowerCase() !== config.network.weth.toLowerCase()) throw new Error(`Configured coordinator ${coordinator} uses WETH ${token1}, not ${config.network.weth}`)
 			if (!trackDisputes) throw new Error(`Configured coordinator ${coordinator} does not track disputes`)
 			const policy = {
 				callbackGasLimit,
+				collateralTokens: config.collateralTokens.map(collateral => collateral.address),
 				coordinator,
 				disputeDelay,
 				feePercentage,

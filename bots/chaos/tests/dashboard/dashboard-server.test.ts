@@ -326,6 +326,9 @@ describe('chaos dashboard server', () => {
 		}
 		const ready = publicChaosReadiness(state, configuration, now)
 		expect(ready).toMatchObject({ blockers: [], maximumScanAgeSeconds: 156, mode: 'live', ready: true, scanAgeSeconds: 60 })
+		const blockedWorkflowState = { ...state, workflows: [{ id: 'blocked-continuation', status: 'blocked' }] }
+		expect(publicChaosReadiness(blockedWorkflowState, configuration, now)).toMatchObject({ activeWorkflowCount: 1, ready: false, blockers: expect.arrayContaining(['recovery']) })
+		expect(publicChaosState(blockedWorkflowState)).toMatchObject({ currentWorkflow: { id: 'blocked-continuation', status: 'blocked' } })
 		const currentTimestamp = new Date().toISOString()
 		const currentState = { ...state, lastScanAt: currentTimestamp, rpcEndpointHealth: state.rpcEndpointHealth.map(check => ({ ...check, checkedAt: currentTimestamp })) }
 		const server = startDashboardServer(0, controller({ getConfiguration: () => configuration, getState: () => currentState }))

@@ -458,6 +458,7 @@ test('an address profile never stays visible under another address', async () =>
 		})
 		expect(await route.loadAddressProfile()).toBe(true)
 		expect(rendered).toEqual([addressA])
+		expect(route.profile?.native_balance_detail).toBeNull()
 		expect(await route.loadAddressProfile({ live: true })).toBe(true)
 		expect(rendered).toEqual([addressA])
 		browser.happyDOM.setURL(`https://scanner.test/address/${addressB}?chainId=1`)

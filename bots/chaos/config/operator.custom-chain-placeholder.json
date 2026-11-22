@@ -9,8 +9,7 @@
 	"discovery": {
 		"maxPools": 100,
 		"maxQuestions": 100,
-		"maxUniverses": 100,
-		"maxVaultsPerPool": 100
+		"maxUniverses": 100
 	},
 	"network": {
 		"chainId": 4242424242,

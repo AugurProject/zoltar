@@ -201,7 +201,7 @@ describe('atomic unpaid cure and portfolio takeover', () => {
 				observation.acceptedPriceEpoch = await buyer.readContract({ ...fixture.capital, functionName: 'acceptedPriceEpoch' })
 				observation.walletRep = await buyer.readContract({ ...fixture.token, functionName: 'balanceOf', args: [account.address] })
 				observation.walletAttoEth = await buyer.getBalance({ address: account.address })
-				observation.positions = [{ ...source, id: 1n, liquidationStarted: await buyer.readContract({ ...fixture.capital, functionName: 'liquidationStarted', args: [1n] }), retirementStatus: 'Not retiring', stalledRetirement: false }]
+				observation.positions = [{ ...source, id: 1n, liquidationStarted: await buyer.readContract({ ...fixture.capital, functionName: 'liquidationStarted', args: [1n] }), retirementStatus: 'No pending reduction', stalledRetirement: false }]
 				Object.assign(observation.snapshot, {
 					owner: account.address,
 					repToken: fixture.token.address,

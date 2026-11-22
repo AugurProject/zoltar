@@ -25,7 +25,7 @@ const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n
 async function selectsSimulationBackend(location: Parameters<typeof initializeActiveEnvironment>[0]) {
 	const simulationFactoryReached = new Error('Simulation backend factory reached')
 	const selected = await initializeActiveEnvironment(location, {
-		createInjectedBackend: ({ profile }) => createFakeBackend({ profile }),
+		createInjectedBackend: (options = {}) => createFakeBackend(options),
 		createSimulationBackend: () => Promise.reject(simulationFactoryReached),
 	}).then(
 		() => false,
@@ -59,7 +59,7 @@ afterEach(() => {
 void describe('active environment', () => {
 	void test('selects either genesis token after network resolution with hash parameters taking precedence', async () => {
 		for (const genesisOutcome of ['yes', 'no'] as const) {
-			const backend = await initializeActiveEnvironment({ hostname: 'localhost', search: '?network=sepolia&genesis=yes', hash: `#/zoltar?genesis=${genesisOutcome}` }, { createInjectedBackend: ({ profile }) => createFakeBackend({ profile }) })
+			const backend = await initializeActiveEnvironment({ hostname: 'localhost', search: '?network=sepolia&genesis=yes', hash: `#/zoltar?genesis=${genesisOutcome}` }, { createInjectedBackend: (options = {}) => createFakeBackend(options) })
 			expect(backend.profile.genesisOutcome).toBe(genesisOutcome)
 			expect(backend.profile.genesisRepTokenAddress).toBe(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, genesisOutcome).genesisRepTokenAddress)
 		}
@@ -72,6 +72,7 @@ void describe('active environment', () => {
 		const simulation = getActiveSimulationController()
 		if (simulation === undefined) throw new Error('Expected simulation controller')
 		try {
+			if (backend.waitUntilReady === undefined) throw new Error('Missing simulation ready hook')
 			await backend.waitUntilReady()
 			const account = (await backend.getAccounts())[0]
 			if (account === undefined) throw new Error('Expected funded QA account')
@@ -82,12 +83,14 @@ void describe('active environment', () => {
 			expect(deployment.applicationDeploymentComplete).toBe(true)
 			const record = persistSavedSimulationState(await simulation.exportState('No genesis'))
 			const mismatch = await initializeActiveEnvironment({ hostname: 'localhost', search: `?simulate=1&genesis=yes&simState=${record.id}` })
+			if (mismatch.waitUntilReady === undefined) throw new Error('Missing simulation ready hook')
 			await mismatch.waitUntilReady()
 			expect(mismatch.profile.genesisOutcome).toBe('yes')
 			expect(mismatch.bootstrapError).toBeUndefined()
 			expect(getActiveSimulationController()?.bootstrapWarning).toBe('Saved simulation state "No genesis" belongs to Augur v2 › No. Falling back to the baseline scenario.')
 			expect(getActiveSimulationController()?.simulationSource.kind).toBe('scenario')
 			const restored = await initializeActiveEnvironment({ hostname: 'localhost', search: `?simulate=1&genesis=no&simState=${record.id}` })
+			if (restored.waitUntilReady === undefined) throw new Error('Missing simulation ready hook')
 			await restored.waitUntilReady()
 			expect(restored.profile.genesisOutcome).toBe('no')
 			expect(getActiveSimulationController()?.simulationSource.kind).toBe('saved-state')
@@ -192,8 +195,8 @@ void describe('active environment', () => {
 		]) {
 			for (const walletAvailable of [true, false]) {
 				const backend = await initializeActiveEnvironment(location, {
-					createInjectedBackend: ({ profile }) => ({
-						...createFakeBackend({ profile }),
+					createInjectedBackend: (options = {}) => ({
+						...createFakeBackend(options),
 						getChainId: async () => {
 							if (!walletAvailable) throw new Error('No wallet')
 							return '0x1'
@@ -530,6 +533,7 @@ void describe('simulation backend', () => {
 			expect(backend.isBootstrapping).toBe(true)
 			expect(backend.isBootstrapped).toBe(false)
 
+			if (backend.waitUntilReady === undefined) throw new Error('Missing simulation ready hook')
 			await backend.waitUntilReady()
 			await bootstrapPromise
 

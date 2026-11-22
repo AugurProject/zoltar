@@ -5,7 +5,7 @@ This directory holds three independent operator services and the code they share
 | Directory | Service | Dashboard |
 | --- | --- | --- |
 | [`chaos/`](./chaos/README.md) | Randomized transaction operator for Zoltar, Statoblast, OpenOracle, and Trading | `http://127.0.0.1:4193` |
-| [`liquidator/`](./liquidator/README.md) | Statoblast security-pool liquidation and REP vault maintenance | `http://127.0.0.1:4183` |
+| [`liquidator/`](./liquidator/README.md) | Statoblast portfolio liquidation and REP backing management | `http://127.0.0.1:4183` |
 | [`open-oracle-arbitrager/`](./open-oracle-arbitrager/README.md) | OpenOracle dispute arbitrage and third-party settlement | `http://127.0.0.1:4173` |
 | `shared/` | Ethereum, connectivity, quorum, block synchronization, signer gate, dashboard, and transaction-submission primitives | — |
 
@@ -39,7 +39,7 @@ Compose restarts a container only while Docker and the host remain available. A 
 
 ## Environment variables
 
-Operator settings live in each bot's JSON file. The environment supplies only the values below.
+Operator settings live in each bot's JSON file. The main operator processes use the variables below. The separate liquidator [one-shot settlement finalizer](./liquidator/README.md#one-shot-settlement-finalizer) documents its eight `SETTLEMENT_*` variables separately.
 
 | Variable | Applies to | Default | Effect |
 | --- | --- | --- | --- |
@@ -53,7 +53,7 @@ Operator settings live in each bot's JSON file. The environment supplies only th
 | `ZOLTAR_BOT_DASHBOARD_PASSWORD` | liquidator, arbitrager | unset | HTTP Basic password for a network-bound dashboard. Chaos ignores it. |
 | `ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY` | liquidator, arbitrager | unset | Host and port that browsers use to reach a network-bound dashboard. Chaos ignores it. |
 
-The shipped Compose services set `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` and `ZOLTAR_BOT_SIGNER_LOCK_ROOT`. The chaos and liquidator services also pass `ZOLTAR_BOT_RPC_QUORUM` through from the host; the arbitrager service does not, because the arbitrager keeps its agreement requirement in its saved settings. None of them forwards `SCAN_BLOCK_TIME_MS`; add it to the service's `environment` to use it in a container.
+The shipped Compose services set `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` and `ZOLTAR_BOT_SIGNER_LOCK_ROOT`. The chaos and liquidator services also pass `ZOLTAR_BOT_RPC_QUORUM` through from the host; the arbitrager service does not, although native arbitrager startup uses the same environment fallback when its operator file has no saved requirement. None of them forwards `SCAN_BLOCK_TIME_MS`; add it to the service's `environment` to use it in a container.
 
 ## Signer lock
 
@@ -73,7 +73,7 @@ If the host or state storage is lost, restore the complete bot state before resu
 - **`1` (default).** The primary `readRpcUrl` is sufficient; `quorumRpcUrls` is optional corroboration. The bot trusts that provider completely.
 - **`2`.** Live execution requires at least two `quorumRpcUrls` in addition to the primary reader, three read endpoints in total. Every read endpoint must use a distinct origin; a different path on one origin is not an independent provider.
 
-Under either setting, only a retryable transport failure makes a reader unavailable. The configured number of readers must respond and every responding reader must agree exactly before a transaction is signed. Under `2`, one transport-unavailable reader is reported as degraded without stopping an otherwise healthy two-reader quorum. A malformed or contradictory response is a safety fault and fails closed.
+Under either setting, retryable transport failures and recognized temporary JSON-RPC errors (including internal errors and missing historical blocks or trie nodes) make a reader unavailable. Once the successful readers meet the configured quorum, other negative-code JSON-RPC errors may also be omitted, except execution reverts. Every successful reader must agree exactly before a transaction is signed. Under `2`, one unavailable reader is reported as degraded without stopping an otherwise healthy two-reader quorum. A malformed or contradictory successful response, or a safety failure that is not covered by these rules, fails closed.
 
 Agreement catches disagreement between providers. It does not help when every endpoint shares one compromised upstream, implementation bug, or correlated failure, so use independently operated providers.
 
@@ -111,7 +111,7 @@ All three operator files use these two sections. A key without a default is requ
 
 | Key | Type | Range | Default | Effect |
 | --- | --- | --- | --- | --- |
-| `mode` | string | `public` or `private` | required | Public mempool broadcast or private relay bundles. |
+| `mode` | string | `public` or `private` | required | Public mempool broadcast or private transaction submission. |
 | `relayUrls` | string array | 0–8 URLs; at least one in private mode | required | Private relays. Each URL must use HTTPS or loopback HTTP and cannot embed credentials, query parameters, or fragments. |
 | `minimumBundleRelaySuccesses` | number | `1`–`8` in public mode; `1` through the number of distinct relay origins in private mode | `1` | Number of distinct relay origins that must accept a private submission. |
 
@@ -140,11 +140,11 @@ The declared REP contract is the selected network's genesis REP. On the Ethereum
 
 The bot converts each venue into REP per ETH, sums executable bid and ask depth inside `depthBps`, and uses the median of fresh venue prices. An estimate is reliable only with `minimumSourceCount` independent exchanges, the minimum two-sided depth, and no more than `maximumVenueDispersionBps` disagreement.
 
-A cross-quoted observation is fresh only when both its REP order book and ETH ticker are fresh. Exchange-provided timestamps are retained, using the older one for a cross-quoted observation, so polling a cached response cannot extend freshness or satisfy the temporal-persistence rule. Required consensus does not admit an observation without a native order-book timestamp and, for cross quotes, a native ETH-ticker timestamp.
+A cross-quoted observation is fresh only when both its REP order book and ETH ticker are fresh. Exchange-provided timestamps are retained, using the older one for a cross-quoted observation, so polling a cached response cannot extend freshness or satisfy the temporal-persistence rule. Venue consensus, in advisory and required modes, excludes observations without a native order-book timestamp and, for cross quotes, a native ETH-ticker timestamp. The separate CEX median can retain those observations; it does not make them eligible consensus votes.
 
 ### DEX sources and group agreement
 
-When `venueConsensus` is configured, the bot also reads each explicit constant-product REP/WETH pair in `dexSources` directly from the chain. It probes both trade directions at `dexProbeDepthEth` and grants one vote per distinct `sourceId`. Pair addresses are explicit so an untrusted discovery service cannot insert a venue. Multiple pools controlled by one venue must share a failure domain and receive one vote. CEX exchange ids and DEX source ids share one namespace, so one failure domain cannot vote in both groups.
+When `venueConsensus` is configured, the bot also reads each explicit constant-product REP/WETH pair in `dexSources` directly from the chain. It probes both trade directions at `dexProbeDepthEth` and grants one vote per distinct `sourceId`. Pair addresses are explicit so an untrusted discovery service cannot insert a venue. Configure at most one pair for each independent venue: duplicate `sourceId` values are rejected, so adding another pool from that venue cannot earn a second vote. CEX exchange ids and DEX source ids share one namespace, so one failure domain cannot vote in both groups.
 
 ```json
 "venueConsensus": {
@@ -170,7 +170,7 @@ The CEX and DEX groups are aggregated separately:
 
 - If both groups are reliable, they must agree within `maximumGroupDeviationBps`.
 - If both are coherent but disagree, or neither has quorum, price-dependent actions stop in required mode, because the bot cannot identify the truthful group.
-- If one group is dispersed while the other has its quorum and the total source count, the coherent group supplies the reference only when `allowSingleGroupFallback` is enabled. Only sources in that group count toward the total-source quorum, and the dashboard warns that venue independence is reduced.
+- If one group is unreliable for any reason, including missing sources, freshness, depth, persistence, or dispersion, while the other has its quorum and the total source count, the coherent group supplies the reference only when `allowSingleGroupFallback` is enabled. Only sources in that group count toward the total-source quorum, and the dashboard warns that venue independence is reduced.
 
 `minimumSourceObservationCount` and `minimumSourceObservationSpanMilliseconds` require each source to remain coherent across polls before it can vote, so a one-block or one-request spike cannot immediately become a trusted reference. The current price regime itself must persist for the configured count and span: old observations cannot warm up a newly changed price, and leaving then returning to an earlier regime restarts its history.
 
@@ -185,7 +185,7 @@ Evidence is keyed by exact chain and REP token. Fork REP tokens without their ow
 
 ### `centralizedMarkets` keys
 
-Every key except `venueConsensus` is required, and inside `venueConsensus` every key is required. The code has no defaults for them; the Example value column shows `config/operator.example.json` in both bots. Amounts ending in `Eth` are decimal strings with at most 18 places, and every key ending in `Bps` is a JSON number.
+In an explicit `centralizedMarkets` block every key except `venueConsensus` is required, and inside `venueConsensus` every key is required. If the arbitrager omits the whole block, it supplies an advisory default with no sources and `minimumSourceCount: 1`; the liquidator requires its block. The Example value column shows the explicit `config/operator.example.json` values. Amounts ending in `Eth` are decimal strings with at most 18 places, and every key ending in `Bps` is a JSON number.
 
 | Key | Type | Range | Example value | Effect |
 | --- | --- | --- | --- | --- |
@@ -201,10 +201,10 @@ Every key except `venueConsensus` is required, and inside `venueConsensus` every
 | `requiredForExecution` | boolean | — | `false` | Selects required or advisory mode. |
 | `sources` | array | distinct exchanges | `[]` | CEX sources. |
 | `venueConsensus.allowSingleGroupFallback` | boolean | — | `false` | Permits a single coherent group to supply the reference. |
-| `venueConsensus.dexProbeDepthEth` | decimal string | ≥ 0 | `"1"` | Trade size used to probe each pair in both directions. |
+| `venueConsensus.dexProbeDepthEth` | decimal string | > 0 | `"1"` | Trade size used to probe each pair in both directions. |
 | `venueConsensus.dexSources` | array | distinct `sourceId` and `pair`; `feeBps` 0–1,000 | `[]` | Explicit constant-product REP/WETH pairs. |
-| `venueConsensus.maximumGroupDeviationBps` | number | 1–10,000 | `500` | Largest accepted distance between the CEX and DEX groups. |
-| `venueConsensus.minimumDexAskDepthEth`, `minimumDexBidDepthEth` | decimal string | ≥ 0 | `"0.5"` | Minimum DEX depth on each side. |
+| `venueConsensus.maximumGroupDeviationBps` | number | 1–10,000 | `500` | Largest accepted distance between the CEX and DEX groups; also caps each DEX pair’s executable bid-ask spread. |
+| `venueConsensus.minimumDexAskDepthEth`, `minimumDexBidDepthEth` | decimal string | ≥ 0 | `"0.5"` | Minimum accepted executable probe size on each side; the observation records the probe and its realized return, rather than total pool liquidity. |
 | `venueConsensus.minimumDexSourceCount` | number | 1–100 | `2` | Independent DEX sources required. |
 | `venueConsensus.minimumSourceObservationCount` | number | 1–100 | `2` | Polls a source must remain coherent for. |
 | `venueConsensus.minimumSourceObservationSpanMilliseconds` | number | 0–3,600,000 | `10000` | Time a source must remain coherent for. |

@@ -131,7 +131,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const escalationClaims = operationsPanel(
 		'Escalation interactions',
 		(item.escalation_claims ?? []).map(claim =>
-			operationRow(String(claim['type'] ?? 'Escalation position'), `${semanticSummary({ event_data: claim['data'] }, itemNativeSymbol)} · Historical position; winning payout depends on final resolution, carry proofs and haircut allocation`, String(claim['entity'] ?? ''), claim['blockNumber']),
+			operationRow(String(claim['type'] ?? 'Escalation position'), `${semanticSummary({ event_data: claim['data'] }, itemNativeSymbol)} · Historical position; winning payout depends on final resolution, carry proofs, reward intervals and fork payout scaling`, String(claim['entity'] ?? ''), claim['blockNumber']),
 		),
 		'No escalation interactions are associated with this address.',
 	)

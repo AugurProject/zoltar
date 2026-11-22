@@ -68,7 +68,7 @@ export async function prepareConfigurationRestart(options: RestartOptions, reque
 	try {
 		if (next.network.chainId !== configuration.settings.network.chainId) {
 			if (address !== undefined) {
-				const lock = await acquireExecutionSignerLock(next.network.chainId, address, 'chaos bot')
+				const lock = await acquireExecutionSignerLock(next.network.chainId, address, 'chaos-bot')
 				releaseSigner = lock.release
 			}
 		} else {

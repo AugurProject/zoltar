@@ -243,3 +243,17 @@ describe('simulation engine prepared states', () => {
 		expect(universeLabels).toContain('Funding QA account 1 of 3')
 	}, 60_000)
 })
+
+test('live scenario resets restore the same transaction baseline', async () => {
+	const engine = await createBaselineEngine()
+	await engine.bootstrap()
+	engine.setTransactionDelayMilliseconds(0)
+	const baseline = engine.getState().transactionCountSinceReset
+	const account = engine.getState().selectedAccount
+	await engine.request({ method: 'eth_sendTransaction', params: [{ from: account, to: account, value: '0x1' }] })
+	expect(engine.getState().transactionCountSinceReset).toBe(baseline + 1n)
+	await engine.reset()
+	expect(engine.getState().transactionCountSinceReset).toBe(baseline)
+	await engine.reset()
+	expect(engine.getState().transactionCountSinceReset).toBe(baseline)
+}, 60_000)

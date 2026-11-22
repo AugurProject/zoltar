@@ -14,8 +14,8 @@ function fixture() {
 	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 1000n.toString(), feeAttoEth: 300n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '950' }
 	const token = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase())
 	if (token === undefined) throw new Error('Missing WETH inventory')
-	token.allowances[pool.coordinator] = '1300'
-	return { snapshot, pool, options: planningOptionsFixture({ maxEthSpendAttoEth: 1300n.toString() }) }
+	token.allowances[pool.coordinator] = '1303'
+	return { snapshot, pool, options: planningOptionsFixture({ maxEthSpendAttoEth: 1303n.toString() }) }
 }
 
 test('complete set purchase pays fee and premium through the portfolio and protects the share quote', () => {
@@ -25,15 +25,15 @@ test('complete set purchase pays fee and premium through the portfolio and prote
 	if (step === undefined) throw new Error('Missing portfolio purchase')
 	expect(step.to).toBe(pool.portfolio)
 	expect(step.value).toBe('0')
-	expect(step.walletAssetDebits).toEqual([{ amount: '1300', asset: snapshot.deployments.weth, kind: 'erc20', category: 'weth' }])
-	expect(decodeFunctionData({ abi: securityPoolPortfolioAbi, data: step.data }).args).toEqual([BigInt(pool.universeId), BigInt(pool.questionId), 1000n, snapshot.wallet.address, 950n, 300n])
+	expect(step.walletAssetDebits).toEqual([{ amount: '1303', asset: snapshot.deployments.weth, kind: 'erc20', category: 'weth' }])
+	expect(decodeFunctionData({ abi: securityPoolPortfolioAbi, data: step.data }).args).toEqual([BigInt(pool.universeId), BigInt(pool.questionId), 1000n, snapshot.wallet.address, 950n, 303n])
 })
 
 test('purchase never spends fees outside the configured wallet budget', () => {
 	const { snapshot, pool, options } = fixture()
 	const operation = completeSetDefinition('create')
-	expect(operation.evaluate(snapshot, { ...options, maxEthSpendAttoEth: 1299n.toString() }).eligible).toBe(false)
-	expect(operation.buildPlan(snapshot, { ...options, maxEthSpendAttoEth: 1299n.toString() })).toBeUndefined()
+	expect(operation.evaluate(snapshot, { ...options, maxEthSpendAttoEth: 1302n.toString() }).eligible).toBe(false)
+	expect(operation.buildPlan(snapshot, { ...options, maxEthSpendAttoEth: 1302n.toString() })).toBeUndefined()
 	expect(operation.buildPlan(snapshot, { ...options, operationInputs: { amount: '999' } })).toBeUndefined()
 	pool.purchaseQuote = undefined
 	expect(operation.evaluate(snapshot, options).eligible).toBe(false)
@@ -51,8 +51,8 @@ test('an unapproved purchase prepares one exact collateral approval before spend
 	expect(plan.steps.map(step => step.id)).toEqual(['approve-portfolio-collateral', 'createCompleteSet'])
 	const approval = plan.steps[0]
 	if (approval === undefined) throw new Error('Missing approval')
-	expect(decodeFunctionData({ abi: erc20Abi, data: approval.data }).args).toEqual([pool.coordinator, 1300n])
-	token.allowances[pool.coordinator] = '1300'
+	expect(decodeFunctionData({ abi: erc20Abi, data: approval.data }).args).toEqual([pool.coordinator, 1303n])
+	token.allowances[pool.coordinator] = '1303'
 	const context = { previousPlan: { ...plan, planningSeed: options.seed }, confirmedStepIds: ['approve-portfolio-collateral'] }
 	expect(operation.buildContinuationPlan(snapshot, options, context)?.steps.map(step => step.id)).toEqual(['createCompleteSet'])
 	pool.purchaseQuote = undefined

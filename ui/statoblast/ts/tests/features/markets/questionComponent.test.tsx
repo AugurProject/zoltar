@@ -36,20 +36,33 @@ describe('Question component', () => {
 		},
 	})
 
+	test.each(['binary', 'categorical'] as const)('fork summaries label an immediate start and omit scalar tick counts for %s questions', async marketType => {
+		const rendered = await renderIntoDocument(<ForkQuestion question={createQuestion({ marketType, numTicks: 0n, startTime: 0n })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('Immediately after creation')
+		expect([...document.querySelectorAll('.metric-label')].map(label => label.textContent)).not.toContain('Ticks')
+	})
+
+	test('keeps a comma inside one categorical label distinct from separate outcomes', async () => {
+		const rendered = await renderIntoDocument(<ForkQuestion question={createQuestion({ marketType: 'categorical', outcomeLabels: ['No, Yes', 'Other'] })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect([...document.querySelectorAll('.plain-list li')].map(item => item.textContent)).toEqual(['No, Yes', 'Other', 'Invalid'])
+	})
+
 	test('shows all fork facts, including start time, scalar range, unit, and complete resolution paragraphs', async () => {
 		const question = createQuestion({ title: 'Highest temperature?', description: 'Use the final station report.\n\nDiscard provisional measurements.', marketType: 'scalar', startTime: 150n, numTicks: 100n, displayValueMin: -10n * 10n ** 18n, displayValueMax: 40n * 10n ** 18n, answerUnit: '°C', outcomeLabels: [] })
 		const rendered = await renderIntoDocument(<ForkQuestion question={question} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.querySelector('h4')?.textContent).toBe('Fork question')
 		expect(document.querySelectorAll('.question-summary-heading p')).toHaveLength(2)
-		for (const value of [question.questionId, 'Starts', '1970-01-01 00:02:30 UTC', 'End time', '-10 to 40\u00a0°C', '100', 'Answer unit', 'Scalar, Invalid']) expect(document.body.textContent).toContain(value)
+		for (const value of [question.questionId, 'Starts', '1970-01-01 00:02:30 UTC', 'End time', '-10 to 40\u00a0°C', '100', 'Answer unit', 'ScalarInvalid']) expect(document.body.textContent).toContain(value)
 	})
 
 	test('labels a bounded outcome page without inventing Invalid or hiding the rest of the question', async () => {
 		const rendered = await renderIntoDocument(<ForkQuestion question={{ ...createQuestion({ marketType: 'categorical', outcomeLabels: ['Eleventh', 'Twelfth'] }), outcomesComplete: false }} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('Outcomes on this page')
-		expect(document.body.textContent).toContain('Eleventh, Twelfth')
+		expect(document.body.textContent).toContain('EleventhTwelfth')
 		expect(document.body.textContent).not.toContain('Invalid')
 		expect(document.body.textContent).toContain('Description')
 		expect(document.body.textContent).toContain('End time')

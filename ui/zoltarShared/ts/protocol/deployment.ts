@@ -1,3 +1,4 @@
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper, PROXY_DEPLOYER_RUNTIME_CODE, zoltarDeploymentStatusStepAddresses } from '@zoltar/core-shared/deployment/deploymentAddresses'
@@ -23,13 +24,13 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	reputationToken: '0x1939fc9070edce2ad78392d5145b884e58d307171bc2e24a95927db370002b86',
-	zoltar: '0xc35a9e778a76c9a152c4a70b84d2db50f11442eb91aeffd1728cd70e35ae1a50',
+	zoltar: '0x31c00bb215b27ee7785ff6ee4555b375920890750c8fec54d269706a056418b0',
 	zoltarQuestionData: '0xcca5c7f98c171d7c11c4353de436365e6fba391937fd3e1ec516f475a97056ee',
 }
 
 const EXPECTED_NO_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	zoltar: '0x18514cebc7881647ec8ae597e9e8a9f8d1b4c593daddadc30725b7389cfb1986',
+	zoltar: '0x9e45a6395fd21cab34a673ac278c0d3bfc9b2bb8ca3a69e2508b2c4074b0f414',
 }
 
 const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
@@ -61,13 +62,13 @@ const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<D
 	deploymentStatusOracle: '0x4d74b03ec334c428ccae8674f7caed0288a1d43b3dcf6614a60a78abd21e41cc',
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
-	zoltar: '0x98528b703598bca4593da702508f01c0477206c6027138fe315c789d2c2eba32',
+	zoltar: '0x44634677d147785cc02f6dd40baf813be5714a5620cef4712224f4d22e9e3385',
 	zoltarQuestionData: '0xcca5c7f98c171d7c11c4353de436365e6fba391937fd3e1ec516f475a97056ee',
 }
 
 const EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	zoltar: '0xfe9d07264347c6a27ea8434345ee8eedbb07dbc9ea5e121749c83ed2810d8473',
+	zoltar: '0x8f7c0055c34478880f32efb6f3347f2dc3f25f5cc9dbf99648f6602d30ae01a1',
 }
 const EXPECTED_PUBLIC_DEPLOYMENT_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES },
@@ -120,7 +121,7 @@ export async function assertCanonicalRawTransactionFeeCompatible(client: Pick<Re
 	const { baseFeePerGas } = await client.getBlock()
 	if (baseFeePerGas === undefined) throw new Error(`${label} cannot be deployed because this network does not report a base fee.`)
 	if (baseFeePerGas > CANONICAL_DEPLOYER_RAW_GAS_PRICE) {
-		throw new Error(`${label} cannot be deployed right now: its fixed gas price of ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas is below the current base fee of ${baseFeePerGas.toString()} attoETH per gas. No ETH was sent.`)
+		throw new Error(`${label} cannot be deployed right now: its fixed gas price of ${formatCurrencyBalance(CANONICAL_DEPLOYER_RAW_GAS_PRICE, 9)} nanoETH per gas is below the current base fee of ${formatCurrencyBalance(baseFeePerGas, 9)} nanoETH per gas. No ETH was sent.`)
 	}
 }
 

@@ -11,23 +11,17 @@ import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfo
 import {
 	DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
 	MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
-	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 	ORACLE_DISPUTE_DELAY,
 	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
 	ORACLE_FEE_PERCENTAGE,
-	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
 	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
 	ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
 	ORACLE_MULTIPLIER,
 	ORACLE_PROTOCOL_FEE,
-	ORACLE_REPORT_GAS,
-	ORACLE_SETTLEMENT_GAS,
 	ORACLE_SETTLEMENT_TIME,
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-	ORACLE_TIME_TYPE,
-	ORACLE_TRACK_DISPUTES,
 } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, number, bigint, bigint, bigint, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint]
+type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, bigint, number, number, number, number, number, Address, bigint, bigint, bigint]
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
 	return encodeDeployData({
@@ -43,19 +37,13 @@ describe('Portfolio oracle configuration guards', () => {
 		getInfraContractAddresses().openOracle,
 		addressString(GENESIS_REPUTATION_TOKEN),
 		WETH_ADDRESS,
-		ORACLE_REPORT_GAS,
-		ORACLE_SETTLEMENT_GAS,
-		ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
 		DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
 		ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-		OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 		ORACLE_SETTLEMENT_TIME,
 		ORACLE_DISPUTE_DELAY,
 		ORACLE_PROTOCOL_FEE,
 		ORACLE_FEE_PERCENTAGE,
 		ORACLE_MULTIPLIER,
-		ORACLE_TIME_TYPE,
-		ORACLE_TRACK_DISPUTES,
 		zeroAddress,
 		ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
 		ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
@@ -65,160 +53,88 @@ describe('Portfolio oracle configuration guards', () => {
 	test('coordinator constructor rejects a priority fee that would exhaust OpenOracle report limits', async () => {
 		const client = fixture.owner()
 		const maximumArgs = getOracleCoordinatorConstructorArgs()
-		maximumArgs[6] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS
+		maximumArgs[3] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS
 		const maximumCoordinator = await deployContract(client, encodeOracleCoordinatorDeployData(maximumArgs))
 		assert.strictEqual(await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: maximumCoordinator, functionName: 'initialReportPriorityFeeAttoEthPerGas' }), MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS)
 
 		const invalidArgs = getOracleCoordinatorConstructorArgs()
-		invalidArgs[6] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n
+		invalidArgs[3] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n
 		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(invalidArgs)), /initial report priority fee exceeds openoracle limits/i)
 	})
 
-	test('coordinator constructor requires a timestamp clock with dispute tracking', async () => {
-		const client = fixture.owner()
-		// Price freshness is measured from the final report timestamp, so block-number games are unsupported.
-		const blockClockArgs = getOracleCoordinatorConstructorArgs()
-		blockClockArgs[14] = false
-		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(blockClockArgs)), /Oracle must track disputes on a timestamp clock/)
-		const untrackedArgs = getOracleCoordinatorConstructorArgs()
-		untrackedArgs[15] = false
-		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(untrackedArgs)), /Oracle must track disputes on a timestamp clock/)
-	})
-
-	test('coordinator constructor rejects game timing that OpenOracle refuses on every report', async () => {
-		const client = fixture.owner()
-		// OpenOracle reverts each report whose settlement time does not exceed its dispute delay.
-		const equalTimingArgs = getOracleCoordinatorConstructorArgs()
-		equalTimingArgs[9] = equalTimingArgs[10]
-		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(equalTimingArgs)), /Settlement time must exceed dispute delay/)
-		const shorterTimingArgs = getOracleCoordinatorConstructorArgs()
-		shorterTimingArgs[10] = shorterTimingArgs[9] + 1
-		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(shorterTimingArgs)), /Settlement time must exceed dispute delay/)
-	})
-
-	test('coordinator constructor rejects a dispute multiplier that OpenOracle refuses on every report', async () => {
-		const client = fixture.owner()
-		// OpenOracle reverts each report whose dispute escalation multiplier is below one hundred percent.
-		const shrinkingArgs = getOracleCoordinatorConstructorArgs()
-		shrinkingArgs[13] = 99
-		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(shrinkingArgs)), /Oracle dispute multiplier must be at least one hundred percent/)
-		const minimumArgs = getOracleCoordinatorConstructorArgs()
-		minimumArgs[13] = 100
-		const coordinator = await deployContract(client, encodeOracleCoordinatorDeployData(minimumArgs))
-		assert.strictEqual(await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: coordinator, functionName: 'multiplier' }), 100n)
-	})
-
-	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
-		const client = fixture.owner()
-		const baseArgs = getOracleCoordinatorConstructorArgs()
-		const zeroPriorityArgs = getOracleCoordinatorConstructorArgs()
-		zeroPriorityArgs[6] = 0n
-		const untrackedArgs = getOracleCoordinatorConstructorArgs()
-		untrackedArgs[15] = false
-		const zeroRequestGasArgs = getOracleCoordinatorConstructorArgs()
-		zeroRequestGasArgs[3] = 0n
-		zeroRequestGasArgs[4] = 0
-		const buildArgsWithSizingParameters = (gasUnitsForOneDispute: bigint, targetPriceErrorForDispute: bigint, openOracleSecurityMultiplierBps: bigint, protocolFee: number, feePercentage: number): OracleCoordinatorConstructorArgs => [
-			baseArgs[0],
-			baseArgs[1],
-			baseArgs[2],
-			baseArgs[3],
-			baseArgs[4],
-			gasUnitsForOneDispute,
-			baseArgs[6],
-			targetPriceErrorForDispute,
-			openOracleSecurityMultiplierBps,
-			baseArgs[9],
-			baseArgs[10],
-			protocolFee,
-			feePercentage,
-			baseArgs[13],
-			baseArgs[14],
-			baseArgs[15],
-			baseArgs[16],
-			baseArgs[17],
-			baseArgs[18],
-			baseArgs[19],
-		]
-		const buildArgsWithRiskParameters = (escalationHaltMultiplierBps: bigint, maxSettlementBaseFeeMultiplierBps: bigint, minLiquidationPriceDistanceBps: bigint): OracleCoordinatorConstructorArgs => [
-			baseArgs[0],
-			baseArgs[1],
-			baseArgs[2],
-			baseArgs[3],
-			baseArgs[4],
-			baseArgs[5],
-			baseArgs[6],
-			baseArgs[7],
-			baseArgs[8],
-			baseArgs[9],
-			baseArgs[10],
-			baseArgs[11],
-			baseArgs[12],
-			baseArgs[13],
-			baseArgs[14],
-			baseArgs[15],
-			baseArgs[16],
-			escalationHaltMultiplierBps,
-			maxSettlementBaseFeeMultiplierBps,
-			minLiquidationPriceDistanceBps,
-		]
-		const invalidRiskParameterCases: Array<{
-			args: OracleCoordinatorConstructorArgs
-			message: RegExp
-		}> = [
+	test('coordinator constructor rejects active timing and risk parameters that cannot produce safe reports', async () => {
+		const cases: readonly { change: (args: OracleCoordinatorConstructorArgs) => void; message: RegExp }[] = [
 			{
-				args: zeroPriorityArgs,
+				change: args => {
+					args[3] = 0n
+				},
 				message: /initial priority fee zero/i,
 			},
 			{
-				args: untrackedArgs,
-				message: /revert/i,
+				change: args => {
+					args[4] = 10_000_000n
+				},
+				message: /target price error must be below/i,
 			},
 			{
-				args: buildArgsWithSizingParameters(0n, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
-				message: /dispute gas units zero/i,
+				change: args => {
+					args[4] = 10_000_001n
+				},
+				message: /target price error must be below/i,
 			},
 			{
-				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, 9999n, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
-				message: /open oracle security multiplier must be at least one hundred percent/i,
+				change: args => {
+					args[5] = args[6]
+				},
+				message: /Settlement time must exceed dispute delay/,
 			},
 			{
-				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, 10000000n, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
-				message: /target price error must be below one hundred percent/i,
+				change: args => {
+					args[6] = args[5] + 1
+				},
+				message: /Settlement time must exceed dispute delay/,
 			},
 			{
-				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, 10000001n, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
-				message: /target price error must be below one hundred percent/i,
+				change: args => {
+					args[7] = 490_000
+					args[8] = 10_000
+				},
+				message: /oracle fees must be below/i,
 			},
 			{
-				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 490000, 10000),
-				message: /oracle fees must be below the target price error/i,
+				change: args => {
+					args[9] = 99
+				},
+				message: /dispute multiplier must be at least/i,
 			},
 			{
-				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, (2n ** 256n - 1n) / (10000000n + ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE) + 1n, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
-				message: /open oracle security multiplier is too large/i,
-			},
-			{
-				args: buildArgsWithRiskParameters(0n, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
+				change: args => {
+					args[11] = 0n
+				},
 				message: /escalation multiplier zero/i,
 			},
 			{
-				args: buildArgsWithRiskParameters(ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, 9999n, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
-				message: /max settlement base fee multiplier must be at least one hundred percent/i,
+				change: args => {
+					args[12] = 9999n
+				},
+				message: /max settlement base fee multiplier/i,
 			},
 			{
-				args: buildArgsWithRiskParameters(ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, 10001n),
-				message: /minimum liquidation price distance cannot exceed one hundred percent/i,
-			},
-			{
-				args: zeroRequestGasArgs,
-				message: /request gas units zero/i,
+				change: args => {
+					args[13] = 10001n
+				},
+				message: /minimum liquidation price distance/i,
 			},
 		]
-
-		for (const invalidCase of invalidRiskParameterCases) {
-			await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(invalidCase.args)), invalidCase.message)
+		for (const entry of cases) {
+			const args = getOracleCoordinatorConstructorArgs()
+			entry.change(args)
+			await assert.rejects(deployContract(fixture.owner(), encodeOracleCoordinatorDeployData(args)), entry.message)
 		}
+		const minimumArgs = getOracleCoordinatorConstructorArgs()
+		minimumArgs[9] = 100
+		const coordinator = await deployContract(fixture.owner(), encodeOracleCoordinatorDeployData(minimumArgs))
+		assert.strictEqual(await fixture.owner().readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: coordinator, functionName: 'multiplier' }), 100n)
 	})
 
 	test('shared feeds retain a positive collateral floor even with zero base fee (#595)', async () => {
@@ -227,9 +143,8 @@ describe('Portfolio oracle configuration guards', () => {
 		const worker = { abi: feedWorkerArtifact.abi, address: infrastructure.sharedPoolPriceFeedDeploymentWorker } as const
 		for (const priority of [DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS]) {
 			const args = getOracleCoordinatorConstructorArgs()
-			args[6] = priority
-			args[7] = 1_000_000n
-			args[8] = 30_000n
+			args[3] = priority
+			args[4] = 1_000_000n
 			const coordinator = await deployContract(client, encodeOracleCoordinatorDeployData(args))
 			const implementationRequest = { ...worker, functionName: 'deployImplementation', args: [coordinator, infrastructure.securityPoolFactory, fixture.portfolio] } as const
 			const { result: implementation } = await client.simulateContract(implementationRequest)
@@ -243,6 +158,8 @@ describe('Portfolio oracle configuration guards', () => {
 				assert.strictEqual((await client.getBlock()).baseFeePerGas, baseFee)
 				const minimum = await client.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEth' })
 				assert.strictEqual(minimum, await client.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumReportCollateral' }))
+				assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'timeType' }), true)
+				assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'trackDisputes' }), true)
 				assert.ok(minimum > 1n)
 				assert.ok(minimum <= (1n << 128n) - 1n)
 			}

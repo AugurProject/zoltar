@@ -1,6 +1,5 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
-import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'
 
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
@@ -53,8 +52,5 @@ export function vaultHealthBps(vaultAttoRepBacking: bigint, underwritingLimitAtt
 	if (underwritingLimitAttoEth === 0n || price === 0n) return undefined
 	const baseRequiredAttoRep = mulDivUp(underwritingLimitAttoEth, price, PRICE_PRECISION)
 	const associatedAtProtocolMinimum = mulDivUp(baseRequiredAttoRep, multiplierBps, BPS_DENOMINATOR)
-	const freeAtProtocolMinimum = mulDivUp(baseRequiredAttoRep, getLiquidationMigrationSecurityMultiplierBps(multiplierBps), BPS_DENOMINATOR)
-	const associatedHealth = associatedAtProtocolMinimum === 0n ? BPS_DENOMINATOR : ((vaultAttoRepBacking + disputeStakedAttoRep) * BPS_DENOMINATOR) / associatedAtProtocolMinimum
-	const freeHealth = freeAtProtocolMinimum === 0n ? BPS_DENOMINATOR : (vaultAttoRepBacking * BPS_DENOMINATOR) / freeAtProtocolMinimum
-	return associatedHealth < freeHealth ? associatedHealth : freeHealth
+	return associatedAtProtocolMinimum === 0n ? BPS_DENOMINATOR : ((vaultAttoRepBacking + disputeStakedAttoRep) * BPS_DENOMINATOR) / associatedAtProtocolMinimum
 }

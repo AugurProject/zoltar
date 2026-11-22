@@ -1,7 +1,5 @@
-import { formatStorageSlot } from '../testSupport/storage'
-import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { approveToken, getERC20Balance, overrideGenesisTheoreticalSupply } from '../testSupport/simulator/utils/utilities'
 import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../types/contractArtifact'
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -26,7 +24,6 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		const securityPoolAddresses = portfolio.poolFor(fixture.questionId)
 		const openInterestAmount = 1n * 10n ** 18n
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
-		const genesisSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 		const readNonDecisionThreshold = async () =>
 			await client.readContract({
 				abi: Zoltar_Zoltar.abi,
@@ -65,13 +62,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		// Change only the external genesis token's theoretical supply: token balances, canonical factory wiring,
 		// vault accounting, and the real complete-set liabilities remain untouched.
 		const trackedSupplyForOneRepThreshold = 2n * reportBond * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
-		await mockWindow.addStateOverrides({
-			[getRepTokenAddress(genesisUniverse)]: {
-				stateDiff: {
-					[genesisSupplySlot]: trackedSupplyForOneRepThreshold,
-				},
-			},
-		})
+		await overrideGenesisTheoreticalSupply(mockWindow, client, getRepTokenAddress(genesisUniverse), trackedSupplyForOneRepThreshold)
 		assert.strictEqual(
 			await client.readContract({
 				abi: Zoltar_Zoltar.abi,

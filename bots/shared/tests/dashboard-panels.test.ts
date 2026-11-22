@@ -3,7 +3,7 @@ import { Window } from 'happy-dom'
 import { repMarketConsensusPanel, renderRepMarketConsensus, renderRepMarketConsensusError } from '../src/dashboard/rep-market-consensus.ts'
 import { rpcConnectivityFields } from '../src/dashboard/rpc-connectivity.ts'
 
-const consensus = { cex: { sourceCount: 2 }, dex: { askDepthEth: '6', bidDepthEth: '5', priceRepPerEth: '21', reliable: true, sourceCount: 1 }, priceRepPerEth: '20.5', reasons: [], reliable: true }
+const consensus = { cex: { sourceCount: 2, reliable: true }, dex: { askDepthEth: '6', bidDepthEth: '5', priceRepPerEth: '21', reliable: true, sourceCount: 1 }, priceRepPerEth: '20.5', reasons: [], reliable: true }
 
 test('consensus panel renders metrics, safe observation text, empty states and retained refresh failures', () => {
 	const window = new Window()
@@ -17,6 +17,12 @@ test('consensus panel renders metrics, safe observation text, empty states and r
 		const market = { askDepthEth: '8', bidDepthEth: '7', observations: [{ askDepthEth: '8', bidDepthEth: '7', exchangeId: '<script>bad()</script>', observedAt: 0, priceRepPerEth: '20', repMarket: 'REP/ETH' }], priceRepPerEth: '20', reasons: ['stale'], reliable: false }
 		renderRepMarketConsensus(document, market, consensus)
 		expect(document.querySelector('#centralized-market-status')?.textContent).toBe('Reliable independent CEX + DEX consensus')
+		renderRepMarketConsensus(document, market, { ...consensus, cex: { ...consensus.cex, reliable: false } })
+		expect(document.querySelector('#centralized-market-status')?.textContent).toContain('DEX-only fallback')
+		expect(document.querySelector('#centralized-market-status')?.textContent).toContain('Warning')
+		renderRepMarketConsensus(document, market, { ...consensus, dex: { ...consensus.dex, reliable: false } })
+		expect(document.querySelector('#centralized-market-status')?.textContent).toContain('CEX-only fallback')
+		renderRepMarketConsensus(document, market, consensus)
 		expect(Array.from(document.querySelectorAll('dd'), value => value.textContent)).toEqual(['20', '21', '20.5', '5 ETH', '6 ETH', '7 ETH', '8 ETH', '2 CEX · 1 DEX'])
 		expect(document.querySelectorAll('dl').length).toBe(8)
 		expect(document.querySelectorAll('tbody td').length).toBe(6)

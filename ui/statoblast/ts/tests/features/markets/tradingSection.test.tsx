@@ -16,8 +16,9 @@ import type { ListedSecurityPool, TradingActionResult, TradingDetails, TradingSh
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { TradingSection as ProductionTradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
-import type { TradingSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { TradingSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { TradingFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { useContext, useEffect, useState } from 'preact/hooks'
@@ -43,17 +44,15 @@ function TradingSection(props: Parameters<typeof ProductionTradingSection>[0]) {
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
+		portfolioAddress: zeroAddress,
 		settlementCollateralAttoEth: 0n,
 		feeEligibleUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
 		hasForkActivity: false,
-		forkOutcome: 'none',
-		forkOwnSecurityPool: false,
 		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: 10n ** 18n,
 		lastOracleSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedAttoRep: 0n,
 		hasForkContinuationEscalationGame: false,
 		ordinaryEscalationGameStarted: false,
 		parent: zeroAddress,
@@ -66,12 +65,8 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		totalPoolHeldAttoRep: 0n,
 		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		mintingCapacityAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
-		collateralRepairAuctionAddress: zeroAddress,
-		collateralRepairAuctionStartedAt: 0n,
 		universeHasForked: false,
 		universeId: 1n,
-		vaultCount: 0n,
-		vaults: [],
 		...overrides,
 	}
 	return {
@@ -119,6 +114,9 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 	return {
 		collateralFunding: {
 			collateral: {
+				owner: overrides.accountState?.address ?? zeroAddress,
+				universeId: overrides.selectedPool?.universeId ?? 0n,
+				questionId: 0n,
 				address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 				token: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 				services: '0x0000000000000000000000000000000000000068',
@@ -374,7 +372,7 @@ void describe('TradingSection', () => {
 
 	test('keeps an open mint form enabled after the oracle price lapses', async () => {
 		const onCreateCompleteSet = mock(() => undefined)
-		const props = createTradingSectionProps({ onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
+		const props = createTradingSectionProps({ onCreateCompleteSet, selectedPool: createSelectedPool({ marketDetails: { ...createMarketDetails(), endTime: 2_000_000n } }), tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
 		const rendered = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={1n}>
 				<TradingSection {...props} />
@@ -412,14 +410,18 @@ void describe('TradingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
 			await act(() => render(renderSection(blockedAccount), rendered.container))
 			const fix = expectWalletFixDescribesAction(within(document.body).getByRole('dialog'), 'Mint complete sets', fixLabel)
-			await act(() => fireEvent.click(fix))
+			await act(() => {
+				fireEvent.click(fix)
+			})
 			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 		})
 
 	test('says to enter an amount while the mint dialog has none', async () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '' }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		})
 		const state = getTransactionButtonState(within(document.body).getByRole('dialog'), 'Mint complete sets')
 		expect(state.disabled).toBe(true)
 		expect(state.reason).toBe('Enter a mint amount.')
@@ -429,8 +431,10 @@ void describe('TradingSection', () => {
 		const props = createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
 		const rendered = await renderIntoDocument(<TradingSection {...props} />)
 		cleanupRenderedComponent = rendered.cleanup
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
-		await act(() => render(<TradingSection {...props} poolState={evaluateSecurityPoolState({ lifecycleState: 'ended' })} />, rendered.container))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		})
+		await act(() => render(<TradingSection {...props} poolState={evaluateSecurityPoolState({ lifecycleState: 'ended', universeHasForked: false })} />, rendered.container))
 		const state = getTransactionButtonState(within(document.body).getByRole('dialog'), 'Mint complete sets')
 		expect(state.disabled).toBe(true)
 		expect(state.reason).toBe('This action is unavailable in the current pool state.')
@@ -630,7 +634,9 @@ void describe('TradingSection', () => {
 	void test('keeps minting inputs and the submit action without a review panel', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }), tradingForm: createTradingForm({ completeSetAmount: '1' }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		})
 		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint complete sets' }))
 		expect(dialog.queryByText('Estimated complete sets received')).toBeNull()
 		expect(dialog.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
@@ -732,7 +738,9 @@ void describe('TradingSection', () => {
 	void test('keeps mint submission independent of the UI price setting', async () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		})
 		const dialog = within(document.body).getByRole('dialog', { name: 'Mint complete sets' })
 		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
 	})
@@ -760,7 +768,9 @@ void describe('TradingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' })))
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
 		await act(() => {
 			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint complete sets' }).querySelector('.field-inline-action')
 			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
@@ -795,7 +805,7 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
-	void test('keeps minting available beyond question end using the child fee horizon', async () => {
+	void test('closes minting at question end even while child fees continue accruing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={2n}>
 				<TradingSection
@@ -818,14 +828,9 @@ void describe('TradingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
 		})
 
-		const dialogElement = within(document.body).getByRole('dialog', { name: 'Mint complete sets' })
-		const dialog = within(dialogElement)
-		expect(dialog.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
-		expect(document.body.querySelector('.transaction-review')).toBeNull()
-		expect(dialog.queryByText('You pay')).toBeNull()
-		expect(dialog.queryByText('Estimated complete sets received')).toBeNull()
-		expect(dialog.queryByText('Estimated holding fee until market end')).toBeNull()
-		expect(dialog.getByRole('button', { name: 'Mint complete sets' }).hasAttribute('disabled')).toBe(false)
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').disabled).toBe(true)
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting closed when the question ended.')
+		expect(within(document.body).queryByRole('dialog')).toBeNull()
 	})
 
 	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {
@@ -1010,7 +1015,7 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ ordinaryEscalationGameStarted: true, totalPoolHeldAttoRep: 10n ** 18n }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting is paused while the outcome is disputed.')
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting is closed for this question once reporting starts.')
 	})
 
 	void test('does not call minting paused for a forked pool whose escalation game has ended', async () => {

@@ -156,10 +156,14 @@ test('reloads an independent application when its optional REP profile changes a
 	try {
 		await act(async () => await mountApp({ applicationTitle: 'OpenOracle', requireGenesisSelection: false, initialize: async () => undefined, root: () => createElement('p', {}, 'Independent application ready') }))
 		window.history.replaceState({}, '', '/?network=sepolia#/open-oracle?openOracleReportId=12')
-		await act(() => window.dispatchEvent(new Event('hashchange')))
+		await act(() => {
+			window.dispatchEvent(new Event('hashchange'))
+		})
 		expect(reload).not.toHaveBeenCalled()
 		window.history.replaceState({}, '', '/?network=sepolia&genesis=no#/open-oracle?openOracleReportId=12')
-		await act(() => window.dispatchEvent(new Event('hashchange')))
+		await act(() => {
+			window.dispatchEvent(new Event('hashchange'))
+		})
 		expect(reload).toHaveBeenCalledTimes(1)
 	} finally {
 		reload.mockRestore()

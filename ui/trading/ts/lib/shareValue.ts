@@ -52,23 +52,23 @@ function formatShareQuantity(amount: bigint, maximumFractionDigits: number, roun
 /** Share outcome keys; display text comes from `outcomeLabel`. */
 export const shareOutcome = { yes: 'YES', no: 'NO', invalid: 'INVALID' } as const
 
-export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
+export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
 	return `${formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding, collateralAsset(market).decimals)} ${outcomeLabel(outcome)}`
 }
 
 /** LP quantities use a fixed scale too; their underlying reserve claims are displayed separately. */
-export function formatLpQuantity(amountLp: bigint, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
+export function formatLpQuantity(amountLp: bigint, maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest') {
 	return `${formatShareQuantity(amountLp, maximumFractionDigits, rounding)} LP`
 }
 
-export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
+export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
 	const formatted = formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding, collateralAsset(market).decimals)
-	return `${formatted} complete ${formatted === '1' ? 'set' : 'sets'}`
+	return `${formatted} complete ${amountAttoShares === 10n ** BigInt(collateralAsset(market).decimals) ? 'set' : 'sets'}`
 }
 
 /** Collateral value of a share amount as an ETH figure; limits round down so the displayed amount is always accepted. */
 export function formatCollateralEth(amountAttoShares: bigint, rate: ShareValueRate, rounding: ShareValueRounding = 'nearest') {
-	const eth = `${formatCollateralValue(amountAttoShares, rate, 4, rounding)} ${collateralAsset(rate).symbol}`
+	const eth = `${formatCollateralValue(amountAttoShares, rate, rounding === 'down' ? 4 : 2, rounding)} ${collateralAsset(rate).symbol}`
 	const rep = attoSharesToRecoveryAttoRep(amountAttoShares, rate)
 	return rep === 0n ? eth : `${eth} + ${formatTrimmedUnits(rep, 18, 4)} REP`
 }
@@ -103,11 +103,11 @@ export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INV
 }
 
 /** Display current backing as a conditional payout, never as an executable sale quote. `noteRedemption` is as for `formatOutcomePayout`. */
-export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, digits = 4, rounding: ShareValueRounding = 'nearest', { noteRedemption = true }: { noteRedemption?: boolean } = {}) {
+export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, digits = 2, rounding: ShareValueRounding = 'nearest', { noteRedemption = true }: { noteRedemption?: boolean } = {}) {
 	return `${formatOutcomeQuantity(amount, outcome, digits, rounding, market)} (${formatOutcomePayout(amount, outcome, market, rounding, { noteRedemption })})`
 }
 
-export function formatCompleteSetWithValue(amount: bigint, market: ShareValueRate & Partial<Pick<LiveMarket, 'loadError'>>, digits = 4, rounding: ShareValueRounding = 'nearest') {
+export function formatCompleteSetWithValue(amount: bigint, market: ShareValueRate & Partial<Pick<LiveMarket, 'loadError'>>, digits = 2, rounding: ShareValueRounding = 'nearest') {
 	return `${formatCompleteSetQuantity(amount, digits, rounding, market)} (${market.loadError === undefined ? formatCollateralEth(amount, market, rounding) : payoutCopy.unavailable})`
 }
 
@@ -127,6 +127,6 @@ export function formatLpPayout(amount: bigint, market: LiveMarket, rounding: Sha
 	return `${payoutCopy.formatConditionalPayout(formatCollateralEth(yes, market, rounding), 'YES')}; ${payoutCopy.formatConditionalPayout(formatCollateralEth(no, market, rounding), 'NO')}`
 }
 
-export function formatLpWithValue(amount: bigint, market: LiveMarket, digits = 4, rounding: ShareValueRounding = 'nearest') {
+export function formatLpWithValue(amount: bigint, market: LiveMarket, digits = 2, rounding: ShareValueRounding = 'nearest') {
 	return `${formatLpQuantity(amount, digits, rounding)} (${formatLpPayout(amount, market, rounding)})`
 }

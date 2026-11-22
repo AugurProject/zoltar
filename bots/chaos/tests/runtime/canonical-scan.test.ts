@@ -26,7 +26,7 @@ import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } fr
 
 test('execution waits for the retained range and discovery, without requiring the unavailable prefix', () => {
 	const index: ChaosProtocolIndex = {
-		schemaVersion: 4,
+		schemaVersion: 5,
 		chainId: 1,
 		openOracle: wallet,
 		zoltar: wallet,
@@ -40,7 +40,6 @@ test('execution waits for the retained range and discovery, without requiring th
 		auctionRefunds: {},
 		escalationDeposits: [],
 		migrationRepSplits: [],
-		childRepSplits: [],
 	}
 	expect(availableHistoryExecutionReady(index, 11185999n, true, false)).toBeTrue()
 	expect(availableHistoryExecutionReady(index, 11186000n, true, false)).toBeFalse()
@@ -53,7 +52,7 @@ test('execution waits for the retained range and discovery, without requiring th
 
 test('a keyless scan at the anchor has complete history without being executable', () => {
 	const index: ChaosProtocolIndex = {
-		schemaVersion: 4,
+		schemaVersion: 5,
 		chainId: 1,
 		openOracle: wallet,
 		zoltar: wallet,
@@ -66,7 +65,6 @@ test('a keyless scan at the anchor has complete history without being executable
 		auctionRefunds: {},
 		escalationDeposits: [],
 		migrationRepSplits: [],
-		childRepSplits: [],
 	}
 	const keyless = { anchorBlockNumber: 132n, carryProofsComplete: false, discoveryComplete: true, index, wallet: undefined }
 	expect(canonicalScanReadiness(keyless)).toEqual({ executionReady: false, historyComplete: true })
@@ -98,7 +96,6 @@ function settings() {
 			maxPools: 100,
 			maxQuestions: 100,
 			maxUniverses: 100,
-			maxVaultsPerPool: 100,
 		},
 		network: { chainId: 11155111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
 		networkConfigured: false,
@@ -146,7 +143,19 @@ function snapshot(): EcosystemSnapshot {
 		reports: [],
 		schemaVersion: 1,
 		universes: [
-			{ forkQuestionId: '0', forkThresholdAttoRep: 1n.toString(), forkTime: '0', id: '0', initialEscalationDepositAttoRep: (10n ** 18n).toString(), knownChildOutcomes: [], migrationBalance: '0', migrationRepSplitProgressByOutcome: {}, nonDecisionThresholdAttoRep: (2n * 10n ** 18n).toString(), repToken: rep },
+			{
+				earliestForkTime: '0',
+				forkQuestionId: '0',
+				forkThresholdAttoRep: 1n.toString(),
+				forkTime: '0',
+				id: '0',
+				initialEscalationDepositAttoRep: (10n ** 18n).toString(),
+				knownChildOutcomes: [],
+				migrationBalance: '0',
+				migrationRepSplitProgressByOutcome: {},
+				nonDecisionThresholdAttoRep: (2n * 10n ** 18n).toString(),
+				repToken: rep,
+			},
 		],
 		wallet: {
 			address: wallet,
@@ -195,7 +204,7 @@ describe('canonical scan policy', () => {
 				vaultsByPool: {},
 			}
 			await saveImmutableTopologyCache(statePath, identity, cache)
-			const lowered = { maxPools: 1, maxQuestions: 1, maxUniverses: 1, maxVaultsPerPool: 1 }
+			const lowered = { maxPools: 1, maxQuestions: 1, maxUniverses: 1 }
 			expect(await loadImmutableTopologyCacheWithinLimits({ identity, limits: lowered, statePath })).toBeUndefined()
 			expect(await loadImmutableTopologyCacheWithinLimits({ identity, limits: lowered, previous: cache, statePath })).toBeUndefined()
 
@@ -218,13 +227,12 @@ describe('canonical scan policy', () => {
 			auctionBids: { [auction.toLowerCase()]: [{ bidId: '2', vault: wallet, lots: '4', minimumAttoRepPerLot: 1n.toString(), targetHealthBps: '10000', settled: false }] },
 			auctionRefunds: {},
 			chainId: 11155111,
-			childRepSplits: [],
 			cursor: { blockHash: zeroHash, blockNumber: '10' },
 			escalationDeposits: [],
 			migrationRepSplits: [],
 			openOracle: oracle,
 			reports: [],
-			schemaVersion: 4,
+			schemaVersion: 5,
 			securityPoolForker: wallet,
 			startBlock: '0',
 			wallet,
@@ -252,13 +260,12 @@ describe('canonical scan policy', () => {
 			auctionBids: {},
 			auctionRefunds: { [auction.toLowerCase()]: { generation, pendingAttoEth: 8n.toString() } },
 			chainId: partial.chainId,
-			childRepSplits: [],
 			cursor: { blockHash: partial.anchor.blockHash, blockNumber: partial.anchor.blockNumber },
 			escalationDeposits: [],
 			migrationRepSplits: [],
 			openOracle: partial.deployments.openOracle,
 			reports: [],
-			schemaVersion: 4,
+			schemaVersion: 5,
 			securityPoolForker: partial.deployments.securityPoolForker,
 			startBlock: '0',
 			wallet: partial.wallet.address,
@@ -297,10 +304,6 @@ describe('canonical scan policy', () => {
 			auctionBids: {},
 			auctionRefunds: {},
 			chainId: base.chainId,
-			childRepSplits: [
-				{ childPoolRepSplitAttoRep: 30n.toString(), outcomeIndex: '1', pool: pool.address },
-				{ childPoolRepSplitAttoRep: 40n.toString(), outcomeIndex: '2', pool: pool.address },
-			],
 			cursor: { blockHash: base.anchor.blockHash, blockNumber: base.anchor.blockNumber },
 			escalationDeposits: [],
 			migrationRepSplits: [
@@ -309,7 +312,7 @@ describe('canonical scan policy', () => {
 			],
 			openOracle: base.deployments.openOracle,
 			reports: [],
-			schemaVersion: 4,
+			schemaVersion: 5,
 			securityPoolForker: base.deployments.securityPoolForker,
 			startBlock: '0',
 			wallet: base.wallet.address,
@@ -509,7 +512,6 @@ describe('canonical scan policy', () => {
 				maxPools: 100,
 				maxQuestions: 100,
 				maxUniverses: 100,
-				maxVaultsPerPool: 100,
 				maximumAggregateItems: 10_000,
 			},
 			maximumBlockIntervalSeconds: 60,

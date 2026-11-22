@@ -4,7 +4,7 @@ import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { useEffect } from 'preact/hooks'
-import { createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, custom, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { TransactionActivityMenu } from '../../app/components/TransactionActivityMenu.js'
 import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { serializeTransactionActivity } from '../../transactions/transactionActivity.js'
@@ -29,8 +29,8 @@ const failedHash: Hash = '0x2222000000000000000000000000000000000000000000000000
 
 const originalTransaction = { from: account, gas: 21_000n, hash: pendingHash, input: '0x', nonce: 7n, to: account, value: 0n } as const
 
-function includedReceipt(transactionHash: Hash) {
-	return { blockHash: transactionHash, blockNumber: 5n, cumulativeGasUsed: 21_000n, effectiveGasPrice: 1n, from: account, gasUsed: 21_000n, logs: [], status: 'success' as const, to: account, transactionHash, transactionIndex: 0, type: 'eip1559' as const }
+function includedReceipt(transactionHash: Hash): TransactionReceipt {
+	return { blockHash: transactionHash, blockNumber: 5n, cumulativeGasUsed: 21_000n, effectiveGasPrice: 1n, from: account, gasUsed: 21_000n, logs: [], status: 'success' as const, to: account, transactionHash, transactionIndex: 0n, type: 'eip1559' as const }
 }
 
 /** Stores one pending Mainnet transaction titled `title` for the connected account, then clears the in-memory list as a fresh page load would; returns its storage key. */
@@ -69,7 +69,9 @@ test('lists recent transactions with their status and a pending count', async ()
 	const trigger = queries.getByRole('button', { name: 'Activity, 1 pending' })
 	expect(trigger.getAttribute('aria-expanded')).toBe('false')
 	expect(document.body.textContent).toContain('1 transaction pending')
-	await act(() => fireEvent.click(trigger))
+	await act(() => {
+		fireEvent.click(trigger)
+	})
 	const panel = queries.getByRole('dialog', { name: 'Recent transactions' })
 	const items = panel.querySelectorAll('li')
 	expect(items).toHaveLength(2)
@@ -81,7 +83,9 @@ test('lists recent transactions with their status and a pending count', async ()
 			.getByRole('link', { name: `View transaction ${pendingHash} on explorer (opens in a new tab)` })
 			.getAttribute('href'),
 	).toContain(pendingHash)
-	await act(() => fireEvent.keyDown(document, { key: 'Escape' }))
+	await act(() => {
+		fireEvent.keyDown(document, { key: 'Escape' })
+	})
 	expect(queries.queryByRole('dialog')).toBeNull()
 	expect(document.activeElement).toBe(trigger)
 	await rendered.cleanup()
@@ -94,20 +98,30 @@ test('lets the user stop tracking a pending transaction after stating that it ca
 	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
 	const queries = within(document.body)
 	try {
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity, 1 pending' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Activity, 1 pending' }))
+		})
 		// The first click only asks: the transaction can still confirm, so nothing is released yet.
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Stop tracking Depositing REP' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Stop tracking Depositing REP' }))
+		})
 		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
 		const confirmation = queries.getByRole('group', { name: 'Stop tracking Depositing REP' })
 		expect(confirmation.textContent).toContain('This transaction can still confirm. Stop tracking lets you send the action again.')
 		const confirm = within(confirmation).getByRole('button', { name: 'Stop tracking' })
 		expect(document.activeElement).toBe(confirm)
-		await act(() => fireEvent.click(within(confirmation).getByRole('button', { name: 'Keep tracking' })))
+		await act(() => {
+			fireEvent.click(within(confirmation).getByRole('button', { name: 'Keep tracking' }))
+		})
 		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
 		expect(document.activeElement).toBe(queries.getByRole('button', { name: 'Stop tracking Depositing REP' }))
 
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Stop tracking Depositing REP' })))
-		await act(() => fireEvent.click(within(queries.getByRole('group', { name: 'Stop tracking Depositing REP' })).getByRole('button', { name: 'Stop tracking' })))
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Stop tracking Depositing REP' }))
+		})
+		await act(() => {
+			fireEvent.click(within(queries.getByRole('group', { name: 'Stop tracking Depositing REP' })).getByRole('button', { name: 'Stop tracking' }))
+		})
 		expect(transactionActivity.value.entries[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
 		// The same hash is released everywhere else that still follows it: the status tray, its action, and receipt waits.
 		expect(stopped).toEqual([pendingHash])
@@ -128,7 +142,9 @@ test('closes the list when keyboard focus leaves it', async () => {
 	document.body.appendChild(outside)
 	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
 	const queries = within(document.body)
-	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity' })))
+	await act(() => {
+		fireEvent.click(queries.getByRole('button', { name: 'Activity' }))
+	})
 	expect(queries.getByRole('dialog', { name: 'Recent transactions' })).not.toBeNull()
 	await act(() => outside.focus())
 	expect(queries.queryByRole('dialog', { name: 'Recent transactions' })).toBeNull()
@@ -175,7 +191,9 @@ test('shows an empty list when this account has no transactions', async () => {
 	transactionActivity.value = { chainId: 1, entries: [], ownerKey: `injected:1:${account}`, storageKey: undefined }
 	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
 	const queries = within(document.body)
-	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity' })))
+	await act(() => {
+		fireEvent.click(queries.getByRole('button', { name: 'Activity' }))
+	})
 	expect(queries.getByRole('dialog', { name: 'Recent transactions' }).textContent).toContain('No transactions from this account yet.')
 	await rendered.cleanup()
 })
@@ -184,7 +202,9 @@ test('asks for a wallet instead of describing an account when none is connected'
 	transactionActivity.value = { chainId: 1, entries: [], ownerKey: 'injected:1:', storageKey: undefined }
 	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
 	const queries = within(document.body)
-	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity' })))
+	await act(() => {
+		fireEvent.click(queries.getByRole('button', { name: 'Activity' }))
+	})
 	const panel = queries.getByRole('dialog', { name: 'Recent transactions' })
 	expect(panel.textContent).toContain('Connect a wallet to see its recent transactions.')
 	expect(panel.textContent).not.toContain('from this account')
@@ -229,7 +249,9 @@ test('resumes receipt watching for a pending transaction restored after a reload
 	const trigger = within(document.body).getByRole('button', { name: 'Activity, 1 new result' })
 	expect(document.body.textContent).toContain('Trade · Will this resolve?: Confirmed')
 	expect(trigger.querySelector('.transaction-activity-result.ok')).not.toBeNull()
-	await act(() => fireEvent.click(trigger))
+	await act(() => {
+		fireEvent.click(trigger)
+	})
 	expect(within(document.body).getByRole('button', { name: 'Activity' }).querySelector('.transaction-activity-result')).toBeNull()
 	await rendered.cleanup()
 })

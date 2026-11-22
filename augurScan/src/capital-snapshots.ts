@@ -277,8 +277,8 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 			liquidationStartedAt: liquidationStartedAt.toString(),
 			belowLiquidationPrice,
 			// What a take-over needs before the ledger cures: a fresh price, an open universe (`_requireOpen`) and an adverse observation.
-			// The ledger then cures the position first and still rejects the take-over when spare commitment covers the deficit; that
-			// outcome depends on the ledger's private minimum commitment and cannot be read. A cohort is taken over per bid, never as a whole.
+			// The ledger first attempts an unpaid cure; if it restores health, the call succeeds with zero transfer.
+			// Cure eligibility also uses the public minimum commitment. A cohort is taken over per bid, never as a whole.
 			takeoverPreconditionsMet: cohortId === 0n && belowLiquidationPrice && liquidationStartedAt !== 0n && state.priceValid && !state.frozen && !state.importing && !state.universeForked,
 		}
 	}

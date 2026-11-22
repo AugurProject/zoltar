@@ -73,7 +73,6 @@ export interface ImmutableTopologyResidentLimits {
 	maxPools: number
 	maxQuestions: number
 	maxUniverses: number
-	maxVaultsPerPool: number
 }
 
 export function emptyCountedRegistryCursor(): CountedRegistryCursor {
@@ -275,7 +274,6 @@ export function assertTopologyResidentBounds(cache: CanonicalImmutableTopologyCa
 		requireResidentLimit(limits.maxPools, 'Immutable topology maxPools')
 		requireResidentLimit(limits.maxQuestions, 'Immutable topology maxQuestions')
 		requireResidentLimit(limits.maxUniverses, 'Immutable topology maxUniverses')
-		requireResidentLimit(limits.maxVaultsPerPool, 'Immutable topology maxVaultsPerPool')
 		if (cache.poolDeployments.length > limits.maxPools) throw configuredResidentLimitError('Immutable topology cache exceeds the configured pool resident limit')
 		if (cache.questions.length > limits.maxQuestions) throw configuredResidentLimitError('Immutable topology cache exceeds the configured question resident limit')
 		if (Object.keys(cache.pairsByPool).length > limits.maxPools) throw configuredResidentLimitError('Immutable topology cache contains more pairs than the configured pool limit')
@@ -286,9 +284,6 @@ export function assertTopologyResidentBounds(cache: CanonicalImmutableTopologyCa
 			for (const childId of children.childUniverseIds) universeIds.add(childId)
 		}
 		if (universeIds.size > limits.maxUniverses) throw configuredResidentLimitError('Immutable topology cache exceeds the configured universe resident limit')
-		for (const vaults of Object.values(cache.vaultsByPool)) {
-			if (vaults.length > limits.maxVaultsPerPool) throw configuredResidentLimitError('Immutable topology cache exceeds the configured per-pool vault resident limit')
-		}
 	}
 	const { poolDeployments, questions, vaultsByPool } = cache.discoveryCursors
 	if (poolDeployments.retentionMode === 'resident' ? BigInt(cache.poolDeployments.length) !== BigInt(poolDeployments.nextIndex) : cache.poolDeployments.length !== 0) {

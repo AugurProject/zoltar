@@ -217,8 +217,8 @@ function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulat
 	if (!isNonNegativeBigInt(state['blockCountSinceReset'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid block count')
 	if (!isNonNegativeBigInt(state['currentTimestamp'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid timestamp')
 	if (!isNonNegativeBigInt(state['transactionCountSinceReset'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid transaction count')
-	if (!isNonNegativeBigInt(state['repPerEthPrice']) || state['repPerEthPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid REP/ETH price')
-	if (!isNonNegativeBigInt(state['repPerUsdcPrice']) || state['repPerUsdcPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid REP/USDC price')
+	if (!isNonNegativeBigInt(state['repPerEthPrice']) || state['repPerEthPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid REP per ETH price')
+	if (!isNonNegativeBigInt(state['repPerUsdcPrice']) || state['repPerUsdcPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid USDC per REP price')
 	if (!isPlainRecord(state['snapshot'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid TEVM snapshot')
 	if (state['blocks'] !== undefined && (!Array.isArray(state['blocks']) || !state['blocks'].every(isSerializedSimulationBlock))) throw new SavedSimulationStateError('Saved simulation state has invalid block history')
 }

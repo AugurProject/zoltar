@@ -73,7 +73,7 @@ export async function demoCatalogRoute(env: DemoEnvironment, path: string): Prom
 				chain_id: pool.chain_id,
 				pool_address: pool.pool_address,
 				event_name: 'CurrentDemoState',
-				state: { systemState: refreshedTail ? '1' : '2', awaitingForkContinuation: false, totalRepBackingUnits: String((refreshedTail ? 84n : 42n) * 10n ** 18n), shareTokenSupplyAttoShares: String(10n * 10n ** 18n) },
+				state: { systemState: refreshedTail ? '1' : '2', awaitingForkContinuation: false, settlementCollateralAttoEth: String((refreshedTail ? 84n : 42n) * 10n ** 18n), shareTokenSupplyAttoShares: String(10n * 10n ** 18n) },
 				block_number: '100',
 				log_index: 0,
 			})),
@@ -111,11 +111,14 @@ export async function demoCatalogRoute(env: DemoEnvironment, path: string): Prom
 			truncated: { pools: false, questions: offset + limit < matching.length, universes: false },
 		}
 	}
+	const query = request.searchParams.get('q')?.trim().toLowerCase()
+	const matches = (...values: string[]) => query === undefined || query === '' || values.some(value => value.toLowerCase().includes(query))
+
 	return {
 		catalogVersion: demoCatalog.catalogVersion,
-		pools: demoCatalog.pools.filter(item => !chainId || item.chain_id === chainId),
-		questions: demoCatalog.questions.filter(item => !chainId || item.chain_id === chainId),
-		universes: demoCatalog.universes.filter(item => !chainId || item.chain_id === chainId),
+		pools: demoCatalog.pools.filter(item => (!chainId || item.chain_id === chainId) && matches(item.pool_address, item.question_title)),
+		questions: demoCatalog.questions.filter(item => (!chainId || item.chain_id === chainId) && matches(item.question_id, item.title)),
+		universes: demoCatalog.universes.filter(item => (!chainId || item.chain_id === chainId) && matches(item.universe_id)),
 		totals: {
 			pools: demoCatalog.pools.filter(item => !chainId || item.chain_id === chainId).length,
 			questions: demoCatalog.questions.filter(item => !chainId || item.chain_id === chainId).length,

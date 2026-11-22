@@ -1,7 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_PROTOCOL_FEE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_PROTOCOL_FEE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { deployContract } from '../testSupport/deployContract'
 import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
@@ -163,10 +163,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		const finalReportBaseFeeAttoEthPerGas = 100n * 10n ** 9n
 		const proposedRepPerEthPrice = 10n ** 18n
 		const requestEthCost = 10n ** 18n
-		const minimumWethReport = calculateOracleMinimumWethReportAttoEth({
-			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
-		})
+		const minimumWethReport = await configuredMinimum()
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openOracle = getInfraContractAddresses().openOracle
 
@@ -221,10 +218,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		const finalDisputeBaseFeeAttoEthPerGas = 100n * 10n ** 9n
 		const proposedRepPerEthPrice = 10n ** 18n
 		const requestEthCost = 10n ** 18n
-		const initialWethReport = calculateOracleMinimumWethReportAttoEth({
-			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-			baseFeeAttoEthPerGas,
-		})
+		const initialWethReport = await configuredMinimum()
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openOracle = getInfraContractAddresses().openOracle
 
@@ -385,36 +379,13 @@ describe('Shared portfolio oracle security regressions', () => {
 	})
 
 	test('coordinator uses the configured collateral floor independently of the current base fee', async () => {
-		const sizingConfigurationAbi = [
-			{
-				inputs: [],
-				name: 'targetPriceErrorForDispute',
-				outputs: [{ type: 'uint256' }],
-				stateMutability: 'view',
-				type: 'function',
-			},
-			{
-				inputs: [],
-				name: 'openOracleSecurityMultiplierBps',
-				outputs: [{ type: 'uint256' }],
-				stateMutability: 'view',
-				type: 'function',
-			},
-		] as const
 		const targetPriceErrorForDispute = await client.readContract({
-			abi: sizingConfigurationAbi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'targetPriceErrorForDispute',
 			address: priceOracle,
 			args: [],
 		})
-		const openOracleSecurityMultiplierBps = await client.readContract({
-			abi: sizingConfigurationAbi,
-			functionName: 'openOracleSecurityMultiplierBps',
-			address: priceOracle,
-			args: [],
-		})
 		assert.strictEqual(targetPriceErrorForDispute, 500000n, 'the initial target price error should be five percent')
-		assert.strictEqual(openOracleSecurityMultiplierBps, 100000n, 'the initial Open Oracle Security multiplier should be ten times gas cost')
 
 		const minimumToken1ReportAttoEth = await client.readContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -446,7 +417,7 @@ describe('Shared portfolio oracle security regressions', () => {
 
 	test('caller can voluntarily fund initial WETH above the coordinator minimum', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialAttoWeth = calculateOracleMinimumWethReportAttoEth() * 2n
+		const requestedInitialAttoWeth = (await configuredMinimum()) * 2n
 		const requestPriceWithMinimumAbi = [
 			{
 				inputs: [
@@ -485,7 +456,7 @@ describe('Shared portfolio oracle security regressions', () => {
 
 	test('coordinator settlement returns the undisputed report liquidity to the sponsor wallet', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialAttoWeth = calculateOracleMinimumWethReportAttoEth() * 2n
+		const requestedInitialAttoWeth = (await configuredMinimum()) * 2n
 		await wrapWeth(client, requestedInitialAttoWeth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
@@ -509,10 +480,7 @@ describe('Shared portfolio oracle security regressions', () => {
 	test('request-block WETH sizing preserves the submitted REP per ETH price after basefee moves', async () => {
 		const requestBaseFeeAttoEthPerGas = 45n * 10n ** 9n
 		const proposedRepPerEthPrice = 1000n * 10n ** 18n
-		const maximumMinimumWethReport = calculateOracleMinimumWethReportAttoEth({
-			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
-		})
+		const maximumMinimumWethReport = await configuredMinimum()
 		await wrapWeth(client, maximumMinimumWethReport)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
@@ -627,7 +595,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(coordinatorRepSurplus, donatedRep, 'the coordinator should hold the unsolicited REP outside OpenOracle')
 
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialAttoWeth = calculateOracleMinimumWethReportAttoEth() * 2n
+		const requestedInitialAttoWeth = (await configuredMinimum()) * 2n
 		await wrapWeth(client, requestedInitialAttoWeth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
@@ -766,10 +734,7 @@ describe('Shared portfolio oracle security regressions', () => {
 	test('#1366 oracle settlement accepts the exact basefee cap and defers above it without extending observation freshness', async () => {
 		const requestBaseFeeAttoEthPerGas = 1n * 10n ** 9n
 		const expectedSettlementBaseFeeCap = ((requestBaseFeeAttoEthPerGas + DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) * ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) / 10000n
-		const minimumWethReport = calculateOracleMinimumWethReportAttoEth({
-			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
-		})
+		const minimumWethReport = await configuredMinimum()
 		const requestEthCost = 10n ** 18n
 		const proposedRepPerEthPrice = 10n ** 18n
 

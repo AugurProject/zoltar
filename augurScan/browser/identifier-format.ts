@@ -7,7 +7,10 @@ export const short = (value: string | readonly unknown[] | null | undefined, fro
 
 export const shortIdentifier = (value: string, front = 8, back = 6) => short(String(value ?? ''), front, back)
 
-export function questionIdHex(value: string | null | undefined) {
+export function protocolIdHex(value: string | null | undefined) {
 	if (value === undefined || value === null || !/^(?:0x[0-9a-f]+|[0-9]+)$/i.test(value)) return '—'
 	return `0x${BigInt(value).toString(16)}`
 }
+
+/** Universe IDs follow the protocol UI's 8-leading/4-trailing hex form. */
+export const shortUniverseId = (value: string) => short(protocolIdHex(value), 8, 4)

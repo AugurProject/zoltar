@@ -63,7 +63,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		const coordinatorDecision = {
 			event_name: 'PriceReportRejected',
 			summary: 'Replacement round was required',
-			arguments: { reportId: identity[1], reason: 'Report was disputed' },
+			arguments: { reportId: identity[1], reason: 'Report uneconomic' },
 			emitter_address: '0x7777777777777777777777777777777777777777',
 			block_number: operations.asOf.blockNumber,
 		}

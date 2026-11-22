@@ -234,15 +234,15 @@
 							</td>
 							<td>Portfolio identity and question admission</td>
 							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Contract guard</td>
 						</tr>
 						<tr>
 							<td>
 								<a href="#pool-accounting"><code>POOL-ACCOUNTING</code></a>
 							</td>
 							<td>Separate capital, settlement and reporter custody</td>
-							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Conservation</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
@@ -250,31 +250,31 @@
 							</td>
 							<td>Owner commitments and loss isolation</td>
 							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
 								<a href="#capital-exit"><code>CAPITAL-EXIT</code></a>
 							</td>
 							<td>Retirement and withdrawal accounting</td>
-							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Conservation</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
 								<a href="#share-settlement"><code>SHARE-SETTLEMENT</code></a>
 							</td>
 							<td>Question shares and backing floor</td>
-							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Conservation</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
 								<a href="#escalation"><code>ESCALATION</code></a>
 							</td>
 							<td>Reporter liabilities and historical proofs</td>
-							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Conservation</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
@@ -282,23 +282,23 @@
 							</td>
 							<td>Shared fork choices and lazy questions</td>
 							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
 								<a href="#auctions"><code>AUCTIONS</code></a>
 							</td>
 							<td>Uniform branch auction and automatic owners</td>
-							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Conservation</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
 								<a href="#auction-refunds"><code>AUCTION-REFUNDS</code></a>
 							</td>
 							<td>Bid and refund ownership</td>
-							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Conservation</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
@@ -306,15 +306,15 @@
 							</td>
 							<td>Shared price acceptance and exposure</td>
 							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
 								<a href="#lifecycle"><code>LIFECYCLE</code></a>
 							</td>
 							<td>Bounded work and explicit recovery</td>
-							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Liveness</td>
+							<td>Reviewed preservation</td>
 						</tr>
 						<tr>
 							<td>
@@ -322,7 +322,7 @@
 							</td>
 							<td>Authority before external effects</td>
 							<td>Safety</td>
-							<td>Contract guard and regression tests</td>
+							<td>Reviewed preservation</td>
 						</tr>
 					</tbody>
 				</table>
@@ -619,7 +619,7 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Contract guard</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
@@ -628,6 +628,7 @@
 										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolio.sol"><code>SecurityPoolPortfolio.sol</code></a
 										>,
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditPortfolioAuthenticity.test.ts"><code>auditPortfolioAuthenticity.test.ts</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolPortfolio.test.ts"><code>securityPoolPortfolio.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -641,16 +642,17 @@
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
-									<dd>Safety</dd>
+									<dd>Conservation</dd>
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioSettlement.sol"><code>SecurityPoolPortfolioSettlement.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolPortfolioSettlement.test.ts"><code>securityPoolPortfolioSettlement.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -668,12 +670,13 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol"><code>SecurityPoolCapitalLedger.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalTakeoverBounds.test.ts"><code>securityPoolCapitalTakeoverBounds.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -687,16 +690,17 @@
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
-									<dd>Safety</dd>
+									<dd>Conservation</dd>
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol"><code>SecurityPoolCapitalLifecycleDelegate.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalLifecycle.test.ts"><code>securityPoolCapitalLifecycle.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -710,16 +714,17 @@
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
-									<dd>Safety</dd>
+									<dd>Conservation</dd>
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementBook.sol"><code>SecurityPoolSettlementBook.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -733,16 +738,17 @@
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
-									<dd>Safety</dd>
+									<dd>Conservation</dd>
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/forkMigrationClaims.test.ts"><code>forkMigrationClaims.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -760,12 +766,13 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol"><code>SecurityPoolPortfolioForkCoordinator.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolPortfolioForkCoordinator.test.ts"><code>securityPoolPortfolioForkCoordinator.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -779,16 +786,17 @@
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
-									<dd>Safety</dd>
+									<dd>Conservation</dd>
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUniformPriceAuction.sol"><code>SecurityPoolUniformPriceAuction.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalAuction.test.ts"><code>securityPoolCapitalAuction.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -802,16 +810,17 @@
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
-									<dd>Safety</dd>
+									<dd>Conservation</dd>
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUniformPriceAuction.sol"><code>SecurityPoolUniformPriceAuction.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionSafetyBounds.test.ts"><code>securityPoolAuctionSafetyBounds.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -829,12 +838,13 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SharedPoolPriceFeed.sol"><code>SharedPoolPriceFeed.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolPortfolioSharedFeed.test.ts"><code>securityPoolPortfolioSharedFeed.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -848,16 +858,17 @@
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
-									<dd>Safety</dd>
+									<dd>Liveness</dd>
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameClaimDelegate.sol"><code>EscalationGameClaimDelegate.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolPortfolioAuctionGas.test.ts"><code>securityPoolPortfolioAuctionGas.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -875,12 +886,13 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guard and regression tests</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolio.sol"><code>SecurityPoolPortfolio.sol</code></a>
+										and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolPortfolioDelivery.test.ts"><code>securityPoolPortfolioDelivery.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>

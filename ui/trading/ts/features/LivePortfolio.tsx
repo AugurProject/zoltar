@@ -16,8 +16,9 @@ import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSu
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { TradingSecurityPoolLink } from '../components/TradingSecurityPoolLink.js'
-import { OUTCOME_BALANCE_KEYS, type LiveBalances, type LiveMarket } from '../protocol/live.js'
-import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
+import { marketAcceptsNewRisk, OUTCOME_BALANCE_KEYS, type LiveBalances, type LiveMarket } from '../protocol/live.js'
+import { maximumInsuredSellEstimate } from './live/tradeTicketModel.js'
+import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings.js'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 import { liveCopy } from '../copy/live.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
@@ -64,13 +65,14 @@ function PortfolioValues({ market, balances, valuation }: { market: LiveMarket; 
 	)
 }
 
-function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
+function PortfolioPositionDetails({ market, balances, settings, nowSeconds }: { market: LiveMarket; balances: LiveBalances; settings: TradeSettings; nowSeconds: bigint }) {
 	const { yes: yesClaim, no: noClaim } = lpReserveClaims(market, balances.lp)
 	let coveredSets = balances.invalid
 	if (yesClaim < coveredSets) coveredSets = yesClaim
 	if (noClaim < coveredSets) coveredSets = noClaim
-	const maximumYesExit = maximumInsuredExit({ longOutcome: 'YES', longBalance: balances.yes, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
-	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: balances.no, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
+	const canExit = market.loadError === undefined && market.pair !== undefined && market.lpTotalSupply > 0n && marketAcceptsNewRisk(market, nowSeconds)
+	const maximumYesExit = canExit ? (maximumInsuredSellEstimate(market, 'YES', balances, settings.slippageBps)?.quote.completeSetShares ?? 0n) : 0n
+	const maximumNoExit = canExit ? (maximumInsuredSellEstimate(market, 'NO', balances, settings.slippageBps)?.quote.completeSetShares ?? 0n) : 0n
 	return (
 		<ReadOnlyDetailAccordion title={portfolioCopy.positionDetails}>
 			<TradingSecurityPoolLink value={market.pool} />
@@ -83,12 +85,14 @@ function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; ba
 					</DataGrid>
 				</WorkflowSubsection>
 			)}
-			<WorkflowSubsection title={portfolioCopy.insuredExits}>
-				<DataGrid dense>
-					<MetricField label={portfolioCopy.maximumInsuredYesExit}>{formatCollateralEth(maximumYesExit, market, 'down')}</MetricField>
-					<MetricField label={portfolioCopy.maximumInsuredNoExit}>{formatCollateralEth(maximumNoExit, market, 'down')}</MetricField>
-				</DataGrid>
-			</WorkflowSubsection>
+			{canExit ? (
+				<WorkflowSubsection title={portfolioCopy.insuredExits}>
+					<DataGrid dense>
+						<MetricField label={portfolioCopy.maximumInsuredYesExit}>{formatCollateralEth(maximumYesExit, market, 'down')}</MetricField>
+						<MetricField label={portfolioCopy.maximumInsuredNoExit}>{formatCollateralEth(maximumNoExit, market, 'down')}</MetricField>
+					</DataGrid>
+				</WorkflowSubsection>
+			) : undefined}
 		</ReadOnlyDetailAccordion>
 	)
 }
@@ -122,6 +126,7 @@ export function LivePortfolio({
 	nowSeconds,
 	walletAction,
 	universeId,
+	settings = DEFAULT_TRADE_SETTINGS,
 }: {
 	entries: readonly PortfolioBalanceEntry[]
 	balanceState: BalanceState
@@ -129,6 +134,7 @@ export function LivePortfolio({
 	retryBalances(): Promise<void>
 	discoveryComplete?: boolean
 	nowSeconds: bigint
+	settings?: TradeSettings
 	/** Inline connect or switch-network control for the disconnected state. */
 	walletAction?: PortfolioWalletAction | undefined
 	/** The universe the positions were read from; the empty state names it and offers to switch. */
@@ -198,7 +204,7 @@ export function LivePortfolio({
 								{error === undefined && balances === undefined ? undefined : (
 									<div className='portfolio-position-extra'>
 										{error === undefined ? undefined : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(error)} retry={retryBalances} />}
-										{balances === undefined ? undefined : <PortfolioPositionDetails market={market} balances={balances} />}
+										{balances === undefined ? undefined : <PortfolioPositionDetails market={market} balances={balances} settings={settings} nowSeconds={nowSeconds} />}
 									</div>
 								)}
 							</li>

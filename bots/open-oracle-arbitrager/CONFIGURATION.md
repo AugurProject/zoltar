@@ -48,7 +48,7 @@ In **Chain and RPC connectivity**, select the chain, enter its read, public, and
 
 ### Deploy from the dashboard
 
-For dashboard deployment, configure a public submission RPC on the selected chain and set an active signer. If execution is armed, pause the bot first; pause blocks new entries but not lifecycle recovery, settlement, or withdrawal, so wait until there are no pending or in-flight signer operations before deploying. Confirm the fixed derived executor address shown by the dashboard. The deploy action checks the RPC chain and canonical CREATE2 proxy. A fresh deployment verifies its successful receipt and runtime bytecode; if the predicted address is already deployed, the action verifies matching runtime bytecode without sending a transaction. It then queues the verified executor for the next scan. Before execution begins, the read quorum verifies the executor against bundled code and checks canonical contract availability.
+For dashboard deployment, configure a public submission RPC on the selected chain and set an active signer. If execution is armed, pause the bot first; pause blocks new entries but not lifecycle recovery, settlement, or withdrawal, so wait until there are no pending or in-flight signer operations before deploying. Confirm the fixed derived executor address shown by the dashboard. The deploy action checks the RPC chain and canonical CREATE2 proxy. A fresh deployment verifies its successful receipt and runtime bytecode; if the predicted address is already deployed, the action verifies matching runtime bytecode without sending a transaction. It then queues the verified executor for the next scan. Before execution begins, the read quorum checks that code exists at the derived executor address and at the required canonical contracts. Runtime bytecode matching is performed by the deployment action.
 
 ### Pause
 
@@ -70,6 +70,7 @@ A key marked **required** has no default in the code; the value shown after it i
 | `connectivity` | object | [shared](../README.md#connectivity) | absent until saved | RPC endpoints and the agreement requirement. |
 | `approvedUniverses` | string array | decimal universe ids below 2^248 | `[]` | Universes whose REP may be traded. |
 | `tokenAddresses` | address array | — | required; `[]` | Additional monitoring-only tokens. |
+| `collateralTokens` | object array | see [collateral tokens](#collateral-tokens) | `[]` | Non-WETH report collateral the bot may price, dispute, and settle. |
 | `deployment.uniswapV2Enabled` | boolean | — | required; `true` | Enables Uniswap V2 (mainnet only). |
 | `deployment.uniswapV3Enabled` | boolean | — | required; `true` | Enables Uniswap V3 with its spot/TWAP check. |
 | `deployment.uniswapV4Enabled` | boolean | — | required; `false` | Enables the V4 PoolManager and Quoter together. |
@@ -79,9 +80,15 @@ A key marked **required** has no default in the code; the value shown after it i
 | `settlement` | object | see [third-party settlement](#third-party-settlement) | settlement disabled | Third-party settlement policy. |
 | `runtime` | object | see below | required | Process and risk settings. |
 
+### Collateral tokens
+
+Each `collateralTokens` entry is `{ "address": "0x…", "wethPoolFee": 500 }`. `address` is a report `token1` other than WETH; `wethPoolFee` (`100`, `500`, `3000`, or `10000`) selects the canonical Uniswap V3 pool between that token and WETH. The bot values the collateral in WETH through that pool's marginal price, and skips the report while the pool is missing, empty, or outside the `strategy.maxSpotTwapTicks` spot/TWAP limit. WETH itself must not be listed and an address may appear once. Reports collateralized in a token with more than 18 decimals are skipped. The list is read at startup; restart the bot after editing it.
+
+Choose a deep pool: it sets the WETH value used for the profit threshold, the risk limits, and the comparison with REP market consensus. Fund and approve each listed token like WETH, including its OpenOracle internal allowance; see [required ETH, WETH, and tokens](./EXECUTION.md#required-eth-weth-and-tokens).
+
 ### `runtime`
 
-Every key is required. `historyFile`, `positionFile`, `priceHistoryFile`, `uiHost`, `uiPort`, `ui`, and `once` are fixed for the life of the process and can be edited only in the file while the bot is stopped.
+Every listed key except `maxPriceImpactBps` is required. `historyFile`, `positionFile`, `priceHistoryFile`, `uiHost`, `uiPort`, `ui`, and `once` are fixed for the life of the process and can be edited only in the file while the bot is stopped.
 
 | Key | Type | Range | Example | Effect |
 | --- | --- | --- | --- | --- |
@@ -94,13 +101,14 @@ Every key is required. `historyFile`, `positionFile`, `priceHistoryFile`, `uiHos
 | `positionFile` | path | distinct from the other journals | `.state/positions-mainnet.json` | [Durable position journal](./RECOVERY.md#durable-position-journal). The settlement journal is `<positionFile>.settlements`. |
 | `priceHistoryFile` | path | distinct from the other journals | `.state/prices-mainnet.jsonl` | Pool price samples. |
 | `logLookbackBlocks` | number | 0–256 | `256` | [Coordinator-free diagnostic](#coordinator-free-diagnostic-mode) event window; `0` disables event discovery. |
+| `maxPriceImpactBps` | number | 0–1,000 | `100` | Optional maximum venue price impact; defaults to 100 bps. |
 | `maxHedgeSlippageBps` | number | 0–1,000 | `50` | Adverse movement permitted by the signed hedge limit. |
 | `pollMilliseconds` | number | 1,000–3,600,000 | `1000` | Longest idle wait between scans, and the centralized-exchange sampling cadence. |
 | `riskLimits.lifecycleGasReserveWeth` | decimal string | ≥ 0 | `"0.01"` | Minimum lifecycle gas reserve subtracted from modeled profit. |
-| `riskLimits.maxConcurrentPositions` | number | 1–1,000 | `1` | Cap on non-closed durable positions. |
+| `riskLimits.maxConcurrentPositions` | number | 1–1,000 | `1` | Cap on durable positions other than `closed` and `expired-not-included`. |
 | `riskLimits.maxDailyGasSpendWeth` | decimal string | ≥ 0 | `"0.05"` | UTC-day gas budget shared by positions and settlements. |
 | `riskLimits.maxPositionNotionalWeth` | decimal string | not above `maxTotalLockedWeth` | `"5"` | Largest notional of one position. |
-| `riskLimits.maxTotalLockedWeth` | decimal string | ≥ 0 | `"10"` | Largest total notional of all non-closed positions. |
+| `riskLimits.maxTotalLockedWeth` | decimal string | ≥ 0 | `"10"` | Largest total notional of all positions other than `closed` and `expired-not-included`. |
 
 ## Adjust the strategy
 
@@ -121,7 +129,7 @@ Increasing profit thresholds reduces execution frequency. Increasing the TWAP wi
 
 The other sections are listed under [configuration keys](#configuration-keys); `network` and `connectivity` are absent until the focused dashboard form saves them. **Risk limits and scanning** edits `runtime.riskLimits`, `runtime.maxHedgeSlippageBps`, `runtime.logLookbackBlocks`, and `runtime.pollMilliseconds`, the main loop interval: the longest idle wait between scans when no new head arrives (`1000` ms in the example). Outside failure backoff a new block wakes the scan immediately. It is also the centralized-exchange sampling cadence; coordinator-free diagnostic mode queries every unseen event-log height. **Execution mode** edits `runtime.execute`. Deployment, execution-mode, and risk changes take effect at the next scan boundary. Process persistence paths and the dashboard bind cannot be edited while the bot is running.
 
-The position notional uses the refreshed required WETH plus required token funding valued at the higher of the executable hedge quote and signed hedge limit. Immediately before journal write and delivery, the bot rechecks that notional, the total of every non-closed durable position, and the UTC-day gas total. Public mode uses `1,200,000 × gas price` for the candidate entry; private mode uses the largest gas usage from the successful relay simulations. Both add the lifecycle reserve. A value equal to a configured cap is allowed; one attoETH above it is rejected.
+The position notional uses the refreshed required WETH plus required token funding valued at the higher of the executable hedge quote and signed hedge limit. Immediately before journal write and delivery, the bot rechecks that notional, the total of every durable position other than `closed` and `expired-not-included`, and the UTC-day gas total. Public mode uses `1,200,000 × gas price` for the candidate entry; private mode uses the largest gas usage from the successful relay simulations. Both add the lifecycle reserve. A value equal to a configured cap is allowed; one attoETH above it is rejected.
 
 Actual gas is assigned to the UTC day of each receipt's quorum-confirmed canonical block timestamp, not the local time at which the transaction was staged or later recovered. The durable position stores one dated gas expenditure per confirmed receipt, and both the execution limit and dashboard use that same ledger.
 
@@ -166,7 +174,7 @@ bun run run
 
 The dashboard shows:
 
-- Bot mode, **Syncing**, **Running**, **Paused**, **Error**, or **Stopped** status, latest block, block age relative to the operator computer, errors, and active-report count.
+- Bot mode, **Syncing**, **Running**, **Paused**, **Error**, **Stopped**, **Connectivity degraded**, **Not deployed**, or **No execution pools** status, latest block, block age relative to the operator computer, errors, and active-report count.
 - Selected network, expected chain ID, read/public RPC controls, and endpoint checks.
 - A local signer control, connected address, and its ETH/WETH/REP balances.
 - ETH, WETH, REP, executable REP value, and estimated portfolio value.

@@ -1,3 +1,4 @@
+import type { ChainBackend, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createBlockWithTimestamp, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
@@ -14,12 +15,12 @@ import { createInitialTransactionTrayState, markTransactionCanceled, markTransac
 import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
-const account = '0x0000000000000000000000000000000000000001'
+const account = '0x0000000000000000000000000000000000000001' as const
 const hash: Hash = `0x${'1'.repeat(64)}`
 
 function setup(replacementReason?: ReplacementReason) {
-	const sendTransaction = mock(async () => hash)
-	const onTransactionPrepared = mock(() => undefined)
+	const sendTransaction = mock(async (_request: Parameters<WriteClient['sendTransaction']>[0]) => hash)
+	const onTransactionPrepared = mock((_preview: TransactionRequestPreview) => undefined)
 	const client = createWalletClient({
 		account,
 		chain: MAINNET_NETWORK_PROFILE.chain,
@@ -85,7 +86,7 @@ test('a wallet-only pool action starts the wallet request without a page confirm
 	const { client, sendTransaction } = setup()
 	const walletRequest = createDeferred<Hash>()
 	sendTransaction.mockImplementationOnce(async () => await walletRequest.promise)
-	const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction }) })
+	const backend = withTransactionReviews<ChainBackend>({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction }) })
 	const reviewed = backend.createWriteClient(account, {})
 	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x1234', value: 1n })
 	const sending = reviewed.sendTransaction({ to: account, data: '0x1234', value: 1n })
@@ -145,7 +146,7 @@ test('wallet-only steps cannot skip an unconfirmed deposit', () => {
 test('a wallet-only pool action reports a wallet rejection without waiting for a page confirmation', async () => {
 	const { client, sendTransaction } = setup()
 	sendTransaction.mockRejectedValueOnce(new Error('User rejected the request'))
-	const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction }) })
+	const backend = withTransactionReviews<ChainBackend>({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction }) })
 	const reviewed = backend.createWriteClient(account, {})
 	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x1234', value: 1n })
 	await expect(reviewed.sendTransaction({ to: account, data: '0x1234', value: 1n })).rejects.toThrow('User rejected the request')
@@ -345,7 +346,7 @@ test('blocks a transaction that was not in the upfront plan', async () => {
 
 test('review wrapping preserves live simulation state getters', () => {
 	let currentTimestamp = 1n
-	const backend = withTransactionReviews({
+	const backend = withTransactionReviews<ChainBackend>({
 		...createFakeBackend(),
 		get currentTimestamp() {
 			return currentTimestamp
@@ -378,7 +379,7 @@ for (const method of ['sendTransaction', 'writeContract'] as const) {
 			...client,
 			waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
 			writeContract: async parameters => {
-				sentData = encodeFunctionData(parameters)
+				sentData = encodeFunctionData({ ...parameters, args: parameters.args ?? [] })
 				return hash
 			},
 			readContract: createReadContractStub(request => {
@@ -525,7 +526,7 @@ test('aborting a review during pre-submit validation prevents submission', async
 test('the reviewed backend forwards review cancellation to its client', async () => {
 	const cancellation = new AbortController()
 	const { client: baseClient, sendTransaction } = setup()
-	const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...baseClient, sendTransaction }) })
+	const backend = withTransactionReviews<ChainBackend>({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...baseClient, sendTransaction }) })
 	const client = backend.createWriteClient(account, { reviewSignal: cancellation.signal })
 	cancellation.abort()
 	await expect(client.sendTransaction({ to: account, value: 1n })).rejects.toThrow()
@@ -788,12 +789,12 @@ for (const phase of ['before-send', 'validation', 'metadata', 'funding', 'after-
 for (const ownership of ['closed', 'open', 'standalone'] as const) {
 	test(`keeps ${ownership} action ownership when another modal opens before client creation`, async () => {
 		const { client, sendTransaction, receipt } = setup()
-		const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction, waitForTransactionReceipt: async () => receipt }) })
+		const backend = withTransactionReviews<ChainBackend>({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction, waitForTransactionReceipt: async () => receipt }) })
 		const restore = installActiveEnvironmentForTesting(backend)
 		const owner = new AbortController()
 		const other = new AbortController()
 		const unregisterOwner = ownership === 'standalone' ? () => undefined : registerTransactionReviewScope(owner.signal)
-		let unregisterOther = () => undefined
+		let unregisterOther: () => void = () => undefined
 		const reached = createDeferred<void>()
 		const resume = createDeferred<void>()
 		const canceled = mock(() => undefined)

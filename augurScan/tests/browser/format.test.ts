@@ -1,4 +1,4 @@
-import { questionIdHex, short, shortIdentifier } from '../../browser/identifier-format.ts'
+import { protocolIdHex, short, shortIdentifier } from '../../browser/identifier-format.ts'
 import { expect, test } from 'bun:test'
 import { exactDecimal, exactNumber, exactUnit, percentFromBps, utcDateTime } from '../../browser/format.ts'
 
@@ -36,9 +36,9 @@ test('exports exact amounts as plain decimals without grouping', () => {
 
 test('question IDs display in hex without numeric precision loss', () => {
 	const id = (1n << 255n) + 26n
-	expect(questionIdHex(id.toString())).toBe(`0x${id.toString(16)}`)
-	expect(questionIdHex('0x1a')).toBe('0x1a')
-	expect(questionIdHex(null)).toBe('—')
+	expect(protocolIdHex(id.toString())).toBe(`0x${id.toString(16)}`)
+	expect(protocolIdHex('0x1a')).toBe('0x1a')
+	expect(protocolIdHex(null)).toBe('—')
 })
 
 test('abbreviates identifiers like the UI and bots and leaves short values unchanged', () => {

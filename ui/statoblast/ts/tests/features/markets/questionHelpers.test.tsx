@@ -51,7 +51,7 @@ void describe('question helpers', () => {
 
 		expect(fields.map(field => field.label)).toEqual(['Question type', 'Question ID', 'Created', 'End time', 'Outcomes'])
 		expect(fields.find(field => field.label === 'Question type')?.value).toBe('Binary')
-		expect(fields.find(field => field.label === 'Outcomes')?.value).toBe('Yes, No, Invalid')
+		expect(fields.find(field => field.label === 'Outcomes')?.value).toBe('YesNoInvalid')
 	})
 
 	void test('builds scalar question summary fields with scalar-specific details', async () => {
@@ -67,7 +67,7 @@ void describe('question helpers', () => {
 
 		expect(fields.map(field => field.label)).toEqual(['Question type', 'Question ID', 'Created', 'End time', 'Outcomes', 'Ticks', 'Display range', 'Answer unit'])
 		expect(fields.find(field => field.label === 'Question type')?.value).toBe('Scalar')
-		expect(fields.find(field => field.label === 'Outcomes')?.value).toBe('Scalar, Invalid')
+		expect(fields.find(field => field.label === 'Outcomes')?.value).toBe('ScalarInvalid')
 		expect(fields.find(field => field.label === 'Ticks')?.value).toBe('100')
 		expect(fields.find(field => field.label === 'Display range')?.value).toBe('1 to 10\u00a0USD')
 		expect(fields.find(field => field.label === 'Answer unit')?.value).toBe('USD')
@@ -80,6 +80,6 @@ void describe('question helpers', () => {
 			outcomeLabels: ['Above', 'Invalid', 'Below'],
 		})
 
-		expect(fields.find(field => field.label === 'Outcomes')?.value).toBe('Above, Invalid, Below')
+		expect(fields.find(field => field.label === 'Outcomes')?.value).toBe('AboveInvalidBelow')
 	})
 })

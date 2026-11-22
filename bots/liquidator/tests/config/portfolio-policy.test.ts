@@ -39,3 +39,8 @@ test('repair income horizons are bounded and survive settings round trips', () =
 	expect(() => parsePortfolioPolicy({ takeoverIncomeHorizonSeconds: -1 })).toThrow()
 	expect(() => parsePortfolioPolicy({ takeoverIncomeHorizonSeconds: 31_536_001 })).toThrow()
 })
+
+test('#1493: the protocol default health target is configurable', () => {
+	expect(parsePortfolioPolicy({ targetHealthFactorBps: 10_000 }).targetHealthFactorBps).toBe(10_000n)
+	expect(() => parsePortfolioPolicy({ targetHealthFactorBps: 9_999 })).toThrow()
+})

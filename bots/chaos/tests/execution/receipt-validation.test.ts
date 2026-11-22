@@ -55,37 +55,25 @@ describe('chaos semantic receipt validation', () => {
 		).toBe('confirmed')
 	})
 
-	test('decodes staged-operation success instead of trusting the event topic alone', () => {
-		const signature = 'ExecutedStagedOperation(uint256,uint8,bool,string)'
-		const stagedTopic = keccak256(toHex(signature))
-		const stagedReceipt = {
+	test('decodes the portfolio setup stage instead of trusting the event topic alone', () => {
+		const signature = 'SetupAdvanced(uint8)'
+		const setupTopic = keccak256(toHex(signature))
+		const setupReceipt = {
 			...receipt,
-			logs: [
-				{
-					address: emitter,
-					data: encodeAbiParameters(
-						[
-							{ name: 'operation', type: 'uint8' },
-							{ name: 'success', type: 'bool' },
-							{ name: 'errorMessage', type: 'string' },
-						],
-						[0, false, 'settlement failed'],
-					),
-					topics: [stagedTopic, toHex(7n, { size: 32 })],
-				},
-			],
+			logs: [{ address: emitter, data: encodeAbiParameters([{ name: 'stage', type: 'uint8' }], [1]), topics: [setupTopic] }],
 		}
 		const evidence = {
-			abi: 'event ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)',
+			abi: 'event SetupAdvanced(uint8 stage)',
 			emitter,
-			equals: true,
-			field: 'success',
-			indexed: { operationId: '7' },
+			equals: '2',
+			field: 'stage',
+			indexed: {},
 			kind: 'decoded-event-field' as const,
 			signature,
-			topic0: stagedTopic,
+			topic0: setupTopic,
 		}
-		expect(() => stepReceiptEvidenceDisposition(step([evidence]), stagedReceipt)).toThrow('ExecutedStagedOperation(uint256,uint8,bool,string).success to equal true')
+		expect(() => stepReceiptEvidenceDisposition(step([evidence]), setupReceipt)).toThrow('SetupAdvanced(uint8).stage to equal 2')
+		expect(stepReceiptEvidenceDisposition(step([{ ...evidence, equals: '1' }]), setupReceipt)).toBe('confirmed')
 	})
 
 	test('does not treat an empty evidence declaration as verified', () => {

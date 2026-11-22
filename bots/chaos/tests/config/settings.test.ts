@@ -219,7 +219,6 @@ describe('chaos-bot settings', () => {
 			maxPools: 100,
 			maxQuestions: 100,
 			maxUniverses: 100,
-			maxVaultsPerPool: 100,
 		})
 		expect(settings.privateKey).toBeUndefined()
 		expect(settings.strategy.allowHighRiskOperations).toBe(false)
@@ -297,16 +296,22 @@ describe('chaos-bot settings', () => {
 		}
 	})
 
-	test('bounds aggregate pool fan-out across universe and vault registries', async () => {
+	test('uses only current discovery dimensions and rejects the retired vault registry setting', async () => {
+		const example = await storedExample()
+		const discovery = { maxPools: 200, maxQuestions: 100, maxUniverses: 50 }
+		expect(parseSettings({ ...example, discovery }).discovery).toEqual(discovery)
+		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxVaultsPerPool: 100 } })).toThrow('discovery contains unsupported field maxVaultsPerPool')
+	})
+
+	test('bounds aggregate pool fan-out across universes', async () => {
 		const example = await storedExample()
 		const discovery = record(example['discovery'])
-		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxUniverses: 100, maxVaultsPerPool: 1 } })).toThrow('maxPools × discovery.maxUniverses')
-		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxUniverses: 1, maxVaultsPerPool: 100 } })).toThrow('maxPools × discovery.maxVaultsPerPool')
+		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxUniverses: 100 } })).toThrow('maxPools × discovery.maxUniverses')
 	})
 
 	test('accepts pool counts that only the removed staged-operation registry bounded and rejects that key as unknown', async () => {
 		const example = await storedExample()
-		const discovery = { maxPools: 200, maxQuestions: 100, maxUniverses: 50, maxVaultsPerPool: 50 }
+		const discovery = { maxPools: 200, maxQuestions: 100, maxUniverses: 50 }
 		expect(parseSettings({ ...example, discovery }).discovery).toEqual(discovery)
 		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxStagedOperationsPerPool: 1 } })).toThrow('discovery contains unsupported field maxStagedOperationsPerPool')
 	})

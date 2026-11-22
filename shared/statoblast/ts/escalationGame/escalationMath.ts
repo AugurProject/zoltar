@@ -60,7 +60,7 @@ function computeIterativeAttritionCostAttoRep(startBondAttoRep: bigint, nonDecis
 	return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost
 }
 
-export function computeEscalationBindingCapitalAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, timeSinceStart: bigint) {
+export function computeEscalationAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, timeSinceStart: bigint) {
 	if (startBondAttoRep <= 0n || nonDecisionThresholdAttoRep <= startBondAttoRep) throw new Error('Escalation threshold must exceed the start bond')
 	return computeIterativeAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep), timeSinceStart)
 }
@@ -68,7 +68,7 @@ export function computeEscalationBindingCapitalAttoRep(startBondAttoRep: bigint,
 /** The contract's `totalCostAttoRep`: zero until the curve starts, then the forward curve. */
 export function computeEscalationCurveAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, timeSinceStart: bigint) {
 	if (timeSinceStart <= 0n) return 0n
-	return computeEscalationBindingCapitalAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, timeSinceStart)
+	return computeEscalationAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, timeSinceStart)
 }
 
 /** Last second before the forward curve strictly exceeds binding capital. */
@@ -150,12 +150,10 @@ export function projectEscalationDeposit({
 }): ProjectedEscalationDeposit | undefined {
 	const outcomeIndex = getEscalationOutcomeIndex(outcome)
 	const currentBalanceAttoRep = balancesAttoRep[outcomeIndex]
-	if (currentBalanceAttoRep >= nonDecisionThresholdAttoRep) return undefined
+	if (currentBalanceAttoRep >= nonDecisionThresholdAttoRep || amountAttoRep < startBondAttoRep) return undefined
 	const roomAttoRep = nonDecisionThresholdAttoRep - currentBalanceAttoRep
 	let acceptedAmountAttoRep = amountAttoRep > roomAttoRep ? roomAttoRep : amountAttoRep
 	let newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
-	// The start bond applies to the amount offered, before the tie trim.
-	if (acceptedAmountAttoRep < startBondAttoRep && newBalanceAttoRep !== nonDecisionThresholdAttoRep) return undefined
 	let tieAdjusted = false
 	const maxBalanceAttoRep = getMaxEscalationBalanceAttoRep(balancesAttoRep)
 	const otherHasMax = (() => {
@@ -168,6 +166,7 @@ export function projectEscalationDeposit({
 		acceptedAmountAttoRep -= 1n
 		newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
 	}
+	if (acceptedAmountAttoRep === 0n) return undefined
 	const projectedBalancesAttoRep = setBalanceAtIndex(balancesAttoRep, outcomeIndex, newBalanceAttoRep)
 	return {
 		acceptedAmountAttoRep,

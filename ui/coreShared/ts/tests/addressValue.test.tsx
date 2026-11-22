@@ -52,7 +52,9 @@ describe('AddressValue', () => {
 		const copy = within(document.body).getByRole('button', { name: `Copy address ${address}` })
 		expect(link.contains(copy)).toBe(false)
 		expect(copy.contains(link)).toBe(false)
-		await act(() => fireEvent.click(copy))
+		await act(() => {
+			fireEvent.click(copy)
+		})
 		await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledWith(address))
 	})
 
@@ -75,24 +77,33 @@ describe('AddressValue', () => {
 		expect(copy.matches(':disabled')).toBe(false)
 		copy.focus()
 		expect(document.activeElement).toBe(copy)
-		await act(() => fireEvent.keyDown(copy, { key: 'Enter' }))
+		await act(() => {
+			fireEvent.keyDown(copy, { key: 'Enter' })
+		})
 		await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledTimes(1))
-		await act(() => fireEvent.keyDown(copy, { key: ' ' }))
+		await act(() => {
+			fireEvent.keyDown(copy, { key: ' ' })
+		})
 		expect(clipboardWriteText).toHaveBeenCalledTimes(1)
-		await act(() => copy.dispatchEvent(new window.KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: ' ' })))
+		await act(() => {
+			copy.dispatchEvent(new window.KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: ' ' }))
+		})
 		await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledTimes(2))
 		expect(clipboardWriteText).toHaveBeenLastCalledWith(address)
 	})
 
 	test('keeps copying available when the network has no explorer', async () => {
 		const address = '0x0000000000000000000000000000000000000001'
-		const rendered = await renderIntoDocument(<AddressValue address={address} explorerProfile={{ ...SEPOLIA_NETWORK_PROFILE, transactionExplorerBaseUrl: undefined }} />)
+		const { transactionExplorerBaseUrl: _transactionExplorerBaseUrl, ...profileWithoutExplorer } = SEPOLIA_NETWORK_PROFILE
+		const rendered = await renderIntoDocument(<AddressValue address={address} explorerProfile={profileWithoutExplorer} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const link = within(document.body).getByRole('link')
 		expect(link.getAttribute('aria-disabled')).toBe('true')
 		expect(link.getAttribute('href')).toBeNull()
 		expect(link.getAttribute('title')).toBe('Explorer unavailable for this network.')
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: `Copy address ${address}` })))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: `Copy address ${address}` }))
+		})
 		await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledWith(address))
 	})
 
@@ -250,7 +261,9 @@ describe('AddressValue', () => {
 		expect(document.querySelector('.address-value-full')?.textContent).toBe(address)
 		expect(document.querySelector('.address-value-text')?.getAttribute('data-abbreviated')).toBe('false')
 		expect(copyButton.getAttribute('title')).toBe(address)
-		await act(() => fireEvent.click(copyButton))
+		await act(() => {
+			fireEvent.click(copyButton)
+		})
 		await waitFor(() => expect(document.querySelector('.copy-feedback')?.textContent).toBe('Copied address'))
 		expect(document.querySelector('.address-value-full')?.textContent).toBe(address)
 	})
@@ -263,7 +276,9 @@ describe('AddressValue', () => {
 		expect(document.querySelector('.address-value [aria-hidden="true"]')?.textContent).toBe('0x123456…345678')
 		expect(document.querySelector('.address-value .visually-hidden')?.textContent).toBe(address)
 		expect(copyButton.getAttribute('title')).toBe(address)
-		await act(() => fireEvent.click(copyButton))
+		await act(() => {
+			fireEvent.click(copyButton)
+		})
 		await waitFor(() => expect(document.querySelector('.copy-feedback')?.textContent).toBe('Copied address'))
 	})
 
@@ -286,7 +301,9 @@ describe('AddressValue', () => {
 		expect(within(document.body).getByRole('link').getAttribute('aria-disabled')).toBe('true')
 		expect(document.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234…cdef')
 		expect(document.querySelector('.address-value-full')?.textContent).toBe(hash)
-		await act(() => fireEvent.click(copyButton))
+		await act(() => {
+			fireEvent.click(copyButton)
+		})
 		await waitFor(() => expect(document.querySelector('.copy-feedback')?.textContent).toBe('Copied address'))
 		expect(document.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234…cdef')
 	})

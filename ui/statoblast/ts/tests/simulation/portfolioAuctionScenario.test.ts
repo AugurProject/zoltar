@@ -22,7 +22,7 @@ void describe('portfolio branch auction simulation scenario', () => {
 		resetActiveEnvironmentForTesting()
 	}, 30_000)
 
-	void test('portfolio-auction opens the Yes branch auction with a winning, an excluded and a rival bid', async () => {
+	void test('portfolio-auction opens the Yes branch auction with binding and excluded owner bids and a rival bid', async () => {
 		activateSimulationBackendProfile(backend)
 		const owner = backend.accounts[0]
 		if (owner === undefined) throw new Error('Expected the simulation owner account')
@@ -38,6 +38,12 @@ void describe('portfolio branch auction simulation scenario', () => {
 		if (auction === undefined) throw new Error('Expected the branch auction')
 		expect(auction).toMatchObject({ opened: true, finalized: false })
 		expect(auction.bids).toHaveLength(2)
+		const rival = backend.accounts[1]
+		if (rival === undefined) throw new Error('Expected the simulation rival bidder')
+		const rivalSnapshot = await loadPortfolioBranchAuction(readClient, portfolio, rival, child)
+		expect(rivalSnapshot.auction?.bids).toHaveLength(1)
+		expect(rivalSnapshot.auction?.bids[0]?.lots).toBe(auction.targetLots)
+
 		const excluded = auction.bids.find(bid => bid.earlyRefundAttoEth > 0n)
 		const winning = auction.bids.find(bid => bid.earlyRefundAttoEth === 0n)
 		if (excluded === undefined || winning === undefined) throw new Error('Expected one excluded and one still-binding owner bid')

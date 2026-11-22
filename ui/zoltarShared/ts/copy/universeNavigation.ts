@@ -4,6 +4,6 @@ export const readErrorDetailsMissing = 'The data source did not provide error de
 export const formatChildUniverseLoadError = (outcome: string) => `The ${outcome} child universe could not be loaded.`
 export const selectScalarOutcome = 'Select outcome'
 export const loadingChild = 'Loading child universe…'
-export const childNotDeployedDetail = 'Created by the first migration into it.'
+export const childNotDeployedDetail = 'Deploy it now, or let the first migration deploy it.'
 /** The registry pages outcomes without a total, so the position names the page alone. */
 export const formatOutcomePage = (page: number) => `Page ${page.toString()}`

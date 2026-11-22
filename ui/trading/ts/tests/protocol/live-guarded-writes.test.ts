@@ -77,7 +77,7 @@ describe('live guarded transaction writes', () => {
 				if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
 				const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data as Hex })
 				if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
-				if (decoded.functionName === 'safeBatchTransferFrom' && decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
+				if (decoded.functionName === 'safeBatchTransferFrom' && (decoded.args[3][1] ?? 0n) > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
 				shareCalls.push(transaction.data as Hex)
 				return method === 'eth_sendTransaction' ? transactionHash : '0x'
 			}
@@ -91,7 +91,9 @@ describe('live guarded transaction writes', () => {
 		expect(shareCalls).toHaveLength(3)
 		expect(shareCalls[1]).toBe(shareCalls[0])
 		expect(shareCalls[2]).toBe(shareCalls[0])
-		const decodedTransfer = decodeFunctionData({ abi: shareTokenAbi, data: shareCalls[0] })
+		const firstTransfer = shareCalls[0]
+		if (firstTransfer === undefined) throw new Error('Missing first transfer')
+		const decodedTransfer = decodeFunctionData({ abi: shareTokenAbi, data: firstTransfer })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
 		expect(decodedTransfer.args[4]).toBe(encodeAbiParameters([receiveRequestParameter], [[2, 0, shareToken, pool, pair, 1n, 2n, 256n, 257n, 258n, 1, 10n, quote.maximumLongShares, quote.minimumEth, account, account, quote.deadline, quote.minimumAttoRep]]))
 		longBalance = 13n
@@ -118,7 +120,7 @@ describe('live guarded transaction writes', () => {
 				const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data as Hex })
 				if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
 				if (decoded.functionName !== 'safeBatchTransferFrom') throw new Error('Unexpected share transfer')
-				if (decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
+				if ((decoded.args[3][1] ?? 0n) > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
 				if (method === 'eth_sendTransaction') {
 					submittedTransfers.push(transaction.data as Hex)
 					return transactionHash
@@ -130,7 +132,9 @@ describe('live guarded transaction writes', () => {
 			expect(quote.maximumLongShares).toBe(13n)
 			longSharesSwapped = 1n
 			expect(await submitFreshExit(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
-			expect(submittedTransfers).toEqual([simulatedTransfers[0]])
+			const simulatedTransfer = simulatedTransfers[0]
+			if (simulatedTransfer === undefined) throw new Error('Missing simulated transfer')
+			expect(submittedTransfers).toEqual([simulatedTransfer])
 			longBalance = 12n
 			await expect(submitFreshExit(client, configuration, account, quote, async write => await write())).rejects.toThrow('no longer covers this sale')
 			longBalance = 20n

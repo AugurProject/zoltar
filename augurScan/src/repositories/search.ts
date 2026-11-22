@@ -6,7 +6,7 @@ const addressPattern = /^0x[0-9a-f]{40}$/i
 const hashPattern = /^0x[0-9a-f]{64}$/i
 
 /** A uint256 identity typed in decimal or in the 0x-prefixed hex the explorer displays, as a decimal string; undefined for anything else. */
-const numericIdentity = (query: string): string | undefined => {
+export const numericIdentity = (query: string): string | undefined => {
 	if (/^\d{1,78}$/.test(query)) return query
 	return /^0x[0-9a-f]{1,64}$/i.test(query) ? BigInt(query).toString() : undefined
 }

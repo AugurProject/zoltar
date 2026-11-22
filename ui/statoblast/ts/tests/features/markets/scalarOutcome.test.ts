@@ -98,7 +98,7 @@ void describe('scalar outcome helpers', () => {
 		expect(() => parseScalarFormInputs({ scalarMin: '0', scalarMax: (1n << 120n).toString(), scalarIncrement: '1' })).toThrow('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
 	})
 
-	void test('rejects UI-created tick counts that a native range input cannot represent exactly', () => {
-		expect(() => parseScalarFormInputs({ scalarMin: '0', scalarMax: (BigInt(Number.MAX_SAFE_INTEGER) + 1n).toString(), scalarIncrement: '1' })).toThrow('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
+	test('accepts all contract-valid tick counts using bigint precision', () => {
+		for (const numTicks of [BigInt(Number.MAX_SAFE_INTEGER) + 1n, (1n << 120n) - 1n]) expect(parseScalarFormInputs({ scalarMin: '0', scalarMax: numTicks.toString(), scalarIncrement: '1' }).numTicks).toBe(numTicks)
 	})
 })

@@ -71,7 +71,6 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 			maxPools: 100,
 			maxQuestions: 100,
 			maxUniverses: 100,
-			maxVaultsPerPool: 100,
 		},
 		network: { chainId: 1, explorerUrl: '', maximumBlockIntervalSeconds: 15, name: 'mainnet' },
 		networkConfigured: true,

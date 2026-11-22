@@ -6,10 +6,6 @@ inputs:
     description: Artifact and tool scope (full, contracts, or root); dependencies share one workspace install.
     required: false
     default: full
-  foundry:
-    description: Install Foundry for jobs that execute EVM tests.
-    required: false
-    default: "true"
   build-inputs:
     description: Same-run artifact to download instead of regenerating build inputs.
     required: false
@@ -52,12 +48,6 @@ runs:
     - name: Setup Bun
       uses: ./.github/actions/setup-bun
 
-    - name: Setup Foundry / Anvil
-      if: inputs.foundry == 'true' && inputs.profile != 'root'
-      uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
-      with:
-        version: ${{ env.FOUNDRY_VERSION }}
-
     - name: Read canonical project metadata
       id: projects
       shell: bash
@@ -86,9 +76,9 @@ runs:
       uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ steps.projects.outputs.component_artifact_outputs }}
-        key: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ steps.projects.outputs.contract_cache_key }}
+        key: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.contract_cache_key }}
         # A fallback is only a compilation seed: cache-hit stays false, forcing regeneration below.
-        restore-keys: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-
+        restore-keys: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-
 
     - name: Cache generated project outputs
       if: inputs.profile != 'root' && inputs.build-inputs == ''
@@ -96,7 +86,7 @@ runs:
       uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ inputs.profile == 'contracts' && steps.projects.outputs.component_artifact_outputs || steps.projects.outputs.full_only_cache_paths }}
-        key: ${{ runner.os }}-generated-${{ inputs.profile }}-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ inputs.profile == 'contracts' && steps.projects.outputs.contract_cache_key || steps.projects.outputs.generated_cache_key }}
+        key: ${{ runner.os }}-generated-${{ inputs.profile }}-${{ env.BUN_VERSION }}-${{ inputs.profile == 'contracts' && steps.projects.outputs.contract_cache_key || steps.projects.outputs.generated_cache_key }}
 
     - name: Generate and verify generated artifacts
       if: inputs.profile != 'root' && inputs.build-inputs == '' && (inputs.verify-generated == 'true' || steps.generated-cache.outputs.cache-hit != 'true' || (inputs.profile == 'full' && steps.contract-cache.outputs.cache-hit != 'true'))

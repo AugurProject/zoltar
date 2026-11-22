@@ -228,10 +228,10 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 
 	/// @notice Set the owner's single commitment, which all deposited principal backs.
 	/// @dev Raising or keeping it applies at once and must meet the owner's health
-	/// target at a fresh price. Lowering it first cures an underwater position at
-	/// once, which uses no healthy spare; the rest of the reduction joins the
-	/// retirement queue. A pending request is locked until it is served: only
-	/// its own value is accepted, which cures an underwater position in place.
+	/// target at a fresh price. Lowering can cure an uncovered deficit immediately
+	/// when it meets the economic minimum and capacity permits; a smaller deficit
+	/// queues the whole reduction for partial and full exits alike. A pending
+	/// request accepts only its saved value, which may cure the position in place.
 	function setCommitment(uint256 commitment) external nonReentrant returns (uint96 id) {
 		return _setCommitment(commitment, 0, USE_ACCEPTED_PRICE);
 	}

@@ -1,7 +1,7 @@
 import type { DiscoveryIssue } from '../operations/types.ts'
 import type { ImmutableTopologyData } from './topology-schema.ts'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
-import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EcosystemDeployments, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
+import type { AuctionBidSnapshot, AuctionRefundSnapshot, EcosystemDeployments, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
 import type { ChaosReadClient } from './discovery-client.ts'
 import { type CanonicalImmutableTopologyCache, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES } from './topology-schema.ts'
 import type { Address, Hash } from '@zoltar/bot-shared/ethereum'
@@ -21,7 +21,6 @@ export interface DiscoveryLimits {
 	maxQuestions: number
 	maxUniverses: number
 	maxPools: number
-	maxVaultsPerPool: number
 }
 
 export interface EcosystemDiscoveryContext {
@@ -37,7 +36,6 @@ export interface EcosystemDiscoveryContext {
 	indexedReports?: readonly OracleGameSnapshot[]
 	indexedAuctionBids?: Readonly<Record<string, readonly AuctionBidSnapshot[]>>
 	indexedAuctionRefunds?: Readonly<Record<string, Readonly<AuctionRefundSnapshot>>>
-	indexedChildRepSplits?: readonly ChildRepSplitProgressSnapshot[]
 	indexedEscalationDeposits?: readonly EscalationDepositSnapshot[]
 	indexedMigrationRepSplits?: readonly MigrationRepSplitProgressSnapshot[]
 	tokenSymbols?: Readonly<Record<string, string>>
@@ -51,7 +49,6 @@ const DEFAULT_LIMITS: DiscoveryLimits = {
 	maxPools: 100,
 	maxQuestions: 100,
 	maxUniverses: 100,
-	maxVaultsPerPool: 100,
 }
 
 export function limitsWithDefaults(configured?: Partial<DiscoveryLimits>): DiscoveryLimits {
@@ -61,7 +58,6 @@ export function limitsWithDefaults(configured?: Partial<DiscoveryLimits>): Disco
 		maxPools: configured?.maxPools ?? DEFAULT_LIMITS.maxPools,
 		maxQuestions: configured?.maxQuestions ?? DEFAULT_LIMITS.maxQuestions,
 		maxUniverses: configured?.maxUniverses ?? DEFAULT_LIMITS.maxUniverses,
-		maxVaultsPerPool: configured?.maxVaultsPerPool ?? DEFAULT_LIMITS.maxVaultsPerPool,
 	}
 }
 
@@ -71,7 +67,6 @@ export function requireAggregateDiscoveryEnvelope(limits: DiscoveryLimits) {
 		['maxPools', limits.maxPools],
 		['maxQuestions', limits.maxQuestions],
 		['maxUniverses', limits.maxUniverses],
-		['maxVaultsPerPool', limits.maxVaultsPerPool],
 	] as const) {
 		if (value > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`${label} exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
 	}
@@ -79,7 +74,6 @@ export function requireAggregateDiscoveryEnvelope(limits: DiscoveryLimits) {
 		throw new Error(`maxOutcomeLabelUtf8BytesPerQuestion exceeds the ${IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES.toString()}-byte immutable-topology safety envelope`)
 	}
 	if (limits.maxPools * limits.maxUniverses > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxUniverses exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
-	if (limits.maxPools * limits.maxVaultsPerPool > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxVaultsPerPool exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
 }
 
 /** Shared anchored inputs for the bounded topology discovery stages. */

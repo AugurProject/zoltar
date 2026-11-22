@@ -371,6 +371,8 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 						['__', 0],
 						['%%', 0],
 						['_%', 1],
+						['0x1', 1],
+						['0x0001', 1],
 					] as const) {
 						const filteredResponse = await handleApi(new Request(`http://localhost/api/v1/${path}?chainId=${fixtureChain}&q=${encodeURIComponent(query)}`), database.sql)
 						if (filteredResponse === undefined) throw new Error(`Missing ${path} search response`)
@@ -380,6 +382,11 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 						expect(Array.isArray(matches) ? matches.length : -1).toBe(expected)
 					}
 				}
+				const globalFiltered = await handleApi(new Request('http://localhost/api/v1/state/catalog?q=0x0001'), database.sql)
+				if (globalFiltered === undefined) throw new Error('Missing global state search response')
+				const globalBody: unknown = await globalFiltered.json()
+				if (!isPlainRecord(globalBody) || !Array.isArray(globalBody['questions'])) throw new Error('Missing global questions')
+				expect(globalBody['questions'].some(question => isPlainRecord(question) && String(question['chain_id']) === String(fixtureChain) && String(question['question_id']) === '1')).toBe(true)
 				await database.sql`UPDATE questions SET title = 'Exact question' WHERE chain_id = ${fixtureChain} AND question_id = 0`
 				await database.sql`DELETE FROM questions WHERE chain_id = ${fixtureChain} AND question_id <> 0`
 				await database.sql`UPDATE questions SET start_time = 1767225600, end_time = 8640000000000, canonical = false WHERE chain_id = ${fixtureChain}`

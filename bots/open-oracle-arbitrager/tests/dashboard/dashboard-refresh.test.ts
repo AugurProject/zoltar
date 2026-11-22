@@ -538,7 +538,7 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 	const settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example/' } })
 	const state = operatorState()
 	state.opportunities = [
-		{ decision: 'skipped', reason: '2 pools exceed the 100 tick spot/TWAP limit', reportId: '11', token: address, tokenSymbol: 'REP', timeRemaining: '241', windowUnit: 'seconds' },
+		{ collateralSymbol: 'USDC', decision: 'skipped', reason: '2 pools exceed the 100 tick spot/TWAP limit', reportId: '11', token: address, tokenSymbol: 'REP', timeRemaining: '241', windowUnit: 'seconds' },
 		{
 			centralizedPriceDeviationBps: undefined,
 			decision: 'unprofitable',
@@ -637,8 +637,8 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 	const body = element(window, 'opportunities-body', window.HTMLTableSectionElement)
 	for (let attempt = 0; attempt < 100 && body.children.length < 2; attempt++) await Bun.sleep(10)
 	const cells = (rowIndex: number) => Array.from(body.children[rowIndex]?.querySelectorAll('td') ?? [], cell => cell.textContent)
-	expect(cells(0)).toEqual(['11', 'skipped', '—', '—', '2 pools exceed the 100 tick spot/TWAP limit', 'WETH/REP', '—', '—', '—', '241 seconds', '—', '—'])
-	expect(cells(1).slice(0, 6)).toEqual(['12', 'unprofitable', 'Unavailable', '10.284 REP / ETH', 'Modeled profit is below configured thresholds', 'sell REP'])
+	expect(cells(0)).toEqual(['11', 'skipped', '—', '—', '2 pools exceed the 100 tick spot/TWAP limit', 'USDC/REP', '—', '—', '—', '241 seconds', '—', '—'])
+	expect(cells(1).slice(0, 8)).toEqual(['12', 'unprofitable', 'Unavailable', '10.284 REP / ETH', 'Modeled profit is below configured thresholds', 'sell REP', '-0.0031 ETH', '0.151 WETH'])
 	expect(body.children[0]?.querySelector('.decision')?.getAttribute('data-decision')).toBe('skipped')
 	expect(element(window, 'opportunity-count', window.HTMLElement).textContent).toBe('1 evaluated · 1 skipped')
 	expect(element(window, 'opportunities-empty', window.HTMLElement).hidden).toBe(true)

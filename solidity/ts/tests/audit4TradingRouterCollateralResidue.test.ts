@@ -129,7 +129,7 @@ describe('audit4: LP claims survive a universe fork', () => {
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, universeId, fixture.questionId)
-		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(4n)
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(1n)
 
 		const pairYesBefore = await balance(pair, yesId)
 		const [yesReserve] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })

@@ -59,17 +59,12 @@ export function formatLockedShareBalance(balance: string) {
 	return `Balance: ${balance} · locked after migration`
 }
 
-/** The selection includes a child universe that already holds this share's whole balance. */
-export function targetAlreadyMigrated(outcome: 'INVALID' | 'YES' | 'NO', childUniverse: string) {
-	return `Your ${outcomeLabel(outcome)} balance is already migrated to ${childUniverse}. Deselect it.`
-}
-
 export function migrationAmount(balance: string) {
 	return `Migrates your entire balance: ${balance}`
 }
 
 export function acknowledgeMigration(balance: string, outcome: 'INVALID' | 'YES' | 'NO') {
-	return `I understand this moves all ${balance} into the selected child universes and permanently locks my ${outcomeLabel(outcome)} transfers in the parent universe.`
+	return `I understand this mints ${balance} in each selected child universe and keeps the original shares in the parent universe, permanently locking my ${outcomeLabel(outcome)} transfers in the parent universe.`
 }
 
 /** `balance` is omitted until the wallet's balance is known, so the sentence never quotes a loading or missing state. */
@@ -91,3 +86,5 @@ export const completeSetsToRedeem = 'Complete sets to redeem'
 export const sets = 'sets'
 
 export const estimateNote = `Estimate from the current collateral rate. ${recheckedBeforeWallet}`
+
+export const minimumRecoveryRep = 'Minimum recovery REP'

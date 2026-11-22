@@ -101,6 +101,8 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 
 	function tradingStatus() public view returns (TradingStatus status) {
 		if (totalSupply() == 0) return TradingStatus.Uninitialized;
+		if (block.timestamp >= securityPool.questionData().getQuestionEndDate(questionId))
+			return TradingStatus.QuestionEnded;
 		if (securityPool.zoltar().getForkTime(universeId) != 0) return TradingStatus.UniverseForked;
 		if (securityPool.awaitingForkContinuation()) return TradingStatus.AwaitingForkContinuation;
 		if (securityPool.systemState() != SystemState.Operational) return TradingStatus.PoolInactive;
@@ -108,8 +110,6 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 			ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool) !=
 			BinaryOutcomes.BinaryOutcome.None
 		) return TradingStatus.QuestionResolved;
-		if (block.timestamp >= securityPool.questionData().getQuestionEndDate(questionId))
-			return TradingStatus.QuestionEnded;
 		return TradingStatus.Open;
 	}
 

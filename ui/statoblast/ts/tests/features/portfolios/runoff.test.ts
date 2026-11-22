@@ -67,3 +67,10 @@ test('collateral-backed authorization needs no separate ETH execution budget', (
 	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toBeUndefined()
 	expect(capitalAuthorizationReason(snapshot, 11n * unit)).toBeUndefined()
 })
+
+test('a pending retirement can repeat only its saved target for an in-place cure', () => {
+	const snapshot = capitalSnapshot()
+	const pending = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
+	expect(capitalRetirementReason(pending, 1n, 5n * unit)).toBeUndefined()
+	expect(capitalRetirementReason(pending, 1n, 4n * unit)).toBe('Retirement already requested.')
+})

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { DAY } from '../testSupport/simulator/utils/constants'
@@ -38,14 +38,15 @@ describe('portfolio security regression coverage', () => {
 		expect(await fixture.owner().readContract({ ...pool(), functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
 	})
 
-	test.each([10n, 30n])('receiver reentrancy rolls back all mint accounting with %s ETH capacity', async capacity => {
+	test.each([10n, 30n])('funded receiver reentrancy reaches the guard with %s ETH capacity', async capacity => {
 		await fixture.prepare(1_000n * unit, capacity * unit)
 		const receiver = await deployContract(fixture.owner(), encodeDeployData({ abi: receiverArtifact.abi, bytecode: applyLibraries(receiverArtifact.evm.bytecode.object), args: [fixture.portfolio, fixture.base.genesisUniverse, fixture.base.questionId] }))
 		const before = await fixture.owner().getBlockNumber()
-		await expect(writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'attack', args: [6n * unit, 6n * unit], value: 20n * unit, gas: 15_000_000n }))).rejects.toThrow()
-		expect(await fixture.owner().readContract({ ...pool(), functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
-		expect(await fixture.owner().readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'demandAttoEth' })).toBe(0n)
-		expect(await fixture.owner().getLogs({ address: pool().address, fromBlock: before + 1n })).toEqual([])
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'attack', args: [6n * unit, 6n * unit], value: 20n * unit, gas: 15_000_000n }))
+		expect(await fixture.owner().readContract({ abi: parseAbi(['function reentryRevertReason() view returns (string)']), address: receiver, functionName: 'reentryRevertReason' })).toBe('Portfolio operation active')
+		expect(await fixture.owner().readContract({ ...pool(), functionName: 'shareTokenSupplyAttoShares' })).toBeGreaterThan(0n)
+		expect(await fixture.owner().readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'demandAttoEth' })).toBe(6n * unit)
+		expect((await fixture.owner().getLogs({ address: pool().address, fromBlock: before + 1n })).length).toBeGreaterThan(0)
 	})
 
 	test('escalation deposits can fill final threshold dust below the start bond', async () => {

@@ -58,7 +58,7 @@ function requestData(params: unknown): Hex {
 	if (typeof transaction !== 'object' || transaction === null) throw new Error('RPC transaction must be an object')
 	const data: unknown = Reflect.get(transaction, 'data')
 	if (typeof data !== 'string' || !isHex(data)) throw new Error('RPC transaction data must be hex')
-	return data
+	return `0x${data.slice(2)}`
 }
 
 function publicClient(handler: (callSelector: string, data: Hex) => Promise<string> | string) {

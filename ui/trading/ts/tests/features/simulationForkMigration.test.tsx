@@ -1,3 +1,4 @@
+import { simulateSettlement } from '../../protocol/settlementSimulation.js'
 /// <reference types='bun-types' />
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
@@ -11,7 +12,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { loadForkMigrationContext } from '../../protocol/forks.js'
-import { createTradingWalletClient, discoverLiveUniverseMarketPage, loadLiveBalances } from '../../protocol/live.js'
+import { createTradingWalletClient, discoverLiveUniverseMarketPage, loadLiveBalances, submitFreshSettlement } from '../../protocol/live.js'
 import { FORKED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario } from '../../simulation/index.js'
 import { buttonByLabel } from '../support/dom.js'
 import { passthroughWorkflowPanelProps } from '../support/liveWorkflowPanelProps.js'
@@ -53,6 +54,8 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 		expect(market.pair).toBeDefined()
 		const account = backend.accounts[0]
 		if (account === undefined) throw new Error('Simulation wallet is missing')
+		const provider = backend.getProvider()
+		if (provider === undefined) throw new Error('Missing simulation provider')
 		const balances = await loadLiveBalances(client, market, account)
 		for (const balance of [balances.yes, balances.no, balances.invalid, balances.lp]) expect(balance).toBeGreaterThan(0n)
 		const context = await loadForkMigrationContext(client, market)
@@ -77,6 +80,8 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 			const market = markets[0]
 			const account = backend.accounts[0]
 			if (market === undefined || account === undefined) throw new Error('Forked scenario market or wallet is missing')
+			const provider = backend.getProvider()
+			if (provider === undefined) throw new Error('Missing simulation provider')
 			const balances = await loadLiveBalances(client, market, account)
 			let refreshes = 0
 			const rendered = await renderIntoDocument(
@@ -88,7 +93,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 					balances={balances}
 					balanceState='ready'
 					account={account}
-					walletClient={createTradingWalletClient(backend.getProvider(), account)}
+					walletClient={createTradingWalletClient(provider, account)}
 					settings={DEFAULT_TRADE_SETTINGS}
 					refresh={async () => {
 						refreshes += 1
@@ -111,7 +116,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 				const acknowledgment = document.querySelector('.trade-impact-acknowledge input[type="checkbox"]')
 				if (!(acknowledgment instanceof HTMLInputElement)) throw new Error('Missing migration acknowledgment')
 				expect(acknowledgment.checked).toBe(false)
-				expect(acknowledgment.closest('label')?.textContent).toContain('into the selected child universes and permanently locks my Yes transfers')
+				expect(acknowledgment.closest('label')?.textContent).toContain('in each selected child universe and keeps the original shares in the parent universe, permanently locking my Yes transfers')
 				expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
 				await act(() => acknowledgment.click())
 				// The action also waits for the migration quote, which can land just after the acknowledgment.
@@ -119,6 +124,18 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 				await act(() => buttonByLabel('Migrate to 1 child universe').click())
 				await waitFor(() => expect(document.body.textContent).toContain('Migrate to 1 child universe confirmed.'), simulationWaitOptions)
 				expect(refreshes).toBeGreaterThan(0)
+				// A completed target can remain in a batch when another wallet view migrated it first.
+				// Prepare No with its own shares, then repeat Yes alongside a new Yes-share destination.
+				const writer = createTradingWalletClient(provider, account)
+				const migrate = async (sourceOutcome: 'YES' | 'NO', targetOutcomeIndexes: readonly bigint[]) => {
+					const quote = await simulateSettlement(writer, configuration, market, account, 'migrate-shares', { sourceOutcome, targetOutcomeIndexes })
+					const hash = await submitFreshSettlement(writer, configuration, account, quote, async write => await write())
+					expect((await writer.waitForTransactionReceipt({ hash })).status).toBe('success')
+				}
+				await migrate('NO', [2n])
+				await migrate('YES', [1n, 2n])
+				const migrated = await loadForkMigrationContext(client, market, account)
+				for (const outcomeIndex of [1n, 2n]) expect(migrated.availableTargets.find(target => target.outcomeIndex === outcomeIndex)?.migrated.yes).toBe(balances.yes)
 			} finally {
 				await rendered.cleanup()
 				restore()

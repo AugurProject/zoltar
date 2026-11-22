@@ -40,7 +40,7 @@
 					</ol>
 					<figcaption id="fig-trading-enter-position-caption"><span class="figure-label">Entering a Yes position.</span> The trader ends up holding the Invalid shares from the complete set; the pair never sees them.</figcaption>
 				</figure>
-				<p>Suppose the reserves are 1,000 Yes and 1,000 No, the fee is zero, and 100 complete-set shares are created. Contract math uses attoShares, where one displayed share is 10<sup>18</sup> attoShares. Swapping 100 No therefore yields 90.909090909090909090 Yes after flooring to a whole number of attoShares. The wallet receives 190.909090909090909090 Yes and 100 Invalid; the reserves become 909.090909090909090910 Yes and 1,100 No. Flooring the output favors existing liquidity providers.</p>
+				<p>Suppose the reserves are 1,000 Yes and 1,000 No, the fee is zero, and 100 complete-set shares are created. This example uses 18-decimal collateral, so one displayed share is 10<sup>18</sup> raw share units. Share precision follows the collateral token: USDC shares use 10<sup>6</sup> units per displayed share. Swapping 100 No therefore yields 90.909090909090909090 Yes after flooring to a whole number of raw share units. The wallet receives 190.909090909090909090 Yes and 100 Invalid; the reserves become 909.090909090909090910 Yes and 1,100 No. Flooring the output favors existing liquidity providers.</p>
 				<p>A No purchase simply reverses the reserves. No position record is created anywhere: wallet Yes, No, Invalid, and LP balances are the complete accounting state.</p>
 			</section>
 		</main>

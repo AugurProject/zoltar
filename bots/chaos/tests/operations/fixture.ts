@@ -51,7 +51,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				awaitingForkContinuation: false,
 				coordinator,
 				childPoolPreparations: {},
-				priceFeed: coordinator,
+				priceFeed: address(80),
 				oracleExposureAttoEth: (10n ** 18n).toString(),
 				currentMintingCapacityAttoEth: (10n ** 19n).toString(),
 				ownQuestionForkReady: false,
@@ -82,18 +82,17 @@ export function snapshotFixture(): EcosystemSnapshot {
 				lastOracleSettlementTimestamp: '1999999900',
 				oraclePriceValidUntilTimestamp: '2000000200',
 				lastSettlementPortfolioTime: '1999999999',
-				minimumToken1ReportAttoEth: 10_000_000_000_000_003n.toString(),
+				minimumToken1ReportAttoEth: 10_000_000_000_000_005n.toString(),
 				oraclePriceValid: true,
 				oracleRequestFunding: {
 					escalationHaltMultiplierBps: '10000',
-					feePercentage: '0',
-					gasConsumedOpenOracleReportPrice: '3',
-					gasUnitsForOneDispute: '1',
+					minimumReportCollateral: '5',
+					minimumRepReportAttoRep: 0n.toString(),
+					settlementBountyMultiplierBps: '10000',
+
 					initialReportPriorityFeeAttoEthPerGas: 1n.toString(),
-					openOracleSecurityMultiplierBps: '10000',
-					protocolFee: '0',
+
 					settlementCallbackGasLimit: '2',
-					targetPriceErrorForDispute: '5000000',
 				},
 				oracleSettlementTime: '900',
 				pendingReportId: '0',
@@ -103,7 +102,8 @@ export function snapshotFixture(): EcosystemSnapshot {
 				questionId: '77',
 				questionOutcome: 3,
 				repToken: rep,
-				requestPriceCostAttoEth: 400_105n.toString(),
+				requestPriceCostAttoEth: 784_107n.toString(),
+				projectedSettlementRecoveryAttoRep: 0n.toString(),
 				projectedSettlementCollateralAttoEth: (10n ** 18n).toString(),
 				settlementCollateralAttoEth: (10n ** 18n).toString(),
 				shareTokenSupplyAttoShares: (10n ** 36n).toString(),
@@ -120,6 +120,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 			{
 				forkBurnDivisor: '5',
 				forkQuestionId: '0',
+				earliestForkTime: '0',
 				forkThresholdAttoRep: (10n ** 18n).toString(),
 				forkTime: '0',
 				id: '0',
@@ -180,17 +181,19 @@ export function completeGenesisInitializationState(overrides: Partial<GenesisIni
 	}
 }
 
-/** The OpenOracle report with id 42 that `pool` has pending, reported by its coordinator; tests override what they exercise. */
+/** The OpenOracle report with id 42 that `pool` has pending, created and called back through an authenticated report escrow; tests override what they exercise. */
 export function pendingPoolReportFixture(snapshot: EcosystemSnapshot, pool: PoolSnapshot, overrides: Partial<OracleGameSnapshot> = {}): OracleGameSnapshot {
+	const escrow = address(87)
+	pool.reportEscrows = { ...pool.reportEscrows, [overrides.reportId ?? '42']: escrow }
 	return {
 		currentAmount1: '1000',
 		currentAmount2: '1000',
-		currentReporter: pool.coordinator,
+		currentReporter: escrow,
 		disputeDelay: '60',
 		escalationHalt: '100000',
 		flags: 7,
-		game: { callbackContract: pool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-		helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: pool.coordinator },
+		game: { callbackContract: escrow, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+		helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: escrow },
 		multiplier: 140,
 		openOracle: snapshot.deployments.openOracle,
 		reportId: '42',

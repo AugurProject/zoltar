@@ -78,11 +78,11 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	const detail = getErrorDetail(error, fallbackMessage)
 	if (detail === undefined) return 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
 	const normalizedDetail = detail.toLowerCase()
+	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('0x058009cb')) return 'This report is not ready to dispute.'
+	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('0x6aeec261')) return 'Dispute window closed. Settle report instead.'
+	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('0x560ff900')) return openOracleCopy.reportAlreadySettled
+	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('0x833b7496')) return openOracleCopy.reportMissingInitialReport
 	if (genericMessage === ensureSentence(detail)) return genericMessage
-	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute.'
-	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle report instead.'
-	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return openOracleCopy.reportAlreadySettled
-	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return openOracleCopy.reportMissingInitialReport
 	return `Transaction failed while disputing the report. Reason: ${ensureSentence(detail)}`
 }
 export function getOpenOracleCreateGuardMessage({ isOnActiveAppChain, settlerRewardInput, walletConnected, walletBalanceAttoEth }: { isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletBalanceAttoEth: bigint | undefined }) {
@@ -279,8 +279,8 @@ function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'curren
  * current clock, so a report past its settlement time reads as ready to settle instead of pending. `pending` and an
  * untimed `disputed` remain only for cached summaries saved before their timing was recorded.
  */
-export type OpenOracleReportProgress = 'awaiting-dispute-window' | 'dispute-window-open' | 'disputed' | 'ready-to-settle' | 'settled' | 'pending'
-export const OPEN_ORACLE_REPORT_PROGRESS_ORDER: readonly OpenOracleReportProgress[] = ['awaiting-dispute-window', 'dispute-window-open', 'disputed', 'ready-to-settle', 'settled']
+export type OpenOracleReportProgress = 'awaiting-dispute-window' | 'dispute-window-open' | 'dispute-window-closing' | 'disputed' | 'ready-to-settle' | 'settled' | 'pending'
+export const OPEN_ORACLE_REPORT_PROGRESS_ORDER: readonly OpenOracleReportProgress[] = ['awaiting-dispute-window', 'dispute-window-open', 'dispute-window-closing', 'disputed', 'ready-to-settle', 'settled']
 type OpenOracleReportProgressReport = Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'timeType'> & { disputeDelay?: bigint | undefined; settlementTime?: bigint | undefined }
 export function getOpenOracleReportProgress(report: OpenOracleReportProgressReport, clock: { currentBlockNumber?: bigint | undefined; currentTime?: bigint | undefined }): OpenOracleReportProgress {
 	const status = getOpenOracleReportStatus(report)
@@ -290,6 +290,7 @@ export function getOpenOracleReportProgress(report: OpenOracleReportProgressRepo
 	if (currentClock >= report.reportTimestamp + report.settlementTime) return 'ready-to-settle'
 	if (report.disputeOccurred) return 'disputed'
 	if (report.disputeDelay !== undefined && currentClock < report.reportTimestamp + report.disputeDelay) return 'awaiting-dispute-window'
+	if (getOpenOracleDisputeSubmissionTimingGuard({ currentClock, reportTimestamp: report.reportTimestamp, settlementTime: report.settlementTime, timeType: report.timeType }) !== undefined) return 'dispute-window-closing'
 	return 'dispute-window-open'
 }
 export function getOpenOracleReportProgressLabel(progress: OpenOracleReportProgress) {
@@ -298,6 +299,8 @@ export function getOpenOracleReportProgressLabel(progress: OpenOracleReportProgr
 			return openOracleCopy.awaitingDisputeWindow
 		case 'dispute-window-open':
 			return openOracleCopy.disputeWindowOpen
+		case 'dispute-window-closing':
+			return openOracleCopy.disputeWindowClosing
 		case 'disputed':
 			return openOracleCopy.disputed
 		case 'ready-to-settle':
@@ -318,6 +321,7 @@ export function getOpenOracleReportProgressTone(progress: OpenOracleReportProgre
 			return 'muted'
 		case 'dispute-window-open':
 			return 'pending'
+		case 'dispute-window-closing':
 		case 'disputed':
 			return 'warning'
 		case 'ready-to-settle':
@@ -489,7 +493,7 @@ export function formatOpenOracleTimingDuration(value: bigint, timeType: boolean)
 	return formatDuration(value)
 }
 
-/** Hint for a seconds input, such as `86400 s = 1d 0h 0m`, so typed durations stay readable. */
+/** Hint for a seconds input, such as `86400 seconds = 1d`, so typed durations stay readable. */
 export function formatOpenOracleSecondsInputHint(input: string) {
 	const seconds = tryParseBigIntInput(input)
 	if (seconds === undefined || seconds < 0n) return undefined

@@ -14,7 +14,6 @@ const leaf = { amountAttoRep: 10n, cumulativeAmountAttoRep: 20n, depositor: owne
 const snapshotRoot = keccak256(encodeAbiParameters([{ type: 'uint256' }], [777n]))
 const snapshotPeaks = Array.from({ length: 64 }, (_, index) => (index === 1 ? snapshotRoot : zeroHash))
 const identity = { ...leaf, escalationGame: child, outcome: 'yes' as const, leafIndex: 1n, snapshotRoot, snapshotLeafCount: 2n }
-const _proof = { ...leaf, leafIndex: 1n, merkleMountainRangePeakIndex: 0n, merkleMountainRangeSiblings: [], nullifierSiblings: [] }
 function batchReads(client: ReturnType<typeof asWriteClient>) {
 	return Object.assign(client, {
 		getBlock: async ({ blockNumber }: { blockNumber: bigint }) => ({ number: blockNumber, hash: snapshotRoot, timestamp: 1n, transactions: [] }),
@@ -179,7 +178,7 @@ for (const _mode of [
 		const transform = { consumedBeforeAttoRep: 1n }
 		const claimId = keccak256(encodeAbiParameters([{ type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [1, 10n, 20n, 1n]))
 		const commitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [game, claimId, zeroHash, 1n]))
-		const sent: { to?: string | null; data?: Hex }[] = []
+		const sent: { to?: string | null | undefined; data?: Hex | undefined }[] = []
 		const client = Object.assign(
 			batchReads(
 				asWriteClient(

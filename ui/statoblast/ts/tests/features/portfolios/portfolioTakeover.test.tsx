@@ -13,7 +13,7 @@ import { capitalSnapshot, index, capital, unit } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
-const idleActions = { ownerReason: undefined, scope: undefined, busy: undefined, runPortfolioAction: async () => undefined }
+const idleActions = { ownerReason: undefined, scope: [], busy: undefined, runPortfolioAction: async () => undefined }
 
 /** Installs a capital reader whose position 2 is a liquidating 15 REP / 10 ETH account at accepted price epoch 4. */
 function installTakeoverReader(snapshot: PortfolioAccountSnapshot) {
@@ -41,11 +41,13 @@ async function fill(field: HTMLInputElement | undefined, value: string) {
 
 test('manual takeover requires all consent bounds and rejects a changed price before signing', async () => {
 	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
+	snapshot.ownerPrincipalAttoRep = 40n * unit
+	snapshot.positions = snapshot.positions.map(position => ({ ...position, rep: 40n * unit }))
 	const reader = installTakeoverReader(snapshot)
 	const requests: PortfolioTransaction[] = []
 	const actions = {
 		ownerReason: undefined,
-		scope: undefined,
+		scope: [],
 		busy: undefined,
 		runPortfolioAction: async (_action: string, _label: string, build: () => PortfolioTransaction | Promise<PortfolioTransaction>) => {
 			requests.push(await build())
@@ -58,7 +60,9 @@ test('manual takeover requires all consent bounds and rejects a changed price be
 	const fields = Array.from(view.container.querySelectorAll('input'))
 	for (const [offset, value] of ['2', '10', '20', '200', '100'].entries()) await fill(fields[offset], value)
 	await waitFor(() => expect(button.disabled).toBe(false))
-	await act(() => button.click())
+	await act(() => {
+		button.click()
+	})
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing takeover transaction')
 	const decoded = decodeFunctionData({ abi: capitalArtifact.abi, data: request.data })
@@ -85,7 +89,7 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	const requests: PortfolioTransaction[] = []
 	const actions = {
 		ownerReason: undefined,
-		scope: undefined,
+		scope: [],
 		busy: undefined,
 		runPortfolioAction: async (_action: string, _label: string, build: () => PortfolioTransaction | Promise<PortfolioTransaction>) => {
 			requests.push(await build())
@@ -109,7 +113,9 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	await waitFor(() => expect(cureButton.disabled).toBe(false))
 	expect(takeOverButton.disabled).toBe(true)
 	expect(view.container.textContent).toContain('Cure it instead; no award is paid.')
-	await act(() => cureButton.click())
+	await act(() => {
+		cureButton.click()
+	})
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing cure transaction')
 	const decoded = decodeFunctionData({ abi: capitalArtifact.abi, data: request.data })
@@ -128,7 +134,7 @@ test('a position the unused commitment cannot restore keeps the takeover and dis
 	reader.setRead('liquidationStarted', 1n, capital)
 	reader.setRead('acceptedPriceEpoch', 4n, capital)
 	reader.install()
-	const actions = { ownerReason: undefined, scope: undefined, busy: undefined, runPortfolioAction: async () => undefined }
+	const actions = { ownerReason: undefined, scope: [], busy: undefined, runPortfolioAction: async () => undefined }
 	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
 	lifecycle.trackRendered(view)
 	const field = view.container.querySelector('input')
@@ -143,6 +149,8 @@ test('a position the unused commitment cannot restore keeps the takeover and dis
 
 test('entering another target clears the bounds typed for the previous position but a new block keeps them', async () => {
 	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
+	snapshot.ownerPrincipalAttoRep = 40n * unit
+	snapshot.positions = snapshot.positions.map(position => ({ ...position, rep: 40n * unit }))
 	installTakeoverReader(snapshot)
 	const view = await renderTakeover(snapshot, idleActions)
 	const button = view.container.querySelector('button')
@@ -150,13 +158,17 @@ test('entering another target clears the bounds typed for the previous position 
 	const fields = Array.from(view.container.querySelectorAll('input'))
 	for (const [offset, value] of ['2', '10', '20', '200', '100'].entries()) await fill(fields[offset], value)
 	await waitFor(() => expect(button.disabled).toBe(false))
-	await act(() => render(<PortfolioTakeover model={{ snapshot: { ...snapshot, blockHash: `0x${'ab'.repeat(32)}` } }} actions={idleActions} />, view.container))
+	await act(() => {
+		render(<PortfolioTakeover model={{ snapshot: { ...snapshot, blockHash: `0x${'ab'.repeat(32)}` } }} actions={idleActions} />, view.container)
+	})
 	expect(fields.slice(1).map(field => field.value)).toEqual(['10', '20', '200', '100'])
 	await fill(fields[0], '3')
 	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '']))
 	await waitFor(() => expect(button.disabled).toBe(true))
 	for (const [offset, value] of ['10', '20', '200', '100'].entries()) await fill(fields[offset + 1], value)
-	await act(() => render(<PortfolioTakeover model={{ snapshot: { ...snapshot, capitalLedger: getAddress('0x0000000000000000000000000000000000000abc') } }} actions={idleActions} />, view.container))
+	await act(() => {
+		render(<PortfolioTakeover model={{ snapshot: { ...snapshot, capitalLedger: getAddress('0x0000000000000000000000000000000000000abc') } }} actions={idleActions} />, view.container)
+	})
 	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '']))
 	expect(fields[0]?.value).toBe('3')
 })
@@ -171,8 +183,12 @@ test('bounds outlive a snapshot reload and a first target, and clear when an ID 
 	for (const [offset, value] of typed.entries()) await fill(fields[offset + 1], value)
 	await fill(fields[0], '5')
 	expect(bounds()).toEqual(typed)
-	await act(() => render(<PortfolioTakeover model={{ snapshot: undefined }} actions={idleActions} />, view.container))
-	await act(() => render(<PortfolioTakeover model={{ snapshot }} actions={idleActions} />, view.container))
+	await act(() => {
+		render(<PortfolioTakeover model={{ snapshot: undefined }} actions={idleActions} />, view.container)
+	})
+	await act(() => {
+		render(<PortfolioTakeover model={{ snapshot }} actions={idleActions} />, view.container)
+	})
 	expect(bounds()).toEqual(typed)
 	await fill(fields[0], '')
 	expect(bounds()).toEqual(typed)
@@ -196,7 +212,7 @@ test.each([
 test('a disabled reason both actions share renders once and describes both buttons', async () => {
 	const snapshot = capitalSnapshot()
 	capitalClient(snapshot).install()
-	const actions = { ownerReason: undefined, scope: undefined, busy: undefined, runPortfolioAction: async () => undefined }
+	const actions = { ownerReason: undefined, scope: [], busy: undefined, runPortfolioAction: async () => undefined }
 	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
 	lifecycle.trackRendered(view)
 	const reason = 'Enter a positive position ID.'
@@ -205,4 +221,26 @@ test('a disabled reason both actions share renders once and describes both butto
 	expect(described).toHaveLength(2)
 	expect(described[0]).toBeTruthy()
 	expect(described[1]).toBe(described[0])
+})
+
+test.each([
+	['cohort', 'Your position and the target have different retirement cohorts.'],
+	['consent', 'Your idle REP exceeds the maximum own REP you consented to pledge.'],
+	['collateral', 'Deposit more REP before taking over this commitment.'],
+	['principal', 'Your resulting principal exceeds the maximum total principal.'],
+	['commitment', 'Your resulting commitment exceeds the maximum total commitment.'],
+] as const)('blocks an ineligible takeover receiver: %s', async (condition, reason) => {
+	const base = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
+	const snapshot = {
+		...base,
+		ownerPrincipalAttoRep: { collateral: 1n, consent: 45n, cohort: 40n, principal: 40n, commitment: 40n }[condition] * unit,
+		ownerAccount: { ...base.ownerAccount, freeAttoRep: condition === 'consent' ? 5n * unit : 0n },
+		positions: base.positions.map(position => ({ ...position, rep: (condition === 'collateral' ? 1n : 40n) * unit, batch: condition === 'cohort' ? 2n : 0n })),
+	}
+	installTakeoverReader(snapshot)
+	const view = await renderTakeover(snapshot, idleActions)
+	const fields = [...view.container.querySelectorAll('input')]
+	for (const [index, value] of ['2', '10', condition === 'consent' ? '4' : '20', condition === 'principal' ? '39' : '200', condition === 'commitment' ? '12' : '100'].entries()) await fill(fields[index], value)
+	await waitFor(() => expect(view.container.textContent).toContain(reason))
+	expect(view.container.querySelector('button')?.disabled).toBe(true)
 })

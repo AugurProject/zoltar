@@ -12,4 +12,4 @@ export function resolvedOutcome(outcome: 'INVALID' | 'YES' | 'NO') {
 	return `Resolved ${outcomeLabel(outcome)}`
 }
 
-export const recoveryRepPurchase = 'New complete sets require recovery REP. Use portfolio purchases.'
+export const recoveryRepPurchase = 'New complete sets require recovery REP. Purchase complete sets from this market’s portfolio in Statoblast.'

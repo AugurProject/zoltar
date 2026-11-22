@@ -29,9 +29,9 @@ export function getZoltarScenarioLabel(scenario: ZoltarScenario) {
 export function getZoltarScenarioDescription(scenario: ZoltarScenario) {
 	switch (scenario) {
 		case 'two-questions':
-			return 'App contracts are deployed with two questions ready to browse and use for a fork.'
+			return 'App contracts are deployed with two questions: one ended and ready to use for a fork, and one still open.'
 		case 'forked-categorical':
-			return 'App contracts are deployed, one five-way categorical fork has already happened, and two child universes are deployed. Use it to test fork warnings, REP migration, and universe switching.'
+			return 'App contracts are deployed, one categorical fork with five named answers plus Invalid has already happened, and two child universes are deployed. Use it to test fork warnings, REP migration, and universe switching.'
 		default:
 			return assertNever(scenario)
 	}

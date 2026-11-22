@@ -205,8 +205,10 @@ function publicOperatorSnapshot(value: unknown) {
 	if (Array.isArray(source['alerts'])) snapshot['alerts'] = publicList(source['alerts'], publicAlert)
 	if (record(source['centralizedMarket']) !== undefined) snapshot['centralizedMarket'] = publicCentralizedMarket(source['centralizedMarket'])
 	if (record(source['marketConsensus']) !== undefined) snapshot['marketConsensus'] = publicMarketConsensus(source['marketConsensus'])
+	const walletRep = record(source['walletRep'])
+	if (walletRep !== undefined) snapshot['walletRep'] = Object.fromEntries(Object.entries(walletRep).filter(([token, amount]) => /^0x[0-9a-fA-F]{40}$/.test(token) && typeof amount === 'string' && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(amount)))
 	if (record(source['metrics']) !== undefined) {
-		snapshot['metrics'] = publicFields(source['metrics'], ['approvedUniverseCount', 'assumedOpenInterestEth', 'candidateCount', 'deployedRep', 'eligiblePoolCount', 'poolCount', 'selectedPoolCount', 'walletEth', 'walletRep'])
+		snapshot['metrics'] = publicFields(source['metrics'], ['approvedUniverseCount', 'assumedOpenInterestEth', 'candidateCount', 'deployedRep', 'eligiblePoolCount', 'poolCount', 'selectedPoolCount', 'walletEth'])
 	}
 	if (Array.isArray(source['pendingTransactions'])) snapshot['pendingTransactions'] = publicList(source['pendingTransactions'], intent => publicFields(intent, ['hash', 'label', 'mode', 'nonce', 'submissionBlock']))
 	if (Array.isArray(source['rpcEndpointHealth'])) snapshot['rpcEndpointHealth'] = publicList(source['rpcEndpointHealth'], publicRpcEndpointHealth)

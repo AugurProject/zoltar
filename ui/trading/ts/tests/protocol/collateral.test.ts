@@ -13,7 +13,7 @@ function metadataClient(symbol: string, decimals: number) {
 				if (!Array.isArray(params)) throw new Error('Missing parameters')
 				const transaction: unknown = params[0]
 				if (transaction === null || typeof transaction !== 'object' || !('data' in transaction) || typeof transaction.data !== 'string' || !isHex(transaction.data, { strict: true })) throw new Error('Missing call')
-				const name = decodeFunctionData({ abi, data: transaction.data }).functionName
+				const name = decodeFunctionData({ abi, data: `0x${transaction.data.slice(2)}` }).functionName
 				return name === 'symbol' ? encodeAbiParameters([{ type: 'string' }], [symbol]) : encodeAbiParameters([{ type: 'uint8' }], [decimals])
 			},
 		}),
@@ -23,7 +23,7 @@ function metadataClient(symbol: string, decimals: number) {
 test('reads an arbitrary ERC20 decimals and marks its self-reported symbol as unverified', async () => {
 	const collateral = await loadTradingCollateralAsset(metadataClient('TOKEN', 8), token)
 	expect(collateral).toEqual({ token, symbol: 'TOKEN (0x000000…0000aa)', decimals: 8, native: false })
-	expect(formatCollateralAmount(123_456_789n, { collateral })).toBe('1.2346 TOKEN (0x000000…0000aa)')
+	expect(formatCollateralAmount(123_456_789n, { collateral })).toBe('≈ 1.23 TOKEN (0x000000…0000aa)')
 })
 
 // #1462: a counterfeit token claiming a reserved symbol must not read as the real collateral.
@@ -60,6 +60,6 @@ test('ERC20s without optional metadata remain usable with labelled base units', 
 test('six-decimal outcome quantities and their redemption value agree', () => {
 	const collateral = { token, symbol: 'USDC', decimals: 6, native: false }
 	const market = { collateral, settlementCollateralAttoEth: 2_000_000n, shareTokenSupplyAttoShares: 2_000_000n }
-	expect(formatCompleteSetQuantity(1_000_000n, 4, 'nearest', market)).toBe('1 complete set')
-	expect(formatCollateralEth(1_000_000n, market)).toBe('1 USDC')
+	expect(formatCompleteSetQuantity(1_000_000n, 4, 'nearest', market)).toBe('1.0000 complete set')
+	expect(formatCollateralEth(1_000_000n, market)).toBe('1.00 USDC')
 })

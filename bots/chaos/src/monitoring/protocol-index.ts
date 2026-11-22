@@ -3,7 +3,7 @@ import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { compareUnsignedStrings, type CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
-import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
+import type { AuctionBidSnapshot, AuctionRefundSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
 import { ChaosProtocolIndexReorgError, canonicalLogOrdinal, fetchProtocolLogs, orderedCanonicalLogs, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex, type CanonicalLogPosition } from './protocol-index-context.ts'
 
 type IndexClient = PublicClient<Transport, Chain>
@@ -14,7 +14,7 @@ interface ProtocolIndexCursor {
 }
 
 export interface ChaosProtocolIndex {
-	schemaVersion: 4
+	schemaVersion: 5
 	chainId: number
 	openOracle: Address
 	zoltar: Address
@@ -29,7 +29,6 @@ export interface ChaosProtocolIndex {
 	auctionRefunds: Record<string, AuctionRefundSnapshot>
 	escalationDeposits: EscalationDepositSnapshot[]
 	migrationRepSplits: MigrationRepSplitProgressSnapshot[]
-	childRepSplits: ChildRepSplitProgressSnapshot[]
 }
 
 export interface UpdateProtocolIndexContext {
@@ -87,7 +86,6 @@ const ORDINARY_SETTLEMENT_INITIALIZED = eventTopic('OrdinarySettlementInitialize
 const CLAIM_DEPOSIT = eventTopic('ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)')
 const CARRY_DEPOSIT_CONSUMED = eventTopic('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)')
 const MIGRATION_REP_SPLIT = eventTopic('MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)')
-const CHILD_REP_SPLIT = eventTopic('ChildRepSplit(address,uint256,uint256,uint256)')
 const UINT248_LIMIT = 1n << 248n
 const MAXIMUM_ACTIVE_SIGNER_REPORTS = 64
 
@@ -297,15 +295,6 @@ function sortedMigrationRepSplits(source: readonly MigrationRepSplitProgressSnap
 		})
 }
 
-function sortedChildRepSplits(source: readonly ChildRepSplitProgressSnapshot[]) {
-	return source
-		.map(progress => ({ ...progress }))
-		.sort((left, right) => {
-			const poolOrder = left.pool.toLowerCase().localeCompare(right.pool.toLowerCase())
-			return poolOrder === 0 ? compareUnsignedStrings(left.outcomeIndex, right.outcomeIndex) : poolOrder
-		})
-}
-
 function unsignedProgressValue(value: string, label: string, bits = 256) {
 	if (!/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be an unsigned integer string`)
 	const parsed = BigInt(value)
@@ -315,10 +304,6 @@ function unsignedProgressValue(value: string, label: string, bits = 256) {
 
 function migrationProgressKey(universeId: string, outcomeIndex: string) {
 	return `${universeId}:${outcomeIndex}`
-}
-
-function childProgressKey(pool: Address, outcomeIndex: string) {
-	return `${pool.toLowerCase()}:${outcomeIndex}`
 }
 
 function indexedMigrationProgress(source: readonly MigrationRepSplitProgressSnapshot[]) {
@@ -332,19 +317,6 @@ function indexedMigrationProgress(source: readonly MigrationRepSplitProgressSnap
 		const key = migrationProgressKey(progress.universeId, progress.outcomeIndex)
 		if (indexed.has(key)) throw new Error(`Persisted migration progress contains duplicate route ${key}`)
 		indexed.set(key, { ...progress })
-	}
-	return indexed
-}
-
-function indexedChildProgress(source: readonly ChildRepSplitProgressSnapshot[]) {
-	const indexed = new Map<string, ChildRepSplitProgressSnapshot>()
-	for (const progress of source) {
-		const pool = getAddress(progress.pool)
-		unsignedProgressValue(progress.outcomeIndex, 'Child-pool progress outcome index')
-		unsignedProgressValue(progress.childPoolRepSplitAttoRep, 'Child-pool progress cumulative REP')
-		const key = childProgressKey(pool, progress.outcomeIndex)
-		if (indexed.has(key)) throw new Error(`Persisted child-pool progress contains duplicate route ${key}`)
-		indexed.set(key, { ...progress, pool })
 	}
 	return indexed
 }
@@ -368,7 +340,6 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 	let auctionRefunds: Record<string, AuctionRefundSnapshot> = {}
 	let escalationDeposits: EscalationDepositSnapshot[] = []
 	let migrationRepSplits = new Map<string, MigrationRepSplitProgressSnapshot>()
-	let childRepSplits = new Map<string, ChildRepSplitProgressSnapshot>()
 	if (context.previous !== undefined) {
 		validatePreviousProtocolIndex(context, context.previous)
 		if ((context.previous.availableStartBlock ?? context.previous.startBlock) !== availableStartBlock.toString()) throw new Error('Protocol index log coverage changed without resetting the index')
@@ -389,7 +360,6 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		auctionRefunds = activeAuctionRefunds(context.previous.auctionRefunds)
 		escalationDeposits = activeEscalationDeposits(context.previous.escalationDeposits)
 		migrationRepSplits = indexedMigrationProgress(context.previous.migrationRepSplits)
-		childRepSplits = indexedChildProgress(context.previous.childRepSplits)
 	}
 
 	if (fromBlock > context.anchorBlockNumber) {
@@ -402,7 +372,6 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 				...context.previous,
 				auctionBids,
 				auctionRefunds,
-				childRepSplits: sortedChildRepSplits([...childRepSplits.values()]),
 				escalationDeposits,
 				migrationRepSplits: sortedMigrationRepSplits([...migrationRepSplits.values()]),
 				reports: [...reports.values()].sort((left, right) => (BigInt(left.reportId) < BigInt(right.reportId) ? -1 : 1)),
@@ -417,7 +386,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		toBlock = maximumToBlock < context.anchorBlockNumber ? maximumToBlock : context.anchorBlockNumber
 		const [rawOracleLogs, rawMigrationLogs, rawAuctionLogs, rawEscalationLogs] = await Promise.all([
 			fetchProtocolLogs(context.client, { address: context.openOracle, fromBlock, toBlock, topics: [REPORT_SUBMITTED, REPORT_DISPUTED, REPORT_SETTLED] }),
-			fetchProtocolLogs(context.client, { address: [context.zoltar, context.securityPoolForker], fromBlock, toBlock, topics: [MIGRATION_REP_SPLIT, CHILD_REP_SPLIT] }),
+			fetchProtocolLogs(context.client, { address: context.zoltar, fromBlock, toBlock, topics: [MIGRATION_REP_SPLIT] }),
 			context.auctionAddresses.length === 0 ? [] : fetchProtocolLogs(context.client, { address: [...context.auctionAddresses], fromBlock, toBlock, topics: [BID_SUBMITTED, BID_SETTLED, REFUND_WITHDRAWN] }),
 			context.escalationGames.length === 0 ? [] : fetchProtocolLogs(context.client, { address: context.escalationGames.map(route => route.escalationGame), fromBlock, toBlock, topics: [LOCAL_DEPOSIT_APPENDED, DEPOSIT_ON_OUTCOME, CLAIM_DEPOSIT, CARRY_DEPOSIT_CONSUMED, ORDINARY_SETTLEMENT_INITIALIZED] }),
 		])
@@ -435,7 +404,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		requireTrustedReportBounds(context, reports, trustedReport)
 		const migrationLogs = orderedCanonicalLogs(rawMigrationLogs, fromBlock, toBlock, 'Migration progress index')
 		for (const log of migrationLogs) {
-			if (log.address.toLowerCase() !== context.zoltar.toLowerCase() && log.address.toLowerCase() !== context.securityPoolForker.toLowerCase()) {
+			if (log.address.toLowerCase() !== context.zoltar.toLowerCase()) {
 				throw new Error(`Migration progress index returned unexpected emitter ${log.address}`)
 			}
 			const topic0 = log.topics[0]
@@ -469,27 +438,6 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 				}
 				if (existing !== undefined && existing.childUniverseId !== progress.childUniverseId) throw new Error('MigrationRepSplit route changed its derived child universe ID')
 				migrationRepSplits.set(routeKey, progress)
-			} else if (topic0 === CHILD_REP_SPLIT) {
-				if (log.address.toLowerCase() !== context.securityPoolForker.toLowerCase()) throw new Error('ChildRepSplit was emitted outside canonical SecurityPoolForker')
-				if (log.topics.length !== 3) throw new Error('ChildRepSplit has an invalid indexed-field count')
-				const pool = strictTopicAddress(log.topics[1], 'ChildRepSplit parent')
-				const outcomeIndex = topicUnsigned(log.topics[2], 'ChildRepSplit outcome index')
-				const data = hexToBytes(log.data)
-				if (data.length !== 64) throw new Error('ChildRepSplit has an invalid data length')
-				const cumulativeAttoRep = readUnsigned(data, 0, 32)
-				readUnsigned(data, 32, 32)
-				const routeKey = childProgressKey(pool, outcomeIndex.toString())
-				const existing = childRepSplits.get(routeKey)
-				const previousCumulative = existing === undefined ? 0n : BigInt(existing.childPoolRepSplitAttoRep)
-				if (cumulativeAttoRep <= previousCumulative) {
-					throw new Error(`ChildRepSplit cumulative progress did not increase for pool ${pool} outcome ${outcomeIndex.toString()}`)
-				}
-				const progress: ChildRepSplitProgressSnapshot = {
-					childPoolRepSplitAttoRep: cumulativeAttoRep.toString(),
-					outcomeIndex: outcomeIndex.toString(),
-					pool,
-				}
-				childRepSplits.set(routeKey, progress)
 			}
 		}
 		if (context.auctionAddresses.length > 0) {
@@ -607,13 +555,12 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		auctionBids: activeAuctionBids(auctionBids),
 		auctionRefunds: activeAuctionRefunds(auctionRefunds),
 		chainId: context.chainId,
-		childRepSplits: sortedChildRepSplits([...childRepSplits.values()]),
 		cursor: { blockHash: anchorHash, blockNumber: toBlock.toString() },
 		escalationDeposits: activeEscalationDeposits(escalationDeposits),
 		migrationRepSplits: sortedMigrationRepSplits([...migrationRepSplits.values()]),
 		openOracle: context.openOracle,
 		reports: [...reports.values()].sort((left, right) => (BigInt(left.reportId) < BigInt(right.reportId) ? -1 : 1)),
-		schemaVersion: 4,
+		schemaVersion: 5,
 		securityPoolForker: context.securityPoolForker,
 		startBlock: context.startBlock.toString(),
 		...(partialHistory ? { availableStartBlock: availableStartBlock.toString() } : {}),
@@ -627,7 +574,6 @@ export function protocolIndexDiscoveryInputs(index: ChaosProtocolIndex) {
 	return {
 		indexedAuctionBids: index.auctionBids,
 		indexedAuctionRefunds: index.auctionRefunds,
-		indexedChildRepSplits: index.childRepSplits,
 		indexedEscalationDeposits: index.escalationDeposits,
 		indexedMigrationRepSplits: index.migrationRepSplits,
 		indexedReports: index.reports,

@@ -224,7 +224,7 @@ export function ReportingSettlementSection({
 		)
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && !reportingStatusMissing && withdrawableSides.length === 0
 	const hasImportedForkedDeposits = activeReportingDetails?.sides.some(side => side.importedUserDeposits.length > 0) ?? false
-	const migrationSettlement = activeReportingDetails?.settlementState === 'migration-required' || activeReportingDetails?.settlementState === 'migration-expired'
+	const migrationSettlement = activeReportingDetails?.settlementState === 'migration-required'
 	return (
 		<SectionBlock className='reporting-settlement-section' title={transactionCopy.settleEscalationDeposits} variant='embedded'>
 			<WalletActionFixReason

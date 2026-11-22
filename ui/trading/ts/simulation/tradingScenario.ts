@@ -64,8 +64,7 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 		const liquidityHash = !nativeFunding
 			? await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithCollateral', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, 0n, 0n, account, block.timestamp + 1_200n, budget] })
 			: await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, 0n, 0n, account, block.timestamp + 1_200n], value: 10n ** 16n })
-		const liquidityReceipt = await readClient.waitForTransactionReceipt({ hash: liquidityHash })
-		if (liquidityReceipt.status !== 'success') throw new Error('Trading simulation liquidity initialization reverted')
+		await readClient.waitForTransactionReceipt({ hash: liquidityHash })
 		const portfolio = await readClient.readContract({ abi: factoryArtifact.abi, address: addresses.securityPoolFactory, functionName: 'getSecurityPoolPortfolio', args: [market.pool] })
 		await sendPortfolioTransaction(writeClient, await prepareSeededPortfolioMint(portfolioReadClient(readClient), account, portfolio, market.questionId, !nativeFunding ? 5n * 10n ** BigInt(asset.decimals) : 5n * 10n ** 15n, 100n), 'Fund trading wallet shares')
 		if (parameters.scenario === FORKED_TRADING_SIMULATION_SCENARIO) await forkSeededPortfolio(parameters, portfolio, market.pool, market.questionId)

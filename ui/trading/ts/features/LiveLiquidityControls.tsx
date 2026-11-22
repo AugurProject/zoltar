@@ -114,7 +114,7 @@ export function LiveLiquidityControls({
 	if (operation === 'initialize') actionLabel = market.pair === undefined ? liquidityCopy.createMarketAndAddLiquidityAction : liquidityCopy.initializeLiquidityAction
 	else if (operation === 'remove') actionLabel = liquidityCopy.removeLiquidityAction
 	// A zero is marked invalid with its reason too; an amount the wallet cannot fund says so at the field as well as the action.
-	const amountError = amount.trim() === '' ? undefined : (amountFormatError ?? liquidityShortfallReason(operation, parsed, walletEthAttoEth, balances?.lp))
+	const amountError = amount.trim() === '' ? undefined : (amountFormatError ?? liquidityShortfallReason(operation, parsed, fundingBalance, balances?.lp, tokenFunded(market), asset.symbol))
 	// Creating or adding to a closed market cannot happen, so its inputs rest disabled beside the action's reason.
 	const inputsDisabled = workflowLocked || funding.pending || (operation !== 'remove' && closedForAdding)
 	let amountHint: string | undefined
@@ -259,6 +259,9 @@ function LiquidityPreviewSection({ preview, bounds, market, connected, protectio
 								{formatOutcomeWithValue(bounds.minimumYesDeposit, shareOutcome.yes, market)} / {formatOutcomeWithValue(bounds.minimumNoDeposit, shareOutcome.no, market)}
 							</MetricField>
 						) : undefined}
+						<MetricField label={liquidityCopy.maximumDeposit}>
+							{formatOutcomeQuantity(bounds.maximumYesDeposit, shareOutcome.yes, 18, 'down', market)} / {formatOutcomeQuantity(bounds.maximumNoDeposit, shareOutcome.no, 18, 'down', market)}
+						</MetricField>
 					</DataGrid>
 				</ReadOnlyDetailAccordion>
 			)}

@@ -59,6 +59,7 @@ export type MarketSourceRow = {
 }
 
 export type Snapshot = {
+	walletRep?: Record<string, string>
 	activities: Activity[]
 	alerts: { message: string; severity: 'error' | 'warning' }[]
 	centralizedMarket?: CentralizedMarket
@@ -82,7 +83,6 @@ export type Snapshot = {
 		poolCount: number
 		selectedPoolCount: number
 		walletEth: string
-		walletRep: string
 	}
 	network?: 'mainnet' | 'sepolia'
 	paused: boolean
@@ -164,7 +164,8 @@ const snapshot = object<Snapshot>({
 	lastScanAt: optionalString,
 	lastScannedBlock: optionalString,
 	lastScannedTimestamp: optionalString,
-	metrics: object<Snapshot['metrics']>({ approvedUniverseCount: numberValue, assumedOpenInterestEth: stringValue, candidateCount: numberValue, deployedRep: stringValue, eligiblePoolCount: numberValue, poolCount: numberValue, selectedPoolCount: numberValue, walletEth: stringValue, walletRep: stringValue }),
+	walletRep: optional(dictionary(stringValue)),
+	metrics: object<Snapshot['metrics']>({ approvedUniverseCount: numberValue, assumedOpenInterestEth: stringValue, candidateCount: numberValue, deployedRep: stringValue, eligiblePoolCount: numberValue, poolCount: numberValue, selectedPoolCount: numberValue, walletEth: stringValue }),
 	network: optional(network),
 	paused: booleanValue,
 	rpcEndpointHealth: optional(array(object<NonNullable<Snapshot['rpcEndpointHealth']>[number]>({ consecutiveFailures: numberValue, error: optionalString, latencyMilliseconds: optional(numberValue), nextRetryAt: optionalString, status: stringValue, target: stringValue }))),

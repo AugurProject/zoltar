@@ -588,12 +588,14 @@ describe('contract deployment internals', () => {
 
 		let plannedFunctions: string[] = []
 		const client = asWriteClient({
-			onTransactionPlan: reviewed
-				? steps => {
-						expect(preparedPreviews).toHaveLength(0)
-						plannedFunctions = steps.map(step => step.functionName)
+			...(reviewed
+				? {
+						onTransactionPlan: (steps: Parameters<NonNullable<WriteClient['onTransactionPlan']>>[0]) => {
+							expect(preparedPreviews).toHaveLength(0)
+							plannedFunctions = steps.map(step => step.functionName)
+						},
 					}
-				: undefined,
+				: {}),
 			getBalance: async () => 0n,
 			getCode: async () => (proxyInstalled ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
 			onTransactionPrepared: preview => {

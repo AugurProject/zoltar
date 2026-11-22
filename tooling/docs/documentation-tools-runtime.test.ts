@@ -220,15 +220,15 @@ test('invariant explorer filters, expands, resets, and opens a fragment target',
 		expect(keyword.value).toBe('')
 		expect(count.textContent).toBe(`${entries.length} of ${entries.length} invariants`)
 
-		const livenessOption = Array.from(typeSelect.options).find(option => option.value === 'Conservation')
-		const toolingOption = Array.from(statusSelect.options).find(option => option.value === 'Contract guard and regression tests')
-		if (livenessOption === undefined || toolingOption === undefined) throw new Error('Invariant explorer facets are missing expected options')
+		const livenessOption = Array.from(typeSelect.options).find(option => option.value === 'Liveness')
+		const guardOption = Array.from(statusSelect.options).find(option => option.value === 'Contract guard')
+		if (livenessOption === undefined || guardOption === undefined) throw new Error('Invariant explorer facets are missing expected options')
 		typeSelect.value = livenessOption.value
 		typeSelect.dispatchEvent(new Event('change'))
 		const livenessCount = entries.filter(entry => !entry.hidden).length
 		expect(livenessCount).toBeGreaterThan(0)
 		expect(count.textContent).toBe(`${livenessCount} of ${entries.length} invariants`)
-		statusSelect.value = toolingOption.value
+		statusSelect.value = guardOption.value
 		statusSelect.dispatchEvent(new Event('change'))
 		expect(count.textContent).toBe(`0 of ${entries.length} invariants`)
 		expect(empty.hidden).toBeFalse()

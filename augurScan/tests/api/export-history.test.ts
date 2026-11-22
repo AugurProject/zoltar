@@ -83,7 +83,7 @@ augurscan_export_history`,
 	}
 })
 
-test('lets only one of two concurrent exports publish into one output directory', async () => {
+test.each(['native', 'raced-success'] as const)('lets only one of two concurrent exports publish into one output directory (%s mkdir)', async mkdirBehavior => {
 	const directory = await mkdtemp(path.join(tmpdir(), 'augurscan-export-history-concurrent-'))
 	const exportDirectory = path.join(directory, 'evidence')
 	try {
@@ -100,6 +100,31 @@ export AUGURSCAN_CHAIN_ID=11155111
 export AUGURSCAN_EXPORT_DIRECTORY="$2"
 export AUGURSCAN_EXPORT_DATASET="$3"
 export AUGURSCAN_EXPORT_CONTAINER="augurscan-export-$3"
+export AUGURSCAN_EXPORT_BARRIER="$4"
+export AUGURSCAN_EXPORT_MKDIR_BEHAVIOR="$5"
+# Hold both empty-directory observations before either worker can claim ownership.
+ls() {
+  local listing ready=0 attempt
+  listing=$(command ls "$@") || return $?
+  touch "$AUGURSCAN_EXPORT_BARRIER.$AUGURSCAN_EXPORT_DATASET"
+  for ((attempt = 0; attempt < 500; attempt++)); do
+    if test -f "$AUGURSCAN_EXPORT_BARRIER.logs" && test -f "$AUGURSCAN_EXPORT_BARRIER.timeline"; then
+      ready=1
+      break
+    fi
+    sleep 0.01
+  done
+  test "$ready" = 1 || { echo 'Concurrent export barrier timed out' >&2; return 2; }
+  printf '%s' "$listing"
+}
+mkdir() {
+  if test "$AUGURSCAN_EXPORT_MKDIR_BEHAVIOR" = raced-success && test "$1" = "$AUGURSCAN_EXPORT_DIRECTORY/.export-attempt"; then
+    # uutils 0.8.0 can report success after a concurrent creator wins (upstream #13970).
+    command mkdir "$@" 2>/dev/null || test -d "$1"
+  else
+    command mkdir "$@"
+  fi
+}
 docker() { :; }
 augurscan_export_readiness() { return 0; }
 augurscan_curl() {
@@ -121,16 +146,19 @@ augurscan_export_history`,
 					exportScript,
 					exportDirectory,
 					dataset,
+					path.join(directory, 'claim-ready'),
+					mkdirBehavior,
 				],
 				{ cwd: projectRoot, env: processEnv(), stdout: 'pipe', stderr: 'pipe' },
 			)
 		const attempts = [exportDataset('logs'), exportDataset('timeline')]
 		const results = await Promise.all(attempts.map(async attempt => ({ status: await attempt.exited, stdout: await new Response(attempt.stdout).text(), stderr: await new Response(attempt.stderr).text() })))
 		const published = results.filter(result => result.status === 0)
-		expect(published).toHaveLength(1)
+		expect(published, JSON.stringify(results)).toHaveLength(1)
 		expect(published[0]?.stdout).toContain(`Validated export: ${exportDirectory}`)
 		const refused = results.filter(result => result.status !== 0)
 		expect(refused).toHaveLength(1)
+		expect(refused[0]?.status).toBe(1)
 		expect(refused[0]?.stdout).not.toContain('Validated export')
 		expect(refused[0]?.stderr).toContain('Use a new export directory')
 		const publishedDataset = results[0]?.status === 0 ? 'logs' : 'timeline'

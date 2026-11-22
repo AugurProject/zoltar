@@ -10,7 +10,7 @@ import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statobla
 import { getDeploymentSteps as getStatoblastDeploymentSteps } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
 import { onchainStateDependencies } from '../../app/onchainStateDependencies.js'
 
-const requiredIds = ['proxyDeployer', 'multicall3', 'openOracle']
+const requiredIds: DeploymentStepId[] = ['proxyDeployer', 'multicall3', 'openOracle']
 const runtimeCodeById = new Map<DeploymentStepId, Hex>([
 	['proxyDeployer', PROXY_DEPLOYER_RUNTIME_CODE],
 	['multicall3', `0x${statoblast_Multicall3_Multicall3.evm.deployedBytecode.object}`],
@@ -33,8 +33,9 @@ describe('OpenOracle deployment boundary', () => {
 		expect(steps.map(step => step.id)).toEqual(requiredIds)
 		for (const step of steps) {
 			const canonical = getStatoblastDeploymentSteps(profile).find(candidate => candidate.id === step.id)
-			expect(step.address).toBe(canonical?.address)
-			expect(step.dependencies).toEqual(canonical?.dependencies)
+			if (canonical === undefined) throw new Error(`Missing canonical ${step.id} step`)
+			expect(step.address).toBe(canonical.address)
+			expect(step.dependencies).toEqual(canonical.dependencies)
 			expect(step.expectedRuntimeCodeHash).toBe(canonical?.expectedRuntimeCodeHash)
 			expect(step.trustedSimulationCodePresence).toBe(canonical?.trustedSimulationCodePresence)
 			expect(step.dependencies.every(id => requiredIds.includes(id))).toBe(true)

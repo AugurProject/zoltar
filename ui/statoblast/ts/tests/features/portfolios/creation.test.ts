@@ -31,5 +31,5 @@ test('the deployment review states the purchase fee floor and minimum commitment
 	const config = parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), minimumCommitment: '100', minimumPurchaseFee: '1.5' }, 6)
 	const review = portfolioDeploymentReviewDescription('open', config, { decimals: 6, symbol: 'USDC' })
 	expect(review).toContain('minimum 1.5 USDC.')
-	expect(review).toContain('Minimum commitment and auction lot 100 USDC;')
+	expect(review).toContain('Minimum collateral commitment 100 USDC; fork auction lots may be larger;')
 })

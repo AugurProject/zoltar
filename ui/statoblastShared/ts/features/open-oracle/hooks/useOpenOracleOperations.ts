@@ -64,6 +64,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		accountAddress,
 		isSelectedReportCurrent,
 		readOptionalMulticall: dependencies.readOptionalMulticall,
+		readNativeBalance: async address => await dependencies.createConnectedReadClient().getBalance({ address }),
 	})
 	const {
 		assertSelectedReportCurrent,

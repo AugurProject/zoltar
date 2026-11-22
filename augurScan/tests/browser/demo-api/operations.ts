@@ -50,7 +50,7 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 			observed_rounds: 1,
 			block_number: String(BigInt(asOf.blockNumber) - 12n),
 			report_data: { token1: '0x221657776846890989a759ba2973e427dff5c9bb', token2: '0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' },
-			lifecycle: { state: 'Settleable', clock: 'block' },
+			lifecycle: { state: 'Ready to settle', clock: 'block' },
 		},
 	]
 	const escalations = [
@@ -71,19 +71,19 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 			bid_count: 18,
 			bidder_count: 11,
 			block_number: asOf.blockNumber,
-			start_data: { attoEthRaiseCap: String(20_000_000_000_000_000_000n), maxAttoRepBeingSold: String(5_000_000_000_000_000_000_000n) },
+			start_data: { opensAt: String(BigInt(asOf.blockTimestamp) - 1_800n), closesAt: String(BigInt(asOf.blockTimestamp) + 1_800n), lotAttoEth: 1000000n.toString(), targetLots: '20', inventoryAttoRep: String(5_000n * 10n ** 18n), maximumAttoRepPerLot: String(500n * 10n ** 18n) },
 		},
 	]
 	const cappedKpiCatalog = context.pageUrl.searchParams.get('operationsKpiCapped') === '1'
 	const reportTemplate = requiredArrayItem(reports, 0, 'Demo report')
-	const settleableReport = requiredArrayItem(reports, 1, 'Settleable demo report')
+	const settleableReport = requiredArrayItem(reports, 1, 'Ready to settle demo report')
 	const escalationTemplate = requiredArrayItem(escalations, 0, 'Demo escalation')
 	const auctionTemplate = requiredArrayItem(auctions, 0, 'Demo auction')
-	const allReports = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...reportTemplate, report_id: String(10_000 + index), lifecycle: { ...reportTemplate.lifecycle, state: 'Finalized' } })), { ...settleableReport, report_id: '10250' }] : reports
+	const allReports = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...reportTemplate, report_id: String(10_000 + index), lifecycle: { ...reportTemplate.lifecycle, state: 'Settled' } })), { ...settleableReport, report_id: '10250' }] : reports
 	const allEscalations = cappedKpiCatalog
 		? [...Array.from({ length: 250 }, (_, index) => ({ ...escalationTemplate, game_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, event_name: index % 2 === 0 ? 'OrdinarySettlementInitialized' : 'NonDecisionReached' })), { ...escalationTemplate, game_address: `0x${(251).toString(16).padStart(40, '0')}` }]
 		: escalations
-	const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Closed' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
+	const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Fully settled' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
 	const poolMetricsMode = context.pageUrl.searchParams.get('poolMetrics')
 	const poolMetricsUnavailable = poolMetricsMode === 'unavailable' || poolMetricsMode === 'stale-unavailable'
 	const risk = {
@@ -92,7 +92,7 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 				pool_address: '0x9999999999999999999999999999999999999999',
 				block_number: asOf.blockNumber,
 				read_status: poolMetricsUnavailable ? 'failed' : 'success',
-				source_method: 'poolAccountingState()',
+				source_method: 'augurscan.pool-state.v1',
 				protocol_state: poolMetricsUnavailable ? 'unavailable' : '0',
 				scanner_severity: 'unavailable',
 				scanner_reason: poolMetricsUnavailable ? 'Tagged pool read unavailable' : 'Question settlement is shown here. Underwriting risk belongs to the shared portfolio capital positions.',
@@ -100,7 +100,12 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 					poolMetricsMode === 'unavailable'
 						? {}
 						: {
+								settlementCollateralAttoEth: String(42n * 10n ** 18n),
 								questionSettlementAttoEth: String(42n * 10n ** 18n),
+								systemState: '0',
+								awaitingForkContinuation: false,
+								escalationResolved: false,
+								collateral: { address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', symbol: 'WETH', decimals: 18 },
 								averageValueAttoEthPerShare: String(7n * 10n ** 17n),
 								shareTokenSupplyAttoShares: String(60n * 10n ** 18n),
 								securityMultiplierBps: '25000',

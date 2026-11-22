@@ -19,15 +19,10 @@
 			"bun": "./ts/initialReport/oracleInitialReport.ts",
 			"default": "./js/initialReport/oracleInitialReport.js"
 		},
-		"./statoblast/liquidation": {
-			"types": "./ts/statoblast/liquidation.ts",
-			"bun": "./ts/statoblast/liquidation.ts",
-			"default": "./js/statoblast/liquidation.js"
-		},
-		"./statoblast/retentionRate": {
-			"types": "./ts/statoblast/retentionRate.ts",
-			"bun": "./ts/statoblast/retentionRate.ts",
-			"default": "./js/statoblast/retentionRate.js"
+		"./statoblast/linearFees": {
+			"types": "./ts/statoblast/linearFees.ts",
+			"bun": "./ts/statoblast/linearFees.ts",
+			"default": "./js/statoblast/linearFees.js"
 		},
 		"./statoblast/securityPoolPortfolio": {
 			"types": "./ts/statoblast/securityPoolPortfolio.ts",

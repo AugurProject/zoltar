@@ -14,7 +14,7 @@ import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
 // Resident limits far above every fixture so loads exercise only the sidecar format checks.
-const generousLimits = { maxPools: 1_000_000, maxQuestions: 1_000_000, maxUniverses: 1_000_000, maxVaultsPerPool: 1_000_000 }
+const generousLimits = { maxPools: 1_000_000, maxQuestions: 1_000_000, maxUniverses: 1_000_000 }
 
 const temporaryDirectories: string[] = []
 
@@ -230,7 +230,7 @@ describe('immutable topology sidecar', () => {
 		await expect(
 			loadImmutableTopologyCacheWithinLimits({
 				identity: identity(),
-				limits: { maxPools: 100, maxQuestions: 10, maxUniverses: 100, maxVaultsPerPool: 100 },
+				limits: { maxPools: 100, maxQuestions: 10, maxUniverses: 100 },
 				statePath,
 			}),
 		).resolves.toBeUndefined()
@@ -238,7 +238,7 @@ describe('immutable topology sidecar', () => {
 		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow()
 	})
 
-	test('rejects aggregate vault payloads against live limits before decoding their chunks', async () => {
+	test('rejects corrupted vault payloads even when current discovery limits allow the pool', async () => {
 		const statePath = await temporaryStatePath()
 		const expected = cache()
 		const pool = address(20).toLowerCase()
@@ -253,7 +253,7 @@ describe('immutable topology sidecar', () => {
 		if (vaultChunk === undefined) throw new Error('Immutable topology generation has no vault chunk')
 		await writeFile(join(generationPath, vaultChunk), '{not valid json', { mode: 0o600 })
 
-		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: { maxPools: 1, maxQuestions: 2, maxUniverses: 3, maxVaultsPerPool: 1 }, statePath })).resolves.toBeUndefined()
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: { maxPools: 1, maxQuestions: 2, maxUniverses: 3 }, statePath })).rejects.toThrow()
 		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow()
 	})
 
@@ -295,7 +295,7 @@ describe('immutable topology sidecar', () => {
 	test('persists exact overflow totals across restarts without retaining historical vault records', async () => {
 		const statePath = await temporaryStatePath()
 		const pool = address(20).toLowerCase()
-		const limits = { maxPools: 3, maxQuestions: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
+		const limits = { maxPools: 3, maxQuestions: 3, maxUniverses: 3 }
 		let expected = cache()
 		expected.vaultsByPool = {}
 		for (const nextIndex of [3, 6, 9, 11]) {

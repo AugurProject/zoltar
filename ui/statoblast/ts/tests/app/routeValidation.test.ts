@@ -6,7 +6,7 @@ import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from '.
 type RouteValidationInput = Parameters<typeof getInvalidStatoblastRouteState>[0]
 
 function validateRoute(overrides: Partial<RouteValidationInput>) {
-	return getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute: 'pools', search: '', selectedPoolView: '', ...overrides })
+	return getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute: 'pools', search: '', ...overrides })
 }
 
 function isRouteInvalid(overrides: Partial<RouteValidationInput>) {
@@ -14,16 +14,6 @@ function isRouteInvalid(overrides: Partial<RouteValidationInput>) {
 }
 
 describe('statoblast route validation', () => {
-	test('rejects an unknown pool tab on the pool route', () => {
-		expect(validateRoute({ selectedPoolView: 'invalid' }).hasInvalidSelectedPoolView).toBe(true)
-	})
-
-	test('rejects removed standalone tabs and accepts question pages without a tab', () => {
-		for (const selectedPoolView of ['', 'vaults', 'fork-workflow', 'fork-auction', 'resolution']) {
-			expect(validateRoute({ selectedPoolView }).hasInvalidSelectedPoolView).toBe(selectedPoolView !== '')
-		}
-	})
-
 	test('rejects every removed oracle view on all Statoblast routes', () => {
 		for (const resolvedRoute of ['open-oracle', 'pools', 'portfolios', 'deploy'] as const) {
 			for (const view of ['', 'browse', 'create', 'selected-report', 'invalid']) {

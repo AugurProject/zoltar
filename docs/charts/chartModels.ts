@@ -1,4 +1,4 @@
-import { computeEscalationBindingCapitalAttoRep, computeEscalationCurveAttoRep, computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/statoblast/ts/escalationGame/escalationMath'
+import { computeEscalationAttritionCostAttoRep, computeEscalationCurveAttoRep, computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/statoblast/ts/escalationGame/escalationMath'
 
 export const quantitativeChartIds = ['fig-statoblast-escalation-cost-curve', 'fig-zoltar-fork-threshold-decay'] as const
 
@@ -43,7 +43,7 @@ function toAttoRep(value: number) {
 
 export function computeCanonicalEscalationBindingCapital(startBondRep: number, nonDecisionThresholdRep: number, elapsedDays: number) {
 	const elapsedSeconds = BigInt(Math.round(Math.max(0, elapsedDays - ESCALATION_ACTIVATION_DELAY_DAYS) * 86_400))
-	return attoRepToNumber(computeEscalationBindingCapitalAttoRep(toAttoRep(startBondRep), toAttoRep(nonDecisionThresholdRep), elapsedSeconds))
+	return attoRepToNumber(computeEscalationAttritionCostAttoRep(toAttoRep(startBondRep), toAttoRep(nonDecisionThresholdRep), elapsedSeconds))
 }
 
 export function computeCanonicalEscalationDeadlineDays(startBondRep: number, nonDecisionThresholdRep: number, bindingCapitalRep: number) {

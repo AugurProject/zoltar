@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { OraclePriceMath } from './OraclePriceMath.sol';
+import { OPEN_ORACLE_PERCENTAGE_PRECISION } from './OpenOraclePriceCoordinatorTypes.sol';
+
 import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 import { ICapitalPriceExposure, ICapitalLedgerAccounting } from './interfaces/ICapitalAccounting.sol';
@@ -67,11 +70,11 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	/// checkpoints all old-price income before forwarding its canonical feed.
 	function acceptPrice(ICapitalPriceExposure feed, uint256 price, uint48 validUntil) external onlyDelegateCall {
 		uint256 uncertainty = feed.targetPriceErrorForDispute();
+		require(uncertainty < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Invalid oracle uncertainty');
 		acceptedPriceEpoch = feed.acceptedEpoch();
-		require(uncertainty < 10_000_000, 'Invalid oracle uncertainty');
 		acceptedPrice = price;
-		conservativePrice = Math.mulDiv(price, 10_000_000, 10_000_000 - uncertainty, Math.Rounding.Ceil);
-		liquidationPrice = Math.mulDiv(price, 10_000_000, 10_000_000 + uncertainty);
+		conservativePrice = OraclePriceMath.conservativePrice(price, uncertainty);
+		liquidationPrice = OraclePriceMath.liquidationPrice(price, uncertainty);
 		require(liquidationPrice != 0, 'Liquidation price rounds to zero');
 		if (!importing && block.timestamp >= priceValidUntil) commitmentIndex.restartLiquidationClock();
 		priceValidUntil = validUntil;

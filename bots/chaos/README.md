@@ -2,6 +2,8 @@
 
 The chaos bot is a long-running operator that exercises the Zoltar, Statoblast, OpenOracle, and trading ecosystem with real, permissionless transactions. It discovers what its dedicated account can currently do, waits a newly randomized delay from the configured 1–60 minute range, chooses one eligible operation, and executes its durable workflow.
 
+ETH-funded and wrapped-collateral purchases reserve 1% above the quoted purchase fee for inclusion-time checkpoints. This allowance stays inside the configured total spend limit; it does not increase the mint principal.
+
 ## Safety at a glance
 
 - The shipped configuration starts **paused**, in **dry-run**, with no private key or configured RPC.
@@ -164,7 +166,7 @@ For example, with direct Bun:
 bun run run -- --drain 0xSigner --confirm "DRAIN profile:id TO 0xSigner"
 ```
 
-**Residuals.** If retirement reports `drained-with-residuals`, review the completion evidence and residual list before accepting replacement for the shown target deployment ID. That `factory:v1:` ID binds both the target core profile and its Uniswap factory, and it differs from the archive ID; copy the full ID shown by the dashboard or launcher.
+**Residuals.** If retirement reports `drained-with-residuals`, review the completion evidence and residual list before accepting replacement for the shown target deployment ID. That `factory:v1:` ID binds both the target core profile and its Uniswap factory, and it differs from the archive ID; copy the full target ID printed by the Windows retirement launcher’s status check.
 
 ```sh
 target_id='factory:v1:…'
@@ -245,7 +247,7 @@ Two batch files wrap the Compose service. Neither fetches repository updates.
 - The archived configuration must permit unpaused live execution with a configured signer and RPC connectivity. If it does not, edit `.state/operator.json.retired-ARCHIVE_ID.json` inside the protected volume before retrying, keeping its deployment pin and state path unchanged.
 - A new drain recovers assets to that signer and unwraps WETH using the default retirement policies, without unmatched-share exit or claim migration. An active drain retains its saved policies. If the archived drain was cancelled, the launcher explicitly requests a new one.
 - Inspect the dashboard Retirement panel for blockers and use `docker logs zoltar-chaos-retirement` for runtime errors.
-- The launcher checks completion every minute. Review and accept any residuals for the displayed target deployment ID in the dashboard; this ID differs from the archive ID.
+- The launcher checks completion every minute. Review residuals in the dashboard, then accept them for the target deployment ID printed by the launcher’s status check; this ID differs from the archive ID.
 - Completion must be canonical and finalized using the archive's configured RPC quorum before the launcher stops retirement and restarts the current service. Keep the window open so it can do so.
 - Closing the window leaves the detached retirement container running; rerun `retirement.bat ARCHIVE_ID` to resume monitoring.
 - Run `start.bat` at any time to stop retirement and return to the latest contracts, preserving retirement progress in the archive's journal.

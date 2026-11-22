@@ -1,3 +1,4 @@
+import { requiredPortfolioCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useId, useRef } from 'preact/hooks'
@@ -17,7 +18,30 @@ import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import * as copy from '../../../copy/portfolioTakeover.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
-async function loadTarget(snapshot: NonNullable<ReturnType<typeof usePortfolio>['snapshot']>, id: bigint) {
+type TakeoverSnapshot = Pick<
+	NonNullable<ReturnType<typeof usePortfolio>['snapshot']>,
+	| 'chainId'
+	| 'blockNumber'
+	| 'blockHash'
+	| 'capitalLedger'
+	| 'commitmentIndex'
+	| 'owner'
+	| 'economics'
+	| 'forkTime'
+	| 'frozen'
+	| 'importing'
+	| 'liquidationPrice'
+	| 'conservativePrice'
+	| 'ownerConservativePrice'
+	| 'securityMultiplierBps'
+	| 'totalCommitmentAttoEth'
+	| 'demandAttoEth'
+	| 'ownerAccount'
+	| 'positions'
+	| 'priceValid'
+> & { collateral: { symbol: string; decimals: number } }
+
+async function loadTarget(snapshot: TakeoverSnapshot, id: bigint) {
 	const client = createConnectedReadClient()
 	const [position, started, epoch] = await Promise.all([
 		client.readContract({ address: snapshot.commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [id], blockNumber: snapshot.blockNumber }),
@@ -27,7 +51,7 @@ async function loadTarget(snapshot: NonNullable<ReturnType<typeof usePortfolio>[
 	return { position, started, epoch }
 }
 
-export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<typeof usePortfolio>, 'snapshot'>; actions: Pick<PortfolioActions, 'ownerReason' | 'scope' | 'busy' | 'runPortfolioAction'> }) {
+export function PortfolioTakeover({ model, actions }: { model: { snapshot: TakeoverSnapshot | undefined }; actions: Pick<PortfolioActions, 'ownerReason' | 'scope' | 'busy' | 'runPortfolioAction'> }) {
 	const positionInput = useSignal('')
 	const commitmentInput = useSignal('')
 	const ownInput = useSignal('')
@@ -83,10 +107,20 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	if (reason === undefined && source?.maximumTakeoverCommitment === 0n) reason = copy.additionalBacking
 	if (cureReason === undefined && !curable) cureReason = copy.takeOverInstead
 	if (reason === undefined && (commitment === undefined || commitment === 0n || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
-	if (reason === undefined && snapshot !== undefined && source !== undefined && commitment !== undefined) {
+	if (reason === undefined && snapshot !== undefined && source !== undefined && commitment !== undefined && maximumOwnRep !== undefined && maximumOwnerPrincipal !== undefined && maximumOwnerCommitment !== undefined) {
 		const transferred = commitment < source.maximumTakeoverCommitment ? commitment : source.maximumTakeoverCommitment
-		if (snapshot.ownerCommitmentAttoEth + transferred < snapshot.economics.minimumCommitmentAttoEth) reason = copy.receiverMinimum
+		const receiver = snapshot.positions.find(position => position.id === snapshot.ownerAccount.positionId)
+		const principal = (receiver?.rep ?? 0n) + snapshot.ownerAccount.freeAttoRep
+		const totalCommitment = (receiver?.commitment ?? 0n) + transferred
+		if (snapshot.ownerAccount.positionId !== 0n && receiver === undefined) reason = copy.receiverMissing
+		else if (receiver !== undefined && receiver.batch !== 0n && receiver.batch !== source.batch) reason = copy.receiverCohort
+		else if (snapshot.ownerAccount.freeAttoRep > maximumOwnRep) reason = copy.receiverConsent
+		else if (principal < requiredPortfolioCollateral(snapshot, totalCommitment)) reason = copy.receiverCollateral
+		else if (totalCommitment < snapshot.economics.minimumCommitmentAttoEth) reason = copy.receiverMinimum
+		else if (principal > maximumOwnerPrincipal) reason = copy.receiverPrincipalBound
+		else if (totalCommitment > maximumOwnerCommitment) reason = copy.receiverCommitmentBound
 	}
+
 	const validateTarget = (current: NonNullable<typeof preview>, capitalLedger: NonNullable<typeof snapshot>['capitalLedger'], commitmentIndex: NonNullable<typeof snapshot>['commitmentIndex'], positionId: bigint) => async () => {
 		const client = createConnectedReadClient()
 		const epoch = await client.readContract({ address: capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch' })

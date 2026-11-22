@@ -14,3 +14,10 @@ test('question and universe inputs enforce their actual unsigned widths', () => 
 	expect(portfolioUnsignedId(String(1n << 248n), 248)).toBeUndefined()
 	for (const value of ['', '-1', '+1', '1e3', '1.2', '0x', String(1n << 256n)]) expect(portfolioUnsignedId(value)).toBeUndefined()
 })
+
+test('#1493: portfolio amounts follow shared decimal and locale rules', () => {
+	expect(portfolioAmountOrUndefined('.5', 6)).toBe(500_000n)
+	expect(portfolioAmountOrUndefined('1,5', 6, ',')).toBe(1_500_000n)
+	expect(portfolioAmountOrUndefined('1,5', 6, '.')).toBeUndefined()
+	expect(portfolioAmountOrUndefined('-1', 6)).toBeUndefined()
+})

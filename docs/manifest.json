@@ -102,7 +102,7 @@
 		{
 			"path": "reference/contracts/securitypoolforker.html",
 			"title": "SecurityPoolForker",
-			"summary": "Read surface, the child-game trust boundary, and the fork initiation, child creation, vault migration, and Collateral Repair Auction entrypoints.",
+			"summary": "Read surface, the child-game trust boundary, question fork activation, reporter continuations, and owner-selected capital branches.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["fork", "migration", "child pool", "auction"]
@@ -110,7 +110,7 @@
 		{
 			"path": "reference/contracts/escalationgame.html",
 			"title": "EscalationGame",
-			"summary": "Read surface and the start, deposit, withdrawal, claim, fork-carry, escrow export, and fallback-routed entrypoints, with accounting examples.",
+			"summary": "Read surface and the start, deposit, withdrawal, proof-based claim, fork-carry, and fallback-routed entrypoints, with accounting examples.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["escalation", "dispute", "deposit", "non-decision"]
@@ -118,10 +118,10 @@
 		{
 			"path": "reference/contracts/openoraclepricecoordinator.html",
 			"title": "OpenOraclePriceCoordinator",
-			"summary": "Read surface and the price request, staged operation, recovery, and openOracleCallback entrypoints.",
+			"summary": "Shared portfolio price adapter reads, report requests, recovery, and exposure checkpoints.",
 			"section": "reference",
 			"topic": "Contracts",
-			"keywords": ["OpenOracle", "price", "coordinator", "staged operation"]
+			"keywords": ["OpenOracle", "price", "coordinator", "shared feed"]
 		},
 		{
 			"path": "reference/contracts/sharetoken.html",
@@ -246,10 +246,10 @@
 		{
 			"path": "explanation/fees.html",
 			"title": "Open-interest fees",
-			"summary": "Why vaults earn a fee on open interest, how utilization sets the rate, and when accrual stops.",
+			"summary": "How healthy portfolio commitments earn fixed annual holding fees, how prepaid rewards vest, and when accrual stops.",
 			"section": "explanation",
 			"topic": "Economics",
-			"keywords": ["fees", "open interest", "retention", "utilization", "vaults"]
+			"keywords": ["fees", "holding fees", "vesting", "capital", "portfolios"]
 		},
 		{
 			"path": "explanation/collateral-repair-auctions.html",
@@ -278,7 +278,7 @@
 		{
 			"path": "reference/open-oracle.html",
 			"title": "OpenOracle integration reference",
-			"summary": "Funding, report sizing, settlement validation, recovery, parameters, and a censorship stress model.",
+			"summary": "Funding, report sizing, settlement validation, recovery, parameters, and shared portfolio price coverage.",
 			"section": "reference",
 			"topic": "Mechanisms",
 			"keywords": ["OpenOracle", "parameters", "funding", "callbacks", "estimators"]

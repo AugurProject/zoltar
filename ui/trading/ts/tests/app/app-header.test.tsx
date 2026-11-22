@@ -1,3 +1,5 @@
+import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import { installTradingRouting, tradingRouting } from '../../lib/routing.js'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
@@ -147,7 +149,7 @@ describe('trading header', () => {
 	})
 
 	test('follows an addressed market into its universe and rewrites a disagreeing parameter', async () => {
-		const pool = `0x${'ab'.repeat(20)}`
+		const pool = `0x${'ab'.repeat(20)}` as const
 		window.history.replaceState(undefined, '', `/#/market/${pool}?universe=0`)
 		const market = etherScaleMarketFixture({ pool, pair: `0x${'cd'.repeat(20)}`, shareToken: `0x${'ef'.repeat(20)}`, universeId: 5n, title: 'Universe five market', description: 'Addressed route fixture' })
 		const rendered = await renderConfiguredApp({
@@ -494,7 +496,7 @@ describe('trading header', () => {
 				if ('universeId' in market) loadedUniverseIds.push(market.universeId)
 				return await walletServices.loadWalletHeaderBalances()
 			},
-			createTradingWalletClient: () => ({}),
+			createTradingWalletClient: () => testDouble<WriteClient>({}),
 			discoverAddressedMarket: async () => {
 				throw Object.assign(new Error('Security pool does not exist.'), { name: 'SecurityPoolNotFoundError' })
 			},

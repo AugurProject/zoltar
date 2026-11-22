@@ -347,9 +347,31 @@ describe('OpenOracle arbitrage executor', () => {
 		expect(await client.getBalance({ address: executor })).toBe(0n)
 	})
 
+	test('#1496: the executor collects a nonzero native settler reward through the real sentinel rules', async () => {
+		const [token1, token2] = await deployTokenPair()
+		for (const token of [token1, token2]) {
+			await mintToken(token, target, 1000n)
+			await writeContractAndWait(client, () => client.writeContract({ abi: targetArtifact.abi, address: target, functionName: 'approveInternal', args: [executor, token, 1000n] }))
+		}
+		await getAnvilWindowEthereum().request({ method: 'anvil_setBalance', params: [target, '0x64'] })
+		const parent = await parentBlock()
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'settleAndWithdraw',
+				args: [{ amount1: 1000n, amount2: 1000n, expectedParentBlockHash: parent.hash, openOracle: target, parentBlockNumber: parent.number }, { ...game(token1, token2), currentReporter: client.account.address, settlerRewardAttoEth: 100n }, helper()],
+			}),
+		)
+		expect(await client.getBalance({ address: target })).toBe(0n)
+		expect(await client.readContract({ abi: targetArtifact.abi, address: target, functionName: 'tokenHolder', args: [executor, getAddress('0x0000000000000000000000000000000000000000')] })).toBe(1n)
+		expect(await tokenBalance(token1, client.account.address)).toBe(1000n)
+		expect(await tokenBalance(token2, client.account.address)).toBe(1000n)
+	})
+
 	test('withdraws one exact replacement credit without consuming unrelated holder balances', async () => {
 		const replacementAmount = 2n ** 128n + 1n
-		const creditedAmount = replacementAmount + 1n
+		const creditedAmount = replacementAmount
 		const token = await deploy(tokenArtifact, ['Replacement Token', 'RPL'])
 		await mintToken(token, client.account.address, creditedAmount)
 		await approveToken(token, target, creditedAmount)

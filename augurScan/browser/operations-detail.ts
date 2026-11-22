@@ -156,8 +156,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	const nativeSymbol = nativeSymbolFor(requiredChainId())
 	// Auction amounts are in the auction's collateral token, which the response names from the latest successful tagged read
 	// (the latest snapshot can be a failed read). Without sampled token metadata they stay in raw collateral units.
-	const auctionUnit = collateralUnit({ collateral: data['collateral'] })
-	const auctionCollateral = route.kind === 'auction' ? auctionUnit : undefined
+	const auctionUnit = collateralUnit(data)
+	const auctionCollateral = route.kind === 'auction' || route.kind === 'pool' ? auctionUnit : undefined
 	if (route.kind === 'pool') {
 		const state = data['read_status'] === 'success' && isPlainRecord(data['read_result']) ? data['read_result'] : {}
 		for (const [label, value] of poolSummaryMetrics(state, nativeSymbol)) summary.append(operationCard(label, value))

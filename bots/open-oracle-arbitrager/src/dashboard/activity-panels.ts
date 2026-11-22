@@ -8,14 +8,14 @@ import { decisionBadge, diagnosticDisclosure, type ExplorerLink, row, setText } 
 import { diagnosticSummary, groupedOperations } from './operation-log.ts'
 import { renderProfitChart } from './profit-chart.ts'
 
-const OPPORTUNITY_LABELS = ['Report', 'Decision', 'Reference deviation', 'Executable REP / ETH', 'Reason', 'Direction', 'Estimated net', 'Required WETH', 'Required token', 'Window', 'Venue', 'Pool / manager']
+const OPPORTUNITY_LABELS = ['Report', 'Decision', 'Reference deviation', 'Executable REP / ETH', 'Reason', 'Direction', 'Estimated net', 'Required collateral', 'Required token', 'Window', 'Venue', 'Pool / manager']
 const HISTORY_LABELS = ['Time', 'Report', 'Direction', 'Modeled net', 'Tracked net', 'Actual gas', 'Inventory used', 'Transaction']
 const POSITION_LABELS = ['Opened', 'Report', 'Direction', 'Status', 'Hedged pre-gas', 'Entry gas', 'Lifecycle gas', 'Settler reward', 'Realized net', 'Withdrawn', 'Entry transaction']
 const OPERATION_LABELS = ['Latest', 'Level', 'Category', 'Report', 'Operation', 'Result', 'Occurrences']
 const NOT_PRICED = '—'
 
 function opportunityRow(opportunity: OpportunitySnapshot, link: ExplorerLink) {
-	// A skipped report never reached a venue quote, so quote-derived columns stay blank; the direction column names the WETH/token pair instead.
+	// A skipped report never reached a venue quote, so quote-derived columns stay blank; the direction column names the collateral/token pair instead.
 	if (opportunity.decision === 'skipped') {
 		return row(
 			[
@@ -24,7 +24,7 @@ function opportunityRow(opportunity: OpportunitySnapshot, link: ExplorerLink) {
 				NOT_PRICED,
 				NOT_PRICED,
 				diagnosticDisclosure(diagnosticSummary(opportunity.reason), opportunity.reasonDetails ?? (diagnosticSummary(opportunity.reason) === opportunity.reason ? undefined : opportunity.reason), `opportunity:${opportunity.reportId}`),
-				`WETH/${opportunity.tokenSymbol}`,
+				`${opportunity.collateralSymbol ?? 'WETH'}/${opportunity.tokenSymbol}`,
 				NOT_PRICED,
 				NOT_PRICED,
 				NOT_PRICED,
@@ -44,7 +44,7 @@ function opportunityRow(opportunity: OpportunitySnapshot, link: ExplorerLink) {
 			opportunityDecisionReason(opportunity),
 			opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
 			exactAmount(opportunity.estimatedNetProfitEth, 'ETH'),
-			exactAmount(opportunity.requiredWeth, 'WETH'),
+			exactAmount(opportunity.requiredWeth, opportunity.collateralSymbol ?? 'WETH'),
 			exactAmount(opportunity.requiredToken, opportunity.tokenSymbol),
 			`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
 			venueLabel(opportunity.venue),
@@ -63,7 +63,7 @@ function historyRow(record: PublicExecutionRecord, link: ExplorerLink) {
 			exactAmount(record.estimatedNetProfitWeth, 'ETH'),
 			exactAmount(record.trackedNetProfitEth, 'ETH'),
 			exactAmount(record.actualGasCostEth, 'ETH'),
-			`${exactAmount(record.requiredWeth, 'WETH')} · ${exactAmount(record.requiredToken, record.tokenSymbol)}`,
+			`${exactAmount(record.requiredWeth, record.collateralSymbol ?? 'WETH')} · ${exactAmount(record.requiredToken, record.tokenSymbol)}`,
 			link(record.transactionHash, 'tx', `history:${record.reportId}:transaction`),
 		],
 		HISTORY_LABELS,
@@ -93,7 +93,7 @@ function positionRow(position: PublicPositionRecord, link: ExplorerLink) {
 			lifecycleGas,
 			settlerRewardAttoEth,
 			exactAmount(position.realizedNetProfitEth, 'ETH'),
-			`${exactAmount(position.withdrawnWeth, 'WETH')} · ${exactAmount(position.withdrawnToken, position.tokenSymbol)}`,
+			`${exactAmount(position.withdrawnWeth, position.collateralSymbol ?? 'WETH')} · ${exactAmount(position.withdrawnToken, position.tokenSymbol)}`,
 			link(position.entryTransactionHash, 'tx', `position:${position.reportId}:transaction`),
 		],
 		POSITION_LABELS,

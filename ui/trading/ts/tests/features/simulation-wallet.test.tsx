@@ -1,3 +1,7 @@
+import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { expect, test } from 'bun:test'
 import { createPublicClient, createWalletClient, custom } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -12,7 +16,7 @@ import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 test('restores the shared simulation wallet without another connect click', async () => {
 	const dom = installDomEnvironment()
 	const account = '0x1111111111111111111111111111111111111111'
-	let selectedAccount = account
+	let selectedAccount: `0x${string}` = account
 	let accountsChanged: () => void = () => undefined
 	const profile = createFakeSimulationProfile()
 	const requests: string[] = []
@@ -39,14 +43,30 @@ test('restores the shared simulation wallet without another connect click', asyn
 	const rendered = await renderIntoDocument(
 		<LiveTrading
 			route='portfolio'
-			configuration={{ chainId: profile.chain.id, chainName: profile.displayName, factory: account, router: account, securityPoolFactory: account, feeBps: 30, rpcUrl: 'http://localhost/' }}
+			configuration={{
+				zoltar: deploymentConfigurationFixture().zoltar,
+				chainId: profile.chain.id,
+				chainName: profile.displayName,
+				factory: account,
+				router: account,
+				securityPoolFactory: account,
+				feeBps: 30,
+				rpcUrl: 'http://localhost/',
+			}}
 			configurationError={undefined}
 			selectedUniverseId='0'
 			onWorkflowLockChange={() => undefined}
 			onWalletSummaryChange={value => {
 				summary = value
 			}}
-			controllerServices={{ ...liveTradingControllerServices, createTradingPublicClient: () => client, createTradingWalletClient: () => wallet, validateLiveDeployment: async () => undefined, discoverLiveUniverseMarketPage: async () => page, discoverSavedMarkets: async () => page }}
+			controllerServices={{
+				...liveTradingControllerServices,
+				createTradingPublicClient: () => testDouble<PublicClient>(client),
+				createTradingWalletClient: () => testDouble<WriteClient>(wallet),
+				validateLiveDeployment: async () => undefined,
+				discoverLiveUniverseMarketPage: async () => page,
+				discoverSavedMarkets: async () => page,
+			}}
 		/>,
 	)
 	try {

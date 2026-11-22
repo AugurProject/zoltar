@@ -116,7 +116,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				const restore = installActiveEnvironmentForTesting(backend, backend)
 				const originalTimeout = globalThis.setTimeout
 				// Shortens the 30s no-progress read deadline so the stalled pool times out sooner. Every read in the test shares it, so it leaves the healthy pool's simulation reads room on a loaded machine.
-				const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalTimeout(handler, delay === 30_000 ? 10_000 : delay, ...args))
+				const timer = spyOn(globalThis, 'setTimeout').mockImplementation(Object.assign((...[handler, delay, ...args]: Parameters<typeof originalTimeout>) => originalTimeout(handler, delay === 30_000 ? 10_000 : delay, ...args), originalTimeout))
 				let result: Awaited<ReturnType<typeof discoverSavedMarkets>> | undefined
 				try {
 					const scope = getLocalEntityScope('trading', 'pool')
@@ -230,9 +230,9 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				const savedMarket = discovery.markets[0]
 				if (savedMarket === undefined) throw new Error('Missing saved pool fixture')
 				const checkedPools: Address[] = []
-				const savedClient = {
+				const savedClient: typeof client = {
 					...client,
-					readContract: async (parameters: Parameters<typeof client.readContract>[0]) => {
+					readContract: async parameters => {
 						if (['securityPoolDeploymentCount', 'securityPoolDeploymentsRange', 'pairDeploymentCount', 'pairDeploymentsRange'].includes(parameters.functionName)) throw new Error('Portfolio must never scan a pool registry')
 						if (parameters.functionName === 'getSecurityPoolOriginId') checkedPools.push(getAddress(String(parameters.args?.[0])))
 						return await client.readContract(parameters)

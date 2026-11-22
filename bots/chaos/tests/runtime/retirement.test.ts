@@ -471,6 +471,32 @@ describe('Drain & Retire planning', () => {
 		expect(retirementPlanFromEvaluations([evaluation(exit)], { ...policies, maximumExitLossBps: 300 })).toBe(exit)
 	})
 
+	test('retirement retains WETH when unwrapping is disabled', () => {
+		const unwrap = plan('open-oracle.weth.unwrap')
+		expect(retirementPlanFromEvaluations([evaluation(unwrap)], { ...DEFAULT_RETIREMENT_POLICIES, unwrapWeth: false })).toBeUndefined()
+		expect(retirementPlanFromEvaluations([evaluation(unwrap)], { ...DEFAULT_RETIREMENT_POLICIES, unwrapWeth: true })).toBe(unwrap)
+	})
+
+	test.each([
+		['100', '0', '0', 0],
+		['0', '100', '0', 1],
+		['0', '0', '100', 1],
+	] as const)('winning-share retirement uses live cash and REP quotes: %s/%s/%s', (storedCash, projectedCash, projectedRep, claimableAssets) => {
+		const snapshot = drainedWalletSnapshotFixture()
+		const pool = snapshot.pools[0]
+		const shares = snapshotFixture().wallet.shares[0]
+		if (pool === undefined || shares === undefined) throw new Error('Missing winning-share fixture')
+		pool.questionOutcome = 1
+		pool.shareTokenSupplyAttoShares = '100'
+		pool.settlementCollateralAttoEth = storedCash
+		pool.projectedSettlementCollateralAttoEth = projectedCash
+		pool.projectedSettlementRecoveryAttoRep = projectedRep
+		snapshot.wallet.shares = [{ ...shares, invalid: '0', yes: '1', no: '0', isApprovedForAll: {} }]
+		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state: initialDurableState(31337), v3: [] })
+		expect(result.proof.claimableAssets).toBe(claimableAssets)
+		expect(result.residuals.some(residual => residual.category === 'accepted-dust')).toBe(claimableAssets === 0)
+	})
+
 	test('does not hide retained WETH or pending V3 verification in a drained proof', () => {
 		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '3', openOracleCredit: '0', symbol: 'WETH' }]

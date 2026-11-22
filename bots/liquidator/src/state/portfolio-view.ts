@@ -21,7 +21,7 @@ export function portfolioViews(state: RuntimeState, settings: OperatorSettings) 
 			commitmentEth: formatDecimalAmount(snapshot.ownerCommitmentAttoEth),
 			managedPrincipalRep: formatDecimalAmount(totalPrincipal),
 			maximumTotalPrincipalRep: formatDecimalAmount(settings.portfolioPolicy.maximumTotalPrincipalAttoRep),
-			automation: settings.portfolioPolicy.allowFundedTakeovers,
+			automation: settings.runtime.execute && !state.paused && portfolio.selected && portfolio.approvedUniverse && settings.portfolioPolicy.allowFundedTakeovers,
 			knownPositionCount: portfolio.knownPositionCount.toString(),
 			nextPositionId: portfolio.nextScope.nextPositionId.toString(),
 			knownAuctionBidCount: (portfolio.knownAuctionBidCount ?? 0n).toString(),

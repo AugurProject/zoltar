@@ -62,6 +62,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		coordinatorAddresses: snapshot.deployment.coordinatorAddresses,
 		executionHistory: snapshot.executionHistory.map(record => ({
 			actualGasCostEth: record.actualGasCostEth,
+			...(record.collateralSymbol === undefined ? {} : { collateralSymbol: record.collateralSymbol }),
 			direction: record.direction,
 			estimatedNetProfitWeth: record.estimatedNetProfitWeth,
 			executedAt: record.executedAt,
@@ -105,6 +106,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		opportunities: snapshot.opportunities.map(publicOpportunity),
 		positions: snapshot.positions.map(position => ({
 			actualEntryGasCostEth: position.actualEntryGasCostEth,
+			...(position.collateral === undefined ? {} : { collateralSymbol: position.collateral.symbol }),
 			direction: position.direction,
 			entryTransactionHash: position.entryTransactionHash,
 			hedgedProfitBeforeGasEth: position.hedgedProfitBeforeGasEth,

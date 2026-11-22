@@ -1,5 +1,7 @@
 /// <reference types="bun-types" />
 
+import type { ComponentChildren } from 'preact'
+
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -31,7 +33,7 @@ describe('Zoltar App route validation', () => {
 
 	async function renderAppForRoute({ hash, route, zoltarUniverseError, zoltarView }: { hash: string; route: 'deploy' | 'not-found' | 'zoltar'; zoltarUniverseError?: string; zoltarView: string }) {
 		window.location.hash = hash
-		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/AppHeaderShell.js', () => ({ AppHeaderShell: ({ overview }: { overview: unknown }) => <div>{overview}</div> }))
+		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/AppHeaderShell.js', () => ({ AppHeaderShell: ({ overview }: { overview: ComponentChildren }) => <div>{overview}</div> }))
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/AppPageHeading.js', () => ({ AppPageHeading: () => <div>heading</div> }))
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/AppStatusNotices.js', () => ({
 			AppStatusNotices: (props: Record<string, unknown>) => {

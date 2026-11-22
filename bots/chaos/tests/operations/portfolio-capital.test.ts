@@ -167,3 +167,14 @@ for (const priceValid of [true, false]) {
 		expect(depositCapital.evaluate(snapshot, options).eligible).toBe(true)
 	})
 }
+
+test('commitment increases reject the exact accepted-price expiry boundary', () => {
+	const { snapshot, capital, options } = fixture()
+	const operation = capitalPolicy('commitment')
+	const target = { ...options, operationInputs: { commitmentAttoEth: 2000000000000000n.toString() } }
+	capital.priceValid = true
+	capital.priceValidUntil = (BigInt(snapshot.anchor.timestamp) + 1n).toString()
+	expect(operation.evaluate(snapshot, target).eligible).toBe(true)
+	capital.priceValidUntil = snapshot.anchor.timestamp
+	expect(operation.evaluate(snapshot, target).eligible).toBe(false)
+})

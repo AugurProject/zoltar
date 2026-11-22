@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"private": true,
 	"type": "module",
-	"description": "Security-pool liquidation and REP health management service",
+	"description": "Portfolio liquidation and REP backing management service",
 	"imports": {
 		"#config/*": "./src/config/*.ts",
 		"#core/*": "./src/core/*.ts",

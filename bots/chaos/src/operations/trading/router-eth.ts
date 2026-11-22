@@ -3,7 +3,7 @@ import type { AbiValue, Address } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { inputInteger, inputMatches } from '../input-values.ts'
 import { amount, choose, eligible, encodeStep, eventEvidence, mixSeed, optionAmount, planBase } from '../planning.ts'
-import { projectedEthToShares } from '../pool-economics.ts'
+import { projectedEthToShares, purchaseFeeBudget } from '../pool-economics.ts'
 import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PairSnapshot, PlanningOptions, PoolSnapshot } from '../types.ts'
 import { ethRouterDeadline, poolForPair, poolLifecycleOpen } from './pool-state.ts'
 import { maximumAfterSlippage, minimumAfterSlippage, proportionalLiquidity, quoteExactInput } from './pricing.ts'
@@ -16,7 +16,7 @@ function purchaseBudget(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options
 	const quote = pool.purchaseQuote
 	if (quote === undefined || !inputMatches(options, 'amount', quote.mintAttoEth)) return undefined
 	const mint = amount(quote.mintAttoEth)
-	const value = mint + amount(quote.feeAttoEth) + amount(quote.premiumAttoEth)
+	const value = mint + purchaseFeeBudget(amount(quote.feeAttoEth))
 	if (mint === 0n || amount(quote.minimumShares) === 0n || value > optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n) || value + optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n) > amount(snapshot.wallet.ethBalanceAttoEth)) return undefined
 	return { mint, value }
 }

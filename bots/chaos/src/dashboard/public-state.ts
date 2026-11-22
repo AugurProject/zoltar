@@ -1,3 +1,4 @@
+import { isRecoveryWorkflowStatus } from './recovery-status.ts'
 import { groupedPublicEvaluations } from './public-operation-evaluations.ts'
 import { publicWorkflowStep } from './public-workflow-step.ts'
 import { publicActivity } from './public-activity.ts'
@@ -425,7 +426,7 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 	const workflows = Array.isArray(source['workflows']) ? source['workflows'] : []
 	const activeWorkflow = workflows.find(entry => {
 		const status = stringField(record(entry) ?? {}, 'status')
-		return status === 'running' || status === 'waiting-continuation' || status === 'waiting-obligation' || status === 'waiting-transaction'
+		return isRecoveryWorkflowStatus(status)
 	})
 	const currentWorkflow = publicWorkflow(source['currentWorkflow'] ?? activeWorkflow)
 	const evaluationSource = source['operationEvaluations'] ?? source['evaluations']

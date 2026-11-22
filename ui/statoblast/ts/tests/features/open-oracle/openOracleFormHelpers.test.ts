@@ -41,7 +41,7 @@ function createProgressReport(overrides: Partial<Parameters<typeof getOpenOracle
 		disputeOccurred: false,
 		isDistributed: false,
 		reportTimestamp: 100n,
-		settlementTime: 60n,
+		settlementTime: 180n,
 		timeType: true,
 		...overrides,
 	}
@@ -55,6 +55,11 @@ describe('OpenOracle create form helpers', () => {
 		expect(parseOpenOracleCreateFormSubmission({ form: createValidForm({ multiplier: '2' }), token1Decimals: 18, token2Decimals: 18 }).multiplier).toBe(200)
 		expect(parseOpenOracleCreateFormSubmission({ form: createValidForm({ multiplier: '1.5' }), token1Decimals: 18, token2Decimals: 18 }).multiplier).toBe(150)
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ multiplier: '0.5' }) }).fieldErrors.multiplier).toBe('Multiplier must be at least 1×.')
+	})
+
+	test('keeps newly created reports inside the one-year dispute safety policy', () => {
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ settlementTime: '31536000' }) }).isValid).toBe(true)
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ settlementTime: '31536001' }) }).fieldErrors.settlementTime).toBe('Settlement delay must not exceed one year in this interface.')
 	})
 
 	test('sends exactly the settler reward as the ETH value', () => {
@@ -106,13 +111,19 @@ describe('OpenOracle report progress', () => {
 		expect(getOpenOracleReportProgress(createProgressReport(), clock(120n))).toBe('dispute-window-open')
 		expect(getOpenOracleReportProgress(createProgressReport({ disputeOccurred: true }), clock(120n))).toBe('disputed')
 		// Past its settlement time a report is ready to settle, even after a dispute.
-		expect(getOpenOracleReportProgress(createProgressReport(), clock(160n))).toBe('ready-to-settle')
-		expect(getOpenOracleReportProgress(createProgressReport({ disputeOccurred: true }), clock(160n))).toBe('ready-to-settle')
-		expect(getOpenOracleReportProgress(createProgressReport({ isDistributed: true }), clock(160n))).toBe('settled')
+		expect(getOpenOracleReportProgress(createProgressReport(), clock(280n))).toBe('ready-to-settle')
+		expect(getOpenOracleReportProgress(createProgressReport({ disputeOccurred: true }), clock(280n))).toBe('ready-to-settle')
+		expect(getOpenOracleReportProgress(createProgressReport({ isDistributed: true }), clock(280n))).toBe('settled')
+	})
+
+	test('marks the final submission reserve as closing on both clocks', () => {
+		expect(getOpenOracleReportProgress(createProgressReport(), { currentTime: 279n })).toBe('dispute-window-closing')
+		expect(getOpenOracleReportProgress(createProgressReport({ timeType: false }), { currentBlockNumber: 279n })).toBe('dispute-window-closing')
+		expect(getOpenOracleReportProgress(createProgressReport(), { currentTime: 280n })).toBe('ready-to-settle')
 	})
 
 	test('uses the block clock for block-based reports and falls back without timing', () => {
-		expect(getOpenOracleReportProgress(createProgressReport({ timeType: false }), { currentBlockNumber: 170n, currentTime: 0n })).toBe('ready-to-settle')
+		expect(getOpenOracleReportProgress(createProgressReport({ timeType: false }), { currentBlockNumber: 290n, currentTime: 0n })).toBe('ready-to-settle')
 		expect(getOpenOracleReportProgress(createProgressReport({ timeType: false }), { currentBlockNumber: undefined, currentTime: 170n })).toBe('pending')
 		expect(getOpenOracleReportProgress(createProgressReport({ settlementTime: undefined }), { currentBlockNumber: undefined, currentTime: 170n })).toBe('pending')
 		expect(getOpenOracleReportProgress(createProgressReport({ disputeOccurred: true, settlementTime: undefined }), { currentBlockNumber: undefined, currentTime: 170n })).toBe('disputed')

@@ -42,7 +42,7 @@ function userDeposit(depositIndex: bigint, amountAttoRep: bigint, cumulativeAmou
 	return { amountAttoRep, cumulativeAmountAttoRep, depositIndex, depositor: zeroAddress }
 }
 
-function createReportingDetails(securityPoolAddress: Address, overrides: Partial<ReportingDetails> = {}): ReportingDetails {
+function createReportingDetails(securityPoolAddress: Address, overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	return {
 		bindingCapital: 10n,
 		settlementCollateralAttoEth: 1n,
@@ -66,12 +66,8 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 8n,
 		viewerWalletRepAllowanceAttoRep: 100n * ATTO_REP,
 		viewerWalletRepBalanceAttoRep: 100n * ATTO_REP,
-		viewerVaultExists: true,
-		viewerVaultDisputeStakedAttoRep: 2n,
-		viewerVaultRepBackingAttoRep: 10n,
 		...overrides,
 	}
 }
@@ -147,8 +143,8 @@ describe('useReportingOperations', () => {
 	test.each([false, true])('refreshes balances after an account change and ignores old-account loads (pending: %s)', async pending => {
 		const pool = getAddress('0x00000000000000000000000000000000000000c1')
 		const nextAccount = getAddress('0x00000000000000000000000000000000000000b2')
-		const oldDetails = createReportingDetails(pool, { viewerPoolHeldVaultRepBackingAttoRep: 8n })
-		const nextDetails = createReportingDetails(pool, { viewerVaultExists: false, viewerPoolHeldVaultRepBackingAttoRep: 0n })
+		const oldDetails = createReportingDetails(pool, { viewerWalletRepBalanceAttoRep: 8n })
+		const nextDetails = createReportingDetails(pool, { viewerWalletRepBalanceAttoRep: 0n })
 		const oldLoad = createDeferred<ReportingDetails>()
 		const nextLoad = createDeferred<ReportingDetails>()
 		const loadReportingDetails = mock(async (_pool: Address, account: Address | undefined) => {
@@ -175,7 +171,7 @@ describe('useReportingOperations', () => {
 			await firstLoad
 		})
 		await waitFor(() => {
-			expect(state().reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(0n)
+			expect(state().reportingDetails?.viewerWalletRepBalanceAttoRep).toBe(0n)
 		})
 	})
 
@@ -238,8 +234,8 @@ describe('useReportingOperations', () => {
 		expect(state().reportingError).toBeUndefined()
 		expect(state().loadingReportingDetails).toBe(false)
 		expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
-		expect(state().reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(8n)
-		expect(state().reportingDetails?.viewerVaultRepBackingAttoRep).toBe(10n)
+		expect(state().reportingDetails?.viewerWalletRepBalanceAttoRep).toBe(100n * ATTO_REP)
+		expect(state().reportingDetails?.viewerWalletRepAllowanceAttoRep).toBe(100n * ATTO_REP)
 	})
 
 	test('reportOutcome blocks pre-start contributions that would exceed the remaining selected-side threshold capacity', async () => {
@@ -258,10 +254,6 @@ describe('useReportingOperations', () => {
 			universeId: 1n,
 			settlementState: 'locked',
 			parentWithdrawalEnabled: false,
-			viewerPoolHeldVaultRepBackingAttoRep: 8n * ATTO_REP,
-			viewerVaultExists: true,
-			viewerVaultDisputeStakedAttoRep: 0n,
-			viewerVaultRepBackingAttoRep: 8n * ATTO_REP,
 		}
 		const loadReportingDetails = mock(async () => latestDetails)
 		const reportOutcomeInSecurityPool = mock(async () => {
@@ -347,8 +339,6 @@ describe('useReportingOperations', () => {
 		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
 			forkContinuation,
 			contributionFunding: 'wallet',
-			viewerPoolHeldVaultRepBackingAttoRep: 0n,
-			viewerVaultExists: false,
 			viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
 			viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
 		})
@@ -405,8 +395,6 @@ describe('useReportingOperations', () => {
 			sides: [side('invalid', 0n), side('yes', bond), side('no', 0n)],
 			activationTime: 10_000n,
 			startBondAttoRep: bond,
-			viewerPoolHeldVaultRepBackingAttoRep: 0n,
-			viewerVaultExists: false,
 		})
 		let submittedRequireLead: boolean | undefined
 		let submittedMaximumAttoRep: bigint | undefined
@@ -434,8 +422,8 @@ describe('useReportingOperations', () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
 		// Invalid already sits at the 20 attoREP threshold, so filling Yes with 18 attoREP ends escalation and triggers the fork.
 		const forkReadySides: ActiveReportingDetails['sides'] = [side('invalid', 20n), side('yes', 2n), side('no', 1n)]
-		const latestDetails = createReportingDetails(securityPoolAddress, { sides: forkReadySides, viewerPoolHeldVaultRepBackingAttoRep: 100n })
-		const displayedDetails = displayedTriggersFork ? latestDetails : createReportingDetails(securityPoolAddress, { viewerPoolHeldVaultRepBackingAttoRep: 100n })
+		const latestDetails = createReportingDetails(securityPoolAddress, { sides: forkReadySides })
+		const displayedDetails = displayedTriggersFork ? latestDetails : createReportingDetails(securityPoolAddress, {})
 		const loadReportingDetails = mock(async () => (loadReportingDetails.mock.calls.length === 1 ? displayedDetails : latestDetails))
 		let submittedTriggersFork: boolean | undefined
 		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
@@ -468,9 +456,6 @@ describe('useReportingOperations', () => {
 			contributionFunding: 'wallet',
 			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
 			sides: [side('invalid', 1n * ATTO_REP), side('yes', 5n * ATTO_REP), side('no', 8n * ATTO_REP)],
-			viewerPoolHeldVaultRepBackingAttoRep: 0n,
-			viewerVaultExists: false,
-			viewerVaultRepBackingAttoRep: 0n,
 			viewerWalletRepAllowanceAttoRep: 0n,
 			viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
 		})
@@ -541,44 +526,6 @@ describe('useReportingOperations', () => {
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
 		expect(state().reportingResult).toBeUndefined()
 		expect(state().reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to settle on No.')
-	})
-
-	test('withdrawEscalation reports when the unresolved escalation migration window has closed', async () => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d4')
-		const loadReportingDetails = mock(async () =>
-			createReportingDetails(securityPoolAddress, {
-				settlementState: 'migration-expired',
-				sides: [side('invalid', 1n, [userDeposit(0n, 1n)]), side('yes', 2n), side('no', 3n)],
-			}),
-		)
-		const withdrawEscalationFromSecurityPool = mock(async () => {
-			throw new Error('withdrawEscalationFromSecurityPool should not be called when the migration window has closed')
-		})
-
-		const dependencies = createReportingOperationsDependencies({
-			loadReportingDetails,
-			withdrawEscalationFromSecurityPool,
-		})
-
-		const { state, setForm } = await renderOperations(dependencies)
-
-		await setForm({
-			securityPoolAddress,
-			selectedWithdrawDepositIndexesByOutcome: {
-				invalid: [0n],
-				yes: [],
-				no: [],
-			},
-		})
-
-		await act(async () => {
-			await state().withdrawEscalation('invalid')
-		})
-
-		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
-		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
-		expect(state().reportingResult).toBeUndefined()
-		expect(state().reportingFeedback?.status.detail).toBe('Settle winning parent deposits in the finalized child pool; the window for the optional cleanup of unresolved parent deposits has closed.')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {

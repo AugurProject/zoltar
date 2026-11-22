@@ -47,7 +47,7 @@ export const marketGuideSteps = [
 	{
 		number: '01',
 		title: 'Create a complete set',
-		description: 'Your collateral is sent to the selected Statoblast security pool, which creates equal amounts of Yes, No, and Invalid shares at its current collateral rate.',
+		description: 'Your collateral goes to the market’s shared portfolio, which funds equal amounts of Yes, No, and Invalid shares at the current collateral rate.',
 	},
 	{
 		number: '02',
@@ -73,7 +73,7 @@ export const shareValueDescription =
 export const pricesAndPayoutsTitle = 'Prices and payouts'
 export const tasksTitle = 'Common tasks'
 export const findMarketTitle = 'Find a market'
-export const findMarketDescription = 'Markets lists browser favorites. Portfolio discovers your wallet’s holdings in registered security pools in the selected universe. Paste a security pool address into Markets to open it directly.'
+export const findMarketDescription = 'Markets lists registered markets in the selected universe, with your favorites first. Portfolio discovers your wallet’s holdings in registered security pools in the selected universe. Paste a security pool address into Markets to open it directly.'
 export const findMarketLink = 'Guide: find a market'
 export const createMarketTitle = 'Create a market'
 export const createMarketDescription = 'Open a security pool without a market under Create, then add the first liquidity at your conditional Yes price.'
@@ -121,3 +121,5 @@ export const deploymentNotConfigured = 'Network or RPC not configured'
 export const deploymentComplete = 'Deployment complete'
 
 export const createMarket = 'Create market'
+
+export const collateralBalanceLocation = 'ETH pays transaction gas. Trading and liquidity forms show each market’s collateral balance.'

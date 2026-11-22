@@ -165,10 +165,7 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		const detailResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
 		expect(detailResponse?.status).toBe(200)
 		const detail = (await detailResponse?.json()) as { data: { summary: Record<string, unknown>; activity: { items: Record<string, unknown>[]; hasMore: boolean }; lpPositions: Record<string, unknown>[] } }
-		expect(detail.data.lpPositions).toEqual([
-			{ address: liquidityProvider, received_liquidity: '99', sent_liquidity: '0', balance: '99' },
-			{ address: `0x${'0'.repeat(39)}1`, received_liquidity: '1', sent_liquidity: '0', balance: '1' },
-		])
+		expect(detail.data.lpPositions).toEqual([{ address: liquidityProvider, received_liquidity: '99', sent_liquidity: '0', balance: '99' }])
 		expect(detail.data.summary).toMatchObject({ eth_volume_atto_eth: '17', eth_volume_24h_atto_eth: '4', eth_volume_7d_atto_eth: '17', eth_trade_count: 2, eth_trade_count_24h: 1 })
 		expect(detail.data.activity.hasMore).toBe(false)
 		expect(detail.data.activity.items.map(item => [item['kind'], item['side'], item['account'], item['shares'], item['eth_in_atto_eth'], item['eth_out_atto_eth']])).toEqual([
@@ -191,7 +188,7 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 
 		const catalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}`), connection)
 		const catalog = (await catalogResponse?.json()) as { data: { items: Record<string, unknown>[] } }
-		expect(catalog.data.items[0]).toMatchObject({ pair_address: pair, eth_volume_atto_eth: '17', eth_volume_24h_atto_eth: '4', eth_trade_count: 2, lp_holder_count: 2 })
+		expect(catalog.data.items[0]).toMatchObject({ pair_address: pair, eth_volume_atto_eth: '17', eth_volume_24h_atto_eth: '4', eth_trade_count: 2, lp_holder_count: 1 })
 		const lpPortfolioResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${chainId}&address=${liquidityProvider}`), connection)
 		const lpPortfolio = (await lpPortfolioResponse?.json()) as { data: { lp_positions: Record<string, unknown>[] } }
 		expect(lpPortfolio.data.lp_positions).toEqual([expect.objectContaining({ market_address: pair, balance: '99', transfer_count: 1, pool_address: pool })])

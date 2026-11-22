@@ -61,6 +61,8 @@ export type OverviewPanelsProps = {
 	walletBootstrapComplete: boolean
 	/** The connected account's REP balance in the active universe. */
 	universeRepBalanceAttoRep: bigint | undefined
+	/** Includes unused prepared migration credit when the application has loaded it. */
+	hasRepToMigrate?: boolean | undefined
 	isLoadingUniverseRepBalance: boolean
 	/** Interactive universe control, such as the shared universe switcher, shown in place of the plain universe label. */
 	universeControl?: ComponentChildren
@@ -194,6 +196,7 @@ export function OverviewPanels({
 	showUniverseForkedNotice,
 	universePresentation,
 	universeRepBalanceAttoRep,
+	hasRepToMigrate,
 	isRefreshing,
 	walletActionMessage,
 	walletBootstrapComplete,
@@ -281,7 +284,7 @@ export function OverviewPanels({
 						</p>
 					) : undefined}
 					{visibleWalletActionMessage === undefined ? undefined : <UserMessage placement='page' tone='neutral' announcement='polite' detail={visibleWalletActionMessage} dismiss={onDismissWalletActionMessage === undefined ? undefined : { label: appCopy.dismissNotice, onDismiss: onDismissWalletActionMessage }} />}
-					{showUniverseForkedNotice ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n} migrateRepHref={migrateRepHref} /> : undefined}
+					{showUniverseForkedNotice ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && (hasRepToMigrate ?? (universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n))} migrateRepHref={migrateRepHref} /> : undefined}
 				</>
 			}
 			footer={

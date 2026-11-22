@@ -135,8 +135,8 @@ export const tradingPnlPanel = (
 			copy?.insertBefore(element('span', '', tradingPnlHoldings(item)), copy.querySelector('code'))
 			return row
 		}),
-		'No trading positions or ETH flows are indexed for this address.',
-		{ label: `Indexed ETH flows${record['truncated'] === true ? ' · first 250 markets shown' : ''}` },
+		'No trading positions or collateral flows are indexed for this address.',
+		{ label: `Indexed collateral flows${record['truncated'] === true ? ' · first 250 markets shown' : ''}` },
 	)
 	if (typeof record['basis'] === 'string') {
 		const method = element('details', 'operations-raw-evidence')

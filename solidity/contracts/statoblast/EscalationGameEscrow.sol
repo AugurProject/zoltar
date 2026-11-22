@@ -10,15 +10,6 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		return _reporterRepBalance();
 	}
 
-	/// @notice Ordinary reports count only their retained contribution to escrow as collateral.
-	/// @dev Continuation claims receive no collateral credit; nominal payouts remain unchanged.
-	function getVaultDisputeBackingAttoRep(address vault) external view returns (uint256) {
-		if (forkContinuation || ordinarySettlementInitialized || _usesCentralReporterCustody()) return 0;
-		uint256 nominal = disputeStakedRepByVaultAttoRep(vault);
-		uint256 backing = vaultAccounting[vault].collateralBackingAttoRep;
-		return nominal < backing ? nominal : backing;
-	}
-
 	function getLocalUnresolvedPrincipalByVaultAndOutcome(address vault, BinaryOutcomes.BinaryOutcome outcome) external view returns (uint256) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		if (_isRetiredOrdinaryOutcome(uint8(outcome))) return 0;

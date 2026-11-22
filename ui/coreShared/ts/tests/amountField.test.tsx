@@ -67,7 +67,7 @@ describe('AmountField', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const input = getInput()
-		const liveRegion = renderedComponent.container.querySelector('.field-error-live-region')
+		const liveRegion = renderedComponent.container.querySelector<HTMLElement>('.field-error-live-region')
 		expect(liveRegion?.getAttribute('aria-live')).toBe('polite')
 		expect(liveRegion?.childElementCount).toBe(0)
 

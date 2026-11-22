@@ -6,25 +6,23 @@ import type { PoolSnapshot, OracleRequestFundingSnapshot } from '../operations/t
 import type { ChaosReadClient } from './discovery-client.ts'
 import type { CanonicalCoordinatorReportRoute } from './protocol-index.ts'
 
-export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator: Address, blockNumber: bigint, settlementCollateralAttoEth: bigint, funding: OracleRequestFundingSnapshot, baseFee: bigint, pendingReportId: bigint, retainedReportIds: readonly bigint[] = []) {
+export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator: Address, blockNumber: bigint, funding: OracleRequestFundingSnapshot, baseFee: bigint, pendingReportId: bigint, retainedReportIds: readonly bigint[] = []) {
 	const priceFeed = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'priceFeed' })
-	const shared = !sameAddress(priceFeed, coordinator)
-	const oracleExposureAttoEth = shared ? await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'aggregateExposureAttoEth' }) : settlementCollateralAttoEth
-	const oracleRequestFunding = shared
-		? {
-				...funding,
-				settlementBountyMultiplierBps: (await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'maxSettlementBaseFeeMultiplierBps' })).toString(),
-				collateralToken: getAddress(await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'collateralToken' })),
-				minimumReportCollateral: (await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'minimumReportCollateral' })).toString(),
-			}
-		: funding
+	const oracleExposureAttoEth = await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'aggregateExposureAttoEth' })
+	const oracleRequestFunding = {
+		...funding,
+		minimumRepReportAttoRep: (await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'minimumToken2ReportAttoRep' })).toString(),
+		settlementBountyMultiplierBps: (await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'maxSettlementBaseFeeMultiplierBps' })).toString(),
+		collateralToken: getAddress(await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'collateralToken' })),
+		minimumReportCollateral: (await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'minimumReportCollateral' })).toString(),
+	}
 	// Canonical shared-feed stake floors do not inspect BASEFEE. Ordinary calls
 	// must work even when the public RPC client's default sender has no funds.
-	const minimumReport = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth', ...(shared ? {} : { gasPrice: baseFee }) })
+	const minimumReport = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth' })
 	const requestCost = oracleRequestPriceCostAttoEth({ baseFeePerGas: baseFee.toString(), coordinator: oracleRequestFunding })
 	assertAnchoredOracleRequestFunding({ baseFeePerGas: baseFee.toString(), coordinator: oracleRequestFunding, minimumToken1ReportAttoEth: minimumReport.toString(), requestPriceCostAttoEth: requestCost, settlementCollateralAttoEth: oracleExposureAttoEth.toString(), subject: `Coordinator ${coordinator}` })
-	const reportEscrows: Record<string, Address> | undefined = shared ? {} : undefined
-	if (reportEscrows !== undefined) {
+	const reportEscrows: Record<string, Address> = {}
+	{
 		for (const reportId of new Set([pendingReportId, ...retainedReportIds])) {
 			if (reportId === 0n) continue
 			const candidate = await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'reportCandidates', args: [reportId] })
@@ -33,17 +31,15 @@ export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator
 			else if (reportId === pendingReportId) throw new Error('Shared feed pending report has no authenticated escrow')
 		}
 	}
-	return { minimumToken1ReportAttoEth: minimumReport.toString(), requestPriceCostAttoEth: requestCost, priceFeed: getAddress(priceFeed), oracleExposureAttoEth: oracleExposureAttoEth.toString(), oracleRequestFunding, ...(reportEscrows === undefined ? {} : { reportEscrows }) }
+	return { minimumToken1ReportAttoEth: minimumReport.toString(), requestPriceCostAttoEth: requestCost, priceFeed: getAddress(priceFeed), oracleExposureAttoEth: oracleExposureAttoEth.toString(), oracleRequestFunding, reportEscrows }
 }
 
 /** Collapse identical question aliases before authenticating canonical report routes. */
 export function canonicalPoolReportRoutes(pools: readonly PoolSnapshot[]): CanonicalCoordinatorReportRoute[] {
 	const routes = new Map<string, CanonicalCoordinatorReportRoute>()
 	for (const pool of pools) {
-		const shared = !sameAddress(pool.priceFeed, pool.coordinator)
-		if (shared && pool.pendingReportId !== '0' && pool.reportEscrows?.[pool.pendingReportId] === undefined) throw new Error('Shared feed pending report has no authenticated escrow')
-		const standalone = pool.pendingReportId === '0' ? [] : [[pool.pendingReportId, pool.priceFeed] as const]
-		const candidates = shared ? Object.entries(pool.reportEscrows ?? {}) : standalone
+		if (pool.pendingReportId !== '0' && pool.reportEscrows?.[pool.pendingReportId] === undefined) throw new Error('Shared feed pending report has no authenticated escrow')
+		const candidates = Object.entries(pool.reportEscrows ?? {})
 		for (const [reportId, creator] of candidates) {
 			const route = { coordinator: creator, pendingReportId: reportId, repToken: pool.repToken }
 			routes.set(`${pool.priceFeed.toLowerCase()}:${reportId}:${pool.repToken.toLowerCase()}`, route)

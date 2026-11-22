@@ -97,6 +97,16 @@ describe('cross-venue market consensus', () => {
 		await expect(requireCanonicalDexEvidence(estimate, async () => hash)).resolves.toBeUndefined()
 		await expect(requireCanonicalDexEvidence(estimate, async () => `0x${'2'.repeat(64)}`)).rejects.toThrow('Canonical block changed during market observation')
 	})
+	test('measures within-group dispersion against the median consistently with the CEX estimate', () => {
+		const observations = [observation('cex', 'alpha', 100n), observation('cex', 'beta', 105n), observation('dex', 'one', 102n), observation('dex', 'two', 103n)]
+		const coherent = estimateMarketConsensus(observations, { ...settings, maximumVenueDispersionBps: 490n }, 'rep', 1, 10_000)
+		expect(coherent.cex.reliable).toBe(true)
+		expect(coherent.reliable).toBe(true)
+		const dispersed = estimateMarketConsensus(observations, { ...settings, maximumVenueDispersionBps: 480n }, 'rep', 1, 10_000)
+		expect(dispersed.cex.reliable).toBe(false)
+		expect(dispersed.reliable).toBe(false)
+	})
+
 	test('requires explicit fallback and counts only the selected reliable group toward total quorum', () => {
 		const observations = [observation('cex', 'alpha', 200n), observation('cex', 'bad-cex', 500n), observation('dex', 'uniswap-v2', 201n), observation('dex', 'sushiswap-v2', 199n)]
 		const estimate = estimateMarketConsensus(observations, settings, 'rep', 1, 10_000)

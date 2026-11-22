@@ -37,6 +37,7 @@ function irreversibleEnabled(options: PlanningOptions) {
 }
 
 function approveRepStep(snapshot: EcosystemSnapshot, universe: UniverseSnapshot, required: bigint) {
+	if (universe.id !== '0') return []
 	const inventory = tokenInventory(snapshot, universe.repToken)
 	if (allowance(inventory, snapshot.deployments.zoltar) >= required) return []
 	return [zoltarApprovalStep(snapshot, universe.repToken, snapshot.deployments.zoltar, required)]
@@ -70,6 +71,7 @@ function exactPreviousRepApproval(snapshot: EcosystemSnapshot, context: Operatio
 }
 
 function zoltarApprovalPrepared(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint) {
+	if (snapshot.universes.some(universe => universe.id !== '0' && universe.repToken.toLowerCase() === token.toLowerCase())) return true
 	const previous = exactPreviousRepApproval(snapshot, context, token, spender, required)
 	if (context.previousPlan.steps.some(step => step.id === 'approve-rep') && previous === undefined) return false
 	if (previous !== undefined && context.confirmedStepIds.includes(previous.id)) return allowance(tokenInventory(snapshot, token), spender) >= required
@@ -78,6 +80,7 @@ function zoltarApprovalPrepared(snapshot: EcosystemSnapshot, context: OperationC
 }
 
 function zoltarRemainingApproval(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint) {
+	if (snapshot.universes.some(universe => universe.id !== '0' && universe.repToken.toLowerCase() === token.toLowerCase())) return []
 	const previous = exactPreviousRepApproval(snapshot, context, token, spender, required)
 	return previous !== undefined && !context.confirmedStepIds.includes(previous.id) && allowance(tokenInventory(snapshot, token), spender) < required ? [zoltarApprovalStep(snapshot, token, spender, required)] : []
 }
@@ -264,7 +267,7 @@ const forkUniverse: OperationDefinition = {
 		const candidates = snapshot.universes.filter(universe => {
 			const threshold = amount(universe.forkThresholdAttoRep)
 			const inventory = tokenInventory(snapshot, universe.repToken)
-			return universe.forkTime === '0' && threshold > 0n && threshold <= maximum && inventory !== undefined && amount(inventory.balance) >= threshold + reserve
+			return universe.forkTime === '0' && amount(universe.earliestForkTime) <= amount(snapshot.anchor.timestamp) && threshold > 0n && threshold <= maximum && inventory !== undefined && amount(inventory.balance) >= threshold + reserve
 		})
 		const universe = choose(candidates, mixSeed(options.seed, 'fork-universe'))
 		if (question === undefined || universe === undefined) return undefined
@@ -313,6 +316,7 @@ const forkUniverse: OperationDefinition = {
 			universe !== undefined &&
 			universe.repToken.toLowerCase() === repToken.toLowerCase() &&
 			universe.forkTime === '0' &&
+			amount(universe.earliestForkTime) <= amount(snapshot.anchor.timestamp) &&
 			amount(universe.forkThresholdAttoRep) === threshold &&
 			question !== undefined &&
 			amount(question.endTime) <= amount(snapshot.anchor.timestamp) &&

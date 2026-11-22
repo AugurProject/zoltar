@@ -95,7 +95,7 @@ void describe('error helpers', () => {
 
 	void test('maps stale-price provider failures to an actionable recovery step', () => {
 		const error = {
-			message: 'An unknown RPC error occurred. Details: execution reverted: Stale price Version: viem@2.53.1',
+			message: 'An unknown RPC error occurred. Details: execution reverted: Capital price stale Version: viem@2.53.1',
 			shortMessage: 'An unknown RPC error occurred.',
 		}
 		expect(formatWriteErrorMessage(error, 'Failed to report on outcome')).toBe(pricingCopy.poolOraclePriceExpiredError)

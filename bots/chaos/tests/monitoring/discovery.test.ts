@@ -1,3 +1,5 @@
+import { discoverPortfolioCapital } from '../../src/monitoring/discovery-portfolios.ts'
+import { discoverPurchaseQuote } from '../../src/monitoring/discovery-purchase.ts'
 import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import type { DiscoveryIssue } from '../../src/operations/types.ts'
 import { formatDiscoveryWarnings } from '../../src/monitoring/discovery-coverage.ts'
@@ -40,9 +42,18 @@ test('keyless discovery scans protocol topology without querying account invento
 	expect(snapshot.wallet.tokens).toEqual([])
 })
 
+test('discovers a fully prepared portfolio with no admitted questions', async () => {
+	const fake = refundBackfillClient(0n)
+	const identity = topologyIdentity()
+	const { chainId: _chainId, ...deployments } = identity
+	const capital = await discoverPortfolioCapital({ client: fake.client, deployments, wallet: address(1), anchorBlockNumber: 10n }, [], 10n)
+	expect(capital.map(item => item.portfolio)).toEqual([address(90)])
+})
+
 test('derives the universe initial escalation deposit from the Zoltar universe supply that genesis burns reduce', async () => {
-	const fake = fakeClient(10n, hash(99), { tokenTheoreticalSupplyAttoRep: 30_000_000n * 10n ** 18n, universeTheoreticalSupplyAttoRep: 20_000_000n * 10n ** 18n })
+	const fake = fakeClient(10n, hash(99), { earliestForkTime: 123n, tokenTheoreticalSupplyAttoRep: 30_000_000n * 10n ** 18n, universeTheoreticalSupplyAttoRep: 20_000_000n * 10n ** 18n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.universes[0]?.earliestForkTime).toBe('123')
 	expect(snapshot.universes.find(universe => universe.id === '0')?.initialEscalationDepositAttoRep).toBe((2n * 10n ** 18n).toString())
 })
 
@@ -67,18 +78,14 @@ test('authenticates latest and retained candidate escrows at the same discovery 
 	const fake = refundBackfillClient(0n, false, { sharedExposure: 0n })
 	const funding = {
 		escalationHaltMultiplierBps: '10000',
-		feePercentage: '0',
-		gasConsumedOpenOracleReportPrice: '1',
-		gasUnitsForOneDispute: '1',
+
 		initialReportPriorityFeeAttoEthPerGas: 1n.toString(),
-		openOracleSecurityMultiplierBps: '10000',
-		protocolFee: '0',
+
 		settlementCallbackGasLimit: '1',
-		targetPriceErrorForDispute: '1000',
 	}
-	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 1n, 7n, [6n, 9n])
+	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, funding, 1n, 7n, [6n, 9n])
 	expect(snapshot.reportEscrows).toEqual({ '6': address(86), '7': address(87) })
-	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
+	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, funding, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
 for (const shared of [false, true])
@@ -175,7 +182,7 @@ test('discovers and authenticates fixed-fee REP/WETH pools for every canonical u
 		anchorBlockNumber: 10n,
 		client: fake.client,
 		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
-		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 		wallet: address(1),
 	})
 	expect(snapshot.universeUniswap?.pools[0]?.positions).toHaveLength(5)
@@ -198,7 +205,7 @@ test('discovers unpoked fees at exact ranges and gates mismatched router binding
 			anchorBlockNumber: 10n,
 			client: fake.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: factory, weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			wallet: address(1),
 		})
 		expect(snapshot.universeUniswap?.routerAuthenticated).toBe(weth === address(7))
@@ -217,7 +224,7 @@ test('discovers Sepolia pools using the network default when no factory override
 		client: fake.client,
 		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 		discoverGenesisDeployment: true,
-		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 		wallet: address(1),
 	})
 	expect(snapshot.genesisUniswap).toMatchObject({ factory: true, pool, initialized: true, liquidity: '7' })
@@ -232,7 +239,7 @@ test('bounds concurrent per-universe Uniswap pool-state fan-out below the RPC qu
 		anchorBlockNumber: 10n,
 		client: fake.client,
 		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
-		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 11, maxVaultsPerPool: 10 },
+		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 11 },
 		wallet: address(1),
 	})
 	expect(snapshot.universeUniswap?.pools).toHaveLength(11)
@@ -287,6 +294,7 @@ interface GraphOverrides {
 	uniswapRouterWeth?: Address
 	uniswapPositionLiquidity?: bigint
 	uniswapFactory?: Address
+	earliestForkTime?: bigint
 	universeTheoreticalSupplyAttoRep?: bigint
 	uniswapPoolsByRep?: Readonly<Record<string, { initialized: boolean; liquidity: bigint; pool: Address }>>
 }
@@ -376,6 +384,8 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 200n
 				case 'getTotalTheoreticalSupply':
 					return graph.tokenTheoreticalSupplyAttoRep ?? 1_000_000n
+				case 'getEarliestForkTime':
+					return graph.earliestForkTime ?? 0n
 				case 'getUniverseTheoreticalSupplyAttoRep':
 					return graph.universeTheoreticalSupplyAttoRep ?? 1_000_000n
 				case 'forkBurnDivisor':
@@ -433,6 +443,8 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					if (graph.outcomeLabelPage !== undefined) return graph.outcomeLabelPage(questionId, start, count)
 					return [...(graph.outcomeLabelsByQuestion?.[questionId.toString()] ?? ['Yes', 'No'])].slice(Number(start), Number(start + count))
 				}
+				case 'portfolioCount':
+					return 0n
 				case 'securityPoolDeploymentCount':
 					return BigInt(graph.poolDeployments?.length ?? 0)
 				case 'securityPoolDeploymentsRange': {
@@ -449,6 +461,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 0n
 				case 'tokenHolder':
 					return 1n
+				case 'availableMintCapacity':
 				case 'internalAllowance':
 					return 0n
 				default:
@@ -467,6 +480,10 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 }
 
 interface RefundBackfillOverrides {
+	auctionOpened?: boolean
+	auctionOpeningError?: Error
+	recoveryAttoRep?: bigint
+	purchaseShares?: bigint
 	sharedExposure?: bigint
 	auctionFinalized?: boolean
 	baseFeePerGas?: bigint
@@ -495,6 +512,10 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 	const implementation = {
 		async simulateContract(parameters: { functionName: string; blockNumber?: bigint; args?: readonly AbiValue[] }) {
 			expect(parameters.blockNumber).toBe(10n)
+			if (parameters.functionName === 'open') {
+				if (overrides.auctionOpeningError !== undefined) throw overrides.auctionOpeningError
+				return { result: undefined }
+			}
 			expect(parameters.functionName).toBe('settleRefund')
 			expect(parameters.args).toEqual([1n])
 			return { result: undefined }
@@ -504,6 +525,14 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 			// Geth evaluates BASEFEE as zero for eth_call without a nonzero fee.
 			const callBaseFee = (parameters.gasPrice ?? 0n) === 0n ? 0n : baseFeePerGas
 			switch (parameters.functionName) {
+				case 'portfolioCount':
+					return 1n
+				case 'portfoliosRange':
+					return [address(90)]
+				case 'setupStage':
+					return 4n
+				case 'getRepToken':
+					return address(10)
 				case 'getSecurityPoolPortfolio':
 					return address(90)
 				case 'getPool':
@@ -540,12 +569,14 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return [address(1), address(25), 10000n, 1n, 100n, false]
 				case 'purchaseQuote':
 					return [0n, 0n]
+				case 'attoSharesToAttoRep':
+					return overrides.recoveryAttoRep ?? 0n
 				case 'attoSharesToAttoEth':
 					return parameters.args?.[0]
 				case 'attoEthToAttoShares':
-					return 0n
+					return overrides.purchaseShares ?? 0n
 				case 'opened':
-					return true
+					return overrides.auctionOpened ?? true
 				case 'frozen':
 				case 'importing':
 				case 'exported':
@@ -617,7 +648,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'getCurrentMintingCapacityAttoEth':
 				case 'getVaultOpenInterestAttoEth':
 				case 'vaultBadDebtAttoEth':
-				case 'backingUnitsToAttoRep':
 					return 0n
 				case 'isPriceValid':
 					return true
@@ -632,7 +662,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'lastPrice':
 					return 10n ** 18n
 				case 'priceFeed':
-					return overrides.sharedExposure === undefined ? coordinator : address(80)
+					return address(80)
 				case 'aggregateExposureAttoEth':
 					expect(parameters.blockNumber).toBe(10n)
 					expect(parameters.address).toBe(address(80))
@@ -642,11 +672,12 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					expect(parameters.address).toBe(address(80))
 					if (parameters.args?.[0] === 7n) return [address(87), address(1), coordinator, 1n]
 					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), coordinator, 1n]
+				case 'minimumToken2ReportAttoRep':
+					return 0n
 				case 'minimumReportCollateral':
 					return 10_001n
 				case 'minimumToken1ReportAttoEth':
-					if (overrides.sharedExposure !== undefined) return 10_001n + (overrides.sharedExposure + 99n) / 100n
-					return 10_001n + ((overrides.sharedExposure ?? 0n) / 100n > 10_001n * callBaseFee ? (overrides.sharedExposure ?? 0n) / 100n : 10_001n * callBaseFee)
+					return 10_001n + ((overrides.sharedExposure ?? 0n) + 99n) / 100n
 				case 'gasConsumedOpenOracleReportPrice':
 				case 'getSettlementCallbackGasLimit':
 				case 'gasUnitsForOneDispute':
@@ -686,8 +717,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'collateralToken':
 				case 'weth':
 					return address(7)
-				case 'securityVaults':
-					return [0n, 0n, 0n, 0n] as const
 				case 'getPendingSettlementOperationIds':
 					return []
 				case 'getPair':
@@ -751,8 +780,8 @@ describe('anchored ecosystem discovery', () => {
 		const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 		expect(snapshot.pools).toHaveLength(1)
 		expect(snapshot.pools[0]).toMatchObject({
-			minimumToken1ReportAttoEth: (10_001n * (1n + baseFeePerGas)).toString(),
-			requestPriceCostAttoEth: (200_001n * (baseFeePerGas + 1n) + 101n).toString(),
+			minimumToken1ReportAttoEth: 10001n.toString(),
+			requestPriceCostAttoEth: (392_002n * 3n * (baseFeePerGas + 1n) + 101n).toString(),
 		})
 	})
 
@@ -937,7 +966,7 @@ describe('anchored ecosystem discovery', () => {
 				anchorBlockNumber: 10n,
 				client: fake.client,
 				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-				limits: { maxPools: 101, maxQuestions: 1, maxUniverses: 100, maxVaultsPerPool: 1 },
+				limits: { maxPools: 101, maxQuestions: 1, maxUniverses: 100 },
 				wallet: address(1),
 			}),
 		).rejects.toThrow('maxPools × maxUniverses exceeds the 10000-item discovery safety envelope')
@@ -1012,7 +1041,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 10n,
 			client: fake.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 2, maxQuestions: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
+			limits: { maxPools: 2, maxQuestions: 2, maxUniverses: 2 },
 			wallet: address(1),
 		})
 		expect(snapshot.questions).toEqual([])
@@ -1030,7 +1059,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 10n,
 			client: fake.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 3, maxQuestions: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
+			limits: { maxPools: 3, maxQuestions: 3, maxUniverses: 3 },
 			wallet: address(1),
 		})
 		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1', '2'])
@@ -1049,7 +1078,7 @@ describe('anchored ecosystem discovery', () => {
 			shareToken: address(3_000 + index),
 			universeId: 0n,
 		}))
-		const limits = { maxPools: 3, maxQuestions: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
+		const limits = { maxPools: 3, maxQuestions: 3, maxUniverses: 3 }
 		let previousAnchor: bigint | undefined
 		for (let cycle = 0; cycle < 4; cycle += 1) {
 			const anchor = 10n + BigInt(cycle)
@@ -1168,7 +1197,7 @@ describe('anchored ecosystem discovery', () => {
 		if (checkpoint === undefined) throw new Error('Boundary-label discovery did not produce a topology checkpoint')
 		expect(snapshot.questions[0]?.outcomeLabels[0]?.length).toBe(IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES)
 		await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint)
-		const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits: { maxPools: 1_000_000, maxQuestions: 1_000_000, maxUniverses: 1_000_000, maxVaultsPerPool: 1_000_000 }, statePath })
+		const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits: { maxPools: 1_000_000, maxQuestions: 1_000_000, maxUniverses: 1_000_000 }, statePath })
 		expect(restored?.questions[0]?.outcomeLabels[0]).toBe(boundaryLabel)
 		await expect(
 			discoverEcosystemSnapshot({
@@ -1192,7 +1221,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 10n,
 			client: first.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			recordTopologyCache: (value, changed) => {
 				checkpoint = value
 				initialChanged = changed
@@ -1213,7 +1242,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 11n,
 			client: next.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			recordTopologyCache: (value, changed) => {
 				nextCheckpoint = value
 				extendedChanged = changed
@@ -1244,7 +1273,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 12n,
 			client: unchanged.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			recordTopologyCache: (value, changed) => {
 				unchangedCheckpoint = value
 				unchangedChanged = changed
@@ -1266,7 +1295,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 11n,
 			client: reorged.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			recordTopologyCache: (_value, changed) => {
 				reorgChanged = changed
 			},
@@ -1461,7 +1490,7 @@ describe('anchored ecosystem discovery', () => {
 			get(_target, property) {
 				if (property === 'readContract')
 					return async () => {
-						throw new Error('execution reverted: Fork game')
+						throw new Error('execution reverted: Invalid deposit preview')
 					}
 				if (property === 'simulateContract')
 					return async () => {
@@ -1691,4 +1720,38 @@ for (const [name, missingContracts, expected] of [
 test('rejects a deployed trading router without its factory', async () => {
 	const fake = fakeClient(10n, hash(10), { missingContract: address(8) })
 	await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })).rejects.toThrow('Configured trading router exists without its factory')
+})
+
+test.each(['universe forked', 'no saleable lots', 'quote is not funded and fresh'])('auction discovery rejects an anchored opening revert: %s', async reason => {
+	const fake = refundBackfillClient(0n, false, { auctionOpened: false, auctionOpeningError: new Error(`execution reverted: ${reason}`) })
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.auctions[0]?.openingExpectedSuccess).toBe(false)
+})
+
+test('auction discovery distinguishes a successful opening from a provider failure', async () => {
+	const fake = refundBackfillClient(0n, false, { auctionOpened: false })
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.auctions[0]?.openingExpectedSuccess).toBe(true)
+	const failed = refundBackfillClient(0n, false, { auctionOpened: false, auctionOpeningError: new Error('Read provider unavailable') })
+	await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: failed.client, deployments: snapshotFixture().deployments, wallet: undefined })).rejects.toThrow('Read provider unavailable')
+})
+
+test('discovery samples recovery REP redemption alongside the live collateral quote', async () => {
+	const fake = refundBackfillClient(0n, false, { recoveryAttoRep: 250n })
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.pools[0]?.projectedSettlementRecoveryAttoRep).toBe('250')
+})
+
+test('purchase discovery subtracts existing question cash from its displayed mint ceiling', async () => {
+	const snapshot = snapshotFixture()
+	const pool = snapshot.pools[0]
+	if (pool === undefined) throw new Error('Missing purchase fixture')
+	pool.currentMintingCapacityAttoEth = '100'
+	pool.settlementCollateralAttoEth = '50'
+	const fake = refundBackfillClient(0n, false, { purchaseShares: 50n })
+	const context = { anchorBlockNumber: 10n, client: fake.client, deployments: snapshot.deployments, wallet: snapshot.wallet.address }
+	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 51n }, pool, 10n)).toBeUndefined()
+	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 50n }, pool, 10n)).toMatchObject({ mintAttoEth: 50n.toString() })
+	pool.settlementCollateralAttoEth = '101'
+	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 1n }, pool, 10n)).toBeUndefined()
 })

@@ -1,3 +1,4 @@
+import { isRecoveryWorkflowStatus, obligationRequiresRecovery } from './recovery-status.ts'
 import { formatAtomicAmount } from '@zoltar/bot-shared/dashboard/amount'
 import { formatDate, fullIdentifier, node, transactionExplorerUrl } from './dom.js'
 import type { Obligation, OperationEvaluation, Snapshot } from './dashboard-data.ts'
@@ -93,8 +94,8 @@ export function obligationDetail(obligation: Obligation) {
 }
 
 export function recoveryItemCount(value: Snapshot) {
-	const selectableContinuation = value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' ? 1 : 0
-	return value.pendingTransactions.length + value.obligations.length + selectableContinuation
+	const selectableContinuation = value.currentWorkflow?.classification === 'selectable' && isRecoveryWorkflowStatus(value.currentWorkflow.status) ? 1 : 0
+	return value.pendingTransactions.length + value.obligations.filter(obligationRequiresRecovery).length + selectableContinuation
 }
 
 /** The ETH a step sends, in ETH; a value the planner did not report as a base-unit integer is shown as it arrived. */

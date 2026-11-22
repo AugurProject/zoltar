@@ -104,9 +104,7 @@ contract EscalationGame is EscalationGameSettlement {
 		// Right-aligned selector words compare directly against `shr(224, calldataload(0))`.
 		uint256 depositWithPermitSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermit.selector);
 		uint256 depositWithAuthorizationSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorization.selector);
-		uint256 depositWithLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithLead.selector);
 		uint256 depositWithPermitAndLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermitAndLead.selector);
-		uint256 depositWithAuthorizationAndLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorizationAndLead.selector);
 		assembly ('memory-safe') {
 			let selector := shr(224, calldataload(0))
 			let delegate := claimDelegateAddress
@@ -114,13 +112,7 @@ contract EscalationGame is EscalationGameSettlement {
 			// delegate. Other selectors remain on the claim delegate's narrow surface.
 			if or(
 				or(eq(selector, depositWithPermitSelector), eq(selector, depositWithAuthorizationSelector)),
-				or(
-					eq(selector, depositWithLeadSelector),
-					or(
-						eq(selector, depositWithPermitAndLeadSelector),
-						eq(selector, depositWithAuthorizationAndLeadSelector)
-					)
-				)
+				eq(selector, depositWithPermitAndLeadSelector)
 			) {
 				delegate := depositDelegateAddress
 			}

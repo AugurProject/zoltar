@@ -58,7 +58,7 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 		renderOperatorHealth(element('operator-health', HTMLDivElement), {
 			mode: value.execute === true ? 'Live armed' : 'Dry run',
 			lastScanAt: value.lastScanAt,
-			capitalAtRisk: state.configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Not tracked · limit ${state.configuration.maximumEthPerOperation} ETH per operation`,
+			capitalAtRisk: state.configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Not tracked · limit ${state.configuration.maximumEthPerOperation} ETH per workflow`,
 			recoveryItems: recoveryItemCount(value),
 			lastAction: value.activities[0]?.label ?? value.activities[0]?.summary ?? 'No action yet',
 			paused: value.paused === true || value.safetyPaused === true,

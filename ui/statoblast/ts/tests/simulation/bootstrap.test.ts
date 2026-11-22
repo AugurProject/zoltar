@@ -30,6 +30,9 @@ type RepTokenMockState = {
 	balances: Map<string, bigint>
 	theoreticalSupply: bigint
 	totalSupply: bigint
+	burnedGenesis: bigint
+	forkTime: bigint
+	frozenSupply: bigint
 }
 
 function createSuccessfulReceipt(accountAddress: Address) {
@@ -55,6 +58,9 @@ function createRepTokenMockState(): RepTokenMockState {
 		balances: new Map<string, bigint>(),
 		theoreticalSupply: 0n,
 		totalSupply: 0n,
+		burnedGenesis: 0n,
+		forkTime: 0n,
+		frozenSupply: 0n,
 	}
 }
 
@@ -81,7 +87,7 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 				case 'getRepToken':
 					return repAddress
 				case 'getUniverseTheoreticalSupplyAttoRep':
-					return repState.theoreticalSupply
+					return repState.forkTime === 0n ? repState.theoreticalSupply - repState.burnedGenesis : repState.frozenSupply
 				default:
 					throw new Error(`Unexpected Zoltar read function ${functionName}`)
 			}
@@ -150,15 +156,14 @@ function createBootstrapMemoryClient(
 }
 
 // Mints 11 attoREP to the primary account through the mocked token, recording raw storage writes.
-async function mintElevenMockedRep({ repAddress, repTokenCode, zoltarAddress }: { repAddress: Address; repTokenCode: `0x${string}`; zoltarAddress: Address }) {
-	const storageWrites: MemoryStorageCall[] = []
-	const repState = createRepTokenMockState()
+async function mintElevenMockedRep({ repAddress, zoltarCode, zoltarAddress, initial = {}, storageWrites = [] }: { repAddress: Address; zoltarCode: `0x${string}`; zoltarAddress: Address; initial?: Partial<RepTokenMockState>; storageWrites?: MemoryStorageCall[] }) {
+	const repState = { ...createRepTokenMockState(), ...initial }
 	const memoryClient = {
 		setStorageAt: async (payload: MemoryStorageCall) => {
 			storageWrites.push(payload)
 			if (payload.address.toLowerCase() === repAddress.toLowerCase()) repState.theoreticalSupply = BigInt(payload.value)
 		},
-		getCode: async () => repTokenCode,
+		getCode: async () => zoltarCode,
 		getBalance: async () => 0n,
 		getTransactionCount: async () => 0n,
 		impersonateAccount: async () => undefined,
@@ -194,6 +199,7 @@ function createRecordingWriteClients() {
 const applyScenario = (parameters: BootstrapScenarioApplyParameters) => applyStatoblastScenario(parameters)
 const ZOLTAR_SIMULATION_STEP: DeploymentStep = {
 	id: 'zoltar',
+	dependencies: [],
 	label: 'Zoltar',
 	address: getAddress('0x00000000000000000000000000000000000000a1'),
 	deploy: async () => ({ action: 'none', address: getAddress('0x00000000000000000000000000000000000000a1'), hash: '0x01' }) as never,
@@ -238,10 +244,10 @@ describe('simulation bootstrap', () => {
 		).rejects.toThrow('Simulation REP mint amount must be greater than zero')
 	})
 
-	test('mints mocked REP balances through the token ABI and skips Zoltar bootstrap when token code is missing', async () => {
+	test('mints mocked REP balances through the token ABI and skips the Zoltar patch when protocol code is missing', async () => {
 		const repAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const zoltarAddress = getAddress('0x00000000000000000000000000000000000000d2')
-		const { repState, storageWrites } = await mintElevenMockedRep({ repAddress, repTokenCode: '0x', zoltarAddress })
+		const { repState, storageWrites } = await mintElevenMockedRep({ repAddress, zoltarCode: '0x', zoltarAddress })
 
 		expect(repState.totalSupply).toBe(11n)
 		expect(repState.theoreticalSupply).toBe(11n)
@@ -249,15 +255,15 @@ describe('simulation bootstrap', () => {
 		expect(storageWrites.filter(write => write.address === zoltarAddress)).toHaveLength(0)
 	})
 
-	test('updates Zoltar genesis pointer when the REP token is already deployed', async () => {
+	test('updates the genesis REP pointer when Zoltar is already deployed', async () => {
 		const repAddress = getAddress('0x00000000000000000000000000000000000000e1')
 		const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e2')
-		const { repState, storageWrites } = await mintElevenMockedRep({ repAddress, repTokenCode: '0x01', zoltarAddress })
+		const { repState, storageWrites } = await mintElevenMockedRep({ repAddress, zoltarCode: '0x01', zoltarAddress })
 		const zoltarWrites = storageWrites.filter(write => write.address === zoltarAddress)
 
 		expect(repState.totalSupply).toBe(11n)
 		expect(repState.theoreticalSupply).toBe(11n)
-		expect(zoltarWrites).toHaveLength(2)
+		expect(zoltarWrites).toHaveLength(1)
 	})
 
 	test.each(['zoltar', 'openOracle'] satisfies DeploymentStep['id'][])('bootstraps a %s deployment plan using an explicit simulation token authority', async stepId => {
@@ -381,4 +387,26 @@ describe('simulation bootstrap', () => {
 			globalThis.setTimeout = originalSetTimeout
 		}
 	})
+})
+
+test.each([0n, 1n])('minting simulated genesis REP preserves prior burns and fork supply (%s)', async forkTime => {
+	const repAddress = getAddress('0x00000000000000000000000000000000000000e1')
+	const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e2')
+	const { repState, storageWrites } = await mintElevenMockedRep({ repAddress, zoltarCode: '0x01', zoltarAddress, initial: { theoreticalSupply: 100n, totalSupply: 70n, burnedGenesis: 30n, forkTime, frozenSupply: 65n } })
+	expect(repState.totalSupply).toBe(81n)
+	expect(repState.theoreticalSupply).toBe(111n)
+	expect(repState.frozenSupply).toBe(65n)
+	// The external supply changes; the protocol's frozen universe supply must not be patched.
+	expect(storageWrites.filter(write => write.address === zoltarAddress)).toHaveLength(1)
+})
+
+test('simulation mint respects the 11M REP ceiling before changing token storage', async () => {
+	const repAddress = getAddress('0x00000000000000000000000000000000000000e1')
+	const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e2')
+	const cap = 11_000_000n * 10n ** 18n
+	const { repState } = await mintElevenMockedRep({ repAddress, zoltarAddress, zoltarCode: '0x01', initial: { theoreticalSupply: cap - 11n, totalSupply: cap - 11n } })
+	expect(repState.theoreticalSupply).toBe(cap)
+	const storageWrites: MemoryStorageCall[] = []
+	await expect(mintElevenMockedRep({ repAddress, zoltarAddress, zoltarCode: '0x01', initial: { theoreticalSupply: cap - 10n, totalSupply: cap - 10n }, storageWrites })).rejects.toThrow('Simulation REP supply cannot exceed 11 million REP')
+	expect(storageWrites).toHaveLength(0)
 })

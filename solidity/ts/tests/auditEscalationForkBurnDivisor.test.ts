@@ -1,3 +1,4 @@
+import { overrideGenesisTheoreticalSupply } from '../testSupport/simulator/utils/utilities'
 import { encodeDeployData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { initializeForkCarrySnapshotWithResolutionBalancesAbi } from './carrySnapshotAbis'
 import { beforeEach, describe, test } from 'bun:test'
@@ -22,8 +23,6 @@ import {
 	Zoltar_Zoltar,
 } from '../types/contractArtifact'
 import { hashCarryLeaf, SparseNullifierTree } from './carryProofHelpers'
-import { formatStorageSlot } from '../testSupport/storage'
-import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 
 const ESCALATION_TIME_LENGTH = 4_233_600n
 const FORK_THRESHOLD = 20n * 10n ** 18n
@@ -38,7 +37,6 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	let depositDelegate: Address
 	const repTokenAddress = addressString(GENESIS_REPUTATION_TOKEN)
 	const zeroHash = `0x${'0'.repeat(64)}` as Hex
-	const genesisSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 
 	const zeroPeaks = () => Array.from({ length: 64 }, () => zeroHash)
 
@@ -234,7 +232,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		test(`below-threshold inherited ties preserve game thresholds with burn divisor ${forkBurnDivisor}`, async () => {
 			const canonicalQuestionData = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'zoltarQuestionData' })
 			const zoltar = await deployContract(client, encodeDeployData({ abi: Zoltar_Zoltar.abi, bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`, args: [canonicalQuestionData, repTokenAddress, 20n, forkBurnDivisor] }))
-			await mockWindow.addStateOverrides({ [repTokenAddress]: { stateDiff: { [genesisSupplySlot]: FORK_THRESHOLD * 20n } } })
+			await overrideGenesisTheoreticalSupply(mockWindow, client, repTokenAddress, FORK_THRESHOLD * 20n)
 			const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
 			const { escalationGame, securityPool } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.None, false, FORK_THRESHOLD])
 			const inheritedBalance = NON_DECISION_THRESHOLD / (2n * forkBurnDivisor)
@@ -314,13 +312,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				args: [canonicalQuestionData, repTokenAddress, 20n, forkBurnDivisor],
 			}),
 		)
-		await mockWindow.addStateOverrides({
-			[repTokenAddress]: {
-				stateDiff: {
-					[genesisSupplySlot]: FORK_THRESHOLD * 20n,
-				},
-			},
-		})
+		await overrideGenesisTheoreticalSupply(mockWindow, client, repTokenAddress, FORK_THRESHOLD * 20n)
 		assert.strictEqual(
 			await client.readContract({
 				abi: Zoltar_Zoltar.abi,

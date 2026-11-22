@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeEventTopics, mainnet } from '@zoltar/core-shared/evm/ethereum'
-import { createPublicClient, encodeAbiParameters, getAddress, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
+import { openOracleAbi, openOracleArbitrageExecutorAbi } from '#contracts/abi'
+import { lifecycleBalancesWithQuorum } from '#execution/recovery-support'
+import { positionCollateralToken } from '#state/position-collateral'
 import {
 	createExecutionLockManager,
 	discoverPublicReplacementWithQuorum,
@@ -208,11 +210,18 @@ function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 're
 	})
 }
 
-function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, settlerRewardAttoEth = 0n, offlineFinalityIndexes: readonly number[] = [], account = getAddress('0x0000000000000000000000000000000000000002')) {
+function lifecycleReceiptClients(
+	blockNumber = 100n,
+	headBlockNumbers?: readonly bigint[] | undefined,
+	settlerRewardAttoEth = 0n,
+	offlineFinalityIndexes: readonly number[] = [],
+	account = getAddress('0x0000000000000000000000000000000000000002'),
+	token1: { address: Hex; amount: bigint } = { address: weth, amount: 10n ** 18n },
+) {
 	const topics = encodeEventTopics({
 		abi: openOracleArbitrageExecutorAbi,
 		eventName: 'LifecycleExecuted',
-		args: { account, reportId: 7n, token1: weth },
+		args: { account, reportId: 7n, token1: token1.address },
 	})
 	if (topics.some(topic => topic === null)) throw new Error('Lifecycle event topics are incomplete')
 	const data = encodeAbiParameters(
@@ -222,13 +231,13 @@ function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly
 			{ name: 'amount2', type: 'uint256' },
 			{ name: 'settlerRewardAttoEth', type: 'uint256' },
 		],
-		[10n ** 18n, token, 2n * 10n ** 18n, settlerRewardAttoEth],
+		[token1.amount, token, 2n * 10n ** 18n, settlerRewardAttoEth],
 	)
 	return executorEventReceiptClients(topics, data, blockNumber, headBlockNumbers, offlineFinalityIndexes)
 }
 
 /** Clients whose successful private entry receipt carries the executor's report-7 hedge event. */
-function entryReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined) {
+function entryReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, hedgeAmountToken1 = 10n ** 18n) {
 	const topics = encodeEventTopics({
 		abi: openOracleArbitrageExecutorAbi,
 		eventName: 'HedgeAndDisputeExecuted',
@@ -243,7 +252,7 @@ function entryReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly big
 			{ name: 'contribution1', type: 'uint256' },
 			{ name: 'contribution2', type: 'uint256' },
 		],
-		[false, 2n * 10n ** 18n, 10n ** 18n, 0n, 0n],
+		[false, 2n * 10n ** 18n, hedgeAmountToken1, 0n, 0n],
 	)
 	const log = {
 		address: executor,
@@ -259,15 +268,15 @@ function entryReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly big
 	return receiptClients(blockNumber, 'success', [log], transactionHash, headBlockNumbers ?? [blockNumber + 12n, blockNumber + 12n])
 }
 
-function replacementCreditReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined) {
+function replacementCreditReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, credit: { amount: bigint; token: Hex } = { amount: 2n * 10n ** 18n, token: weth }) {
 	const account = getAddress('0x0000000000000000000000000000000000000002')
 	const topics = encodeEventTopics({
 		abi: openOracleArbitrageExecutorAbi,
 		eventName: 'ReplacementCreditWithdrawn',
-		args: { account, reportId: 7n, token: weth },
+		args: { account, reportId: 7n, token: credit.token },
 	})
 	if (topics.some(topic => topic === null)) throw new Error('Replacement-credit event topics are incomplete')
-	const data = encodeAbiParameters([{ name: 'amount', type: 'uint256' }], [2n * 10n ** 18n])
+	const data = encodeAbiParameters([{ name: 'amount', type: 'uint256' }], [credit.amount])
 	return executorEventReceiptClients(topics, data, blockNumber, headBlockNumbers)
 }
 
@@ -690,5 +699,68 @@ describe('atomic lifecycle crash recovery', () => {
 		const recovered = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [], wrongAccount), recoveryConfiguration, position, 100n)
 		expect(recovered.status).toBe('recovery-required')
 		expect(recovered.lifecycleReceiptRecovered).toBe(true)
+	})
+})
+
+describe('#1274: positions collateralized in an allowlisted non-WETH token', () => {
+	const usdc = getAddress('0x00000000000000000000000000000000000000c0')
+	// Six-decimal USDC valued at 1e12 / 3000 atto-WETH per base unit (3000 USDC per WETH).
+	const collateral = { decimals: 6, symbol: 'USDC', token: usdc, valuationAttoWeth: '1000000000000', valuationUnits: '3000' }
+
+	test('accepts settlement evidence in the collateral token and its decimals and rejects a WETH token1', async () => {
+		const position = withdrawingPosition({ collateral, lockedWeth: '1' })
+		const accepted = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [], undefined, { address: usdc, amount: 10n ** 6n }), recoveryConfiguration, position, 100n)
+		expect(accepted.status).toBe('closed-pending-finality')
+		expect(accepted.withdrawnWeth).toBe('1')
+		const wethEvidence = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [], undefined, { address: weth, amount: 10n ** 6n }), recoveryConfiguration, position, 100n)
+		expect(wethEvidence.status).toBe('recovery-required')
+		const eighteenDecimalAmount = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [], undefined, { address: usdc, amount: 10n ** 18n }), recoveryConfiguration, position, 100n)
+		expect(eighteenDecimalAmount.status).toBe('recovery-required')
+	})
+
+	test('accounts a replacement credit paid in the collateral token in its decimals', async () => {
+		const position = withdrawingPosition({ collateral, lifecycleKind: 'replacement-credit', replacementCreditAmount: (2n * 10n ** 6n).toString(), replacementCreditToken: usdc })
+		const provisional = await recoverPendingLifecycleWithQuorum(replacementCreditReceiptClients(100n, undefined, { amount: 2n * 10n ** 6n, token: usdc }), recoveryConfiguration, position, 100n)
+		expect(provisional.status).toBe('closed-pending-finality')
+		expect(provisional.withdrawnWeth).toBe('2')
+		expect(provisional.withdrawnToken).toBe('0')
+	})
+
+	test('values a recovered entry hedge improvement with the entry collateral valuation', async () => {
+		// The sell hedge was quoted at 3000 USDC and executed at 3030 USDC: 30 USDC more is 0.01 WETH more profit.
+		const position = pendingEntryPosition({ collateral, hedgeWeth: '3000', hedgedProfitBeforeGasEth: '0.1' })
+		const recovered = (await recoverPendingEntryWithQuorum(entryReceiptClients(100n, undefined, 3_030n * 10n ** 6n), recoveryConfiguration, position, 18)).position
+		expect(recovered.status).toBe('open-pending-finality')
+		expect(recovered.hedgeWeth).toBe('3030')
+		expect(recovered.hedgedProfitBeforeGasEth).toBe('0.11')
+	})
+
+	test('reads OpenOracle holdings and executor allowances for the position collateral, not WETH', async () => {
+		const reads: { functionName: string; token: string }[] = []
+		const blockHash = `0x${'aa'.repeat(32)}`
+		const provider: EIP1193Provider = {
+			request: async ({ method, params }) => {
+				if (method === 'eth_chainId') return '0x1'
+				if (method === 'eth_getBlockByNumber') return rpcBlock('0x64', blockHash, '0x0')
+				if (method !== 'eth_call' || !Array.isArray(params)) throw new Error(`Unexpected RPC ${method}`)
+				const call = params[0]
+				if (typeof call !== 'object' || call === null || !('data' in call) || typeof call.data !== 'string') throw new Error('Unexpected call')
+				if (call.data.startsWith('0x313ce567')) return encodeAbiParameters([{ type: 'uint8' }], [18])
+				const decoded = decodeFunctionData({ abi: openOracleAbi, data: call.data as Hex })
+				if (decoded.functionName === 'tokenHolder' || decoded.functionName === 'internalAllowance') reads.push({ functionName: decoded.functionName, token: String(decoded.args?.at(-1)).toLowerCase() })
+				return encodeAbiParameters([{ type: 'uint256' }], [5n])
+			},
+		}
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+		const account = getAddress('0x0000000000000000000000000000000000000002')
+		const balances = await lifecycleBalancesWithQuorum([client], { ...recoveryConfiguration, quorumRpcUrls: [] }, account, positionCollateralToken({ collateral }, weth), token, 100n)
+		expect(balances).toMatchObject({ holderToken1: 5n, internalAllowanceToken1: 5n })
+		expect(
+			reads
+				.filter(read => read.token === usdc.toLowerCase())
+				.map(read => read.functionName)
+				.sort(),
+		).toEqual(['internalAllowance', 'tokenHolder'])
+		expect(reads.some(read => read.token === weth.toLowerCase())).toBeFalse()
 	})
 })

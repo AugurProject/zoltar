@@ -95,6 +95,12 @@ describe('portfolio branch price SDK', () => {
 		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 80_000n, data: '0x12345678' as const }))
 		const batch = { gasLimit: 5_760_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations }
 		const request = buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, batch)
+		for (const bytes of [512, 513]) {
+			const data: Hex = `0x${'ab'.repeat(bytes)}`
+			const build = () => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, operations: [{ gasLimit: 80_000n, data }] })
+			if (bytes === 512) expect(build).not.toThrow()
+			else expect(build).toThrow('512 bytes')
+		}
 		const operationAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
 		expect(decodeFunctionData({ abi: operationAbi, data: request.data })).toEqual({ functionName: 'requestPortfolioPriceWithOperations', args: [unit, 2n * unit, 36_869_712n * 10_000_000_000n + 101n, batch] })
 		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: batch.gasLimit - 1n })).toThrow('gas budget')

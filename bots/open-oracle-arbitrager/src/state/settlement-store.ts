@@ -88,6 +88,8 @@ export function settlementAttemptIsUnresolved(record: Pick<SettlementRecord, 'fi
 /** One report awaiting third-party settlement, evaluated at the latest scan head. */
 export type SettlementCandidateSnapshot = {
 	callbackGasLimit: string
+	/** Symbol of a non-WETH report collateral; settlement still pays its reward in ETH. */
+	collateralSymbol?: string | undefined
 	coordinator: Address
 	decision: SettlementDecision
 	elapsed: string

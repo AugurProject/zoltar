@@ -91,7 +91,6 @@ function packedReport(
 }
 
 const migrationRepSplitTopic = keccak256(toHex('MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'))
-const childRepSplitTopic = keccak256(toHex('ChildRepSplit(address,uint256,uint256,uint256)'))
 const reportSubmittedTopic = keccak256(toHex('ReportSubmitted(uint256,bytes)'))
 const reportSettledTopic = keccak256(toHex('ReportSettled(uint256)'))
 const ethRefundDeferredTopic = keccak256(toHex('BidSettled(uint256,address,uint256,uint256)'))
@@ -125,18 +124,6 @@ function migrationRepSplitLog(parameters: { amount: bigint; blockNumber: bigint;
 		data: encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [migrator, outcomeIndex, parameters.amount, parameters.cumulative]),
 		logIndex: parameters.logIndex,
 		topics: [migrationRepSplitTopic, indexedAddress(migrator), toHex(0n, { size: 32 }), toHex(childUniverseId, { size: 32 })],
-	})
-}
-
-function childRepSplitLog(parameters: { blockNumber: bigint; cumulative: bigint; logIndex: number; outcomeIndex?: bigint; pool?: Address }) {
-	const outcomeIndex = parameters.outcomeIndex ?? 1n
-	const pool = parameters.pool ?? address(22)
-	return canonicalLog({
-		address: indexDeployments.securityPoolForker,
-		blockNumber: parameters.blockNumber,
-		data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [parameters.cumulative, 0n]),
-		logIndex: parameters.logIndex,
-		topics: [childRepSplitTopic, indexedAddress(pool), toHex(outcomeIndex, { size: 32 })],
 	})
 }
 
@@ -187,13 +174,12 @@ function protocolIndexFixture(overrides: Partial<ChaosProtocolIndex>): ChaosProt
 		auctionBids: {},
 		auctionRefunds: {},
 		chainId: 31337,
-		childRepSplits: [],
 		cursor: { blockHash: hash(10), blockNumber: '10' },
 		escalationDeposits: [],
 		migrationRepSplits: [],
 		...indexDeployments,
 		reports: [],
-		schemaVersion: 4,
+		schemaVersion: 5,
 		startBlock: '1',
 		wallet: address(1),
 		...overrides,
@@ -574,11 +560,15 @@ describe('durable protocol index', () => {
 		expect(JSON.stringify(JSON.parse(JSON.stringify(index)))).toBe(JSON.stringify(index))
 	})
 
+	test('does not expose progress for the removed ChildRepSplit event', async () => {
+		const update = await updateProtocolIndex(indexContext(eventIndexClient([])))
+		expect('childRepSplits' in update.index).toBe(false)
+	})
+
 	test('replays out-of-order canonical migration logs into deterministic cumulative routes', async () => {
 		const firstWalletSplit = migrationRepSplitLog({ amount: 3n, blockNumber: 10n, cumulative: 3n, logIndex: 0 })
-		const poolSplit = childRepSplitLog({ blockNumber: 11n, cumulative: 40n, logIndex: 0 })
 		const secondWalletSplit = migrationRepSplitLog({ amount: 2n, blockNumber: 12n, cumulative: 5n, logIndex: 0 })
-		const update = await updateProtocolIndex(indexContext(eventIndexClient([secondWalletSplit, poolSplit, firstWalletSplit]), { anchorBlockNumber: 12n }))
+		const update = await updateProtocolIndex(indexContext(eventIndexClient([secondWalletSplit, firstWalletSplit]), { anchorBlockNumber: 12n }))
 		expect(update.index.migrationRepSplits).toEqual([
 			{
 				childMigrationRepAmountAttoRep: 5n.toString(),
@@ -587,10 +577,8 @@ describe('durable protocol index', () => {
 				universeId: '0',
 			},
 		])
-		expect(update.index.childRepSplits).toEqual([{ childPoolRepSplitAttoRep: 40n.toString(), outcomeIndex: '1', pool: address(22) }])
-		const advanced = await updateProtocolIndex(indexContext(eventIndexClient([childRepSplitLog({ blockNumber: 13n, cumulative: 60n, logIndex: 1 }), migrationRepSplitLog({ amount: 2n, blockNumber: 13n, cumulative: 7n, logIndex: 0 })]), { anchorBlockNumber: 13n, previous: update.index }))
+		const advanced = await updateProtocolIndex(indexContext(eventIndexClient([migrationRepSplitLog({ amount: 2n, blockNumber: 13n, cumulative: 7n, logIndex: 0 })]), { anchorBlockNumber: 13n, previous: update.index }))
 		expect(advanced.index.migrationRepSplits[0]?.childMigrationRepAmountAttoRep).toBe('7')
-		expect(advanced.index.childRepSplits[0]?.childPoolRepSplitAttoRep).toBe('60')
 	})
 
 	test('rejects incomplete, forged, duplicate, and non-monotonic migration histories', async () => {
@@ -617,17 +605,13 @@ describe('durable protocol index', () => {
 					return [log, log]
 				})(),
 			},
-			{
-				expected: 'cumulative progress did not increase',
-				logs: [childRepSplitLog({ blockNumber: 10n, cumulative: 4n, logIndex: 0 }), childRepSplitLog({ blockNumber: 10n, cumulative: 4n, logIndex: 1 })],
-			},
 		]
 		for (const candidate of cases) {
 			await expect(updateProtocolIndex(indexContext(eventIndexClient(candidate.logs)))).rejects.toThrow(candidate.expected)
 		}
 	})
 
-	test('binds persisted progress to both canonical migration emitters', async () => {
+	test('binds persisted progress to the protocol deployments', async () => {
 		const initial = await updateProtocolIndex(indexContext(eventIndexClient([])))
 		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, zoltar: address(99) }))).rejects.toThrow('Zoltar deployment changed')
 		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, securityPoolForker: address(99) }))).rejects.toThrow('SecurityPoolForker deployment changed')
@@ -636,7 +620,6 @@ describe('durable protocol index', () => {
 	test('retains more than ten thousand distinct durable migration routes', async () => {
 		const routeCount = 10_001
 		const previous = protocolIndexFixture({
-			childRepSplits: Array.from({ length: routeCount }, (_, index) => ({ childPoolRepSplitAttoRep: 1n.toString(), outcomeIndex: (index + 1).toString(), pool: address(22) })),
 			migrationRepSplits: Array.from({ length: routeCount }, (_, index) => {
 				const outcomeIndex = BigInt(index + 1)
 				return {
@@ -649,7 +632,6 @@ describe('durable protocol index', () => {
 		})
 		const update = await updateProtocolIndex(indexContext(eventIndexClient([]), { previous, startBlock: 1n }))
 		expect(update.index.migrationRepSplits).toHaveLength(routeCount)
-		expect(update.index.childRepSplits).toHaveLength(routeCount)
 	})
 
 	test('prunes terminal bids and escalation deposits even when the cursor is already current', async () => {
@@ -722,7 +704,7 @@ describe('durable protocol index', () => {
 		const implementation = {
 			getBlock: canonicalBlock,
 			async getLogs(parameters: { address?: Address | Address[] }) {
-				if (parameters.address === address(6)) return []
+				if (parameters.address === address(6) || parameters.address === indexDeployments.zoltar) return []
 				if (Array.isArray(parameters.address) && parameters.address.some(value => value.toLowerCase() === indexDeployments.zoltar.toLowerCase())) return []
 				return [
 					{
@@ -773,7 +755,7 @@ test('native portfolio auction replay tracks bid IDs and refund generations acro
 	const withdrawn = await updateProtocolIndex({ ...context, anchorBlockNumber: 12n, previous: credited.index })
 	expect(withdrawn.index.auctionRefunds).toEqual({})
 	expect(withdrawn.index.auctionBids).toEqual({})
-	expect(snapshotProtocolIndex(withdrawn.index, 31337).schemaVersion).toBe(4)
+	expect(snapshotProtocolIndex(withdrawn.index, 31337).schemaVersion).toBe(5)
 })
 
 test('indexed discovery detects a removed bid block as a recoverable reorg before dereferencing bids', async () => {

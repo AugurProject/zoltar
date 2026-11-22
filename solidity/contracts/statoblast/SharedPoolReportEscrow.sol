@@ -19,7 +19,7 @@ contract SharedPoolReportEscrow {
 	address public immutable feed;
 	address public immutable sponsor;
 	OpenOracle public immutable openOracle;
-	IERC20 public immutable weth;
+	IERC20 public immutable collateralToken;
 	ReputationToken public immutable reputationToken;
 	/// @dev Gas the report promises its settlement callback.
 	uint32 private immutable callbackGasLimit;
@@ -34,18 +34,18 @@ contract SharedPoolReportEscrow {
 	/// `recoverReport` can still complete it), 1 = accepted, 2 = rejected.
 	event ReportCompleted(uint256 indexed reportId, address indexed priceFeed, uint8 outcome);
 
-	constructor(address _sponsor, OpenOracle _openOracle, IERC20 _weth, ReputationToken _reputationToken, uint32 _callbackGasLimit) {
+	constructor(address _sponsor, OpenOracle _openOracle, IERC20 _collateralToken, ReputationToken _reputationToken, uint32 _callbackGasLimit) {
 		callbackGasLimit = _callbackGasLimit;
 		feed = msg.sender;
 		sponsor = _sponsor;
 		openOracle = _openOracle;
-		weth = _weth;
+		collateralToken = _collateralToken;
 		reputationToken = _reputationToken;
 	}
 
 	function start(OpenOracle.OracleGame calldata parameters) external payable returns (uint256) {
 		require(msg.sender == feed && reportId == 0, 'Report escrow already started');
-		weth.safeApprove(address(openOracle), parameters.currentAmount1);
+		collateralToken.safeApprove(address(openOracle), parameters.currentAmount1);
 		require(reputationToken.approve(address(openOracle), parameters.currentAmount2), 'Oracle REP approval failed');
 		reportId = openOracle.report{value: msg.value}(parameters, false, false, OpenOracle.TimingBoundaries({blockNumber: 0, blockNumberBound: 0, blockTimestamp: 0, blockTimestampBound: 0}));
 		return reportId;
@@ -73,7 +73,7 @@ contract SharedPoolReportEscrow {
 	function withdrawFunding() external {
 		_withdrawOracleFunding();
 		if (reportId == 0) return;
-		_returnDirectBalance(weth);
+		_returnDirectBalance(collateralToken);
 		_returnDirectBalance(IERC20(address(reputationToken)));
 	}
 
@@ -83,7 +83,7 @@ contract SharedPoolReportEscrow {
 	}
 
 	function _withdrawOracleFunding() private {
-		openOracle.withdrawTo(address(weth), type(uint256).max, sponsor);
+		openOracle.withdrawTo(address(collateralToken), type(uint256).max, sponsor);
 		openOracle.withdrawTo(address(reputationToken), type(uint256).max, sponsor);
 	}
 }

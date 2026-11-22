@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { Window } from 'happy-dom'
-import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { evaluateBuyRep, evaluateSellRep } from '#core/strategy'
+import { WETH_VALUATION } from '#core/collateral-valuation'
 import { bigintToSafeNumber } from '@zoltar/bot-shared/ethereum'
 
 const fixture = {
+	reportCollateralAttoWeth: 817_262_744_792_307_693n,
 	baseFeeAttoEthPerGas: 118_491_126n,
 	blockHash: '0x4aa49d2760cffd97612684d3306b8be38ce4daf7604ad0f9cbeb975159fde73e',
 	blockNumber: 25_600_852n,
@@ -33,24 +34,6 @@ const fixture = {
 	weth: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 } as const
 
-const gasStressExpectations = [
-	[0n, 807_692_307_692_307_693n],
-	[1n, 888_461_538_461_538_463n],
-	[5n, 1_211_538_461_538_461_540n],
-	[10n, 1_615_384_615_384_615_386n],
-	[20n, 2_423_076_923_076_923_078n],
-	[50n, 4_846_153_846_153_846_155n],
-	[100n, 8_884_615_384_615_384_617n],
-	[200n, 16_961_538_461_538_461_540n],
-] as const
-
-function minimumReport(baseFeeAttoEthPerGas: bigint) {
-	return calculateOracleMinimumWethReportAttoEth({
-		...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-		baseFeeAttoEthPerGas,
-	})
-}
-
 function formatWad(value: bigint): string {
 	const sign = value < 0n ? '-' : ''
 	const absolute = value < 0n ? -value : value
@@ -67,7 +50,7 @@ function formatPercent(numerator: bigint, denominator: bigint): string {
 }
 
 function verifyRecordedEconomics() {
-	const minimumWeth = minimumReport(fixture.baseFeeAttoEthPerGas)
+	const minimumWeth = fixture.reportCollateralAttoWeth
 	assert.equal(minimumWeth, 817_262_744_792_307_693n)
 	assert.equal((fixture.midReportRep * (10_000n + fixture.reportDeviationBps)) / 10_000n, fixture.cheapRepAmount)
 	assert.equal((fixture.midReportRep * (10_000n - fixture.reportDeviationBps)) / 10_000n, fixture.expensiveRepAmount)
@@ -76,10 +59,6 @@ function verifyRecordedEconomics() {
 	assert.equal(fixture.sellRep.callData.slice(feeWordStart, feeWordStart + 64), encodedPoolFee)
 	assert.equal(fixture.buyRep.callData.slice(feeWordStart, feeWordStart + 64), encodedPoolFee)
 
-	for (const [baseFeeNanoEth, expectedMinimumWeth] of gasStressExpectations) {
-		assert.equal(minimumReport(baseFeeNanoEth * 10n ** 9n), expectedMinimumWeth)
-	}
-
 	const commonGame = {
 		currentAmount1: minimumWeth,
 		feePercentage: fixture.feePercentage,
@@ -87,11 +66,11 @@ function verifyRecordedEconomics() {
 		token1: fixture.weth,
 		token2: fixture.rep,
 	}
-	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostAttoWeth)
-	assert.equal(sell.hedgeCostAttoWeth, 826_252_634_985_023_076n)
+	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostAttoWeth, WETH_VALUATION)
+	assert.equal(sell.hedgeCostToken1, 826_252_634_985_023_076n)
 	assert.equal(sell.profitBeforeGasAttoWeth, -255_235_735_754_674_523n)
 
-	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostAttoWeth)
+	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostAttoWeth, WETH_VALUATION)
 	assert.equal(buy.hedgeAmountAttoRep, 2_037_255_704_072_578_672_476n)
 	assert.equal(buy.profitBeforeGasAttoWeth, -626_254_311_426_940_506n)
 	assert(sell.profitBeforeGasAttoWeth < 0n)
@@ -115,7 +94,7 @@ async function verifyDocumentedFixture() {
 		buyReportAttoRep: fixture.expensiveRepAmount,
 		gasCostWethAttoEth: fixture.gasCostAttoWeth,
 		midReportAttoRep: fixture.midReportRep,
-		minimumWethReportAttoEth: minimumWeth,
+		reportCollateralAttoWeth: minimumWeth,
 		protocolFee: fixture.protocolFee,
 		reportDeviationBps: fixture.reportDeviationBps,
 		reporterFee: fixture.feePercentage,
@@ -139,7 +118,7 @@ async function verifyDocumentedFixture() {
 		deviationMagnitude: deviation,
 		gasCostWeth: `${fixture.gasCostAttoWeth.toString()} WETH`,
 		midReportRep: `${formatWad(fixture.midReportRep)} REP`,
-		minimumWethReport: `${formatWad(minimumWeth)} WETH`,
+		reportCollateral: `${formatWad(minimumWeth)} WETH`,
 		protocolFee: formatPercent(fixture.protocolFee, 10_000_000n),
 		reporterFee: formatPercent(fixture.feePercentage, 10_000_000n),
 		sellDeviation: `+${deviation}`,

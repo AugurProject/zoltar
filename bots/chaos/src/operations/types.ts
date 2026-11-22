@@ -61,6 +61,7 @@ interface WalletInventory {
 }
 
 export interface UniverseSnapshot {
+	earliestForkTime: string
 	id: string
 	repToken: Address
 	forkBurnDivisor?: string
@@ -89,20 +90,15 @@ export interface QuestionSnapshot {
 
 /** Immutable coordinator inputs used to bound inclusion-time oracle funding. */
 export interface OracleRequestFundingSnapshot {
+	minimumRepReportAttoRep?: CanonicalUintString
 	/** Shared feeds budget public settlement at this request-time fee multiplier. */
 	settlementBountyMultiplierBps?: CanonicalUintString
 	/** Shared feed collateral stake floor, in raw token units. */
 	minimumReportCollateral?: CanonicalUintString
 	collateralToken?: Address
 	escalationHaltMultiplierBps: CanonicalUintString
-	feePercentage: CanonicalUintString
-	gasConsumedOpenOracleReportPrice: CanonicalUintString
-	gasUnitsForOneDispute: CanonicalUintString
 	initialReportPriorityFeeAttoEthPerGas: CanonicalUintString
-	openOracleSecurityMultiplierBps: CanonicalUintString
-	protocolFee: CanonicalUintString
 	settlementCallbackGasLimit: CanonicalUintString
-	targetPriceErrorForDispute: CanonicalUintString
 }
 
 interface DirectEscalationDepositQuoteSnapshot {
@@ -145,6 +141,7 @@ export interface PoolSnapshot {
 	settlementCollateralAttoEth: CanonicalUintString
 	purchaseQuote?: { spender: Address; mintAttoEth: CanonicalUintString; feeAttoEth: CanonicalUintString; premiumAttoEth: CanonicalUintString; minimumShares: string } | undefined
 	projectedSettlementCollateralAttoEth: CanonicalUintString
+	projectedSettlementRecoveryAttoRep: CanonicalUintString
 	shareTokenSupplyAttoShares: CanonicalUintString
 	currentMintingCapacityAttoEth: CanonicalUintString
 	statoblastSecurityMultiplierBps: string
@@ -198,12 +195,6 @@ export interface MigrationRepSplitProgressSnapshot {
 	childMigrationRepAmountAttoRep: CanonicalUintString
 }
 
-export interface ChildRepSplitProgressSnapshot {
-	pool: Address
-	outcomeIndex: string
-	childPoolRepSplitAttoRep: CanonicalUintString
-}
-
 export interface AuctionBidSnapshot {
 	bidId: string
 	vault: Address
@@ -219,6 +210,7 @@ export interface AuctionRefundSnapshot {
 }
 
 export interface AuctionSnapshot {
+	openingExpectedSuccess: boolean
 	collateralToken: Address
 	walletCollateral: CanonicalUintString
 	collateralAllowance: CanonicalUintString
@@ -448,7 +440,6 @@ export interface ImmutableTopologyPlanningCapacity {
 	maxPools: number
 	maxQuestions: number
 	maxUniverses: number
-	maxVaultsPerPool: number
 	maximumAggregateItems: number
 }
 

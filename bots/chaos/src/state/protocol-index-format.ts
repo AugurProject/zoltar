@@ -3,7 +3,7 @@ import { parseJsonDocument } from '@zoltar/bot-shared/config/durable-file'
 
 import type { Hex } from '@zoltar/bot-shared/ethereum'
 
-import type { ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
+import type { EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
 
 import { assertExactKeys, normalizedHash32 as hash, requiredRecord, unsignedIntegerString } from './validators.ts'
 import {
@@ -17,26 +17,24 @@ import {
 	parseAuctionRefundRecord,
 	parseEscalationDeposit,
 	parseMigrationRepSplitProgress,
-	parseChildRepSplitProgress,
 	assertStrictCanonicalOrder,
 	compareReports,
 	compareAuctionBidRecords,
 	compareAuctionRefundRecords,
 	compareDeposits,
 	compareMigrationRoutes,
-	compareChildRoutes,
 } from './protocol-index-schema.ts'
 import type { PreparedProtocolIndexChunk } from './protocol-index-store.ts'
 
 export const PROTOCOL_INDEX_REFERENCE_VERSION = 1
-const PROTOCOL_INDEX_MANIFEST_VERSION = 1
+const PROTOCOL_INDEX_MANIFEST_VERSION = 2
 export const MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS = 256
 export const MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES = 1024 * 1024
 const MAXIMUM_PROTOCOL_INDEX_CHUNKS = 512
 export const MAXIMUM_PROTOCOL_INDEX_BYTES = 64 * 1024 * 1024
 export const MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES = 64 * 1024
 
-export const COLLECTION_KINDS = ['reports', 'auction-bids', 'auction-refunds', 'escalation-deposits', 'migration-routes', 'child-routes'] as const
+export const COLLECTION_KINDS = ['reports', 'auction-bids', 'auction-refunds', 'escalation-deposits', 'migration-routes'] as const
 
 export type CollectionKind = (typeof COLLECTION_KINDS)[number]
 
@@ -57,8 +55,8 @@ export type CollectionCommitment = {
 type ProtocolIndexManifestPayload = {
 	collections: Record<CollectionKind, CollectionCommitment>
 	identity: ProtocolIndexIdentity
-	indexSchemaVersion: 3
-	schemaVersion: 1
+	indexSchemaVersion: 5
+	schemaVersion: 2
 }
 
 type ProtocolIndexManifest = ProtocolIndexManifestPayload & {
@@ -73,10 +71,9 @@ export function manifestPayload(identity: ProtocolIndexIdentity, collections: Re
 			'auction-refunds': collections['auction-refunds'],
 			'escalation-deposits': collections['escalation-deposits'],
 			'migration-routes': collections['migration-routes'],
-			'child-routes': collections['child-routes'],
 		},
 		identity,
-		indexSchemaVersion: 3,
+		indexSchemaVersion: 5,
 		schemaVersion: PROTOCOL_INDEX_MANIFEST_VERSION,
 	}
 }
@@ -178,7 +175,7 @@ export function parseManifest(value: unknown, expectedChainId: number, expectedD
 	const manifest = requiredRecord(value, 'protocol index manifest')
 	assertExactKeys(manifest, ['collections', 'identity', 'indexSchemaVersion', 'manifestDigest', 'schemaVersion'], [], 'protocol index manifest')
 	if (manifest['schemaVersion'] !== PROTOCOL_INDEX_MANIFEST_VERSION) throw new Error('Protocol index manifest schema is unsupported')
-	if (manifest['indexSchemaVersion'] !== 3) throw new Error('Protocol index manifest refers to an unsupported index schema')
+	if (manifest['indexSchemaVersion'] !== 5) throw new Error('Protocol index manifest refers to an unsupported index schema')
 	const rawCollections = requiredRecord(manifest['collections'], 'protocol index manifest.collections')
 	assertExactKeys(rawCollections, COLLECTION_KINDS, [], 'protocol index manifest.collections')
 	const collections = Object.fromEntries(COLLECTION_KINDS.map(kind => [kind, parseCollectionCommitment(rawCollections[kind], `protocol index manifest.collections.${kind}`)])) as Record<CollectionKind, CollectionCommitment>
@@ -225,14 +222,13 @@ export function parseChunkEnvelope(contents: string, kind: CollectionKind, ordin
 type LoadedCollections = {
 	auctionBids: AuctionBidRecord[]
 	auctionRefunds: AuctionRefundRecord[]
-	childRepSplits: ChildRepSplitProgressSnapshot[]
 	escalationDeposits: EscalationDepositSnapshot[]
 	migrationRepSplits: MigrationRepSplitProgressSnapshot[]
 	reports: OracleGameSnapshot[]
 }
 
 export function emptyLoadedCollections(): LoadedCollections {
-	return { auctionBids: [], auctionRefunds: [], childRepSplits: [], escalationDeposits: [], migrationRepSplits: [], reports: [] }
+	return { auctionBids: [], auctionRefunds: [], escalationDeposits: [], migrationRepSplits: [], reports: [] }
 }
 
 export function appendParsedRecord(collections: LoadedCollections, kind: CollectionKind, value: unknown, identity: ProtocolIndexIdentity, label: string) {
@@ -241,7 +237,6 @@ export function appendParsedRecord(collections: LoadedCollections, kind: Collect
 	else if (kind === 'auction-refunds') collections.auctionRefunds.push(parseAuctionRefundRecord(value, label))
 	else if (kind === 'escalation-deposits') collections.escalationDeposits.push(parseEscalationDeposit(value, label))
 	else if (kind === 'migration-routes') collections.migrationRepSplits.push(parseMigrationRepSplitProgress(value, label))
-	else collections.childRepSplits.push(parseChildRepSplitProgress(value, label))
 }
 
 export function validateLoadedCollectionOrder(collections: LoadedCollections) {
@@ -250,5 +245,4 @@ export function validateLoadedCollectionOrder(collections: LoadedCollections) {
 	assertStrictCanonicalOrder(collections.auctionRefunds, compareAuctionRefundRecords, 'protocolIndex.auctionRefunds')
 	assertStrictCanonicalOrder(collections.escalationDeposits, compareDeposits, 'protocolIndex.escalationDeposits')
 	assertStrictCanonicalOrder(collections.migrationRepSplits, compareMigrationRoutes, 'protocolIndex.migrationRepSplits')
-	assertStrictCanonicalOrder(collections.childRepSplits, compareChildRoutes, 'protocolIndex.childRepSplits')
 }

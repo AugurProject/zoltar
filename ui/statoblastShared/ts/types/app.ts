@@ -13,23 +13,6 @@ export type TradingFormState = {
 	targetOutcomeIndexes: string
 }
 
-export type ForkAuctionFormState = {
-	claimBidIndex: string
-	claimBidTick: string
-	depositIndexes: string
-	directForkQuestionId: string
-	directForkUniverseId: string
-	refundBidIndex: string
-	refundTick: string
-	repMigrationOutcomes: string
-	securityPoolAddress: string
-	selectedOutcome: ReportingOutcomeKey
-	settlementAddress: string
-	submitBidAmount: string
-	submitBidPrice: string
-	vaultAddress: string
-}
-
 export type OpenOracleFormState = {
 	amount1: string
 	amount2: string

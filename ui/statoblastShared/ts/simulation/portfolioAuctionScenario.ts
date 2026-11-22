@@ -36,13 +36,7 @@ async function sendPortfolioTransaction(client: Parameters<typeof sendUnlabelled
 	try {
 		return await sendUnlabelled(client, request, title)
 	} catch (error) {
-		let detail = error instanceof Error ? error.message : String(error)
-		// A mined revert carries no reason; replay the call to recover it.
-		try {
-			await client.call({ account: client.account, to: request.to, data: request.data, value: request.value })
-		} catch (replay) {
-			detail += ` (replay: ${replay instanceof Error ? replay.message : String(replay)})`
-		}
+		const detail = error instanceof Error ? error.message : String(error)
 		throw new Error(`${title}: ${detail}`)
 	}
 }

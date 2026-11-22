@@ -60,7 +60,7 @@ test('lands on Browse pools by default and rejects the removed portfolio route',
 
 test('treats a malformed pools path as not found instead of falling back to Browse pools', () => {
 	for (const routeHash of ['#/pools/browse/x', '#/pools/create/extra', '#/pools/operate', '#/pools/0xabc/tab/extra']) expect(statoblastRouting.resolve(routeHash)).toBe('not-found')
-	expect(statoblastRouting.resolve('#/pools/0xa83562266e1514927697d5118C8777828860aD73/vaults')).toBe('pools')
+	expect(statoblastRouting.resolve('#/pools/0xa83562266e1514927697d5118C8777828860aD73/vaults')).toBe('not-found')
 })
 
 test('keeps the active migration screen in navigation with the same universe', () => {

@@ -15,17 +15,17 @@ function readFeatureStylesheet(owner: keyof typeof featureStylesheets) {
 function findSubminimumFontRules(stylesheet: string) {
 	const violations: string[] = []
 	for (const rule of stylesheet.matchAll(/(?<selector>[^{}]+)\{(?<body>[^{}]*)\}/g)) {
-		const selector = rule.groups?.selector?.trim()
-		const body = rule.groups?.body
+		const selector = rule.groups?.['selector']?.trim()
+		const body = rule.groups?.['body']
 		if (selector === undefined || body === undefined) throw new Error('Unable to inspect CSS rule')
 
 		for (const declaration of body.matchAll(/(?<property>font(?:-size)?)\s*:\s*(?<value>[^;]+)/g)) {
-			const property = declaration.groups?.property
-			const value = declaration.groups?.value?.trim()
+			const property = declaration.groups?.['property']
+			const value = declaration.groups?.['value']?.trim()
 			if (property === undefined || value === undefined) throw new Error('Unable to inspect CSS font declaration')
 			const absoluteSize = value.match(/(?<size>\d+(?:\.\d+)?)(?<unit>px|rem)(?:\s*\/|\s|$)/)
-			const size = absoluteSize?.groups?.size
-			const unit = absoluteSize?.groups?.unit
+			const size = absoluteSize?.groups?.['size']
+			const unit = absoluteSize?.groups?.['unit']
 			if (size === undefined || unit === undefined) continue
 
 			const pixels = Number(size) * (unit === 'rem' ? 16 : 1)

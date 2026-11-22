@@ -3,6 +3,7 @@ import { address } from '../operations/fixture.ts'
 
 export function auctionFixture(): AuctionSnapshot {
 	return {
+		openingExpectedSuccess: true,
 		address: address(600),
 		collateralToken: address(7),
 		walletCollateral: '1000000000000000000',

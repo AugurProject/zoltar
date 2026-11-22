@@ -99,7 +99,7 @@ export function escalationWithdrawalSafe(snapshot: EcosystemSnapshot, pool: Pool
 	const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
 	if (universe === undefined) return false
 	const forkTime = amount(universe.forkTime)
-	return forkTime === 0n || forkTime >= amount(pool.escalationGameEndTime) || pool.escalationHasReachedNonDecision
+	return forkTime === 0n || forkTime > amount(pool.escalationGameEndTime) || pool.escalationHasReachedNonDecision
 }
 
 export function approvePool(snapshot: EcosystemSnapshot, pool: PoolSnapshot, required: bigint) {

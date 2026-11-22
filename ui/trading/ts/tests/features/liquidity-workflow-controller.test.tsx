@@ -1,3 +1,4 @@
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { act } from 'preact/test-utils'
@@ -85,7 +86,7 @@ describe('liquidity workflow controller state', () => {
 		let sends = 0
 		const initialMarket = { ...market, pair: undefined, lpTotalSupply: 0n }
 		const baseClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
-		const walletClient = { ...baseClient, waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
+		const walletClient = testDouble<NonNullable<ProbeProps['walletClient']>>({ ...baseClient, waitForTransactionReceipt: async () => ({ status: 'success' as const }) })
 		const services: LiveLiquidityServices = {
 			submitFreshLiquidity: async (_client, _configuration, _account, quote, guardedWrite) => {
 				expect(quote.expectedLiquidity).toBe(10n ** 16n - 1_000n)
@@ -108,10 +109,14 @@ describe('liquidity workflow controller state', () => {
 			),
 		)
 		try {
-			await act(() => controller?.updateAmount('0.01'))
+			await act(() => {
+				controller?.updateAmount('0.01')
+			})
 			await settleQuote()
 			expect(controller?.estimate?.operation).toBe('initialize')
-			await act(async () => await controller?.submit())
+			await act(async () => {
+				await controller?.submit()
+			})
 			expect(sends).toBe(1)
 			expect(controller?.transaction.state).toBe('confirmed')
 		} finally {
@@ -140,11 +145,17 @@ describe('liquidity workflow controller state', () => {
 			),
 		)
 		try {
-			await act(() => current?.updateAmount('0.1'))
+			await act(() => {
+				current?.updateAmount('0.1')
+			})
 			expect(current?.estimate?.amount).toBe(10n ** 17n)
-			await act(async () => await current?.submit())
+			await act(async () => {
+				await current?.submit()
+			})
 			expect(current?.transaction.state).toBe('error')
-			await act(async () => await current?.submit())
+			await act(async () => {
+				await current?.submit()
+			})
 			expect(current?.amount).toBe('0.1')
 			expect(calls).toBe(2)
 		} finally {
@@ -217,7 +228,9 @@ describe('liquidity workflow controller state', () => {
 			),
 		)
 		try {
-			await act(() => controller?.updateAmount('1'))
+			await act(() => {
+				controller?.updateAmount('1')
+			})
 			expect(controller?.estimate?.operation).toBe('add')
 			expect(controller?.previewBlocker).toBeUndefined()
 		} finally {
@@ -236,10 +249,16 @@ describe('liquidity workflow controller state', () => {
 		const rendered = await renderIntoDocument(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={{ ...market, lpTotalSupply: 0n }} />)
 		try {
 			expect(controller?.operation).toBe('initialize')
-			await act(() => render(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={market} />, rendered.container))
+			await act(() => {
+				render(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={market} />, rendered.container)
+			})
 			expect(controller?.operation).toBe('add')
-			await act(() => controller?.selectOperation('remove'))
-			await act(() => render(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={{ ...market }} />, rendered.container))
+			await act(() => {
+				controller?.selectOperation('remove')
+			})
+			await act(() => {
+				render(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={{ ...market }} />, rendered.container)
+			})
 			expect(controller?.operation).toBe('remove')
 		} finally {
 			await rendered.cleanup()
@@ -266,14 +285,24 @@ describe('liquidity workflow controller state', () => {
 		const scaledMarket = { ...market, yesReserve: 10n ** 18n, noReserve: 2n * 10n ** 18n, lpTotalSupply: 10n ** 18n }
 		const rendered = await renderIntoDocument(controllerProbe(walletClient, services, onController, onLockChange, scaledMarket))
 		try {
-			await act(() => controller?.updateAmount('0.01'))
+			await act(() => {
+				controller?.updateAmount('0.01')
+			})
 			expect(controller?.estimate).toMatchObject({ operation: 'add', amount: 10n ** 16n, liquidity: 5n * 10n ** 15n })
-			await act(() => controller?.updateAmount('0.02'))
+			await act(() => {
+				controller?.updateAmount('0.02')
+			})
 			expect(controller?.estimate).toMatchObject({ amount: 2n * 10n ** 16n, liquidity: 10n ** 16n })
-			await act(() => controller?.selectOperation('remove'))
-			await act(() => controller?.updateAmount('0.01'))
+			await act(() => {
+				controller?.selectOperation('remove')
+			})
+			await act(() => {
+				controller?.updateAmount('0.01')
+			})
 			expect(controller?.estimate).toMatchObject({ operation: 'remove', yesOut: 10n ** 16n, noOut: 2n * 10n ** 16n })
-			await act(() => render(controllerProbe(walletClient, services, onController, onLockChange, { ...scaledMarket, noReserve: 3n * 10n ** 18n }), rendered.container))
+			await act(() => {
+				render(controllerProbe(walletClient, services, onController, onLockChange, { ...scaledMarket, noReserve: 3n * 10n ** 18n }), rendered.container)
+			})
 			expect(controller?.estimate).toMatchObject({ yesOut: 10n ** 16n, noOut: 3n * 10n ** 16n })
 			await settleQuote()
 			expect(requests).toBe(0)
@@ -286,7 +315,7 @@ describe('liquidity workflow controller state', () => {
 		const signature = createDeferred<Hash>()
 		const signatureRequested = createDeferred<void>()
 		const baseWalletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
-		const walletClient = { ...baseWalletClient, waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
+		const walletClient = testDouble<NonNullable<ProbeProps['walletClient']>>({ ...baseWalletClient, waitForTransactionReceipt: async () => ({ status: 'success' as const }) })
 		const services: LiveLiquidityServices = {
 			submitFreshLiquidity: async (_client, _configuration, _account, _quote, guardedWrite) =>
 				await guardedWrite(async () => {
@@ -306,7 +335,9 @@ describe('liquidity workflow controller state', () => {
 				locked => locks.push(locked),
 			),
 		)
-		await act(() => controller?.updateAmount('0.01'))
+		await act(() => {
+			controller?.updateAmount('0.01')
+		})
 		await settleQuote()
 		const submission = controller?.submit()
 		await signatureRequested.promise
@@ -320,7 +351,7 @@ describe('liquidity workflow controller state', () => {
 	test('represents a broadcast with an unknown receipt as one locked uncertain state', async () => {
 		const receiptFailure = createDeferred<{ status: 'success' | 'reverted' }>()
 		const baseWalletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
-		const walletClient = { ...baseWalletClient, waitForTransactionReceipt: async () => await receiptFailure.promise }
+		const walletClient = testDouble<NonNullable<ProbeProps['walletClient']>>({ ...baseWalletClient, waitForTransactionReceipt: async () => await receiptFailure.promise })
 		const services: LiveLiquidityServices = {
 			submitFreshLiquidity: async (_client, _configuration, _account, quote, guardedWrite) => {
 				// The submission service starts the deadline during its authoritative simulation.
@@ -339,11 +370,15 @@ describe('liquidity workflow controller state', () => {
 			),
 		)
 
-		await act(() => controller?.updateAmount('0.01'))
+		await act(() => {
+			controller?.updateAmount('0.01')
+		})
 		await settleQuote()
 		const submission = controller?.submit()
 		await flush()
-		await act(async () => Bun.sleep(10))
+		await act(async () => {
+			await Bun.sleep(10)
+		})
 		expect(controller?.transaction.state).toBe('pending')
 		expect(controller?.transaction.transactionHash).toBe(transactionHash)
 		receiptFailure.reject(new Error('receipt RPC unavailable'))
@@ -356,7 +391,9 @@ describe('liquidity workflow controller state', () => {
 		expect(controller?.transaction.workflowLocked).toBeTrue()
 		expect(locks.at(-1)).toBeTrue()
 
-		await act(() => controller?.updateAmount('0.04'))
+		await act(() => {
+			controller?.updateAmount('0.04')
+		})
 		expect(controller?.amount).toBe('0.01')
 		expect(controller?.transaction.transactionHash).toBe(transactionHash)
 		await rendered.cleanup()
@@ -385,12 +422,18 @@ describe('liquidity workflow controller state', () => {
 		}
 		const rendered = await renderIntoDocument(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={first} refresh={refresh} />)
 		try {
-			await act(() => controller?.updateAmount('0.01'))
-			await act(async () => await controller?.submit())
+			await act(() => {
+				controller?.updateAmount('0.01')
+			})
+			await act(async () => {
+				await controller?.submit()
+			})
 			expect(refreshes).toBe(1)
 			expect(controller?.amount).toBe('0.01')
 			expect(controller?.transaction.error).toContain('The price moved past your slippage limit.')
-			await act(async () => await controller?.submit())
+			await act(async () => {
+				await controller?.submit()
+			})
 			expect(submitted).toEqual([10n ** 16n, 2n * 10n ** 16n])
 		} finally {
 			await rendered.cleanup()
@@ -419,14 +462,20 @@ describe('liquidity workflow controller state', () => {
 			/>,
 		)
 		try {
-			await act(() => controller?.updateAmount('0.01'))
+			await act(() => {
+				controller?.updateAmount('0.01')
+			})
 			const submission = controller?.submit()
 			await flush()
 			expect(controller?.transaction.workflowLocked).toBeTrue()
-			await act(() => controller?.updateAmount('0.02'))
+			await act(() => {
+				controller?.updateAmount('0.02')
+			})
 			expect(controller?.amount).toBe('0.01')
 			refreshing.reject(new Error('Refresh RPC unavailable'))
-			await act(async () => await submission)
+			await act(async () => {
+				await submission
+			})
 			expect(controller?.transaction.workflowLocked).toBeFalse()
 			expect(controller?.transaction.error).toContain('The price moved past your slippage limit.')
 		} finally {
@@ -455,14 +504,20 @@ describe('liquidity workflow controller state', () => {
 			),
 		)
 		try {
-			await act(() => controller?.updateAmount('0.01'))
-			await act(async () => await controller?.submit())
+			await act(() => {
+				controller?.updateAmount('0.01')
+			})
+			await act(async () => {
+				await controller?.submit()
+			})
 			expect(controller?.transaction.state).toBe('error')
 			expect(controller?.transaction.error).toContain('The price moved past your slippage limit.')
 			expect(controller?.estimate?.amount).toBe(10n ** 16n)
 			await settleQuote()
 			expect(submissions).toBe(1)
-			await act(async () => await controller?.submit())
+			await act(async () => {
+				await controller?.submit()
+			})
 			expect(submissions).toBe(2)
 		} finally {
 			await rendered.cleanup()

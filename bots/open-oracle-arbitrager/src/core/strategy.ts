@@ -1,18 +1,24 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { attoWethValue, type CollateralValuation } from '#core/collateral-valuation'
 
 const OPEN_ORACLE_PERCENTAGE_PRECISION = 10_000_000n
 
 export type ArbitrageDirection = 'sell-rep' | 'buy-rep'
 
+/**
+ * `grossProceedsToken1` and `hedgeCostToken1` are report `token1` (collateral) base units, the amounts the executor
+ * trades and bounds. Profits are atto-WETH: collateral amounts are converted with `valuation`, which is one to one for WETH.
+ */
 export type ArbitrageQuote = {
 	direction: ArbitrageDirection
-	grossProceedsAttoWeth: bigint
+	grossProceedsToken1: bigint
 	hedgeAmountAttoRep: bigint
-	hedgeCostAttoWeth: bigint
+	hedgeCostToken1: bigint
 	netProfitAttoWeth: bigint
 	profitBeforeGasAttoWeth: bigint
 	tokenToSwap: Address
+	valuation: CollateralValuation
 }
 
 export function calculateFee(amount: bigint, rate: bigint) {
@@ -54,9 +60,9 @@ export function hedgeWethLimitAttoEth(direction: ArbitrageDirection, quotedAttoW
 	return (quotedAttoWeth * (10_000n + maximumSlippageBps) + 9_999n) / 10_000n
 }
 
-export function hedgeSlippageReserveAttoWeth(direction: ArbitrageDirection, quotedAttoWeth: bigint, maximumSlippageBps: bigint) {
-	const limit = hedgeWethLimitAttoEth(direction, quotedAttoWeth, maximumSlippageBps)
-	return direction === 'sell-rep' ? quotedAttoWeth - limit : limit - quotedAttoWeth
+export function hedgeSlippageReserveToken1(direction: ArbitrageDirection, quotedToken1: bigint, maximumSlippageBps: bigint) {
+	const limit = hedgeWethLimitAttoEth(direction, quotedToken1, maximumSlippageBps)
+	return direction === 'sell-rep' ? quotedToken1 - limit : limit - quotedToken1
 }
 
 export function spotTwapDeviationWithinLimit(spotTick: bigint, twapTick: bigint, maximumDeviation: bigint) {
@@ -78,41 +84,63 @@ export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'c
 	}
 }
 
-export function fundedCapitalAtRiskAttoWeth(funding: { token1: bigint; token2: bigint }, hedgeAmountToken: bigint, quotedHedgeAttoWeth: bigint, signedHedgeWethLimitAttoEth: bigint) {
+/** The funded token1 plus the token2 inventory valued at the conservative hedge price, in token1 base units. */
+function fundedCapitalAtRiskToken1(funding: { token1: bigint; token2: bigint }, hedgeAmountToken: bigint, quotedHedgeToken1: bigint, signedHedgeLimitToken1: bigint) {
 	if (hedgeAmountToken === 0n) return funding.token1
-	const conservativeHedgeAttoWeth = quotedHedgeAttoWeth > signedHedgeWethLimitAttoEth ? quotedHedgeAttoWeth : signedHedgeWethLimitAttoEth
-	return funding.token1 + (funding.token2 * conservativeHedgeAttoWeth + hedgeAmountToken - 1n) / hedgeAmountToken
+	const conservativeHedgeToken1 = quotedHedgeToken1 > signedHedgeLimitToken1 ? quotedHedgeToken1 : signedHedgeLimitToken1
+	return funding.token1 + (funding.token2 * conservativeHedgeToken1 + hedgeAmountToken - 1n) / hedgeAmountToken
 }
 
-export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1'>, quotedWethOutAttoEth: bigint, gasCostAttoWeth: bigint): ArbitrageQuote {
-	const wethSpendAttoEth = game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee)
+/** The funded capital at risk in atto-WETH, rounded up so a collateral valuation never understates exposure. */
+export function fundedCapitalAtRiskAttoWeth(funding: { token1: bigint; token2: bigint }, hedgeAmountToken: bigint, quotedHedgeToken1: bigint, signedHedgeLimitToken1: bigint, valuation: CollateralValuation) {
+	return attoWethValue(valuation, fundedCapitalAtRiskToken1(funding, hedgeAmountToken, quotedHedgeToken1, signedHedgeLimitToken1), 'up')
+}
+
+/** The collateral the hedge receives or pays, the side the executor's hedge limit bounds. */
+export function hedgeReferenceToken1(quote: Pick<ArbitrageQuote, 'direction' | 'grossProceedsToken1' | 'hedgeCostToken1'>) {
+	return quote.direction === 'sell-rep' ? quote.grossProceedsToken1 : quote.hedgeCostToken1
+}
+
+/** The executable hedge price in REP per ETH, with the collateral leg valued in WETH so it is comparable with market consensus. */
+export function executableDexPriceRepPerEth(quote: ArbitrageQuote) {
+	const referenceAttoWeth = attoWethValue(quote.valuation, hedgeReferenceToken1(quote), 'down')
+	return referenceAttoWeth <= 0n ? 0n : (quote.hedgeAmountAttoRep * 10n ** 18n) / referenceAttoWeth
+}
+
+export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1'>, quotedToken1Out: bigint, gasCostAttoWeth: bigint, valuation: CollateralValuation): ArbitrageQuote {
+	const token1Spend = game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee)
+	const profitBeforeGasAttoWeth = attoWethValue(valuation, quotedToken1Out - token1Spend, 'down')
 	return {
 		direction: 'sell-rep',
-		grossProceedsAttoWeth: quotedWethOutAttoEth,
+		grossProceedsToken1: quotedToken1Out,
 		hedgeAmountAttoRep: game.currentAmount2,
-		hedgeCostAttoWeth: wethSpendAttoEth,
-		netProfitAttoWeth: quotedWethOutAttoEth - wethSpendAttoEth - gasCostAttoWeth,
-		profitBeforeGasAttoWeth: quotedWethOutAttoEth - wethSpendAttoEth,
+		hedgeCostToken1: token1Spend,
+		netProfitAttoWeth: profitBeforeGasAttoWeth - gasCostAttoWeth,
+		profitBeforeGasAttoWeth,
 		tokenToSwap: game.token1,
+		valuation,
 	}
 }
 
-export function evaluateBuyRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token2'>, quotedWethInAttoEth: bigint, gasCostAttoWeth: bigint): ArbitrageQuote {
+export function evaluateBuyRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token2'>, quotedToken1In: bigint, gasCostAttoWeth: bigint, valuation: CollateralValuation): ArbitrageQuote {
 	const repNeededAttoRep = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
+	const profitBeforeGasAttoWeth = attoWethValue(valuation, game.currentAmount1 - quotedToken1In, 'down')
 	return {
 		direction: 'buy-rep',
-		grossProceedsAttoWeth: game.currentAmount1,
+		grossProceedsToken1: game.currentAmount1,
 		hedgeAmountAttoRep: repNeededAttoRep,
-		hedgeCostAttoWeth: quotedWethInAttoEth,
-		netProfitAttoWeth: game.currentAmount1 - quotedWethInAttoEth - gasCostAttoWeth,
-		profitBeforeGasAttoWeth: game.currentAmount1 - quotedWethInAttoEth,
+		hedgeCostToken1: quotedToken1In,
+		netProfitAttoWeth: profitBeforeGasAttoWeth - gasCostAttoWeth,
+		profitBeforeGasAttoWeth,
 		tokenToSwap: game.token2,
+		valuation,
 	}
 }
 
 export function meetsProfitThreshold(quote: ArbitrageQuote, minimumProfitAttoWeth: bigint, minimumProfitBps: bigint) {
-	if (quote.netProfitAttoWeth < minimumProfitAttoWeth || quote.hedgeCostAttoWeth <= 0n) return false
-	return quote.netProfitAttoWeth * 10_000n >= quote.hedgeCostAttoWeth * minimumProfitBps
+	const hedgeCostAttoWeth = attoWethValue(quote.valuation, quote.hedgeCostToken1, 'up')
+	if (quote.netProfitAttoWeth < minimumProfitAttoWeth || hedgeCostAttoWeth <= 0n) return false
+	return quote.netProfitAttoWeth * 10_000n >= hedgeCostAttoWeth * minimumProfitBps
 }
 
 export function calculateTrackedNetProfitEth(profitBeforeGasAttoWeth: bigint, actualGasCostAttoEth: bigint) {

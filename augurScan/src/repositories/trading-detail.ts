@@ -76,10 +76,10 @@ export const tradingDetailData = async (sql: SQL, query: TradingDetailQuery) => 
 				AND event.event_name = 'Transfer' AND event.event_data ? 'from' AND event.event_data ? 'to' AND event.event_data ? 'value'
 		), deltas AS (
 			SELECT to_address AS address, amount AS received_liquidity, 0::numeric AS sent_liquidity, amount AS balance_delta
-			FROM transfers WHERE to_address <> '0x0000000000000000000000000000000000000000'
+			FROM transfers WHERE to_address NOT IN ('0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000001')
 			UNION ALL
 			SELECT from_address, 0::numeric, amount, -amount
-			FROM transfers WHERE from_address <> '0x0000000000000000000000000000000000000000'
+			FROM transfers WHERE from_address NOT IN ('0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000001')
 		)
 		SELECT delta.address, sum(delta.received_liquidity)::text AS received_liquidity,
 			sum(delta.sent_liquidity)::text AS sent_liquidity, sum(delta.balance_delta)::text AS balance

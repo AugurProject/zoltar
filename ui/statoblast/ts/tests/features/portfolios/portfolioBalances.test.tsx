@@ -101,3 +101,24 @@ test('earnings show what claiming pays, and the credited amounts when that previ
 	expect(metric(claimable, copy.ethEarnings)).toBe('5WETH')
 	expect(metric(claimable, copy.repEarnings)).toBe('7REP')
 })
+
+test('a pending position exposes re-submission without unlocking its saved target', async () => {
+	const base = capitalSnapshot()
+	const snapshot = { ...base, positions: base.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
+	const view = await renderIntoDocument(<Harness snapshot={snapshot} />)
+	lifecycle.trackRendered(view)
+	const button = [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Re-submit retirement request')
+	expect(button?.disabled).toBe(false)
+	expect(view.container.textContent).not.toContain(copy.remainingCommitmentHint)
+})
+
+test.each([0n, 3n * unit])('available backing uses the canonical purchase capacity (%s)', async available => {
+	const view = await renderIntoDocument(<Harness snapshot={{ ...capitalSnapshot(), availableMintCapacityAttoEth: available }} />)
+	lifecycle.trackRendered(view)
+	const value = [...view.container.querySelectorAll('.metric-label')]
+		.find(node => node.textContent === copy.availableCapacity)
+		?.parentElement?.querySelector('.currency-value')
+		?.getAttribute('title')
+		?.replaceAll(/\s/g, '')
+	expect(value).toBe(`${available / unit}WETH`)
+})

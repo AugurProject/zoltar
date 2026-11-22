@@ -188,7 +188,7 @@ export function QuestionCreateSection({
 		})
 	}
 	const removeCategoricalOutcome = (outcomeIndex: number) => {
-		if (questionForm.categoricalOutcomes.length <= 2) return
+		if (questionForm.categoricalOutcomes.length <= 1) return
 		onQuestionFormChange({
 			categoricalOutcomes: questionForm.categoricalOutcomes.filter((_, index) => index !== outcomeIndex),
 		})
@@ -326,8 +326,8 @@ export function QuestionCreateSection({
 													/>
 												</label>
 												<button
-													disabled={questionForm.categoricalOutcomes.length <= 2}
-													aria-describedby={questionForm.categoricalOutcomes.length <= 2 ? 'minimum-outcomes-reason' : undefined}
+													disabled={questionForm.categoricalOutcomes.length <= 1}
+													aria-describedby={questionForm.categoricalOutcomes.length <= 1 ? 'minimum-outcomes-reason' : undefined}
 													aria-label={marketCopy.formatRemoveOutcomeLabel(outcomeIndex + 1)}
 													className='secondary categorical-outcome-remove'
 													type='button'
@@ -340,7 +340,7 @@ export function QuestionCreateSection({
 									</div>
 									{getVisibleFieldError('categoricalOutcomes') === undefined ? undefined : <UserMessage placement='field' tone='error' id='market-create-outcomes-error' detail={getVisibleFieldError('categoricalOutcomes')} />}
 									{/* Explains the disabled Remove buttons only; it follows any field error so it never reads as one. */}
-									{questionForm.categoricalOutcomes.length <= 2 ? <UserMessage placement='field' id='minimum-outcomes-reason' detail={marketCopy.minimumOutcomeCountReason} /> : undefined}
+									{questionForm.categoricalOutcomes.length <= 1 ? <UserMessage placement='field' id='minimum-outcomes-reason' detail={marketCopy.minimumOutcomeCountReason} /> : undefined}
 									<UserMessage placement='field' detail={marketCopy.categoricalOutcomeLabelsHelpText} />
 									<button className='secondary categorical-outcome-add' type='button' onClick={addCategoricalOutcome}>
 										{marketCopy.addOutcome}

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeFunctionData, isHex, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, parseAbiParameters, encodeFunctionData, isHex, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -16,7 +17,7 @@ import {
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
-import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, deployChild, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { createCarryProof, hashCarryLeaf, SparseNullifierTree } from '../carryProofHelpers'
@@ -42,10 +43,48 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 		return { child, childPool }
 	}
 
+	test('#1495: the constructor rejects an unusable priority fee without SDK validation', async () => {
+		const configuration = encodeAbiParameters(parseAbiParameters('address,uint256,uint248,uint256,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint48'), [
+			'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+			10n ** 16n,
+			fixture.base.genesisUniverse,
+			20_000n,
+			MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n,
+			365n * DAY,
+			fixture.questionAdmissionPolicy,
+			portfolioEconomics.purchaseFeeBps,
+			portfolioEconomics.annualFeeBps,
+			portfolioEconomics.minimumPurchaseFeeAttoEth,
+			portfolioEconomics.minimumCommitmentAttoEth,
+			portfolioEconomics.minimumOutcomeRate,
+			portfolioEconomics.rewardVestingSeconds,
+		])
+		await expect(fixture.owner().simulateContract({ ...factory(), functionName: 'deployPortfolio', args: [applyLibraries(portfolioArtifact.evm.bytecode.object), configuration] })).rejects.toThrow('Initial report priority fee exceeds OpenOracle limits')
+	})
+
 	test('rejects missing universes and invalid origin parameters', async () => {
-		for (const securityMultiplierBps of [0n, 10_000n, 10_001n, 10_002n, 10_499n]) await expect(fixture.deployPortfolio(undefined, undefined, { securityMultiplierBps })).rejects.toThrow('multiplier must be at least 10500 BPS')
-		await expect(fixture.deployPortfolio(undefined, undefined, { universeId: 999999n })).rejects.toThrow('Universe REP token missing')
-		await expect(fixture.deployPortfolio(undefined, undefined, { reportPriorityFeeAttoEthPerGas: 0n })).rejects.toThrow('Report priority fee must be positive')
+		const simulateOrigin = async ({ securityMultiplierBps = 20_000n, universeId = fixture.base.genesisUniverse, priorityFee = 10n ** 10n } = {}) => {
+			const configuration = encodeAbiParameters(parseAbiParameters('address,uint256,uint248,uint256,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint48'), [
+				'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+				10n ** 16n,
+				universeId,
+				securityMultiplierBps,
+				priorityFee,
+				365n * DAY,
+				fixture.questionAdmissionPolicy,
+				portfolioEconomics.purchaseFeeBps,
+				portfolioEconomics.annualFeeBps,
+				portfolioEconomics.minimumPurchaseFeeAttoEth,
+				portfolioEconomics.minimumCommitmentAttoEth,
+				portfolioEconomics.minimumOutcomeRate,
+				portfolioEconomics.rewardVestingSeconds,
+			])
+			return await fixture.owner().simulateContract({ ...factory(), functionName: 'deployPortfolio', args: [applyLibraries(portfolioArtifact.evm.bytecode.object), configuration] })
+		}
+		for (const securityMultiplierBps of [0n, 10_000n, 10_001n, 10_002n, 10_499n]) await expect(simulateOrigin({ securityMultiplierBps })).rejects.toThrow('Multiplier must be at least 10500 BPS')
+		await expect(simulateOrigin({ universeId: 999999n })).rejects.toThrow('Universe REP token missing')
+		await expect(simulateOrigin({ priorityFee: 0n })).rejects.toThrow('Initial priority fee zero')
+
 		for (const securityMultiplierBps of [10_500n, 15_000n]) {
 			const created = await fixture.deployPortfolio(undefined, undefined, { securityMultiplierBps })
 			await fixture.register(fixture.base.questionId, created)

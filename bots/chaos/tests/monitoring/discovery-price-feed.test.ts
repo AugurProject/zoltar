@@ -32,6 +32,8 @@ test('#1252 discovers a shared-feed bounty without funding a public RPC call sen
 						return encodeAbiParameters([{ type: 'uint256' }], [10n])
 					case 'maxSettlementBaseFeeMultiplierBps':
 						return encodeAbiParameters([{ type: 'uint256' }], [30_000n])
+					case 'minimumToken2ReportAttoRep':
+						return encodeAbiParameters([{ type: 'uint256' }], [0n])
 					case 'minimumReportCollateral':
 						return encodeAbiParameters([{ type: 'uint256' }], [10_001n])
 					case 'minimumToken1ReportAttoEth':
@@ -44,16 +46,12 @@ test('#1252 discovers a shared-feed bounty without funding a public RPC call sen
 	})
 	const funding = {
 		escalationHaltMultiplierBps: '10000',
-		feePercentage: '0',
-		gasConsumedOpenOracleReportPrice: '1',
-		gasUnitsForOneDispute: '1',
+
 		initialReportPriorityFeeAttoEthPerGas: 1n.toString(),
-		openOracleSecurityMultiplierBps: '10000',
-		protocolFee: '0',
+
 		settlementCallbackGasLimit: '1',
-		targetPriceErrorForDispute: '1000',
 	}
-	const snapshot = await discoverPoolPriceFeed(client, coordinator, 10n, 0n, funding, baseFeePerGas, 0n)
+	const snapshot = await discoverPoolPriceFeed(client, coordinator, 10n, funding, baseFeePerGas, 0n)
 	expect(snapshot.requestPriceCostAttoEth).toBe((392_002n * 3n * (baseFeePerGas + 1n) + 101n).toString())
 	expect(snapshot.minimumToken1ReportAttoEth).toBe('10002')
 	expect(reads).not.toContain('getRequestPriceCostAttoEth')

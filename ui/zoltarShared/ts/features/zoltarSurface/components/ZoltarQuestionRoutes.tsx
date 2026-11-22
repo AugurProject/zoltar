@@ -14,7 +14,7 @@ export function ZoltarQuestionsRoute() {
 	return (
 		<QuestionsView
 			currentTimestamp={currentTimestamp}
-			forkHandoff={getForkHandoff({ universe: operations.zoltarUniverse, universeError, universeState })}
+			forkHandoff={getForkHandoff({ universe: operations.zoltarUniverse, universeError, universeState, currentTimestamp })}
 			zoltarQuestionsFreshness={operations.zoltarQuestionsFreshness}
 			loadingZoltarQuestions={operations.loadingZoltarQuestions}
 			onActiveViewChange={onViewChange}
@@ -28,8 +28,8 @@ export function ZoltarQuestionsRoute() {
 }
 
 export function ZoltarCreateQuestionRoute() {
-	const { accountState, environmentRefreshKey, onForkQuestionIdChange, onViewChange, operations, universeError, universeState } = useZoltarWorkspace()
-	const forkHandoff = getForkHandoff({ universe: operations.zoltarUniverse, universeError, universeState })
+	const { accountState, currentTimestamp, environmentRefreshKey, onForkQuestionIdChange, onViewChange, operations, universeError, universeState } = useZoltarWorkspace()
+	const forkHandoff = getForkHandoff({ universe: operations.zoltarUniverse, universeError, universeState, currentTimestamp })
 	// The contract rejects a second question with the same ID, so the draft's ID is looked up before Create.
 	const existingQuestionCheck = useExistingQuestionCheck({ enabled: operations.questionResult === undefined && !operations.questionCreating, environmentRefreshKey, form: operations.questionForm })
 	return (

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { OraclePriceMath } from './OraclePriceMath.sol';
 import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
@@ -115,13 +116,13 @@ contract SharedPoolPriceFeed {
 		ReportCandidate storage candidate = reports[reportId];
 		return (candidate.escrow, candidate.sponsor, candidate.coordinator, candidate.maxSettlementBaseFee);
 	}
-	/// @dev 0 = unknown or pending, 1 = accepted, 2 = rejected or recovered.
+	/// @dev 0 = unknown or pending, 1 = accepted, 2 = rejected. Recovery can produce either final outcome.
 	function reportOutcome(uint256 reportId) external view returns (uint8) {
 		return reports[reportId].outcome;
 	}
 
 	event CoordinatorRegistered(address indexed coordinator, address indexed securityPool);
-	event ExposureCheckpoint(address indexed coordinator, uint256 exposureAttoEth, uint256 aggregateExposureAttoEth);
+	event ExposureCheckpoint(address indexed coordinator, uint256 aggregateExposureAttoEth);
 	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 	event ReportFundingAssigned(uint256 indexed reportId, address indexed coordinator, address indexed sponsor);
 	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
@@ -192,7 +193,7 @@ contract SharedPoolPriceFeed {
 		uint256 exposureAttoEth = aggregateExposureAttoEth();
 		if (exposureAttoEth == checkpointedExposureAttoEth) return;
 		checkpointedExposureAttoEth = exposureAttoEth;
-		emit ExposureCheckpoint(coordinatorAddress, exposureAttoEth, exposureAttoEth);
+		emit ExposureCheckpoint(coordinatorAddress, exposureAttoEth);
 	}
 
 	function aggregateExposureAttoEth() public view returns (uint256) {
@@ -207,14 +208,12 @@ contract SharedPoolPriceFeed {
 
 	/// @notice Conservative upper REP/collateral bound for entry, withdrawals and capacity.
 	function conservativePrice() external view returns (uint256) {
-		return
-			Math.mulDiv(lastPrice, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION - targetPriceErrorForDispute, Math.Rounding.Ceil);
+		return OraclePriceMath.conservativePrice(lastPrice, targetPriceErrorForDispute);
 	}
 
 	/// @notice Lower REP/collateral bound for externally rewarded adverse actions.
 	function liquidationPrice() external view returns (uint256) {
-		return
-			Math.mulDiv(lastPrice, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute);
+		return OraclePriceMath.liquidationPrice(lastPrice, targetPriceErrorForDispute);
 	}
 
 	/// @notice Report collateral covers aggregate standing commitment or funded demand.
@@ -318,7 +317,7 @@ contract SharedPoolPriceFeed {
 
 	/// @dev Quote first; custody changes and the self-only escrow call stay in the request path.
 	function _quoteReportFunding(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private view returns (ReportFundingQuote memory quote) {
-		require(requestedInitialAttoWeth >= minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice), 'Report funding exceeds approved budget');
+		require(requestedInitialAttoWeth >= minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice), 'Report funding below minimum');
 		quote.wethAttoEth = requestedInitialAttoWeth;
 		quote.repAttoRep = Math.mulDiv(quote.wethAttoEth, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
 		quote.haltAttoEth = Math.mulDiv(quote.wethAttoEth, escalationHaltMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
@@ -542,7 +541,7 @@ contract SharedPoolPriceFeed {
 		require(_isProfitableForExposure(amount1, newExposure), 'Report exposure insufficient');
 		uint256 price = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
 		require(price != 0, 'Oracle price is zero');
-		conservativeReportPrice = Math.mulDiv(price, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION - targetPriceErrorForDispute, Math.Rounding.Ceil);
+		conservativeReportPrice = OraclePriceMath.conservativePrice(price, targetPriceErrorForDispute);
 		return (conservativeReportPrice, acceptedEpoch);
 	}
 

@@ -8,7 +8,7 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice A branch auction of exact collateral lots. Lower REP-per-lot limits bid a
 /// higher price; every winning lot pledges exactly the same clearing REP.
-/// Weak demand buys all inventory; grid residue belongs to winners as REP fees.
+/// Only filled lots sell REP; unsold inventory, including grid residue, returns as recovery REP.
 /// Its AVL tree freezes at closing and also owns unmaterialized winners' fees.
 /// Bidding, clearing and detaching one winner use logarithmic paths, never scans.
 contract SecurityPoolUniformPriceAuction {
@@ -122,22 +122,6 @@ contract SecurityPoolUniformPriceAuction {
 		repGrid = repGrid_;
 		feeAllocator = feeAllocator_;
 		emit AuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
-	}
-
-	/// @notice Largest grid limit at which a new bid can still enter the book.
-	/// Equal-price bids already funded rank first. Zero means no new lot fits.
-	function maximumAcceptableBidAttoRepPerLot() external view returns (uint256) {
-		if (!initialized || finalized || block.timestamp >= closesAt) return 0;
-		uint256 low;
-		uint256 high = maximumBidAttoRepPerLot / repGrid;
-		while (low < high) {
-			uint256 middle = low + (high - low + 1) / 2;
-			uint256 limit = middle * repGrid;
-			if (_pricePrefix(limit, PriceBoundary.Inclusive) < Math.min(targetLots, inventoryAttoRep / limit))
-				low = middle;
-			else high = middle - 1;
-		}
-		return low * repGrid;
 	}
 
 	function submitBid(address bidder, address vault, uint256 targetHealthBps, uint256 lots, uint256 minimumAttoRepPerLot) external onlyController returns (uint256 bidId) {

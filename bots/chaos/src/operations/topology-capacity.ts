@@ -13,11 +13,10 @@ function aggregateProductFits(left: number, right: number, maximum: number) {
 export function configuredImmutableTopologyCapacity(options: PlanningOptions): ImmutableTopologyPlanningCapacity | undefined {
 	const capacity = options.immutableTopologyCapacity
 	if (capacity === undefined) return undefined
-	const limits = [capacity.maxPools, capacity.maxQuestions, capacity.maxUniverses, capacity.maxVaultsPerPool, capacity.maximumAggregateItems]
+	const limits = [capacity.maxPools, capacity.maxQuestions, capacity.maxUniverses, capacity.maximumAggregateItems]
 	if (limits.some(limit => !Number.isSafeInteger(limit) || limit <= 0)) return undefined
-	if ([capacity.maxPools, capacity.maxQuestions, capacity.maxUniverses, capacity.maxVaultsPerPool].some(limit => limit > capacity.maximumAggregateItems)) return undefined
+	if ([capacity.maxPools, capacity.maxQuestions, capacity.maxUniverses].some(limit => limit > capacity.maximumAggregateItems)) return undefined
 	if (!aggregateProductFits(capacity.maxPools, capacity.maxUniverses, capacity.maximumAggregateItems)) return undefined
-	if (!aggregateProductFits(capacity.maxPools, capacity.maxVaultsPerPool, capacity.maximumAggregateItems)) return undefined
 	return capacity
 }
 
@@ -45,13 +44,8 @@ export function topologyMutationCapacityBlocker(snapshot: EcosystemSnapshot, opt
 	if (!Number.isSafeInteger(resultingUniverses) || resultingUniverses > capacity.maxUniverses) {
 		return `${mutation.label} would exceed the configured ${capacity.maxUniverses.toString()}-universe discovery resident limit`
 	}
-	for (const [aggregateLabel, left, right] of [
-		['pool × universe', resultingPools, resultingUniverses],
-		['pool × vault', resultingPools, capacity.maxVaultsPerPool],
-	] as const) {
-		if (!aggregateProductFits(left, right, capacity.maximumAggregateItems)) {
-			return `${mutation.label} would exceed the configured ${capacity.maximumAggregateItems.toString()}-item ${aggregateLabel} discovery aggregate limit`
-		}
+	if (!aggregateProductFits(resultingPools, resultingUniverses, capacity.maximumAggregateItems)) {
+		return `${mutation.label} would exceed the configured ${capacity.maximumAggregateItems.toString()}-item pool × universe discovery aggregate limit`
 	}
 	return undefined
 }

@@ -244,6 +244,7 @@ export function useReportingOperations(
 		const displayedFunding = displayedDetails === undefined ? undefined : getReportingContributionFunding(displayedDetails, currentForm.contributionFunding)
 		const latestDetails = await dependencies.loadReportingDetails(securityPoolAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
+		if (latestDetails.reportingBlockedReason !== undefined) throw new Error(latestDetails.reportingBlockedReason)
 		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
 		const timingGuard = getReportingSubmissionTimingGuard(latestDetails.status === 'active' ? latestDetails : undefined)
 		if (timingGuard !== undefined) throw new Error(timingGuard)
@@ -344,7 +345,6 @@ export function useReportingOperations(
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
 				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning parent deposits in the child pool after it finalizes; parent deposits do not need migration.')
-				if (latestDetails.settlementState === 'migration-expired') throw new Error('Settle winning parent deposits in the finalized child pool; the window for the optional cleanup of unresolved parent deposits has closed.')
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error(reportingCopy.questionFinalizationRequired)
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]

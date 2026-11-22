@@ -56,4 +56,5 @@ test('unwind rechecks the original target even outside the current discovery pag
 	viable = false
 	expect(await executeUnusedPortfolioFunding(wallet, settings, state, pool, target, async () => true, { refresh, submit })).toBe(true)
 	expect(calls[0]?.portfolioFunding).toEqual({ key, operation: 'withdraw', amount: 60n * unit })
+	expect(() => calls[0]?.gasBudgetExceeded?.()).toThrow('Unused funding withdrawal exceeds gas budget')
 })

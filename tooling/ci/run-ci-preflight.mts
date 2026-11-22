@@ -6,6 +6,7 @@ export function getCiPreflightTasks(args: readonly string[]) {
 	const tasks = [
 		{ command: ['run', 'tsc:scripts'], name: 'Script TypeScript' },
 		{ command: ['run', 'tsc:solidity:current'], name: 'Solidity TypeScript' },
+		{ command: ['run', 'tsc:ui-tests'], name: 'UI test TypeScript' },
 	]
 	if (!args.includes('--typecheck-only')) tasks.push({ command: ['run', 'ui:build:prod:current'], name: 'Production UI build' })
 	return tasks

@@ -69,6 +69,7 @@ function StrategyPanel() {
 						<div class='field-grid'>
 							<SwitchField id='allow-funded-takeovers' label='Funded takeovers and earnings claims' name='allowFundedTakeovers' />
 							<DecimalField label='Minimum net reward (ETH)' name='minimumNetRewardEth' />
+							<IntegerField label='Takeover income horizon (seconds; 0 disables repairs)' name='takeoverIncomeHorizonSeconds' />
 							<DecimalField label='Maximum gas cost (ETH)' name='maximumGasCostEth' />
 							<DecimalField label='Wallet ETH reserve' name='walletReserveEth' />
 							<DecimalField label='Wallet REP reserve' name='walletReserveRep' />

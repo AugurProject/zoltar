@@ -30,7 +30,7 @@ function metric(container: HTMLElement, text: string) {
 
 test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
 	const fixture = await auctionFixture()
-	fixture.values.maximumAdmissibleBidAttoRepPerLot = 3n * unit
+	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 3n * unit
 	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))

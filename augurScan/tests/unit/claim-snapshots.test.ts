@@ -115,7 +115,7 @@ const fixtureRead =
 			case 'getClaimCheckpointProgress':
 				return [root, 0n, false, !options.checkpointRequired]
 			case 'getInheritedClaimAllocation':
-				return [50n, 33n, 33n, (Number(args[3]) + 1) * 33 + '']
+				return [50n, 50n, 33n, (Number(args[3]) + 1) * 33 + '']
 			default:
 				throw new Error(`Unexpected ${name}`)
 		}
@@ -125,7 +125,8 @@ test('reconstructs inherited membership and independent unspent proofs with tagg
 	const result = await sampleClaimPositions(child, fixtureRead(), state)
 	expect(result.status).toBe('available')
 	expect(result.positions).toHaveLength(3)
-	expect(result.positions[2]).toMatchObject({ kind: 'inherited', status: 'claimable', retained_principal_atto_rep: '33', auction_haircut_atto_rep: '17', payout_atto_rep: '23', burn_atto_rep: '8', proof: { leafIndex: '2', merkleMountainRangePeakIndex: '0', merkleMountainRangeSiblings: [peaks[1]] } })
+	expect(result.positions[2]).toMatchObject({ kind: 'inherited', status: 'claimable', retained_principal_atto_rep: '50', payout_atto_rep: '31', burn_atto_rep: '8', proof: { leafIndex: '2', merkleMountainRangePeakIndex: '0', merkleMountainRangeSiblings: [peaks[1]] } })
+	expect(result.positions.every(position => !('auction_haircut_atto_rep' in position))).toBe(true)
 	expect(result.positions[2]?.['membership_root']).toBe(buildCarryMerkleMountainRangeProof(hashes, 2).root)
 	expect(result.positions.every(position => position['nullifier_root'] === createSparseNullifier([]).getRoot())).toBe(true)
 })

@@ -40,7 +40,6 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 			const client = createConnectedReadClient()
 			void (async () => {
 				const question = await loadPortfolioMintQuestion(client, snapshot, questionId)
-				if (question === undefined) throw new Error('Register this question before purchasing.')
 				const quote = await loadPortfolioMintQuote({ client: portfolioReadClient(client), portfolio: snapshot.portfolio, universeId: snapshot.universeId, questionId, mintAttoEth: amount, blockNumber: snapshot.blockNumber })
 				if (current) {
 					recoveryKnowledge.value = { selection, applicable: quote.recoveryAttoRep > 0n }
@@ -143,7 +142,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum, maximumRecoveryAttoRep: recoveryBudget }
 				return {
 					...buildPortfolioMintRequest({ trader: buyer, portfolio: selected.portfolio, universeId: selected.universeId, recipient: buyer, ...captured }),
-					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatUnits(amount, decimals)} ${selected.collateral.symbol}. The total charge for backing and the resolution premium is ${formatUnits(quote.purchaseFeeAttoEth, decimals)} ${selected.collateral.symbol}, capped at ${formatUnits(fee, decimals)} ${selected.collateral.symbol}. Receive at least ${formatUnits(minimum, decimals)} of each outcome. The proportional recovery contribution is ${formatUnits(quote.recoveryAttoRep, 18)} REP, capped at ${formatUnits(recoveryBudget, 18)} REP. Available backing is checked after retirement in the same transaction.`,
+					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatUnits(amount, decimals)} ${selected.collateral.symbol}. The total charge for backing and the resolution premium is ${formatUnits(quote.purchaseFeeAttoEth, decimals)} ${selected.collateral.symbol}, capped at ${formatUnits(fee, decimals)} ${selected.collateral.symbol}. Receive at least ${formatUnits(minimum, decimals)} of each outcome. The proportional recovery contribution is ${formatUnits(quote.recoveryAttoRep, 18)} REP, capped at ${formatUnits(recoveryBudget, 18)} REP. Available backing excludes queued retirement reductions; this purchase does not process retirement.`,
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()
 						const latest = await loadPortfolioAccount(client, selected.portfolio, selected.owner, selected.universeId)

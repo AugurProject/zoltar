@@ -6,6 +6,7 @@ import type { ExecutionRecord } from '#state/execution-record'
 import { formatTokenAmount } from '#monitoring/market-monitor'
 import { realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from '#core/position-accounting'
 import type { PositionRecord } from '#state/position-store'
+import { formatPositionCollateralAmount, parsePositionCollateralAmount, positionCollateralToken, positionCollateralValuation } from '#state/position-collateral'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { calculateTrackedNetProfitEth } from '#core/strategy'
 import { receiptGasCost } from '#execution/transaction-tracker'
@@ -116,7 +117,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		}
 		throw new Error('Executor hedge event does not match the durable position')
 	}
-	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.hedgeWeth), hedgeExecution.hedgeAmountAttoWeth)
+	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parsePositionCollateralAmount(position, position.hedgeWeth), hedgeExecution.hedgeAmountAttoWeth, positionCollateralValuation(position))
 	// The entry stays provisional, holding its risk slot and withholding its history record, until finalizeEntryAfterFinalityWithQuorum proves the receipt block canonical.
 	const confirmedPosition = {
 		...position,
@@ -126,7 +127,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		entryTransactionHash: executorReceipt.transactionHash,
 		gasExpenditures,
 		hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenDecimals),
-		hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountAttoWeth),
+		hedgeWeth: formatPositionCollateralAmount(position, hedgeExecution.hedgeAmountAttoWeth),
 		hedgedProfitBeforeGasEth: decimalSignedEth(actualProfitBeforeGas),
 		historyOutbox: undefined,
 		status: 'open-pending-finality' as const,
@@ -395,9 +396,9 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		if (execution.account.toLowerCase() !== position.account.toLowerCase() || execution.reportId.toString() !== position.reportId || execution.token.toLowerCase() !== position.replacementCreditToken.toLowerCase() || execution.amount !== expectedAmount) {
 			return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
 		}
-		const creditIsWeth = execution.token.toLowerCase() === config.network.weth.toLowerCase()
+		const creditIsCollateral = execution.token.toLowerCase() === positionCollateralToken(position, config.network.weth).toLowerCase()
 		const creditIsPositionToken = execution.token.toLowerCase() === position.token.toLowerCase()
-		if (!creditIsWeth && !creditIsPositionToken) return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
+		if (!creditIsCollateral && !creditIsPositionToken) return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
 		return {
 			...accountedPosition,
 			closedAt: undefined,
@@ -408,18 +409,18 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 			realizedNetProfitEth: undefined,
 			status: 'closed-pending-finality',
 			withdrawnToken: creditIsPositionToken ? formatUnits(execution.amount, tokenDecimals) : '0',
-			withdrawnWeth: creditIsWeth ? decimalWeth(execution.amount) : '0',
+			withdrawnWeth: creditIsCollateral ? formatPositionCollateralAmount(position, execution.amount) : '0',
 		}
 	}
 	if (!('amount1' in execution)) throw new Error('Lifecycle executor event does not match the durable position')
-	const expectedAttoWeth = parseDecimalWeth(position.lockedWeth)
+	const expectedToken1 = parsePositionCollateralAmount(position, position.lockedWeth)
 	const expectedToken = parseUnits(position.lockedToken, tokenDecimals)
 	if (
 		execution.account.toLowerCase() !== position.account.toLowerCase() ||
 		execution.reportId.toString() !== position.reportId ||
-		execution.token1.toLowerCase() !== config.network.weth.toLowerCase() ||
+		execution.token1.toLowerCase() !== positionCollateralToken(position, config.network.weth).toLowerCase() ||
 		execution.token2.toLowerCase() !== position.token.toLowerCase() ||
-		execution.amount1 !== expectedAttoWeth ||
+		execution.amount1 !== expectedToken1 ||
 		execution.amount2 !== expectedToken
 	) {
 		return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }

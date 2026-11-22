@@ -7,7 +7,7 @@ import { act } from 'preact/test-utils'
  * Renders `useHook(props)` in a bare component and returns accessors for the latest hook state. The caller owns
  * `cleanup`, which unmounts the component.
  */
-export async function renderHookWithProps<Props extends object, State>(useHook: (props: Props) => State, initialProps: Props) {
+export async function renderHookWithProps<Props extends object, State>(useHook: (props: Props) => State, initialProps: NoInfer<Props>) {
 	let props = initialProps
 	let hookState: State | undefined
 	function HookHarness({ hookProps }: { hookProps: Props }) {

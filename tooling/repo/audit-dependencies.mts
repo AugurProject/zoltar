@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { acceptedAuditAdvisories } from './projects.ts'
+import { acceptedAuditAdvisories } from './dependency-audit-policy.ts'
 import { repositoryRoot } from './root.mts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 

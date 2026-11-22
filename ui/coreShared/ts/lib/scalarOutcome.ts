@@ -1,6 +1,6 @@
 import { parseDecimalInput } from '../forms/decimal.js'
 import { getVisualRatio } from './visualMetrics.js'
-import { formatScalarOutcomeIndexLabel as formatSharedScalarOutcomeIndexLabel, formatScalarOutcomeLabel as formatSharedScalarOutcomeLabel, MAX_PRECISE_SCALAR_TICK_COUNT, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
+import { formatScalarOutcomeIndexLabel as formatSharedScalarOutcomeIndexLabel, formatScalarOutcomeLabel as formatSharedScalarOutcomeLabel, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 
 export {
 	clampScalarTickIndex,
@@ -54,9 +54,8 @@ export function parseScalarFormInputs({ scalarIncrement, scalarMax, scalarMin }:
 	if (range % increment !== 0n) throw new Error('Scalar min, max, and increment do not produce a whole number of ticks')
 
 	const numTicks = range / increment
-	if (numTicks <= 1n) throw new Error('Scalar inputs must produce more than 1 tick')
+	if (numTicks < 1n) throw new Error('Scalar inputs must produce at least 1 tick')
 	if (numTicks > SCALAR_PART_MASK) throw new Error('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
-	if (numTicks > MAX_PRECISE_SCALAR_TICK_COUNT) throw new Error('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
 
 	return {
 		displayValueMax,

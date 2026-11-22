@@ -132,7 +132,7 @@ describe('simulation worker lifecycle', () => {
 		const worker = createWorkerHarness()
 		const lookups: Array<[string, string]> = []
 		const backendPromise = createSimulationBackend(
-			{ appId: 'statoblast', scenario: 'portfolio' },
+			{ appId: 'statoblast', scenario: 'securitypoolx2' },
 			{
 				createWorkerConnection: () => worker.connection,
 				fetchScenarioSnapshot: async (workerPath, scenario) => {
@@ -147,7 +147,7 @@ describe('simulation worker lifecycle', () => {
 			const bootstrap = backend.bootstrap()
 			await waitForPostedCall(worker, 'bootstrap')
 			expect(worker.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({ method: 'bootstrap', params: { scenarioSnapshot: '{"prepared":true}', scenarioSnapshotKey: 'key-1' }, type: 'call' })
-			expect(lookups).toEqual([[expect.stringContaining('/statoblast/ts/simulation/tevmWorker.ts'), 'portfolio']])
+			expect(lookups).toEqual([[expect.stringContaining('/statoblast/ts/simulation/tevmWorker.ts'), 'securitypoolx2']])
 			worker.emitMessage({ id: 1, type: 'result', value: undefined })
 			await bootstrap
 		} finally {
@@ -256,8 +256,10 @@ describe('simulation worker lifecycle', () => {
 		expect(accountsChanged).toHaveBeenCalledTimes(1)
 		await expect(backend.getAccounts()).resolves.toEqual([])
 		const requestedAccounts = backend.requestAccounts()
-		worker.emitMessage({ id: 1, type: 'result', value: [backend.accounts[0]] })
-		await expect(requestedAccounts).resolves.toEqual([backend.accounts[0]])
+		const account = backend.accounts[0]
+		if (account === undefined) throw new Error('Expected a simulation account')
+		worker.emitMessage({ id: 1, type: 'result', value: [account] })
+		await expect(requestedAccounts).resolves.toEqual([account])
 		expect(backend.walletMode).toBe('connected')
 		expect(accountsChanged).toHaveBeenCalledTimes(2)
 		expect(chainChanged).toHaveBeenCalledTimes(1)
@@ -312,7 +314,7 @@ describe('simulation worker lifecycle', () => {
 /** Shortens the two-minute worker request timeout to `requestTimeoutMilliseconds`; returns the real `setTimeout` and the spy to restore. */
 function shortenRequestTimeout(requestTimeoutMilliseconds: number) {
 	const originalSetTimeout = globalThis.setTimeout
-	const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? requestTimeoutMilliseconds : delay, ...args))
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(Object.assign((...[handler, delay, ...args]: Parameters<typeof originalSetTimeout>) => originalSetTimeout(handler, delay === 120_000 ? requestTimeoutMilliseconds : delay, ...args), originalSetTimeout))
 	return { originalSetTimeout, timer }
 }
 

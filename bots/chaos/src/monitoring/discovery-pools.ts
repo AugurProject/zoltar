@@ -117,14 +117,8 @@ export async function discoverPools({
 			lastPrice,
 			lastSettlementTimestamp,
 			priceValidUntil,
-			gasConsumedOpenOracleReportPrice,
 			settlementCallbackGasLimit,
-			gasUnitsForOneDispute,
 			initialReportPriorityFeeAttoEthPerGas,
-			targetPriceErrorForDispute,
-			openOracleSecurityMultiplierBps,
-			protocolFee,
-			feePercentage,
 			escalationHaltMultiplierBps,
 			pendingReportId,
 			questionOutcome,
@@ -153,14 +147,8 @@ export async function discoverPools({
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastPrice' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastSettlementTimestamp' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'priceValidUntil' }),
-			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'gasConsumedOpenOracleReportPrice' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
-			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'gasUnitsForOneDispute' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'initialReportPriorityFeeAttoEthPerGas' }),
-			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'targetPriceErrorForDispute' }),
-			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracleSecurityMultiplierBps' }),
-			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'protocolFee' }),
-			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'feePercentage' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'escalationHaltMultiplierBps' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'pendingReportId' }),
 			client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getQuestionOutcome' }),
@@ -184,17 +172,11 @@ export async function discoverPools({
 		])
 		const oracleRequestFunding = {
 			escalationHaltMultiplierBps: escalationHaltMultiplierBps.toString(),
-			feePercentage: feePercentage.toString(),
-			gasConsumedOpenOracleReportPrice: gasConsumedOpenOracleReportPrice.toString(),
-			gasUnitsForOneDispute: gasUnitsForOneDispute.toString(),
 			initialReportPriorityFeeAttoEthPerGas: initialReportPriorityFeeAttoEthPerGas.toString(),
-			openOracleSecurityMultiplierBps: openOracleSecurityMultiplierBps.toString(),
-			protocolFee: protocolFee.toString(),
 			settlementCallbackGasLimit: settlementCallbackGasLimit.toString(),
-			targetPriceErrorForDispute: targetPriceErrorForDispute.toString(),
 		}
 		const retainedReportIds = (context.indexedReports ?? []).filter(report => report.token2.toLowerCase() === repToken.toLowerCase() && report.settlementTimestamp === '0').map(report => BigInt(report.reportId))
-		const priceFeedSnapshot = await discoverPoolPriceFeed(client, coordinator, blockNumber, settlementCollateral, oracleRequestFunding, anchorBaseFeePerGas, pendingReportId, retainedReportIds)
+		const priceFeedSnapshot = await discoverPoolPriceFeed(client, coordinator, blockNumber, oracleRequestFunding, anchorBaseFeePerGas, pendingReportId, retainedReportIds)
 		const universe = authenticatedUniverse
 		assertCanonicalPoolGraph({
 			configuredFactory: deployments.securityPoolFactory,
@@ -286,7 +268,10 @@ export async function discoverPools({
 				: ([emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote()] satisfies PoolSnapshot['directEscalationDepositQuotes'])
 		const pendingReportSettled = pendingReportId === 0n ? false : (await client.readContract({ abi: abis.openOracleAbi, address: deployments.openOracle, args: [pendingReportId], blockNumber, functionName: 'storedGame' })).settlementTimestamp !== 0n
 		const forkQuestion = questionById.get(universe.forkQuestionId)
-		const projectedSettlementCollateral = await client.readContract({ abi: abis.securityPoolAbi, address, args: [shareTokenSupply], blockNumber, functionName: 'attoSharesToAttoEth' })
+		const [projectedSettlementCollateral, projectedSettlementRecovery] = await Promise.all([
+			client.readContract({ abi: abis.securityPoolAbi, address, args: [shareTokenSupply], blockNumber, functionName: 'attoSharesToAttoEth' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, args: [shareTokenSupply], blockNumber, functionName: 'attoSharesToAttoRep' }),
+		])
 		let ownQuestionForkReady = false
 		if (wallet !== undefined && universe.forkTime === '0' && escalationCanTriggerOwnFork) {
 			try {
@@ -336,6 +321,7 @@ export async function discoverPools({
 			questionOutcome: bigintToSafeNumber(questionOutcome),
 			repToken: getAddress(repToken),
 			projectedSettlementCollateralAttoEth: projectedSettlementCollateral.toString(),
+			projectedSettlementRecoveryAttoRep: projectedSettlementRecovery.toString(),
 			settlementCollateralAttoEth: settlementCollateral.toString(),
 			shareTokenSupplyAttoShares: shareTokenSupply.toString(),
 			statoblastSecurityMultiplierBps: securityMultiplier.toString(),

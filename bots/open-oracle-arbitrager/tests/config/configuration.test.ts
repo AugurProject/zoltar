@@ -39,6 +39,7 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 	const address = '0x0000000000000000000000000000000000000001'
 	return {
 		approvedUniverses: [],
+		collateralTokens: [],
 		centralizedMarkets: {
 			assetAddress: address,
 			assetChainId: 1,

@@ -6,7 +6,9 @@ import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 function escalationWithdrawalCandidates(snapshot: EcosystemSnapshot) {
 	return snapshot.pools.flatMap(pool => {
 		if (pool.systemState !== 0 || pool.questionOutcome === BINARY_OUTCOME_NONE || !escalationWithdrawalSafe(snapshot, pool)) return []
-		const deposits = snapshot.escalationDeposits.filter(deposit => !deposit.claimed && deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase()).sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex))
+		const deposits = snapshot.escalationDeposits
+			.filter(deposit => !deposit.claimed && (pool.escalationForkContinuation || deposit.outcome === pool.questionOutcome) && deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase())
+			.sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex))
 		return [...new Set(deposits.map(deposit => deposit.outcome))].flatMap(outcome => lifecycleBatches(deposits.filter(deposit => deposit.outcome === outcome)).map(batch => ({ deposits: batch, outcome, pool })))
 	})
 }
