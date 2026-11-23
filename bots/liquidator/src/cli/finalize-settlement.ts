@@ -15,7 +15,7 @@ function positiveInteger(name: string) {
 
 if (process.argv.includes('--help')) {
 	console.log(`Settlement finalizer: scan a Statoblast security pool once for funded final questions.
-Set SETTLEMENT_RPC_URL, SETTLEMENT_CHAIN_ID, SETTLEMENT_PORTFOLIO and
+Set SETTLEMENT_RPC_URL, SETTLEMENT_CHAIN_ID, SETTLEMENT_SECURITY_POOL and
 SETTLEMENT_MINIMUM_CASH (raw collateral units).
 
 For submission, supply a dedicated SETTLEMENT_PRIVATE_KEY plus

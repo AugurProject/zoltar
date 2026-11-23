@@ -38,8 +38,8 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 	},
 	routes: [
 		{ hash: '#/deploy', name: 'deploy', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
-		// Pools lands on Browse pools. The legacy question ledgers hash resolves to Pools; the URL state rewrites its query onto the pool path.
-		{ aliases: ['#/security-pools'], hash: POOLS_ROUTE_HASH, name: 'pools', queryParameters: new Set(['questionId', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
+		// The questions route lands on Browse questions.
+		{ hash: POOLS_ROUTE_HASH, name: 'pools', queryParameters: new Set(['questionId', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
 		{ match: routeHash => (parsePoolsRouteHash(routeHash) === undefined ? undefined : 'pools') },
 		{ hash: '#/security-pools', name: 'security-pools', queryParameters: new Set(['securityPool', 'owner', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
 		{ hash: '#/open-oracle', name: 'open-oracle', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
