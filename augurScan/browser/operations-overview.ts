@@ -1,3 +1,4 @@
+import { renderHistoricalExport } from './operations-export.ts'
 import { shortUniverseId, protocolIdHex as formatProtocolId } from './identifier-format.ts'
 import { collateralUnit } from '../src/collateral.ts'
 import { timelineEntityPath, timelineTransitionSummary } from './semantic-evidence.ts'
@@ -334,10 +335,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 				),
 				operationsPanel(
 					'Selected-chain historical exports',
-					[
-						operationRow('Export semantic timeline', 'Snapshot-bound canonical NDJSON with exact event data; response headers identify an opaque continuation cursor.', undefined, undefined, operationsHref('/api/v1/export?dataset=timeline&canonical=canonical&limit=50000')),
-						operationRow('Export canonical and orphan logs', 'Occurrence-level NDJSON including decoded arguments and canonical flags.', undefined, undefined, operationsHref('/api/v1/export?dataset=logs&canonical=all&limit=50000')),
-					],
+					[renderHistoricalExport(content, 'Semantic timeline', operationsHref('/api/v1/export?dataset=timeline&canonical=canonical&limit=50000')), renderHistoricalExport(content, 'Canonical and orphan logs', operationsHref('/api/v1/export?dataset=logs&canonical=all&limit=50000'))],
 					'',
 					{ label: selectedNetworkScope },
 				),
