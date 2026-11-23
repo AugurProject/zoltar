@@ -143,7 +143,7 @@ function TransactionFeedbackOperationModalHarness() {
 							detail: 'Submitting the prerequisite approval.',
 							dismissKey: 'transaction-request-2',
 							rows: [
-								{ identityKey: 'security-pool', label: 'Pool', value: '0xpool' },
+								{ identityKey: 'security-pool', label: 'Question ledger', value: '0xpool' },
 								{ identityKey: 'outcome', label: 'Share outcome', value: 'Yes' },
 								{ label: 'Approval Amount', value: '2 REP' },
 							],
@@ -162,7 +162,7 @@ function TransactionFeedbackOperationModalHarness() {
 							detail: 'Approval confirmed. Continue with the dispute.',
 							dismissKey: 'transaction-request-2',
 							rows: [
-								{ identityKey: 'security-pool', label: 'Pool', value: '0xpool' },
+								{ identityKey: 'security-pool', label: 'Question ledger', value: '0xpool' },
 								{ identityKey: 'outcome', label: 'Share outcome', value: 'Yes' },
 								{ label: 'Approval Amount', value: '2 REP' },
 							],

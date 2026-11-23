@@ -78,10 +78,10 @@ describe('transaction presentations', () => {
 		})
 		const reportingIntent = createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'no' })
 
-		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Share outcome'])
+		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Question ledger', 'Share outcome'])
 		expect(tradingIntent.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
 		expect(tradingPresentation.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
-		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Outcome'])
+		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Question ledger', 'Outcome'])
 	})
 
 	test('uses the same pool grammar without redundant universe rows in intent and success presentations', () => {
@@ -99,8 +99,8 @@ describe('transaction presentations', () => {
 		]
 
 		for (const { intent, presentation } of cases) {
-			expect(intent.rows?.[0]?.label).toBe('Pool')
-			expect(presentation.rows?.[0]?.label).toBe('Pool')
+			expect(intent.rows?.[0]?.label).toBe('Question ledger')
+			expect(presentation.rows?.[0]?.label).toBe('Question ledger')
 			expect(intent.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(presentation.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(intent.universeId).toBe(7n)

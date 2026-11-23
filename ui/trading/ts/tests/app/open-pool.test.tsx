@@ -15,7 +15,7 @@ test('the market list search opens a pasted pool address even before any market 
 		const form = rendered.container.querySelector<HTMLFormElement>('form.market-list-search')
 		const input = form?.querySelector<HTMLInputElement>('input[type="search"]')
 		if (form === null || input === null || input === undefined) throw new Error('Market search did not render')
-		expect(input.placeholder).toContain('paste an address')
+		expect(input.placeholder).toContain('paste address')
 		const type = (value: string) =>
 			act(() => {
 				input.value = value

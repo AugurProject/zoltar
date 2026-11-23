@@ -26,7 +26,7 @@ export function humanizeTransactionAction(action: string) {
 
 export function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined): GlobalTransactionRow[] | undefined {
 	if (context === undefined) return undefined
-	return context.questionLedgerAddress === undefined || context.questionLedgerAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.questionLedgerAddress} /> }]
+	return context.questionLedgerAddress === undefined || context.questionLedgerAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.questionLedger, value: <AddressValue address={context.questionLedgerAddress} /> }]
 }
 
 export function buildPresentation({

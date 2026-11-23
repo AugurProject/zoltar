@@ -46,7 +46,7 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: transactionCopy.pool, value: <AddressValue address={result.questionLedgerAddress} /> },
+			{ label: transactionCopy.questionLedger, value: <AddressValue address={result.questionLedgerAddress} /> },
 			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
 		title,
