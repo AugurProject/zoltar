@@ -34,8 +34,6 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	uint256 public immutable noTokenId;
 	uint256 public immutable feeBps;
 
-	uint256 private yesReserve;
-	uint256 private noReserve;
 	bool private entered;
 
 	event LiquidityInitialized(address indexed provider, address indexed recipient, uint256 yesAmount, uint256 noAmount, uint256 liquidity);
@@ -92,7 +90,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	}
 
 	function getReserves() external view returns (uint256, uint256) {
-		return (yesReserve, noReserve);
+		return (_yesBalance(), _noBalance());
 	}
 
 	function getEffectiveReserves() external view returns (uint256, uint256) {
@@ -126,14 +124,14 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		require(liquidity >= minLiquidity, 'Minimum liquidity');
 		_mint(MINIMUM_LIQUIDITY_LOCK, MINIMUM_LIQUIDITY);
 		_mint(recipient, liquidity);
-		_updateReserves();
+		_checkReserves(yesAmount, noAmount);
 		emit LiquidityInitialized(msg.sender, recipient, yesAmount, noAmount, liquidity);
 	}
 
 	function addLiquidity(uint256 maxYes, uint256 maxNo, uint256 minLiquidity, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 yesUsed, uint256 noUsed, uint256 liquidity) {
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
-		_synchronize();
+		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
 		(yesUsed, noUsed) = TwoWayConstantProductMath.proportionalDeposit(yesReserve, noReserve, maxYes, maxNo);
 		require(yesUsed > 0 && noUsed > 0, 'Liquidity rounds to zero');
 		uint256 yesLiquidity = Math.mulDiv(yesUsed, totalSupply(), yesReserve);
@@ -143,30 +141,38 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		shareToken.safeTransferFrom(msg.sender, address(this), yesTokenId, yesUsed, '');
 		shareToken.safeTransferFrom(msg.sender, address(this), noTokenId, noUsed, '');
 		_mint(recipient, liquidity);
-		_updateReserves();
+		_checkReserves(yesReserve + yesUsed, noReserve + noUsed);
 		emit LiquidityAdded(msg.sender, recipient, yesUsed, noUsed, liquidity);
 	}
 
 	function removeLiquidity(uint256 liquidity, uint256 minYes, uint256 minNo, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 yesOut, uint256 noOut) {
 		require(recipient != address(0), 'Recipient is zero');
 		require(liquidity > 0, 'Liquidity is zero');
-		_synchronize();
+		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
 		yesOut = Math.mulDiv(yesReserve, liquidity, totalSupply());
 		noOut = Math.mulDiv(noReserve, liquidity, totalSupply());
 		require(yesOut >= minYes && noOut >= minNo, 'Liquidity slippage');
 		// A dust position can round to zero on the scarce side. It must still exit.
 		require(yesOut > 0 || noOut > 0, 'Liquidity output is zero');
 		_burn(msg.sender, liquidity);
-		if (yesOut > 0) shareToken.safeTransferFrom(address(this), recipient, yesTokenId, yesOut, '');
-		if (noOut > 0) shareToken.safeTransferFrom(address(this), recipient, noTokenId, noOut, '');
-		_updateReserves();
+		if (yesOut != 0 && noOut != 0) {
+			uint256[] memory ids = new uint256[](2);
+			uint256[] memory amounts = new uint256[](2);
+			ids[0] = yesTokenId;
+			ids[1] = noTokenId;
+			amounts[0] = yesOut;
+			amounts[1] = noOut;
+			shareToken.safeBatchTransferFrom(address(this), recipient, ids, amounts, '');
+		} else if (yesOut != 0) shareToken.safeTransferFrom(address(this), recipient, yesTokenId, yesOut, '');
+		else shareToken.safeTransferFrom(address(this), recipient, noTokenId, noOut, '');
+		_checkReserves(yesReserve - yesOut, noReserve - noOut);
 		emit LiquidityRemoved(msg.sender, recipient, yesOut, noOut, liquidity);
 	}
 
 	function swapExactInput(bool yesForNo, uint256 amountIn, uint256 minAmountOut, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountOut, uint256 feeAmount) {
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
-		_synchronize();
+		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
 		(uint256 reserveIn, uint256 reserveOut) = yesForNo ? (yesReserve, noReserve) : (noReserve, yesReserve);
 		(amountOut, feeAmount) = TwoWayConstantProductMath.quoteExactInput(reserveIn, reserveOut, amountIn, feeBps);
 		require(amountOut >= minAmountOut, 'Swap slippage');
@@ -174,14 +180,14 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		uint256 tokenOut = yesForNo ? noTokenId : yesTokenId;
 		shareToken.safeTransferFrom(msg.sender, address(this), tokenIn, amountIn, '');
 		shareToken.safeTransferFrom(address(this), recipient, tokenOut, amountOut, '');
-		_updateReserves();
-		emit Swap(msg.sender, recipient, yesForNo, false, amountIn, amountOut, feeAmount, yesReserve, noReserve);
+		_checkReserves(yesForNo ? yesReserve + amountIn : yesReserve - amountOut, yesForNo ? noReserve - amountOut : noReserve + amountIn);
+		emit Swap(msg.sender, recipient, yesForNo, false, amountIn, amountOut, feeAmount, _yesBalance(), _noBalance());
 	}
 
 	function swapExactOutput(bool yesForNo, uint256 amountOut, uint256 maxAmountIn, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountIn, uint256 feeAmount) {
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
-		_synchronize();
+		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
 		(uint256 reserveIn, uint256 reserveOut) = yesForNo ? (yesReserve, noReserve) : (noReserve, yesReserve);
 		(amountIn, feeAmount) = TwoWayConstantProductMath.quoteExactOutput(reserveIn, reserveOut, amountOut, feeBps);
 		require(amountIn <= maxAmountIn, 'Swap slippage');
@@ -189,13 +195,14 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		uint256 tokenOut = yesForNo ? noTokenId : yesTokenId;
 		shareToken.safeTransferFrom(msg.sender, address(this), tokenIn, amountIn, '');
 		shareToken.safeTransferFrom(address(this), recipient, tokenOut, amountOut, '');
-		_updateReserves();
-		emit Swap(msg.sender, recipient, yesForNo, true, amountIn, amountOut, feeAmount, yesReserve, noReserve);
+		_checkReserves(yesForNo ? yesReserve + amountIn : yesReserve - amountOut, yesForNo ? noReserve - amountOut : noReserve + amountIn);
+		emit Swap(msg.sender, recipient, yesForNo, true, amountIn, amountOut, feeAmount, _yesBalance(), _noBalance());
 	}
 
 	function sync() external nonReentrant {
 		require(totalSupply() > 0, 'Uninitialized');
-		_synchronize();
+		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
+		emit Sync(yesReserve, noReserve);
 	}
 
 	function quoteExactInput(bool yesForNo, uint256 amountIn) external view returns (uint256 amountOut, uint256 feeAmount) {
@@ -247,22 +254,13 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	function _effectiveReserves() private view returns (uint256 effectiveYes, uint256 effectiveNo) {
 		effectiveYes = _yesBalance();
 		effectiveNo = _noBalance();
-		require(effectiveYes >= yesReserve && effectiveNo >= noReserve, 'Balance below reserve');
 		require(_invalidBalance() == 0, 'Pair holds INVALID');
 	}
 
-	function _synchronize() private {
-		(uint256 currentYes, uint256 currentNo) = _effectiveReserves();
-		yesReserve = currentYes;
-		noReserve = currentNo;
-		emit Sync(currentYes, currentNo);
-	}
-
-	function _updateReserves() private {
-		require(_invalidBalance() == 0, 'Pair holds INVALID');
-		yesReserve = _yesBalance();
-		noReserve = _noBalance();
-		emit Sync(yesReserve, noReserve);
+	function _checkReserves(uint256 minimumYes, uint256 minimumNo) private {
+		(uint256 yesBalance, uint256 noBalance) = _effectiveReserves();
+		require(yesBalance >= minimumYes && noBalance >= minimumNo, 'Balance below expected');
+		emit Sync(yesBalance, noBalance);
 	}
 
 	function _yesBalance() private view returns (uint256) {

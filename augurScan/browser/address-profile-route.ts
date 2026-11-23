@@ -84,7 +84,7 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 		const requestedAddress = (location.pathname.startsWith('/address/') ? location.pathname.slice('/address/'.length) : deps.getPageUrl().searchParams.get('address'))?.toLowerCase()
 		const backParams = new URLSearchParams({ chainId: requiredChainId() })
 		if (isDemo) backParams.set('demo', '1')
-		$('#address-back').href = `/richlist?${backParams}`
+		$('#address-back').href = `/addresses?${backParams}`
 		if (requestedAddress === undefined || !/^0x[0-9a-f]{40}$/.test(requestedAddress)) {
 			content.replaceChildren(element('div', 'detail-error', 'A complete 20-byte address is required.'))
 			content.setAttribute('aria-busy', 'false')

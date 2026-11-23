@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Abi, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deployContract } from '../testSupport/deployContract'
-import { applyLibraries, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { forkUniverse, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
@@ -58,8 +58,8 @@ describe('audit4: router keeps no wrapped collateral or services allowance', () 
 		const owner = fixture.owner()
 		const account = owner.account.address
 		const native = fixture.poolFor(fixture.base.questionId)
-		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: applyLibraries(factoryArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
-		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
+		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
+		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
 		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
 		const services = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
 		const deadline = fixture.base.questionData.endTime - 1n
@@ -116,8 +116,8 @@ describe('audit4: LP claims survive a universe fork', () => {
 		const client = fixture.client
 		const account = client.account.address
 		const native = portfolio.poolFor(fixture.questionId)
-		const factory = await deployContract(client, encodeDeployData({ abi: factoryArtifact.abi, bytecode: applyLibraries(factoryArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
-		const router = await deployContract(client, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
+		const factory = await deployContract(client, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
+		const router = await deployContract(client, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
 		const deadline = fixture.questionData.endTime - 1n
 		const amount = 1_000_000n
 		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, amount, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, account, deadline], value: amount }))

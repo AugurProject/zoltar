@@ -7,7 +7,9 @@ import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexTo
 import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
 import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../ui/statoblastShared/ts/contractArtifact.js'
+import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../ui/statoblastShared/ts/contractArtifact.js'
+import { shareTokenAbi } from '../../ui/trading/ts/protocol/authorization.js'
+import { tradingContracts } from '../../ui/trading/ts/generated/contractArtifact.js'
 import * as portfolioCopy from '../../ui/statoblastShared/ts/copy/portfolio.js'
 import * as collateralCopy from '../../ui/statoblastShared/ts/copy/collateral.js'
 import * as capitalCopy from '../../ui/statoblastShared/ts/copy/portfolioCapital.js'
@@ -620,27 +622,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		const profile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) })
 		const { securityPoolFactory } = getInfraContractAddresses(profile)
 		const abi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
-		const readFixtureContract = async (data: Hex) => {
-			const result = await driver.evaluateAsync(`new Promise((resolve, reject) => {
-				const worker = window.__zoltarProductionWorkers?.at(-1)
-				if (!(worker instanceof Worker)) { reject(new Error('Simulation worker was not available')); return }
-				// App RPC IDs are positive; fixture reads use negative IDs to avoid consuming app responses.
-				const id = window.__zoltarFixtureRequestId = (window.__zoltarFixtureRequestId ?? 0) - 1
-				const timeout = setTimeout(() => { worker.removeEventListener('message', receive); reject(new Error('Seeded pool registry read timed out')) }, 10000)
-				function receive(event) {
-					const message = event.data
-					if (message.id !== id) return
-					clearTimeout(timeout)
-					worker.removeEventListener('message', receive)
-					if (message.type === 'error') reject(new Error(message.message))
-					else resolve(message.value)
-				}
-				worker.addEventListener('message', receive)
-				worker.postMessage({ id, type: 'rpc', method: 'eth_call', params: [{ to: ${JSON.stringify(securityPoolFactory)}, data: ${JSON.stringify(data)} }, 'latest'] })
-			})`)
-			if (typeof result !== 'string') throw new Error('Seeded pool registry returned invalid call data')
-			return bytesToHex(hexToBytes(result))
-		}
+		const readFixtureContract = (data: Hex) => readBrowserContract(driver, securityPoolFactory, data)
 		const count = decodeFunctionResult({ abi, functionName: 'securityPoolDeploymentCount', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'securityPoolDeploymentCount' })) })
 		expect(count > 0n && count <= 10n).toBe(true)
 		const pools = decodeFunctionResult({ abi, functionName: 'securityPoolDeploymentsRange', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'securityPoolDeploymentsRange', args: [0n, count] })) })
@@ -721,4 +703,140 @@ productionInteractionTest('deployment', '#/deploy?simulate=1&genesis=yes&simScen
 	await driver.waitForBodyText(`0 / ${steps.length}`)
 	await driver.clickButton('Deploy next contract')
 	expect(await driver.waitForBodyText(`1 / ${steps.length}`)).toContain('Proxy Deployer')
+})
+
+async function readBrowserContract(driver: ProductionBrowserDriver, address: string, data: Hex) {
+	const result = await driver.evaluateAsync(`new Promise((resolve, reject) => {
+				const worker = window.__zoltarProductionWorkers?.at(-1)
+				if (!(worker instanceof Worker)) { reject(new Error('Simulation worker was not available')); return }
+				// App RPC IDs are positive; fixture reads use negative IDs to avoid consuming app responses.
+				const id = window.__zoltarFixtureRequestId = (window.__zoltarFixtureRequestId ?? 0) - 1
+				const timeout = setTimeout(() => { worker.removeEventListener('message', receive); reject(new Error('Simulation fixture contract read timed out')) }, 10000)
+				function receive(event) {
+					const message = event.data
+					if (message.id !== id) return
+					clearTimeout(timeout)
+					worker.removeEventListener('message', receive)
+					if (message.type === 'error') reject(new Error(message.message))
+					else resolve(message.value)
+				}
+				worker.addEventListener('message', receive)
+				worker.postMessage({ id, type: 'rpc', method: 'eth_call', params: [{ to: ${JSON.stringify(address)}, data: ${JSON.stringify(data)} }, 'latest'] })
+			})`)
+	if (typeof result !== 'string') throw new Error('Simulation fixture contract returned invalid call data')
+	return bytesToHex(hexToBytes(result))
+}
+
+function productWorkflow(scenario: ProductionWorkflowScenario, app: UiAppId, route: string, interact: (driver: ProductionBrowserDriver) => Promise<void>) {
+	productionWorkflowTest(scenario, async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		await loadProductionDocumentInChromium(new URL(`/${app}/${route}`, server.url).href, { width: 390, height: 844 }, interact)
+	})
+}
+
+productWorkflow('trading-liquidity', 'trading', '#/markets?simulate=1&genesis=no&simScenario=trading-funded', async driver => {
+	await driver.waitForReady()
+	await driver.waitForBodyText('Liquidity')
+	const route = await driver.evaluate(`[...document.querySelectorAll('a')].find(anchor => anchor.hash.startsWith('#/liquidity/'))?.href`)
+	if (typeof route !== 'string') throw new Error('Missing seeded liquidity market')
+	await driver.navigate(route)
+	await driver.clickButton('Remove')
+	await driver.waitForBodyText('You hold 0.0088 LP')
+	const pair = await driver.evaluate(`document.querySelectorAll('.market-contracts-grid .address-value-full')[1]?.textContent.trim()`)
+	if (typeof pair !== 'string') throw new Error('Missing trading pair')
+	const account = '00000000000000000000000000000000000000a1'
+	const balanceOf = `0x70a08231${account.padStart(64, '0')}` as const
+	const before = BigInt(await readBrowserContract(driver, pair, balanceOf))
+	await driver.setInputByLabel('Amount', '0.001')
+	await driver.clickButton('Remove liquidity')
+	await driver.waitForBodyText('You hold 0.0078 LP')
+	const after = BigInt(await readBrowserContract(driver, pair, balanceOf))
+	expect(before - after).toBe(10n ** 15n)
+	const armed = await driver.evaluate(`(() => {
+		const worker = window.__zoltarProductionWorkers?.at(-1)
+		if (!(worker instanceof Worker)) return false
+		const post = worker.postMessage.bind(worker)
+		worker.postMessage = (...args) => {
+			if (args[0]?.method === 'eth_sendTransaction') {
+				worker.postMessage = post
+				throw new Error('Injected trading worker send failure')
+			}
+			return post(...args)
+		}
+		return true
+	})()`)
+	expect(armed).toBeTrue()
+	await driver.setInputByLabel('Amount', '0.001')
+	await driver.clickButton('Remove liquidity')
+	await driver.waitForBodyText('Injected trading worker send failure')
+	expect(BigInt(await readBrowserContract(driver, pair, balanceOf))).toBe(after)
+
+	// Reopen the same funded market through its normal trade route.
+	await driver.navigate(route.replace('#/liquidity/', '#/market/'))
+	await driver.waitForReady()
+	await driver.waitForBodyText('You pay')
+	const pairAbi = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair.abi
+	const shareToken = decodeFunctionResult({ abi: pairAbi, functionName: 'shareToken', data: await readBrowserContract(driver, pair, encodeFunctionData({ abi: pairAbi, functionName: 'shareToken' })) })
+	const lookupToken = async (functionName: 'yesTokenId' | 'invalidTokenId') => decodeFunctionResult({ abi: pairAbi, functionName, data: await readBrowserContract(driver, pair, encodeFunctionData({ abi: pairAbi, functionName })) })
+	const [yes, invalid] = await Promise.all([lookupToken('yesTokenId'), lookupToken('invalidTokenId')])
+	const shares = (id: bigint) => readBrowserContract(driver, shareToken, encodeFunctionData({ abi: shareTokenAbi, functionName: 'balanceOf', args: [getAddress(`0x${account}`), id] })).then(BigInt)
+	const [yesBefore, invalidBefore] = await Promise.all([shares(yes), shares(invalid)])
+	const [yesReserve, noReserve] = decodeFunctionResult({ abi: pairAbi, functionName: 'getEffectiveReserves', data: await readBrowserContract(driver, pair, encodeFunctionData({ abi: pairAbi, functionName: 'getEffectiveReserves' })) })
+	const fee = decodeFunctionResult({ abi: pairAbi, functionName: 'feeBps', data: await readBrowserContract(driver, pair, encodeFunctionData({ abi: pairAbi, functionName: 'feeBps' })) })
+	expect(
+		await driver.evaluate(`(() => {
+			const worker = window.__zoltarProductionWorkers?.at(-1)
+			if (!(worker instanceof Worker)) return false
+			const post = worker.postMessage.bind(worker)
+			window.__zoltarBuySends = 0
+			worker.postMessage = (...args) => {
+				if (args[0]?.method === 'eth_sendTransaction') window.__zoltarBuySends++
+				return post(...args)
+			}
+			return true
+		})()`),
+	).toBeTrue()
+	await driver.setInputByLabel('You pay', '0.0012')
+	await driver.clickButton('Buy Yes')
+	await driver.waitForBodyText('Buy Yes confirmed.')
+	const minted = (await shares(invalid)) - invalidBefore
+	const netSwap = (minted * (10_000n - fee)) / 10_000n
+	expect(minted).toBeGreaterThan(0n)
+	expect((await shares(yes)) - yesBefore).toBe(minted + (yesReserve * netSwap) / (noReserve + netSwap))
+	expect(await driver.evaluate('window.__zoltarBuySends')).toBe(1)
+})
+
+productWorkflow('openoracle-report', 'openoracle', '#/open-oracle?simulate=1&genesis=yes&simScenario=deployed', async driver => {
+	await driver.waitForReady()
+	const route = await driver.evaluate(`[...document.querySelectorAll('a')].find(anchor => anchor.textContent.trim() === 'Create report')?.href`)
+	if (typeof route !== 'string') throw new Error('Missing report creation route')
+	await driver.navigate(route)
+	const rep = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
+	const weth = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
+	if (typeof rep !== 'string' || typeof weth !== 'string') throw new Error('Missing simulation token addresses')
+	const profile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(rep), wethAddress: getAddress(weth) })
+	const oracleAddress = getInfraContractAddresses(profile).openOracle
+	const abi = statoblast_openOracle_OpenOracle_OpenOracle.abi
+	const nextReport = () => readBrowserContract(driver, oracleAddress, encodeFunctionData({ abi, functionName: 'nextReportId' })).then(BigInt)
+	const before = await nextReport()
+	await driver.setInputByLabel('Base token address', rep)
+	await driver.setInputByLabel('Quote token address', weth)
+	await driver.setInputByLabel('Base token amount', '0.01')
+	await driver.setInputByLabel('Quote token amount', '0.005')
+	await driver.setInputByLabel('Settler reward', '0.000001')
+	for (const [action, title] of [
+		['Approve 0.01\u00a0REP', 'Base token approved'],
+		['Approve ≈ 0.01\u00a0WETH', 'Quote token approved'],
+	] as const) {
+		await driver.clickButton(action)
+		await driver.waitForTransactionStatus('Confirmed', title)
+		await driver.evaluate("document.querySelector('.global-transaction-dismiss')?.click()")
+		expect(await nextReport()).toBe(before)
+	}
+	await driver.clickButton('Create standalone OpenOracle report')
+	await driver.clickButton(`Open report #${before}`)
+	expect(await nextReport()).toBe(before + 1n)
+	const stored = decodeFunctionResult({ abi, functionName: 'storedGame', data: await readBrowserContract(driver, oracleAddress, encodeFunctionData({ abi, functionName: 'storedGame', args: [before] })) })
+	expect([stored[0], stored[1]]).toEqual([10n ** 16n, 5n * 10n ** 15n])
+	await driver.waitForBodyText('Report actions')
 })

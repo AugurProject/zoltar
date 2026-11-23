@@ -21,7 +21,7 @@ describe('mutation smoke support', () => {
 			const source = await readFile(join(repositoryRoot, mutation.filePath), 'utf8')
 			const testSource = await readFile(join(repositoryRoot, testPath), 'utf8')
 			expect(applyExactMutation(source, mutation)).not.toBe(source)
-			expect(pinMutationTestToTypeScript(testSource, mutation)).not.toBe(testSource)
+			expect(pinMutationTestToTypeScript(testSource, mutation)).toContain(mutation.filePath.split('/').at(-1) ?? mutation.filePath)
 		}
 	})
 
@@ -40,24 +40,30 @@ describe('mutation smoke support', () => {
 	test('counts only assertion failures as killed mutants', () => {
 		expect(classifyMutantResult(0, '<testsuite><testcase /></testsuite>')).toBe('survived')
 		expect(() => classifyMutantResult(0, '<testsuite><testcase name="expected" /></testsuite>', { expectedTestNames: ['expected'], mutatedModuleLoaded: false })).toThrow('mutated module')
-		expect(classifyMutantResult(1, '<testsuite><testcase><failure /></testcase></testsuite>')).toBe('killed')
+		expect(classifyMutantResult(1, '<testsuite><testcase><failure type="AssertionError" /></testcase></testsuite>')).toBe('killed')
 		expect(() => classifyMutantResult(1, '<testsuite><testcase /></testsuite>')).toThrow('without a recorded test assertion failure')
 		expect(() => classifyMutantResult(1, '')).toThrow('Malformed JUnit')
-		expect(() => classifyMutantResult(1, '<testsuite><testcase name="other"><failure /></testcase></testsuite>', { expectedTestNames: ['expected'], mutatedModuleLoaded: true })).toThrow('expected test identities')
-		expect(() => classifyMutantResult(1, '<testsuite><testcase name="expected"><failure /></testcase></testsuite>', { expectedTestNames: ['expected'], mutatedModuleLoaded: false })).toThrow('mutated module')
+		expect(() => classifyMutantResult(1, '<testsuite><testcase name="other"><failure type="AssertionError" /></testcase></testsuite>', { expectedTestNames: ['expected'], mutatedModuleLoaded: true })).toThrow('expected test identities')
+		expect(() => classifyMutantResult(1, '<testsuite><testcase name="expected"><failure type="AssertionError" /></testcase></testsuite>', { expectedTestNames: ['expected'], mutatedModuleLoaded: false })).toThrow('mutated module')
 		expect(() => classifyMutantResult(1, '<testsuite><testcase name="expected"><error /></testcase></testsuite>', { expectedTestNames: ['expected'], mutatedModuleLoaded: true })).toThrow('infrastructure')
-		expect(() => classifyMutantResult(1, '<testsuite><testcase><failure /></testcase></testsuite><testcase')).toThrow('Malformed JUnit')
-		expect(() => classifyMutantResult(1, '<testsuites><testsuite><testcase><failure /></testcase></testsuites></testsuite>')).toThrow('mismatched')
+		expect(() => classifyMutantResult(1, '<testsuite><testcase><failure type="AssertionError" /></testcase></testsuite><testcase')).toThrow('Malformed JUnit')
+		expect(() => classifyMutantResult(1, '<testsuites><testsuite><testcase><failure type="AssertionError" /></testcase></testsuites></testsuite>')).toThrow('mismatched')
+	})
+
+	test('rejects Bun failures that occurred before assertions', () => {
+		for (const type of ['TimeoutError', 'TypeError']) {
+			expect(() => classifyMutantResult(1, `<testsuite><testcase><failure type="${type}" /></testcase></testsuite>`)).toThrow('without a recorded test assertion failure')
+		}
 	})
 
 	test('accepts greater-than characters in mutation testcase names', () => {
-		const junit = '<testsuite><testcase name="compares 2 > 1"><failure /></testcase></testsuite>'
+		const junit = '<testsuite><testcase name="compares 2 > 1"><failure type="AssertionError" /></testcase></testsuite>'
 		expect(getMutationJunitTestNames(junit)).toEqual(['compares 2 > 1'])
 		expect(classifyMutantResult(1, junit, { expectedTestNames: ['compares 2 > 1'], mutatedModuleLoaded: true })).toBe('killed')
 	})
 
 	test('reads mutation error counts only from structured suite attributes', () => {
-		expect(classifyMutantResult(1, '<testsuite errors="0"><testcase><![CDATA[errors="1"]]><failure /></testcase><!-- errors="1" --></testsuite>')).toBe('killed')
-		expect(() => classifyMutantResult(1, "<testsuite errors='01'><testcase><failure /></testcase></testsuite>")).toThrow('infrastructure')
+		expect(classifyMutantResult(1, '<testsuite errors="0"><testcase><![CDATA[errors="1"]]><failure type="AssertionError" /></testcase><!-- errors="1" --></testsuite>')).toBe('killed')
+		expect(() => classifyMutantResult(1, `<testsuite errors='01'><testcase><failure type="AssertionError" /></testcase></testsuite>`)).toThrow('infrastructure')
 	})
 })

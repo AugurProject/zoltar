@@ -1,7 +1,6 @@
 export const eventSourceByName: Record<string, string> = {
 	PortfolioRecoveryRightsConsumed: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	PortfolioRecoveryRightsTransferred: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
-	ClaimCheckpointProgress: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol',
 	CoordinatorRegistered: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 	ReportFundingAssigned: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 	ExposureCheckpoint: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',

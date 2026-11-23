@@ -47,5 +47,4 @@ export const carryStorageAbi = [
 		],
 		outputs: [{ name: 'parentDepositIndexes', type: 'uint256[]' }],
 	},
-	{ type: 'function', name: 'rootClaimSourceGame', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
 ] as const

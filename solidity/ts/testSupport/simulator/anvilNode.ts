@@ -240,10 +240,11 @@ type IsolatedAnvilOptions = {
 	gasLimit?: bigint
 	hardfork?: string
 	printTraces?: boolean
+	stepsTracing?: boolean
 	zeroFees?: boolean
 }
 
-export const getIsolatedAnvilArgs = ({ chainId = 1, disableCodeSizeLimit = false, gasLimit, hardfork, printTraces = false, zeroFees = true }: IsolatedAnvilOptions = {}): string[] => {
+export const getIsolatedAnvilArgs = ({ chainId = 1, disableCodeSizeLimit = false, gasLimit, hardfork, printTraces = false, stepsTracing = false, zeroFees = true }: IsolatedAnvilOptions = {}): string[] => {
 	const anvilArgs = ['--host', DEFAULT_ANVIL_HOST, '--port', OS_ASSIGNED_PORT.toString(), '--threads', ANVIL_THREADS, '--chain-id', chainId.toString(), '--timestamp', '1']
 	if (zeroFees) anvilArgs.push('--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee')
 	anvilArgs.push('--max-persisted-states', ANVIL_MAX_PERSISTED_STATES)
@@ -251,6 +252,7 @@ export const getIsolatedAnvilArgs = ({ chainId = 1, disableCodeSizeLimit = false
 	if (gasLimit !== undefined) anvilArgs.push('--gas-limit', gasLimit.toString())
 	if (disableCodeSizeLimit) anvilArgs.push('--disable-code-size-limit')
 	if (printTraces) anvilArgs.push('--print-traces')
+	else if (stepsTracing) anvilArgs.push('--steps-tracing')
 	return anvilArgs
 }
 

@@ -1,6 +1,14 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { loadConfiguration } from '#config/configuration'
+import { parseOperatorSettings, saveOperatorSettings } from '#config/settings-store'
+import { loadPositionJournal } from '#state/position-store'
+import { savePositionJournal } from '../support/position-journal.ts'
+import example from '../../config/operator.example.json'
 import { describe, expect, test } from 'bun:test'
 import { encodeEventTopics, mainnet } from '@zoltar/core-shared/evm/ethereum'
-import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, privateKeyToAccount, zeroAddress, decodeFunctionData, encodeAbiParameters, getAddress, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { openOracleAbi, openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import { lifecycleBalancesWithQuorum } from '#execution/recovery-support'
@@ -763,4 +771,119 @@ describe('#1274: positions collateralized in an allowlisted non-WETH token', () 
 		).toEqual(['internalAllowance', 'tokenHolder'])
 		expect(reads.some(read => read.token === weth.toLowerCase())).toBeFalse()
 	})
+})
+
+test('keeps a durable position through read disagreement and records agreed entry finality exactly once', async () => {
+	const receiptHash = `0x${'aa'.repeat(32)}` as Hex
+	const descendantHash = `0x${'bb'.repeat(32)}` as Hex
+	const newDescendantHash = `0x${'cc'.repeat(32)}` as Hex
+	const localAccount = privateKeyToAccount(`0x${'11'.repeat(32)}`)
+	const storedGame = openOracleAbi.find(item => item.type === 'function' && item.name === 'storedGame')
+	const storedHelper = openOracleAbi.find(item => item.type === 'function' && item.name === 'storedHelper')
+	if (storedGame === undefined || storedHelper === undefined) throw new Error('Missing report ABI')
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-lifecycle-audit-'))
+	try {
+		const settingsFile = join(directory, 'operator.json')
+		const journal = join(directory, 'positions.json')
+		await saveOperatorSettings(
+			settingsFile,
+			parseOperatorSettings({
+				...example,
+				network: 'mainnet',
+				networkConfigured: true,
+				connectivity: { publicRpcUrls: ['https://public.example/'], readRpcUrl: 'https://one.example/', quorumRpcUrls: ['https://two.example/'], rpcQuorum: 2 },
+				runtime: { ...example.runtime, historyFile: join(directory, 'history.jsonl'), positionFile: journal, priceHistoryFile: join(directory, 'prices.jsonl') },
+			}),
+		)
+		const config = { ...(await loadConfiguration(settingsFile)), executor }
+		const position = openPositionFixture({ account: localAccount.address, entryReceiptBlockHash: receiptHash, entryReceiptBlockNumber: '100', status: 'open-pending-finality', executionIntent: executionIntentFixture() })
+		await savePositionJournal(journal, [position], 1)
+		let mode: 'disagree' | 'agree' = 'disagree'
+		let reads = 0
+		const buildReader = (index: number) =>
+			createPublicClient({
+				chain: mainnet,
+				transport: custom({
+					request: async ({ method, params }) => {
+						reads += 1
+						if (!Array.isArray(params)) throw new Error(`Missing arguments: ${method}`)
+						if (method === 'eth_getBlockByNumber') {
+							const block = String(params[0])
+							const descendant = mode === 'disagree' && index === 1 ? newDescendantHash : descendantHash
+							const hash = block === '0x64' ? receiptHash : descendant
+							return rpcBlock(block, hash, '0x0')
+						}
+						if (method === 'eth_getTransactionReceipt') return mode === 'disagree' ? null : rpcReceipt({ blockHash: receiptHash, blockNumber: '0x64', from: localAccount.address, logs: [], status: '0x1', transactionHash })
+						if (method !== 'eth_call') throw new Error(`Unexpected read method: ${method}`)
+						const data = params[0]?.data
+						if (typeof data !== 'string' || !data.startsWith('0x')) throw new Error('Missing encoded read')
+						if (data.startsWith('0x313ce567')) return encodeAbiParameters([{ type: 'uint8' }], [18])
+						const decoded = decodeFunctionData({ abi: openOracleAbi, data: data as Hex })
+						if (decoded.functionName === 'storedGame') return encodeAbiParameters(storedGame.outputs, [1n, 2n, localAccount.address, 110, 0, config.network.weth, 0, 1_000, 0n, zeroAddress, 0n, token, 1, 0, 0, 100, zeroAddress, 0, 0, 0])
+						if (decoded.functionName === 'storedHelper') return encodeAbiParameters(storedHelper.outputs, [localAccount.address, 0n, 100])
+						if (decoded.functionName === 'tokenHolder' || decoded.functionName === 'internalAllowance') return encodeAbiParameters([{ type: 'uint256' }], [0n])
+						throw new Error(`Unexpected ABI call: ${decoded.functionName}`)
+					},
+				}),
+			})
+		const primary = buildReader(0)
+		const clients = [primary, buildReader(1)]
+		let unexpectedSideEffects = 0
+		const wallet = createWalletClient({
+			account: {
+				...localAccount,
+				signTransaction: async () => {
+					unexpectedSideEffects++
+					throw new Error('Unexpected signing')
+				},
+				signMessage: async () => {
+					unexpectedSideEffects++
+					throw new Error('Unexpected relay signing')
+				},
+			},
+			chain: mainnet,
+			transport: custom({
+				request: async () => {
+					unexpectedSideEffects++
+					throw new Error('Unexpected wallet request')
+				},
+			}),
+		})
+		const writes: PositionRecord[] = []
+		const runAt = async (head: bigint) => {
+			const [current] = await loadPositionJournal(journal, 1)
+			if (current === undefined) throw new Error('Position disappeared')
+			return processPositionLifecycle(
+				primary,
+				clients,
+				wallet,
+				config,
+				current,
+				head,
+				async updated => {
+					writes.push(updated)
+					await savePositionJournal(journal, [updated], 1)
+				},
+				() => {
+					unexpectedSideEffects++
+				},
+			)
+		}
+		expect(await runAt(111n)).toBe('waiting')
+		expect(reads).toBe(0)
+		await expect(runAt(112n)).rejects.toThrow('RPC disagreement')
+		expect(writes).toHaveLength(0)
+		const [interrupted] = await loadPositionJournal(journal, 1)
+		expect(interrupted).toMatchObject({ status: 'open-pending-finality', entryReceiptBlockHash: receiptHash, actualEntryGasCostEth: '0.001', executionIntent: position.executionIntent })
+		mode = 'agree'
+		expect(await runAt(112n)).toBe('waiting')
+		const [confirmed] = await loadPositionJournal(journal, 1)
+		expect(confirmed?.entryReceiptBlockHash).toBeUndefined()
+		expect(confirmed).toMatchObject({ status: 'open', historyOutbox: { reportId: '7', blockNumber: '100', actualGasCostEth: '0.001', trackedNetProfitEth: '0.099', transactionHash } })
+		expect(await runAt(113n)).toBe('waiting')
+		expect(writes).toHaveLength(1)
+		expect(unexpectedSideEffects).toBe(0)
+	} finally {
+		await rm(directory, { recursive: true, force: true })
+	}
 })

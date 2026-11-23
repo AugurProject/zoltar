@@ -182,7 +182,7 @@
 		{
 			"path": "reference/contract-inventory.html",
 			"title": "Contract inventory",
-			"summary": "Every production Solidity source by area, the caller and trust boundaries of deployment helpers and delegate modules, SecurityPoolUtils previews, and testnet Uniswap dependencies.",
+			"summary": "Every production Solidity source by area, the caller and trust boundaries of deployment helpers and delegate modules, and testnet Uniswap dependencies.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["inventory", "factories", "delegates", "SecurityPoolUtils", "trust boundary"]

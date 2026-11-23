@@ -29,9 +29,14 @@ interface NetworkRouteDeps {
 export const createNetworkRoute = (deps: NetworkRouteDeps) => {
 	const { globalNetworkFilter, networkCards, selectedChainId, isDemo, liveState, canonicalState, api, resetSelectedNetworkContext, renderNetworks, updateFreshness, updateConnectionStatus } = deps
 	const $ = deps.lookup
+	let waitingForEnabledNetwork = false
 	const syncNetworkUrl = () => {
 		const url = new URL(location.href)
 		const chainId = selectedChainId()
+		if (chainId !== '' && waitingForEnabledNetwork) {
+			document.querySelector('#network-notice')?.remove()
+			waitingForEnabledNetwork = false
+		}
 		if (chainId) url.searchParams.set('chainId', chainId)
 		else url.searchParams.delete('chainId')
 		// The periodic status poll calls this with an unchanged network; an unchanged URL and links are left alone.
@@ -78,10 +83,14 @@ export const createNetworkRoute = (deps: NetworkRouteDeps) => {
 		const optionsChanged = globalNetworkFilter.options.length !== items.length || items.some((network, index) => globalNetworkFilter.options[index]?.value !== String(network.chain_id) || globalNetworkFilter.options[index]?.text !== network.name)
 		if (optionsChanged) globalNetworkFilter.replaceChildren(...items.map((network: { name: string; chain_id: string }) => new Option(network.name, network.chain_id)))
 		const selectedIsIndexed = [...globalNetworkFilter.options].some(option => option.value === selected)
-		applyNetworkSelection(globalNetworkFilter, selectedIsIndexed ? selected : String(items[0]?.chain_id ?? ''), unappliedChoice)
-		const shown = items[0]
-		if (selected !== '' && !selectedIsIndexed && shown !== undefined) showNetworkNotice(unavailableNetworkNotice(selected, shown.name))
+		const shown = items.find(network => network.enabled !== false)
+		applyNetworkSelection(globalNetworkFilter, selectedIsIndexed ? selected : String(shown?.chain_id ?? ''), unappliedChoice)
 		syncNetworkUrl()
+		if (selected !== '' && !selectedIsIndexed && shown !== undefined) showNetworkNotice(unavailableNetworkNotice(selected, shown.name))
+		if (!selectedIsIndexed && shown === undefined && items.length > 0 && !waitingForEnabledNetwork) {
+			showNetworkNotice('Waiting for an enabled network to report its status. Select a retained network to browse its history.')
+			waitingForEnabledNetwork = true
+		}
 		updateNetworkLabels()
 	}
 

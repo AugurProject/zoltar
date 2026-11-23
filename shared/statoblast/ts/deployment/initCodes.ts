@@ -1,5 +1,4 @@
-import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	ORACLE_DISPUTE_DELAY,
 	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
@@ -13,8 +12,6 @@ import {
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
 } from '../initialReport/oracleInitialReport.js'
 import { createInfraContractAddressHelper } from './deploymentAddresses.js'
-
-const SECURITY_POOL_UTILS_LIBRARY = 'contracts/statoblast/SecurityPoolUtils.sol:SecurityPoolUtils'
 
 // Constructor parameters shared by the price coordinator and its factory, after their gas parameters.
 const ORACLE_SETTLEMENT_PARAMETER_TYPES = [{ type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }] as const
@@ -54,7 +51,6 @@ type ContractArtifact = BytecodeArtifact & Readonly<{ abi: Abi }>
 
 /** Compiled artifacts for the proxy-deployed statoblast infrastructure; callers supply them from their own artifact module. */
 type StatoblastInfrastructureArtifacts = {
-	escalationGameClaimDelegate: BytecodeArtifact
 	escalationGameDepositDelegate: BytecodeArtifact
 	escalationGameFactory: ContractArtifact
 	multicall3: BytecodeArtifact
@@ -77,7 +73,6 @@ type StatoblastInfrastructureArtifacts = {
 	securityPoolReporterLedgerDeployer: BytecodeArtifact
 	securityPoolPortfolioForkCoordinatorDeployer: BytecodeArtifact
 	securityPoolPortfolioAuctionDeployer: BytecodeArtifact
-	securityPoolUtils: BytecodeArtifact
 	shareTokenFactory: ContractArtifact
 }
 
@@ -111,35 +106,32 @@ const bytecodeOf = (artifact: BytecodeArtifact): Hex => `0x${artifact.evm.byteco
 
 /** Init-code builders for the statoblast infrastructure, deployed through the CREATE2 proxy deployer. */
 export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArtifacts, { proxyDeployerAddress, zeroSalt }: { proxyDeployerAddress: Address; zeroSalt: Hex }) {
-	const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: bytecodeOf(artifacts.securityPoolUtils), from: proxyDeployerAddress, salt: zeroSalt })
-	const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [{ hash: keccak256(toHex(SECURITY_POOL_UTILS_LIBRARY)).slice(2, 36), address: getSecurityPoolUtilsAddress() }])
-
 	const getShareTokenFactoryByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.shareTokenFactory.abi, bytecode: bytecodeOf(artifacts.shareTokenFactory), args: [zoltar] })
-	const getEscalationGameFactoryByteCode = (claimDelegate: Address, depositDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [claimDelegate, depositDelegate] })
-	const getPriceCoordinatorDeploymentWorkerByteCode = () => applyLibraries(artifacts.priceCoordinatorDeploymentWorker.evm.bytecode.object)
-	const getSharedPoolPriceFeedDeploymentWorkerByteCode = () => applyLibraries(artifacts.sharedPoolPriceFeedDeploymentWorker.evm.bytecode.object)
+	const getEscalationGameFactoryByteCode = (depositDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [depositDelegate] })
+	const getPriceCoordinatorDeploymentWorkerByteCode = (): Hex => `0x${artifacts.priceCoordinatorDeploymentWorker.evm.bytecode.object}`
+	const getSharedPoolPriceFeedDeploymentWorkerByteCode = (): Hex => `0x${artifacts.sharedPoolPriceFeedDeploymentWorker.evm.bytecode.object}`
 	const getWorkerAddress = (bytecode: Hex) => getCreate2Address({ bytecode, from: proxyDeployerAddress, salt: zeroSalt })
 	const getOpenOraclePriceCoordinatorFactoryByteCode = (weth: Address) =>
-		concatHex([applyLibraries(artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object), encodeOpenOraclePriceCoordinatorFactoryArguments(weth, getWorkerAddress(getPriceCoordinatorDeploymentWorkerByteCode()), getWorkerAddress(getSharedPoolPriceFeedDeploymentWorkerByteCode()))])
-	const getSecurityPoolForkerPortfolioDelegateByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForkerPortfolioDelegate.abi, bytecode: applyLibraries(artifacts.securityPoolForkerPortfolioDelegate.evm.bytecode.object), args: [zoltar] })
-	const getSecurityPoolForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForker.abi, bytecode: applyLibraries(artifacts.securityPoolForker.evm.bytecode.object), args: [zoltar, getWorkerAddress(getSecurityPoolForkerPortfolioDelegateByteCode(zoltar))] })
-	const getSecurityPoolEventEmitterByteCode = () => applyLibraries(artifacts.securityPoolEventEmitter.evm.bytecode.object)
-	const getSecurityPoolOperationsDelegateByteCode = () => applyLibraries(artifacts.securityPoolOperationsDelegate.evm.bytecode.object)
-	const getSecurityPoolCapitalLedgerDeployerByteCode = () => applyLibraries(artifacts.securityPoolCapitalLedgerDeployer.evm.bytecode.object)
-	const getSecurityPoolCommitmentIndexDeployerByteCode = () => applyLibraries(artifacts.securityPoolCommitmentIndexDeployer.evm.bytecode.object)
-	const getSecurityPoolCapitalFeeStreamsDeployerByteCode = () => applyLibraries(artifacts.securityPoolCapitalFeeStreamsDeployer.evm.bytecode.object)
-	const getSecurityPoolSettlementBookDeployerByteCode = () => applyLibraries(artifacts.securityPoolSettlementBookDeployer.evm.bytecode.object)
-	const getSecurityPoolPortfolioSettlementDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioSettlementDeployer.evm.bytecode.object)
-	const getSecurityPoolPortfolioServicesDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioServicesDeployer.evm.bytecode.object)
-	const getSecurityPoolReporterLedgerDeployerByteCode = () => applyLibraries(artifacts.securityPoolReporterLedgerDeployer.evm.bytecode.object)
-	const getSecurityPoolPortfolioForkCoordinatorDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object)
-	const getSecurityPoolPortfolioAuctionDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioAuctionDeployer.evm.bytecode.object)
+		concatHex([`0x${artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object}`, encodeOpenOraclePriceCoordinatorFactoryArguments(weth, getWorkerAddress(getPriceCoordinatorDeploymentWorkerByteCode()), getWorkerAddress(getSharedPoolPriceFeedDeploymentWorkerByteCode()))])
+	const getSecurityPoolForkerPortfolioDelegateByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForkerPortfolioDelegate.abi, bytecode: `0x${artifacts.securityPoolForkerPortfolioDelegate.evm.bytecode.object}`, args: [zoltar] })
+	const getSecurityPoolForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForker.abi, bytecode: `0x${artifacts.securityPoolForker.evm.bytecode.object}`, args: [zoltar, getWorkerAddress(getSecurityPoolForkerPortfolioDelegateByteCode(zoltar))] })
+	const getSecurityPoolEventEmitterByteCode = (): Hex => `0x${artifacts.securityPoolEventEmitter.evm.bytecode.object}`
+	const getSecurityPoolOperationsDelegateByteCode = (): Hex => `0x${artifacts.securityPoolOperationsDelegate.evm.bytecode.object}`
+	const getSecurityPoolCapitalLedgerDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCapitalLedgerDeployer.evm.bytecode.object}`
+	const getSecurityPoolCommitmentIndexDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCommitmentIndexDeployer.evm.bytecode.object}`
+	const getSecurityPoolCapitalFeeStreamsDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCapitalFeeStreamsDeployer.evm.bytecode.object}`
+	const getSecurityPoolSettlementBookDeployerByteCode = (): Hex => `0x${artifacts.securityPoolSettlementBookDeployer.evm.bytecode.object}`
+	const getSecurityPoolPortfolioSettlementDeployerByteCode = (): Hex => `0x${artifacts.securityPoolPortfolioSettlementDeployer.evm.bytecode.object}`
+	const getSecurityPoolPortfolioServicesDeployerByteCode = (): Hex => `0x${artifacts.securityPoolPortfolioServicesDeployer.evm.bytecode.object}`
+	const getSecurityPoolReporterLedgerDeployerByteCode = (): Hex => `0x${artifacts.securityPoolReporterLedgerDeployer.evm.bytecode.object}`
+	const getSecurityPoolPortfolioForkCoordinatorDeployerByteCode = (): Hex => `0x${artifacts.securityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object}`
+	const getSecurityPoolPortfolioAuctionDeployerByteCode = (): Hex => `0x${artifacts.securityPoolPortfolioAuctionDeployer.evm.bytecode.object}`
 	/** The only portfolio creation code the factory deploys; its hash is a factory constructor argument. */
-	const getSecurityPoolPortfolioCreationCode = () => applyLibraries(artifacts.securityPoolPortfolio.evm.bytecode.object)
+	const getSecurityPoolPortfolioCreationCode = (): Hex => `0x${artifacts.securityPoolPortfolio.evm.bytecode.object}`
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
 		encodeDeployData({
 			abi: artifacts.securityPoolFactory.abi,
-			bytecode: applyLibraries(artifacts.securityPoolFactory.evm.bytecode.object),
+			bytecode: `0x${artifacts.securityPoolFactory.evm.bytecode.object}`,
 			args: [
 				inputs.securityPoolForker,
 				inputs.zoltarQuestionData,
@@ -169,7 +161,6 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	/** CREATE2 addresses of every infrastructure contract for one WETH deployment and Zoltar core. */
 	const createInfraContractAddresses = (weth: Address, zoltar: ZoltarAddressSources) =>
 		createInfraContractAddressHelper({
-			escalationGameClaimDelegateBytecode: bytecodeOf(artifacts.escalationGameClaimDelegate),
 			escalationGameDepositDelegateBytecode: bytecodeOf(artifacts.escalationGameDepositDelegate),
 			getEscalationGameFactoryByteCode,
 			getSecurityPoolFactoryByteCode,
@@ -184,7 +175,6 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			priceCoordinatorDeploymentWorkerBytecode: getPriceCoordinatorDeploymentWorkerByteCode(),
 			sharedPoolPriceFeedDeploymentWorkerBytecode: getSharedPoolPriceFeedDeploymentWorkerByteCode(),
 			proxyDeployerAddress,
-			securityPoolUtilsBytecode: bytecodeOf(artifacts.securityPoolUtils),
 			securityPoolOperationsDelegateBytecode: getSecurityPoolOperationsDelegateByteCode(),
 			securityPoolEventEmitterBytecode: getSecurityPoolEventEmitterByteCode(),
 			securityPoolCapitalLedgerDeployerBytecode: getSecurityPoolCapitalLedgerDeployerByteCode(),
@@ -200,7 +190,6 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		}).getInfraContractAddresses
 
 	return {
-		applyLibraries,
 		createInfraContractAddresses,
 		getEscalationGameFactoryByteCode,
 		getOpenOraclePriceCoordinatorFactoryByteCode,

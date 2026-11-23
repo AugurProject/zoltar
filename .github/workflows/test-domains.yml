@@ -134,7 +134,7 @@ jobs:
           retention-days: 1
 
   solidity-tests:
-    name: Solidity tests (${{ matrix.shard }}/8)
+    name: Solidity tests (${{ matrix.shard }}/4)
     needs: timing-history-input
     if: inputs.solidity && needs.timing-history-input.result == 'success'
     runs-on: ubuntu-latest
@@ -142,7 +142,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-ci
@@ -157,7 +157,7 @@ jobs:
         env:
           ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings-solidity.json
           ZOLTAR_TEST_TIMING_OUTPUT: test-results/solidity-${{ matrix.shard }}.timing.json
-        run: bun run test:run:balanced-shard -- --bail=1 --parallel=1 --domain=solidity --shard="${{ matrix.shard }}/8"
+        run: bun run test:run:balanced-shard -- --bail=1 --parallel=2 --domain=solidity --shard="${{ matrix.shard }}/4"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -204,10 +204,34 @@ jobs:
 
       - run: bun run test:mutation:smoke
 
+  solidity-trace-smoke:
+    name: Solidity trace smoke
+    if: inputs.solidity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-ci
+        with:
+          profile: contracts
+          build-inputs: ${{ inputs.build-inputs }}
+      - name: Verify trace attribution and completed output
+        env:
+          SOLIDITY_BYTECODE_COVERAGE: "1"
+          SOLIDITY_BYTECODE_COVERAGE_DIRECTORY: ${{ runner.temp }}/solidity-trace-smoke
+        run: |
+          bun ./tooling/testing/bun-test.mts --preload ./tooling/testing/finalize-solidity-coverage.mts \
+            solidity/ts/tests/coverage-attribution.test.ts \
+            solidity/ts/tests/coverageHelpers.test.ts \
+            solidity/ts/tests/auditTradingMathFuzz.test.ts
+          test -f "${SOLIDITY_BYTECODE_COVERAGE_DIRECTORY}/complete"
+          test -s "${SOLIDITY_BYTECODE_COVERAGE_DIRECTORY}/coverage-summary.json"
+          test -s "${SOLIDITY_BYTECODE_COVERAGE_DIRECTORY}/lcov.info"
+
   required:
     name: Required domain results
     if: always()
-    needs: [prepare, application-tests, solidity-tests, timing-history, mutation-smoke]
+    needs: [prepare, application-tests, solidity-tests, timing-history, mutation-smoke, solidity-trace-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: Verify selected domains
@@ -218,6 +242,7 @@ jobs:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           APPLICATION_RESULT: ${{ needs.application-tests.result }}
           SOLIDITY_RESULT: ${{ needs.solidity-tests.result }}
+          TRACE_RESULT: ${{ needs.solidity-trace-smoke.result }}
           TIMING_RESULT: ${{ needs.timing-history.result }}
           MUTATION_RESULT: ${{ needs.mutation-smoke.result }}
         run: |
@@ -232,6 +257,7 @@ jobs:
           }
           [[ "${APPLICATION_SELECTED}" == "true" || "${SOLIDITY_SELECTED}" == "true" ]] || exit 1
           require_result "${SOLIDITY_SELECTED}" "${SOLIDITY_RESULT}" solidity
+          require_result "${SOLIDITY_SELECTED}" "${TRACE_RESULT}" solidity-trace
           require_result "${APPLICATION_SELECTED}" "${APPLICATION_RESULT}" application
           require_result "${APPLICATION_SELECTED}" "${MUTATION_RESULT}" mutation
           prepare_selected="false"

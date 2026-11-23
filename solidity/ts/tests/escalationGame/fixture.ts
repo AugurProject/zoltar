@@ -65,7 +65,7 @@ export function useEscalationGameFixture() {
 			data: encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
+				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })

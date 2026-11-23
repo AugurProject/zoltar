@@ -10,7 +10,7 @@ browserTest(
 			expect(await evaluate(`!document.querySelector('#operations-content').textContent.includes('Coordinator REP / ETH')`)).toBe(true)
 			expect(await evaluate(`[...document.querySelectorAll('#operations-content a')].some(link => new URL(link.href).pathname === '/operations/risk' && link.textContent.includes('Capital ledgers'))`)).toBe(true)
 			await evaluate(`[...document.querySelectorAll('#operations-content a')].find(link => new URL(link.href).pathname === '/operations/risk' && link.textContent.includes('Capital ledgers')).click()`)
-			await waitFor(`location.pathname === '/operations/risk' && document.querySelector('#operations-content').textContent.includes('200 REP/USDC')`)
+			await waitFor(`location.pathname === '/operations/risk' && document.querySelector('#operations-content')?.textContent.includes('200 REP/USDC')`)
 		})
 	},
 	30_000,
@@ -19,7 +19,7 @@ browserTest(
 browserTest(
 	'navigation closes the account dialog, focuses a rendered heading, and keeps route filters on their own route',
 	async () => {
-		await withBrowserPage(`${origin}/richlist?demo=1&chainId=1&view=cards`, desktopViewport, async session => {
+		await withBrowserPage(`${origin}/addresses?demo=1&chainId=1&view=cards`, desktopViewport, async session => {
 			const { evaluate, waitFor } = session
 			await waitFor(`document.querySelector('.rich-transactions') !== null`)
 			await evaluate(`document.querySelector('.rich-transactions').focus(); document.querySelector('.rich-transactions').click()`)
@@ -32,19 +32,19 @@ browserTest(
 			await evaluate(`document.querySelector('#detail-content .account-transaction a.explorer-link').click()`)
 			await waitFor(`location.pathname.startsWith('/tx/') && document.querySelector('#explorer-content h2') !== null`)
 			expect(await evaluate(`document.querySelector('#detail-dialog').open`)).toBe(false)
-			await waitFor(`document.activeElement === document.querySelector('#explorer-content h2')`)
+			await waitFor(`document.activeElement?.matches('#explorer-content h2') === true`)
 
 			await session.send('Page.navigate', { url: `${origin}/operations/risk?demo=1&chainId=1` })
 			await waitFor(`document.querySelector('#operations-content a.operations-row[href^="/pool/"]') !== null`)
 			await evaluate(`document.querySelector('#operations-content a.operations-row[href^="/pool/"]').click()`)
 			await waitFor(`location.pathname.startsWith('/pool/') && document.querySelector('#operations-content .operations-detail-header h2') !== null`)
-			await waitFor(`document.activeElement === document.querySelector('#operations-content .operations-detail-header h2')`)
+			await waitFor(`document.activeElement?.matches('#operations-content .operations-detail-header h2') === true`)
 			expect(await evaluate(`document.activeElement.getClientRects().length > 0`)).toBe(true)
 			await evaluate(`[...document.querySelectorAll('.product-nav a')].find(link => new URL(link.href).pathname === '/operations').click()`)
 			await waitFor(`location.pathname === '/operations'`)
 
 			await session.send('Page.navigate', { url: `${origin}/?demo=1&chainId=1&event=Transfer` })
-			await waitFor(`document.querySelector('#feed').getAttribute('aria-busy') === 'false'`)
+			await waitFor(`document.querySelector('#feed')?.getAttribute('aria-busy') === 'false'`)
 			await evaluate(`[...document.querySelectorAll('.product-nav a')].find(link => new URL(link.href).pathname === '/operations').click()`)
 			await waitFor(`location.pathname === '/operations'`)
 			expect(await evaluate(`new URL(location.href).searchParams.has('event')`)).toBe(false)
@@ -81,7 +81,7 @@ browserTest(
 			await Bun.sleep(350)
 			expect(await evaluate(`document.activeElement?.id`)).toBe('entity-search')
 			expect(await evaluate(`document.querySelector('#entity-search').disabled`)).toBe(false)
-			await waitFor(`document.querySelector('#entity-list').getAttribute('aria-busy') === 'false'`)
+			await waitFor(`document.querySelector('#entity-list')?.getAttribute('aria-busy') === 'false'`)
 			expect(await evaluate(`document.activeElement?.id`)).toBe('entity-search')
 			expect(await evaluate(`document.querySelector('.entity-row[aria-selected]')`)).toBe(null)
 
@@ -108,7 +108,7 @@ browserTest(
 browserTest(
 	'the stylesheet hides hidden controls, overlays search results, and wraps exact metric values',
 	async () => {
-		await withBrowserPage(`${origin}/richlist?demo=1&chainId=1`, desktopViewport, async session => {
+		await withBrowserPage(`${origin}/addresses?demo=1&chainId=1`, desktopViewport, async session => {
 			const { evaluate, waitFor } = session
 			await waitFor(`document.querySelector('.data-table tbody tr') !== null`)
 			expect(await evaluate(`(() => { const more = document.querySelector('#richlist-more'); more.hidden = true; return more.classList.contains('secondary') && getComputedStyle(more).display })()`)).toBe('none')

@@ -367,8 +367,11 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 		IERC20 token2 = IERC20(game.token2);
 		result.hedgeAmountToken2 =
 			uint256(game.currentAmount2) +
-			_fee(game.currentAmount2, game.feePercentage) +
-			_fee(game.currentAmount2, game.protocolFee);
+			(
+				_chargesFees(game)
+					? _fee(game.currentAmount2, game.feePercentage) + _fee(game.currentAmount2, game.protocolFee)
+					: 0
+			);
 		require(result.contribution2 >= result.hedgeAmountToken2, 'OpenOracle buy hedge exceeds token2 contribution');
 		_pullExact(token1, result.contribution1 + request.hedgeWethLimitAttoEth, balances.executorToken1);
 		_pullExact(token2, result.contribution2 - result.hedgeAmountToken2, balances.executorToken2);
@@ -493,22 +496,27 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 		uint128 newAmount1,
 		uint128 newAmount2
 	) private pure returns (uint256 contribution1, uint256 contribution2) {
+		bool chargeFees = _chargesFees(game);
 		bool swapToken2 = uint256(newAmount2) * game.currentAmount1 > uint256(game.currentAmount2) * newAmount1;
 		if (swapToken2) {
 			contribution1 = newAmount1 > game.currentAmount1 ? newAmount1 - game.currentAmount1 : 0;
 			contribution2 =
 				uint256(newAmount2) +
 				game.currentAmount2 +
-				_fee(game.currentAmount2, game.feePercentage) +
-				_fee(game.currentAmount2, game.protocolFee);
+				(chargeFees ? _fee(game.currentAmount2, game.feePercentage) : 0) +
+				(chargeFees ? _fee(game.currentAmount2, game.protocolFee) : 0);
 		} else {
 			contribution1 =
 				uint256(newAmount1) +
 				game.currentAmount1 +
-				_fee(game.currentAmount1, game.feePercentage) +
-				_fee(game.currentAmount1, game.protocolFee);
+				(chargeFees ? _fee(game.currentAmount1, game.feePercentage) : 0) +
+				(chargeFees ? _fee(game.currentAmount1, game.protocolFee) : 0);
 			contribution2 = newAmount2 > game.currentAmount2 ? newAmount2 - game.currentAmount2 : 0;
 		}
+	}
+
+	function _chargesFees(IOpenOracleDispute.OracleGame calldata game) private pure returns (bool) {
+		return (game.flags & (1 << 5)) == 0 || game.currentAmount1 >= game.escalationHalt;
 	}
 
 	function _fee(uint256 amount, uint256 rate) private pure returns (uint256) {

@@ -17,7 +17,7 @@ import { deployContract } from '../../testSupport/deployContract'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
-import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
@@ -148,7 +148,7 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		await createQuestion(owner, question, fixture.base.outcomes)
 		await approveToken(owner, getRepTokenAddress(universe), getZoltarAddress())
 		await forkUniverse(owner, universe, getQuestionId(question, fixture.base.outcomes))
-		const counterfeit = await deployContract(attacker, encodeDeployData({ abi: counterfeitArtifact.abi, bytecode: applyLibraries(counterfeitArtifact.evm.bytecode.object), args: [universe, victim.address] }))
+		const counterfeit = await deployContract(attacker, encodeDeployData({ abi: counterfeitArtifact.abi, bytecode: `0x${counterfeitArtifact.evm.bytecode.object}`, args: [universe, victim.address] }))
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
 		expect(await owner.readContract({ ...victim, functionName: 'systemState' })).toBe(0n)
 		const attack = () => (functionName === 'createChildUniverse' ? attacker.writeContract({ ...forker, functionName, args: [counterfeit, 1n] }) : attacker.writeContract({ ...forker, functionName, args: [counterfeit, universe] }))

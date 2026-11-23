@@ -17,7 +17,6 @@ import {
 	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact,
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGame_EscalationGame,
-	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	Zoltar_Zoltar,
@@ -33,7 +32,6 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
-	let claimDelegate: Address
 	let depositDelegate: Address
 	const repTokenAddress = addressString(GENESIS_REPUTATION_TOKEN)
 	const zeroHash = `0x${'0'.repeat(64)}` as Hex
@@ -56,7 +54,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repTokenAddress, proofVerifier, claimDelegate, depositDelegate],
+				args: [securityPool, repTokenAddress, proofVerifier, depositDelegate],
 			}),
 		)
 		await writeContractAndWait(client, () =>
@@ -92,13 +90,6 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		await setupTestAccounts(mockWindow)
 		depositDelegate = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi, bytecode: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`, args: [] }))
 		await ensureZoltarDeployed(client)
-		claimDelegate = await deployContract(
-			client,
-			encodeDeployData({
-				abi: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
-				bytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
-			}),
-		)
 	})
 
 	for (const ownFork of [false, true])

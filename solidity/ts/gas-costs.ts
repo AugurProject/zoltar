@@ -14,7 +14,7 @@ import { createWriteClient, type WriteClient } from './testSupport/simulator/uti
 import { DAY, TEST_ADDRESSES } from './testSupport/simulator/utils/constants'
 import { setupTestAccounts, approveToken, getChildUniverseId } from './testSupport/simulator/utils/utilities'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress, deployChild, forkUniverse, getUniverseData } from './testSupport/simulator/utils/contracts/zoltar'
-import { applyLibraries, ensureInfraDeployed, getInfraContractAddresses } from './testSupport/simulator/utils/contracts/deployStatoblast'
+import { ensureInfraDeployed, getInfraContractAddresses } from './testSupport/simulator/utils/contracts/deployStatoblast'
 import { manipulatePriceOracle } from './testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { createQuestion, makeQuestion } from './testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -55,7 +55,7 @@ try {
 	await ensureZoltarDeployed(owner)
 	await ensureInfraDeployed(owner)
 	const infra = getInfraContractAddresses()
-	const policyReceipt = await measure('1. Portfolio deployment', 'Open question admission policy', owner, () => owner.sendTransaction({ data: encodeDeployData({ abi: policyArtifact.abi, bytecode: applyLibraries(policyArtifact.evm.bytecode.object) }) }))
+	const policyReceipt = await measure('1. Portfolio deployment', 'Open question admission policy', owner, () => owner.sendTransaction({ data: encodeDeployData({ abi: policyArtifact.abi, bytecode: `0x${policyArtifact.evm.bytecode.object}` }) }))
 	const policy = policyReceipt.contractAddress
 	if (policy === undefined) throw new Error('Missing admission policy')
 	const deployment = buildPortfolioDeploymentRequest({
@@ -65,7 +65,7 @@ try {
 		maximumQuestionHorizonSeconds: 20n * 365n * DAY,
 		questionAdmissionPolicy: policy,
 		economics: { purchaseFeeBps: 100n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: unit / 1_000n, minimumCommitmentAttoEth: unit, minimumOutcomeRate: 1_000n, rewardVestingSeconds: DAY },
-		creationCode: applyLibraries(portfolioArtifact.evm.bytecode.object),
+		creationCode: `0x${portfolioArtifact.evm.bytecode.object}`,
 	})
 	const deployed = await measure('1. Portfolio deployment', 'Deploy shared portfolio', owner, () => owner.sendTransaction({ ...deployment, gas: 16_777_216n }))
 	const portfolioAddress = portfolioAddressFromDeploymentLogs(deployed.logs, infra.securityPoolFactory)

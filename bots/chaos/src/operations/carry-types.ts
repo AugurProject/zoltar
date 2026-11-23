@@ -1,4 +1,3 @@
-import type { ClaimCheckpointSettlement } from '@zoltar/statoblast-shared/escalationGame/claimCheckpoint'
 import type { Address, Hash, Hex } from '@zoltar/bot-shared/ethereum'
 import type { CanonicalUintString } from '../core/units.ts'
 
@@ -33,21 +32,6 @@ export interface ForkedCarryWithdrawalSnapshot {
 	amountToWithdrawAttoRep: CanonicalUintString
 	burnAmountAttoRep: CanonicalUintString
 	preflightExpectedResult: Hex
-}
-
-export type ForkedClaimCheckpointSnapshot = Pick<ForkedCarryWithdrawalSnapshot, 'pool' | 'game' | 'sourceGame' | 'claimSourceGame' | 'outcome' | 'parentDepositIndex' | 'sourceNodeId'> & {
-	amountAttoRep: CanonicalUintString
-	cumulativeAmountAttoRep: CanonicalUintString
-	leafIndex: string
-	nextSourceGame: Address
-	pendingSteps: string
-	pendingCommitment: Hash
-	baseCommitment: Hash
-	transforms: { consumedBeforeAttoRep: CanonicalUintString }[]
-	targetGame: Address
-	preparationReason: 'required' | 'shared-ancestor' | 'finishing-parent'
-	settlement: ClaimCheckpointSettlement
-	finalWithdrawal?: { multicall3: Address; proof: ForkedCarryDepositProofSnapshot; resultingCarryRoot: Hash; resultingNullifierRoot: Hash; preflightExpectedResult: Hex }
 }
 
 /** Lightweight canonical identity retained independently of bounded proof work. */

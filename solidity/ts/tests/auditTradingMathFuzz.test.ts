@@ -1,3 +1,4 @@
+import { positiveFuzzInteger } from './auditFuzzBudget'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, getAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -23,10 +24,11 @@ const NO_DEADLINE = 2n ** 64n
 
 // Section E of the audit brief: the constant-product math against exact bigint models
 // (including the 257-bit denominator branch) and a real pair driven by random operations.
-// Long run: AUDIT_FUZZ_SECONDS=12 (budget per randomized test) AUDIT_FUZZ_SEED=<n> bun ./tooling/testing/bun-test.mts --timeout 600000 solidity/ts/tests/auditTradingMathFuzz.test.ts
+// Long run: AUDIT_FUZZ_ROUNDS=100 AUDIT_FUZZ_SEED=<n> bun ./tooling/testing/bun-test.mts --timeout 600000 solidity/ts/tests/auditTradingMathFuzz.test.ts
 
-const SECONDS = Number(process.env['AUDIT_FUZZ_SECONDS'] ?? '3')
-let seed = Number(BigInt(process.env['AUDIT_FUZZ_SEED'] ?? '20261113') % 0xffffffffn)
+const roundsPerProperty = positiveFuzzInteger('AUDIT_FUZZ_ROUNDS', 24)
+const initialSeed = Number(BigInt(process.env['AUDIT_FUZZ_SEED'] ?? '20261113') % 0xffffffffn)
+let seed = initialSeed
 const random = () => {
 	seed = (seed + 0x6d2b79f5) | 0
 	let value = Math.imul(seed ^ (seed >>> 15), 1 | seed)
@@ -84,6 +86,57 @@ const modelInitialLiquidity = (completeSets: bigint, yesBps: bigint) => {
 	return { first: yesAmount, second: noAmount }
 }
 
+const receiptWaitBudgetMs = 10_000
+const receiptClock = { now: () => performance.now(), wait: (ms: number) => Bun.sleep(ms) }
+
+async function waitForRawReceipt(hash: unknown, read: () => Promise<unknown>, clock = receiptClock) {
+	const deadline = clock.now() + receiptWaitBudgetMs
+	let delay = 5
+	while (true) {
+		const receipt = await read()
+		if (typeof receipt === 'object' && receipt !== null && 'status' in receipt) return receipt
+		if (receipt !== null) throw new Error(`Invalid receipt response for ${String(hash)}`)
+		const remaining = deadline - clock.now()
+		if (remaining <= 0) throw new Error(`No receipt for ${String(hash)} after ${receiptWaitBudgetMs} ms (last RPC result: null)`)
+		await clock.wait(Math.min(delay, remaining))
+		delay = Math.min(50, delay * 2)
+	}
+}
+
+test('raw receipt wait retries pending receipts and preserves reverted status', async () => {
+	const requests: number[] = []
+	let now = 0
+	const receipt = { status: '0x0' }
+	const result = await waitForRawReceipt(
+		'0xabc',
+		async () => {
+			requests.push(now)
+			return now >= 75 ? receipt : null
+		},
+		{ now: () => now, wait: async ms => void (now += ms) },
+	)
+	expect(result).toBe(receipt)
+	expect(requests).toEqual([0, 5, 15, 35, 75])
+})
+
+test('raw receipt wait bounds pending retries and propagates transport failures immediately', async () => {
+	let now = 0
+	const clock = { now: () => now, wait: async (ms: number) => void (now += ms) }
+	const failure = new Error('receipt transport failed')
+	await expect(
+		waitForRawReceipt(
+			'0xabc',
+			async () => {
+				throw failure
+			},
+			clock,
+		),
+	).rejects.toBe(failure)
+	expect(now).toBe(0)
+	await expect(waitForRawReceipt('0xabc', async () => null, clock)).rejects.toThrow('0xabc after 10000 ms (last RPC result: null)')
+	expect(now).toBe(10_000)
+})
+
 describe('audit fuzz: constant-product trading math and pair', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let client: WriteClient
@@ -96,16 +149,7 @@ describe('audit fuzz: constant-product trading math and pair', () => {
 	const raw = (method: string, params: unknown[]) => getAnvilWindowEthereum().requestRaw({ method, params })
 	const sendRaw = async (to: Address | undefined, data: Hex) => {
 		const hash = await raw('eth_sendTransaction', [to === undefined ? { from: account, data, gas: '0x1000000' } : { from: account, to, data, gas: '0x1000000' }])
-		let receipt: unknown
-		for (let attempt = 0; attempt < 2000 && (typeof receipt !== 'object' || receipt === null); attempt++) {
-			try {
-				receipt = await raw('eth_getTransactionReceipt', [hash])
-			} catch (error) {
-				if (!(error instanceof Error) || !/receipt|transaction|not found/i.test(error.message)) throw error
-				receipt = undefined
-			}
-		}
-		if (typeof receipt !== 'object' || receipt === null || !('status' in receipt)) throw new Error('Transaction receipt missing')
+		const receipt = await waitForRawReceipt(hash, () => raw('eth_getTransactionReceipt', [hash]))
 		return { succeeded: receipt.status === '0x1', created: 'contractAddress' in receipt && typeof receipt.contractAddress === 'string' ? receipt.contractAddress : undefined }
 	}
 	const send = async (to: Address, data: Hex) => {
@@ -153,13 +197,13 @@ describe('audit fuzz: constant-product trading math and pair', () => {
 	})
 
 	test('math: random and edge-case parity with exact models, k monotonicity and exact-output safety', async () => {
-		const started = Date.now()
+		seed = initialSeed
 		let wideDenominator = 0
 		const fail = (kind: Kind, values: readonly bigint[], actual: unknown, expected: unknown): never => {
 			throw new Error(`${kind}(${values.join(', ')}) = ${JSON.stringify(actual, (_, value) => (typeof value === 'bigint' ? value.toString() : value))}, model ${JSON.stringify(expected, (_, value) => (typeof value === 'bigint' ? value.toString() : value))}`)
 		}
 		let rounds = 0
-		while (Date.now() - started < SECONDS * 1000 || rounds < 3) {
+		while (rounds < roundsPerProperty) {
 			rounds++
 			const cases: { kind: Kind; values: bigint[] }[] = []
 			for (let index = 0; index < 60; index++) {
@@ -228,7 +272,7 @@ describe('audit fuzz: constant-product trading math and pair', () => {
 	})
 
 	test('pair: random liquidity, swaps, donations and round trips never leak value', async () => {
-		const started = Date.now()
+		seed = initialSeed
 		const yesId = (17n << 8n) | 1n
 		const noId = (17n << 8n) | 2n
 		const snapshot = async () => {
@@ -241,7 +285,7 @@ describe('audit fuzz: constant-product trading math and pair', () => {
 		}
 		const balance = (owner: Address, id: bigint) => client.readContract({ abi: shareArtifact.abi, address: share, functionName: 'balanceOf', args: [owner, id] })
 		const mint = (owner: Address, id: bigint, amount: bigint) => send(share, encodeFunctionData({ abi: shareArtifact.abi, functionName: 'mint', args: [owner, id, amount] }))
-		while (Date.now() - started < SECONDS * 1000) {
+		for (let round = 0; round < roundsPerProperty; round++) {
 			const baseline = await snapshot()
 			const feeBps = pick([0n, 1n, 30n, 300n, 5_000n, 9_999n])
 			const factory = await deploy(factoryArtifact, [coreFactory, feeBps])

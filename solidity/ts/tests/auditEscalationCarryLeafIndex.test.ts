@@ -48,7 +48,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
+				args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		)
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'setEscalationGame', args: [escalationGame] }))

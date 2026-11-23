@@ -8,7 +8,6 @@ import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
-import { EscalationGameClaimDelegate } from '../EscalationGameClaimDelegate.sol';
 import { EscalationGameDepositDelegate } from '../EscalationGameDepositDelegate.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 
@@ -16,15 +15,12 @@ contract EscalationGameFactory {
 	uint256 private constant CREATION_CODE_CHUNK_SIZE = 24_000;
 
 	EscalationGameProofVerifier public immutable proofVerifier;
-	EscalationGameClaimDelegate public immutable claimDelegate;
 	EscalationGameDepositDelegate public immutable depositDelegate;
 	address private immutable escalationGameCreationCodePartOne;
 	address private immutable escalationGameCreationCodePartTwo;
 
-	constructor(EscalationGameClaimDelegate _claimDelegate, EscalationGameDepositDelegate _depositDelegate) {
-		require(address(_claimDelegate).code.length > 0, 'Claim delegate');
+	constructor(EscalationGameDepositDelegate _depositDelegate) {
 		require(address(_depositDelegate).code.length > 0, 'Deposit delegate');
-		claimDelegate = _claimDelegate;
 		proofVerifier = new EscalationGameProofVerifier();
 		bytes memory creationCode = type(EscalationGame).creationCode;
 		uint256 firstPartLength =
@@ -52,6 +48,7 @@ contract EscalationGameFactory {
 	}
 
 	function deployEscalationGame(uint256 startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external returns (EscalationGame) {
+		require(EscalationGameRepCustody.portfolio(msg.sender) != address(0), 'Reporter portfolio required');
 		require(_nonDecisionThresholdAttoRep > 1, 'Escalation threshold too low');
 		if (startBondAttoRep >= _nonDecisionThresholdAttoRep) startBondAttoRep = _nonDecisionThresholdAttoRep - 1;
 		EscalationGame gameImplementation = _deployOrReuseEscalationGame(ISecurityPool(payable(msg.sender)));
@@ -64,7 +61,8 @@ contract EscalationGameFactory {
 		bool winnerHaircutPaidByFork;
 		uint256 forkCarryInitialBackingAttoRep;
 		address portfolio = EscalationGameRepCustody.portfolio(address(child));
-		if (portfolio != address(0)) {
+		require(portfolio != address(0), 'Reporter portfolio required');
+		{
 			(SecurityPoolReporterLedger.Question memory state, ) = SecurityPoolReporterLedger(ISecurityPoolPortfolioNative(portfolio).reporterLedger(child.universeId())).question(child.universeId(), child.questionId());
 			winnerHaircutPaidByFork = state.winnerHaircutPaidByFork;
 			forkCarryInitialBackingAttoRep = state.balanceAttoRep;
@@ -119,6 +117,6 @@ contract EscalationGameFactory {
 		// Code storage is cheaper to deploy and read than one storage slot per 32-byte
 		// word, while two fixed parts keep each carrier below EIP-170.
 		return
-			abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate, depositDelegate));
+			abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, depositDelegate));
 	}
 }

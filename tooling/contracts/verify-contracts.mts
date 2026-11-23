@@ -5,20 +5,7 @@ import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import process from 'node:process'
 import { getDeploymentManifestFileName, getDeploymentManifestId } from './deployment-manifests.mts'
-import {
-	buildVerificationPlan,
-	getExplorerTargets,
-	getSourcifyTarget,
-	parseDeploymentManifest,
-	verifyContractsWithExplorer,
-	verifyContractsWithSourcify,
-	type ArtifactLookup,
-	type DeploymentManifest,
-	type ExplorerFetch,
-	type StandardJsonInputs,
-	type VerificationOutcome,
-	type VerificationPlan,
-} from './contract-verification.mts'
+import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type ArtifactLookup, type DeploymentManifest, type ExplorerFetch, type StandardJsonInputs, type VerificationOutcome } from './contract-verification.mts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const CONTRACT_ARTIFACT_PATH = path.join(repositoryRoot, 'solidity', 'artifacts', 'Contracts.json')
@@ -101,18 +88,15 @@ function buildSourceObject(sources: ReadonlyMap<string, string>): Record<string,
 	return Object.fromEntries(Array.from(sources, ([sourcePath, content]) => [sourcePath, { content }]))
 }
 
-async function buildStandardJsonInputs(plan: VerificationPlan): Promise<StandardJsonInputs> {
+async function buildStandardJsonInputs(): Promise<StandardJsonInputs> {
 	const compileModule = await import('../../solidity/ts/compile.ts')
 	const sources = await compileModule.loadContractSources()
-	const libraries = {
-		'contracts/statoblast/SecurityPoolUtils.sol': { SecurityPoolUtils: plan.libraryAddresses.securityPoolUtils },
-	}
 	return {
 		main: {
 			compilerVersion: toExplorerCompilerVersion(compileModule.getMainCompilerVersion()),
 			inputJson: JSON.stringify({
 				language: 'Solidity',
-				settings: { ...compileModule.mainCompilerSettings, libraries },
+				settings: compileModule.mainCompilerSettings,
 				sources: buildSourceObject(compileModule.createMainCompilerSources(sources)),
 			}),
 		},
@@ -166,7 +150,7 @@ export async function main(
 			})
 			console.log(`Verifying ${jobs.length.toString()} ${networkId} ${genesisOutcome} contracts (chain ${chainId.toString()})`)
 			for (const skippedStep of plan.skipped) console.log(`  Skipping ${skippedStep.id}: ${skippedStep.reason}`)
-			const inputs = await buildStandardJsonInputs(plan)
+			const inputs = await buildStandardJsonInputs()
 			for (const target of getExplorerTargets(chainId, environment)) {
 				if (target.requiresApiKey && target.apiKey === undefined) {
 					console.log(`Skipping ${target.name} on ${networkId}: set ETHERSCAN_API_KEY to verify there.`)

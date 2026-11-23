@@ -1,4 +1,6 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { runBunTestProcess } from './run-bun-test-process.mts'
 import { createBalancedTestShards, discoverTestFiles, toBunTestPath } from './test-discovery.mts'
@@ -56,15 +58,23 @@ const parseCoverageSummary = (value: unknown): SolidityCoverageSummary | undefin
 	return { totalLines, totalCoveredLines, files }
 }
 
-const readCoverageSummary = async (): Promise<SolidityCoverageSummary | undefined> => {
+const readCoverageSummary = async (reportPath: string): Promise<SolidityCoverageSummary | undefined> => {
 	let rawSummary: string
 	try {
-		rawSummary = await readFile(summaryPath, 'utf8')
+		rawSummary = await readFile(reportPath, 'utf8')
 	} catch (error) {
 		if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 		return undefined
 	}
 	return parseCoverageSummary(JSON.parse(rawSummary))
+}
+
+export async function readCompletedSolidityCoverage(directory: string) {
+	await readFile(join(directory, 'complete'), 'utf8')
+	const summary = await readCoverageSummary(join(directory, 'coverage-summary.json'))
+	if (summary === undefined) throw new Error(`Missing or invalid completed Solidity coverage summary in ${directory}`)
+	await readFile(join(directory, 'lcov.info'), 'utf8')
+	return summary
 }
 
 const recomputeCoverageSummaryTotals = (files: Record<string, SolidityCoverageFileSummary>): SolidityCoverageSummary => {
@@ -198,19 +208,22 @@ if (import.meta.main) {
 	for (const testShard of selectedShards) {
 		const shardIndex = testShards.indexOf(testShard) + 1
 		console.log(`Running Solidity bytecode coverage shard ${shardIndex}/${testShards.length}`)
-		await rm(coverageDirectory, { recursive: true, force: true })
-		const exitCode = await runBunTestProcess({
-			// Trace collection makes large gas-regression fixtures exceed the ordinary five-minute test budget.
-			cmd: [process.execPath, 'test', '--timeout', '1200000', ...testShard.map(toBunTestPath)],
-			env: {
-				...Bun.env,
-				SOLIDITY_BYTECODE_COVERAGE: '1',
-			},
-		})
-		if (exitCode !== 0) globalThis.process.exit(exitCode)
-		const shardSummary = await readCoverageSummary()
-		if (shardSummary === undefined) throw new Error(`Coverage shard ${shardIndex} did not write a summary`)
-		mergedSummary = mergeCoverageSummaries(mergedSummary, shardSummary)
-		await writeCoverageSummary(mergedSummary)
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-solidity-coverage-'))
+		try {
+			const exitCode = await runBunTestProcess({
+				// Trace collection makes large gas-regression fixtures exceed the ordinary five-minute test budget.
+				cmd: [process.execPath, 'test', '--preload', fileURLToPath(new URL('./finalize-solidity-coverage.mts', import.meta.url)), '--timeout', '1200000', ...testShard.map(toBunTestPath)],
+				env: {
+					...Bun.env,
+					SOLIDITY_BYTECODE_COVERAGE: '1',
+					SOLIDITY_BYTECODE_COVERAGE_DIRECTORY: directory,
+				},
+			})
+			if (exitCode !== 0) throw new Error(`Coverage shard ${shardIndex} exited with status ${exitCode}`)
+			mergedSummary = mergeCoverageSummaries(mergedSummary, await readCompletedSolidityCoverage(directory))
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
 	}
+	if (mergedSummary !== undefined) await writeCoverageSummary(mergedSummary)
 }

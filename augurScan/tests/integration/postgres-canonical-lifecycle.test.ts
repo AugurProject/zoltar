@@ -1,4 +1,5 @@
 import { expect } from 'bun:test'
+import { handleApi } from '../../src/api/router.ts'
 import { assertStartBlockCompatible, lockLiveEventWriter, ScannerDatabase } from '../../src/database.ts'
 import type { Address } from '../../src/ethereum.ts'
 import { createLiveBus } from '../../src/live.ts'
@@ -180,7 +181,22 @@ postgresTest(
 
 			const firstState = await storeFirstBlock(context)
 			const orphanedState = await storeAndRewindOrphan(context, firstState)
+			const orphanExport = await handleApi(new Request(`http://localhost/api/v1/export?chainId=${chainId}&dataset=logs&canonical=orphaned&fromBlock=2&toBlock=2`), database.sql)
+			expect(orphanExport?.headers.get('x-augurscan-snapshot-block')).toBe('1')
+			expect(await orphanExport?.text()).toContain(orphanedState.orphan.hash)
+			const exportUrl = new URL(`http://localhost/api/v1/export?chainId=${chainId}&dataset=logs&canonical=all&fromBlock=2&toBlock=2&limit=1`)
+			const firstExportPage = await handleApi(new Request(exportUrl), database.sql)
+			const exportCursor = firstExportPage?.headers.get('x-augurscan-next-cursor')
+			if (exportCursor === undefined || exportCursor === null) throw new Error('Expected an orphan export continuation')
+			expect(await firstExportPage?.text()).toContain(orphanedState.orphan.hash)
 			const replacement = await storeReplacementBlock(context, orphanedState)
+			exportUrl.searchParams.set('cursor', exportCursor)
+			const resumedExport = await handleApi(new Request(exportUrl), database.sql)
+			expect(resumedExport?.headers.get('x-augurscan-snapshot-block')).toBe('1')
+			expect(resumedExport?.headers.get('x-augurscan-truncated')).toBe('false')
+			const resumedEvidence = await resumedExport?.text()
+			expect(resumedEvidence).toContain(orphanedState.orphan.hash)
+			expect(resumedEvidence).not.toContain(replacement.hash)
 			await expectReplacementPoolHistory(context, replacement)
 			await reconcileManifestAfterReorg(context, orphanedState, replacement)
 			const third = await storeThirdBlockWithV4Markets(context, replacement)

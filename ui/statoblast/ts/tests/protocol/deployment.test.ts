@@ -28,7 +28,7 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
-		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'openOracle', 'securityPoolEventEmitter', 'securityPoolOperationsDelegate', 'securityPoolUtils'])
+		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameDepositDelegate', 'openOracle', 'securityPoolEventEmitter', 'securityPoolOperationsDelegate'])
 	})
 
 	test('deploys independent fork and auction modules with verified runtime code', async () => {
@@ -59,17 +59,15 @@ describe('statoblast deployment steps', () => {
 		}
 	})
 
-	test('deploys both shared escalation delegates before binding them to the factory', async () => {
+	test('deploys the shared deposit delegate before binding it to the factory', async () => {
 		const steps = getDeploymentSteps(simulationProfile)
 		const factory = steps.find(step => step.id === 'escalationGameFactory')
-		const claim = steps.find(step => step.id === 'escalationGameClaimDelegate')
 		const deposit = steps.find(step => step.id === 'escalationGameDepositDelegate')
-		if (factory === undefined || claim === undefined || deposit === undefined) throw new Error('Missing escalation deployment step')
-		expect(factory.dependencies).toEqual(['proxyDeployer', 'escalationGameClaimDelegate', 'escalationGameDepositDelegate'])
-		expect(steps.indexOf(claim)).toBeLessThan(steps.indexOf(factory))
+		if (factory === undefined || deposit === undefined) throw new Error('Missing escalation deployment step')
+		expect(factory.dependencies).toEqual(['proxyDeployer', 'escalationGameDepositDelegate'])
 		expect(steps.indexOf(deposit)).toBeLessThan(steps.indexOf(factory))
 		const initCode = await captureDeploymentInitCode(factory.deploy)
-		expect(initCode.endsWith(encodeAbiParameters([{ type: 'address' }, { type: 'address' }], [claim.address, deposit.address]).slice(2))).toBe(true)
+		expect(initCode.endsWith(encodeAbiParameters([{ type: 'address' }], [deposit.address]).slice(2))).toBe(true)
 	})
 
 	test('the deployment status oracle step deploys the statoblast oracle, not the zoltar-only oracle', async () => {
@@ -80,7 +78,6 @@ describe('statoblast deployment steps', () => {
 			const statoblastStepIds = [
 				'securityPoolForker',
 				'securityPoolForkerPortfolioDelegate',
-				'escalationGameClaimDelegate',
 				'escalationGameDepositDelegate',
 				'escalationGameFactory',
 				'securityPoolFactory',

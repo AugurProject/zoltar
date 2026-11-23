@@ -69,11 +69,11 @@ describe('OpenOracle compiler profile', () => {
 		}
 	})
 
-	test('generated artifacts retain immutable and link ranges required for deployed-bytecode coverage matching', async () => {
+	test('generated factory artifacts retain immutable metadata without deployed-library links', async () => {
 		const artifact: unknown = JSON.parse(await fs.readFile('solidity/artifacts/Contracts.json', 'utf8'))
 		if (!isObjectRecord(artifact) || !isObjectRecord(artifact['contracts'])) throw new Error('Generated contract artifact is missing contracts')
 		const securityPoolSource = artifact['contracts']['contracts/statoblast/factories/SecurityPoolFactory.sol']
-		if (!isObjectRecord(securityPoolSource) || !isObjectRecord(securityPoolSource['SecurityPoolFactory'])) throw new Error('Generated contract artifact is missing SecurityPool')
+		if (!isObjectRecord(securityPoolSource) || !isObjectRecord(securityPoolSource['SecurityPoolFactory'])) throw new Error('Generated contract artifact is missing SecurityPoolFactory')
 		const evm = securityPoolSource['SecurityPoolFactory']['evm']
 		if (!isObjectRecord(evm) || !isObjectRecord(evm['deployedBytecode'])) throw new Error('Generated SecurityPool artifact is missing deployed bytecode')
 		const immutableReferences = evm['deployedBytecode']['immutableReferences']
@@ -81,6 +81,6 @@ describe('OpenOracle compiler profile', () => {
 		if (!isObjectRecord(immutableReferences)) throw new Error('Generated SecurityPool artifact is missing immutable references')
 		if (!isObjectRecord(linkReferences)) throw new Error('Generated SecurityPool artifact is missing link references')
 		expect(Object.values(immutableReferences).some(ranges => Array.isArray(ranges) && ranges.length > 0)).toBe(true)
-		expect(Object.values(linkReferences).some(libraries => isObjectRecord(libraries) && Object.values(libraries).some(ranges => Array.isArray(ranges) && ranges.length > 0))).toBe(true)
+		expect(linkReferences).toEqual({})
 	})
 })

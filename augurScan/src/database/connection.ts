@@ -120,22 +120,25 @@ export async function pruneLiveEvents(this: ScannerDatabase): Promise<void> {
 	})
 }
 
-export async function auditIntegrity(this: ScannerDatabase, sql: SQL = this.sql): Promise<readonly IntegrityIssue[]> {
+export async function auditIntegrity(this: ScannerDatabase, sql: SQL = this.sql, chainIds?: readonly number[]): Promise<readonly IntegrityIssue[]> {
 	const rows = await sql`
-			WITH checkpoint_issues AS (
+			WITH audited_networks AS (
+				SELECT chain_id, start_block, indexed_block, indexed_hash FROM networks
+				WHERE ${chainIds === undefined} OR chain_id = ANY(${sql.array(chainIds === undefined ? [] : [...chainIds], 'BIGINT')})
+			), checkpoint_issues AS (
 				SELECT n.chain_id, 'checkpoint_missing'::text AS code,
 					'The indexed checkpoint does not identify a canonical stored block'::text AS detail
-				FROM networks n
+				FROM audited_networks n
 				LEFT JOIN blocks b ON b.chain_id = n.chain_id AND b.number = n.indexed_block AND b.hash = n.indexed_hash AND b.canonical
 				WHERE n.indexed_block IS NOT NULL AND b.hash IS NULL
 			), cursor_issues AS (
 				SELECT cursor.chain_id, 'log_cursor_ahead'::text AS code,
 					'Log cursor for ' || cursor.contract_address || ' is ahead of the network checkpoint' AS detail
 				FROM log_scan_cursors cursor
-				JOIN networks network USING (chain_id)
+				JOIN audited_networks network USING (chain_id)
 				WHERE network.indexed_block IS NULL OR cursor.last_retrieved_block > network.indexed_block
 			), recent_canonical_blocks AS (
-				SELECT b.* FROM blocks b JOIN networks n USING (chain_id)
+				SELECT b.* FROM blocks b JOIN audited_networks n USING (chain_id)
 				WHERE b.canonical AND b.number >= GREATEST(n.start_block, n.indexed_block - 10000)
 			), continuity_issues AS (
 				SELECT chain_id, 'canonical_discontinuity'::text AS code,

@@ -175,6 +175,14 @@ describe('network configuration', () => {
 		).toThrow('contract 1 duplicates address')
 	})
 
+	test('uses Compose network and RPC defaults for blank settings', async () => {
+		process.env['NETWORKS'] = ''
+		process.env['MAINNET_RPC_URL'] = ''
+		process.env['SEPOLIA_RPC_URL'] = ''
+		const networks = await loadNetworks()
+		expect(networks.map(({ id, rpcUrls }) => [id, rpcUrls])).toEqual(networkDefinitions.map(({ id, defaultRpcUrl }) => [id, [defaultRpcUrl]]))
+	})
+
 	test('uses public endpoints with historical state by default', async () => {
 		process.env['NETWORKS'] = 'mainnet,sepolia'
 		delete process.env['MAINNET_RPC_URL']

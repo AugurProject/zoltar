@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getTimingContextPaths, getWeightedTestFiles, KNOWN_FILE_WEIGHTS, parseShardOption } from './run-balanced-test-shard.mts'
-import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles, parseCoverageShardNumber } from './run-solidity-bytecode-coverage.mts'
+import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles, parseCoverageShardNumber, readCompletedSolidityCoverage } from './run-solidity-bytecode-coverage.mts'
 import { TEST_BUILD_TARGET_IDS } from '../ui/tests.mts'
 import { createBalancedTestShards, discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, hasExplicitTestPath, isExplicitTestPath, isTestSourceFile, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
 import {
@@ -120,8 +120,8 @@ describe('canonical test discovery', () => {
 	})
 
 	test('domain timing fingerprints cover the workspace lockfile and preload', () => {
-		expect(getTimingContextPaths('application')).toEqual(['bun-test-setup.ts', 'bunfig.toml', 'bun.lock', 'tooling/testing/run-bun-test-process.mts', 'bun-test-setup-ui.ts'])
-		expect(getTimingContextPaths('solidity')).toEqual(['bun-test-setup.ts', 'bunfig.toml', 'bun.lock', 'tooling/testing/run-bun-test-process.mts'])
+		expect(getTimingContextPaths('application')).toEqual(['bun-test-setup.ts', 'bunfig.toml', 'bun.lock', 'tooling/testing/run-bun-test-process.mts', 'tooling/testing/test-timings.mts', 'bun-test-setup-ui.ts'])
+		expect(getTimingContextPaths('solidity')).toEqual(['bun-test-setup.ts', 'bunfig.toml', 'bun.lock', 'tooling/testing/run-bun-test-process.mts', 'tooling/testing/test-timings.mts', '.github/workflows/test-domains.yml', 'solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts'])
 	})
 
 	test('bytecode coverage dynamically shards the complete Solidity source set', async () => {
@@ -147,6 +147,30 @@ describe('canonical test discovery', () => {
 		expect(() => parseCoverageShardNumber(['--shard', '0'], 2)).toThrow('Invalid Solidity bytecode coverage shard')
 		expect(() => parseCoverageShardNumber(['--shard', '3'], 2)).toThrow('Unknown Solidity bytecode coverage shard')
 		expect(() => parseCoverageShardNumber(['--shard=1', '--shard=2'], 2)).toThrow('--shard may be given only once')
+	})
+
+	test('bytecode coverage finalizes a real worker after its last traced operation', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-final-coverage-'))
+		try {
+			const worker = Bun.spawn([process.execPath, 'test', '--preload', './tooling/testing/finalize-solidity-coverage.mts', './solidity/ts/tests/coverage-attribution.test.ts'], {
+				env: { ...Bun.env, SOLIDITY_BYTECODE_COVERAGE: '1', SOLIDITY_BYTECODE_COVERAGE_DIRECTORY: directory },
+				stdout: 'ignore',
+				stderr: 'pipe',
+			})
+			const output = await new Response(worker.stderr).text()
+			if ((await worker.exited) !== 0) throw new Error(output)
+			const summary = await readCompletedSolidityCoverage(directory)
+			const source = 'solidity/contracts/statoblast/Multicall3.sol'
+			const line = (await readFile(source, 'utf8')).split('\n').findIndex(text => text.trim() === 'chainid = block.chainid;') + 1
+			expect(line).toBeGreaterThan(0)
+			const hits = summary.files[join(process.cwd(), source)]?.lineHits[String(line)]
+			expect(hits).toBeGreaterThan(0)
+			expect(await readFile(join(directory, 'lcov.info'), 'utf8')).toMatch(new RegExp(`^SF:${source.replaceAll('.', '\\.')}\\n(?:(?!end_of_record).+\\n)*DA:${line},${hits}$`, 'm'))
+			await rm(join(directory, 'complete'))
+			await expect(readCompletedSolidityCoverage(directory)).rejects.toThrow()
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
 	})
 
 	test('fuzz extensions remain discoverable without depending on a particular production model', async () => {
@@ -250,6 +274,15 @@ describe('canonical test discovery', () => {
 		const observation = createTestTimingObservation('<testcase file="slow.test.ts" time="6"/><testcase file="fast.test.ts" time="2"/>', 10, ['slow.test.ts', 'fast.test.ts'])
 		const history = mergeTestTimingHistory(undefined, [observation], ['slow.test.ts', 'fast.test.ts'])
 		expect(history.samplesByFile).toEqual({ 'fast.test.ts': [3], 'slow.test.ts': [7] })
+	})
+
+	test('uses measured file suite time and records skipped-only files', () => {
+		const junit = '<testsuites time="9"><testsuite file="slow.test.ts" time="8"><testcase file="slow.test.ts" time="1"/></testsuite><testsuite file="skip.test.ts" time="0.5"><testcase file="skip.test.ts" time="0"><skipped/></testcase></testsuite></testsuites>'
+		const observation = createTestTimingObservation(junit, 10, ['slow.test.ts', 'skip.test.ts'])
+		expect(observation.skippedOnlyTestFiles).toEqual(['skip.test.ts'])
+		expect(observation.executedTestFiles).toEqual(['slow.test.ts'])
+		expect(observation.runnerOverheadSeconds).toBe(1)
+		expect(mergeTestTimingHistory(undefined, [observation], observation.testFiles).samplesByFile).toEqual({ 'slow.test.ts': [8], 'skip.test.ts': [0.5] })
 	})
 
 	test('timing history stays bounded and gives new tests a conservative weight', () => {

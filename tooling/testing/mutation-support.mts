@@ -33,6 +33,7 @@ export function pinMutationTestToTypeScript(testSource: string, mutation: Source
 	const extensionlessSpecifier = typeScriptSpecifier.replace(/\.ts$/u, '')
 	for (const quote of ["'", '"']) {
 		for (const candidate of [javaScriptSpecifier, extensionlessSpecifier]) {
+			if (testSource.includes(`${quote}${typeScriptSpecifier}${quote}`)) return testSource
 			const quotedCandidate = `${quote}${candidate}${quote}`
 			if (testSource.includes(quotedCandidate)) return applyExactMutation(testSource, { from: quotedCandidate, name: `${mutation.name} test import`, to: `${quote}${typeScriptSpecifier}${quote}` })
 		}
@@ -47,17 +48,20 @@ export function classifyMutantResult(exitCode: number, junitXml: string, evidenc
 		const names = new Set(getMutationJunitTestNames(junitXml))
 		if (!evidence.expectedTestNames.every(name => names.has(name))) throw new Error('Mutation runner did not execute the expected test identities')
 	}
-	if (exitCode === 0) return 'survived' as const
 	const tags = scanXmlTags(junitXml)
+	if (tags.some(tag => /^<skipped\b/.test(tag))) throw new Error('Mutation runner reported skipped cases')
+	if (exitCode === 0) return 'survived' as const
 	let testcaseDepth = 0
 	let testcaseCount = 0
 	let assertionFailure = false
+	let currentTestName: string | undefined
 	for (const tag of tags) {
 		if (/^<testcase\b/.test(tag)) {
 			testcaseCount += 1
+			currentTestName = getXmlAttribute(tag, 'name')
 			if (!tag.endsWith('/>')) testcaseDepth += 1
 		} else if (/^<\/testcase\s*>$/.test(tag)) testcaseDepth -= 1
-		else if (testcaseDepth > 0 && /^<failure\b/.test(tag)) assertionFailure = true
+		else if (testcaseDepth > 0 && /^<failure\b/.test(tag) && getXmlAttribute(tag, 'type') === 'AssertionError' && (evidence === undefined || (currentTestName !== undefined && evidence.expectedTestNames.includes(currentTestName)))) assertionFailure = true
 	}
 	let suiteReportedErrors = false
 	for (const tag of tags.filter(tag => /^<testsuites?\b/.test(tag))) {
@@ -99,5 +103,19 @@ export const MUTATION_SMOKE_CASES: readonly SourceMutation[] = [
 		from: 'return thresholdHits >= 2',
 		to: 'return thresholdHits >= 3',
 		testCommand: ['bun', 'test', 'shared/statoblast/ts/escalationGame/escalationMath.test.ts'],
+	},
+	{
+		name: 'Trading lifecycle evidence is discarded',
+		filePath: 'augurScan/browser/operations-data.ts',
+		from: 'items: rounds.items,',
+		to: "items: route.kind === 'trading' ? [] : rounds.items,",
+		testCommand: ['bun', 'test', 'augurScan/tests/unit/market-activity-pagination.test.ts'],
+	},
+	{
+		name: 'Trading historical activity is reversed',
+		filePath: 'augurScan/browser/operations-data.ts',
+		from: 'items: decisions.items,',
+		to: "items: route.kind === 'trading' ? [...decisions.items].reverse() : decisions.items,",
+		testCommand: ['bun', 'test', 'augurScan/tests/unit/market-activity-pagination.test.ts'],
 	},
 ]

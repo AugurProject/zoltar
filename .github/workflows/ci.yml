@@ -285,7 +285,31 @@ jobs:
         with:
           directory: ${{ matrix.directory }}
       - run: bun tooling/ci/run-component-ci.mts "${{ matrix.package }}"
-
+        env:
+          ZOLTAR_TEST_COVERAGE_DIRECTORY: ${{ matrix.package != 'augur-scan' && 'coverage/ci' || '' }}
+      - name: Verify component coverage provenance
+        working-directory: ${{ matrix.directory }}
+        run: |
+          mapfile -t reports < <(find coverage/ci -name lcov.info -size +0c)
+          [[ "${#reports[@]}" -gt 0 ]]
+          for report in "${reports[@]}"; do test -s "${report%/*}/junit.xml"; done
+          printf '%s\n' "${GITHUB_SHA}" > coverage/ci/commit.txt
+      - name: Publish component line coverage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: component-coverage-${{ matrix.package }}
+          path: ${{ matrix.directory }}/coverage/ci
+      - name: Run augurScan Chromium cases
+        if: matrix.package == 'augur-scan'
+        working-directory: augurScan
+        run: bun run test:browser:chromium
+      - name: Publish augurScan Chromium evidence
+        if: always() && matrix.package == 'augur-scan'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: augurscan-chromium
+          path: augurScan/coverage/chromium
   augur-scan-integration:
     name: augurScan PostgreSQL integration
     needs: [changes, build-inputs]
@@ -313,11 +337,16 @@ jobs:
           profile: contracts
 
           build-inputs: ci-contract-inputs
-      - run: bun run test:integration
+      - run: bun run test:integration --coverage --coverage-reporter=lcov --coverage-dir=coverage/postgres
         working-directory: augurScan
         env:
           POSTGRES_TEST_URL: postgres://postgres:postgres@127.0.0.1:5432/augur_scan_test
-
+      - name: Publish augurScan PostgreSQL coverage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: augurscan-postgres-coverage
+          path: augurScan/coverage/postgres
   required:
     name: Required
     if: always()

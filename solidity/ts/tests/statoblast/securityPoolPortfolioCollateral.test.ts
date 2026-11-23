@@ -11,7 +11,7 @@ import {
 	trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter as routerArtifact,
 } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
-import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { deployChild, forkUniverse, getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -23,7 +23,7 @@ describe('ERC20 portfolio collateral', () => {
 	test.each(['callback', 'recovery'] as const)('#1502 blocked sponsor refunds cannot roll back %s acceptance', async mode => {
 		const owner = fixture.owner()
 		const other = fixture.other()
-		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: applyLibraries(tokenArtifact.evm.bytecode.object), args: [18] }))
+		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [18] }))
 		const portfolio = await fixture.deployPortfolio(undefined, portfolioEconomics, { collateralToken: token })
 		await fixture.register(fixture.base.questionId, portfolio)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [owner.account.address, 1_000_000n * unit] }))
@@ -97,7 +97,7 @@ describe('ERC20 portfolio collateral', () => {
 	test.each(['paused', 'burn-blocked'] as const)('#1336/#1337 REP disputes and fee accounting survive %s collateral', async mode => {
 		const owner = fixture.owner()
 		const other = fixture.other()
-		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: applyLibraries(tokenArtifact.evm.bytecode.object), args: [18] }))
+		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [18] }))
 		const portfolio = await fixture.deployPortfolio(undefined, portfolioEconomics, { collateralToken: token })
 		await fixture.register(fixture.base.questionId, portfolio)
 		for (const recipient of [owner.account.address, other.account.address]) await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [recipient, 1_000_000n * unit] }))
@@ -156,7 +156,7 @@ describe('ERC20 portfolio collateral', () => {
 	test('six-decimal collateral funds direct reports and round trips', async () => {
 		const owner = fixture.owner()
 		const buyer = fixture.other()
-		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: applyLibraries(tokenArtifact.evm.bytecode.object), args: [6] }))
+		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [6] }))
 		const floor = 10_000n
 		const portfolio = await fixture.deployPortfolio(undefined, { ...portfolioEconomics, minimumCommitmentAttoEth: 1_000_000n, minimumPurchaseFeeAttoEth: 100n }, { collateralToken: token, minimumReportCollateral: floor })
 		await fixture.register(fixture.base.questionId, portfolio)
@@ -200,8 +200,8 @@ describe('ERC20 portfolio collateral', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setFee', args: [0n] }))
 		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [cash] }))
 		expect(await balance()).toBe(before - quote[0])
-		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: applyLibraries(factoryArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
-		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
+		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
+		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
 		await approveToken(buyer, token, router)
 		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithCollateral', args: [pool, cash, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, buyer.account.address, fixture.base.questionData.endTime - 1n, 2n * cash] }))
 		expect(await buyer.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [router] })).toBe(0n)
