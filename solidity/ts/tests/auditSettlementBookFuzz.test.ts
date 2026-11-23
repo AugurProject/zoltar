@@ -678,7 +678,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 				// A requirement of 2^128 attoREP or more is unrepresentable and rejected with a reason, never a panic.
 				if (outcome.ok && op.k === 'mint' && book !== undefined && book.rec !== 0n) {
 					const required = await client.readContract({ ...target, functionName: 'quoteMintRecoveryRep', args: [BigInt(op.b), BigInt(op.q), op.cash] }).catch((error: unknown) => {
-						if (error instanceof Error && error.message.includes('Recovery REP exceeds precision bound')) return undefined
+						if (error instanceof Error && error.message.includes('Recovery REP too large')) return undefined
 						throw error
 					})
 					if (required === undefined) outcome = reject('recovery precision bound')

@@ -170,7 +170,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	/// @notice Donate the active cash deficit while preserving all recovery REP.
 	function topUp(uint64 bookId, uint256 cashAttoEth) external onlyPortfolio {
 		Book storage book = _activeBook(bookId);
-		require(cashAttoEth != 0 && cashAttoEth == _missingCash(bookId, book), 'Supply the entire settlement deficit');
+		require(cashAttoEth != 0 && cashAttoEth == _missingCash(bookId, book), 'Settlement deficit must be exact');
 		book.cashAttoEth += cashAttoEth;
 		_syncFeeMode(bookId, book);
 		emit SettlementBookRepaired(bookId, cashAttoEth);
