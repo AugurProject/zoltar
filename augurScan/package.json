@@ -18,6 +18,7 @@
 		"test": "bun run test:unit && bun run test:api && bun run test:replay && bun run test:browser && bun run test:integration",
 		"test:ci": "bun run test:unit && bun run test:api && bun run test:replay && bun run test:browser",
 		"test:browser": "bun test tests/browser",
+		"test:browser:chromium": "bun scripts/test-chromium.ts",
 		"test:unit": "bun test tests/unit",
 		"test:api": "bun test tests/api",
 		"test:replay": "bun test tests/replay",

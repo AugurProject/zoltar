@@ -81,7 +81,8 @@ export const historicalExportRows = async (sql: SQL, query: HistoricalExportQuer
 				ORDER BY replacement.id DESC LIMIT 1
 			) invalidation ON true
 			WHERE log.chain_id = ${chainId} AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
-				AND log.block_number <= ${snapshotBlock} AND (${canonical === 'all'} OR log.canonical = ${canonical === 'canonical'})
+				AND (log.block_number <= ${snapshotBlock} OR (NOT log.canonical AND invalidation.id <= ${snapshotInvalidationId}))
+				AND (${canonical === 'all'} OR log.canonical = ${canonical === 'canonical'})
 				AND (${lastKey === undefined} OR (log.block_number, log.transaction_index, log.log_index, log.block_hash, log.tx_hash) >
 					(${lastKey?.[0] ?? '0'}::bigint, ${lastKey?.[1] ?? '0'}::integer, ${lastKey?.[2] ?? '0'}::integer,
 						${lastKey?.[3] ?? ZERO_HASH}, ${lastKey?.[4] ?? ZERO_HASH}))
@@ -112,7 +113,8 @@ export const historicalExportRows = async (sql: SQL, query: HistoricalExportQuer
 				ORDER BY replacement.id DESC LIMIT 1
 			) invalidation ON true
 			WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
-				AND timeline.block_number <= ${snapshotBlock} AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
+				AND (timeline.block_number <= ${snapshotBlock} OR (NOT timeline.canonical AND invalidation.id <= ${snapshotInvalidationId}))
+				AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
 				AND (${lastKey === undefined} OR (timeline.block_number, timeline.block_hash, timeline.tx_hash, timeline.log_index,
 					timeline.entity_type, timeline.entity_identity) > (${lastKey?.[0] ?? '0'}::bigint,
 					${lastKey?.[1] ?? ZERO_HASH}, ${lastKey?.[2] ?? ZERO_HASH}, ${lastKey?.[3] ?? '0'}::integer,

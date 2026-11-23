@@ -13,19 +13,26 @@ function isTestTimingObservation(value: unknown): value is TestTimingObservation
 	if (!('domain' in value) || typeof value.domain !== 'string' || !isTestDomain(value.domain) || value.domain === 'all') return false
 	if (!('shardIndex' in value) || !Number.isSafeInteger(value.shardIndex) || !('shardCount' in value) || !Number.isSafeInteger(value.shardCount)) return false
 	if (!('executedTestFiles' in value) || !Array.isArray(value.executedTestFiles) || !value.executedTestFiles.every(file => typeof file === 'string')) return false
+	if (!('reportedTestFiles' in value) || !Array.isArray(value.reportedTestFiles) || !value.reportedTestFiles.every(file => typeof file === 'string')) return false
 	if (!('exitStatus' in value) || value.exitStatus !== 0 || !('completionStatus' in value) || value.completionStatus !== 'complete') return false
 	if (
 		!('selectedManifestHash' in value) ||
 		typeof value.selectedManifestHash !== 'string' ||
 		!sha256.test(value.selectedManifestHash) ||
-		!('executedManifestHash' in value) ||
-		typeof value.executedManifestHash !== 'string' ||
-		!sha256.test(value.executedManifestHash) ||
-		value.selectedManifestHash !== value.executedManifestHash
+		!('reportedManifestHash' in value) ||
+		typeof value.reportedManifestHash !== 'string' ||
+		!sha256.test(value.reportedManifestHash) ||
+		value.selectedManifestHash !== value.reportedManifestHash
 	)
 		return false
 	if (!('contextFingerprint' in value) || typeof value.contextFingerprint !== 'string' || !sha256.test(value.contextFingerprint)) return false
 	if (!('fingerprintsByFile' in value) || typeof value.fingerprintsByFile !== 'object' || value.fingerprintsByFile === null || !Object.values(value.fingerprintsByFile).every(fingerprint => typeof fingerprint === 'string' && sha256.test(fingerprint))) return false
+	if ('fileWallSecondsByFile' in value) {
+		if (typeof value.fileWallSecondsByFile !== 'object' || value.fileWallSecondsByFile === null) return false
+		if (!Object.entries(value.fileWallSecondsByFile).every(([file, seconds]) => Array.isArray(value.testFiles) && value.testFiles.includes(file) && typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0)) return false
+	}
+	if ('skippedOnlyTestFiles' in value && (!Array.isArray(value.skippedOnlyTestFiles) || !value.skippedOnlyTestFiles.every(file => typeof file === 'string' && Array.isArray(value.testFiles) && value.testFiles.includes(file)))) return false
+	if ('runnerOverheadSeconds' in value && (typeof value.runnerOverheadSeconds !== 'number' || !Number.isFinite(value.runnerOverheadSeconds) || value.runnerOverheadSeconds < 0)) return false
 	return Object.values(value.testCaseSecondsByFile).every(seconds => typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0)
 }
 
@@ -63,11 +70,12 @@ if (observations.some(observation => observation.domain !== firstObservation.dom
 const selectedFiles = observations.flatMap(observation => observation.testFiles)
 if (new Set(selectedFiles).size !== selectedFiles.length) throw new Error('Timing observations contain overlapping selected manifests')
 for (const observation of observations) {
-	const executedFiles = observation.executedTestFiles ?? []
-	if (JSON.stringify([...observation.testFiles].sort()) !== JSON.stringify([...executedFiles].sort())) throw new Error('Timing observation selected and executed manifests differ')
-	if (observation.selectedManifestHash !== hashManifest(observation.testFiles) || observation.executedManifestHash !== hashManifest(executedFiles)) throw new Error('Timing observation manifest hash is invalid')
-	if (JSON.stringify(Object.keys(observation.testCaseSecondsByFile).sort()) !== JSON.stringify([...executedFiles].sort())) throw new Error('Timing observation testcase manifest differs from executed files')
-	if (observation.fingerprintsByFile === undefined || JSON.stringify(Object.keys(observation.fingerprintsByFile).sort()) !== JSON.stringify([...executedFiles].sort())) throw new Error('Timing observation fingerprint manifest differs from executed files')
+	const reportedFiles = observation.reportedTestFiles ?? []
+	if (!haveExactManifestUnion(reportedFiles, observation.testFiles)) throw new Error('Timing observation selected and reported manifests differ')
+	if (!haveExactManifestUnion([...(observation.executedTestFiles ?? []), ...(observation.skippedOnlyTestFiles ?? [])], reportedFiles)) throw new Error('Timing observation executed and skipped files do not partition the reported manifest')
+	if (observation.selectedManifestHash !== hashManifest(observation.testFiles) || observation.reportedManifestHash !== hashManifest(reportedFiles)) throw new Error('Timing observation manifest hash is invalid')
+	if (!haveExactManifestUnion(Object.keys(observation.testCaseSecondsByFile), reportedFiles)) throw new Error('Timing observation testcase manifest differs from reported files')
+	if (observation.fingerprintsByFile === undefined || !haveExactManifestUnion(Object.keys(observation.fingerprintsByFile), reportedFiles)) throw new Error('Timing observation fingerprint manifest differs from reported files')
 }
 const expectedFiles = await discoverTestFilesForDomain(observationDomain)
 if (!haveExactManifestUnion(selectedFiles, expectedFiles)) throw new Error('Timing observations are not an exact union of the expected domain manifest')

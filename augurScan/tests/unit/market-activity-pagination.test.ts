@@ -30,7 +30,47 @@ test('collects older market activity independently from lifecycle evidence', asy
 	const response = await data.loadOperationsDetail({ kind: 'trading', identity: ['0x1111111111111111111111111111111111111111'] }, 0, 0, 0, 150)
 	const activity = response.data['activity']
 	if (!isPlainRecord(activity)) throw new Error('Activity page missing')
-	expect(operationRecords(activity['items'])).toHaveLength(150)
+	expect(operationRecords(activity['items']).map(row => row['tx_hash'])).toEqual(Array.from({ length: 150 }, (_, index) => `trade-${index}`))
+	const events = response.data['events']
+	if (!isPlainRecord(events)) throw new Error('Lifecycle evidence missing')
+	expect(operationRecords(events['items']).map(row => row['tx_hash'])).toEqual(['evidence'])
 	expect(activity['hasMore']).toBe(false)
 	expect(requests.some(url => url.searchParams.has('activityCursor'))).toBe(true)
+})
+
+test('rejects a cyclic continuation before requesting the same cursor again', async () => {
+	const { collectCanonicalPages } = await import('../../browser/canonical-pagination.ts')
+	const requested: Array<string | undefined> = []
+	await expect(
+		collectCanonicalPages(
+			async cursor => {
+				requested.push(cursor)
+				if (requested.length > 3) throw new Error('Fixture request ceiling')
+				return { items: ['same'], nextCursor: cursor === 'A' ? 'B' : 'A' }
+			},
+			2,
+			value => value,
+		),
+	).rejects.toThrow('Canonical page cursor did not advance')
+	expect(requested).toEqual([undefined, 'A', 'B'])
+})
+
+test('deduplicates overlapping pages with one key lookup per fetched row', async () => {
+	const { collectCanonicalPages } = await import('../../browser/canonical-pagination.ts')
+	let keyCalls = 0
+	const result = await collectCanonicalPages<number, number>(
+		async (cursor = 0, limit = 100) => {
+			if (limit === 1) return { items: [cursor + 1] }
+			const items = Array.from({ length: limit }, (_, index) => index + cursor)
+			const nextCursor = cursor + limit - 1
+			return { items, ...(nextCursor >= 1049 ? {} : { nextCursor }) }
+		},
+		1050,
+		value => {
+			keyCalls++
+			return String(value)
+		},
+	)
+	expect(result.items).toEqual(Array.from({ length: 1050 }, (_, index) => index))
+	expect(keyCalls).toBeLessThan(1070)
 })

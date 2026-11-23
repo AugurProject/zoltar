@@ -16,7 +16,7 @@ export const useIsolatedAnvilNode = () => {
 		const connectionMode = getAnvilConnectionMode()
 		anvilNode = await createAnvilNodeForConnectionMode(connectionMode, {
 			context: 'test file',
-			printTraces: isSolidityBytecodeCoverageEnabled(),
+			stepsTracing: isSolidityBytecodeCoverageEnabled(),
 			startTimestamp: TEST_CHAIN_START_TIMESTAMP,
 		})
 		anvilWindowEthereum = anvilNode.anvilWindowEthereum

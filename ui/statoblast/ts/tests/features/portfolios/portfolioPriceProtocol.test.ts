@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeEventTopics, parseAbi, parseAbiParameters, zeroHash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, parseAbi, parseAbiParameters, zeroHash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { loadPortfolioBranchPrice, loadPortfolioPriceReport, submittedPortfolioPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioPrice.js'
+import { buildPortfolioPriceTokenWithdrawal, loadPortfolioBranchPrice, loadPortfolioPriceReport, submittedPortfolioPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioPrice.js'
 import { sendPortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -21,6 +21,19 @@ test('direct report authentication pins stored preimages and subtracts oracle cr
 	expect(fixture.reads.length).toBeLessThan(16)
 	fixture.set(priceOracle, 'tokenHolder', 1n)
 	expect(await loadPortfolioPriceReport(fixture.client, snapshot, 9n)).toMatchObject({ wethCredit: 0n, repCredit: 0n })
+})
+test('encodes independent funding withdrawals to the sponsor or a sponsor-selected recipient', async () => {
+	const fixture = priceFixture()
+	const snapshot = await loadPortfolioBranchPrice(fixture.client, portfolio, owner, 42n)
+	const report = await loadPortfolioPriceReport(fixture.client, snapshot, 9n)
+	const abi = parseAbi(['function withdrawTokenFunding(address token,address recipient)'])
+	const rep = buildPortfolioPriceTokenWithdrawal(snapshot, report, 'rep', owner)
+	const collateral = buildPortfolioPriceTokenWithdrawal(snapshot, report, 'collateral', portfolio)
+	expect(rep).toMatchObject({ account: owner, to: priceEscrow, value: 0n })
+	expect(decodeFunctionData({ abi, data: rep.data })).toEqual({ functionName: 'withdrawTokenFunding', args: [token, owner] })
+	expect(decodeFunctionData({ abi, data: collateral.data })).toEqual({ functionName: 'withdrawTokenFunding', args: [priceWeth, portfolio] })
+	expect(() => buildPortfolioPriceTokenWithdrawal({ ...snapshot, owner: portfolio }, report, 'rep', portfolio)).toThrow('Invalid report funding recipient')
+	expect(() => buildPortfolioPriceTokenWithdrawal(snapshot, report, 'rep', priceEscrow)).toThrow('Invalid report funding recipient')
 })
 test.each(['escrow', 'token', 'callback', 'stored flags', 'time flag', 'state hash', 'block hash'])('report authentication rejects mismatched %s', async mismatch => {
 	const fixture = priceFixture()

@@ -60,8 +60,6 @@
 				"tooling/repo/build-shared.mts",
 				"tooling/repo/check-agent-configs.mts",
 				"tooling/repo/check-unit-terminology.mts",
-				"tooling/ui/browserSmoke.mts",
-				"tooling/ui/chromiumDevTools.mts",
 				"tooling/ui/dev-server.ts",
 				"tooling/ui/production.mts",
 				"tooling/ui/watch.mts",

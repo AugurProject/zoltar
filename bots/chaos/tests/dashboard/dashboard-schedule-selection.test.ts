@@ -48,10 +48,12 @@ browserTest(
 		try {
 			const waitFor = async (expression: string) => await cdp.waitFor(expression, { attempts: 400 })
 			const capture = async (name: string) => {
+				const directory = process.env['CHAOS_QA_SCREENSHOTS']
+				if (directory === undefined) return
 				const result = await cdp.command('Page.captureScreenshot', { format: 'png' })
 				const data = typeof result === 'object' && result !== null ? Reflect.get(result, 'data') : undefined
 				if (typeof data !== 'string') throw new Error('Screenshot unavailable')
-				await Bun.write(`/tmp/chaos-controls-qa/${name}.png`, Buffer.from(data, 'base64'))
+				await Bun.write(`${directory}/${name}.png`, Buffer.from(data, 'base64'))
 			}
 			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
 			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/overview` })
