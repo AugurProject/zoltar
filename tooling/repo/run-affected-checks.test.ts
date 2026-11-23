@@ -79,11 +79,19 @@ test.each([
 	['bots/README.md', ['arbitrager', 'docs']],
 ] as const)('documentation consumed by code (%s) selects its consumer and documentation checks', (path, expected) => {
 	expect(affectedCheckSelection([path]).map(project => project.id)).toEqual([...expected])
-	expect(new Set(affectedCheckPlan([path]).map(entry => entry.projectId))).toEqual(new Set(expected))
+	const plan = affectedCheckPlan([path])
+	if (expected[0] === 'repository') {
+		expect(plan.filter(entry => entry.projectId === 'repository' && entry.command.join(' ') === 'bun run check:complete')).toHaveLength(1)
+		expect(plan.some(entry => entry.projectId === 'docs')).toBe(false)
+	} else {
+		expect(new Set(plan.map(entry => entry.projectId))).toEqual(new Set(expected))
+	}
 })
 
-test('repository-wide documentation data selects the complete registry', () => {
-	expect(affectedCheckSelection(['docs/mainnet-deployment-addresses.json'])).toEqual(projects)
+test('repository-wide documentation data selects the complete registry without repeating documentation checks', () => {
+	const paths = ['docs/mainnet-deployment-addresses.json']
+	expect(affectedCheckSelection(paths)).toEqual(projects)
+	expect(affectedCheckPlan(paths).some(entry => entry.projectId === 'docs')).toBe(false)
 })
 
 test('mixed documentation and runtime changes preserve each distinct owner', () => {

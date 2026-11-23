@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { getTimingContextPaths, getWeightedTestFiles, KNOWN_FILE_WEIGHTS, parseShardOption } from './run-balanced-test-shard.mts'
 import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles, parseCoverageShardNumber } from './run-solidity-bytecode-coverage.mts'
 import { TEST_BUILD_TARGET_IDS } from '../ui/tests.mts'
-import { createBalancedTestShards, discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, hasExplicitTestPath, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
+import { createBalancedTestShards, discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, hasExplicitTestPath, isExplicitTestPath, isTestSourceFile, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
 import {
 	createTestFingerprints,
 	createTestTimingObservation,
@@ -25,15 +25,22 @@ import {
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 describe('canonical test discovery', () => {
-	test('the aggregate test entrypoint owns every local package suite and browser smoke', async () => {
+	test('validate owns comprehensive local checks and browser smoke', async () => {
 		const packageManifest: unknown = JSON.parse(await readFile('package.json', 'utf8'))
 		if (!isPlainRecord(packageManifest) || !isPlainRecord(packageManifest['scripts'])) throw new Error('package.json must define scripts')
-		const command = packageManifest['scripts']['test:all']
-		expect(typeof command).toBe('string')
-		if (typeof command !== 'string') return
-		expect(command).toContain('bun run test:preflight')
-		expect(command).toContain('bun run validate')
-		expect(command).toContain('bun run test:browser:smoke')
+		const scripts = packageManifest['scripts']
+		expect(scripts['test:all']).toBe('bun run validate')
+		const validate = scripts['validate']
+		if (typeof validate !== 'string') throw new Error('package.json must define validate')
+		expect(validate.split(' && ')).toEqual(['bun run projects:test --group complete-validation', 'bun run projects:check --group complete-validation', 'bun run test:browser:smoke'])
+		const preflight = scripts['test:preflight']
+		if (typeof preflight !== 'string') throw new Error('package.json must define test:preflight')
+		const preflightFiles = preflight
+			.split(' ')
+			.filter(isTestSourceFile)
+			.map(file => file.replace(/^\.\//, ''))
+		expect(preflightFiles.length).toBeGreaterThan(0)
+		expect(await discoverTestFiles()).toEqual(expect.arrayContaining(preflightFiles))
 	})
 
 	test('local and CI discovery include source, shared, and stateful tests exactly once', async () => {

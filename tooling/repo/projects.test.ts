@@ -47,9 +47,15 @@ test('registry tasks carry explicit working directories and derive canonical tas
 	expect(taskProjects('test').map(project => project.id)).toContain('chaos')
 })
 
-test('complete validation includes root and non-database AugurScan tests', () => {
+test('complete validation runs root and non-database AugurScan tests plus each composite check once', () => {
 	expect(projectsInTaskGroup('test', 'complete-validation').map(project => project.id)).toEqual(['repository', 'augur-scan'])
 	expect(projects.find(project => project.id === 'augur-scan')?.tasks.test?.command).toEqual(['bun', 'run', 'test:ci'])
+	expect(projectsInTaskGroup('check', 'complete-validation').map(project => project.id)).toEqual(
+		taskProjects('check')
+			.filter(project => project.id !== 'docs')
+			.map(project => project.id),
+	)
+	expect(taskProjects('check').find(project => project.id === 'docs')?.tasks.check?.command).toEqual(['bun', 'run', 'docs:check'])
 })
 
 test('every dependency audit excludes only the documented unpatched advisories', () => {

@@ -154,13 +154,14 @@ Each serve command first builds the selected app and its dependencies, then serv
 | Regenerate contract bindings and vendor assets    | `bun run generate` (contracts only: `bun run compile-contracts`)                                    |
 | Build every UI app and test bundle                | `bun run ui:build` (production bundles: `bun run ui:build:prod`)                                    |
 | Type-check                                        | `bun run tsc`                                                                                        |
-| Find and run the tests my change affects          | `bun run test:plan`, then the listed test paths; `bun run check:affected` runs affected project checks |
+| Find and run focused tests                        | `bun run test:plan`, then run the relevant suggested test commands                                   |
+| Run checks for affected projects                  | `bun run check:affected` (preview with `bun run check:affected -- --dry-run`)                          |
+| Run comprehensive local validation                | `bun run validate`                                                                                   |
 | Run the root test suite                           | `bun run test`                                                                                       |
 | Lint and check what I changed                     | `bun run check:changed`                                                                              |
 | Run the full lint, documentation, and repository checks | `bun run check`                                                                                |
 | Format, or verify formatting                      | `bun run format`, `bun run format:check`                                                            |
 | Find dead code                                    | `bun run knip`                                                                                       |
-| Run comprehensive local validation                  | `bun run validate` (plus preflight and browser smoke tests: `bun run test:all`)                     |
 
 ### Script families
 
@@ -168,20 +169,20 @@ Root scripts are grouped by prefix:
 
 - `setup`, `generate`, `compile-contracts`, `shared:build`, `ui:vendor`, `ensure-*`: install dependencies and create generated outputs. `tooling/repo/generated-artifacts.ts` lists every generated output with the command that recreates it.
 - `app:serve:<app>`, `app:watch:<app>`, `ui:build*`, `ui:browser-smoke:<app>`, `ui:layout-scan`, `ui:publish:*`: build, serve, smoke-test, layout-scan, and publish the UI apps.
-- `test`, `test:*`, `coverage*`: `test` runs `tsc` and then the canonical root suite (`test:run`). `test:preflight` covers the project registry and CI tooling, the `test:browser:*` and `test:integration:*` tiers run only when invoked explicitly, and the remaining `test:*` scripts run focused suites.
+- `test`, `test:*`, `coverage*`: `test` runs `tsc` and then the canonical root suite (`test:run`), which includes the project registry and CI tooling tests. Run `test:preflight` to check that subset on its own. Browser workflow and live integration suites have dedicated commands.
 - `check`, `check:*`, `lint:*`, `docs:check*`, `format*`, `knip*`: static analysis. `check` runs `check:static` (Biome and custom lint rules), `docs:check`, and `check:repository`. `check:complete` adds formatting, dead-code analysis, and generated-output freshness, and is the repository's `check` task in `validate`.
-- `validate`, `test:all`: comprehensive local validation. CI additionally runs mutation smoke, the browser workflow tier, dependency auditing and augurScan PostgreSQL integration.
+- `validate`: comprehensive local validation with browser smoke. `test:all` is an alias. CI additionally runs mutation smoke, the browser workflow tier, dependency auditing and augurScan PostgreSQL integration.
 - `projects:*`: run one task (`setup`, `test`, `check`, `typecheck`, `workers`) across the projects registered in `tooling/repo/projects.ts`.
 - `ci:*`: entry points used by GitHub Actions jobs.
 - `trading:*`: Trading-only shortcuts used by the [Trading development guide](https://augurproject.github.io/zoltar/docs/how-to/trading-set-up-development.html).
 
-A `:current` suffix runs the same work as the unsuffixed script against the workspace as it is: it skips the preparation step, which is usually regenerating contract artifacts or shared builds (`compile-contracts:current`, `check:contract-safety:current`, `check:mainnet-deployment:current`, `docs:check:current`, `ui:build:prod:current`). `check:repository:current` instead skips the source-size and preflight steps that CI runs in a separate job, and `ci:*:current` and `tsc:solidity:current` are the names CI calls after it has restored the generated artifacts. Use `:current` only after `bun run setup` or `bun run generate` has run in the same checkout.
+A `:current` suffix runs the same work as the unsuffixed script against the workspace as it is: it skips the preparation step, which is usually regenerating contract artifacts or shared builds (`compile-contracts:current`, `check:contract-safety:current`, `check:mainnet-deployment:current`, `docs:check:current`, `ui:build:prod:current`). `check:repository:current` instead skips the source-size check that CI runs in a separate job, and `ci:*:current` and `tsc:solidity:current` are the names CI calls after it has restored the generated artifacts. Use `:current` only after `bun run setup` or `bun run generate` has run in the same checkout.
 
 ### Details
 
-Changes to global, unowned, CI, or repository-tooling paths make `check:affected` select the full registered check set. Project-owned changes select the owning project and its registry dependents. When a package's canonical `check` command already covers its typecheck, lint, or tests, affected validation runs that composite once instead of repeating the covered work.
+Changes to global, unowned, CI, or repository-tooling paths make `check:affected` select the full registered check set. Project-owned changes select the owning project and its registry dependents. When a package's canonical `check` command already covers its typecheck, lint, or tests, affected validation runs the composite. The root composite includes documentation checks. Documentation-only plans can run `docs:check` directly.
 
-`bun run validate` runs the root suite, every independent package `check` command, formatting, repository checks, dead-code analysis, and generated-output freshness. CI component selection, dependency expansion, cache inputs, generated outputs, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
+`bun run validate` runs the root and AugurScan test suites, the registered composite checks for the repository and independent packages, and browser smoke. The root composite includes formatting, documentation and repository checks, dead-code analysis, and generated-output freshness. CI component selection, dependency expansion, cache inputs, generated outputs, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
 
 - `bun run tsc` prepares missing or stale contract artifacts and shared build outputs, then runs the registered project typechecks. `bun run tsc:app` refreshes Trading vendor inputs and then typechecks the UI apps. Both commands can write generated files.
 - `bun run test:launch-invariants` runs the launch-focused fork, auction, and exit invariant gate.

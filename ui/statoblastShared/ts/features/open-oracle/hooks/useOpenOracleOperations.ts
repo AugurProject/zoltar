@@ -7,8 +7,9 @@ import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatOpenOracleDisputeWriteErrorMessage, formatOpenOracleSettleWriteErrorMessage, getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, getOpenOracleSelectedReportActionMode, getOpenOracleSettleAvailability, parseOpenOracleCreateFormSubmission } from '../lib/openOracle.js'
-import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from '../lib/openOracle.js'
+import type { OpenOracleCreateContractFieldErrors } from '../lib/openOracle.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '../lib/openOracleDispute.js'
+import { assertDisputeSwapTokenUnchanged, submitPreparedDispute } from '../lib/disputeSubmission.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { getDefaultOpenOracleCreateFormState } from '../lib/formDefaults.js'
@@ -123,13 +124,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			walletEthBalanceAttoEth: ethBalanceAttoEth,
 			wethAddress: getWethAddress(),
 		})
-
-	// The proposed price picks the swapped token, so a refreshed report that flips it must be reviewed before any write.
-	const assertDisputeSwapTokenUnchanged = (reviewed: OpenOracleDisputeSubmissionDetails, refreshed: OpenOracleDisputeSubmissionDetails, reportDetails: OpenOracleReportDetails) => {
-		if (reviewed.swapTokenKey === undefined || refreshed.swapTokenKey === undefined || reviewed.swapTokenKey === refreshed.swapTokenKey) return
-		const symbolOf = (token: 'token1' | 'token2') => (token === 'token1' ? reportDetails.token1Symbol : reportDetails.token2Symbol)
-		throw new Error(openOracleCopy.formatDisputeSwapTokenChanged(symbolOf(refreshed.swapTokenKey), symbolOf(reviewed.swapTokenKey)))
-	}
 
 	const runOracleAction = async (
 		actionName: OpenOracleActionResult['action'],
@@ -463,42 +457,29 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		}
 	}
 
-	const disputeReport = async () =>
-		await (() => {
-			const submittedOpenOracleForm = openOracleForm.value
-			return runOracleAction(
-				'dispute',
-				async (walletAddress, context) => {
-					const submittedReportIdInput = submittedOpenOracleForm.reportId.trim()
-					const cachedReportDetails = openOracleReportDetails.value
-					const cachedDisputeSubmission = cachedReportDetails === undefined ? undefined : getDisputeSubmission(cachedReportDetails, submittedOpenOracleForm)
-					const { details } = await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: submittedReportIdInput, requireCurrentSelection: true })
-					const disputeInputPreflight = getDisputeSubmission(details, submittedOpenOracleForm)
-					if (disputeInputPreflight.inputBlockMessage !== undefined) throw new Error(disputeInputPreflight.inputBlockMessage.message)
-					if (cachedDisputeSubmission !== undefined) assertDisputeSwapTokenUnchanged(cachedDisputeSubmission, disputeInputPreflight, details)
-					await refreshOpenOracleTokenAccess(details, { preserveExisting: true })
-					assertSelectedReportCurrent(details.reportId.toString())
-					const disputeSubmission = getDisputeSubmission(details, submittedOpenOracleForm)
-					if (!disputeSubmission.canSubmit || disputeSubmission.newAmount1 === undefined || disputeSubmission.newAmount2 === undefined || disputeSubmission.swapTokenKey === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
-					const tokenToSwap = disputeSubmission.swapTokenKey === 'token1' ? details.token1 : details.token2
-					return await dependencies.disputeOracleReport(
-						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
-						getOpenOracleAddress(),
-						details.reportId,
-						tokenToSwap,
-						disputeSubmission.newAmount1,
-						disputeSubmission.newAmount2,
-						details.currentAmount2,
-						details.stateHash,
-					)
-				},
-				'Failed to dispute report',
-				{
-					formatErrorMessage: formatOpenOracleDisputeWriteErrorMessage,
-					refreshTokenAccessOnSuccess: true,
-				},
-			)
-		})()
+	const disputeReport = async () => {
+		const submittedForm = openOracleForm.value
+		await runOracleAction(
+			'dispute',
+			(walletAddress, context) =>
+				submitPreparedDispute({
+					cachedReport: openOracleReportDetails.value,
+					getSubmission: details => getDisputeSubmission(details, submittedForm),
+					reloadReport: () => ensureLoadedSelectedReport({ forceReload: true, reportIdInput: submittedForm.reportId.trim(), requireCurrentSelection: true }),
+					refreshTokenAccess: details => refreshOpenOracleTokenAccess(details, { preserveExisting: true }),
+					assertSelectedReportCurrent,
+					submit: ({ details, tokenToSwap, newAmount1, newAmount2 }) => {
+						const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
+						return dependencies.disputeOracleReport(writeClient, getOpenOracleAddress(), details.reportId, tokenToSwap, newAmount1, newAmount2, details.currentAmount2, details.stateHash)
+					},
+				}),
+			'Failed to dispute report',
+			{
+				formatErrorMessage: formatOpenOracleDisputeWriteErrorMessage,
+				refreshTokenAccessOnSuccess: true,
+			},
+		)
+	}
 
 	useEffect(() => {
 		cancelWithdrawalBalanceCheck()

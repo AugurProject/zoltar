@@ -580,7 +580,7 @@ ${command}`,
 			}
 		}
 		const scripts = requireRecord(requireRecord(JSON.parse(await readFile(rootPackagePath, 'utf8')), 'root package')['scripts'], 'root scripts')
-		expect(scripts['check:repository']).toBe('bun run check:source-size && bun run test:preflight && bun run check:repository:current')
+		expect(scripts['check:repository']).toBe('bun run check:source-size && bun run check:repository:current')
 		expect(scripts['check:repository:current']).not.toContain('test:preflight')
 		expect(scripts['check:repository:current']).not.toContain('check:source-size')
 	})

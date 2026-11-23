@@ -25,6 +25,10 @@ library SecurityPoolSettlementMath {
 	function scaledValue(uint256 weight, uint256 net, uint256 units) internal pure returns (uint256) {
 		return weight == 0 || units == 0 ? 0 : Math.mulDiv(weight, net, units);
 	}
+	/// @dev A partial burn rounds down; the last burn consumes every remaining unit.
+	function unitsForRedeemedShares(uint256 units, uint256 supply, uint256 burnedShares) internal pure returns (uint256) {
+		return burnedShares == supply ? units : Math.mulDiv(units, burnedShares, supply);
+	}
 	function cashForUnits(uint256 cash, uint256 units, uint256 remainder, uint256 burned) internal pure returns (uint256) {
 		if (burned == 0) return 0;
 		return burned == units ? cash : rawValue(burned, netCash(cash, remainder), units, Math.Rounding.Floor);
