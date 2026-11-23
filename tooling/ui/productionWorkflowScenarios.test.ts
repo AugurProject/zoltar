@@ -14,3 +14,8 @@ test.each([...PRODUCTION_WORKFLOW_SCENARIOS])('a CI job selects only %s', scenar
 test.each(['unknown', 'Deployment', 'deployment,pool-recovery', ' deployment'])('rejects invalid scenario %s rather than silently running zero tests', scenario => {
 	expect(() => selectProductionWorkflowScenarios(scenario)).toThrow('Unknown production browser workflow scenario')
 })
+
+test('a grouped job selects every named scenario exactly once', () => {
+	expect(selectProductionWorkflowScenarios('deployment,trading-liquidity,openoracle-report')).toEqual(['deployment', 'trading-liquidity', 'openoracle-report'])
+	expect(() => selectProductionWorkflowScenarios('deployment,deployment')).toThrow('Duplicate production browser workflow scenario')
+})

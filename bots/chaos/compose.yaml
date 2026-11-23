@@ -9,6 +9,7 @@ services:
       dockerfile: bots/chaos/Dockerfile
     image: zoltar-chaos
     environment:
+      ZOLTAR_BOT_COMPOSE_UI_PORT: "4193"
       # Keep this assertion paired with the host-loopback port mapping below.
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
       # flock coordinates containers on this Docker host through the shared volume.

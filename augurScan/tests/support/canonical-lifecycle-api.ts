@@ -24,7 +24,7 @@ export const expectCanonicalLogPagination = async ({ database }: LifecycleContex
 	const orphanHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&canonical=orphaned`), database.sql)
 	const orphanHistory = (await orphanHistoryResponse?.json()) as { items: unknown[]; canonical: string }
 	expect(orphanHistory.canonical).toBe('orphaned')
-	expect(orphanHistory.items).toContainEqual(expect.objectContaining({ block_hash: orphan.hash, canonical: false, summary: 'orphan event' }))
+	expect(orphanHistory.items).toContainEqual(expect.objectContaining({ block_hash: orphan.hash, canonical_block_hash: replacement.hash, canonical: false, summary: 'orphan event' }))
 	const orphanHistoryDetailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${orphan.hash}/${transactionHash}/0?canonical=all`), database.sql)
 	expect(orphanHistoryDetailResponse?.status).toBe(200)
 	expect(await orphanHistoryDetailResponse?.json()).toMatchObject({ block_hash: orphan.hash, canonical: false, summary: 'orphan event' })

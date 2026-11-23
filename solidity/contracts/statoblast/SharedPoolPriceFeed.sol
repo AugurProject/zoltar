@@ -463,6 +463,7 @@ contract SharedPoolPriceFeed {
 
 	/// @notice Complete a settled report whose callback failed or whose settlement block
 	/// exceeded its base-fee ceiling, using the amounts and observation timestamp OpenOracle stored.
+	/// Funding remains separately withdrawable from the report escrow.
 	/// Expired observations retire normally; fresh canonical prices may still serve
 	/// superseded candidates’ bounded operations. Fresh candidates retain
 	/// their original sponsor operations and cannot be killed by callback starvation
@@ -473,7 +474,6 @@ contract SharedPoolPriceFeed {
 		(uint128 amount1, uint128 amount2, , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
 		require(settlementTimestamp != 0, 'Report not settled');
 		require(_completeReport(reportId, amount1, amount2, candidate), 'Base fee too high');
-		candidate.escrow.withdrawFunding();
 		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 	}
 
@@ -488,7 +488,7 @@ contract SharedPoolPriceFeed {
 
 	function _validateSettledReport(uint256 reportId, uint256 amount1, uint256 amount2) private view returns (string memory reason, uint256 priceTimestamp) {
 		// Before activation, closing is anchored to the native recap deadline.
-		// A later callback must refund normally without replacing its frozen quote.
+		// A later callback must reject the candidate without replacing its frozen quote.
 		if (!ISharedPoolPortfolioPriceCheckpoint(portfolio).isPriceReportingOpen(universeId()))
 			return ('Portfolio reporting window closed', 0);
 		(, , , uint48 finalReportTimestamp, , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);

@@ -65,25 +65,26 @@ contract SharedPoolReportEscrow {
 		}
 		ISharedReportReceiver(feed).settleReport(id, amount1, amount2);
 		emit ReportCompleted(id, feed, ISharedReportReceiver(feed).reportOutcome(id));
-		_withdrawOracleFunding();
 	}
 
-	/// @notice Anyone can deliver already-released report funding to its sponsor.
-	/// A disputed or failed-callback candidate cannot lock another report's funds.
+	/// @notice Anyone can deliver both released report tokens to the sponsor.
+	/// @dev Settlement never transfers tokens. If one token fails here, use
+	/// withdrawTokenFunding to claim the other independently.
 	function withdrawFunding() external {
-		_withdrawOracleFunding();
-		if (reportId == 0) return;
-		_returnDirectBalance(collateralToken);
-		_returnDirectBalance(IERC20(address(reputationToken)));
+		_withdrawTokenFunding(collateralToken, sponsor);
+		_withdrawTokenFunding(IERC20(address(reputationToken)), sponsor);
 	}
 
-	function _returnDirectBalance(IERC20 token) private {
+	/// @notice Withdraw one report token independently. Only the sponsor may redirect it.
+	/// @dev A failed transfer reverts this token's withdrawal, preserving its oracle credit.
+	function withdrawTokenFunding(IERC20 token, address recipient) external {
+		require((msg.sender == sponsor || recipient == sponsor) && recipient != address(this) && (address(token) == address(collateralToken) || address(token) == address(reputationToken)), 'Invalid funding withdrawal');
+		_withdrawTokenFunding(token, recipient);
+	}
+
+	function _withdrawTokenFunding(IERC20 token, address recipient) private {
+		openOracle.withdrawTo(address(token), type(uint256).max, recipient);
 		uint256 balance = token.balanceOf(address(this));
-		if (balance != 0) token.safeTransfer(sponsor, balance);
-	}
-
-	function _withdrawOracleFunding() private {
-		openOracle.withdrawTo(address(collateralToken), type(uint256).max, sponsor);
-		openOracle.withdrawTo(address(reputationToken), type(uint256).max, sponsor);
+		if (balance != 0) token.safeTransfer(recipient, balance);
 	}
 }

@@ -170,6 +170,8 @@ function getRpcUrlValidationError(url: string) {
 		throw error
 	}
 
+	if (parsedUrl.username !== '' || parsedUrl.password !== '') return 'RPC URL must not contain embedded credentials.'
+
 	if (parsedUrl.protocol === 'https:') return undefined
 	if (parsedUrl.protocol === 'http:' && isLocalHttpRpcHostname(parsedUrl.hostname)) return undefined
 	if (parsedUrl.protocol === 'http:') return 'RPC URL must use https:// unless it points to local loopback.'

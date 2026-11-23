@@ -50,6 +50,7 @@ export async function preparePortfolioCollateralRepairAuction(fixture: ReturnTyp
 		await mock.advanceTime(481n)
 		await openOracleSettle(owner, id)
 		if ((await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'reportOutcome', args: [id] })) !== 1n) throw new Error('Collateral repair auction price report was not accepted')
+		return id
 	}
 	const open = () => writeContractAndWait(owner, () => owner.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'open' }))
 	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit, health = 12_000n) => {

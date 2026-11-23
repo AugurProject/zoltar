@@ -361,10 +361,16 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFeeAttoEthPerGas, pendingMaxSettlementBaseFeeAfterRecovery, 'PendingReportRecovered should expose the cleared basefee guard')
 		assert.strictEqual(recoveryLog.args.lastPrice, lastPriceAfterRecovery, 'PendingReportRecovered should expose the accepted last price')
 		assert.strictEqual(recoveryLog.args.lastSettlementTimestamp, lastSettlementTimestampAfterRecovery, 'PendingReportRecovered should expose the accepted settlement timestamp')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest + pendingState.game.currentAmount2, 'recovery should return the settled REP amount to the sponsor')
-		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAttoEthAfterRequest + pendingState.game.currentAmount1, 'recovery should return the settled WETH amount to the sponsor')
-		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(pendingReportId), addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'recovery should drain the coordinator REP credit to its sentinel')
-		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(pendingReportId), WETH_ADDRESS), 1n, 'recovery should drain the coordinator WETH credit to its sentinel')
+		const escrow = await escrowFor(pendingReportId)
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest, 'recovery must not transfer sponsor REP')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAttoEthAfterRequest, 'recovery must not transfer sponsor WETH')
+		assert.strictEqual(await getOpenOracleHeldBalance(escrow, addressString(GENESIS_REPUTATION_TOKEN)), pendingState.game.currentAmount2 + 1n, 'recovery must retain withdrawable REP credit')
+		assert.strictEqual(await getOpenOracleHeldBalance(escrow, WETH_ADDRESS), pendingState.game.currentAmount1 + 1n, 'recovery must retain withdrawable WETH credit')
+		await writeContractAndWait(client, () => client.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest + pendingState.game.currentAmount2, 'withdrawal should return the settled REP amount to the sponsor')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAttoEthAfterRequest + pendingState.game.currentAmount1, 'withdrawal should return the settled WETH amount to the sponsor')
+		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(pendingReportId), addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'withdrawal should drain the escrow REP credit to its sentinel')
+		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(pendingReportId), WETH_ADDRESS), 1n, 'withdrawal should drain the escrow WETH credit to its sentinel')
 
 		await requestPriceWithValue(client, priceOracle, costAttoEth)
 		const nextPendingReportId = await getPendingReportId(client, priceOracle)
@@ -454,7 +460,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(reportStatus.currentAmount2, requestedInitialAttoWeth, 'the coordinator should derive matching REP from the selected WETH amount and proposed price')
 	})
 
-	test('coordinator settlement returns the undisputed report liquidity to the sponsor wallet', async () => {
+	test('coordinator settlement leaves undisputed report liquidity separately withdrawable', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
 		const requestedInitialAttoWeth = (await configuredMinimum()) * 2n
 		await wrapWeth(client, requestedInitialAttoWeth)
@@ -473,8 +479,15 @@ describe('Shared portfolio oracle security regressions', () => {
 
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 		await openOracleSettle(client, reportId)
-		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), wethBalanceAttoEthBeforeRequest, 'settlement should return the coordinator reporter WETH to the sponsor')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest, 'settlement should return the coordinator reporter REP to the sponsor')
+		const escrow = await escrowFor(reportId)
+		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'reportOutcome', args: [reportId] }), 1n, 'settlement should accept the report before withdrawal')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), wethBalanceAttoEthBeforeRequest - requestedInitialAttoWeth, 'acceptance must not transfer sponsor WETH')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest - requestedInitialAttoWeth, 'acceptance must not transfer sponsor REP')
+		assert.strictEqual(await getOpenOracleHeldBalance(escrow, WETH_ADDRESS), requestedInitialAttoWeth + 1n, 'settlement must retain withdrawable WETH credit')
+		assert.strictEqual(await getOpenOracleHeldBalance(escrow, addressString(GENESIS_REPUTATION_TOKEN)), requestedInitialAttoWeth + 1n, 'settlement must retain withdrawable REP credit')
+		await writeContractAndWait(client, () => client.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), wethBalanceAttoEthBeforeRequest, 'withdrawal should return the escrow reporter WETH to the sponsor')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest, 'withdrawal should return the escrow reporter REP to the sponsor')
 	})
 
 	test('request-block WETH sizing preserves the submitted REP per ETH price after basefee moves', async () => {
@@ -566,7 +579,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'the cached price should remain stale after expiry')
 	})
 
-	test('oracle settlement distinguishes direct coordinator balances from OpenOracle beneficiary credits', async () => {
+	test('withdrawal distinguishes direct coordinator balances from OpenOracle escrow credits', async () => {
 		const donor = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const donatedWeth = 3n * 10n ** 15n
 		const donatedRep = 5n * 10n ** 18n
@@ -631,12 +644,18 @@ describe('Shared portfolio oracle security regressions', () => {
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 		await openOracleSettle(client, reportId)
 
-		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBeforeRequest + openOracleDonatedWeth, 'settlement should send the sponsor every withdrawable WETH credit held internally for the coordinator')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBeforeRequest + openOracleDonatedRep, 'settlement should send the sponsor every withdrawable REP credit held internally for the coordinator')
-		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(reportId), WETH_ADDRESS), 1n, 'settlement should drain the coordinator OpenOracle WETH credit to its sentinel')
-		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(reportId), addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'settlement should drain the coordinator OpenOracle REP credit to its sentinel')
-		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, priceOracle), coordinatorWethSurplus, 'settlement must not sweep unsolicited coordinator WETH into sponsor proceeds')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle), coordinatorRepSurplus, 'settlement must not sweep unsolicited coordinator REP into sponsor proceeds')
+		const escrow = await escrowFor(reportId)
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBeforeRequest - requestedInitialAttoWeth, 'settlement must leave sponsor WETH unchanged until withdrawal')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBeforeRequest - requestedInitialAttoWeth, 'settlement must leave sponsor REP unchanged until withdrawal')
+		assert.strictEqual(await getOpenOracleHeldBalance(escrow, WETH_ADDRESS), requestedInitialAttoWeth + openOracleDonatedWeth + 1n, 'escrow credit must retain settled and donated WETH')
+		assert.strictEqual(await getOpenOracleHeldBalance(escrow, addressString(GENESIS_REPUTATION_TOKEN)), requestedInitialAttoWeth + openOracleDonatedRep + 1n, 'escrow credit must retain settled and donated REP')
+		await writeContractAndWait(donor, () => donor.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBeforeRequest + openOracleDonatedWeth, 'withdrawal should send the sponsor every withdrawable WETH credit held internally for the escrow')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBeforeRequest + openOracleDonatedRep, 'withdrawal should send the sponsor every withdrawable REP credit held internally for the escrow')
+		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(reportId), WETH_ADDRESS), 1n, 'withdrawal should drain the escrow OpenOracle WETH credit to its sentinel')
+		assert.strictEqual(await getOpenOracleHeldBalance(await escrowFor(reportId), addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'withdrawal should drain the escrow OpenOracle REP credit to its sentinel')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, priceOracle), coordinatorWethSurplus, 'withdrawal must not sweep unsolicited coordinator WETH into sponsor proceeds')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle), coordinatorRepSurplus, 'withdrawal must not sweep unsolicited coordinator REP into sponsor proceeds')
 	})
 
 	test('rejecting sponsors roll back bounty refunds, report creation, and token funding', async () => {

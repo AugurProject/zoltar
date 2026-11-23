@@ -242,3 +242,16 @@ describe('rpc config', () => {
 		).toBe('https://ethereum.dark.florist')
 	})
 })
+
+test('rejects credential-bearing RPC settings before writing storage', () => {
+	const storage = {
+		getItem: () => null,
+		setItem: () => {
+			throw new Error('unexpected write')
+		},
+	}
+	for (const url of ['https://user:password@rpc.example', 'http://user@localhost:8545']) {
+		expect(() => saveNetworkRpcUrl('mainnet', url, storage)).toThrow('embedded credentials')
+		expect(resolveConfiguredRpcConfig({ overrideRpcUrl: url }).rejectedOverride?.reason).toContain('embedded credentials')
+	}
+})

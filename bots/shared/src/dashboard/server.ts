@@ -55,6 +55,8 @@ function validateExposure(hostname: '0.0.0.0' | '127.0.0.1', loopbackPublished: 
  * carries the security headers; its detail only reaches the process log.
  */
 export function startBotDashboardServer(options: BotDashboardServerOptions) {
+	const composePort = process.env['ZOLTAR_BOT_COMPOSE_UI_PORT']
+	if (composePort !== undefined && String(options.port) !== composePort) throw new Error(`runtime.uiPort must be ${composePort} in Compose`)
 	validateExposure(options.hostname, options.loopbackPublished, options.exposure)
 	const password = 'password' in options.exposure ? options.exposure.password : undefined
 	const publicAuthority = 'publicAuthority' in options.exposure ? options.exposure.publicAuthority : undefined

@@ -45,6 +45,9 @@ services:
       context: ..
       dockerfile: augurScan/Dockerfile
     command: ["bun", "augurScan/src/indexer-process.ts"]
+    # The worker has no HTTP listener; the image probe belongs to the web app.
+    healthcheck:
+      disable: true
     restart: unless-stopped
     depends_on:
       postgres:

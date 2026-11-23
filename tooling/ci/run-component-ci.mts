@@ -1,3 +1,5 @@
+import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { componentProjects, projectDependencyClosure, projects, type Project } from '../repo/projects.ts'
 import { runTaskProcess } from '../repo/task-process.mts'
 
@@ -34,6 +36,18 @@ export async function runComponentCiCommand(args: readonly string[] = process.ar
 	const packageName = args[0]
 	if (packageName === undefined) throw new Error('Unknown component package: (missing)')
 	for (const task of createComponentCiPlan(packageName)) {
+		if (packageName === 'augur-scan' && task.command.at(-1) === 'test:ci') {
+			for (const tier of ['unit', 'api', 'replay']) {
+				const directory = `coverage/ci/${tier}`
+				await mkdir(join(task.cwd, directory), { recursive: true })
+				const exitCode = await runTaskProcess({
+					command: ['bun', 'run', `test:${tier}`, '--coverage', '--coverage-reporter=lcov', `--coverage-dir=${directory}`, '--reporter=junit', `--reporter-outfile=${directory}/junit.xml`],
+					cwd: task.cwd,
+				})
+				if (exitCode !== 0) process.exit(exitCode)
+			}
+			continue
+		}
 		console.log(`component-ci(${packageName}): ${task.command.join(' ')}`)
 		const exitCode = await runTaskProcess({ command: task.command, cwd: task.cwd, retryTransientNetworkErrors: task.retryTransientNetworkErrors === true })
 		if (exitCode !== 0) process.exit(exitCode)

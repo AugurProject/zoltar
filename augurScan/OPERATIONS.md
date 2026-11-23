@@ -43,7 +43,7 @@ Every setting is an environment variable. The Compose column names the service t
 | `LIVE_MAX_STREAM_LIFETIME_MS` | `1800000` | `app` | Age at which a live stream is closed and its slot released. The browser reconnects and replays missed events. |
 | `DISABLE_INDEXER` | unset | `indexer` (`0`); fixed to `1` on `app` | `1` starts the indexer process without indexing. See below. |
 
-`DISABLE_INDEXER` affects only the indexer process (`src/indexer-process.ts`). The web app (`src/server.ts`) never indexes, whatever the value. A process that runs without indexing still needs write access: it initializes or migrates the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
+`DISABLE_INDEXER` affects only the indexer process (`src/indexer-process.ts`). The web app (`src/server.ts`) never indexes, whatever the value. A process that runs without indexing still needs write access: it initializes or migrates the schema, records an indexer-disabled process run, and records the run's stop time. Expired live-stream events are pruned by the web app's scheduler, independently of `DISABLE_INDEXER`; a disabled worker alone does not perform retention.
 
 The website and API do not require authentication. API requests share one per-client quota; non-API routes do not consume quota and remain available when it is exhausted.
 
