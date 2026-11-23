@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Every production Solidity source by area, the caller and trust boundaries of deployment helpers and delegate modules, and the SecurityPoolUtils previews." />
+		<meta name="description" content="Every production Solidity source by area, the caller and trust boundaries of deployment helpers and delegate modules." />
 		<title>Contract inventory · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -14,7 +14,7 @@
 				<header>
 					<p class="kicker">Reference</p>
 					<h1 id="support-module-inventory">Contract inventory</h1>
-					<p>This page lists every production Solidity source by area. The <a href="./contracts.html">contract interaction reference</a> documents the entrypoints of the contracts users and keepers call; this page adds the caller and trust boundaries of the deployment helpers, delegate modules, and libraries that reference does not cover, the <code>SecurityPoolUtils</code> previews, and the Uniswap contracts a testnet deployment uses.</p>
+					<p>This page lists every production Solidity source by area. The <a href="./contracts.html">contract interaction reference</a> documents the entrypoints of the contracts users and keepers call; this page adds the caller and trust boundaries of the deployment helpers, delegate modules, and libraries that reference does not cover, and the Uniswap contracts a testnet deployment uses.</p>
 				</header>
 				<section id="caller-and-trust-boundaries">
 					<h2>Caller and trust boundaries</h2>
@@ -134,7 +134,7 @@
 							</tr>
 							<tr>
 								<td><code>EscalationGameFactory</code></td>
-								<td><code>deployEscalationGame</code> and <code>deployEscalationGameFromFork</code> have no permission check, but a successful caller must implement the <code>ISecurityPool</code> reads used during construction; an EOA or incompatible contract reverts. The <code>CREATE2</code> salt is zero; the caller is bound into the init code as the new game's <code>securityPool</code>, so each caller has one game address; the factory itself becomes the game's immutable <code>owner</code> and immediately calls <code>start</code> or <code>startFromFork</code>. Ordinary deployment requires a threshold above one attoREP and lowers a start bond at or above that threshold to <code>threshold - 1</code>. Its constructor receives separately deployed claim and deposit delegates, in that order, and requires code at both addresses. Games share these immutable helpers while keeping their own accounting through <code>delegatecall</code>. Deploying the deposit delegate separately keeps factory init code within the EVM limit. The factory has no owner role and no later <code>resumeFromFork</code> relay.</td>
+								<td><code>deployEscalationGame</code> and <code>deployEscalationGameFromFork</code> require the caller to have a bound reporter portfolio and implement the <code>ISecurityPool</code> reads used during construction; an EOA or incompatible contract reverts. The <code>CREATE2</code> salt is zero; the caller is bound into the init code as the new game's <code>securityPool</code>, so each caller has one game address; the factory itself becomes the game's immutable <code>owner</code> and immediately calls <code>start</code> or <code>startFromFork</code>. Ordinary deployment requires a threshold above one attoREP and lowers a start bond at or above that threshold to <code>threshold - 1</code>. Its constructor receives the separately deployed deposit delegate and requires code at that address. Games share this immutable helper while keeping their own accounting through <code>delegatecall</code>. Deploying the deposit delegate separately keeps factory init code within the EVM limit. The factory has no owner role and no later <code>resumeFromFork</code> relay.</td>
 								<td>Accept a game only after <code>EscalationGameSet</code> from a recognized pool. In the supported continuation path, the owning pool calls <code>resumeFromFork</code>, which also verifies aggregate funding.</td>
 							</tr>
 							<tr>
@@ -160,7 +160,7 @@
 								<td>They are code-size deployment plumbing. The proxy deployer deploys one deterministic <code>SecurityPoolOperationsDelegate</code>, and its address is passed into the <code>SecurityPoolFactory</code> constructor. The proxy deployer is the deterministic <code>CREATE2</code> deployment proxy that every canonical deployment goes through; it is not a Solidity source in this repository and appears in the deployment manifests as step <code>proxyDeployer</code>. The factory passes that address through its deployer and worker to every pool. Its deterministic address is published as <code>securityPoolOperationsDelegate</code>. Pools become canonical only when the factory emits <code>SecurityPoolRegistered</code> and <code>DeploySecurityPool</code>.</td>
 							</tr>
 							<tr>
-								<td><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, <code>SecurityPoolForkerPortfolioDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
+								<td><code>EscalationGameDepositDelegate</code>, <code>SecurityPoolForkerPortfolioDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
 								<td>EscalationGame delegates share game storage and implement reporting deposits and authenticated historical claims. SecurityPoolOperationsDelegate handles wallet reporting, continuation resumption, and redemption. SecurityPoolForkerPortfolioDelegate prepares child questions against shared branch state. These helpers execute in their recognized host context.</td>
 								<td>Accept resulting state and logs only when the recognized game, pool, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through the portfolio capital ledger; continuation activation enters through <code>SecurityPool.resumeForkedEscalationGame</code>.</td>
 							</tr>
@@ -182,9 +182,9 @@
 						</tbody>
 					</table>
 				</section>
-				<section id="securitypoolutils-read-surface">
-					<h2>SecurityPoolUtils read surface</h2>
-					<p><code>calculateInitialEscalationDepositAttoRep</code> derives the first-report bond from theoretical REP supply. <code>calculateMinimumVaultRepDepositAttoRep</code> is an unused helper for a configured or supply-derived minimum; production capital configuration does not call it. Other lifecycle and underwriting math belongs to the corresponding portfolio module.</p>
+				<section id="internal-arithmetic">
+					<h2>Internal arithmetic</h2>
+					<p><code>SecurityPoolUtils.calculateInitialEscalationDepositAttoRep</code> is an internal pure function that derives the first-report bond from theoretical REP supply. It needs no deployed library or linking. Other lifecycle and underwriting math belongs to the corresponding portfolio module.</p>
 					<p><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/UniverseIds.sol"><code>UniverseIds.sol</code></a> derives child-universe IDs from the parent and outcome. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OraclePriceMath.sol"><code>OraclePriceMath.sol</code></a> centralizes conservative and liquidation price bounds and the report-priority-fee ceiling.</p>
 				</section>
 				<section id="production-contract-inventory">
@@ -237,11 +237,9 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateCall.sol"><code>DelegateCall.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateCallForwarder.sol"><code>DelegateCallForwarder.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateErrorReason.sol"><code>DelegateErrorReason.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationClaimCheckpointTypes.sol"><code>EscalationClaimCheckpointTypes.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>EscalationGameCalculations.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>EscalationGameCarry.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameClaimDelegate.sol"><code>EscalationGameClaimDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameDepositDelegate.sol"><code>EscalationGameDepositDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameEscrow.sol"><code>EscalationGameEscrow.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameProofVerifier.sol"><code>EscalationGameProofVerifier.sol</code></a

@@ -5,5 +5,5 @@ import { PROXY_DEPLOYER_ADDRESS } from '../../testSupport/simulator/utils/consta
 
 test('Statoblast status oracle starts with the production Zoltar deployment steps', () => {
 	const addresses = getInfraContractAddresses()
-	expect(getDeploymentStepAddresses().slice(0, 5)).toEqual([addressString(PROXY_DEPLOYER_ADDRESS), addresses.multicall3, addresses.zoltarQuestionData, addresses.zoltar, addresses.securityPoolUtils])
+	expect(getDeploymentStepAddresses().slice(0, 4)).toEqual([addressString(PROXY_DEPLOYER_ADDRESS), addresses.multicall3, addresses.zoltarQuestionData, addresses.zoltar])
 })

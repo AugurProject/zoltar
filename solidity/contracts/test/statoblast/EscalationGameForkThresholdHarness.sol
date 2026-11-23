@@ -5,7 +5,6 @@ import { Zoltar } from '../../Zoltar.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameCalculations } from '../../statoblast/EscalationGameCalculations.sol';
 import { EscalationGameProofVerifier } from '../../statoblast/EscalationGameProofVerifier.sol';
-import { EscalationGameClaimDelegate } from '../../statoblast/EscalationGameClaimDelegate.sol';
 import { EscalationGameState } from '../../statoblast/EscalationGameState.sol';
 import { ISecurityPool } from '../../statoblast/interfaces/ISecurityPool.sol';
 
@@ -44,14 +43,7 @@ contract EscalationGameForkThresholdHarness is EscalationGameCalculations {
 		return address(0x0);
 	}
 
-	constructor(ISecurityPool _securityPool, EscalationGameProofVerifier _proofVerifier)
-		EscalationGameState(
-			_securityPool,
-			ReputationToken(address(0)),
-			_proofVerifier,
-			EscalationGameClaimDelegate(address(0))
-		)
-	{}
+	constructor(ISecurityPool _securityPool, EscalationGameProofVerifier _proofVerifier) EscalationGameState(_securityPool, ReputationToken(address(0)), _proofVerifier) {}
 
 	function configureBoundary(uint256 gameEndDate, uint256 _nonDecisionThresholdAttoRep, uint256 winningBalanceAttoRep) external {
 		activationTime = gameEndDate;

@@ -108,7 +108,7 @@
 							<td><code>withdrawForkedEscalationDeposits(outcome, proofs)</code><wbr /></td>
 							<td>Anyone, for one recorded depositor</td>
 							<td>Operational finalized question, valid unconsumed proofs, one depositor per batch.</td>
-							<td>Settles authenticated inherited leaves without migrating every reporter. Bounded checkpoints prepare deep history; payouts go to the recorded owner.</td>
+							<td>Settles authenticated inherited leaves without migrating every reporter. Payouts go to the recorded owner.</td>
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
@@ -143,7 +143,7 @@
 							<td><code>initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot)</code><wbr /></td>
 							<td><code>SecurityPoolForker</code> only</td>
 							<td>A game is configured; it is a fork continuation with fewer than three initialized outcomes; leaf counts fit the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome’s data; the third call verifies the full commitment.</td>
-							<td>Installs the next outcome of the continuation game’s canonical snapshot. Three calls complete its immutable carry peaks, counts, totals, resolution balances, and normalized nullifier roots.</td>
+							<td>Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus mutable current peaks, carry totals, resolution balances, and normalized nullifier roots.</td>
 							<td><code>ForkCarryCheckpoint</code> on completion of the third outcome</td>
 						</tr>
 						<tr>

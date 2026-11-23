@@ -11,7 +11,7 @@ import {
 } from '../types/contractArtifact'
 import { deployContract } from '../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { applyLibraries, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { maximumQuestionHorizonSeconds, portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
@@ -38,7 +38,7 @@ describe('audit: only portfolios the factory deployed are canonical', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const infrastructure = () => getInfraContractAddresses()
 	const factory = () => ({ abi: factoryArtifact.abi, address: infrastructure().securityPoolFactory })
-	const creationCode = () => applyLibraries(portfolioArtifact.evm.bytecode.object)
+	const creationCode = (): Hex => `0x${portfolioArtifact.evm.bytecode.object}`
 	const origin = () => ({ collateralToken: weth, minimumReportCollateral: 10n ** 16n, universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas: 10_000_000_000n })
 	const configuration = () => encodeAbiParameters(portfolioConfigurationInputs, [origin(), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, portfolioEconomics])
 	const canonicalDeployers = () => ({
@@ -105,7 +105,7 @@ describe('audit: only portfolios the factory deployed are canonical', () => {
 		const before = await portfolioCount()
 		// One appended byte, and another contract's code, both hash differently.
 		await expect(deploy(`${creationCode()}00`, configuration())).rejects.toThrow('Portfolio creation code is not canonical')
-		await expect(deploy(applyLibraries(openAdmissionArtifact.evm.bytecode.object), configuration())).rejects.toThrow('Portfolio creation code is not canonical')
+		await expect(deploy(`0x${openAdmissionArtifact.evm.bytecode.object}`, configuration())).rejects.toThrow('Portfolio creation code is not canonical')
 		// A longer configuration would otherwise be read as extra constructor arguments, a shorter one would shift them.
 		await expect(deploy(creationCode(), `${configuration()}${'00'.repeat(32)}`)).rejects.toThrow('Portfolio configuration length invalid')
 		await expect(deploy(creationCode(), `0x${configuration().slice(2 + 64)}`)).rejects.toThrow('Portfolio configuration length invalid')
@@ -144,7 +144,7 @@ describe('audit: only portfolios the factory deployed are canonical', () => {
 			expect((await owner.getCode({ address: clone }))?.toLowerCase()).toBe(boundCloneRuntimeCode(implementation, bindings).toLowerCase())
 			const code = await owner.getCode({ address: implementation })
 			if (code === undefined) throw new Error('Module code missing')
-			expect(withoutImmutables(code, artifact)).toBe(withoutImmutables(applyLibraries(artifact.evm.deployedBytecode.object), artifact))
+			expect(withoutImmutables(code, artifact)).toBe(withoutImmutables(`0x${artifact.evm.deployedBytecode.object}`, artifact))
 		}
 		expect(getAddress(await owner.readContract({ ...root, functionName: 'portfolio' }))).toBe(getAddress(created))
 	})

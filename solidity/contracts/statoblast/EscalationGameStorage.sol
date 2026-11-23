@@ -2,14 +2,11 @@
 pragma solidity 0.8.35;
 
 import { EscalationClaimBundle, Node, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
-import { EscalationClaimCheckpoint } from './EscalationClaimCheckpointTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
-import { DelegateCall } from './DelegateCall.sol';
 import { Constants } from '../Constants.sol';
 
 /// @dev EscalationGame owns this storage and routes mutations through delegatecall.
-/// DepositDelegate writes deposits, carry initialization and escrow; ClaimDelegate
-/// processes bounded claim checkpoints. Both must share this exact layout.
+/// DepositDelegate writes deposits, carry initialization and escrow using this exact layout.
 /// Pool/custody bindings and authorization live in the host context: delegates
 /// execute with the original caller and the host's storage, not their own accounts.
 abstract contract EscalationGameStorage {
@@ -47,14 +44,10 @@ abstract contract EscalationGameStorage {
 	// retires at most this component; local principal is released on settlement.
 	uint256 internal forkCarryDisputeStakedAttoRep;
 	address internal forkCarrySourceGame;
-	address internal forkCarryRootClaimSourceGame;
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 	NonDecisionState public nonDecisionState;
 	uint8 public forkCarrySnapshotOutcomesInitialized;
 	bytes32 internal forkCarrySnapshotId;
-	// A checkpoint stores only frozen grandparent-and-earlier transforms. The
-	// current game and its immediate source always remain live.
-	mapping(bytes32 => EscalationClaimCheckpoint) internal claimCheckpoints;
 	bool public ordinarySettlementInitialized;
 	BinaryOutcomes.BinaryOutcome internal ordinarySettlementOutcome;
 	uint256 public ordinaryWinningReserveAttoRep;
@@ -102,38 +95,5 @@ abstract contract EscalationGameStorage {
 		uint256 claimUnits = amountAttoRep;
 		vaultAccounting[bundleId].claimBundle.disputeStakedRepClaimUnits += claimUnits;
 		totalDisputeStakedAttoRep += amountAttoRep;
-	}
-
-	function _recordConsumedPrincipal(uint8 outcomeIndex, uint256 leafIndex, uint256 amountAttoRep) internal {
-		// Carry indexes are strictly below 2^64. Updating the fixed-size tree does
-		// not depend on the number or order of previously settled deposits.
-		uint256 index = leafIndex + 1;
-		while (index <= outcomeState[outcomeIndex].currentLeafCount) {
-			outcomeState[outcomeIndex].consumedPrincipalTree[index] += amountAttoRep;
-			index += index & (~index + 1);
-		}
-	}
-
-	function _consumedPrincipalBefore(uint8 outcomeIndex, uint256 leafIndex) internal view returns (uint256 amountAttoRep) {
-		while (leafIndex != 0) {
-			amountAttoRep += outcomeState[outcomeIndex].consumedPrincipalTree[leafIndex];
-			leafIndex &= leafIndex - 1;
-		}
-	}
-
-	function _getInheritedClaimAllocation(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex)
-		internal
-		view
-		returns (
-			uint256 sourceAmountAttoRep,
-			uint256 retainedAmountAttoRep,
-			uint256 rewardAmountAttoRep,
-			uint256 retainedCumulativeAttoRep
-		)
-	{
-		(bool success, bytes memory data) = address(this).staticcall(abi.encodeWithSignature('getInheritedClaimAllocation(uint8,uint256,uint256,uint256)', outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex));
-		if (!success) DelegateCall.bubbleRevert(data);
-		require(data.length == 128, 'Invalid allocation response');
-		return abi.decode(data, (uint256, uint256, uint256, uint256));
 	}
 }

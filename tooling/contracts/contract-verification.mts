@@ -1,8 +1,7 @@
-import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { getAddress, getCreate2Address, getCreateAddress, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, getCreate2Address, getCreateAddress, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
-import { CREATE_DERIVED_CONTRACTS, SECURITY_POOL_UTILS_SOURCE_PATH, STEP_DEFINITIONS, UNVERIFIABLE_STEPS, type CompilerProfile } from './contract-verification-steps.mts'
+import { CREATE_DERIVED_CONTRACTS, STEP_DEFINITIONS, UNVERIFIABLE_STEPS, type CompilerProfile } from './contract-verification-steps.mts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const ZERO_SALT = toHex(0, { size: 32 })
@@ -40,7 +39,6 @@ export type VerificationJob = {
 
 export type VerificationPlan = {
 	jobs: VerificationJob[]
-	libraryAddresses: { securityPoolUtils: Address }
 	skipped: { id: string; reason: string }[]
 }
 
@@ -116,8 +114,6 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 		return step.address
 	}
 	const proxyDeployerAddress = stepAddress('proxyDeployer')
-	const libraryAddresses = { securityPoolUtils: stepAddress('securityPoolUtils') }
-	const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [{ address: libraryAddresses.securityPoolUtils, hash: keccak256(toHex(`${SECURITY_POOL_UTILS_SOURCE_PATH}:SecurityPoolUtils`)).slice(2, 36) }])
 	const jobs: VerificationJob[] = []
 	const skipped: { id: string; reason: string }[] = []
 	for (const step of manifest.deploymentSteps) {
@@ -130,7 +126,7 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 		if (definition === undefined) throw new Error(`Deployment step ${step.id} has no contract-verification definition. Add one to tooling/contracts/contract-verification.mts.`)
 		if (step.constructorArguments === undefined) throw new Error(`Deployment manifest step ${step.id} has no constructorArguments. Regenerate the manifests with bun ./tooling/contracts/check-mainnet-deployment.mts --write.`)
 		const artifact = getArtifact(definition.artifactPath, definition.contractName)
-		const linkedBytecode: Hex = definition.linksLibraries === true ? applyLibraries(artifact.creationBytecode) : `0x${artifact.creationBytecode}`
+		const linkedBytecode: Hex = `0x${artifact.creationBytecode}`
 		const initCode: Hex = `${linkedBytecode}${step.constructorArguments}`
 		const computedAddress = getCreate2Address({ bytecode: initCode, from: proxyDeployerAddress, salt: ZERO_SALT })
 		if (computedAddress !== step.address) {
@@ -166,7 +162,7 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 			label: contract.label,
 		})
 	}
-	return { jobs, libraryAddresses, skipped }
+	return { jobs, skipped }
 }
 
 export type ExplorerTarget = {

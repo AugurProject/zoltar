@@ -8,7 +8,6 @@ import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
-import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 import { EscalationClaimBundle } from './EscalationGameTypes.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
@@ -17,7 +16,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	ISecurityPool public immutable securityPool;
 	ReputationToken public immutable repToken;
 	EscalationGameProofVerifier internal immutable proofVerifier;
-	EscalationGameClaimDelegate internal immutable claimDelegate;
 	address internal immutable owner;
 	bytes32 internal immutable EMPTY_NULLIFIER_ROOT;
 
@@ -29,11 +27,10 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 	event ForkContinuationResidualRepBurned(uint256 amountAttoRep);
 
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate) {
+	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier) {
 		securityPool = _securityPool;
 		repToken = _repToken;
 		proofVerifier = _proofVerifier;
-		claimDelegate = _claimDelegate;
 		owner = msg.sender;
 		EMPTY_NULLIFIER_ROOT = _readEmptyNullifierRoot(_proofVerifier);
 	}
@@ -89,8 +86,8 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _getDepositDelegate() internal view virtual returns (address);
 
-	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep, uint256 leafIndex) internal {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners, (bundleId, outcomeIndex, amountAttoRep, leafIndex)));
+	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep) internal {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners, (bundleId, outcomeIndex, amountAttoRep)));
 	}
 
 	function _safeTransferRep(address receiver, uint256 amountAttoRep) internal {

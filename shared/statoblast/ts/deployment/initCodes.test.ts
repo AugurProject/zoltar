@@ -9,9 +9,8 @@ const weth: Address = '0x0000000000000000000000000000000000000004'
 const zeroSalt: Hex = `0x${'00'.repeat(32)}`
 const artifact = (id: number, inputs = '') => ({ abi: [{ type: 'constructor' as const, stateMutability: 'nonpayable' as const, inputs: parseAbiParameters(inputs) }], evm: { bytecode: { object: `60${id.toString(16).padStart(2, '0')}6000` } } })
 const artifacts = {
-	escalationGameClaimDelegate: artifact(1),
 	escalationGameDepositDelegate: artifact(2),
-	escalationGameFactory: artifact(3, 'address,address'),
+	escalationGameFactory: artifact(3, 'address'),
 	multicall3: artifact(4),
 	openOracle: artifact(5),
 	openOraclePriceCoordinatorFactory: artifact(6),
@@ -23,7 +22,6 @@ const artifacts = {
 	securityPoolForkerPortfolioDelegate: artifact(11, 'address'),
 	securityPoolOperationsDelegate: artifact(12),
 	securityPoolEventEmitter: artifact(13),
-	securityPoolUtils: artifact(14),
 	shareTokenFactory: artifact(15, 'address'),
 	securityPoolCapitalLedgerDeployer: artifact(17),
 	securityPoolCommitmentIndexDeployer: artifact(18),

@@ -23,13 +23,11 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import assert from '../testSupport/simulator/utils/assert'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
-import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ReputationToken_ReputationToken,
-	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
@@ -119,18 +117,21 @@ test('coverage runtime matching preserves linked PCs and masks generated mutable
 	const linkRanges = parseBytecodeRanges(evm['deployedBytecode']['linkReferences'])
 	if (typeof bytecode !== 'string' || typeof sourceMap !== 'string') throw new Error('SecurityPool coverage metadata must contain bytecode and a source map')
 	assert.ok(immutableRanges.length > 0, 'SecurityPool must expose immutable ranges')
-	assert.ok(linkRanges.length > 0, 'SecurityPool must expose linked-library ranges')
+	assert.strictEqual(linkRanges.length, 0, 'The pool factory must not depend on deployed libraries')
 	const ranges = [...immutableRanges, ...linkRanges]
 	const runtimeCharacters = bytecode.split('')
 	for (const range of ranges) {
 		for (let index = range.start * 2; index < (range.start + range.length) * 2; index++) runtimeCharacters[index] = runtimeCharacters[index] === 'f' ? '0' : 'f'
 	}
 	assert.ok(isCoverageBytecodeCompatibleForTest(bytecode, runtimeCharacters.join(''), ranges), 'runtime matching must ignore constructor-populated immutable bytes')
-	const firstLinkRange = linkRanges.reduce((first, range) => (range.start < first.start ? range : first))
-	const pcToSource = buildCoveragePcToSourceMapForTest(bytecode, sourceMap, linkRanges)
+	assert.ok(buildCoveragePcToSourceMapForTest(bytecode, sourceMap, linkRanges).size > 0, 'Unlinked production bytecode retains its source map')
+	// Linking remains an input supported by the generic coverage parser; exercise it without a production library dependency.
+	const placeholder = '__$' + '11'.repeat(17) + '$__'
+	const linkedBytecode = `73${placeholder}60005000`
+	const pcToSource = buildCoveragePcToSourceMapForTest(linkedBytecode, '0:1:0;1:1:0;2:1:0;3:1:0', [{ start: 1, length: 20 }])
 	assert.ok(
-		[...pcToSource.keys()].some(pc => pc > firstLinkRange.start + firstLinkRange.length),
-		'PC parsing must retain source-mapped instructions after the first library placeholder',
+		[...pcToSource.keys()].some(pc => pc > 21),
+		'PC parsing must retain source-mapped instructions after a library placeholder',
 	)
 	assert.ok(!isCoverageBytecodeCompatibleForTest('6000', '6100', []), 'runtime matching must reject changes outside declared ranges')
 	assert.strictEqual(
@@ -351,7 +352,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
-					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, `0x${'00'.repeat(32)}`, portfolioModuleDeployers],
 				}),
 			}),
@@ -361,7 +362,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
-					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
 				}),
 			}),
@@ -371,7 +372,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
-					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, client.account.address, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
 				}),
 			}),
@@ -381,7 +382,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client,
 			encodeDeployData({
 				abi: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.abi,
-				bytecode: applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
+				bytecode: `0x${statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object}`,
 			}),
 		)
 
@@ -389,7 +390,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
-					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
 				}),
 			}),
@@ -399,7 +400,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client,
 			encodeDeployData({
 				abi: statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.abi,
-				bytecode: applyLibraries(statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.bytecode.object),
+				bytecode: `0x${statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.bytecode.object}`,
 			}),
 		)
 
@@ -407,7 +408,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client,
 			encodeDeployData({
 				abi: factoryArtifact.abi,
-				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+				bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
 				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, eventEmitter, portfolioCreationCodeHash, portfolioModuleDeployers],
 			}),
 		)
@@ -1610,13 +1611,6 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	test('traces factory deployment paths through transaction-backed calls', async () => {
 		const reputationTokenAddress = await deployReputationToken()
-		const claimDelegateAddress = await deployContract(
-			client,
-			encodeDeployData({
-				abi: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
-				bytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
-			}),
-		)
 		const depositDelegateAddress = await deployContract(
 			client,
 			encodeDeployData({
@@ -1629,11 +1623,10 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi,
 				bytecode: `0x${statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
-				args: [claimDelegateAddress, depositDelegateAddress],
+				args: [depositDelegateAddress],
 			}),
 		)
 		assert.strictEqual(await client.readContract({ abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, address: escalationGameFactoryAddress, functionName: 'depositDelegate' }), depositDelegateAddress)
-		assert.strictEqual(await client.readContract({ abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, address: escalationGameFactoryAddress, functionName: 'claimDelegate' }), claimDelegateAddress)
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.sendTransaction({
@@ -1648,43 +1641,22 @@ describe('Solidity bytecode coverage helpers', () => {
 			),
 			/execution reverted|reverted with reason|returned no data/i,
 		)
-		const startedGamePoolAddress = await deployEscalationGameFactorySecurityPool(reputationTokenAddress)
-		const forkedGamePoolAddress = await deployEscalationGameFactorySecurityPool(reputationTokenAddress)
-		await transact(
-			startedGamePoolAddress,
-			encodeFunctionData({
-				abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
-				functionName: 'deployStartedGame',
-				args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
-			}),
-		)
-		await transact(
-			forkedGamePoolAddress,
-			encodeFunctionData({
-				abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
-				functionName: 'deployForkedGame',
-				args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n],
-			}),
-		)
-		await assert.rejects(
-			transact(
-				startedGamePoolAddress,
-				encodeFunctionData({
-					abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
-					functionName: 'deployStartedGame',
-					args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
-				}),
-			),
-			/Invalid game start/, // A second deployment reuses the pool's canonical game address, which starts only once (#1453).
-		)
+		const unboundPool = await deployEscalationGameFactorySecurityPool(reputationTokenAddress)
+		for (const method of ['deployStartedGame', 'deployForkedGame'] as const) {
+			const data =
+				method === 'deployStartedGame'
+					? encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP] })
+					: encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n] })
+			await assert.rejects(transact(unboundPool, data), /Reporter portfolio required/)
+		}
 
-		const coordinatorWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.abi, bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.evm.bytecode.object) }))
-		const feedWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker.abi, bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker.evm.bytecode.object) }))
+		const coordinatorWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.abi, bytecode: `0x${statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.evm.bytecode.object}` }))
+		const feedWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker.abi, bytecode: `0x${statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker.evm.bytecode.object}` }))
 		const priceOracleFactoryAddress = await deployContract(
 			client,
 			encodeDeployData({
 				abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
-				bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
+				bytecode: `0x${statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object}`,
 				args: [zeroAddress, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, 480, 0, 100000, 10000, 115, client.account.address, 100000n, 30000n, 1000n, coordinatorWorker, feedWorker],
 			}),
 		)
@@ -1708,7 +1680,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client,
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
-				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+				bytecode: `0x${statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object}`,
 				args: [zeroAddress, zeroAddress, zeroAddress],
 			}),
 		)
@@ -1739,7 +1711,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client,
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
-				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
+				bytecode: `0x${statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object}`,
 				args: [zeroAddress, zeroAddress],
 			}),
 		)

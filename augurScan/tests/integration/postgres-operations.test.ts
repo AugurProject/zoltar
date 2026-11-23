@@ -269,7 +269,7 @@ const expectManifestResetRetention = async ({ database, operationsChainId, netwo
 
 const expectUniqueEscalationCollections = async ({ database, operationsChainId, oracle }: OperationsContext) => {
 	const game = '0x7777777777777777777777777777777777777777'
-	for (const [index, eventName] of ['DepositOnOutcome', 'LocalDepositAppended', 'ClaimCheckpointProgress', 'ClaimDeposit'].entries()) {
+	for (const [index, eventName] of ['DepositOnOutcome', 'LocalDepositAppended', 'ClaimDeposit'].entries()) {
 		const eventData = JSON.stringify({ depositor: address, outcome: 1, amountAttoRep: '100', parentDepositIndex: '7' })
 		const logIndex = 800_000 + index
 		await database.sql`

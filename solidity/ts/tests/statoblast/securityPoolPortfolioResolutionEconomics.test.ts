@@ -19,7 +19,6 @@ import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/s
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
-import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { loadPortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 
 describe('Statoblast: reporting and unresolved capital compensation', () => {
@@ -128,7 +127,7 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 	test('recipient callbacks observe the completed purchase premium accounting', async () => {
 		await fixture.prepare()
 		const services = await service()
-		const receiver = await deployContract(fixture.owner(), encodeDeployData({ abi: receiverArtifact.abi, bytecode: applyLibraries(receiverArtifact.evm.bytecode.object), args: [services.address, fixture.base.genesisUniverse, fixture.base.questionId] }))
+		const receiver = await deployContract(fixture.owner(), encodeDeployData({ abi: receiverArtifact.abi, bytecode: `0x${receiverArtifact.evm.bytecode.object}`, args: [services.address, fixture.base.genesisUniverse, fixture.base.questionId] }))
 		await fixture.mint(10n * unit, fixture.base.questionId, { recipient: receiver })
 		const observed = await fixture.owner().readContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'observedPremium' })
 		expect(observed).toBeGreaterThan(0n)

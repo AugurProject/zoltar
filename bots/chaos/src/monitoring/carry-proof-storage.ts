@@ -146,7 +146,7 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 			const slots = (await historicalSlots(info.parentGame, outcome)).slice(0, Number(state.snapshotLeafCount))
 			budget(slots.length)
 			const commitment = carryCommitment(slots)
-			if (commitment.leafCount !== state.snapshotLeafCount.toString() || commitment.peaks.some((peak, index) => peak.toLowerCase() !== state.snapshotPeaks[index]?.toLowerCase())) throw new Error('Stored parent carry snapshot root is not reconstructible')
+			if (commitment.leafCount !== state.snapshotLeafCount.toString() || commitment.root.toLowerCase() !== state.snapshotCarryRoot.toLowerCase()) throw new Error('Stored parent carry snapshot root is not reconstructible')
 			const consumed = new Set([...(await inheritedConsumed(info.parentGame, outcome)), ...(await localConsumed(route.escalationGame, outcome))])
 			const nullifier = {
 				consumed: [...consumed]
@@ -162,7 +162,8 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 				const leaf = slot.leaf
 				if (slot.hash === zeroHash || leaf.depositor.toLowerCase() !== wallet.toLowerCase() || consumed.has(leaf.parentDepositIndex)) continue
 				const encodedSource = getAddress(`0x${(BigInt(leaf.parentDepositIndex) >> 96n).toString(16).padStart(40, '0')}`)
-				const claimSourceGame = encodedSource === zeroAddress ? await client.readContract({ abi: storageAbi, address: route.escalationGame, blockNumber, functionName: 'rootClaimSourceGame' }) : encodedSource
+				const claimSourceGame = slot.originGame
+				if (encodedSource !== zeroAddress && encodedSource.toLowerCase() !== claimSourceGame.toLowerCase()) throw new Error('Carry claim source differs from authenticated history')
 				const claimInfo = await gameInfo(claimSourceGame)
 				if (claimInfo.forker.toLowerCase() !== info.forker.toLowerCase()) throw new Error('Carry claim source uses a different forker')
 				candidates.push({ pool: route.pool, game: route.escalationGame, sourcePool: info.parent, sourceGame: info.parentGame, claimSourceGame, forker: info.forker, state, ...leaf, slots, index, nullifier })
