@@ -70,6 +70,12 @@ describe('test impact recommendations', () => {
 		expect(commandsFor(['augurScan/src/index.test.ts', 'bots/open-oracle-arbitrager/src/quote.test.ts'])).toEqual(['cd augurScan && bun test src/index.test.ts', 'cd bots/open-oracle-arbitrager && bun ../../tooling/testing/bun-test.mts src/quote.test.ts'])
 	})
 
+	test('includes prerequisites for gated augurScan tests', () => {
+		expect(commandsFor(['augurScan/tests/integration/postgres-canonical-lifecycle.test.ts'])).toEqual(['cd augurScan && POSTGRES_TEST_URL="${POSTGRES_TEST_URL:?set-POSTGRES_TEST_URL}" bun ../tooling/testing/bun-test.mts tests/integration/postgres-canonical-lifecycle.test.ts'])
+		expect(commandsFor(['augurScan/tests/browser/integrity-live.test.ts'])).toEqual(['cd augurScan && AUGURSCAN_BROWSER_URL="${AUGURSCAN_BROWSER_URL:?set-AUGURSCAN_BROWSER_URL}" bun test tests/browser/integrity-live.test.ts'])
+		expect(commandsFor(['augurScan/tests/browser/format.test.ts'])).toEqual(['cd augurScan && bun test tests/browser/format.test.ts'])
+	})
+
 	test('deduplicates recommendations shared by multiple changed files', () => {
 		expect(commandsFor(['tooling/testing/test-discovery.mts', 'tooling/testing/test-discovery.test.ts', 'tooling/testing/test-impact.mts', 'tooling/testing/test-impact.test.ts', 'tooling/testing/test-timings.mts'])).toEqual([INFRASTRUCTURE_COMMAND])
 	})

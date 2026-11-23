@@ -90,7 +90,10 @@ export async function demoNetworksRoute(env: DemoEnvironment): Promise<unknown> 
 	const { networkState } = env.settings
 	if (networkState === 'error') throw new Error('Network status could not be refreshed')
 	counters.networkRequests++
+	const sepoliaOnly = context.pageUrl.searchParams.get('sepoliaOnly')
 	const items = demoNetworkItems(env)
+		.filter(network => sepoliaOnly !== 'unstarted' || network.chain_id !== '11155111')
+		.map(network => ({ ...network, enabled: sepoliaOnly === null || network.chain_id === '11155111' }))
 	return {
 		items: context.pageUrl.searchParams.get('networkFallbackAfterLoad') === '1' && counters.networkRequests > 1 ? items.filter(network => network.chain_id !== '1') : items,
 	}

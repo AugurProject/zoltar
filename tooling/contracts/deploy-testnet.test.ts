@@ -126,6 +126,13 @@ describe('testnet deployment inputs', () => {
 		}
 	})
 
+	test('accepts split deployment flags and rejects leftover arguments', () => {
+		const environment = { PRIVATE_KEY: TEST_PRIVATE_KEY, RPC_URL: 'https://rpc.example.test' }
+		expect(parseDeploymentCommandLine(['--chain-id', '31337', '--max-total-cost-eth', '0.1'], environment)).toMatchObject({ chainId: 31337, maxTotalCost: 100_000_000_000_000_000n })
+		expect(() => parseDeploymentCommandLine(['--max-total-cost-eth', '--chain-id=31337'], environment)).toThrow('Missing value for --max-total-cost-eth')
+		expect(() => parseDeploymentCommandLine(['--max-total-cost=0.1'], environment)).toThrow('Unknown deployment argument')
+	})
+
 	test('accepts RPC and cost limits as uppercase command-line assignments', () => {
 		const privateKey = TEST_PRIVATE_KEY
 		expect(

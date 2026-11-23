@@ -31,7 +31,7 @@ All routes use `GET`. Limits, cursors, and consistency boundaries for every page
 
 | Endpoint | Returns |
 | --- | --- |
-| `/api/v1/networks` | Network status. |
+| `/api/v1/networks` | Network status, including retained networks. Each item has an `enabled` flag from the server network configuration. |
 | [`/api/v1/search?q=:query&chainId=:optionalChainId&limit=:limit`](#get-apiv1search) | Global search. |
 | [`/api/v1/transactions/:chainId/:hash`](#get-apiv1transactionschainidhash) | Internal transaction evidence. |
 | [`/api/v1/blocks/:chainId/:number`](#get-apiv1blockschainidnumber) | Internal block evidence. |
@@ -327,7 +327,7 @@ A snapshot-bound newline-delimited JSON export. Use it for durable audit files w
 | `x-augurscan-truncated` | Whether another page exists. |
 | `x-augurscan-next-cursor` | The continuation, when truncated. |
 
-Snapshot block/hash, invalidation ID, and the selected network's applied ABI/application/projection source hashes are repeated in response headers and encoded in the cursor. The applied hashes are updated only when the process that owns that network's indexer lease successfully seeds its configuration and replay decision; starting a standby process does not change them. An indexed replacement or a change to any applied source marker returns `409` instead of mixing pages.
+Snapshot block/hash, invalidation ID, and the selected network's applied ABI/application/projection source hashes are repeated in response headers and encoded in the cursor. The applied hashes are updated only when the process that owns that network's indexer lease successfully seeds its configuration and replay decision; starting a standby process does not change them. An indexed replacement or a change to any applied source marker returns `409` instead of mixing pages. Canonical rows are bounded by the snapshot checkpoint. Orphaned and all-evidence exports also include retained noncanonical logs and timeline entries above that checkpoint when an invalidation at or before the snapshot invalidation ID identifies the occurrence. This preserves displaced evidence while the canonical index catches up.
 
 **Log rows.** Every exported log occurrence contains its raw `topics` and `data`, current decoded display fields, decode error, and its complete immutable log `interpretations` array. Each interpretation identifies its kind/key, serialized result, run, run schema/application version, ABI/application/projection source hashes, and interpretation time.
 

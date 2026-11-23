@@ -115,7 +115,13 @@ export const callbackComplete = 'This report callback is already complete.'
 export const withdraw = 'Return released funding'
 export const withdrawing = 'Returning released funding…'
 export const noFunding = 'No released report funding is waiting to be returned.'
-export const fundingReturnHint = 'Released funding always returns to this report’s original sponsor. Settlement and recovery remain available after the reporting window closes.'
+export const withdrawToken = (symbol: string) => `Return released ${symbol}`
+export const withdrawingToken = (symbol: string) => `Returning released ${symbol}…`
+export const withdrawalRecipient = 'Single-token recipient'
+export const withdrawalRecipientHint = 'Leave blank to send to the sponsor.'
+export const invalidWithdrawalRecipient = 'Enter a valid recipient address other than the report escrow.'
+export const fundingReturnHint = 'Return both tokens to the sponsor, or return either token independently.'
+export const tokenWithdrawalReview = (symbol: string, recipient: string) => `Send released ${symbol} to ${recipient}.`
 export const refresh = 'Refresh report status'
 export const refreshing = 'Refreshing report status…'
 export const busy = 'Wait for the current transaction.'

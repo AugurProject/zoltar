@@ -87,7 +87,7 @@ for (const viewport of qaViewports) {
 				expect(await evaluate(`document.querySelector('.address-profile-panel .rich-position a[href*="/capital/"]')?.getAttribute('href')`)).toBe(`/capital/${ledger}/${owner}?chainId=1&demo=1`)
 				expect(await evaluate(noOverflow)).toBe(true)
 			})
-			await withBrowserPage(`${origin}/richlist?demo=1&chainId=1&view=cards&expandRich=1`, viewport, async ({ evaluate, waitFor }) => {
+			await withBrowserPage(`${origin}/addresses?demo=1&chainId=1&view=cards&expandRich=1`, viewport, async ({ evaluate, waitFor }) => {
 				await waitFor(`document.querySelector('#richlist-rows .rich-involvement') !== null`)
 				const card = await evaluate(`document.querySelector('#richlist-rows article')?.textContent`)
 				expect(card).toContain('1 capital position')

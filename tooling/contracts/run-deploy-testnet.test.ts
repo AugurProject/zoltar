@@ -56,6 +56,7 @@ test('headless deployment bundling rejects package traversal', () => {
 })
 
 test('requested chain id resolution prefers arguments over the environment', () => {
+	expect(resolveRequestedChainId(['--chain-id', '17000'], { CHAIN_ID: '1' })).toBe('17000')
 	expect(resolveRequestedChainId(['--chain-id=17000'], { CHAIN_ID: '1' })).toBe('17000')
 	expect(resolveRequestedChainId(['CHAIN_ID=560048'], {})).toBe('560048')
 	expect(resolveRequestedChainId(['--CHAIN_ID=5', 'CHAIN_ID=7'], {})).toBe('5')
@@ -84,6 +85,7 @@ async function runStubbedDeployment(args: readonly string[], deploymentExitCode:
 }
 
 test.each([
+	{ args: ['--etherscan-api-key', 'split-key'], expected: 'split-key' },
 	{ args: ['--etherscan-api-key=flag-key', 'ETHERSCAN_API_KEY=assignment-key'], expected: 'flag-key' },
 	{ args: ['ETHERSCAN_API_KEY=assignment-key', '--etherscan-api-key=flag-key'], expected: 'flag-key' },
 	{ args: ['ETHERSCAN_API_KEY=assignment-key'], expected: 'assignment-key' },
