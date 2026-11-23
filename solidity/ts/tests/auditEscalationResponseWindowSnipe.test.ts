@@ -60,7 +60,7 @@ describe('a carried game: pause and resume the pure curve', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		const activatedAt = await latestBlockTimestamp()
 		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [source, child] }))
-		const pool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		const pool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		return { pool, game: await gameFor(pool), universe: child, forkTime, activatedAt }
 	}
 

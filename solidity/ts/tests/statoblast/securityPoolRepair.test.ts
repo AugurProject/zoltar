@@ -179,7 +179,7 @@ describe('Statoblast: permissionless settlement repair', () => {
 			const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 			for (const [index, questionId] of additional.entries()) {
 				await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [fixture.poolFor(questionId).questionLedger, child] }))
-				const address = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getPool', args: [questionId, child] })
+				const address = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getQuestionLedger', args: [questionId, child] })
 				const pool = { abi: poolArtifact.abi, address }
 				await approveToken(owner, getRepTokenAddress(child), address)
 				// Report the last claim just before the cutoff, leaving its
@@ -258,7 +258,7 @@ describe('Statoblast: permissionless settlement repair', () => {
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		const source = fixture.poolFor(fixture.secondQuestionId)
 		await writeContractAndWait(other, () => other.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [source.questionLedger, child] }))
-		const childPool = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getPool', args: [fixture.secondQuestionId, child] })
+		const childPool = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getQuestionLedger', args: [fixture.secondQuestionId, child] })
 		for (const outcome of [0n, 1n, 2n]) await writeContractAndWait(other, () => other.writeContract({ abi: shareArtifact.abi, address: source.shareToken, functionName: 'migrate', args: [genesis * 256n + outcome, [1n]] }))
 		const collateral = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
 		await approveToken(owner, collateral, settlement)

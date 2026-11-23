@@ -191,7 +191,7 @@ describe('Statoblast: bounded fork initialization', () => {
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [childUniverse] })), 'shared branch activation', 2_000_000n)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'prepareSecurityPoolQuestion', args: [parent, childUniverse] })), 'question preparation')
-		const child = await owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getPool', args: [secondQuestionId, childUniverse] })
+		const child = await owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getQuestionLedger', args: [secondQuestionId, childUniverse] })
 		expect(await getQuestionLedgersEscalationGame(owner(), child)).toBe(zeroAddress)
 		for (let outcome = 0; outcome < 3; outcome++) {
 			await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'materializeSecurityPoolQuestion', args: [parent, childUniverse], gas: transactionGasLimit })), `question carry outcome ${outcome}`)

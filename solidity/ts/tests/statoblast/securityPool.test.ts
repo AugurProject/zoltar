@@ -132,7 +132,7 @@ describe('Statoblast: central security pool and native question integration', ()
 		for (const question of [base.questionId, secondQuestionId]) {
 			const pool = poolFor(question).questionLedger
 			expect(await owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'securityPoolCustody' })).toBe(fixture.capitalLedger)
-			expect(await owner().readContract({ ...securityPool(), functionName: 'getPool', args: [question, base.genesisUniverse] })).toBe(pool)
+			expect(await owner().readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [question, base.genesisUniverse] })).toBe(pool)
 		}
 		expect(await ownerAccount()).toEqual(before)
 		expect(await demand()).toBe(0n)

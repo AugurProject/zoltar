@@ -86,7 +86,7 @@ describe('Statoblast: shared security pool fork entry', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
 		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'materializeSecurityPoolQuestion', args: [pool, child] }))
-		const childPool = await owner.readContract({ ...securityPool, functionName: 'getPool', args: [fixture.base.questionId, child] })
+		const childPool = await owner.readContract({ ...securityPool, functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		const childGame = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
 		expect(await owner.readContract({ abi: reporterArtifact.abi, address: reporters, functionName: 'balanceOfGame', args: [childGame] })).toBe(reporterBacking)
 		const childCapital = await owner.readContract({ ...securityPool, functionName: 'capitalLedger', args: [child] })
@@ -106,7 +106,7 @@ describe('Statoblast: shared security pool fork entry', () => {
 		const first = { abi: securityPoolArtifact.abi, address: fixture.securityPool }
 		const second = { abi: securityPoolArtifact.abi, address: secondSecurityPool }
 		const firstPool = fixture.poolFor(fixture.base.questionId).questionLedger
-		const secondPool = await owner.readContract({ ...second, functionName: 'getPool', args: [fixture.base.questionId, universe] })
+		const secondPool = await owner.readContract({ ...second, functionName: 'getQuestionLedger', args: [fixture.base.questionId, universe] })
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		const token = getRepTokenAddress(universe)
 		for (const pool of [firstPool, secondPool]) {

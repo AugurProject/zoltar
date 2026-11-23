@@ -91,7 +91,7 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		await fixture.base.mockWindow.advanceTime(365n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'prepareSecurityPoolQuestion', args: [pool(), child] }))
-		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		for (let outcome = 0; outcome < 3; outcome++) {
 			expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'systemState' })).toBe(2n)
 			await expect(owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'depositWalletRepToEscalationGame', args: [1, unit] })).rejects.toThrow(own ? 'Forked' : 'Pool inactive')
@@ -122,7 +122,7 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [pool(), child] }))
-		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		expect([...(await owner.readContract({ ...securityPool(), functionName: 'inheritedFixedOutcome', args: [child, fixture.base.questionId] }))]).toEqual([true, 1n])
 		await expect(owner.writeContract({ ...securityPool(), functionName: 'createCompleteSet', args: [child, fixture.base.questionId, unit, owner.account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow()
 		await fixture.base.mockWindow.setTime(firstForkTime + 70n * DAY)

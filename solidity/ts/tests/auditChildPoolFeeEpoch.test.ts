@@ -65,7 +65,7 @@ describe('Shared security pool child fee clock', () => {
 		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })
 		const feeRate = async () => (await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, base.questionId] }))[0].feeRateAttoEthPerSecond
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializeSecurityPoolQuestion', args: [parent, child] }))
-		const poolAddress = await owner.readContract({ ...securityPool, functionName: 'getPool', args: [base.questionId, child] })
+		const poolAddress = await owner.readContract({ ...securityPool, functionName: 'getQuestionLedger', args: [base.questionId, child] })
 		const pool = { abi: poolArtifact.abi, address: poolAddress }
 		const refresh = () => writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'refreshSecurityPoolFees' }))
 		const cash = () => owner.readContract({ ...securityPool, functionName: 'quoteQuestionSettlement', args: [poolAddress, 10n * unit] })

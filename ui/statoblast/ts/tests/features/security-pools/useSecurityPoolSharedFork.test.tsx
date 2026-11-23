@@ -236,7 +236,7 @@ async function recoverySetup() {
 	fixture.source.setRead('questionOriginIds', `0x${'11'.repeat(32)}`)
 	fixture.source.setRead('sourceGame', zeroAddress)
 	fixture.source.setRead('getQuestionLedger', token)
-	fixture.source.setRead('getPool', token)
+	fixture.source.setRead('getQuestionLedger', token)
 	fixture.source.setRead('shareToken', token)
 	fixture.source.setRead('balanceOfSecurityPoolRecoveryRights', [3n * unit, 5n * unit, 4n * unit])
 	fixture.source.setRead('isSecurityPoolRecoveryEligible', true)

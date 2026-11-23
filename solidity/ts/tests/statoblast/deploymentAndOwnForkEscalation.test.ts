@@ -39,7 +39,7 @@ describe('Statoblast: security pool namespaces and own-fork claims', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, BigInt(outcome)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [pool(), child] }))
-		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		return { child, childPool }
 	}
 
@@ -88,7 +88,7 @@ describe('Statoblast: security pool namespaces and own-fork claims', () => {
 		for (const securityMultiplierBps of [10_500n, 15_000n]) {
 			const created = await fixture.deploySecurityPool(undefined, undefined, { securityMultiplierBps })
 			await fixture.register(fixture.base.questionId, created)
-			const native = await fixture.owner().readContract({ ...securityPool(created), functionName: 'getPool', args: [fixture.base.questionId, fixture.base.genesisUniverse] })
+			const native = await fixture.owner().readContract({ ...securityPool(created), functionName: 'getQuestionLedger', args: [fixture.base.questionId, fixture.base.genesisUniverse] })
 			expect(await fixture.owner().readContract({ abi: poolArtifact.abi, address: native, functionName: 'statoblastSecurityMultiplierBps' })).toBe(securityMultiplierBps)
 		}
 	})
@@ -103,7 +103,7 @@ describe('Statoblast: security pool namespaces and own-fork claims', () => {
 		await fixture.refreshPrice(fixture.base.questionId, unit, second)
 		await fixture.authorize(100n * unit, owner, second)
 		await fixture.mint(7n * unit, fixture.base.questionId, { namespace: second })
-		const secondPool = await owner.readContract({ ...securityPool(second), functionName: 'getPool', args: [fixture.base.questionId, fixture.base.genesisUniverse] })
+		const secondPool = await owner.readContract({ ...securityPool(second), functionName: 'getQuestionLedger', args: [fixture.base.questionId, fixture.base.genesisUniverse] })
 		const origins = []
 		const tokens = []
 		for (const [namespace, native, cash] of [
@@ -139,7 +139,7 @@ describe('Statoblast: security pool namespaces and own-fork claims', () => {
 		const no = await activate(2)
 		const independent = await fixture.deploySecurityPool(undefined, securityPoolEconomics, { universeId: yes.child })
 		await fixture.register(fixture.base.questionId, independent)
-		const independentPool = await owner.readContract({ ...securityPool(independent), functionName: 'getPool', args: [fixture.base.questionId, yes.child] })
+		const independentPool = await owner.readContract({ ...securityPool(independent), functionName: 'getQuestionLedger', args: [fixture.base.questionId, yes.child] })
 		const inheritedOrigin = await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [pool()] })
 		const inheritedToken = fixture.poolFor(fixture.base.questionId).shareToken
 		for (const { child, childPool } of [yes, no]) {
@@ -174,7 +174,7 @@ describe('Statoblast: security pool namespaces and own-fork claims', () => {
 		const priorityFee = 20n * 10n ** 9n
 		const independent = await fixture.deploySecurityPool(undefined, undefined, { universeId: universe, reportPriorityFeeAttoEthPerGas: priorityFee })
 		await fixture.register(fixture.base.questionId, independent)
-		const native = await owner.readContract({ ...securityPool(independent), functionName: 'getPool', args: [fixture.base.questionId, universe] })
+		const native = await owner.readContract({ ...securityPool(independent), functionName: 'getQuestionLedger', args: [fixture.base.questionId, universe] })
 		const expectedOrigin = await owner.readContract({ ...factory(), functionName: 'getQuestionOriginId', args: [independent, universe, fixture.base.questionId, fixture.base.statoblastSecurityMultiplierBps, priorityFee] })
 		expect(await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [native] })).toBe(expectedOrigin)
 		expect(await owner.readContract({ ...securityPool(independent), functionName: 'initialReportPriorityFeeAttoEthPerGas' })).toBe(priorityFee)

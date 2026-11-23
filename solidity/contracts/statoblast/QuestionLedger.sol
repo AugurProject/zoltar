@@ -169,11 +169,6 @@ contract QuestionLedger is QuestionLedgerStorage {
 		_delegateAccounting(eventCall);
 	}
 
-	/// @notice Native question ledgers hold no underwriting REP; the security pool owns its shared capital.
-	function getTotalPoolHeldAttoRep() public pure returns (uint256) {
-		return 0;
-	}
-
 	/// @notice Returns zero once the question ends or a game exists; otherwise question cash plus available shared security pool capacity.
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
 		if (address(escalationGame) != address(0) || block.timestamp >= questionData.getQuestionEndDate(questionId))

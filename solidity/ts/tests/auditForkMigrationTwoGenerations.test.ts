@@ -105,7 +105,7 @@ describe('audit: multi-question security pool across two universe forks', () => 
 		// ---- Q2 (trading, no game): origin -> A -> A1 with no pool in A ----
 		// Anyone can create the grandchild pool straight from the origin pool (skipping A).
 		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [source2, A1] }))
-		const pool2A1 = await owner.readContract({ ...p, functionName: 'getPool', args: [q2, A1] })
+		const pool2A1 = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [q2, A1] })
 		expect((await owner.readContract({ abi: poolArtifact.abi, address: pool2A1, functionName: 'parent' })).toLowerCase()).toBe(source2.toLowerCase())
 		// The intermediate pool can still be prepared explicitly and tokens migrated through it.
 		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [source2, A] }))
@@ -130,7 +130,7 @@ describe('audit: multi-question security pool across two universe forks', () => 
 		// ---- Q1 (final in the forked, never materialized A) ----
 		await writeContractAndWait(trader, () => trader.writeContract({ ...shares1, functionName: 'migrate', args: [U0 * 256n + 1n, [1n]] }))
 		for (let step = 0; step < 3; step++) await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [source1, A] }))
-		const pool1A = await owner.readContract({ ...p, functionName: 'getPool', args: [q1, A] })
+		const pool1A = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [q1, A] })
 		expect(Number(await owner.readContract({ abi: poolArtifact.abi, address: pool1A, functionName: 'systemState' }))).toBe(0)
 		await expect(trader.simulateContract({ ...shares1, functionName: 'migrate', args: [A * 256n + 1n, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')
 		before = await cash(trader.account.address)
@@ -179,7 +179,7 @@ describe('audit: multi-question security pool across two universe forks', () => 
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [A] }))
 		// Optional first-use preparation only: the pool stays in ForkMigration.
 		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [source2, A] }))
-		const poolA = await owner.readContract({ ...p, functionName: 'getPool', args: [q2, A] })
+		const poolA = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [q2, A] })
 		await writeContractAndWait(trader, () => trader.writeContract({ ...shares2, functionName: 'migrate', args: [U0 * 256n + 1n, [1n]] }))
 		const stateBefore = Number(await owner.readContract({ abi: poolArtifact.abi, address: poolA, functionName: 'systemState' }))
 		await base.mockWindow.setTime(fork1 + 63n * DAY + 30n * DAY)

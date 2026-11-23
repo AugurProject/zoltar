@@ -143,13 +143,3 @@ export const getRepToken = async (client: ReadClient, questionLedgerAddress: Add
 		'REP token address',
 	)
 
-export const getTotalPoolHeldAttoRep = async (client: ReadClient, questionLedgerAddress: Address): Promise<bigint> =>
-	requireBigInt(
-		await client.readContract({
-			abi: statoblast_QuestionLedger_QuestionLedger.abi,
-			functionName: 'getTotalPoolHeldAttoRep',
-			address: questionLedgerAddress,
-			args: [],
-		}),
-		'Total REP balance',
-	)

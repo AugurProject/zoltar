@@ -228,7 +228,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 		page = new uint256[](count);
 		for (uint256 i; i < count; i++) page[i] = questions[start + i];
 	}
-	function getPool(uint256 questionId, uint248 universeId) public view returns (IQuestionLedger pool) {
+	function getQuestionLedger(uint256 questionId, uint248 universeId) public view returns (IQuestionLedger pool) {
 		bytes32 origin = questionOriginIds[questionId];
 		require(origin != bytes32(0), 'Question not registered');
 		pool = factory.getQuestionLedger(origin, universeId);
@@ -301,7 +301,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 	}
 	function _registerPool(IQuestionLedger pool) private {
 		require(factory.securityPoolOf(pool) == address(this), 'Pool belongs to another security pool');
-		require(address(getPool(pool.questionId(), pool.universeId())) == address(pool), 'Pool is not canonical');
+		require(address(getQuestionLedger(pool.questionId(), pool.universeId())) == address(pool), 'Pool is not canonical');
 		if (registeredLedgers[address(pool)]) return;
 		registeredLedgers[address(pool)] = true;
 		settlement.registerQuestion(address(pool), pool.universeId(), pool.questionId());
@@ -349,7 +349,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 		require(ISecurityPoolForkCoordinator(forkController).isReady(universeId), 'Universe is not ready');
 		if (universeId != originUniverseId)
 			require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
-		pool = universeId == originUniverseId ? addQuestion(questionId) : getPool(questionId, universeId);
+		pool = universeId == originUniverseId ? addQuestion(questionId) : getQuestionLedger(questionId, universeId);
 		purchasingPool = address(pool);
 		capitalLedger[universeId].checkpoint();
 	}

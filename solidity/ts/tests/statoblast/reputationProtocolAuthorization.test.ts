@@ -31,7 +31,7 @@ describe('Statoblast REP authorization entry points', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializeSecurityPoolQuestion', args: [fixture.poolFor(fixture.secondQuestionId).questionLedger, child] }))
 		await addRepToMigrationBalance(client, fixture.base.genesisUniverse, 1_000n * unit)
 		await splitMigrationRep(client, fixture.base.genesisUniverse, 1_000n * unit, [1])
-		const pool = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getPool', args: [fixture.secondQuestionId, child] })
+		const pool = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getQuestionLedger', args: [fixture.secondQuestionId, child] })
 		const token = { abi: tokenArtifact.abi, address: getRepTokenAddress(child) }
 		const accounts = await mock.request({ method: 'eth_accounts' })
 		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')

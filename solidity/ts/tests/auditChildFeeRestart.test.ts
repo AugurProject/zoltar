@@ -61,7 +61,7 @@ describe('audit: a holding fee does not restart in a fork child for a question u
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [child] }))
 		// Register the child pool without materializing the branch's own game.
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'prepareSecurityPoolQuestion', args: [parent, child] }))
-		const childPool = await owner.readContract({ ...securityPool, functionName: 'getPool', args: [base.questionId, child] })
+		const childPool = await owner.readContract({ ...securityPool, functionName: 'getQuestionLedger', args: [base.questionId, child] })
 		expect(childPool).not.toBe(zeroAddress)
 
 		// Neither earlier guard applies: the child pool has no game, and the inherited question has no finality time.

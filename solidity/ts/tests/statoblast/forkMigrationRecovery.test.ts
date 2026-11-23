@@ -52,7 +52,7 @@ describe('Statoblast: lazy child outcome supply', () => {
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializeSecurityPoolQuestion', args: [parent.questionLedger, child] }))
-		const childPool = await owner().readContract({ abi: securityPoolArtifact.abi, address: securityPool, functionName: 'getPool', args: [base.questionId, child] })
+		const childPool = await owner().readContract({ abi: securityPoolArtifact.abi, address: securityPool, functionName: 'getQuestionLedger', args: [base.questionId, child] })
 		await base.mockWindow.setBalance(childPool, 13n * unit)
 		for (const outcome of outcomes) await writeContractAndWait(other(), () => other().writeContract({ abi: shareArtifact.abi, address: parent.shareToken, functionName: 'migrate', args: [base.genesisUniverse * 256n + BigInt(outcome), [1n]] }))
 		const materialized = () => Promise.all([0, 1, 2].map(outcome => owner().readContract({ abi: shareArtifact.abi, address: parent.shareToken, functionName: 'totalSupplyForOutcome', args: [child, outcome] })))

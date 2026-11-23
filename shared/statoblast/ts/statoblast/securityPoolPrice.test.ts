@@ -28,7 +28,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		factory,
 		originUniverseId: 0n,
 		getQuestions: [123n],
-		getPool: seed,
+		getQuestionLedger: seed,
 		zoltar,
 		priceFeed: feed,
 		isPriceReportingOpen: true,

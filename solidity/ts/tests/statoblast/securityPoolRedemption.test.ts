@@ -328,7 +328,7 @@ describe('Statoblast: native finalized security pool redemptions', () => {
 		await splitMigrationRep(owner, genesisUniverse, 1_000n * unit, [1])
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [fixture.poolFor(reportTarget).questionLedger, child] }))
-		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [reportTarget, child] })
+		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [reportTarget, child] })
 		await approveToken(owner, getRepTokenAddress(child), childPool)
 		const beforeReport = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [childBook, reportTarget] })
 		expect(BigInt(beforeReport[0].finalAfter)).toBe(0n)
@@ -463,7 +463,7 @@ describe('Statoblast: native finalized security pool redemptions', () => {
 		const child = getChildUniverseId(fixture.base.genesisUniverse, 1)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
 		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'prepareSecurityPoolQuestion', args: [pool().address, child] }))).rejects.toThrow('Question finalized in source universe')
-		await expect(owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })).rejects.toThrow('Question pool unavailable')
+		await expect(owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		await refresh()
 		const state = await settlementState()
 		const beforeShares = await shares()

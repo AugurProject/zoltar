@@ -23,7 +23,7 @@ export async function loadSecurityPoolMintQuestion(client: ReadClient, snapshot:
 		if (finalBlock.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the question. Refresh and try again.')
 		return { pool: zeroAddress, questionEndTime, escalationGame: zeroAddress, systemState: 0n }
 	}
-	const pool = await client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getPool', args: [questionId, universeId], blockNumber })
+	const pool = await client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getQuestionLedger', args: [questionId, universeId], blockNumber })
 	const [nativeQuestionId, nativeUniverseId, questionData, escalationGame, systemState] = await Promise.all([
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'questionId', blockNumber }),
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'universeId', blockNumber }),

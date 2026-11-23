@@ -22,7 +22,7 @@ test('security pool discovery authenticates question-first registration at the p
 				const decoded = decodeFunctionData({ abi: [...securityPoolFactoryAbi, ...securityPoolAbi], data: call.data })
 				expect(params[1]).toBe('0x64')
 				if (decoded.functionName === 'securityPoolOf') return encodeAbiParameters([{ type: 'address' }], [question.securityPool])
-				if (decoded.functionName === 'getPool') {
+				if (decoded.functionName === 'getQuestionLedger') {
 					expect(decoded.args).toEqual([999n, 17n])
 					registrationChecked = true
 					return encodeAbiParameters([{ type: 'address' }], [question.address])

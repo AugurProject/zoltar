@@ -535,7 +535,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return address(10)
 				case 'securityPoolOf':
 					return address(90)
-				case 'getPool':
+				case 'getQuestionLedger':
 					return pool
 				case 'factory':
 					return parameters.address === address(90) ? address(4) : address(8)
@@ -643,7 +643,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'lastSettlementTimestamp':
 				case 'priceValidUntil':
 				case 'pendingReportId':
-				case 'getTotalPoolHeldAttoRep':
 				case 'getQuestionOutcome':
 				case 'getCurrentMintingCapacityAttoEth':
 				case 'getVaultOpenInterestAttoEth':

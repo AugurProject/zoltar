@@ -40,7 +40,7 @@ test('shared child creation prepares its native namespace only after the shared 
 	expect(plan?.steps.map(step => decodeFunctionData({ abi: [...securityPoolFactoryAbi, ...questionForkerAbi], data: step.data }).functionName)).toEqual(['prepareSecurityPoolQuestion'])
 	if (plan === undefined) throw new Error('Missing shared child creation plan')
 	expect(assertWorkflowPrerequisiteLimit(plan)).toBe(0)
-	expect(plan.steps[0]?.evidence).toMatchObject([{ functionName: 'getPool', args: [snapshot.pools[0]?.questionId, '88'], relation: 'greater-than', expected: '0' }])
+	expect(plan.steps[0]?.evidence).toMatchObject([{ functionName: 'getQuestionLedger', args: [snapshot.pools[0]?.questionId, '88'], relation: 'greater-than', expected: '0' }])
 })
 
 for (const expired of [false, true])

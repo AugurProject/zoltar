@@ -57,7 +57,7 @@ describe('Statoblast: native fork reporter registration', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [sourcePool(), child] }))
-		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [base.questionId, child] })
+		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [base.questionId, child] })
 		for (let outcome = 0; outcome < carryOutcomes; outcome++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [sourcePool(), child] }))
 		return { child, childPool }
 	}

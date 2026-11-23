@@ -72,7 +72,7 @@ describe('security pool security regression coverage', () => {
 		const child = getChildUniverseId(fixture.base.genesisUniverse, outcome)
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...forks, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'prepareSecurityPoolQuestion', args: [pool().address, child] }))
-		const childPool = await fixture.owner().readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		const childPool = await fixture.owner().readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		expect(childPool).not.toBe(zeroAddress)
 		expect(await contractExists(fixture.owner(), childPool)).toBe(true)
 	})

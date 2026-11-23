@@ -26,7 +26,7 @@ test.each([
 					return zeroAddress
 				case 'getQuestionLedger':
 					return zeroAddress
-				case 'getPool':
+				case 'getQuestionLedger':
 					expect(request.args).toEqual([7n, 0n])
 					return token
 				case 'shareToken':

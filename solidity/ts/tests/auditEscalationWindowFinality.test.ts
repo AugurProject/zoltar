@@ -61,7 +61,7 @@ describe("audit: a carried game's resumed curve keeps game, settlement book and 
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [universe, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [source, child] }))
-		const pool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		const pool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		return { pool, game: await gameFor(pool), universe: child }
 	}
 

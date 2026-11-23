@@ -32,7 +32,7 @@ interface ISecurityPoolForkRoot {
 	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
 	function prepareForkChild(uint248 parent, uint256 outcome) external returns (SecurityPoolCapitalLedger);
 	function activateForkChild(uint248 child) external;
-	function getPool(uint256 questionId, uint248 universeId) external view returns (IQuestionLedger);
+	function getQuestionLedger(uint256 questionId, uint248 universeId) external view returns (IQuestionLedger);
 	function minimumCommitmentAttoEth() external view returns (uint256);
 	function auctionDeployer() external view returns (ISecurityPoolCollateralRepairAuctionDeployer);
 }
@@ -436,7 +436,7 @@ contract SecurityPoolForkCoordinator {
 		_freeze(source);
 		require(block.timestamp >= zoltar.getForkChoiceDeadline(source), 'Fork choices still open');
 		SecurityPoolSettlementBook.Question memory question = _recoveryQuestion(source, questionId);
-		IQuestionLedger pool = securityPool.getPool(questionId, source);
+		IQuestionLedger pool = securityPool.getQuestionLedger(questionId, source);
 		ISecurityPoolRecoveryShares(address(pool.shareToken())).consumeSecurityPoolRecoveryCompleteSets(source, msg.sender, shares);
 		cash = _recordRecovery(source, questionId, question, shares);
 		ISecurityPoolForkServices(securityPool.services()).recoverPremiumCash(source, questionId, shares, msg.sender);

@@ -84,7 +84,7 @@ describe('Statoblast: reject materializing a question that finalized before an u
 
 		for (const functionName of ['prepareSecurityPoolQuestion', 'materializeSecurityPoolQuestion'] as const) {
 			await expect(writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName, args: [sourcePool(), child] }))).rejects.toThrow('Question finalized in source universe')
-			await expect(owner.readContract({ ...p(), functionName: 'getPool', args: [base.questionId, child] })).rejects.toThrow('Question pool unavailable')
+			await expect(owner.readContract({ ...p(), functionName: 'getQuestionLedger', args: [base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		}
 
 		await expect(trader.simulateContract({ ...shares(), functionName: 'migrate', args: [base.genesisUniverse * 256n + 1n, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')

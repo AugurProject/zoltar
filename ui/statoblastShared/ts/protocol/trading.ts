@@ -255,7 +255,7 @@ const purchaseAbi = parseAbi([
 	'function services() view returns (address)',
 	'function securityPoolOf(address pool) view returns (address)',
 	'function isSecurityPool(address securityPool) view returns (bool)',
-	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
+	'function getQuestionLedger(uint256 questionId,uint248 universeId) view returns (address)',
 	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
 	'function quoteMintRecoveryRep(uint248 universeId,uint256 questionId,uint256 cash) view returns(uint256)',
@@ -276,7 +276,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const [universeId, factory] = await Promise.all([readQuestionLedgerUniverseId(client, questionLedgerAddress), client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'securityPoolFactory' })])
 	const securityPool = await requireCanonicalSecurityPoolOf(client, factory, questionLedgerAddress)
 	const quote = async () => {
-		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'getPool', args: [questionId, universeId] })
+		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'getQuestionLedger', args: [questionId, universeId] })
 		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== questionLedgerAddress.toLowerCase()) throw new Error('Security pool question pool is not canonical.')
 		const [quoted, capacity, recoveryValue] = await Promise.all([
 			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),

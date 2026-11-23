@@ -135,7 +135,7 @@ export function createE2E(fixture: Fixture) {
 	const burned = () => rep(fixture.base.genesisUniverse, addressString(BURN_ADDRESS))
 	const forkTime = async (universe: bigint) => (await getUniverseData(owner(), universe)).forkTime
 	const gameOf = (pool: Address) => owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
-	const poolOf = (questionId: bigint, universe: bigint) => owner().readContract({ ...securityPool(), functionName: 'getPool', args: [questionId, universe] })
+	const poolOf = (questionId: bigint, universe: bigint) => owner().readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [questionId, universe] })
 	const game = (address: Address) => ({ abi: gameArtifact.abi, address })
 	const ledgerQuestion = async (universe: bigint, questionId: bigint) => owner().readContract({ abi: reporterArtifact.abi, address: await reporterLedger(universe), functionName: 'question', args: [universe, questionId] })
 	const ledgerBook = async (universe: bigint) => {

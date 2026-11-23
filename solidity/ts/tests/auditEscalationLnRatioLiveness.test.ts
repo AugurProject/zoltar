@@ -15,7 +15,6 @@ import { createWriteClient, writeContractAndWait } from '../testSupport/simulato
 import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { getTotalPoolHeldAttoRep } from '../testSupport/simulator/utils/contracts/questionLedger'
 
 const ESCALATION_TIME_LENGTH = 4_233_600n
 
@@ -35,7 +34,6 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		const pool = questionLedgerAddresses.questionLedger
 		const token = getRepTokenAddress(genesisUniverse)
 		const zoltar = getZoltarAddress()
-		assert.strictEqual(await getTotalPoolHeldAttoRep(client, pool), 0n, 'wallet reporting must not depend on vault backing or its immutable minimum')
 		const readTrackedSupply = () => client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] })
 		for (const account of TEST_ADDRESSES.slice(1)) {
 			const burner = createWriteClient(mockWindow, account)

@@ -872,7 +872,7 @@ test('minting complete sets sends the transaction directly and tracks its receip
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'securityPoolFactory') return account
-			if (request.functionName === 'securityPoolOf' || request.functionName === 'getPool') return account
+			if (request.functionName === 'securityPoolOf' || request.functionName === 'getQuestionLedger') return account
 			if (request.functionName === 'isSecurityPool') return true
 			if (request.functionName === 'collateralToken') return MAINNET_NETWORK_PROFILE.wethAddress
 			if (request.functionName === 'services') return account

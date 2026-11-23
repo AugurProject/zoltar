@@ -47,7 +47,7 @@ describe('security pool settlement finalizer', () => {
 		await fixture.base.mockWindow.setTime(activatedAt + 3n * DAY)
 		expect(await scan(1n)).toEqual([])
 		await fixture.base.mockWindow.setTime(activatedAt + 3n * DAY + 1n)
-		await expect(owner.readContract({ address: fixture.securityPool, abi: securityPoolAbi, functionName: 'getPool', args: [fixture.base.questionId, child] })).rejects.toThrow('Question pool unavailable')
+		await expect(owner.readContract({ address: fixture.securityPool, abi: securityPoolAbi, functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		const candidates = await scan(1n)
 		expect(candidates).toHaveLength(1)
 		expect(rejectedRanges).toBeGreaterThan(0)

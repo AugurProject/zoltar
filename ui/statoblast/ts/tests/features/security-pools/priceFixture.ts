@@ -24,7 +24,7 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 		branches: [0n, 1n, 0n, 0n, 0n, 100n * unit, true, true, false],
 		seedPool: token,
 		getQuestions: [123n],
-		getPool: token,
+		getQuestionLedger: token,
 		securityPoolOf: securityPool,
 		getQuestionLedgerOriginId: `0x${'11'.repeat(32)}`,
 		getQuestionLedger: token,

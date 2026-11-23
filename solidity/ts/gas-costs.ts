@@ -76,7 +76,7 @@ try {
 	await createQuestion(owner, question, outcomes)
 	const questionId = getQuestionId(question, outcomes)
 	await measure('1. Security pool deployment', 'Register question', trader, () => trader.writeContract({ ...securityPool, functionName: 'addQuestion', args: [questionId] }))
-	const poolAddress = await owner.readContract({ ...securityPool, functionName: 'getPool', args: [questionId, 0n] })
+	const poolAddress = await owner.readContract({ ...securityPool, functionName: 'getQuestionLedger', args: [questionId, 0n] })
 	const pool = { abi: poolArtifact.abi, address: poolAddress }
 	const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...securityPool, functionName: 'capitalLedger', args: [0n] }) }
 	await approveToken(owner, getRepTokenAddress(0n), capital.address)

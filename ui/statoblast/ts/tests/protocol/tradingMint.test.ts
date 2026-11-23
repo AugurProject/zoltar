@@ -26,7 +26,7 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'securityPoolOf') return securityPool
 				if (request.functionName === 'isSecurityPool') return true
-				if (request.functionName === 'getPool') return pool
+				if (request.functionName === 'getQuestionLedger') return pool
 				if (request.functionName === 'purchaseQuote') return [0n, 0n]
 				if (request.functionName === 'quoteMintRecoveryRep') return recovery.required
 				if (request.functionName === 'recoveryTokens') return pool
@@ -146,7 +146,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return game
 						case 'questionData':
 						case 'securityPoolFactory':
-						case 'getPool':
+						case 'getQuestionLedger':
 							return pool
 						case 'securityPoolOf':
 							return securityPool

@@ -28,7 +28,7 @@ export async function discoverSecurityPoolCapital(context: EcosystemDiscoveryCon
 		const securityPool = getAddress(await client.readContract({ address: deployments.securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'securityPoolOf', args: [pool.address], blockNumber }))
 		if (securityPool === zeroAddress) throw new Error(`Question ${pool.address} has no security pool`)
 		const universeId = BigInt(pool.universeId)
-		const registered = await client.readContract({ address: securityPool, abi: securityPoolAbi, functionName: 'getPool', args: [BigInt(pool.questionId), universeId], blockNumber })
+		const registered = await client.readContract({ address: securityPool, abi: securityPoolAbi, functionName: 'getQuestionLedger', args: [BigInt(pool.questionId), universeId], blockNumber })
 		requireGraphEdge(getAddress(registered), pool.address, 'Security pool question binding')
 		await authenticateSecurityPool(securityPool)
 		const key = `${securityPool.toLowerCase()}:${universeId}`

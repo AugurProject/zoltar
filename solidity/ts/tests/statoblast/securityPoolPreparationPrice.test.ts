@@ -103,7 +103,7 @@ describe('Statoblast: child security pool price preparation', () => {
 		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'acceptedPrice' })).toBe(unit)
 		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'feesEnabled', args: [context.child] })).toBe(false)
 		expect((await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'clocks', args: [context.child] }))[3]).toBe(false)
-		await expect(context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getPool', args: [fixture.base.questionId, context.child] })).rejects.toThrow('Question pool unavailable')
+		await expect(context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getQuestionLedger', args: [fixture.base.questionId, context.child] })).rejects.toThrow('Question pool unavailable')
 		const [escrow] = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'reportCandidates', args: [report] })
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: escrowArtifact.abi, address: escrow, functionName: 'withdrawFunding' }))
 		expect(await context.balance(context.weth)).toBe(wethBefore)

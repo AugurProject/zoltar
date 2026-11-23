@@ -7,7 +7,7 @@ const abi = parseAbi([
 	'function factory() view returns (address)',
 	'function originUniverseId() view returns (uint248)',
 	'function getQuestions(uint256 start,uint256 count) view returns (uint256[])',
-	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
+	'function getQuestionLedger(uint256 questionId,uint248 universeId) view returns (address)',
 	'function zoltar() view returns (address)',
 	'function universeId() view returns (uint248)',
 	'function getRepToken(uint248 universeId) view returns (address)',
@@ -74,7 +74,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 	if (!Array.isArray(questionPage) || questionPage.length > 1) throw new Error('Invalid security pool preparation source page.')
 	let sourcePool: Address | undefined
 	if (questionPage.length === 1) {
-		sourcePool = decodeAddress(await read(securityPool, 'getPool', [decodeUint(questionPage[0], 'Source question'), originUniverseId]), 'Preparation source')
+		sourcePool = decodeAddress(await read(securityPool, 'getQuestionLedger', [decodeUint(questionPage[0], 'Source question'), originUniverseId]), 'Preparation source')
 		const [sourceSecurityPool, sourceOrigin] = await Promise.all([read(factory, 'securityPoolOf', [sourcePool]), read(factory, 'getQuestionLedgerOriginId', [sourcePool])])
 		if (typeof sourceOrigin !== 'string' || !isHex(sourceOrigin) || sourceOrigin.length !== 66) throw new Error('Invalid preparation source origin.')
 		if (decodeAddress(sourceSecurityPool, 'Source security pool') !== securityPool || decodeAddress(await read(factory, 'getQuestionLedger', [sourceOrigin, originUniverseId]), 'Canonical source') !== sourcePool) throw new Error('Security pool preparation source is not canonical.')

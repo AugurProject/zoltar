@@ -10,7 +10,7 @@ const abi = parseAbi([
 	'function questionOriginIds(uint256 questionId) view returns (bytes32)',
 	'function getQuestionLedger(bytes32 originId,uint248 universeId) view returns (address)',
 	'function originUniverseId() view returns (uint248)',
-	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
+	'function getQuestionLedger(uint256 questionId,uint248 universeId) view returns (address)',
 	'function sourceGame(uint248 universeId,uint256 questionId) view returns (address)',
 	'function questionLedger() view returns (address)',
 	'function shareToken() view returns (address)',
@@ -36,7 +36,7 @@ export async function loadSecurityPoolSourceRecovery(client: ReadClient, snapsho
 	const pool = requireAddressValue(await client.readContract({ address: factory, abi, functionName: 'getQuestionLedger', args: [originId, snapshot.universeId], blockNumber }), 'source pool')
 	const origin = requireBigintValue(originValue, 'origin universe')
 	const game = requireAddressValue(gameValue, 'source game')
-	const sourceValue = game === zeroAddress ? await client.readContract({ address: snapshot.securityPool, abi, functionName: 'getPool', args: [questionId, origin], blockNumber }) : await client.readContract({ address: game, abi, functionName: 'questionLedger', blockNumber })
+	const sourceValue = game === zeroAddress ? await client.readContract({ address: snapshot.securityPool, abi, functionName: 'getQuestionLedger', args: [questionId, origin], blockNumber }) : await client.readContract({ address: game, abi, functionName: 'questionLedger', blockNumber })
 	const source = requireAddressValue(sourceValue, 'reporter source pool')
 	if (source === zeroAddress) throw new Error('Question is not registered in this security pool.')
 	const shareTokenValue = await client.readContract({ address: source, abi, functionName: 'shareToken', blockNumber })

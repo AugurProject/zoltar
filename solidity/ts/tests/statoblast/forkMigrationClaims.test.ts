@@ -38,7 +38,7 @@ describe('Security pool own-fork reporter claims', () => {
 		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(relayer, () => relayer.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [pool, child] }))
 		for (let side = 0; side < 3; side++) await writeContractAndWait(relayer, () => relayer.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [pool, child] }))
-		const childPool = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getPool', args: [fixture.base.questionId, child] })
+		const childPool = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		const game = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
 		const reporters = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'reporterLedger', args: [child] })
 		const backing = await owner.readContract({ abi: reporterArtifact.abi, address: reporters, functionName: 'balanceOfGame', args: [game] })

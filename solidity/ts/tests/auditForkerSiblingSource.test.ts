@@ -61,7 +61,7 @@ describe('audit: a security pool question ledger descends only from an ancestor 
 
 		// The question is prepared in A only (ForkMigration), never in B.
 		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [originPool, A], gas: GAS }))
-		const poolA = await owner.readContract({ ...p, functionName: 'getPool', args: [q2, A] })
+		const poolA = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [q2, A] })
 		expect(await parentOf(poolA)).toBe(originPool.toLowerCase())
 
 		// A forks; its child A1 is activated in the security pool. B is untouched.
@@ -81,14 +81,14 @@ describe('audit: a security pool question ledger descends only from an ancestor 
 		for (const functionName of ['prepareSecurityPoolQuestion', 'materializeSecurityPoolQuestion'] as const) await expect(trader.simulateContract({ ...forker, functionName, args: [poolA, B], gas: GAS })).rejects.toThrow('Target universe does not descend from source')
 		// The source an interface derives (origin pool) still deploys and activates B's ledger.
 		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [originPool, B], gas: GAS }))
-		const poolB = await owner.readContract({ ...p, functionName: 'getPool', args: [q2, B] })
+		const poolB = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [q2, B] })
 		expect(await parentOf(poolB)).toBe(originPool.toLowerCase())
 		expect(await state(poolB)).toBe(0)
 
 		// A1's ledger is prepared from the intermediate pool. A call naming the origin pool,
 		// as the interface does without a recorded reporter game, completes it.
 		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [poolA, A1], gas: GAS }))
-		const poolA1 = await owner.readContract({ ...p, functionName: 'getPool', args: [q2, A1] })
+		const poolA1 = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [q2, A1] })
 		expect(await parentOf(poolA1)).toBe(poolA.toLowerCase())
 		expect(await state(poolA1)).toBe(2)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [originPool, A1], gas: GAS }))

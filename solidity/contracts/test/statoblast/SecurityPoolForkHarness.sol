@@ -262,7 +262,7 @@ contract SecurityPoolForkHarness {
 		pools[u][q] = pool;
 		settlement.registerQuestion(address(pool), u, q);
 	}
-	function getPool(uint256 q, uint248 u) external view returns (IQuestionLedger) {
+	function getQuestionLedger(uint256 q, uint248 u) external view returns (IQuestionLedger) {
 		return pools[u][q];
 	}
 	function mintQuestion(uint256 q) external payable {

@@ -19,7 +19,7 @@ test('security pool simulation mints use each funded purchase quote, including f
 			switch (parameters.functionName) {
 				case 'questionOriginIds':
 					return hash
-				case 'getPool':
+				case 'getQuestionLedger':
 					return owner
 				case 'capitalLedger':
 					return owner

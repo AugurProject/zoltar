@@ -9,7 +9,7 @@ const abi = parseAbi([
 	'function addQuestion(uint256 questionId) returns (address)',
 	'function questionOriginIds(uint256 questionId) view returns (bytes32)',
 	'function originUniverseId() view returns (uint248)',
-	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
+	'function getQuestionLedger(uint256 questionId,uint248 universeId) view returns (address)',
 	'function quoteQuestionMint(address pool,uint256 cash) view returns (uint256)',
 	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 mintAttoEth) view returns (uint256 fee,uint256 premium)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
@@ -76,7 +76,7 @@ export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPo
 	const registered = questionOrigin !== zeroHash
 	if (!registered && decodeUint(await read(securityPool, 'originUniverseId'), 'Origin universe', 248) !== universeId) throw new Error('New questions can only be purchased in the origin universe.')
 	const [poolValue, capitalValue, feeQuote, recoveryQuote] = await Promise.all([
-		registered ? read(securityPool, 'getPool', [questionId, universeId]) : zeroAddress,
+		registered ? read(securityPool, 'getQuestionLedger', [questionId, universeId]) : zeroAddress,
 		read(securityPool, 'capitalLedger', [universeId]),
 		read(securityPool, 'purchaseQuote', [universeId, questionId, cash]),
 		read(securityPool, 'quoteMintRecoveryRep', [universeId, questionId, cash]),

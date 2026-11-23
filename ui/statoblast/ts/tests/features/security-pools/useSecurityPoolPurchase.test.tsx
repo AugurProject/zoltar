@@ -17,7 +17,7 @@ async function setup(snapshot = capitalSnapshot(), recoveryAttoRep = 0n, recover
 	const source = capitalClient(snapshot)
 	const values = {
 		questionOriginIds: `0x${'11'.repeat(32)}`,
-		getPool: capital,
+		getQuestionLedger: capital,
 		questionId: 999n,
 		questionData: token,
 		getQuestionEndDate: 10_000n,

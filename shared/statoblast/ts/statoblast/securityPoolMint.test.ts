@@ -24,7 +24,7 @@ describe('shared capital complete-set purchases', () => {
 
 	test('quotes canonical question units and uniform purchase fees without a vault or allocation scan', async () => {
 		const calls: string[] = []
-		const responses: Record<string, unknown> = { questionOriginIds: `0x${'11'.repeat(32)}`, getPool: pool, capitalLedger, purchaseQuote: [20n, 8n], quoteQuestionMint: 99n, availableMintCapacity: 200n, isPriceValid: true, quoteMintRecoveryRep: 0n }
+		const responses: Record<string, unknown> = { questionOriginIds: `0x${'11'.repeat(32)}`, getQuestionLedger: pool, capitalLedger, purchaseQuote: [20n, 8n], quoteQuestionMint: 99n, availableMintCapacity: 200n, isPriceValid: true, quoteMintRecoveryRep: 0n }
 		const client: SecurityPoolReadClient = {
 			getChainId: async () => 1,
 			getBlock: async () => ({ number: 45n, timestamp: 100n }),
@@ -72,7 +72,7 @@ test('quotes an unregistered origin question without reading a nonexistent pool'
 	}
 	const quote = await loadSecurityPoolMintQuote({ client, securityPool, universeId: 7n, questionId: 13n, mintAttoEth: 100n })
 	expect(quote).toMatchObject({ pool: zeroAddress, shares: 100n, purchaseFeeAttoEth: 20n, availableCommitmentAttoEth: 200n })
-	expect(calls).not.toContain('getPool')
+	expect(calls).not.toContain('getQuestionLedger')
 	expect(calls).not.toContain('quoteQuestionMint')
 	await expect(loadSecurityPoolMintQuote({ client, securityPool, universeId: 8n, questionId: 13n, mintAttoEth: 100n })).rejects.toThrow('origin universe')
 })

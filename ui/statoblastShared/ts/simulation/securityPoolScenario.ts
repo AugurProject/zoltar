@@ -72,7 +72,7 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 	await reportStep('Funded owner principal')
 	// One settlement refreshes every question in the security pool universe.
 	await advanceSimulationTime(memoryClient, 301n)
-	const questionPool = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getPool', args: [BigInt(initial.questionId), 0n] })
+	const questionPool = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getQuestionLedger', args: [BigInt(initial.questionId), 0n] })
 	const managerAddress = (await loadAllQuestionLedgers(readClient)).find(pool => pool.questionLedgerAddress.toLowerCase() === questionPool.toLowerCase())?.managerAddress
 	if (managerAddress === undefined) throw new Error('Expected namespaced security pool question pool')
 	await reportStep('Preparing shared security pool oracle')

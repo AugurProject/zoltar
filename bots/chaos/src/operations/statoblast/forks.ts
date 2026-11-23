@@ -76,7 +76,7 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 	function build(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof candidates>[number]) {
 		const evidence: OperationEvidence[] =
 			kind === 'create-child'
-				? [{ kind: 'storage-postcondition', contract: candidate.pool.securityPool, abi: 'function getPool(uint256,uint248) view returns (address)', functionName: 'getPool', args: [candidate.pool.questionId, candidate.targetUniverse], relation: 'greater-than', expected: '0' }]
+				? [{ kind: 'storage-postcondition', contract: candidate.pool.securityPool, abi: 'function getQuestionLedger(uint256,uint248) view returns (address)', functionName: 'getQuestionLedger', args: [candidate.pool.questionId, candidate.targetUniverse], relation: 'greater-than', expected: '0' }]
 				: [{ kind: 'storage-postcondition', contract: candidate.pool.address, abi: 'function systemState() view returns (uint8)', functionName: 'systemState', args: [], relation: 'equals', expected: '1' }]
 
 		return planBase({

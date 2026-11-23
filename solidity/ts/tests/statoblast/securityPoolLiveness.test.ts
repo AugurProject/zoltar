@@ -35,7 +35,7 @@ describe('Statoblast contract liveness', () => {
 		const finalize = { ...settlement, functionName: 'finalizeQuestion' as const, args: [child, questionId] as const }
 		const before = await demand()
 		expect((await question())[1]).toBe(0n)
-		await expect(owner.readContract({ ...root, functionName: 'getPool', args: [questionId, child] })).rejects.toThrow('Question pool unavailable')
+		await expect(owner.readContract({ ...root, functionName: 'getQuestionLedger', args: [questionId, child] })).rejects.toThrow('Question pool unavailable')
 		await window.setTime(activatedAt + 2n * DAY)
 		await writeContractAndWait(caller, () => caller.writeContract(finalize))
 		expect(await demand()).toBe(before)

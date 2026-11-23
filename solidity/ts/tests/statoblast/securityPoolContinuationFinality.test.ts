@@ -103,7 +103,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [source, child] }))
 		for (let i = 0; i < 3; i++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [source, child] }))
-		const childPool = await owner.readContract({ ...p, functionName: 'getPool', args: [base.questionId, child] })
+		const childPool = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [base.questionId, child] })
 		const game = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
 		const gameEnd = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
 		const resolution = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getFinalQuestionResolution' })
@@ -163,7 +163,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		for (let i = 0; i < 3; i++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [childPool, grandchild] }))
 		await writeContractAndWait(trader, () => trader.writeContract({ ...shares, functionName: 'migrate', args: [child * 256n + 1n, [1n]] }))
 		expect(await trader.readContract({ ...shares, functionName: 'balanceOf', args: [trader.account.address, grandchild * 256n + 1n] })).toBe(childBalance)
-		const grandPool = await owner.readContract({ ...p, functionName: 'getPool', args: [base.questionId, grandchild] })
+		const grandPool = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [base.questionId, grandchild] })
 		const grandGame = await owner.readContract({ abi: poolArtifact.abi, address: grandPool, functionName: 'escalationGame' })
 		const grandEnd = await owner.readContract({ abi: gameArtifact.abi, address: grandGame, functionName: 'getEscalationGameEndDate' })
 		// Leave room for the fixed-point attrition curve's inverse-rounding boundary.
