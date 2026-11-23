@@ -34,7 +34,7 @@
 					<li>For a categorical fork, select Invalid or one or more labeled answers.</li>
 					<li>For a scalar fork, select Invalid or add one or more exact scalar ticks. The UI displays the human value and derives the packed onchain outcome index.</li>
 				</ul>
-				<p>A single-target call may create a missing child SecurityPool. A multi-target call must reference children whose canonical pools already exist. To migrate one source share to several new scalar outcomes, submit each missing outcome by itself; locking prevents transfers but not later migration of the same source into a new child. Once those children exist, another source share can target all of them in one call. Every call must add at least one source-and-child entitlement the wallet has not migrated before.</p>
+				<p>A single-target call may create a missing child SecurityPool, but only once the portfolio's fork branch into that child universe is active. Until then the call reverts with <code>Fork branch not active</code>, and Trading blocks the migration: anyone can prepare, start, and activate the branch under <strong>Fork choices and recovery</strong> in Statoblast, each as its own transaction. A multi-target call must reference children whose canonical pools already exist. To migrate one source share to several new scalar outcomes, submit each missing outcome by itself; locking prevents transfers but not later migration of the same source into a new child. Once those children exist, another source share can target all of them in one call. Every call must add at least one source-and-child entitlement the wallet has not migrated before.</p>
 			</section>
 			<section id="in-the-ui">
 				<h2>In the UI</h2>
