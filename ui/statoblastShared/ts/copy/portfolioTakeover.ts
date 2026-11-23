@@ -27,6 +27,7 @@ export const hint = 'Use the position ID shown by the scanner or liquidator. Auc
 export const review = 'Pledge your own REP for the transferred commitment and its future fees. The original provider keeps all principal and past earnings. Consent limits cap your resulting exposure.'
 export const repairLimit = 'Maximum commitment to repair'
 export const notStarted = 'Not started'
+export const strandsSource = 'Take over the full repair, or little enough that the position stays below the liquidation price.'
 export const additionalBacking = 'This minimum position needs additional backing or new healthy capacity before retirement.'
 export const receiverMinimum = 'Your resulting commitment would be below the portfolio minimum.'
 
