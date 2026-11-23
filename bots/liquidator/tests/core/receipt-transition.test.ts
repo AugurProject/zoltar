@@ -27,7 +27,7 @@ test('takeover expiry requires consistent final receipt-block evidence (#1372)',
 	expect(await explainTakeoverReceiptExpiry(intent, { ...receipt, gasUsed: 1_000_000n }, updatedReaders, 1)).toBeUndefined()
 })
 
-test('#1472 a takeover reverted by a stale price or an inactive universe at inclusion is an expected expiry', async () => {
+test('price expiry alone cannot explain a reverted auction fill; an inactive universe can', async () => {
 	const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
 	receipt.status = 'reverted'
 	receipt.blockNumber = 123n
@@ -37,8 +37,8 @@ test('#1472 a takeover reverted by a stale price or an inactive universe at incl
 	const timestamp = fresh.observation.snapshot.timestamp
 	expect(await explain({})).toBeUndefined()
 	expect(await explain({ priceValidUntil: timestamp + 1n })).toBeUndefined()
-	expect(await explain({ priceValidUntil: timestamp })).toBe('Capital price stale')
-	expect(await explain({ priceValidUntil: timestamp - 1n })).toBe('Capital price stale')
+	expect(await explain({ priceValidUntil: timestamp })).toBeUndefined()
+	expect(await explain({ priceValidUntil: timestamp - 1n })).toBeUndefined()
 	expect(await explain({ frozen: true })).toBe('Capital universe inactive')
 	expect(await explain({ importing: true })).toBe('Capital universe inactive')
 	expect(await explain({ getForkTime: 1n })).toBe('Capital universe inactive')

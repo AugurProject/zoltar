@@ -29,16 +29,16 @@ describe('manual takeover against native portfolio contracts', () => {
 			const initialSource = distressed.positions[0]
 			if (initialSource === undefined) throw new Error('Missing distressed position')
 			expect(initialSource.liquidationStarted).toBeGreaterThan(0n)
-			// Keep quotes fresh while the reward matures; a stale gap restarts its clock.
-			for (let renewal = 0; renewal < 8; renewal++) await fixture.refreshPrice(fixture.base.questionId, 3n * unit)
+			// Let the triggering quote expire without renewal while the auction reaches full terms.
+			await fixture.base.mockWindow.advanceTime(3601n)
 			const snapshot = { ...(await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })), collateral: { symbol: 'WETH', decimals: 18 } }
 			const original = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })
 			const source = original.positions[0]
 			if (source === undefined) throw new Error('Missing distressed position')
 			expect(source.liquidationStarted).toBe(initialSource.liquidationStarted)
 			expect(snapshot.timestamp - source.liquidationStarted).toBeGreaterThanOrEqual(3600n)
-			expect(snapshot.priceValid).toBe(true)
-			expect(snapshot.timestamp).toBeLessThan(snapshot.priceValidUntil)
+			expect(snapshot.priceValid).toBe(false)
+			expect(snapshot.timestamp).toBeGreaterThanOrEqual(snapshot.priceValidUntil)
 			const backend = { ...createFakeBackend({ accountAddress: keeper.account.address }), createReadClient: () => keeper }
 			installActiveEnvironmentForTesting(backend)
 			let submitted = false

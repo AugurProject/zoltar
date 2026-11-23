@@ -195,13 +195,14 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
 	})
 
-	test('a funded repair moves only its target bonus and preserves another winner’s fees', async () => {
+	test.each([false, true])('a funded repair moves only its target bonus and preserves another winner’s fees (expired=%s)', async expired => {
 		await activate()
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'creditFees', value: 30n }))
-		await setPrice(6n * ATTO_ETH_PER_ETH)
+		await setPrice(6n * ATTO_ETH_PER_ETH, expired ? 60n : 100_000n)
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [caller.account.address, 3n * REP] }))
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, 3n * REP] }))
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [caller.account.address, 3n * REP] }))
+		if (expired) await getAnvilWindowEthereum().advanceTime(61n)
 		const bounds = { maximumOwnerPrincipal: 5n * REP, maximumOwnerCommitment: LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }
 		await expect(caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [1n, LOT, 0n, 3n * REP, { ...bounds, maximumOwnerPrincipal: 3n * REP - 1n }] })).rejects.toThrow('Takeover owner principal exceeds limit')
 		expect((await owner(first.account.address)).positionId).toBe(0n)

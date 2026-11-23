@@ -25,19 +25,13 @@ test('an independently accounted auction vault controlled by the keeper is not a
 	expect(evaluate(observation).plan).toBeUndefined()
 })
 
-test('unapproved, deselected, stale, forked and independent-price failures cannot produce actions', () => {
+test('unapproved, deselected, forked and independent-price failures cannot produce actions', () => {
 	for (const mutation of [
 		(value: ReturnType<typeof portfolioObservation>) => {
 			value.approvedUniverse = false
 		},
 		(value: ReturnType<typeof portfolioObservation>) => {
 			value.selected = false
-		},
-		(value: ReturnType<typeof portfolioObservation>) => {
-			value.snapshot.priceValid = false
-		},
-		(value: ReturnType<typeof portfolioObservation>) => {
-			value.snapshot.timestamp = value.snapshot.priceValidUntil
 		},
 		(value: ReturnType<typeof portfolioObservation>) => {
 			value.snapshot.forkTime = 1n
@@ -53,12 +47,17 @@ test('unapproved, deselected, stale, forked and independent-price failures canno
 	expect(evaluate(portfolioObservation(), portfolioSettings(), 0n, false).plan).toBeUndefined()
 })
 
-test('#1472 a takeover is planned only while the accepted price outlives the signed transaction validity window', () => {
+test('an already-started auction remains actionable across price expiry and the signed validity window', () => {
 	const horizon = DEFAULT_TRANSACTION_VALIDITY_BLOCKS * SIGNED_TRANSACTION_SLOT_SECONDS
-	for (const offset of [1n, horizon]) {
+	for (const offset of [-1n, 0n, 1n, horizon]) {
 		const observation = portfolioObservation()
 		observation.snapshot.timestamp = observation.snapshot.priceValidUntil - offset
-		expect(evaluate(observation).reason).toBe('Accepted price expires before the signed transaction validity window ends')
+		observation.snapshot.priceValid = offset > 0n
+		expect(evaluate(observation).plan).toBeDefined()
+		const position = observation.positions[0]
+		if (position === undefined) throw new Error('Fixture target missing')
+		position.liquidationStarted = 0n
+		expect(evaluate(observation).plan).toBeUndefined()
 	}
 	const observation = portfolioObservation()
 	observation.snapshot.timestamp = observation.snapshot.priceValidUntil - horizon - 1n

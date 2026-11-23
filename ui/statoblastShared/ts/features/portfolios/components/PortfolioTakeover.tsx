@@ -39,7 +39,6 @@ type TakeoverSnapshot = Pick<
 	| 'demandAttoEth'
 	| 'ownerAccount'
 	| 'positions'
-	| 'priceValid'
 > & { collateral: { symbol: string; decimals: number } }
 
 async function loadTarget(snapshot: TakeoverSnapshot, id: bigint) {
@@ -100,7 +99,6 @@ export function PortfolioTakeover({ model, actions }: { model: { snapshot: Takeo
 	if (reason === undefined && (id === undefined || id === 0n)) reason = copy.enterTarget
 	if (reason === undefined && preview === undefined) reason = loaded?.error ?? copy.loading
 	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
-	if (reason === undefined && snapshot !== undefined && !snapshot.priceValid) reason = copy.priceRequired
 	const distressed = preview !== undefined && snapshot !== undefined && preview.position.owner !== snapshot.owner && preview.position.commitment !== 0n && preview.position.maxHealthyPrice < snapshot.liquidationPrice && preview.started !== 0n
 	// Auction awards remain pledged in the receiver vault. A preliminary cure that restores health stands without a transfer.
 	const curable = distressed && source?.healthy === true && source.removed !== 0n

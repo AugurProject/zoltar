@@ -41,8 +41,8 @@ async function fill(field: HTMLInputElement | undefined, value: string) {
 	})
 }
 
-test('manual takeover requires all consent bounds and rejects a changed price before signing', async () => {
-	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
+test.each([true, false])('an existing auction permits manual takeover with consent bounds after price expiry (fresh=%s)', async priceValid => {
+	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit, priceValid, ...(priceValid ? {} : { priceValidUntil: 1n }) })
 	snapshot.ownerPrincipalAttoRep = 40n * unit
 	snapshot.positions = snapshot.positions.map(position => ({ ...position, rep: 40n * unit }))
 	const reader = installTakeoverReader(snapshot)
@@ -221,16 +221,12 @@ test('bounds outlive a snapshot reload and a first target, and clear when an ID 
 	await waitFor(() => expect(bounds()).toEqual(['', '', '', '']))
 })
 
-test.each([
-	// Stated as a condition: a report may already be in its challenge period, so asking for another would invite a duplicate.
-	['an expired price in an active universe needs a new accepted price', { priceValid: false }, 'A new accepted REP price is required.'],
-	['a forked universe cannot take over at all', { priceValid: false, forkTime: 1n }, 'Takeovers require an active universe.'],
-])('%s', async (_case, overrides, reason) => {
-	const snapshot = capitalSnapshot(overrides)
+test('a forked universe cannot take over at all', async () => {
+	const snapshot = capitalSnapshot({ priceValid: false, forkTime: 1n })
 	installTakeoverReader(snapshot)
 	const view = await renderTakeover(snapshot, idleActions)
 	await fill(view.container.querySelector('input') ?? undefined, '2')
-	await waitFor(() => expect(view.container.textContent).toContain(reason))
+	await waitFor(() => expect(view.container.textContent).toContain('Takeovers require an active universe.'))
 	expect(view.container.querySelector('button')?.disabled).toBe(true)
 })
 

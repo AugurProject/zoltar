@@ -289,7 +289,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint64 observation = _distressObservation(id);
 		return observation == 0 ? 0 : CheckedCast.toUint48(Math.max(observationTimes[observation], distressRestart));
 	}
-	/// @notice Wall-clock time advances compensation even while execution awaits a fresh price.
+	/// @notice Wall-clock time advances compensation; an existing auction survives price expiry.
 	function liquidationElapsed(uint96 id) public view returns (uint256) {
 		uint64 observation = _distressObservation(id);
 		return observation == 0 ? 0 : block.timestamp - observationTimes[observation];

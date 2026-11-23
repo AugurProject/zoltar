@@ -407,7 +407,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 	function takeOverAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
 		_requireOpen();
-		_requireFresh();
 		_checkpoint();
 		(, uint96 id) = _materializeAuctionBid(bidId);
 		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
@@ -426,7 +425,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 
 	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds) private returns (uint96) {
 		_requireOpen();
-		_requireFresh();
+		// The index requires an existing adverse observation. Its auction remains
+		// executable at the last accepted valuation after that report expires.
 		_checkpoint();
 		return
 			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.takeOver, (id, commitment, minimumAward, maximumOwnRep, bounds, enforceBounds, minimumCommitmentAttoEth))), (uint96));
