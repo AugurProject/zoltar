@@ -221,10 +221,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		require(outcomeShares > 0 && outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
 		uint256 scaledRecovery = _scaledRecovery(bookId, book, questionId, state);
 		recoveryAttoRep = _quoteRecovery(book, state, frozenBookId, outcomeShares, scaledRecovery);
-		unitsBurned =
-			outcomeShares == state.outcomeSupplyAttoShares
-				? state.units
-				: Math.mulDiv(state.units, outcomeShares, state.outcomeSupplyAttoShares);
+		unitsBurned = SettlementMath.unitsForRedeemedShares(state.units, state.outcomeSupplyAttoShares, outcomeShares);
 		if (frozenBookId == 0) {
 			require(!book.isSealed, 'Use child settlement book');
 			cashAttoEth = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned);
@@ -361,10 +358,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		if (state.outcomeSupplyAttoShares == 0) return (0, 0);
 		require(outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
 		if (outcomeShares == 0) return (0, 0);
-		unitsBurned =
-			outcomeShares == state.outcomeSupplyAttoShares
-				? state.units
-				: Math.mulDiv(state.units, outcomeShares, state.outcomeSupplyAttoShares);
+		unitsBurned = SettlementMath.unitsForRedeemedShares(state.units, state.outcomeSupplyAttoShares, outcomeShares);
 		if (frozenBookId == 0) {
 			if (!book.isSealed && _isMature(book, state.finalAfter, portfolioTimestamp)) {
 				uint256 reserved = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], state.units);
