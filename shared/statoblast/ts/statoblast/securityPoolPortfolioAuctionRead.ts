@@ -207,7 +207,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 			depositedAttoEth: decodeUint(deposited, 'Bid escrow'),
 			refundAttoEth: decodeUint(bidCredit, 'Bid refund'),
 		}
-		if (terms.lotAttoEth === 0n || terms.repGrid === 0n || terms.targetLots !== terms.shortfallAttoEth / terms.lotAttoEth) throw new Error('Invalid auction lot configuration.')
+		if (terms.lotAttoEth === 0n || terms.repGrid === 0n || terms.targetLots !== (terms.shortfallAttoEth + terms.lotAttoEth - 1n) / terms.lotAttoEth) throw new Error('Invalid auction lot configuration.')
 		let price: { conservativePrice: bigint; validUntil: bigint; lastSettlementTimestamp: bigint; exposureLimitAttoEth: bigint; exposureLimitAttoRep: bigint; requiredExposureAttoEth: bigint } | undefined
 		if (priceFeed !== zeroAddress) {
 			const [values, exposureValue] = await Promise.all([Promise.all(['conservativePrice', 'priceValidUntil', 'lastSettlementTimestamp', 'acceptedExposureLimitAttoEth', 'acceptedRepExposureLimitAttoRep'].map(name => read(priceFeed, name))), read(portfolio, 'oracleExposure', [universeId])])

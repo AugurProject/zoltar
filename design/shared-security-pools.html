@@ -1222,15 +1222,15 @@
 				<h3 id="auction">5.3 The Collateral Repair Auction: uniform-price lots</h3>
 				<p>The auction sells fresh inventory REP for ETH to repair the shortfall, and nothing else. It does not select truth: it sells REP of a child universe that already exists. Its design differs from the standalone tick auction in almost every detail, so it is worth stating the whole mechanism.</p>
 				<h4>Units</h4>
-				<p>The ETH side is denominated in whole <strong>lots</strong>, each equal to the portfolio's minimum commitment. The REP side is denominated in a <strong>grid</strong> that makes the per-lot collateral divide exactly for any number of lots:</p>
+				<p>The ETH side is denominated in whole equal <strong>lots</strong> of at least the portfolio's minimum commitment, rounded up so that a full fill covers the entire shortfall whether or not the lot count divides it; the less than one attoETH per lot that a full fill raises beyond the shortfall is burned. The REP side is denominated in a <strong>grid</strong> that makes the per-lot collateral divide exactly for any number of lots:</p>
 				<div class="equation" id="eq-lots">
 					<math display="block">
 						<mtable displaystyle="true">
 							<mtr>
-								<mtd><mi>lotEth</mi><mo>=</mo><mi>minimumCommitment</mi></mtd>
+								<mtd><mi>targetLots</mi><mo>=</mo><mi>max</mi><mo>(</mo><mn>1</mn><mo>,</mo><mo>⌊</mo><mi>shortfall</mi><mo>÷</mo><mi>minimumCommitment</mi><mo>⌋</mo><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
-								<mtd><mi>targetLots</mi><mo>=</mo><mo>⌊</mo><mi>shortfall</mi><mo>÷</mo><mi>lotEth</mi><mo>⌋</mo></mtd>
+								<mtd><mi>lotEth</mi><mo>=</mo><mo>⌈</mo><mi>shortfall</mi><mo>÷</mo><mi>targetLots</mi><mo>⌉</mo></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>repGrid</mi><mo>=</mo><mi>securityMultiplier</mi><mo>÷</mo><mi>gcd</mi><mo>(</mo><mi>securityMultiplier</mi><mo>,</mo><mn>10 000</mn><mo>)</mo></mtd>

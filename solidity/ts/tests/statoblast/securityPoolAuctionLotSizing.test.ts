@@ -46,10 +46,16 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		const required = await client.readContract({ abi: indexArtifact.abi, address: index, functionName: 'requiredRep', args: [lot, 10n ** 18n, 10_500n, 10_000n] })
 		return { lots, lot, rounded, required, gas: (await client.waitForTransactionReceipt({ hash: transaction })).gasUsed }
 	}
+	const unit = 10n ** 18n
+	const expectCoveringLots = (result: { lots: bigint; lot: bigint }, shortfall: bigint) => {
+		expect(result.lots * result.lot).toBeGreaterThanOrEqual(shortfall)
+		expect((result.lots - 1n) * result.lot).toBeLessThan(shortfall)
+		expect(result.lots * result.lot - shortfall).toBeLessThan(result.lots)
+	}
 	test('#1339 enlarges tiny lots until grid rounding adds less than one percent', async () => {
 		const result = await open(1_000_000n)
 		expect(result.lots).toBeGreaterThan(1n)
-		expect(result.lots * result.lot).toBe(1_000_000n)
+		expectCoveringLots(result, 1_000_000n)
 		expect((result.rounded - result.required) * 100n).toBeLessThan(result.required)
 	})
 	test('#1339 one full-deficit lot remains possible when indivisible REP exceeds the rounding target', async () => {
@@ -58,14 +64,30 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		expect(result.lot).toBe(1n)
 		expect((result.rounded - result.required) * 100n).toBeGreaterThan(result.required)
 	})
-	test('#1339 six-decimal collateral raises exactly 35 USDC in two 17.5 USDC lots', async () => {
+	test('#1339 six-decimal collateral covers 35 USDC in three equal lots of at least 10 USDC', async () => {
 		const result = await open(35_000_000n, 10_000_000n)
-		expect([result.lots, result.lot]).toEqual([2n, 17_500_000n])
+		expect([result.lots, result.lot]).toEqual([3n, 11_666_667n])
+		expectCoveringLots(result, 35_000_000n)
 	})
 	test('#1339 selecting lots remains gas bounded at a 128-bit deficit', async () => {
 		const shortfall = 2n ** 127n
 		const result = await open(shortfall)
 		expect(result.lots * result.lot).toBe(shortfall)
 		expect(result.gas).toBeLessThan(3_000_000n)
+	})
+	test('#1551 a one-wei-odd deficit still sells about one minimum-size lot per minimum commitment', async () => {
+		const shortfall = 1_000n * unit + 1n
+		const result = await open(shortfall, unit)
+		expect([result.lots, result.lot]).toEqual([1_000n, unit + 1n])
+		expectCoveringLots(result, shortfall)
+	})
+	test('#1551 the lot count does not depend on how many times two divides the deficit', async () => {
+		for (const remainder of [2n, 3n, 7n, 12_345_678_901n, unit / 3n, unit - 1n]) {
+			const shortfall = 1_000n * unit + remainder
+			const result = await open(shortfall, unit)
+			expect(result.lots).toBe(1_000n)
+			expect(result.lot).toBe((shortfall + 999n) / 1_000n)
+			expectCoveringLots(result, shortfall)
+		}
 	})
 })
