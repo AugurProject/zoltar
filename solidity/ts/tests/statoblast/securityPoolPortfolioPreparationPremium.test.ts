@@ -81,24 +81,30 @@ describe('Statoblast: preparation premium ownership', () => {
 		expect(await context.fees()).toBe(0n)
 		await context.checkpoint()
 		const remaining = (await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] }))[0]
-		expect(activationCash).toBeLessThan(context.premiumBefore)
+		expect(activationCash).toBe(context.premiumBefore)
 		expect(await context.fees()).toBe(activationCash - remaining)
-		// Elapsed preparation premium is burned, never retained or paid to later underwriters.
-		expect(preparation).toBe(context.premiumBefore - activationCash)
-		expect(preparation).toBeGreaterThan(0n)
+		// Paused reporting earns no preparation premium. Only time after activation earns.
+		expect(preparation).toBe(0n)
 		await context.mock.advanceTime(300n)
 		await context.checkpoint()
 		expect(await context.fees()).toBeGreaterThan(0n)
 	})
 
-	test('expired preparation premiums are entirely burned without delaying activation', async () => {
+	test('late activation preserves premium until the reporting clock resumes', async () => {
 		const context = await prepare(4n * DAY)
 		const { preparation } = await context.finalize()
-		expect(preparation).toBe(context.premiumBefore)
-		expect(await context.servicesCash()).toBe(context.servicesCashBefore + context.settlementFeesBefore - context.premiumBefore)
-		await context.checkpoint()
+		expect(preparation).toBe(0n)
+		// With no burn to flush, settlement fees remain in settlement custody.
+		expect(await context.servicesCash()).toBe(context.servicesCashBefore)
+		const settlement = await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		expect(await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'pendingServiceFees' })).toBe(context.settlementFeesBefore)
+		expect((await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] }))[0]).toBe(context.premiumBefore)
 		expect(await context.fees()).toBe(0n)
-		expect((await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] }))[0]).toBe(0n)
+		await context.checkpoint()
+		const [remaining] = await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] })
+		const queuedBurn = await context.owner.readContract({ abi: servicesArtifact.abi, address: context.services, functionName: 'pendingBurnCash', args: [context.child] })
+		expect(remaining).toBeGreaterThan(0n)
+		expect((await context.fees()) + queuedBurn).toBe(context.premiumBefore - remaining)
 	})
 
 	test('#1332 earned reporting premium remains assigned to old capital during a stale-price retirement request', async () => {
@@ -157,8 +163,8 @@ describe('Statoblast: preparation premium ownership', () => {
 		const { preparation } = await context.finalize()
 		const [remaining, , timestamp] = await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] })
 		expect(timestamp).toBe(frozenTime)
-		expect(remaining).toBe(0n)
+		expect(remaining).toBe(context.premiumBefore)
 		expect(await context.fees()).toBe(0n)
-		expect(preparation).toBe(context.premiumBefore)
+		expect(preparation).toBe(0n)
 	})
 })

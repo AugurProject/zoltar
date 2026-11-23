@@ -496,12 +496,15 @@ describe('deposit deadline preview', () => {
 		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline, extension: deadline - details.escalationEndTime, reachesNonDecision: false })
 	})
 
-	test('keeps the fixed response window of a resumed game and restarts nothing on a change of leader', () => {
-		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 4000000n, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
-		// The resumed curve is already past the median, yet any start-bond report is accepted inside the window.
-		expect(previewReportingDeadline(details, 'no', rep(10n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
-		expect(previewReportingDeadline(details, 'yes', rep(90n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
+	test('projects only remaining curve time when a resumed report takes the lead', () => {
+		const base = createReportingDetails()
+		const elapsed = (value: bigint) => computeEscalationFinalityElapsed(base.startBondAttoRep, base.nonDecisionThresholdAttoRep, rep(value))
+		const inheritedElapsed = elapsed(5n) - 100n
+		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: inheritedElapsed, currentRequiredBond: rep(3n), escalationEndTime: 200n })
+		const deadline = 100n + elapsed(8n) - inheritedElapsed
+		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline, extension: deadline - 200n, reachesNonDecision: false })
 	})
+
 	test('a report taking the lead projects the curve crossing of the new median, with no restart', () => {
 		const details = createLateDetails({ sides: [side('invalid', rep(1n)), side('yes', rep(5n)), side('no', rep(6n))] })
 		const elapsed = (amount: bigint) => computeEscalationFinalityElapsed(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, amount)

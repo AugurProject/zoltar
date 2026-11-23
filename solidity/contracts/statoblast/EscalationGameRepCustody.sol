@@ -6,6 +6,9 @@ import { CheckedCast } from '../CheckedCast.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
+import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
+import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import {
 	ISecurityPoolReporterLedger,
 	ISecurityPoolReporterPortfolio
@@ -34,6 +37,26 @@ library EscalationGameRepCustody {
 		address ledgerAddress = ISecurityPoolReporterPortfolio(authority).reporterLedger(ISecurityPool(payable(poolAddress)).universeId());
 		require(ledgerAddress.code.length != 0, 'Portfolio reporter ledger is missing');
 		return ISecurityPoolReporterLedger(ledgerAddress);
+	}
+
+	/// @dev Fixed questions retain their inherited cutoff through unrelated forks,
+	/// including questions with trader shares but no reporter deposits or game.
+	function fixedQuestionFinalAfter(address authority, uint248 universe, uint256 questionId) internal view returns (uint48) {
+		ISecurityPoolReporterPortfolio root = ISecurityPoolReporterPortfolio(authority);
+		(SecurityPoolReporterLedger.Question memory reporter, ) = SecurityPoolReporterLedger(root.reporterLedger(universe)).question(universe, questionId);
+		if (reporter.finalAfter != 0) return reporter.finalAfter;
+		// Standalone custody harnesses may have no settlement engine.
+		try root.settlement() returns (address engine) {
+			if (engine != address(0)) {
+				SecurityPoolPortfolioSettlement settlement = SecurityPoolPortfolioSettlement(engine);
+				uint64 bookId = settlement.bookIds(universe);
+				if (bookId != 0) {
+					(SecurityPoolSettlementBook.Question memory claim, ) = settlement.ledger().question(bookId, questionId);
+					return claim.finalAfter;
+				}
+			}
+		} catch {}
+		return 0;
 	}
 
 	function balance(address poolAddress, address tokenAddress) internal view returns (uint256) {

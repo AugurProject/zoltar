@@ -92,10 +92,11 @@ describe('escalation math', () => {
 		expect(projectEscalationEndTime({ ...base, balancesAttoRep: [0n, 8n, 7n] })).toBeLessThanOrEqual(1000n + ESCALATION_TIME_LENGTH)
 	})
 
-	test('projects a resumed continuation from its rebased curve and its fixed response period', () => {
+	test('projects a resumed continuation with only its remaining curve time', () => {
 		const base = { activationTime: 0n, nonDecisionThresholdAttoRep: 8n, startBondAttoRep: 1n, balancesAttoRep: [0n, 4n, 2n] } as const
 		const curveElapsed = computeEscalationFinalityElapsed(1n, 8n, 2n)
-		expect(projectEscalationEndTime({ ...base, continuation: { forkElapsedAtStart: curveElapsed + 5n, forkResumedAt: 100n } })).toBe(100n + ESCALATION_ACTIVATION_DELAY)
+		expect(projectEscalationEndTime({ ...base, continuation: { forkElapsedAtStart: curveElapsed + 5n, forkResumedAt: 100n } })).toBe(100n)
+		expect(projectEscalationEndTime({ ...base, continuation: { forkElapsedAtStart: curveElapsed - 600n, forkResumedAt: 100n } })).toBe(700n)
 		expect(projectEscalationEndTime({ ...base, continuation: { forkElapsedAtStart: -ESCALATION_ACTIVATION_DELAY, forkResumedAt: 100n } })).toBe(100n + curveElapsed + ESCALATION_ACTIVATION_DELAY)
 	})
 

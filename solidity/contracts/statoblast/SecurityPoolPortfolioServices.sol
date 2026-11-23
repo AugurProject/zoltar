@@ -203,11 +203,11 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		_burn(child, premiumLedger.createChild(source, child));
 		premiumChildCreated[child] = true;
 		(, uint256 questionId, , , ) = IPortfolioServiceRoot(portfolio).capitalLedger(source).zoltar().universes(source);
-		premiumLedger.schedule(child, questionId, premiumLedger.minimumFinalAfter(child));
+		premiumLedger.schedule(child, questionId, premiumLedger.minimumFinalAfter(child) + Constants.FORK_RESPONSE_DELAY);
 	}
 	/// @notice Preparation time cannot become retroactive underwriting income.
-	/// @dev The child clock follows its fixed native deadline even if activation
-	/// is delayed. Burn that elapsed premium before capital becomes operational.
+	/// @dev The child reporting clock remains paused until branch activation.
+	/// Checkpoint inherited accounting before capital becomes operational.
 	function checkpointPreparationPremium(uint248 child) external onlyForkController {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		require(premiumChildCreated[child] && root.capitalLedger(child).importing(), 'Premium preparation unavailable');

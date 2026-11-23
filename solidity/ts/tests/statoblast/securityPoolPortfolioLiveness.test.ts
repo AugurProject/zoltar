@@ -25,6 +25,7 @@ describe('Statoblast contract liveness', () => {
 		const window = fixture.base.mockWindow
 		await window.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
+		const [, activatedAt] = await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'clocks', args: [child] })
 		const settlement = { abi: settlementArtifact.abi, address: await owner.readContract({ ...root, functionName: 'settlement' }) }
 		const ledger = { abi: bookArtifact.abi, address: await owner.readContract({ ...settlement, functionName: 'ledger' }) }
 		const bookId = await owner.readContract({ ...settlement, functionName: 'bookIds', args: [child] })
@@ -35,11 +36,11 @@ describe('Statoblast contract liveness', () => {
 		const before = await demand()
 		expect((await question())[1]).toBe(0n)
 		await expect(owner.readContract({ ...root, functionName: 'getPool', args: [questionId, child] })).rejects.toThrow('Question pool unavailable')
-		await window.setTime(forkTime + 65n * DAY)
+		await window.setTime(activatedAt + 2n * DAY)
 		await writeContractAndWait(caller, () => caller.writeContract(finalize))
 		expect(await demand()).toBe(before)
 		expect((await question())[1]).toBe(0n)
-		await window.setTime(forkTime + 66n * DAY + 1n)
+		await window.setTime(activatedAt + 3n * DAY + 1n)
 		await writeContractAndWait(caller, () => caller.writeContract(finalize))
 		const [, frozen] = await question()
 		expect(frozen).not.toBe(0n)

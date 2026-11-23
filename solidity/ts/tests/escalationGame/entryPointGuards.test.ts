@@ -209,10 +209,10 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	test('claimDepositForWinning rejects false-returning REP transfers', async () => {
 		const falseReturningRepToken = await deployFalseReturningToken()
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool(falseReturningRepToken)
-		await startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		// Preserve remaining activation time so this empty continuation is still open.
+		await startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, -DAY)
 		await initializeSnapshotViaTestSecurityPool(testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await resumeEscalationFromFork(escalationGameAddress)
-		// The resumed curve already exceeds the empty game's median, so the deposit must meet it rather than only the start bond.
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
 		await mockWindow.advanceTime(4n * DAY)
 

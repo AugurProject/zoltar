@@ -343,7 +343,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 				offset: book.offset,
 				isSealed: false,
 				enabled: book.enabled,
-				minimumFinalAfter: book.ts + RESPONSE,
+				minimumFinalAfter: book.ts,
 				rec: op.rec,
 				depth: book.depth + 1,
 				children: 0,

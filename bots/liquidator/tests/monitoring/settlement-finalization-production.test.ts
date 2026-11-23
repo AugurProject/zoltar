@@ -24,6 +24,7 @@ describe('portfolio settlement finalizer', () => {
 		const { child, forks, forkTime } = await fixture.forkAndStartYesBranch()
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ address: forks, abi: forkArtifact.abi, functionName: 'finalizeBranch', args: [child] }))
+		const [, activatedAt] = await owner.readContract({ address: forks, abi: forkArtifact.abi, functionName: 'clocks', args: [child] })
 		let rejectedRanges = 0
 		const limitedFinalizer: Pick<typeof finalizer, 'getBlock' | 'readContract' | 'getLogs'> = {
 			getBlock: finalizer.getBlock,
@@ -43,7 +44,9 @@ describe('portfolio settlement finalizer', () => {
 			return matches.filter(candidate => candidate.universeId === child)
 		}
 		expect(await scan(1n)).toEqual([])
-		await fixture.base.mockWindow.setTime(forkTime + 66n * DAY + 1n)
+		await fixture.base.mockWindow.setTime(activatedAt + 3n * DAY)
+		expect(await scan(1n)).toEqual([])
+		await fixture.base.mockWindow.setTime(activatedAt + 3n * DAY + 1n)
 		await expect(owner.readContract({ address: fixture.portfolio, abi: securityPoolPortfolioAbi, functionName: 'getPool', args: [fixture.base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		const candidates = await scan(1n)
 		expect(candidates).toHaveLength(1)
