@@ -1,3 +1,4 @@
+import { auditFuzzSeeds, positiveFuzzInteger } from './auditFuzzBudget'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
@@ -21,7 +22,7 @@ import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 // merges, cures, claims and liquidation clocks. Trees hold up to a few hundred leaves with
 // clustered, equal and full-width keys, prices and demand are arbitrary per call, and the
 // harness's structural validator runs after every step.
-// Long run: AUDIT_FUZZ_SEEDS=<n> (replaces the time budgets) AUDIT_FUZZ_SEED_START=1 AUDIT_FUZZ_STEPS=260 AUDIT_FUZZ_INDEX_BUDGET_MS=25000 AUDIT_FUZZ_STREAM_BUDGET_MS=6000 AUDIT_FUZZ_SHRINK=0 (skip shrinking) bun ./tooling/testing/bun-test.mts --timeout 3600000 solidity/ts/tests/auditCapitalIndexFuzz.test.ts
+// Long run: AUDIT_FUZZ_SEEDS=<n> AUDIT_FUZZ_SEED_START=1 AUDIT_FUZZ_STEPS=260 AUDIT_FUZZ_SHRINK=0 (skip shrinking) bun ./tooling/testing/bun-test.mts --timeout 3600000 solidity/ts/tests/auditCapitalIndexFuzz.test.ts
 
 const MAX_UINT = (1n << 256n) - 1n
 const SCALE = 1n << 96n
@@ -853,13 +854,10 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 	test('random index operations keep every aggregate, cohort, fee, clock and preview equal to the reference model', async () => {
 		// The shared fixture reverts to its own snapshot before each test, which consumes ours.
 		baseline = ''
-		const firstSeed = Number(process.env['AUDIT_FUZZ_SEED_START'] ?? '1')
-		const requested = process.env['AUDIT_FUZZ_SEEDS']
-		const steps = Number(process.env['AUDIT_FUZZ_STEPS'] ?? '260')
-		const budget = Number(process.env['AUDIT_FUZZ_INDEX_BUDGET_MS'] ?? '5000')
-		const startedAt = Date.now()
+		const steps = positiveFuzzInteger('AUDIT_FUZZ_STEPS', 260)
 		const failures: string[] = []
-		for (let seed = firstSeed; requested === undefined ? Date.now() - startedAt < budget : seed < firstSeed + Number(requested); seed++) {
+		const seeds = auditFuzzSeeds([1, 2, 3, 19, 37, 54])
+		for (const seed of seeds) {
 			const outcome = await run(seed, steps, undefined)
 			if (outcome.failure === undefined) continue
 			const failing = outcome.trace.slice(0, outcome.failure.step + 1)
@@ -867,6 +865,7 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 			const replay = await run(seed, steps, minimal)
 			const report = [
 				`seed ${seed} step ${outcome.failure.step} tag ${outcome.failure.tag}`,
+				`Replay: AUDIT_FUZZ_SEEDS=1 AUDIT_FUZZ_SEED_START=${seed} AUDIT_FUZZ_STEPS=${steps} bun ./tooling/testing/bun-test.mts solidity/ts/tests/auditCapitalIndexFuzz.test.ts`,
 				...outcome.failure.issues.slice(0, 10),
 				`minimal sequence (${minimal.length} operations):`,
 				...minimal.map((op, position) => `  ${position}: ${stringify(op)}`),
@@ -882,12 +881,9 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 
 	test('random funding and release schedules pay each stream exactly its linear amount', async () => {
 		baseline = ''
-		const firstSeed = Number(process.env['AUDIT_FUZZ_SEED_START'] ?? '1')
-		const requested = process.env['AUDIT_FUZZ_SEEDS']
-		const budget = Number(process.env['AUDIT_FUZZ_STREAM_BUDGET_MS'] ?? '2000')
-		const startedAt = Date.now()
 		const from = client().account.address
-		for (let seed = firstSeed; requested === undefined ? Date.now() - startedAt < budget : seed < firstSeed + Number(requested); seed++) {
+		const seeds = auditFuzzSeeds([1, 2, 3, 19, 37, 54])
+		for (const seed of seeds) {
 			await reset()
 			const random = createRandom(seed)
 			const target = random.pick(streamHarnesses)

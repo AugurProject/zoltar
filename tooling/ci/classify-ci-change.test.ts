@@ -158,3 +158,12 @@ test('full-run coverage follows every scope in the registry', () => {
 	expect(full.allScopesSelected).toBe(true)
 	expect(classifyCiChange(['README.md']).allScopesSelected).toBe(false)
 })
+
+test('publishes the UI-only Solidity route as a shadow decision', () => {
+	const ui = classifyCiChange(['ui/openoracle/ts/index.ts'])
+	expect(ui.shadowSolidityRoute).toBe('application-only')
+	expect(ui.expandedScopes).toContain('core')
+	for (const paths of [['ui/trading/ts/index.ts'], ['ui/openoracle/ts/index.ts', 'ui/zoltar/ts/index.ts'], ['ui/openoracle/ts/index.ts', 'solidity/contracts/Zoltar.sol'], ['ui/openoracle/ts/tests/app.test.ts']]) {
+		expect(classifyCiChange(paths).shadowSolidityRoute).toBe('full')
+	}
+})

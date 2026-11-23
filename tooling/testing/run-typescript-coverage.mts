@@ -5,7 +5,7 @@ import { sharedPackages } from '../repo/sharedPackages.ts'
 import { mergeLcovRecords, parseLcov, renderLcovRecords } from './coverage-report.mts'
 import { runBunTestProcess } from './run-bun-test-process.mts'
 import { getWeightedTestFiles } from './run-balanced-test-shard.mts'
-import { createBalancedTestShards, discoverTestFiles, toBunTestPath, type WeightedTestFile } from './test-discovery.mts'
+import { createBalancedTestShards, discoverTestFiles, EXPLICIT_TEST_TIER_FILES, toBunTestPath, type WeightedTestFile } from './test-discovery.mts'
 import { isMissingPathError } from '../repo/fs.mts'
 
 export const TYPESCRIPT_COVERAGE_SHARD_COUNT = 4
@@ -97,13 +97,22 @@ async function main() {
 			lcovPaths.push(join(shardDirectory, 'lcov.info'))
 			console.log(`Running TypeScript coverage shard ${shardNumber.toString()}/${shards.length.toString()}: ${shardFiles.length.toString()} test files`)
 			return await runBunTestProcess({
-				cmd: [process.execPath, './tooling/testing/run-tests.mts', '--bail=1', '--coverage', '--coverage-reporter=lcov', '--coverage-reporter=text', `--coverage-dir=${relative(repositoryRoot, shardDirectory)}`, '--reporter=dots', ...shardFiles.map(toBunTestPath)],
+				cmd: [process.execPath, './tooling/testing/run-tests.mts', '--bail=1', '--parallel=4', '--coverage', '--coverage-reporter=lcov', '--coverage-reporter=text', `--coverage-dir=${relative(repositoryRoot, shardDirectory)}`, '--reporter=dots', ...shardFiles.map(toBunTestPath)],
 				env: { ...process.env, ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' },
 			})
 		})
 		if (exitCode !== 0) {
 			console.error(`TypeScript coverage failed; the last complete capture remains at ${relative(repositoryRoot, coverageDirectory)}`)
 			return exitCode
+		}
+		for (const file of EXPLICIT_TEST_TIER_FILES) {
+			const directory = await mkdtemp(join(workingDirectory, 'browser-'))
+			const browserExit = await runBunTestProcess({
+				cmd: [process.execPath, 'test', '--preload', './bun-test-setup-ui.ts', '--coverage', '--coverage-reporter=lcov', `--coverage-dir=${directory}`, toBunTestPath(file)],
+				env: { ...process.env, ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' },
+			})
+			if (browserExit !== 0) return browserExit
+			lcovPaths.push(join(directory, 'lcov.info'))
 		}
 		// Build-isolation tests can replace emitted output. Restore maps after them before reporting its coverage.
 		const sourceMapsExitCode = await prepareCoverageSourceMaps(repositoryRoot)
@@ -120,6 +129,7 @@ async function main() {
 					count: testFiles.length,
 					durationMs: Date.now() - startedAt,
 					files: testFiles,
+					browserFiles: [...EXPLICIT_TEST_TIER_FILES],
 					shards: shards.map((files, index) => ({ index: index + 1, count: shards.length, files })),
 				},
 				undefined,
