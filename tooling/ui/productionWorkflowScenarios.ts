@@ -1,4 +1,4 @@
-export const PRODUCTION_WORKFLOW_SCENARIOS = ['auction-boot', 'capital-recovery', 'security-pool-purchase', 'deployment', 'trading-liquidity', 'openoracle-report'] as const
+export const PRODUCTION_WORKFLOW_SCENARIOS = ['auction-boot', 'capital-recovery', 'portfolio-purchase', 'deployment', 'trading-liquidity', 'openoracle-report'] as const
 export type ProductionWorkflowScenario = (typeof PRODUCTION_WORKFLOW_SCENARIOS)[number]
 
 export function selectProductionWorkflowScenarios(value: string | undefined): readonly ProductionWorkflowScenario[] {

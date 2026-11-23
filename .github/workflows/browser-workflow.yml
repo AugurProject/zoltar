@@ -75,7 +75,7 @@ jobs:
         include:
           - scenarios: auction-boot
           - scenarios: capital-recovery
-          - scenarios: security-pool-purchase
+          - scenarios: portfolio-purchase
           - scenarios: deployment,trading-liquidity,openoracle-report
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

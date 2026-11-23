@@ -673,7 +673,7 @@ productionInteractionTest('capital-recovery', '#/security-pools?simulate=1&genes
 	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5001REP')
 })
 
-productionInteractionTest('security-pool-purchase', '#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
+productionInteractionTest('portfolio-purchase', '#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 	const selected = await driver.evaluate(
 		`(() => { const label = [...document.querySelectorAll('label')].find(node => node.textContent === ${JSON.stringify(securityPoolCopy.registeredQuestions)}); const select = label?.control; if (!(select instanceof HTMLSelectElement)) return false; const option = [...select.options].find(option => option.value !== ''); if (!option) return false; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
