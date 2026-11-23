@@ -243,7 +243,7 @@ describe('rpc config', () => {
 	})
 })
 
-test('rejects credential-bearing RPC settings before writing storage', () => {
+test('rejects credential-bearing RPC settings before writing storage and omits credentials from rejected override URL', () => {
 	const storage = {
 		getItem: () => null,
 		setItem: () => {
@@ -252,6 +252,11 @@ test('rejects credential-bearing RPC settings before writing storage', () => {
 	}
 	for (const url of ['https://user:password@rpc.example', 'http://user@localhost:8545']) {
 		expect(() => saveNetworkRpcUrl('mainnet', url, storage)).toThrow('embedded credentials')
-		expect(resolveConfiguredRpcConfig({ overrideRpcUrl: url }).rejectedOverride?.reason).toContain('embedded credentials')
+		const rejected = resolveConfiguredRpcConfig({ overrideRpcUrl: url }).rejectedOverride
+		expect(rejected?.reason).toContain('embedded credentials')
+		expect(rejected?.url).not.toContain('user')
+		expect(rejected?.url).not.toContain('password')
 	}
+	expect(resolveConfiguredRpcConfig({ overrideRpcUrl: 'https://user:password@rpc.example' }).rejectedOverride?.url).toBe('https://rpc.example/')
+	expect(resolveConfiguredRpcConfig({ overrideRpcUrl: 'http://user@localhost:8545' }).rejectedOverride?.url).toBe('http://localhost:8545/')
 })

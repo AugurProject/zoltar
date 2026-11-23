@@ -90,7 +90,11 @@ export const riskDetailResponse = async (sql: SQL, parts: readonly string[], url
 	const lastLifecycle = pageRows.lifecycleEvents.at(-1)
 	const nextPositions: RiskHistoryPositions = {
 		...positions,
-		...(lastState === undefined ? {} : { state: [String(lastState['block_number']), cursorTimestamp(lastState['cursor_observed_at']), String(lastState['id'])] as const }),
+		...(lastState !== undefined
+			? { state: [String(lastState['block_number']), cursorTimestamp(lastState['cursor_observed_at']), String(lastState['id'])] as const }
+			: positions.state === undefined
+				? { state: [String(asOf['blockNumber']), new Date(Number(asOf['blockTimestamp'] ?? 0) * 1000).toISOString(), '0'] as const }
+				: {}),
 		...(lastAccounting === undefined
 			? {}
 			: {

@@ -178,6 +178,20 @@ function getRpcUrlValidationError(url: string) {
 	return 'RPC URL must use https://, or http:// for local loopback.'
 }
 
+function sanitizeRpcUrlForDisplay(url: string): string {
+	try {
+		const parsedUrl = new URL(url)
+		if (parsedUrl.username !== '' || parsedUrl.password !== '') {
+			parsedUrl.username = ''
+			parsedUrl.password = ''
+			return parsedUrl.toString()
+		}
+		return url
+	} catch {
+		return url
+	}
+}
+
 function resolveConfiguredRpcOverride(source: ConfiguredRpcOverrideSource, value: unknown, fallbackRpcUrl: string): ConfiguredRpcConfig | undefined {
 	const url = resolveNonEmptyString(value)
 	if (url === undefined) return undefined
@@ -189,7 +203,7 @@ function resolveConfiguredRpcOverride(source: ConfiguredRpcOverrideSource, value
 		rejectedOverride: {
 			reason: validationError,
 			source,
-			url,
+			url: sanitizeRpcUrlForDisplay(url),
 		},
 		source: 'default',
 		url: fallbackRpcUrl,

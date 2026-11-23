@@ -38,8 +38,11 @@ export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string
 			`
 	const row = rows[0]
 	if (row === undefined) {
-		const configured = await sql`SELECT 1 FROM networks WHERE chain_id = ${chainId}`
+		const configured = await sql`SELECT 1, indexed_block FROM networks WHERE chain_id = ${chainId}`
 		if (configured.length === 0) throw new ApiRequestError('chainId is not configured')
+		if (atBlock === '0' && configured[0]?.indexed_block === null) {
+			return await operationsAsOf(sql, chainId, undefined)
+		}
 		throw new ApiRequestError('atBlock is outside retained canonical coverage')
 	}
 	return {

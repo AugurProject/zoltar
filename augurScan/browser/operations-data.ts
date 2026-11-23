@@ -185,18 +185,30 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 	}
 
 	const loadOperationsPairedDetail = async (route: OperationsDetailRoute, roundTargetCount: number, decisionTargetCount: number): Promise<OperationsResponse> => {
-		let first: OperationsResponse | undefined
 		const primaryKey = route.kind === 'trading' ? 'events' : 'rounds'
 		const secondaryKey = route.kind === 'trading' ? 'activity' : 'coordinatorDecisions'
-		let lastRoundPage: Record<string, unknown> = {}
-		let lastDecisionPage: Record<string, unknown> = {}
-		let snapshotIdentity: string | undefined
+
+		const initialResponse = decodeOperationsResponse(
+			await api(operationsDetailEndpoint(route, undefined, roundTargetCount, undefined, decisionTargetCount)),
+		)
+		const snapshotIdentity = `${initialResponse.chainId}:${String(initialResponse.asOf['blockNumber'] ?? '')}:${String(initialResponse.asOf['blockHash'] ?? '')}`
+		const initialRoundPage = detailPageRecord(initialResponse.data, primaryKey)
+		const initialDecisionPage = detailPageRecord(initialResponse.data, secondaryKey)
+
+		let lastRoundPage: Record<string, unknown> = initialRoundPage
+		let lastDecisionPage: Record<string, unknown> = initialDecisionPage
+
 		const fetchPage = async (cursor: string | undefined, limit: number, collection: 'decisions' | 'rounds') => {
+			if (cursor === undefined) {
+				const page = collection === 'rounds' ? initialRoundPage : initialDecisionPage
+				return {
+					items: operationRecords(page['items']),
+					...(page['hasMore'] === true && typeof page['nextCursor'] === 'string' ? { nextCursor: page['nextCursor'] } : {}),
+				}
+			}
 			const response = decodeOperationsResponse(await api(operationsDetailEndpoint(route, collection === 'rounds' ? cursor : undefined, collection === 'rounds' ? limit : 1, collection === 'decisions' ? cursor : undefined, collection === 'decisions' ? limit : 1)))
 			const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
-			if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity) throw new Error('Report evidence changed while older evidence was loading; retry from the latest available block')
-			snapshotIdentity ??= responseIdentity
-			first ??= response
+			if (responseIdentity !== snapshotIdentity) throw new Error('Report evidence changed while older evidence was loading; retry from the latest available block')
 			const page = detailPageRecord(response.data, collection === 'rounds' ? primaryKey : secondaryKey)
 			if (collection === 'rounds') lastRoundPage = page
 			else lastDecisionPage = page
@@ -206,11 +218,10 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 			}
 		}
 		const [rounds, decisions] = await Promise.all([collectCanonicalPages((cursor, limit = 100) => fetchPage(cursor, limit, 'rounds'), roundTargetCount, operationsDetailRecordKey), collectCanonicalPages((cursor, limit = 100) => fetchPage(cursor, limit, 'decisions'), decisionTargetCount, operationsDetailRecordKey)])
-		if (first === undefined) throw new Error('Report detail returned no page')
 		return {
-			...first,
+			...initialResponse,
 			data: {
-				...first.data,
+				...initialResponse.data,
 				[primaryKey]: {
 					...lastRoundPage,
 					items: rounds.items,
