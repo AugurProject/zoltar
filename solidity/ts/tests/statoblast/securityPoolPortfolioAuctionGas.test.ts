@@ -289,6 +289,8 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		// The incumbent first retires its spare capacity so distressed commitment
 		// is needed by claims and must be taken over instead of simply cured.
 		await gasOf('retirement: incumbent retires all spare capacity', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [0n] }))
+		await addRepToMigrationBalance(owner, context.source, 1_000n * unit)
+		await splitMigrationRep(owner, context.source, 1_000n * unit, [1])
 		await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'transfer', args: [keeper.account.address, 600n * unit] }))
 		await approveToken(keeper, context.token, context.capital)
 		await gasOf('liquidation: keeper deposits principal', keeper, () => keeper.writeContract({ ...capital, functionName: 'depositFor', args: [keeper.account.address, 600n * unit] }))

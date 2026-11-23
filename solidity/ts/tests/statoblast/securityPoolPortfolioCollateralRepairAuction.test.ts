@@ -305,6 +305,6 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'minimumToken2ReportAttoRep' })).toBe(20n * unit)
 		const minimum = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [unit / 10n] })
 		expect(minimum).toBe(200n * unit)
-		await expect(context.report(unit / 10n)).rejects.toThrow('Report funding below minimum')
+		await expect(context.report(unit / 10n, 10n * unit)).rejects.toThrow('Report funding below minimum')
 	})
 })

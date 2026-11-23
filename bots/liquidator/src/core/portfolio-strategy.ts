@@ -125,7 +125,7 @@ function paidTakeoverPlan(observation: PortfolioObservation, position: Portfolio
 	const gasBudget = settings.strategy.maximumGasCostAttoEth * 3n
 	if (observation.walletAttoEth < gasBudget + policy.walletReserveAttoEth) return reject('Wallet ETH gas reserve would be consumed')
 	// This is a projection at the current fee rate and demand, not guaranteed income.
-	// Principal is an investment, not an execution expense or a liquidation reward.
+	// Receiver-funded principal is an investment, not an execution expense or reward.
 	const annualFees = (snapshot.demandAttoEth * snapshot.economics.annualFeeBps) / BPS
 	const projectedIncome = (annualFees * commitment * BigInt(policy.takeoverIncomeHorizonSeconds)) / (snapshot.totalCommitmentAttoEth - source.removed) / 31_536_000n
 	const awardValue = (award * UNIT) / snapshot.ownerConservativePrice
