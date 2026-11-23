@@ -32,11 +32,22 @@ export const canonicalPageLimit = (targetCount: number, loadedCount: number, pag
 
 export const collectCanonicalPages = async <T, Cursor = string>(fetchPage: (cursor?: Cursor, limit?: number) => Promise<Page<T, Cursor>>, targetCount: number, keyFor: (record: T) => string): Promise<Page<T, Cursor>> => {
 	let cursor: Cursor | undefined
-	let items: T[] = []
+	const items: T[] = []
+	const recordKeys = new Set<string>()
+	const requestedCursors = new Set<Cursor>()
 	do {
+		if (cursor !== undefined) {
+			if (requestedCursors.has(cursor)) throw new Error('Canonical page cursor did not advance')
+			requestedCursors.add(cursor)
+		}
 		const remaining = targetCount > 0 ? canonicalPageLimit(targetCount, items.length, 100) : undefined
 		const page = await fetchPage(cursor, remaining)
-		items = mergeUniqueRecords(items, page.items, keyFor)
+		for (const item of page.items) {
+			const key = keyFor(item)
+			if (recordKeys.has(key)) continue
+			recordKeys.add(key)
+			items.push(item)
+		}
 		cursor = page.nextCursor
 	} while (cursor !== undefined && items.length < targetCount)
 	return { items: targetCount > 0 ? items.slice(0, targetCount) : items, nextCursor: cursor }

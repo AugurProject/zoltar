@@ -5,13 +5,34 @@ import { browserTest, desktopViewport, mobileViewport, origin, qaViewports, writ
 browserTest(
 	'integrity history ignores block bursts, refreshes periodically, and refreshes after reorgs',
 	async () => {
-		await withBrowserPage(`${origin}/operations/integrity?demo=1&chainId=1&streamDemo=1&burstDemo=1&integrityCombinedCauses=1`, desktopViewport, async session => {
-			await session.waitFor(`document.querySelector('#operations-content .operations-row') !== null`)
+		await withBrowserPage('about:blank', desktopViewport, async session => {
+			await session.send('Page.addScriptToEvaluateOnNewDocument', {
+				source: `(() => {
+				const nativeSetInterval = window.setInterval.bind(window)
+				window.setInterval = (callback, delay, ...args) => {
+					if (delay !== 12_000) return nativeSetInterval(callback, delay, ...args)
+					window.qaRunRoutePoll = () => callback(...args)
+					return -1
+				}
+				const NativeEventSource = window.EventSource
+				window.qaBlockEvents = 0
+				window.EventSource = class extends NativeEventSource {
+					constructor(...args) {
+						super(...args)
+						this.addEventListener('block', () => { window.qaBlockEvents++ })
+					}
+				}
+			})()`,
+			})
+			await session.send('Page.navigate', { url: `${origin}/operations/integrity?demo=1&chainId=1&streamDemo=1&burstDemo=1&integrityCombinedCauses=1` })
+			await session.waitFor(`document.querySelector('#operations-content .operations-row') !== null && typeof window.qaRunRoutePoll === 'function'`)
+			await session.evaluate(`window.qaInitialBlockEvents = window.qaBlockEvents`)
 			await session.evaluate(`window.qaIntegrityRefreshes = 0; new MutationObserver(records => {
 			window.qaIntegrityRefreshes += records.filter(record => record.attributeName === 'aria-busy').length
 		}).observe(document.querySelector('#operations-content'), { attributes: true })`)
-			await session.evaluate(`new Promise(resolve => setTimeout(resolve, 5000))`)
+			await session.waitFor(`window.qaBlockEvents >= window.qaInitialBlockEvents + 5`)
 			expect(await session.evaluate('window.qaIntegrityRefreshes')).toBe(0)
+			await session.evaluate('window.qaRunRoutePoll()')
 			await session.waitFor('window.qaIntegrityRefreshes > 0', { attempts: 100 })
 			await session.waitFor(`document.querySelector('#operations-content').getAttribute('aria-busy') === 'false'`)
 			await writeScreenshot(session, '/tmp/augurscan-integrity-desktop.png')
@@ -42,7 +63,7 @@ browserTest(
 			for (const state of ['loading', 'empty', 'error']) {
 				const scenario = state === 'empty' ? 'catalogEmpty=1' : `state=${state}`
 				await withBrowserPage(`${origin}/operations/integrity?demo=1&chainId=1&${scenario}`, viewport, async session => {
-					await session.waitFor(state === 'loading' ? `document.querySelector('#operations-content').getAttribute('aria-busy') === 'true' && document.querySelector('#operations-status').textContent.includes('Loading')` : `document.querySelector('#operations-content').getAttribute('aria-busy') === 'false'`)
+					await session.waitFor(state === 'loading' ? `document.querySelector('#operations-content')?.getAttribute('aria-busy') === 'true' && document.querySelector('#operations-status')?.textContent.includes('Loading')` : `document.querySelector('#operations-content')?.getAttribute('aria-busy') === 'false'`)
 					if (state === 'error') expect(await session.evaluate(`document.querySelector('#operations-status button') !== null`)).toBe(true)
 					if (state === 'empty') expect(await session.evaluate(`document.querySelector('#operations-content').textContent.includes('No')`)).toBe(true)
 					expect(await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth')).toBe(true)

@@ -51,7 +51,7 @@ type ResolvedTraceStep = {
 
 type SourceFileData = {
 	readonly absoluteSourcePath: string
-	readonly sourceCode: string
+	readonly sourceBytes: Buffer
 	readonly lineStartOffsets: readonly number[]
 	readonly coverableLines: readonly boolean[]
 }
@@ -59,6 +59,7 @@ type SourceFileData = {
 type SegmentCoverageLines = {
 	readonly absoluteSourcePath: string
 	readonly lineNumbers: readonly number[]
+	readonly scopeOnly: boolean
 }
 
 type ContractArtifactEvmBytecode = {
@@ -360,8 +361,9 @@ const toAddressList = (value: unknown): readonly string[] => {
 
 const computeLineStartOffsets = (source: string): readonly number[] => {
 	const lineStartOffsets = [0]
-	for (let index = 0; index < source.length; index++) {
-		if (source[index] === '\n') lineStartOffsets.push(index + 1)
+	const sourceBytes = Buffer.from(source, 'utf8')
+	for (let index = 0; index < sourceBytes.length; index++) {
+		if (sourceBytes[index] === 10) lineStartOffsets.push(index + 1)
 	}
 	return lineStartOffsets
 }
@@ -389,9 +391,10 @@ const lineRangeFromSourceOffset = (sourceLength: number, lineStartOffsets: reado
 	const length = Math.max(0, sourceLengthForSegment)
 	const startLine = lineForOffset(sourceLength, lineStartOffsets, sourceOffset)
 	const endOffset = length === 0 ? sourceOffset : sourceOffset + length - 1
-	const endLine = lineForOffset(sourceLength, lineStartOffsets, endOffset)
-	return { startLine, endLine }
+	return { startLine, endLine: lineForOffset(sourceLength, lineStartOffsets, endOffset) }
 }
+
+export const getSoliditySourceLineRangeForTest = (source: string, offset: number, length: number) => lineRangeFromSourceOffset(Buffer.byteLength(source), computeLineStartOffsets(source), offset, length)
 
 const stripSolidityComments = (source: string): readonly string[] => {
 	let insideBlockComment = false
@@ -523,7 +526,7 @@ const readSourceFileBySourcePath = async (rootPath: string, sourcePath: string):
 			}
 			const sourceFile = {
 				absoluteSourcePath: candidate,
-				sourceCode,
+				sourceBytes: Buffer.from(sourceCode, 'utf8'),
 				lineStartOffsets: computeLineStartOffsets(sourceCode),
 				coverableLines: getCoverableLinesForSource(candidate, sourceCode),
 			}
@@ -681,7 +684,7 @@ const getSegmentCoverageLines = async (profile: CoverageProfile, segment: Parsed
 		return undefined
 	}
 
-	const { startLine, endLine } = lineRangeFromSourceOffset(sourceFile.sourceCode.length, sourceFile.lineStartOffsets, segment.sourceOffset, segment.sourceLength)
+	const { startLine, endLine } = lineRangeFromSourceOffset(sourceFile.sourceBytes.length, sourceFile.lineStartOffsets, segment.sourceOffset, segment.sourceLength)
 	if (startLine <= 0 || endLine <= 0) {
 		segmentCoverageLinesByKey.set(cacheKey, undefined)
 		return undefined
@@ -691,14 +694,16 @@ const getSegmentCoverageLines = async (profile: CoverageProfile, segment: Parsed
 		if (sourceFile.coverableLines[line - 1] !== true) continue
 		lineNumbers.push(line)
 	}
-	const segmentCoverageLines = { absoluteSourcePath: sourceFile.absoluteSourcePath, lineNumbers }
+	const prefix = sourceFile.sourceBytes.toString('utf8', segment.sourceOffset, Math.min(segment.sourceOffset + segment.sourceLength, segment.sourceOffset + 96))
+	const scopeOnly = /^(?:(?:abstract\s+)?contract|library|interface)\s+/.test(prefix.trimStart())
+	const segmentCoverageLines = { absoluteSourcePath: sourceFile.absoluteSourcePath, lineNumbers, scopeOnly }
 	segmentCoverageLinesByKey.set(cacheKey, segmentCoverageLines)
 	return segmentCoverageLines
 }
 
 const recordLineHitsForProfileSegment = async (profile: CoverageProfile, segment: ParsedSourceMapSegment, hitCount: number, rootPath: string, lineCoverage: Map<string, Map<number, number>>): Promise<void> => {
 	const segmentCoverageLines = await getSegmentCoverageLines(profile, segment, rootPath)
-	if (segmentCoverageLines === undefined || segmentCoverageLines.lineNumbers.length === 0) return
+	if (segmentCoverageLines === undefined || segmentCoverageLines.lineNumbers.length === 0 || segmentCoverageLines.scopeOnly) return
 
 	let fileCoverage = lineCoverage.get(segmentCoverageLines.absoluteSourcePath)
 	if (fileCoverage === undefined) {
@@ -755,11 +760,6 @@ let coverageRevision = 0
 let writtenCoverageRevision = 0
 let activeCoverageWritePromise: Promise<void> | undefined
 let scheduledCoverageWrite: ReturnType<typeof setTimeout> | undefined
-if (isSolidityBytecodeCoverageEnabled()) {
-	process.once('beforeExit', () => {
-		void flushSolidityBytecodeCoverageForTest()
-	})
-}
 
 const writeCoverage = async (): Promise<void> => {
 	if (activeCoverageWritePromise !== undefined) return activeCoverageWritePromise
@@ -811,7 +811,7 @@ export const getSolidityBytecodeCoverageProfileHitCountForTest = async (sourceSu
 			for (const candidate of candidates) {
 				try {
 					const source = await fs.readFile(candidate, 'utf8')
-					const { startLine, endLine } = lineRangeFromSourceOffset(source.length, computeLineStartOffsets(source), segment.sourceOffset, segment.sourceLength)
+					const { startLine, endLine } = lineRangeFromSourceOffset(Buffer.byteLength(source), computeLineStartOffsets(source), segment.sourceOffset, segment.sourceLength)
 					if (lineNumber >= startLine && lineNumber <= endLine) hitCount += segmentHitCount
 					break
 				} catch (error) {
@@ -948,7 +948,7 @@ const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcR
 		}
 	}
 	if (segmentHitCountsByProfile.size > 0) coverageRevision++
-	if (segmentHitCountsByProfile.size > 0) scheduleCoverageWrite()
+	if (segmentHitCountsByProfile.size > 0 && process.env['SOLIDITY_BYTECODE_COVERAGE_FINALIZE'] !== '1') scheduleCoverageWrite()
 }
 
 export const collectBytecodeCoverageForTransaction = async (options: { readonly request: RpcRequest; readonly transactionHash: string; readonly transaction: RpcTransactionRequest; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {

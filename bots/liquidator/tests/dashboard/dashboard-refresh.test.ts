@@ -1,3 +1,4 @@
+import { controlReconnectTimers } from './reconnect-test-clock.ts'
 import { parsePortfolioPolicy, serializePortfolioPolicy } from '../../src/config/portfolio-policy.ts'
 import { decodeSnapshot, type MarketSourceRow } from '../../src/dashboard/api-validation.ts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
@@ -890,6 +891,7 @@ describe('liquidator dashboard refresh behavior', () => {
 			{ ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://mainnet-public.example'], quorumRpcUrls: ['https://mainnet-quorum-a.example', 'https://mainnet-quorum-b.example'], readRpcUrl: 'https://mainnet-read.example', rpcQuorum: 2 } },
 			state(undefined, [], { rpcEndpointHealth: [{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://mainnet.example' }] }),
 		)
+		const advanceUntil = controlReconnectTimers(page.window)
 		page.setStaleProfilePolls(3)
 		page.hangNextProfileResponse()
 		page.hangNextConfigurationRequest()
@@ -907,7 +909,6 @@ describe('liquidator dashboard refresh behavior', () => {
 		page.suspendNextMarketSourceRequest()
 		testSources.click()
 		await Bun.sleep(10)
-
 		page.suspendNextStateRequest()
 		const staleStateRefresh = page.refresh()
 		await Bun.sleep(10)
@@ -935,12 +936,11 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('market-source-rows')?.textContent).not.toContain('Observed')
 		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Configured source admission')
 		expect(page.window.document.getElementById('show-active-admission')?.classList.contains('hidden')).toBe(true)
-
 		page.releaseStateRequest()
 		await Bun.sleep(20)
 		expect(networkName.value).toBe('mainnet')
 		await staleStateRefresh
-		await Bun.sleep(6_000)
+		await advanceUntil(() => networkName.value === 'sepolia' && !networkFields.disabled)
 		expect(networkName.value).toBe('sepolia')
 		expect(networkFields.disabled).toBe(false)
 		expect(strategyFields.disabled).toBe(true)

@@ -7,9 +7,9 @@ import { createTestFingerprints, filterTestTimingHistory, getHistoricalTestWeigh
 
 const repositoryRoot = process.cwd()
 
-const SHARED_TIMING_CONTEXT_PATHS = ['bun-test-setup.ts', 'bunfig.toml', 'bun.lock', 'tooling/testing/run-bun-test-process.mts'] as const
+const SHARED_TIMING_CONTEXT_PATHS = ['bun-test-setup.ts', 'bunfig.toml', 'bun.lock', 'tooling/testing/run-bun-test-process.mts', 'tooling/testing/test-timings.mts'] as const
 const APPLICATION_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun-test-setup-ui.ts'] as const
-const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS] as const
+const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, '.github/workflows/test-domains.yml', 'solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts'] as const
 
 export function getTimingContextPaths(domain: TestDomain) {
 	if (domain === 'application') return [...APPLICATION_TIMING_CONTEXT_PATHS]
