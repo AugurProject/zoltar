@@ -38,6 +38,7 @@ export type StateTab = 'pools' | 'questions' | 'universes'
 
 export interface NetworkRecord {
 	chain_id: string
+	enabled?: boolean
 	id: string
 	name: string
 	start_block: string

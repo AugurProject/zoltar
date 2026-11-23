@@ -24,9 +24,22 @@ describe('portfolio settlement finalizer', () => {
 		const { child, forks, forkTime } = await fixture.forkAndStartYesBranch()
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ address: forks, abi: forkArtifact.abi, functionName: 'finalizeBranch', args: [child] }))
+		let rejectedRanges = 0
+		const limitedFinalizer: Pick<typeof finalizer, 'getBlock' | 'readContract' | 'getLogs'> = {
+			getBlock: finalizer.getBlock,
+			readContract: finalizer.readContract,
+			getLogs: parameters => {
+				const { fromBlock, toBlock } = parameters ?? {}
+				if (typeof fromBlock === 'bigint' && typeof toBlock === 'bigint' && toBlock - fromBlock >= 5n) {
+					rejectedRanges++
+					throw new Error('Block range limit is 5 blocks')
+				}
+				return finalizer.getLogs(parameters)
+			},
+		}
 		const scan = async (minimum: bigint) => {
 			const matches = []
-			for await (const candidate of scanSettlementFinalizations(finalizer, fixture.portfolio, minimum)) matches.push(candidate)
+			for await (const candidate of scanSettlementFinalizations(limitedFinalizer, fixture.portfolio, minimum)) matches.push(candidate)
 			return matches.filter(candidate => candidate.universeId === child)
 		}
 		expect(await scan(1n)).toEqual([])
@@ -34,6 +47,7 @@ describe('portfolio settlement finalizer', () => {
 		await expect(owner.readContract({ address: fixture.portfolio, abi: securityPoolPortfolioAbi, functionName: 'getPool', args: [fixture.base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		const candidates = await scan(1n)
 		expect(candidates).toHaveLength(1)
+		expect(rejectedRanges).toBeGreaterThan(0)
 		expect(candidates[0]?.questionId).toBe(fixture.base.questionId)
 		expect(candidates[0]?.cash).toBe(10n * unit)
 		expect(await scan(10n * unit + 1n)).toEqual([])

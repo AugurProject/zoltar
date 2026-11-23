@@ -20,6 +20,7 @@ const abi = parseAbi([
 	'function tokenHolder(address owner,address token) view returns (uint256)',
 	'function recoverReport(uint256 id)',
 	'function withdrawFunding()',
+	'function withdrawTokenFunding(address token,address recipient)',
 	'event PriceRequested(uint256 indexed reportId,uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)',
 ])
 export async function loadPortfolioBranchPrice(client: ReadClient, portfolio: Address, owner: Address, universeId: bigint) {
@@ -101,6 +102,12 @@ export function buildPortfolioPriceRecovery(snapshot: PortfolioPriceSnapshot, re
 }
 export function buildPortfolioPriceFundingWithdrawal(snapshot: PortfolioPriceSnapshot, report: PortfolioPriceReport): PortfolioTransaction {
 	return { account: snapshot.owner, to: report.escrow, value: 0n, data: encodeFunctionData({ abi, functionName: 'withdrawFunding' }) }
+}
+export function buildPortfolioPriceTokenWithdrawal(snapshot: PortfolioPriceSnapshot, report: PortfolioPriceReport, token: 'collateral' | 'rep', recipient: Address): PortfolioTransaction {
+	const tokenAddress = token === 'rep' ? snapshot.repToken : snapshot.observation?.weth
+	if (tokenAddress === undefined) throw new Error('Branch price feed is unavailable.')
+	if (recipient === zeroAddress || recipient === report.escrow || (recipient !== getAddress(report.sponsor) && getAddress(snapshot.owner) !== getAddress(report.sponsor))) throw new Error('Invalid report funding recipient.')
+	return { account: snapshot.owner, to: report.escrow, value: 0n, data: encodeFunctionData({ abi, functionName: 'withdrawTokenFunding', args: [tokenAddress, recipient] }) }
 }
 export function submittedPortfolioPriceReport(receipt: Pick<TransactionReceipt, 'logs'>, feed: Address) {
 	for (const log of receipt.logs) {

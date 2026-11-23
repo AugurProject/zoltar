@@ -95,26 +95,30 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 		$('#rich-sort').setAttribute('aria-busy', String(presentation.busy))
 		$('#richlist-rows').setAttribute('aria-busy', String(presentation.busy))
 		try {
-			let snapshotCursor = append ? richListSnapshot : undefined
-			const fetchPage = async (offset: number, limit: number) => {
-				const query = new URLSearchParams({ sort: $('#rich-sort').value, offset: String(offset), limit: String(limit) })
-				query.set('chainId', requiredChainId())
+			const sort = $('#rich-sort').value
+			const chainId = requiredChainId()
+			const fetchPage = async (offset: number, limit: number, snapshotCursor?: string) => {
+				const query = new URLSearchParams({ sort, offset: String(offset), limit: String(limit), chainId })
 				if (snapshotCursor !== undefined) query.set('snapshot', snapshotCursor)
-				const page = decodeItemsPage(await api(`/api/v1/richlist?${query}`), isRichListRecord, 'Rich list')
-				snapshotCursor = page.snapshotCursor
-				return page
+				return decodeItemsPage(await api(`/api/v1/richlist?${query}`), isRichListRecord, 'Rich list')
 			}
 			const fetchSnapshot = async (requestedCount: number) => {
 				const firstLimit = Math.min(100, requestedCount)
 				const firstPage = await fetchPage(0, firstLimit)
 				const targetCount = Math.min(requestedCount, firstPage.total ?? firstPage.items.length)
-				const remainingOffsets = []
-				for (let offset = firstLimit; offset < targetCount; offset += 100) remainingOffsets.push(offset)
-				const remainingPages = await Promise.all(remainingOffsets.map(offset => fetchPage(offset, Math.min(100, targetCount - offset))))
-				return { ...firstPage, items: [firstPage, ...remainingPages].flatMap(page => page.items).slice(0, targetCount) }
+				const items = [...firstPage.items]
+				const pageSize = 100
+				const concurrency = 4
+				// Leave capacity for status and other views while keeping every page pinned to the first page's snapshot.
+				for (let offset = firstLimit; offset < targetCount; offset += pageSize * concurrency) {
+					const offsets = Array.from({ length: concurrency }, (_, index) => offset + pageSize * index).filter(pageOffset => pageOffset < targetCount)
+					const pages = await Promise.all(offsets.map(pageOffset => fetchPage(pageOffset, Math.min(pageSize, targetCount - pageOffset), firstPage.snapshotCursor)))
+					for (const page of pages) items.push(...page.items)
+				}
+				return { ...firstPage, items: items.slice(0, targetCount) }
 			}
 			let replace = !append
-			let result = append ? await fetchPage(nextOffset, 50) : await fetchSnapshot(Math.max(50, richListItems.length))
+			let result = append ? await fetchPage(nextOffset, 50, richListSnapshot) : await fetchSnapshot(Math.max(50, richListItems.length))
 			if (!isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, richListRequestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) return false
 			if (append && paginatedSnapshotWasReplaced(richListItems.length, result.total ?? result.items.length)) {
 				result = await fetchSnapshot(Math.max(1, richListItems.length))

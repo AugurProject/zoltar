@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { repositoryRoot } from '../repo/root.mts'
+import { parseChainId, parseDeploymentOptions } from './deployment-command-line.mts'
 
 import { existsSync } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -64,21 +65,8 @@ function isHelpRequest(args: readonly string[]) {
 	return args.includes('--help') || args.includes('-h')
 }
 
-// Mirrors deploy-testnet.mts: flags win over the first uppercase assignment,
-// followed by the environment.
-function resolveRequestedOption(args: readonly string[], optionName: string, environmentName: string, environment: Readonly<Record<string, string | undefined>>) {
-	const optionPrefix = `--${optionName}=`
-	const optionArgument = args.find(candidate => candidate.startsWith(optionPrefix))
-	if (optionArgument !== undefined) return optionArgument.slice(optionPrefix.length)
-	for (const argument of args) {
-		const assignmentPrefix = [`${environmentName}=`, `--${environmentName}=`].find(candidate => argument.startsWith(candidate))
-		if (assignmentPrefix !== undefined) return argument.slice(assignmentPrefix.length)
-	}
-	return environment[environmentName]
-}
-
 export function resolveRequestedChainId(args: readonly string[], environment: Readonly<Record<string, string | undefined>> = process.env) {
-	return resolveRequestedOption(args, 'chain-id', 'CHAIN_ID', environment) ?? '11155111'
+	return parseChainId(parseDeploymentOptions(args, environment)('CHAIN_ID')).toString()
 }
 
 async function buildHeadlessEntrypoint(sourceEntrypoint: string) {
@@ -130,7 +118,7 @@ export async function runHeadlessTestnetDeployment(args: readonly string[], opti
 			if (exitCode === 0 && receivedSignal === undefined && !isHelpRequest(args)) {
 				const chainId = resolveRequestedChainId(args)
 				const verificationCommand = [process.execPath, path.join(repositoryRoot, 'tooling', 'contracts', 'verify-contracts.mts'), `--chain-id=${chainId}`]
-				const verificationEnvironment = { ...process.env, ETHERSCAN_API_KEY: resolveRequestedOption(args, 'etherscan-api-key', 'ETHERSCAN_API_KEY', process.env) }
+				const verificationEnvironment = { ...process.env, ETHERSCAN_API_KEY: parseDeploymentOptions(args)('ETHERSCAN_API_KEY') }
 				activeChild = options.spawnVerification?.(verificationCommand, verificationEnvironment) ?? Bun.spawn(verificationCommand, { cwd: repositoryRoot, env: verificationEnvironment, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
 				const verificationExitCode = await activeChild.exited
 				if (verificationExitCode !== 0 && receivedSignal === undefined) {

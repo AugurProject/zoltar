@@ -1,26 +1,41 @@
 import * as process from 'node:process'
 import { type Hex, parseUnits } from '@zoltar/core-shared/evm/ethereum'
-import { SEPOLIA_CHAIN_ID } from './uniswap-deployment.mts'
+import { SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 
 const DEFAULT_MAX_FEE_PER_GAS_NANO_ETH = '100'
 const DEFAULT_MAX_TOTAL_COST_ETH = '20'
 
-function option(name: string, argv = process.argv.slice(2)) {
-	const prefix = `--${name}=`
-	return argv.find(argument => argument.startsWith(prefix))?.slice(prefix.length)
-}
+const deploymentOptions = {
+	'chain-id': 'CHAIN_ID',
+	'max-fee-per-gas-nanoeth': 'MAX_FEE_PER_GAS_NANO_ETH',
+	'max-total-cost-eth': 'MAX_TOTAL_COST_ETH',
+	'private-key': 'PRIVATE_KEY',
+	'rpc-url': 'RPC_URL',
+	'etherscan-api-key': 'ETHERSCAN_API_KEY',
+} as const
 
-function assignment(name: string, argv: readonly string[]) {
-	const prefixes = [`${name}=`, `--${name}=`]
-	for (const argument of argv) {
-		const prefix = prefixes.find(candidate => argument.startsWith(candidate))
-		if (prefix !== undefined) return argument.slice(prefix.length)
+export function parseDeploymentOptions(argv: readonly string[], environment: Readonly<Record<string, string | undefined>> = process.env) {
+	const options = Object.entries(deploymentOptions)
+	const flags = new Map<string, string>()
+	const assignments = new Map<string, string>()
+	for (let index = 0; index < argv.length; index++) {
+		const argument = argv[index]
+		if (argument === undefined) throw new Error('Missing deployment argument')
+		const equals = argument.indexOf('=')
+		const name = equals < 0 ? argument : argument.slice(0, equals)
+		const flag = options.find(([option]) => name === `--${option}`)
+		if (flag !== undefined) {
+			const value = equals < 0 ? argv[++index] : argument.slice(equals + 1)
+			if (value === undefined || (equals < 0 && (value.startsWith('--') || /^[A-Z_]+=/.test(value)))) throw new Error(`Missing value for ${name}`)
+			if (flags.has(flag[1])) throw new Error(`Duplicate deployment flag ${name}`)
+			flags.set(flag[1], value)
+			continue
+		}
+		const assignment = options.find(([, key]) => equals >= 0 && key !== 'PRIVATE_KEY' && (name === key || name === `--${key}`))
+		if (assignment === undefined) throw new Error('Unknown deployment argument. See --help for accepted options.')
+		if (!assignments.has(assignment[1])) assignments.set(assignment[1], argument.slice(equals + 1))
 	}
-	return undefined
-}
-
-function commandLineValue(optionName: string, assignmentName: string, argv: readonly string[]) {
-	return option(optionName, [...argv]) ?? assignment(assignmentName, argv)
+	return (name: (typeof deploymentOptions)[keyof typeof deploymentOptions]) => flags.get(name) ?? assignments.get(name) ?? environment[name]
 }
 
 export function parseChainId(value: string | undefined) {
@@ -73,12 +88,13 @@ export function parseMaxTotalCost(value: string | undefined) {
 }
 
 export function parseDeploymentCommandLine(argv = process.argv.slice(2), environment: Readonly<Record<string, string | undefined>> = process.env) {
+	const value = parseDeploymentOptions(argv, environment)
 	return {
-		chainId: parseChainId(commandLineValue('chain-id', 'CHAIN_ID', argv) ?? environment['CHAIN_ID']),
-		maxFeePerGas: parseMaxFeePerGas(commandLineValue('max-fee-per-gas-nanoeth', 'MAX_FEE_PER_GAS_NANO_ETH', argv) ?? environment['MAX_FEE_PER_GAS_NANO_ETH']),
-		maxTotalCost: parseMaxTotalCost(commandLineValue('max-total-cost-eth', 'MAX_TOTAL_COST_ETH', argv) ?? environment['MAX_TOTAL_COST_ETH']),
-		privateKey: parsePrivateKey(option('private-key', [...argv]) ?? environment['PRIVATE_KEY']),
-		rpcUrl: parseRpcUrl(commandLineValue('rpc-url', 'RPC_URL', argv) ?? environment['RPC_URL']),
+		chainId: parseChainId(value('CHAIN_ID')),
+		maxFeePerGas: parseMaxFeePerGas(value('MAX_FEE_PER_GAS_NANO_ETH')),
+		maxTotalCost: parseMaxTotalCost(value('MAX_TOTAL_COST_ETH')),
+		privateKey: parsePrivateKey(value('PRIVATE_KEY')),
+		rpcUrl: parseRpcUrl(value('RPC_URL')),
 	}
 }
 
@@ -90,7 +106,7 @@ export function getDeploymentHelp() {
 	return `Deploy the complete deterministic Zoltar infrastructure to an EVM testnet
 
 Load PRIVATE_KEY from a secret manager or hidden prompt; --private-key=0x... risks shell history exposure.
-Pass RPC and cost limits as flags, or as uppercase assignments such as RPC_URL=...:
+Flags accept --name=value or --name value. RPC and cost limits also accept uppercase assignments such as RPC_URL=...:
   bun run deploy:testnet -- --rpc-url=https://... --max-fee-per-gas-nanoeth=100 --max-total-cost-eth=20
 
   --private-key=0x...    Required unless PRIVATE_KEY is set
