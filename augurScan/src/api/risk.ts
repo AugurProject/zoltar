@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { riskCatalogData } from '../repositories/operations.ts'
-import { riskHistoryRows } from '../repositories/risk.ts'
+import { riskHistoryObservationHighWater, riskHistoryRows } from '../repositories/risk.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import { ApiRequestError, cursorTimestamp, hasCursorSnapshot, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, postgresBigint, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
@@ -14,7 +14,21 @@ type RiskHistoryPositions = {
 	readonly accounting?: RiskEventPosition
 	readonly lifecycle?: RiskEventPosition
 }
-type RiskHistoryCursor = readonly [version: 1, chainId: number, domain: 'risk-history', identity: string, snapshotBlock: string, snapshotHash: string, invalidationId: string, abiSourceHash: string, applicationSourceHash: string, projectionSourceHash: string, offset: number, positions: RiskHistoryPositions]
+type RiskHistoryCursor = readonly [
+	version: 2,
+	chainId: number,
+	domain: 'risk-history',
+	identity: string,
+	snapshotBlock: string,
+	snapshotHash: string,
+	invalidationId: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
+	offset: number,
+	positions: RiskHistoryPositions,
+	observationHighWater: string,
+]
 
 const riskEventPosition = (value: unknown): RiskEventPosition | undefined => {
 	if (!Array.isArray(value) || value.length !== 4 || !isPostgresBigint(value[0]) || !isPostgresInteger(value[1])) return undefined
@@ -52,14 +66,16 @@ const parseRiskHistoryCursor = (value: string | null, chainId: number, identity:
 		value,
 		parts => {
 			const positions = riskHistoryPositions(parts[11])
-			if (parts.length !== 12 || parts[0] !== 1 || parts[1] !== chainId || parts[2] !== 'risk-history' || parts[3] !== identity || !hasCursorSnapshot(parts, 4) || !isNonNegativeSafeInteger(parts[10]) || positions === undefined) throw new Error('shape')
-			return [1, chainId, 'risk-history', identity, String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), Number(parts[10]), positions]
+			const observationHighWater = parts[12]
+			if (parts.length !== 13 || parts[0] !== 2 || parts[1] !== chainId || parts[2] !== 'risk-history' || parts[3] !== identity || !hasCursorSnapshot(parts, 4) || !isNonNegativeSafeInteger(parts[10]) || positions === undefined || !isPostgresBigint(observationHighWater)) throw new Error('shape')
+			return [2, chainId, 'risk-history', identity, String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), Number(parts[10]), positions, observationHighWater]
 		},
 		error => new ApiRequestError('cursor is invalid', { cause: error }),
 	)
 }
 
-const riskHistoryCursorFor = (chainId: number, identity: string, asOf: Record<string, unknown>, offset: number, positions: RiskHistoryPositions): string => encodeOpaqueCursor([1, chainId, 'risk-history', identity, ...snapshotBoundary(asOf), offset, positions] satisfies RiskHistoryCursor)
+const riskHistoryCursorFor = (chainId: number, identity: string, asOf: Record<string, unknown>, offset: number, positions: RiskHistoryPositions, observationHighWater: string): string =>
+	encodeOpaqueCursor([2, chainId, 'risk-history', identity, ...snapshotBoundary(asOf), offset, positions, observationHighWater] satisfies RiskHistoryCursor)
 
 export const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
 	const kind = parts[0]
@@ -77,7 +93,9 @@ export const riskDetailResponse = async (sql: SQL, parts: readonly string[], url
 	const risk = await riskCatalogData(sql, chainId, { poolAddress, limit: 1, snapshotBlock: String(asOf['blockNumber']) })
 	const entity = risk.pools.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress)
 	if (entity === undefined) return json({ error: 'Pool risk state not found' }, 404)
-	const { stateSnapshots, accountingSnapshots, lifecycleEvents } = await riskHistoryRows(sql, { chainId, poolAddress, asOfBlock: String(asOf['blockNumber']), positions, limit })
+	const asOfBlock = String(asOf['blockNumber'])
+	const observationHighWater = cursor?.[12] ?? (await riskHistoryObservationHighWater(sql, chainId, poolAddress, asOfBlock))
+	const { stateSnapshots, accountingSnapshots, lifecycleEvents } = await riskHistoryRows(sql, { chainId, poolAddress, asOfBlock, observationHighWater, positions, limit })
 	const historyTruncated = [stateSnapshots, accountingSnapshots, lifecycleEvents].some(rows => rows.length > limit)
 	const statePageRows = stateSnapshots.slice(0, limit)
 	const pageRows = {
@@ -112,7 +130,7 @@ export const riskDetailResponse = async (sql: SQL, parts: readonly string[], url
 				limit,
 				offset,
 				truncated: historyTruncated,
-				nextCursor: historyTruncated ? riskHistoryCursorFor(chainId, historyIdentity, asOf, offset + limit, nextPositions) : undefined,
+				nextCursor: historyTruncated ? riskHistoryCursorFor(chainId, historyIdentity, asOf, offset + limit, nextPositions, observationHighWater) : undefined,
 			},
 		},
 	})

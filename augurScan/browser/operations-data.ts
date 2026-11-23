@@ -1,6 +1,6 @@
 import type { OperationsDetailRoute, PagedOperationsCatalogSection } from './browser-types.ts'
 import { decodeOperationsResponseValue, isJsonRecord, operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
-import { collectCanonicalPages, collectCursorCollections } from './canonical-pagination.ts'
+import { canonicalPageLimit, collectCanonicalPages, collectCursorCollections } from './canonical-pagination.ts'
 import { operationsCatalogRecordKey, operationsDetailRecordKey } from './operations-presentation.ts'
 
 export const operationsRiskHistoryKeys = ['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents'] as const
@@ -185,44 +185,44 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 	}
 
 	const loadOperationsPairedDetail = async (route: OperationsDetailRoute, roundTargetCount: number, decisionTargetCount: number): Promise<OperationsResponse> => {
-		let first: OperationsResponse | undefined
 		const primaryKey = route.kind === 'trading' ? 'events' : 'rounds'
 		const secondaryKey = route.kind === 'trading' ? 'activity' : 'coordinatorDecisions'
-		let lastRoundPage: Record<string, unknown> = {}
-		let lastDecisionPage: Record<string, unknown> = {}
-		let snapshotIdentity: string | undefined
-		const fetchPage = async (cursor: string | undefined, limit: number, collection: 'decisions' | 'rounds') => {
-			const response = decodeOperationsResponse(await api(operationsDetailEndpoint(route, collection === 'rounds' ? cursor : undefined, collection === 'rounds' ? limit : 1, collection === 'decisions' ? cursor : undefined, collection === 'decisions' ? limit : 1)))
-			const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
-			if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity) throw new Error('Report evidence changed while older evidence was loading; retry from the latest available block')
-			snapshotIdentity ??= responseIdentity
-			first ??= response
-			const page = detailPageRecord(response.data, collection === 'rounds' ? primaryKey : secondaryKey)
-			if (collection === 'rounds') lastRoundPage = page
-			else lastDecisionPage = page
+		const primaryLimit = canonicalPageLimit(roundTargetCount, 0, 100)
+		const secondaryLimit = canonicalPageLimit(decisionTargetCount, 0, 100)
+		const first = decodeOperationsResponse(await api(operationsDetailEndpoint(route, undefined, primaryLimit, undefined, secondaryLimit)))
+		const snapshotIdentity = (response: OperationsResponse) => JSON.stringify([response.chainId, ...['blockNumber', 'blockHash', 'invalidationId', 'abiSourceHash', 'applicationSourceHash', 'projectionSourceHash'].map(key => response.asOf[key])])
+		const firstIdentity = snapshotIdentity(first)
+		const collect = async (key: string, targetCount: number, continuationEndpoint: (cursor: string, limit: number) => string) => {
+			let lastPage = detailPageRecord(first.data, key)
+			const collected = await collectCanonicalPages(
+				async (cursor, limit = 100) => {
+					if (cursor !== undefined) {
+						const response = decodeOperationsResponse(await api(continuationEndpoint(cursor, limit)))
+						if (snapshotIdentity(response) !== firstIdentity) throw new Error('Indexed evidence changed while older evidence was loading; retry from the latest available block')
+						lastPage = detailPageRecord(response.data, key)
+					}
+					return {
+						items: operationRecords(lastPage['items']),
+						...(lastPage['hasMore'] === true && typeof lastPage['nextCursor'] === 'string' ? { nextCursor: lastPage['nextCursor'] } : {}),
+					}
+				},
+				targetCount,
+				operationsDetailRecordKey,
+			)
 			return {
-				items: operationRecords(page['items']),
-				...(page['hasMore'] === true && typeof page['nextCursor'] === 'string' ? { nextCursor: page['nextCursor'] } : {}),
+				...lastPage,
+				items: collected.items,
+				hasMore: collected.nextCursor !== undefined,
+				...(collected.nextCursor === undefined ? {} : { nextCursor: collected.nextCursor }),
 			}
 		}
-		const [rounds, decisions] = await Promise.all([collectCanonicalPages((cursor, limit = 100) => fetchPage(cursor, limit, 'rounds'), roundTargetCount, operationsDetailRecordKey), collectCanonicalPages((cursor, limit = 100) => fetchPage(cursor, limit, 'decisions'), decisionTargetCount, operationsDetailRecordKey)])
-		if (first === undefined) throw new Error('Report detail returned no page')
+		const [rounds, decisions] = await Promise.all([collect(primaryKey, roundTargetCount, (cursor, limit) => operationsDetailEndpoint(route, cursor, limit, undefined, 1)), collect(secondaryKey, decisionTargetCount, (cursor, limit) => operationsDetailEndpoint(route, undefined, 1, cursor, limit))])
 		return {
 			...first,
 			data: {
 				...first.data,
-				[primaryKey]: {
-					...lastRoundPage,
-					items: rounds.items,
-					hasMore: rounds.nextCursor !== undefined,
-					...(rounds.nextCursor === undefined ? {} : { nextCursor: rounds.nextCursor }),
-				},
-				[secondaryKey]: {
-					...lastDecisionPage,
-					items: decisions.items,
-					hasMore: decisions.nextCursor !== undefined,
-					...(decisions.nextCursor === undefined ? {} : { nextCursor: decisions.nextCursor }),
-				},
+				[primaryKey]: rounds,
+				[secondaryKey]: decisions,
 			},
 		}
 	}

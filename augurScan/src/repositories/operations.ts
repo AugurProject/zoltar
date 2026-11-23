@@ -3,6 +3,8 @@ import { auctionLifecycle, auctionStartedWindow, reportLifecycle, reportLifecycl
 import { ApiRequestError } from '../query-errors.ts'
 import { jsonRecord } from '../record-serialization.ts'
 
+export const unavailableOperationsBlockHash = `0x${'0'.repeat(64)}`
+
 export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string): Promise<Record<string, unknown>> => {
 	const rows =
 		atBlock === undefined
@@ -45,7 +47,7 @@ export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string
 	return {
 		...row,
 		blockNumber: row['blockNumber'] ?? '0',
-		blockHash: row['blockHash'] ?? `0x${'0'.repeat(64)}`,
+		blockHash: row['blockHash'] ?? unavailableOperationsBlockHash,
 		blockTimestamp: row['blockTimestamp'] ?? '0',
 		indexedHead: row['indexedHead'] ?? row['blockNumber'] ?? '0',
 		historyDepthBlocks: row['historyDepthBlocks'] ?? '0',

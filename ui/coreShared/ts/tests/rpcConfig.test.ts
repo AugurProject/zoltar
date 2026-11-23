@@ -84,7 +84,7 @@ describe('rpc config', () => {
 			resolveConfiguredRpcConfig({
 				fallbackRpcUrl: 'https://fallback.example',
 				location: {
-					search: '?rpcUrl=http://query.example',
+					search: '?rpcUrl=http://query.example/path%3Ftoken%3Ddummy',
 				},
 				storage: {
 					getItem: () => 'https://storage.example',
@@ -116,7 +116,6 @@ describe('rpc config', () => {
 			rejectedOverride: {
 				reason: 'RPC URL must be an absolute https:// URL, or http:// for local loopback.',
 				source: 'localStorage',
-				url: 'not-a-url',
 			},
 			source: 'default',
 			url: 'https://fallback.example',
@@ -250,8 +249,36 @@ test('rejects credential-bearing RPC settings before writing storage', () => {
 			throw new Error('unexpected write')
 		},
 	}
-	for (const url of ['https://user:password@rpc.example', 'http://user@localhost:8545']) {
+	const samples = [
+		['https://user:password@rpc.example/private?token=dummy', 'https://rpc.example'],
+		['http://user@localhost:8545', 'http://localhost:8545'],
+	] as const
+	for (const [url, displayUrl] of samples) {
 		expect(() => saveNetworkRpcUrl('mainnet', url, storage)).toThrow('embedded credentials')
-		expect(resolveConfiguredRpcConfig({ overrideRpcUrl: url }).rejectedOverride?.reason).toContain('embedded credentials')
+		expect(resolveConfiguredRpcConfig({ overrideRpcUrl: url, fallbackRpcUrl: 'https://fallback.example' })).toEqual({
+			rejectedOverride: {
+				reason: 'RPC URL must not contain embedded credentials.',
+				source: 'override',
+				url: displayUrl,
+			},
+			source: 'default',
+			url: 'https://fallback.example',
+		})
 	}
+})
+
+test('retains the source and fallback without displaying malformed RPC input', () => {
+	expect(
+		resolveConfiguredRpcConfig({
+			overrideRpcUrl: 'https://user:password@rpc.example:invalid/private?token=dummy',
+			fallbackRpcUrl: 'https://fallback.example',
+		}),
+	).toEqual({
+		rejectedOverride: {
+			reason: 'RPC URL must be an absolute https:// URL, or http:// for local loopback.',
+			source: 'override',
+		},
+		source: 'default',
+		url: 'https://fallback.example',
+	})
 })
