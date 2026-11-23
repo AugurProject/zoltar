@@ -156,7 +156,7 @@ describe('ERC20 portfolio collateral', () => {
 	test('#1567 a provider the collateral token blocks still claims REP and collateral earnings to another recipient', async () => {
 		const owner = fixture.owner()
 		const other = fixture.other()
-		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: applyLibraries(tokenArtifact.evm.bytecode.object), args: [18] }))
+		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [18] }))
 		const portfolio = await fixture.deployPortfolio(undefined, portfolioEconomics, { collateralToken: token })
 		await fixture.register(fixture.base.questionId, portfolio)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [owner.account.address, 1_000_000n * unit] }))
