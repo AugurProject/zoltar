@@ -13,6 +13,7 @@ import {
 	trading_test_TradingProtocolMocks_TradingMockShareToken,
 	trading_test_TradingProtocolMocks_TradingMockZoltar,
 	trading_test_TradingProtocolMocks_TradingReentrantRecipient,
+	trading_test_TradingProtocolMocks_TradingReserveReader,
 	trading_test_TwoWayConstantProductMathHarness_TwoWayConstantProductMathHarness,
 } from '../../types/contractArtifact'
 
@@ -32,6 +33,7 @@ const tradingContracts = {
 		TradingMockShareToken: trading_test_TradingProtocolMocks_TradingMockShareToken,
 		TradingMockZoltar: trading_test_TradingProtocolMocks_TradingMockZoltar,
 		TradingReentrantRecipient: trading_test_TradingProtocolMocks_TradingReentrantRecipient,
+		TradingReserveReader: trading_test_TradingProtocolMocks_TradingReserveReader,
 	},
 	'contracts/trading/test/TwoWayConstantProductMathHarness.sol': { TwoWayConstantProductMathHarness: trading_test_TwoWayConstantProductMathHarness_TwoWayConstantProductMathHarness },
 } as const

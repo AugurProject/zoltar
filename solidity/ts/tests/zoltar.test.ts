@@ -80,6 +80,21 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(await read(getChildUniverseId(0n, 1n)), deadline + 604800n)
 	})
 
+	test('#1554 only a universe that actually forked matches its fork question', async () => {
+		const matches = (universe: bigint, question: bigint) => client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'forkQuestionMatches', args: [universe, question] })
+		const question = makeQuestion('Fork question identity')
+		await createQuestion(client, question, ['Yes', 'No'])
+		const id = getQuestionId(question, ['Yes', 'No'])
+		assert.strictEqual(await matches(0n, 0n), false)
+		assert.strictEqual(await matches(123456n, 0n), false)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, 0n, id)
+		assert.strictEqual(await matches(0n, id), true)
+		assert.strictEqual(await matches(0n, id + 1n), false)
+		await deployChild(client, 0n, 1n)
+		assert.strictEqual(await matches(getChildUniverseId(0n, 1n), id), false)
+	})
+
 	test('canDeployContract', async () => {
 		const isDeployed = await isZoltarDeployed(client)
 		assert.ok(isDeployed, 'Not Deployed!')

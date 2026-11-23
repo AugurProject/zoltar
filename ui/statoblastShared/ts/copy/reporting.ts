@@ -185,33 +185,21 @@ export const recoverySource = 'Reporter recovery'
 
 export const settleInheritedClaim = 'Settle inherited reporter claim'
 
-export const prepareInheritedClaim = 'Prepare inherited reporter claim'
-
 export const claimSettled = 'Reporter claim settled'
-
-export const claimPrepared = 'Reporter claim prepared'
 
 export const inheritedClaims = 'Inherited reporter claims'
 
-export const inheritedClaimsDescription = 'Recover deposits carried from the parent question after this branch resolves. Prepare long histories in bounded batches.'
+export const inheritedClaimsDescription = 'Recover winning deposits carried from the parent question after this branch resolves.'
 
 export const claimPending = 'Another claim transaction is pending.'
 
 export const claimAuthenticationRequired = 'Refresh to authenticate this claim.'
-
-export const claimPreparationRequired = 'Prepare this claim first.'
 
 export const claimResolutionRequired = 'Wait for branch resolution.'
 
 export const claimWinningOutcomeRequired = 'Only the winning outcome can recover REP.'
 
 export const repUnit = 'REP'
-
-export const prepareClaim = 'Prepare claim'
-
-export const preparingClaim = 'Preparing claim'
-
-export const claimAlreadyPrepared = 'Claim prepared.'
 
 export const settleClaim = 'Settle claim'
 

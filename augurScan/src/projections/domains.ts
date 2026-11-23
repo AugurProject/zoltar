@@ -34,7 +34,6 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('oracle', 'price-feed', ['CoordinatorRegistered', 'ExposureCheckpoint', 'ReportFundingAssigned', 'ReportOperationAttempted']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
-		'ClaimCheckpointProgress',
 		'ClaimDeposit',
 		'DepositOnOutcome',
 		'ForkCarryCheckpoint',
@@ -93,7 +92,6 @@ const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'ammRouter',
 	'deploymentStatusOracle',
 	'escalationGame',
-	'escalationGameClaimDelegate',
 	'escalationGameDepositDelegate',
 	'openOracle',
 	'priceCoordinator',

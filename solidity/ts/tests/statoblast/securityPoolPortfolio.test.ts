@@ -12,7 +12,7 @@ import {
 } from '../../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { deployContract } from '../../testSupport/deployContract'
-import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createCompleteSet, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
@@ -44,7 +44,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 			reportPriorityFeeAttoEthPerGas,
 		})
 		const factory = { abi: factoryArtifact.abi, address: infrastructure.securityPoolFactory }
-		const creationCode = applyLibraries(portfolioArtifact.evm.bytecode.object)
+		const creationCode = `0x${portfolioArtifact.evm.bytecode.object}` as const
 		// The factory call is encoded here, without the SDK's validation, so the constructor's own checks are the ones exercised.
 		const deploy = (configuration = portfolioEconomics, reportPriorityFeeAttoEthPerGas = 10_000_000_000n, securityMultiplierBps = fixture.base.statoblastSecurityMultiplierBps) =>
 			writeContractAndWait(fixture.owner(), () =>

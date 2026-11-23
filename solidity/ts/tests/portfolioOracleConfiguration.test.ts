@@ -5,7 +5,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
-import { applyLibraries, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker as feedWorkerArtifact } from '../types/contractArtifact'
 import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 import {
@@ -26,7 +26,7 @@ type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, bigi
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
 	return encodeDeployData({
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		bytecode: applyLibraries(statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
+		bytecode: `0x${statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object}`,
 		args: [...args, getCreateAddress({ from: getInfraContractAddresses().priceCoordinatorDeploymentWorker, nonce: 3n })],
 	})
 }

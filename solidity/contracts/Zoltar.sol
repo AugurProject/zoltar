@@ -90,9 +90,9 @@ contract Zoltar {
 		return getForkRecapitalizationDeadline(universes[universeId].parentUniverseId) + Constants.FORK_RESPONSE_TIME;
 	}
 
-	/// @notice Returns whether the universe's recorded fork question id equals `questionId`.
+	/// @notice Returns whether the universe has forked on `questionId`.
 	function forkQuestionMatches(uint248 universeId, uint256 questionId) external view returns (bool) {
-		return universes[universeId].forkQuestionId == questionId;
+		return universes[universeId].forkTime != 0 && universes[universeId].forkQuestionId == questionId;
 	}
 
 	/// @notice Returns the universe's REP token.

@@ -4,7 +4,7 @@ import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zo
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as policyArtifact } from '../../../../types/contractArtifact'
 import { deployContract } from '../../../deployContract'
 import { type WriteClient, writeContractAndWait } from '../clients'
-import { applyLibraries, getInfraContractAddresses, getSecurityPoolAddresses } from './deployStatoblast'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployStatoblast'
 
 /** The protocol's portfolio module deployers, as `buildPortfolioDeploymentRequest` expects them. */
 export function getTestPortfolioDeployers() {
@@ -25,7 +25,7 @@ export function getTestPortfolioDeployers() {
 /** A fully prepared native portfolio with one registered question and no owner capital. */
 export async function deployTestPortfolio(client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplierBps: bigint) {
 	const infrastructure = getInfraContractAddresses()
-	const questionAdmissionPolicy = await deployContract(client, encodeDeployData({ abi: policyArtifact.abi, bytecode: applyLibraries(policyArtifact.evm.bytecode.object) }))
+	const questionAdmissionPolicy = await deployContract(client, encodeDeployData({ abi: policyArtifact.abi, bytecode: `0x${policyArtifact.evm.bytecode.object}` }))
 	const reportPriorityFeeAttoEthPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS
 	const request = buildPortfolioDeploymentRequest({
 		owner: client.account.address,
@@ -34,7 +34,7 @@ export async function deployTestPortfolio(client: WriteClient, universeId: bigin
 		maximumQuestionHorizonSeconds: 20n * 365n * 86_400n,
 		questionAdmissionPolicy,
 		economics: { purchaseFeeBps: 100n, annualFeeBps: 1_000n, minimumPurchaseFeeAttoEth: 10n ** 15n, minimumCommitmentAttoEth: 10n ** 16n, minimumOutcomeRate: 1_000n, rewardVestingSeconds: 86_400n },
-		creationCode: applyLibraries(portfolioArtifact.evm.bytecode.object),
+		creationCode: `0x${portfolioArtifact.evm.bytecode.object}`,
 	})
 	const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ ...request, gas: 16_777_216n }) })
 	if (receipt.status !== 'success') throw new Error('Test portfolio deployment failed')

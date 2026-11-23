@@ -1,5 +1,5 @@
 import type { PortfolioCapitalSnapshot } from './portfolio-types.ts'
-import type { ForkedCarryWithdrawalPresenceSnapshot, ForkedCarryWithdrawalSnapshot, ForkedClaimCheckpointSnapshot } from './carry-types.ts'
+import type { ForkedCarryWithdrawalPresenceSnapshot, ForkedCarryWithdrawalSnapshot } from './carry-types.ts'
 import type { UniverseUniswapSnapshot } from './uniswap-types.ts'
 import type { OperationInputValues } from './input-values.ts'
 import type { OperationDefinition } from './operation-definition.ts'
@@ -319,7 +319,6 @@ export interface EcosystemSnapshot {
 	portfolioCapital: PortfolioCapitalSnapshot[]
 	escalationDeposits: EscalationDepositSnapshot[]
 	/** Verified, unconsumed inherited deposits owned by the configured wallet. */
-	forkedClaimCheckpoints?: ForkedClaimCheckpointSnapshot[]
 	forkedCarryWithdrawals?: ForkedCarryWithdrawalSnapshot[]
 	/** Complete raw identities used for lifecycle absence confirmation. */
 	forkedCarryWithdrawalPresence?: ForkedCarryWithdrawalPresenceSnapshot[]

@@ -1,6 +1,6 @@
 import { loadPortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress, encodeFunctionData, isHex, createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, getAddress, zeroAddress, encodeFunctionData, isHex, createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
@@ -18,7 +18,7 @@ import {
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { fundCoordinatorInitialReport, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, loadOpenOracleEventState, openOracleSettle, requestPriceWithValue, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { fundCoordinatorInitialReport, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, loadOpenOracleEventState, openOracleSettle, openOracleSettleWithGasPrice, requestPriceWithValue, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
@@ -48,12 +48,19 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(authoritative).toBe(15_804_573n * (7n + priority) + 101n)
 	})
 
-	test('#1340 independent same-block reports can both settle', async () => {
-		await fixture.prepare()
+	test.each([
+		{ reverse: false, recover: false },
+		{ reverse: true, recover: false },
+		{ reverse: false, recover: true },
+		{ reverse: true, recover: true },
+	])('#1553 preserves first same-time price (reverse: $reverse, recovery: $recover)', async ({ reverse, recover }) => {
+		// Both price orders must leave enough backing for the requested health increase.
+		await fixture.prepare(3_000n * unit, 200n * unit)
 		const owner = fixture.owner()
 		const other = fixture.other()
 		const target = { abi: feedArtifact.abi, address: await feed() }
-		const bounty = await owner.readContract({ ...target, functionName: 'getRequestPriceCostAttoEth' })
+		const bounty = 3n * (await owner.readContract({ ...target, functionName: 'getRequestPriceCostAttoEth' }))
+		const deadline = (await owner.getBlock()).timestamp + 5_000n
 		const token = await owner.readContract({ ...target, functionName: 'weth' })
 		const rep = await owner.readContract({ ...target, functionName: 'reputationToken' })
 		for (const sponsor of [owner, other]) {
@@ -61,11 +68,19 @@ describe('Statoblast: central capital shared price feed', () => {
 			await approveToken(sponsor, token, target.address)
 			await approveToken(sponsor, rep, target.address)
 		}
-		const data = encodeFunctionData({ ...target, functionName: 'requestPortfolioPrice', args: [unit, 100n * unit, bounty] })
+		const prices = [unit, 2n * unit]
+		let index = 0
 		const hashes: Hash[] = []
 		await fixture.base.mockWindow.requestRaw({ method: 'evm_setAutomine', params: [false] })
 		try {
 			for (const sponsor of [owner, other]) {
+				const price = prices[index++]
+				if (price === undefined) throw new Error('Missing report price')
+				const data = encodeFunctionData({
+					...target,
+					functionName: 'requestPortfolioPriceWithOperations',
+					args: [price, 100n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: 2n * unit, deadline, operations: [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [15_000n] }) }] }],
+				})
 				const hash = await fixture.base.mockWindow.requestRaw({ method: 'eth_sendTransaction', params: [{ from: sponsor.account.address, to: target.address, data, value: `0x${bounty.toString(16)}`, gas: '0x7a1200' }] })
 				if (typeof hash !== 'string' || !isHex(hash) || hash.length !== 66) throw new Error('Missing report transaction hash')
 				hashes.push(`0x${hash.slice(2)}`)
@@ -77,8 +92,27 @@ describe('Statoblast: central capital shared price feed', () => {
 		for (const hash of hashes) expect((await owner.getTransactionReceipt({ hash })).status).toBe('success')
 		const second = await owner.readContract({ ...target, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
-		await openOracleSettle(owner, second)
-		await openOracleSettle(owner, second - 1n)
+		await openOracleSettle(owner, reverse ? second : second - 1n)
+		const firstPrice = await owner.readContract({ ...target, functionName: 'lastPrice' })
+		const epoch = await owner.readContract({ ...target, functionName: 'acceptedEpoch' })
+		const limits = await owner.readContract({ ...target, functionName: 'acceptedRepExposureLimitAttoRep' })
+		const later = reverse ? second - 1n : second
+		let completion: Hash
+		if (recover) {
+			const [, , , ceiling] = await owner.readContract({ ...target, functionName: 'reportCandidates', args: [later] })
+			await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${(ceiling + 1n).toString(16)}`] })
+			await openOracleSettleWithGasPrice(owner, later, ceiling + 1n)
+			expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [later] })).toBe(0n)
+			await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+			completion = await writeContractAndWait(owner, () => owner.writeContract({ ...target, functionName: 'recoverReport', args: [later], gasPrice: ceiling }))
+		} else completion = await openOracleSettle(owner, later)
+		const receipt = await owner.getTransactionReceipt({ hash: completion })
+		const events = receipt.logs.filter(log => log.address.toLowerCase() === target.address.toLowerCase()).map(log => decodeEventLog({ abi: feedArtifact.abi, data: log.data, topics: log.topics }))
+		expect(events.some(event => event.eventName === 'PriceReported' && event.args.reportId === later && event.args.price === firstPrice)).toBe(true)
+		expect(await owner.readContract({ ...target, functionName: 'lastPrice' })).toBe(firstPrice)
+		expect(await owner.readContract({ ...target, functionName: 'acceptedEpoch' })).toBe(epoch)
+		expect(await owner.readContract({ ...target, functionName: 'acceptedRepExposureLimitAttoRep' })).toBe(limits)
+		for (const sponsor of [owner, other]) expect((await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'ownerAccount', args: [sponsor.account.address] })).targetHealthFactorBps).toBe(15_000n)
 		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [second] })).toBe(1n)
 		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [second - 1n] })).toBe(1n)
 	})

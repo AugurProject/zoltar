@@ -434,7 +434,6 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 				}
 	const snapshot: EcosystemSnapshot = {
 		...indexedSnapshot,
-		forkedClaimCheckpoints: carryUpdated?.complete === true ? carryUpdated.checkpoints : [],
 		forkedCarryWithdrawalPresence: carryUpdated?.complete === true ? carryUpdated.withdrawalPresence.map(candidate => ({ ...candidate })) : [],
 		forkedCarryWithdrawals: carryUpdated?.complete === true ? carryUpdated.withdrawals.map(candidate => ({ ...candidate, proof: { ...candidate.proof, merkleMountainRangeSiblings: [...candidate.proof.merkleMountainRangeSiblings], nullifierSiblings: [...candidate.proof.nullifierSiblings] } })) : [],
 		warnings: [

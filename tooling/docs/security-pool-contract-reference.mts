@@ -230,7 +230,7 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`withdrawForkedEscalationDeposits(outcome, proofs)`',
 			caller: 'Anyone, for one recorded depositor',
-			effect: 'Settles authenticated inherited leaves without migrating every reporter. Bounded checkpoints prepare deep history; payouts go to the recorded owner.',
+			effect: 'Settles authenticated inherited leaves without migrating every reporter. Payouts go to the recorded owner.',
 			declarations: [
 				{
 					name: 'withdrawForkedEscalationDeposits',
@@ -295,7 +295,7 @@ export const securityPoolContractReference: ContractReference = {
 					name: 'initializeForkCarryOutcome',
 				},
 			],
-			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls complete its immutable carry peaks, counts, totals, resolution balances, and normalized nullifier roots.',
+			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus mutable current peaks, carry totals, resolution balances, and normalized nullifier roots.',
 			preconditions: 'A game is configured; it is a fork continuation with fewer than three initialized outcomes; leaf counts fit the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome’s data; the third call verifies the full commitment.',
 			signals: '`ForkCarryCheckpoint` on completion of the third outcome',
 		},

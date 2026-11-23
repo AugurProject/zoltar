@@ -4,7 +4,7 @@ import type { BatchReader } from '#core/batch-read'
 import type { ExecutionCandidate, Pool, ReadClient } from '#core/operator-types'
 import { requiredBigint, requiredHash } from '#core/rpc-validation'
 import { adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth, type RiskLimits } from '#core/safety-controls'
-import { calculateFee, calculateNextAmount1, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hedgeReferenceToken1, hedgeSlippageReserveToken1, type ArbitrageQuote } from '#core/strategy'
+import { gameFee, calculateNextAmount1, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hedgeReferenceToken1, hedgeSlippageReserveToken1, type ArbitrageQuote } from '#core/strategy'
 import { attoWethValue, type CollateralValuation } from '#core/collateral-valuation'
 import { resolveCollateralValuation } from '#monitoring/collateral-valuation'
 import type { Venue } from '#core/venue-strategy'
@@ -43,7 +43,7 @@ export type EvaluationConfiguration = Pick<Configuration, 'maxPriceImpactBps' | 
  */
 export async function evaluate(client: BatchReader, config: EvaluationConfiguration, report: OpenOracleStatePreimage, pool: Pool, gasPrice: bigint, marketBlock: { hash: `0x${string}`; number: bigint; observedAt: number }, valuation: CollateralValuation) {
 	const game = report.game
-	const quotes = await quoteVenue(client, config, pool, { sellAmount: game.currentAmount2, buyAmount: game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee), replacementAmount1: calculateNextAmount1(game) }, marketBlock.number)
+	const quotes = await quoteVenue(client, config, pool, { sellAmount: game.currentAmount2, buyAmount: game.currentAmount2 + gameFee(game, game.currentAmount2, game.feePercentage) + gameFee(game, game.currentAmount2, game.protocolFee), replacementAmount1: calculateNextAmount1(game) }, marketBlock.number)
 	const reserve = projectedLifecycleGasReserveAttoWeth({ callbackGasLimit: BigInt(game.callbackGasLimit), configuredReserveAttoWeth: config.riskLimits.lifecycleGasReserveAttoWeth, gasPrice, submissionMode: config.submission.mode })
 	const adjusted = (quote: ArbitrageQuote) => safetyAdjustedQuote(quote, gasPrice * 1_200_000n, reserve, config)
 	const sell = quotes.sell === undefined ? undefined : adjusted(evaluateSellRep(game, quotes.sell, 0n, valuation))
@@ -61,7 +61,7 @@ export async function evaluate(client: BatchReader, config: EvaluationConfigurat
 			marketId: pool.address,
 			observationId: `${config.network.chain.id.toString()}:${marketBlock.number.toString()}:${marketBlock.hash.toLowerCase()}`,
 			observedAt: marketBlock.observedAt,
-			priceRepPerEth: ((game.currentAmount2 * 10n ** 18n) / sell.grossProceedsToken1 + ((game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)) * 10n ** 18n) / buy.hedgeCostToken1) / 2n,
+			priceRepPerEth: ((game.currentAmount2 * 10n ** 18n) / sell.grossProceedsToken1 + ((game.currentAmount2 + gameFee(game, game.currentAmount2, game.feePercentage) + gameFee(game, game.currentAmount2, game.protocolFee)) * 10n ** 18n) / buy.hedgeCostToken1) / 2n,
 			sourceId: pool.venue,
 		})
 	const replacementToken = quotes.replacement === undefined ? undefined : deriveTokenToSwap(game, calculateNextAmount1(game), quotes.replacement)
@@ -87,7 +87,7 @@ export async function executionReadQuorum(
 	if (executor === undefined) throw new Error('Execution quorum requires the authenticated executor')
 	const game = report.game
 	const newAmount1 = calculateNextAmount1(game)
-	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
+	const repWithFees = game.currentAmount2 + gameFee(game, game.currentAmount2, game.feePercentage) + gameFee(game, game.currentAmount2, game.protocolFee)
 	const observations = clients.map(async (readClient, index) => {
 		if (pool.venue !== hedgeVenue || pool.fee !== hedgeFee) throw new Error('Execution venue does not match the selected pool')
 		if (pool.quoteToken.toLowerCase() !== game.token1.toLowerCase()) throw new Error('Execution pool does not trade the report collateral')

@@ -26,7 +26,7 @@
 					<li><code>LiquidityAdded(indexed provider, indexed recipient, yesAmount, noAmount, liquidity)</code> records proportional reserve use.</li>
 					<li><code>LiquidityRemoved(indexed provider, indexed recipient, yesAmount, noAmount, liquidity)</code> records raw-share output.</li>
 					<li><code>Swap(indexed sender, indexed recipient, yesForNo, exactOutput, amountIn, amountOut, feeAmount, resultingYesReserve, resultingNoReserve)</code> provides authoritative direction, mode, amounts, fee, and resulting state.</li>
-					<li><code>Sync(yesReserve, noReserve)</code> records reserves after synchronization or mutation.</li>
+					<li><code>Sync(yesReserve, noReserve)</code> records current Yes and No balances after a pair mutation or a call to <code>sync()</code>.</li>
 					<li><code>PredeploymentSharesQuarantined(invalidAmount, yesAmount, noAmount)</code> records canonical shares removed from a counterfactual pair address during construction. The destination is the factory's immutable <code>predeploymentShareSink</code>.</li>
 					<li>Standard ERC-20 <code>Transfer</code> and <code>Approval</code> events describe LP ownership and allowances.</li>
 				</ul>

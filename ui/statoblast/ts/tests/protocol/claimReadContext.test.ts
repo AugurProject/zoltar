@@ -13,7 +13,7 @@ const replacement = keccak256('0x02')
 function emptyCarryResponse(functionName: string) {
 	if (functionName === 'escalationGame') return game
 	if (functionName === 'forkContinuation') return false
-	if (functionName === 'getOutcomeState') return { currentCarryRoot: zeroHash, currentLeafCount: 0n, currentNullifierRoot: zeroHash, localHeadNodeId: 0n, snapshotLeafCount: 0n, snapshotPeaks: Array.from({ length: 64 }, () => zeroHash) }
+	if (functionName === 'getOutcomeState') return { currentCarryRoot: zeroHash, currentLeafCount: 0n, currentNullifierRoot: zeroHash, localHeadNodeId: 0n, snapshotLeafCount: 0n, snapshotCarryRoot: zeroHash }
 	if (functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
 	if (functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 	throw new Error(`Unexpected read: ${functionName}`)
@@ -32,7 +32,7 @@ test('claim discovery follows empty consumed-node pages to the oldest live leaf'
 		readContract: createReadContractStub(async request => {
 			switch (request.functionName) {
 				case 'getOutcomeState':
-					return { currentCarryRoot: root, currentLeafCount: 32n, currentNullifierRoot: zeroHash, localHeadNodeId: request.address === game ? 32n : 0n, snapshotLeafCount: request.address === child ? 32n : 0n, snapshotPeaks: Array.from({ length: 64 }, (_, index) => (index === 5 ? root : zeroHash)) }
+					return { currentCarryRoot: root, currentLeafCount: 32n, currentNullifierRoot: zeroHash, localHeadNodeId: request.address === game ? 32n : 0n, snapshotLeafCount: request.address === child ? 32n : 0n, snapshotCarryRoot: root }
 				case 'getCarryLeafPageByOutcome': {
 					const cursor = request.args?.[1]
 					if (typeof cursor !== 'bigint') throw new Error('Missing carry page cursor')
@@ -50,8 +50,6 @@ test('claim discovery follows empty consumed-node pages to the oldest live leaf'
 					return parent
 				case 'isEscalationDepositClaimedDirectly':
 					return false
-				case 'getClaimCheckpointProgress':
-					return [game, 9n, false, false]
 				default:
 					return emptyCarryResponse(request.functionName)
 			}
@@ -81,7 +79,7 @@ for (const mode of ['stable', 'reorg', 'continuous reorg', 'provider error', 'ba
 				expect(keys.has(key)).toBe(false)
 				keys.add(key)
 				if (mode === 'provider error') throw new Error('RPC disconnected')
-				if (mode === 'bad reconstruction after reorg' && attempts === 1 && parameters.address === child && parameters.functionName === 'getOutcomeState') return { snapshotLeafCount: 1n, snapshotPeaks: [] }
+				if (mode === 'bad reconstruction after reorg' && attempts === 1 && parameters.address === child && parameters.functionName === 'getOutcomeState') return { snapshotLeafCount: 1n, snapshotCarryRoot: zeroHash }
 				return emptyCarryResponse(parameters.functionName)
 			}),
 		}

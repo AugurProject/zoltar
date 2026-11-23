@@ -194,11 +194,6 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 					address: readStringField(infraContractAddresses, 'securityPoolForker', 'infraContractAddresses.securityPoolForker'),
 				},
 				{
-					id: 'escalationGameClaimDelegate',
-					label: 'Escalation Claim Checkpoint Delegate',
-					address: readStringField(infraContractAddresses, 'escalationGameClaimDelegate', 'infraContractAddresses.escalationGameClaimDelegate'),
-				},
-				{
 					id: 'escalationGameFactory',
 					label: 'Escalation Game Factory',
 					address: readStringField(infraContractAddresses, 'escalationGameFactory', 'infraContractAddresses.escalationGameFactory'),

@@ -17,7 +17,7 @@ import {
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
-import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, deployChild, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { createCarryProof, hashCarryLeaf, SparseNullifierTree } from '../carryProofHelpers'
@@ -59,7 +59,7 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 			portfolioEconomics.minimumOutcomeRate,
 			portfolioEconomics.rewardVestingSeconds,
 		])
-		await expect(fixture.owner().simulateContract({ ...factory(), functionName: 'deployPortfolio', args: [applyLibraries(portfolioArtifact.evm.bytecode.object), configuration] })).rejects.toThrow('Initial report priority fee exceeds OpenOracle limits')
+		await expect(fixture.owner().simulateContract({ ...factory(), functionName: 'deployPortfolio', args: [`0x${portfolioArtifact.evm.bytecode.object}`, configuration] })).rejects.toThrow('Initial report priority fee exceeds OpenOracle limits')
 	})
 
 	test('rejects missing universes and invalid origin parameters', async () => {
@@ -79,7 +79,7 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 				portfolioEconomics.minimumOutcomeRate,
 				portfolioEconomics.rewardVestingSeconds,
 			])
-			return await fixture.owner().simulateContract({ ...factory(), functionName: 'deployPortfolio', args: [applyLibraries(portfolioArtifact.evm.bytecode.object), configuration] })
+			return await fixture.owner().simulateContract({ ...factory(), functionName: 'deployPortfolio', args: [`0x${portfolioArtifact.evm.bytecode.object}`, configuration] })
 		}
 		for (const securityMultiplierBps of [0n, 10_000n, 10_001n, 10_002n, 10_499n]) await expect(simulateOrigin({ securityMultiplierBps })).rejects.toThrow('Multiplier must be at least 10500 BPS')
 		await expect(simulateOrigin({ universeId: 999999n })).rejects.toThrow('Universe REP token missing')
