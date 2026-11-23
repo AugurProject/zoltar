@@ -1,15 +1,14 @@
+import type { Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getCreateAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { constructorArgumentsFromInitCode } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import type { DeploymentStepId } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createStatoblastInitCodes } from '@zoltar/statoblast-shared/deployment/initCodes'
 import { statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import {
-	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
-	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
 	statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer,
@@ -36,7 +35,6 @@ export { getZoltarAddress, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-
 
 const statoblastInitCodes = createStatoblastInitCodes(
 	{
-		escalationGameClaimDelegate: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 		escalationGameDepositDelegate: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 		escalationGameFactory: statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 		multicall3: statoblast_Multicall3_Multicall3,
@@ -59,7 +57,6 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolPortfolioAuctionDeployer: statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuctionDeployer,
 		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 		securityPoolEventEmitter: statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
-		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	},
 	{ proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS, zeroSalt: ZERO_SALT },
@@ -100,15 +97,13 @@ export {
 	getShareTokenFactoryByteCode,
 }
 
-export const applyStatoblastLibraries = statoblastInitCodes.applyLibraries
-
 /** The linked creation code the canonical factory pins by hash and deploys for every portfolio. */
 export const getSecurityPoolPortfolioCreationCode = statoblastInitCodes.getSecurityPoolPortfolioCreationCode
 
-export const getSecurityPoolPortfolioRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.deployedBytecode.object)
+export const getSecurityPoolPortfolioRuntimeCode = (): Hex => `0x${statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.deployedBytecode.object}`
 
-export const getSecurityPoolEventEmitterRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.deployedBytecode.object)
-export const getSecurityPoolOperationsDelegateRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.deployedBytecode.object)
+export const getSecurityPoolEventEmitterRuntimeCode = (): Hex => `0x${statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.deployedBytecode.object}`
+export const getSecurityPoolOperationsDelegateRuntimeCode = (): Hex => `0x${statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.deployedBytecode.object}`
 
 export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()) {
 	const zoltarAddresses = getZoltarContractAddresses(profile)
@@ -124,7 +119,6 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 export function getInfraStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
 	const addresses = getInfraContractAddresses(profile)
 	return {
-		securityPoolUtils: '',
 		securityPoolEventEmitter: constructorArgumentsFromInitCode(getSecurityPoolEventEmitterByteCode(), statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.bytecode.object),
 		securityPoolOperationsDelegate: constructorArgumentsFromInitCode(getSecurityPoolOperationsDelegateByteCode(), statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
 		openOracle: '',
@@ -143,9 +137,8 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 		securityPoolPortfolioForkCoordinatorDeployer: constructorArgumentsFromInitCode(getSecurityPoolPortfolioForkCoordinatorDeployerByteCode(), statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object),
 		securityPoolPortfolioAuctionDeployer: constructorArgumentsFromInitCode(getSecurityPoolPortfolioAuctionDeployerByteCode(), statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuctionDeployer.evm.bytecode.object),
 		securityPoolForker: constructorArgumentsFromInitCode(getSecurityPoolForkerByteCode(addresses.zoltar), statoblast_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
-		escalationGameClaimDelegate: '',
 		escalationGameDepositDelegate: '',
-		escalationGameFactory: constructorArgumentsFromInitCode(getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate, addresses.escalationGameDepositDelegate), statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object),
+		escalationGameFactory: constructorArgumentsFromInitCode(getEscalationGameFactoryByteCode(addresses.escalationGameDepositDelegate), statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object),
 		securityPoolFactory: constructorArgumentsFromInitCode(getSecurityPoolFactoryByteCode(addresses), statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
 	}
 }

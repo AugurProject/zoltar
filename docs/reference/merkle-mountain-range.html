@@ -65,7 +65,7 @@ bagPeaks(peaks, peakCount):
 					<li><code>leafIndex &gt;= leafCount</code>: <code>Bad carry leaf</code>;</li>
 					<li>a <code>merkleMountainRangePeakIndex</code> that is not the height of the peak containing <code>leafIndex</code>: <code>Bad carry peak</code>;</li>
 					<li>a sibling array whose length is not <code>peakHeight + peakCount - 1</code>: <code>Bad MMR proof length</code>;</li>
-					<li>a reconstructed root that differs from the bagged snapshot peaks: <code>Bad carry proof</code>;</li>
+					<li>a reconstructed root that differs from the stored snapshot root: <code>Bad carry proof</code>;</li>
 					<li>a nullifier path whose length is not <code>64</code>: <code>Bad nullifier length</code>;</li>
 					<li>a nullifier path that does not reproduce the current nullifier root from an empty leaf, which includes an already-consumed nullifier: <code>Bad nullifier proof</code>.</li>
 				</ul>
@@ -165,7 +165,7 @@ bagPeaks(peaks, peakCount):
 					<div class="plot-chart" data-plot-chart="fig-mmr-proof-anatomy" data-plot-width="940" data-plot-height="1390" role="img" aria-label="A carried-deposit proof has an MMR membership lane and a separate nullifier lane"><span class="plot-chart-fallback">The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane uses the unique carry leaf position and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Carry proof anatomy.</span> The MMR sibling array first reconstructs one selected peak and then supplies every other occupied peak. The independent 64-level nullifier path uses the proof-bound MMR leaf index directly, so distinct leaves cannot collide in one slot. The position persists through descendant snapshots.</p>
 				</figure>
-				<p><code>merkleMountainRangePeakIndex</code> is the occupied peak height, not the ordinal position of that peak among occupied peaks. <code>leafIndex</code> is the leaf's global position across the whole snapshot. The verifier derives the peak that contains that position, requires <code>merkleMountainRangePeakIndex</code> to equal its height, and orders the in-peak siblings by the in-peak offset <code>leafIndex - peakStart</code>, where <code>peakStart</code> is the <code>peakStartIndex</code> returned by <code>getCurrentCarryPeakForLeaf</code>. Claim accounting also keys inherited-versus-local provenance and settled principal by the global position. For example, if the full snapshot has <code>13</code> leaves, the height-<code>3</code> peak holds global leaves <code>0</code> through <code>7</code>, the height-<code>2</code> peak holds <code>8</code> through <code>11</code>, and the height-<code>0</code> peak holds <code>12</code>. A proof for the third leaf of the height-<code>2</code> peak uses <code>merkleMountainRangePeakIndex = 2</code> and <code>leafIndex = 10</code>; its in-peak offset is <code>2</code>.</p>
+				<p><code>merkleMountainRangePeakIndex</code> is the occupied peak height, not the ordinal position of that peak among occupied peaks. <code>leafIndex</code> is the leaf's global position across the whole snapshot. The verifier derives the peak that contains that position, requires <code>merkleMountainRangePeakIndex</code> to equal its height, and orders the in-peak siblings by the in-peak offset <code>leafIndex - peakStart</code>, where <code>peakStart</code> is the <code>peakStartIndex</code> returned by <code>getCurrentCarryPeakForLeaf</code>. The game identifies inherited leaves and nullifier positions by this global index. For example, if the full snapshot has <code>13</code> leaves, the height-<code>3</code> peak holds global leaves <code>0</code> through <code>7</code>, the height-<code>2</code> peak holds <code>8</code> through <code>11</code>, and the height-<code>0</code> peak holds <code>12</code>. A proof for the third leaf of the height-<code>2</code> peak uses <code>merkleMountainRangePeakIndex = 2</code> and <code>leafIndex = 10</code>; its in-peak offset is <code>2</code>.</p>
 				<p><code>merkleMountainRangeSiblings</code> is also ordered in two phases. The first <code>merkleMountainRangePeakIndex</code> entries are the bottom-up Merkle siblings inside the selected peak. The remaining entries are the other occupied peak roots in ascending peak-height order, skipping the selected peak height. That exact ordering is why the verifier checks <code>merkleMountainRangeSiblings.length == peakHeight + peakCount - 1</code>.</p>
 				<h3 id="nullifier-tree">Nullifier tree</h3>
 				<p>Each continuation outcome keeps a binary Merkle tree of fixed depth <code>NULLIFIER_DEPTH = 64</code>, hashed with the same <code>parentHash</code>.</p>
@@ -245,7 +245,7 @@ bagPeaks(peaks, peakCount):
 					</thead>
 					<tbody>
 						<tr>
-							<td><code>snapshotLeafCount</code> and <code>snapshotPeaks</code></td>
+							<td><code>snapshotLeafCount</code> and <code>snapshotCarryRoot</code></td>
 							<td>The immutable inherited carry commitment.</td>
 						</tr>
 						<tr>

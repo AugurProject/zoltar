@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, keccak256, decodeEventLog, toEventSelector, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -11,11 +11,8 @@ import { initializeForkCarrySnapshotAbi, initializeForkCarrySnapshotWithResoluti
 import {
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate as depositArtifact,
-	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as claimArtifact,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier as verifierArtifact,
 	test_statoblast_EscalationGamePortfolioClockHarness_EscalationGamePortfolioClockHarness as poolArtifact,
-	test_statoblast_EscalationGamePortfolioClockHarness_EscalationCentralClaimCheckpointHarness as centralCheckpointArtifact,
-	test_statoblast_EscalationClaimCheckpointHarness_EscalationClaimCheckpointHarness as checkpointArtifact,
 } from '../../types/contractArtifact'
 
 /** Deploys Zoltar and a portfolio clock harness anchored at `wallAnchor` with a 1_000 second response period, wired to a fresh escalation game. */
@@ -25,8 +22,7 @@ async function deployClockHarness(ethereum: Parameters<typeof setupTestAccounts>
 	const pool = await deployContract(owner, encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), wallAnchor, 1_000n] }))
 	const verifier = await deployContract(owner, encodeDeployData({ abi: verifierArtifact.abi, bytecode: `0x${verifierArtifact.evm.bytecode.object}` }))
 	const deposits = await deployContract(owner, encodeDeployData({ abi: depositArtifact.abi, bytecode: `0x${depositArtifact.evm.bytecode.object}` }))
-	const claims = await deployContract(owner, encodeDeployData({ abi: claimArtifact.abi, bytecode: `0x${claimArtifact.evm.bytecode.object}` }))
-	const game = await deployContract(owner, encodeDeployData({ abi: gameArtifact.abi, bytecode: `0x${gameArtifact.evm.bytecode.object}`, args: [pool, getRepTokenAddress(0n), verifier, claims, deposits] }))
+	const game = await deployContract(owner, encodeDeployData({ abi: gameArtifact.abi, bytecode: `0x${gameArtifact.evm.bytecode.object}`, args: [pool, getRepTokenAddress(0n), verifier, deposits] }))
 	await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'setEscalationGame', args: [game] }))
 	return { game, pool }
 }
@@ -63,52 +59,6 @@ describe('Statoblast: fixed portfolio reporter clock', () => {
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'forkResumedAt' })).toBe(wallAnchor)
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })).toBe(wallAnchor + 3n * 86_400n)
 		expect(Number(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getFinalQuestionResolution' }))).toBe(1)
-	})
-
-	test('central inherited claim coordinates stay bounded and emit progress when persisted (#1417)', async () => {
-		const ethereum = getAnvilWindowEthereum()
-		const owner = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		await setupTestAccounts(ethereum)
-		let source: Address = zeroAddress
-		for (let depth = 0; depth < 20; depth++) {
-			source = await deployContract(owner, encodeDeployData({ abi: checkpointArtifact.abi, bytecode: `0x${checkpointArtifact.evm.bytecode.object}`, args: [source, 2n, 0n] }))
-		}
-		const target = await deployContract(owner, encodeDeployData({ abi: centralCheckpointArtifact.abi, bytecode: `0x${centralCheckpointArtifact.evm.bytecode.object}`, args: [source] }))
-		const args = [1, 7n, 19n, 1n] as const
-		expect([...(await owner.readContract({ abi: claimArtifact.abi, address: target, functionName: 'getInheritedClaimAllocation', args }))]).toEqual([7n, 7n, 7n, 19n])
-		expect([...(await owner.readContract({ abi: claimArtifact.abi, address: target, functionName: 'getClaimCheckpointProgress', args }))]).toEqual([zeroAddress, 0n, true, true])
-		const gas = await owner.estimateContractGas({ abi: claimArtifact.abi, address: target, functionName: 'getInheritedClaimAllocation', args })
-		expect(gas).toBeLessThan(100_000n)
-
-		const state = () => owner.readContract({ abi: claimArtifact.abi, address: target, functionName: 'getClaimCheckpointState', args })
-		expect((await state())[0]).toBeFalse()
-		const hash = await writeContractAndWait(owner, () => owner.writeContract({ abi: claimArtifact.abi, address: target, functionName: 'processClaimCheckpoint', args: [...args, 1n, zeroHash(), []] }))
-		expect((await state())[0]).toBeTrue()
-		const receipt = await owner.getTransactionReceipt({ hash })
-		const eventAbi = claimArtifact.abi.find(item => item.type === 'event' && item.name === 'ClaimCheckpointProgress')
-		if (eventAbi === undefined) throw new Error('Missing checkpoint progress event ABI')
-		const events = receipt.logs.filter(log => log.topics[0] === toEventSelector(eventAbi)).map(log => decodeEventLog({ abi: [eventAbi], data: log.data, topics: log.topics }))
-		const claimId = keccak256(encodeAbiParameters([{ type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], args))
-		expect(events.map(event => event.args)).toEqual([{ claimId, nextSourceGame: zeroAddress, pendingSteps: 0n, complete: true }])
-	})
-
-	test('central checkpoint ancestry agrees with the leaf transform (#1416)', async () => {
-		const ethereum = getAnvilWindowEthereum()
-		const owner = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		await setupTestAccounts(ethereum)
-		const source = await deployContract(owner, encodeDeployData({ abi: checkpointArtifact.abi, bytecode: `0x${checkpointArtifact.evm.bytecode.object}`, args: [zeroAddress, 2n, 0n] }))
-		const target = await deployContract(owner, encodeDeployData({ abi: centralCheckpointArtifact.abi, bytecode: `0x${centralCheckpointArtifact.evm.bytecode.object}`, args: [source] }))
-		const args = [1, 7n, 19n, 1n] as const
-
-		for (const [leafIndex, expectedSource] of [
-			[1n, source],
-			[2n, zeroAddress],
-		] as const) {
-			const [transformSource] = await owner.readContract({ abi: claimArtifact.abi, address: target, functionName: 'getClaimIntervalTransform', args: [args[0], leafIndex] })
-			const [, checkpointSource] = await owner.readContract({ abi: claimArtifact.abi, address: target, functionName: 'getReusableClaimCheckpoint', args: [args[0], args[1], args[2], leafIndex] })
-			expect(transformSource).toBe(expectedSource)
-			expect(checkpointSource).toBe(expectedSource)
-		}
 	})
 
 	test('a wallet can report on an unrelated resumed central continuation', async () => {

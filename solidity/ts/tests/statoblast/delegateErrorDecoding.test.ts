@@ -4,7 +4,6 @@ import { statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegat
 import { deployContract } from '../../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 
@@ -22,8 +21,8 @@ describe('Statoblast: delegate revert reasons', () => {
 	beforeAll(async () => {
 		await setupTestAccounts(node.getAnvilWindowEthereum())
 		client = createWriteClient(node.getAnvilWindowEthereum(), TEST_ADDRESSES[0])
-		delegates.push({ name: 'operations', address: await deployContract(client, encodeDeployData({ abi: operationsArtifact.abi, bytecode: applyLibraries(operationsArtifact.evm.bytecode.object) })) })
-		delegates.push({ name: 'accounting', address: await deployContract(client, encodeDeployData({ abi: accountingArtifact.abi, bytecode: applyLibraries(accountingArtifact.evm.bytecode.object) })) })
+		delegates.push({ name: 'operations', address: await deployContract(client, encodeDeployData({ abi: operationsArtifact.abi, bytecode: `0x${operationsArtifact.evm.bytecode.object}` })) })
+		delegates.push({ name: 'accounting', address: await deployContract(client, encodeDeployData({ abi: accountingArtifact.abi, bytecode: `0x${accountingArtifact.evm.bytecode.object}` })) })
 		await node.setBaselineSnapshot()
 	})
 

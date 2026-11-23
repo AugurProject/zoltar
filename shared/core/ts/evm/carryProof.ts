@@ -34,7 +34,7 @@ export function bagCarryPeaks(peaks: readonly Hex[]): Hex {
 	return root
 }
 
-export function buildCarryPeakHeights(leafCount: bigint) {
+function buildCarryPeakHeights(leafCount: bigint) {
 	const peakHeights: number[] = []
 	let remainingLeafCount = leafCount
 	let currentHeight = 0

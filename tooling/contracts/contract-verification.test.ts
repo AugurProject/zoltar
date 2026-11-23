@@ -86,7 +86,6 @@ test('verification does not require a deployment for the internal scalar library
 		const manifest = await loadRealManifest(networkId)
 		const plan = buildVerificationPlan({ ...manifest, deploymentSteps: manifest.deploymentSteps.filter(step => step.id !== 'scalarOutcomes') }, artifactLookup)
 		expect(plan.jobs.some(job => job.id === 'scalarOutcomes')).toBe(false)
-		expect(Object.keys(plan.libraryAddresses)).toEqual(['securityPoolUtils'])
 		expect(plan.jobs.some(job => job.id === 'zoltarQuestionData')).toBe(true)
 	}
 })

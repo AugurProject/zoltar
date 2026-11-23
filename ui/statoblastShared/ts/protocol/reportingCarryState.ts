@@ -1,18 +1,17 @@
 import { bigintToSafeNumber, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as claimArtifact, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { AuthenticatedForkClaim, CarriedDepositProof, ImportedEscalationDeposit } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
+import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { executeForkAuctionAction, readSecurityPoolUniverseId } from './securityPoolActions.js'
-import { getCarrySnapshotRoot, buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
+import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { claimStateChanged } from './claimActionState.js'
 import { withClaimReadContext } from './claimReadContext.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
-import { submitClaimCheckpoint } from './reportingClaimCheckpoint.js'
 
 const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
 
@@ -251,12 +250,11 @@ async function loadRecursiveCarrySnapshot(
 }
 
 function authenticateCarrySnapshot(parentHistoricalLeaves: readonly HistoricalCarrySnapshotEntry[], childOutcomeState: Awaited<ReturnType<typeof readEscalationOutcomeState>>) {
-	const { snapshotLeafCount: parentCarryLeafCount, snapshotPeaks } = childOutcomeState
+	const { snapshotLeafCount: parentCarryLeafCount, snapshotCarryRoot: snapshotRoot } = childOutcomeState
 	if (BigInt(parentHistoricalLeaves.length) < parentCarryLeafCount) throw new Error('Parent carry snapshot is not locally reconstructible.')
 	const orderedEntries = parentHistoricalLeaves.slice(0, bigintToSafeNumber(parentCarryLeafCount, 'Parent carry leaf count'))
 	const orderedLeaves = orderedEntries.map(entry => entry.leaf)
 	const leafHashes = orderedEntries.map(entry => entry.leafHash)
-	const snapshotRoot = getCarrySnapshotRoot(parentCarryLeafCount, snapshotPeaks)
 	if (leafHashes.length > 0 && buildCarryMerkleMountainRangeProof(leafHashes, 0).root !== snapshotRoot) throw new Error('Parent carry snapshot root is not locally reconstructible.')
 	return { orderedEntries, orderedLeaves, leafHashes, snapshotRoot }
 }
@@ -285,15 +283,6 @@ async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, chil
 			.map(async leaf => {
 				const leafIndex = orderedEntries.findIndex(entry => entry.leaf.parentDepositIndex === leaf.parentDepositIndex && entry.leafHash === hashCarryLeaf(leaf, outcome))
 				if (leafIndex < 0) throw new Error('Inherited claim history is incomplete.')
-				const args = [getReportingOutcomeValue(outcome), leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, BigInt(leafIndex)] as const
-				const progress = requireTupleValue(await client.readContract({ address: childEscalationGameAddress, abi: claimArtifact.abi, functionName: 'getClaimCheckpointProgress', args }), 4, 'claim checkpoint progress')
-				const claimCheckpoint = {
-					nextSourceGame: requireAddressValue(progress[0], 'claim checkpoint source'),
-					pendingSteps: requireBigintValue(progress[1], 'claim checkpoint steps'),
-					complete: requireBooleanValue(progress[2], 'claim checkpoint completion'),
-					ready: requireBooleanValue(progress[3], 'claim checkpoint readiness'),
-				}
-				const claimAllocation = claimCheckpoint.ready ? await client.readContract({ address: childEscalationGameAddress, abi: claimArtifact.abi, functionName: 'getInheritedClaimAllocation', args }) : undefined
 				const claimIdentity: AuthenticatedForkClaim = {
 					escalationGame: childEscalationGameAddress,
 					outcome,
@@ -305,7 +294,7 @@ async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, chil
 					parentDepositIndex: leaf.parentDepositIndex,
 					leafIndex: BigInt(leafIndex),
 				}
-				return { amountAttoRep: leaf.amountAttoRep, cumulativeAmountAttoRep: leaf.cumulativeAmountAttoRep, depositor: leaf.depositor, parentDepositIndex: leaf.parentDepositIndex, claimIdentity, claimCheckpoint, claimAllocation }
+				return { amountAttoRep: leaf.amountAttoRep, cumulativeAmountAttoRep: leaf.cumulativeAmountAttoRep, depositor: leaf.depositor, parentDepositIndex: leaf.parentDepositIndex, claimIdentity }
 			}),
 	)
 }
@@ -403,10 +392,4 @@ export async function withdrawForkedEscalationDeposits(client: WriteClient, secu
 				],
 			})),
 	)
-}
-
-/** Prepare a bounded batch using membership authenticated when the deposit list loaded. */
-export async function prepareForkClaimCheckpoint(client: WriteClient, securityPoolAddress: Address, identity: AuthenticatedForkClaim) {
-	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-	return await executeForkAuctionAction('prepareForkClaim', securityPoolAddress, universeId, async () => await submitClaimCheckpoint(client, securityPoolAddress, identity))
 }

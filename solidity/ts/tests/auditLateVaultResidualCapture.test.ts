@@ -75,7 +75,7 @@ describe('Wallet reporting without standalone vault backing', () => {
 	test('an orphan game cannot accept wallet deposits or mutate canonical accounting', async () => {
 		const sender = fixture.other()
 		const infra = getInfraContractAddresses()
-		const orphan = await deployContract(sender, encodeDeployData({ abi: gameArtifact.abi, bytecode: `0x${gameArtifact.evm.bytecode.object}`, args: [pool().address, token(), infra.escalationGameProofVerifier, infra.escalationGameClaimDelegate, infra.escalationGameDepositDelegate] }))
+		const orphan = await deployContract(sender, encodeDeployData({ abi: gameArtifact.abi, bytecode: `0x${gameArtifact.evm.bytecode.object}`, args: [pool().address, token(), infra.escalationGameProofVerifier, infra.escalationGameDepositDelegate] }))
 		await writeContractAndWait(sender, () => sender.writeContract({ abi: gameArtifact.abi, address: orphan, functionName: 'start', args: [100n * unit, 200n * unit] }))
 		await approveToken(sender, token(), orphan)
 		const before = await snapshot(sender)

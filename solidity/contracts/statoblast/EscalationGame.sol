@@ -9,12 +9,11 @@ import { EscalationGameSettlement } from './EscalationGameSettlement.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
 import { ESCALATION_TIME_LENGTH, NonDecisionState } from './EscalationGameTypes.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
-import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 
 contract EscalationGame is EscalationGameSettlement {
 	EscalationGameDepositDelegate private immutable depositDelegate;
 
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate, EscalationGameDepositDelegate _depositDelegate) EscalationGameState(_securityPool, _repToken, _proofVerifier, _claimDelegate) {
+	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameDepositDelegate _depositDelegate) EscalationGameState(_securityPool, _repToken, _proofVerifier) {
 		fixedQuestionOutcome = BinaryOutcomes.BinaryOutcome.None;
 		require(address(_depositDelegate).code.length > 0, 'Deposit delegate');
 		depositDelegate = _depositDelegate;
@@ -96,10 +95,9 @@ contract EscalationGame is EscalationGameSettlement {
 		return address(depositDelegate);
 	}
 
-	/// @notice Routes the signed deposit entry points to the deposit delegate and every other selector to the claim delegate.
+	/// @notice Routes only the signed deposit entry points to the deposit delegate.
 	/// @dev Returns or reverts with the delegate's exact output.
 	fallback() external {
-		address claimDelegateAddress = address(claimDelegate);
 		address depositDelegateAddress = address(depositDelegate);
 		// Right-aligned selector words compare directly against `shr(224, calldataload(0))`.
 		uint256 depositWithPermitSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermit.selector);
@@ -107,18 +105,19 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 depositWithPermitAndLeadSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermitAndLead.selector);
 		assembly ('memory-safe') {
 			let selector := shr(224, calldataload(0))
-			let delegate := claimDelegateAddress
 			// Only the signed and protected public deposit entrypoints reach the deposit
-			// delegate. Other selectors remain on the claim delegate's narrow surface.
-			if or(
-				or(eq(selector, depositWithPermitSelector), eq(selector, depositWithAuthorizationSelector)),
-				eq(selector, depositWithPermitAndLeadSelector)
+			// delegate. Unknown and internal-only selectors are rejected.
+			if iszero(
+				or(
+					or(eq(selector, depositWithPermitSelector), eq(selector, depositWithAuthorizationSelector)),
+					eq(selector, depositWithPermitAndLeadSelector)
+				)
 			) {
-				delegate := depositDelegateAddress
+				revert(0, 0)
 			}
 			let pointer := mload(0x40)
 			calldatacopy(pointer, 0, calldatasize())
-			if iszero(delegatecall(gas(), delegate, pointer, calldatasize(), 0, 0)) {
+			if iszero(delegatecall(gas(), depositDelegateAddress, pointer, calldatasize(), 0, 0)) {
 				returndatacopy(pointer, 0, returndatasize())
 				revert(pointer, returndatasize())
 			}

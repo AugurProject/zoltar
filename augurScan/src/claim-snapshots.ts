@@ -1,5 +1,5 @@
 import { allocatedWinningPayout, ordinaryWinningPayout } from './claim-payout.ts'
-import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
+import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { abiForKind } from './abi-catalog.ts'
@@ -148,12 +148,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			}),
 		)
 		if (nullifiers.getRoot() !== hash(view['currentNullifierRoot'])) throw new Error('Claim nullifier commitment mismatch')
-		const peaks = array(view['snapshotPeaks'])
-		const snapshotRoot = bagCarryPeaks(
-			buildCarryPeakHeights(count)
-				.sort((a, b) => a - b)
-				.map(height => hash(peaks[height])),
-		)
+		const snapshotRoot = hash(view['snapshotCarryRoot'])
 		const inheritedHashes = inherited.map(leaf => leaf.leafHash)
 		if (inherited.length > 0 && buildCarryMerkleMountainRangeProof(inheritedHashes, 0).root !== snapshotRoot) throw new Error('Claim membership commitment mismatch')
 		for (const leaf of leaves) {
@@ -182,26 +177,13 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 							merkleMountainRangeSiblings: membership.merkleMountainRangeSiblings,
 							nullifierSiblings: nullifiers.getProof(leaf.index),
 						}
-			let sourcePrincipal = leaf.amountAttoRep
-			let principal = leaf.amountAttoRep
-			let rewardAmount = leaf.amountAttoRep
-			let rewardCumulative = leaf.cumulativeAmountAttoRep
-			let allocationReady = true
-			if (isInherited) {
-				const claim = [outcome, leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, leaf.index]
-				const progress = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getClaimCheckpointProgress', claim))
-				allocationReady = flag(progress[3])
-				if (allocationReady) {
-					const allocation = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getInheritedClaimAllocation', claim))
-					sourcePrincipal = uint(allocation[0])
-					principal = uint(allocation[1])
-					rewardAmount = uint(allocation[2])
-					rewardCumulative = uint(allocation[3])
-				} else if (status === 'claimable') status = 'checkpoint-required'
-			}
+			const sourcePrincipal = leaf.amountAttoRep
+			const principal = leaf.amountAttoRep
+			const rewardAmount = leaf.amountAttoRep
+			const rewardCumulative = leaf.cumulativeAmountAttoRep
 			if (principal > sourcePrincipal) throw new Error('Retained claim principal exceeds source allocation')
 			const payout = ctx.continuation ? allocatedWinningPayout : ordinaryWinningPayout
-			const result = allocationReady && status === 'claimable' ? payout({ principal, rewardAmount, rewardCumulative, binding: uint(state['bindingCapitalAttoRep']), winningBalance: uint(view['balanceAttoRep']), forkThreshold, nonDecisionThreshold: uint(state['nonDecisionThresholdAttoRep']) }) : undefined
+			const result = status === 'claimable' ? payout({ principal, rewardAmount, rewardCumulative, binding: uint(state['bindingCapitalAttoRep']), winningBalance: uint(view['balanceAttoRep']), forkThreshold, nonDecisionThreshold: uint(state['nonDecisionThresholdAttoRep']) }) : undefined
 			positions.push({
 				depositor: leaf.depositor.toLowerCase(),
 				outcome: String(outcome),
@@ -210,11 +192,10 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 				kind: isInherited ? 'inherited' : 'local',
 				status,
 				principal_atto_rep: leaf.amountAttoRep.toString(),
-				source_principal_atto_rep: allocationReady ? sourcePrincipal.toString() : undefined,
-				retained_principal_atto_rep: allocationReady ? principal.toString() : undefined,
-				reward_amount_atto_rep: allocationReady ? rewardAmount.toString() : undefined,
-				reward_cumulative_atto_rep: allocationReady ? rewardCumulative.toString() : undefined,
-				checkpoint_ready: isInherited ? allocationReady : undefined,
+				source_principal_atto_rep: sourcePrincipal.toString(),
+				retained_principal_atto_rep: principal.toString(),
+				reward_amount_atto_rep: rewardAmount.toString(),
+				reward_cumulative_atto_rep: rewardCumulative.toString(),
 				calculation: { binding_capital_atto_rep: state['bindingCapitalAttoRep'], winning_balance_atto_rep: uint(view['balanceAttoRep']).toString(), fork_threshold_atto_rep: forkThreshold.toString(), non_decision_threshold_atto_rep: state['nonDecisionThresholdAttoRep'] },
 				payout_atto_rep: result?.payout.toString(),
 				burn_atto_rep: result?.burn.toString(),
@@ -224,5 +205,5 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			})
 		}
 	}
-	return { status: 'available', positions, truncated, reads, basis: 'Tagged contract allocations and verified carry/nullifier commitments. Each proof is independent at this block; refresh after any claim. Payouts credit the depositor claim bundle, not a wallet transfer quote.' }
+	return { status: 'available', positions, truncated, reads, basis: 'Authenticated leaf allocations and verified carry/nullifier commitments. Each proof is independent at this block; refresh after any claim. Payouts credit the depositor claim bundle, not a wallet transfer quote.' }
 }

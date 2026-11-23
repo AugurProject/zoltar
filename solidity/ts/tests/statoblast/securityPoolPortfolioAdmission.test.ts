@@ -11,7 +11,7 @@ import {
 } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
@@ -23,7 +23,7 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 
 describe('Statoblast: pluggable question admission', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
-	const deployFixed = (questions: bigint[], universe = fixture.base.genesisUniverse) => deployContract(fixture.owner(), encodeDeployData({ abi: fixedArtifact.abi, bytecode: applyLibraries(fixedArtifact.evm.bytecode.object), args: [universe, questions] }))
+	const deployFixed = (questions: bigint[], universe = fixture.base.genesisUniverse) => deployContract(fixture.owner(), encodeDeployData({ abi: fixedArtifact.abi, bytecode: `0x${fixedArtifact.evm.bytecode.object}`, args: [universe, questions] }))
 
 	test('the interface’s maximum list of 700 full-width question IDs fits the transaction gas cap (#1354)', async () => {
 		const owner = fixture.owner()
@@ -65,7 +65,7 @@ describe('Statoblast: pluggable question admission', () => {
 	})
 
 	test('a revoked or reverting custom policy prevents purchases but cannot block redemption or principal exit', async () => {
-		const policy = await deployContract(fixture.owner(), encodeDeployData({ abi: policyArtifact.abi, bytecode: applyLibraries(policyArtifact.evm.bytecode.object) }))
+		const policy = await deployContract(fixture.owner(), encodeDeployData({ abi: policyArtifact.abi, bytecode: `0x${policyArtifact.evm.bytecode.object}` }))
 		const portfolio = await fixture.deployPortfolio(policy)
 		await fixture.register(fixture.base.questionId, portfolio)
 		await fixture.deposit(1_000n * unit, fixture.owner(), portfolio)
@@ -87,7 +87,7 @@ describe('Statoblast: pluggable question admission', () => {
 	test('revoking admission also blocks new purchases of an already prepared descendant question', async () => {
 		const owner = fixture.owner()
 		const universe = fixture.base.genesisUniverse
-		const policy = await deployContract(owner, encodeDeployData({ abi: policyArtifact.abi, bytecode: applyLibraries(policyArtifact.evm.bytecode.object) }))
+		const policy = await deployContract(owner, encodeDeployData({ abi: policyArtifact.abi, bytecode: `0x${policyArtifact.evm.bytecode.object}` }))
 		const portfolio = await fixture.deployPortfolio(policy)
 		await fixture.register(fixture.secondQuestionId, portfolio)
 		const parent = fixture.poolFor(fixture.secondQuestionId, universe, zeroAddress, portfolio).securityPool

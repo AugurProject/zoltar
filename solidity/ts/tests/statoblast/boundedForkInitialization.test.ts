@@ -87,9 +87,9 @@ describe('Statoblast: bounded fork initialization', () => {
 		// Exercise the largest fixed-width carry representation, independent of the
 		// number of historical questions, deposits and prior native forks.
 		for (const outcome of outcomes) {
-			const outcomeSlot = 8n + 142n * BigInt(outcome)
-			stateDiff[formatStorageSlot(outcomeSlot + 70n)] = leafCount
-			for (let peak = 0; peak < 64; peak++) stateDiff[formatStorageSlot(outcomeSlot + 71n + BigInt(peak))] = BigInt(keccak256(formatStorageSlot(BigInt(1 + outcome * 64 + peak))))
+			const outcomeSlot = 8n + 78n * BigInt(outcome)
+			stateDiff[formatStorageSlot(outcomeSlot + 6n)] = leafCount
+			for (let peak = 0; peak < 64; peak++) stateDiff[formatStorageSlot(outcomeSlot + 7n + BigInt(peak))] = BigInt(keccak256(formatStorageSlot(BigInt(1 + outcome * 64 + peak))))
 		}
 		await base.mockWindow.addStateOverrides({ [parentGame]: { stateDiff } })
 		const parentStates = await Promise.all(outcomes.map(outcome => getEscalationGameOutcomeState(owner(), parentGame, outcome)))
@@ -213,7 +213,7 @@ describe('Statoblast: bounded fork initialization', () => {
 			const expected = parentStates[outcome]
 			if (expected === undefined) throw new Error('Missing parent outcome state')
 			expect(state.currentLeafCount).toBe(leafCount)
-			expect(state.snapshotPeaks).toEqual(expected.currentPeaks)
+			expect(state.snapshotCarryRoot).toEqual(expected.currentCarryRoot)
 			expect(state.currentPeaks).toEqual(expected.currentPeaks)
 			expect(state.balanceAttoRep).toBe(expected.balanceAttoRep)
 		}

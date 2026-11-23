@@ -7,7 +7,7 @@ import { loadMintFees } from '../../../../ui/trading/ts/protocol/minting.js'
 import { portfolioMintFee, portfolioMintWithinBudget } from '@zoltar/trading-shared/trading/portfolioMint'
 import { encodeDeployData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
-import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import {
 	trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as factoryArtifact,
@@ -26,8 +26,8 @@ describe('Trading: portfolio-funded complete sets', () => {
 		const native = fixture.poolFor(fixture.base.questionId)
 		await fixture.mint(unit)
 		await fixture.base.mockWindow.advanceTime(elapsed)
-		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: applyLibraries(factoryArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
-		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
+		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
+		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
 		const [fee] = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, unit] })
 		await writeContractAndWait(owner, () =>
 			owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, owner.account.address, fixture.base.questionData.endTime - 1n], value: unit + fee + unit / 10n }),
@@ -45,8 +45,8 @@ describe('Trading: portfolio-funded complete sets', () => {
 		await fixture.prepare()
 		const owner = fixture.owner()
 		const native = fixture.poolFor(fixture.base.questionId)
-		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: applyLibraries(factoryArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
-		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: applyLibraries(routerArtifact.evm.bytecode.object), args: [factory] }))
+		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
+		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
 		const deadline = fixture.base.questionData.endTime - 1n
 		await expect(owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, owner.account.address, deadline], value: unit })).rejects.toThrow('Purchase fee exceeds budget')
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: native.securityPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)

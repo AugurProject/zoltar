@@ -6,7 +6,6 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import assert from '../testSupport/simulator/utils/assert'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	ReputationToken_ReputationToken,
@@ -122,7 +121,7 @@ describe('Safe ERC20 Operations', () => {
 			client,
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
-				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+				bytecode: `0x${statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object}`,
 				args: [zeroAddress, zeroAddress, zeroAddress],
 			}),
 		)
