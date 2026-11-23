@@ -163,9 +163,10 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 					Math.ceilDiv(capital.commitmentIndex().requiredRep(lotAttoEth, feed.conservativePrice(), capital.securityMultiplierBps(), 10_000), repGrid) * repGrid;
 			result = engine.finalize(eligible ? targetLots : 0, floorAttoRepPerLot);
 			engine.withdrawRaised(payable(address(this)));
-			// Equal lots round up, so a full fill can exceed the deficit by less
-			// than one wei per lot. The child book accepts at most the deficit,
-			// and the rounding surplus has no owner, so it is burned.
+			// Equal lots round up, so a full fill can exceed the deficit: by less
+			// than one wei per lot once the deficit spans at least one minimum
+			// commitment, and otherwise by up to the minimum lot. The child book
+			// accepts at most the deficit, and the surplus has no owner, so it is burned.
 			IERC20 collateral = ICollateralConfig(address(portfolio)).collateralToken();
 			if (result.raisedAttoEth > shortfallAttoEth) {
 				Collateral.send(collateral, Constants.BURN_ADDRESS, result.raisedAttoEth - shortfallAttoEth);
