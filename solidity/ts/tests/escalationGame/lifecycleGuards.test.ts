@@ -7,7 +7,7 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { contractExists } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { getActivationTime, getBalances, getEscalationGameOutcomeState, getQuestionResolution, readEscalationGameEndDate, readCarryPeaks, readCarryLeafCount, readCarryTotal, readNullifierRoot } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getActivationTime, getBalances, getQuestionResolution, readEscalationGameEndDate, readCarryPeaks, readCarryLeafCount, readCarryTotal, readNullifierRoot } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
@@ -274,7 +274,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 	})
 
 	for (const elapsed of [1n, FRESH_FORK_RESPONSE_PERIOD - 1n, FRESH_FORK_RESPONSE_PERIOD, FRESH_FORK_RESPONSE_PERIOD + 1n]) {
-		test(`continuation response admission at elapsed ${elapsed} separates provisional and final resolution`, async () => {
+		test(`an expired continuation rejects a response at elapsed ${elapsed} without a fresh grace period`, async () => {
 			const parent = await deployEscalationGameTestSecurityPool()
 			await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 100n * reportBond)
 			const child = await deployForkContinuationEscalationGame()
@@ -300,19 +300,11 @@ describe('Escalation Game: lifecycle and guards', () => {
 				if (elapsed > 1n) await mockWindow.setTime(resumedAt + elapsed - 1n)
 				return record()
 			}
-			if (elapsed > FRESH_FORK_RESPONSE_PERIOD) {
-				assert.strictEqual(finalResolution, BigInt(QuestionOutcome.Yes))
-				await assert.rejects(preview(), /Invalid deposit preview/)
-				await assert.rejects(recordAtBoundary(), /Question resolved/)
-				assert.strictEqual(await readCarryTotal(client, child.escalationGameAddress, QuestionOutcome.No), 0n)
-			} else {
-				assert.strictEqual(finalResolution, BigInt(QuestionOutcome.None))
-				assert.deepStrictEqual(await preview(), [300n * reportBond, 300n * reportBond])
-				await recordAtBoundary()
-				assert.strictEqual((await client.getBlock()).timestamp, resumedAt + elapsed, 'execution must use the exact tested timestamp')
-				assert.strictEqual((await getEscalationGameOutcomeState(client, child.escalationGameAddress, QuestionOutcome.No)).balanceAttoRep, 300n * reportBond)
-				assert.ok((await readEscalationGameEndDate(client, child.escalationGameAddress)) > resumedAt + FRESH_FORK_RESPONSE_PERIOD, 'the accepted challenge extends the game through its binding capital')
-			}
+			assert.strictEqual(await readEscalationGameEndDate(client, child.escalationGameAddress), resumedAt)
+			assert.strictEqual(finalResolution, BigInt(QuestionOutcome.Yes))
+			await assert.rejects(preview(), /Invalid deposit preview/)
+			await assert.rejects(recordAtBoundary(), /Question resolved/)
+			assert.strictEqual(await readCarryTotal(client, child.escalationGameAddress, QuestionOutcome.No), 0n)
 		})
 	}
 

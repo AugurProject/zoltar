@@ -46,16 +46,14 @@ describe('protocol constant coupling', () => {
 		const purchase = await installRuntime(purchaseArtifact, '0x0000000000000000000000000000000000c01002')
 		const premium = await installRuntime(premiumArtifact, '0x0000000000000000000000000000000000c01003')
 		const bookDeployer = await installRuntime(bookDeployerArtifact, '0x0000000000000000000000000000000000c01004')
-		const minimumForkResponse = await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'MINIMUM_FORK_RESPONSE' })
 		const feeEndLimit = await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'FEE_END_LIMIT' })
 		const resolutionWindow = await client.readContract({ abi: purchaseArtifact.abi, address: purchase, functionName: 'RESOLUTION_WINDOW' })
 		const maximumReportingWindow = await client.readContract({ abi: premiumArtifact.abi, address: premium, functionName: 'MAXIMUM_REPORTING_WINDOW' })
 		const feeEndGranularity = await client.readContract({ abi: bookDeployerArtifact.abi, address: bookDeployer, functionName: 'FEE_END_GRANULARITY' })
 
-		// One three-day response period: game activation, minimum fork response and inherited finality.
+		// One three-day response period: game activation and fixed-outcome inherited finality.
 		expect(constants.forkResponseDelay).toBe(3n * DAY)
 		expect(constants.activationDelay).toBe(constants.forkResponseDelay)
-		expect(BigInt(minimumForkResponse)).toBe(constants.forkResponseDelay)
 		// A child universe cannot fork again before inherited outcomes finalize.
 		expect(constants.forkResponseTime).toBeGreaterThan(constants.forkResponseDelay)
 		// The premium is paid and streamed over the same window: activation delay plus escalation length.

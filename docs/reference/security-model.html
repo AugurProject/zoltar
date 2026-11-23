@@ -130,31 +130,23 @@
 				<p class="assumption-group-intro">These assumptions connect onchain branching and accounting to offchain truth judgments, asset value, liquidity, and migration.</p>
 				<ol class="assumption-grid">
 					<li id="assumption-a07" value="7">
-						<h3><span class="assumption-id">A07</span> A supported lineage preserves enough aggregate child value</h3>
-						<p>For each protected Statoblast origin lineage, evaluate the parent and its child-pool continuations in one numeraire at the fork-security decision horizon, before long-run value has fully concentrated on one branch. The sum of traded child-lineage values remains large enough compared with that parent lineage’s pre-fork value under the origin’s immutable <code>statoblastSecurityMultiplierBps</code>. Each child asset is valued in its own branch; unrelated external collateral is not counted again.</p>
-						<div class="equation assumption-equation" id="eq-fork-value-preservation" role="region" aria-label="Fork value assumption" tabindex="0">
-							<math display="block" aria-label="value of the parent Statoblast lineage is less than or equal to the sum of value in its child-lineage continuations divided by that origin lineage's Statoblast security multiplier" data-source="parentLineageValue <= sum(childLineageValues) * BPS_DENOMINATOR / lineageStatoblastSecurityMultiplierBps">
+						<h3><span class="assumption-id">A07</span> Truthful-child REP retains enough backing value</h3>
+						<p>For one protected Statoblast origin lineage, let <var>V<sub>parent</sub></var> be its pre-fork REP backing value and <var>V<sub>child</sub></var> the corresponding backing value in the supported truthful child after fork haircuts, at the repair decision horizon. Both use the same collateral numeraire; unrelated external collateral and REP in other branches are excluded. The multiplier <var>m</var> is the origin's immutable <code>statoblastSecurityMultiplierBps / 10_000</code>.</p>
+						<div class="equation assumption-equation" id="eq-fork-value-preservation" role="region" aria-label="Fork backing value assumption" tabindex="0">
+							<math display="block" aria-label="truthful child REP backing value is at least parent REP backing value divided by the Statoblast security multiplier" data-source="truthfulChildBackingValue >= parentBackingValue * BPS_DENOMINATOR / lineageStatoblastSecurityMultiplierBps">
 								<mrow>
-									<msub><mi>Value</mi><mtext>parent lineage</mtext></msub>
-									<mo>≤</mo>
-									<mfrac>
-										<mrow>
-											<munder>
-												<mo>∑</mo>
-												<mrow><mi>child</mi><mo>∈</mo><mi>Lineage continuations</mi></mrow>
-											</munder>
-											<msub><mi>Value</mi><mi>child</mi></msub>
-											<mo>×</mo>
-											<mi>BPS_DENOMINATOR</mi>
-										</mrow>
-										<msub><mi>statoblastSecurityMultiplierBps</mi><mi>lineage</mi></msub>
-									</mfrac>
+									<msub><mi>V</mi><mtext>child</mtext></msub>
+									<mo>≥</mo>
+									<mfrac
+										><msub><mi>V</mi><mtext>parent</mtext></msub
+										><mi>m</mi></mfrac
+									>
 								</mrow>
 							</math>
-							<p class="equation-note">Parent and child values use the same origin lineage, valuation source, numeraire, and decision horizon. For multiplier <code>20_000 BPS</code>, aggregate child-lineage value must be at least twice parent-lineage value; multiplier <code>30_000 BPS</code> requires three times that value.</p>
+							<p class="equation-note">At <code>20_000 BPS</code>, this bound requires retaining at least half the parent backing value; at <code>30_000 BPS</code>, at least one third. At the minimum admission ratio, that retained value equals the secured collateral before realization costs. This is a valuation assumption, not an onchain parent/child price check or a guarantee of full repair; auction participation and conversion costs are covered by <a href="#assumption-a12">A12</a>.</p>
 						</div>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> Value destruction or fragmentation can make a malicious or unnecessary fork cheaper than the harm it causes.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">fork economics</a>, <a href="../explanation/zoltar.html#non-guarantees">fork coordination</a>, and <a href="../explanation/statoblast.html#forks-migration">pool migration</a>.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> Insufficient retained backing value can leave a truthful child's collateral shortfall unrepaired.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#forks-migration">pool migration</a>. Rationale: <a href="https://github.com/AugurProject/oracle-research/blob/main/Arctic%20Tern%20Oracle.md">REP backing and open interest</a>.</p>
 					</li>
 					<li id="assumption-a08" value="8">
 						<h3><span class="assumption-id">A08</span> REP market capitalization approximates economic value</h3>
@@ -164,7 +156,7 @@
 					</li>
 					<li id="assumption-a09" value="9">
 						<h3><span class="assumption-id">A09</span> Users value the universes they judge truthful</h3>
-						<p>Users prefer the universe or universes they judge truthful, so economic activity and durable asset value concentrate there. Unlike A07’s fork-security decision horizon, this assumption describes the later, durable allocation of value after users coordinate.</p>
+						<p>Users prefer the universe or universes they judge truthful, so economic activity and durable asset value concentrate there. This assumption describes the durable allocation of value after users coordinate; <a href="#assumption-a07">A07</a> bounds backing value at the repair decision horizon.</p>
 						<div class="equation assumption-equation" id="eq-truthful-universe-value" role="region" aria-label="Truthful universe value assumption" tabindex="0">
 							<math display="block" aria-label="value of assets before the fork is approximately equal to value of assets in the truthful universe" data-source="valueBeforeFork ~= truthfulUniverseValue">
 								<mrow>

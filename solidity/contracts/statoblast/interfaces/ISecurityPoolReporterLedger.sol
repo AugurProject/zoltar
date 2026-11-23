@@ -9,6 +9,7 @@ interface ISecurityPoolReporterLedger {
 }
 
 interface ISecurityPoolReporterPortfolio {
+	function settlement() external view returns (address);
 	function portfolioTime(uint248 universeId) external view returns (uint48);
 	function portfolioTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
 	function nativeTimeForPortfolioTime(uint248 universeId, uint48 timestamp) external view returns (uint48);

@@ -207,7 +207,8 @@ describe('Statoblast: bounded fork initialization', () => {
 		const childGame = await getSecurityPoolsEscalationGame(owner(), child)
 		expect(await getSystemState(owner(), child)).toBe(SystemState.Operational)
 		expect(await owner().readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'forkCarrySnapshotInitialized' })).toBe(true)
-		expect(await owner().readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'forkResumedAt' })).toBe(forkTime + 63n * DAY)
+		const [, activatedAt] = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'clocks', args: [childUniverse] })
+		expect(await owner().readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'forkResumedAt' })).toBe(BigInt(activatedAt))
 		for (const outcome of outcomes) {
 			const state = await getEscalationGameOutcomeState(owner(), childGame, outcome)
 			const expected = parentStates[outcome]

@@ -116,7 +116,7 @@ describe('Statoblast: fixed portfolio reporter clock', () => {
 		const owner = createWriteClient(ethereum, TEST_ADDRESSES[0])
 		const wallAnchor = 1_000_000n
 		const { game, pool } = await deployClockHarness(ethereum, owner, wallAnchor)
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: gameArtifact.abi, address: game, functionName: 'startFromFork', args: [1n, 1_000n, 0n, 3, false, 0n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: gameArtifact.abi, address: game, functionName: 'startFromFork', args: [1n, 1_000n, -86_400n, 3, false, 0n] }))
 		for (let outcome = 0; outcome < 3; outcome++) {
 			await writeContractAndWait(owner, () =>
 				owner.writeContract({

@@ -268,7 +268,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'nonDecisionState' }), 0n, 'a strict winning report must not fabricate a local non-decision')
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'canTriggerOwnFork' }), false)
 			const endDate = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getEscalationGameEndDate' })
-			await mockWindow.setTime(endDate + 1n)
+			if ((await mockWindow.getTime()) <= endDate) await mockWindow.setTime(endDate + 1n)
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getFinalQuestionResolution' }), BigInt(QuestionOutcome.Yes))
 		})
 	}

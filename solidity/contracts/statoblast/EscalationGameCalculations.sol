@@ -3,6 +3,8 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
+import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
+import { ISecurityPoolReporterPortfolio } from './interfaces/ISecurityPoolReporterLedger.sol';
 import { ESCALATION_TIME_LENGTH, NonDecisionState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameCalculations is EscalationGameState {
@@ -27,17 +29,28 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (nonDecisionState == NonDecisionState.Local) return nonDecisionTimestamp;
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
-			if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return forkResumedAt + ACTIVATION_DELAY;
+			if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return _fixedQuestionEndDate();
 			int256 requiredElapsed = int256(_finalityElapsed());
 			uint256 curveEnd =
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
 					: forkResumedAt + uint256(requiredElapsed - forkElapsedAtStart);
-			uint256 responseEnd = forkResumedAt + ACTIVATION_DELAY;
-			return curveEnd > responseEnd ? curveEnd : responseEnd;
+			return curveEnd;
 		}
 		// The forward curve crossing binding capital is the only deadline: a leader change adds no time.
 		return activationTime + _finalityElapsed();
+	}
+
+	/// @dev A late-activated fixed outcome can be interrupted by another native fork.
+	/// Custody preserves its remaining deadline; materialization must never restart it.
+	function _fixedQuestionEndDate() private view returns (uint256) {
+		address authority = EscalationGameRepCustody.portfolio(address(securityPool));
+		if (authority == address(0)) return forkResumedAt + ACTIVATION_DELAY;
+		ISecurityPoolReporterPortfolio portfolio = ISecurityPoolReporterPortfolio(authority);
+		uint248 universe = securityPool.universeId();
+		uint48 finalAfter = EscalationGameRepCustody.fixedQuestionFinalAfter(authority, universe, securityPool.questionId());
+		if (finalAfter == 0) return forkResumedAt + ACTIVATION_DELAY;
+		return portfolio.nativeTimeForPortfolioTime(universe, finalAfter);
 	}
 
 	/// @dev Finality is strictly after this last second at or below binding capital.

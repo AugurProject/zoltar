@@ -20,10 +20,9 @@ import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenA
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
-// A flip in the last second of a carried game's fixed response window restarts nothing. The
-// settlement book and the reporter ledger must keep the game's deadline: neither may freeze the
-// question before the game is final, and all three finalize together after the window.
-describe("audit: a carried game's fixed response window keeps game, settlement book and reporter ledger in agreement", () => {
+// A late flip must extend all three schedules together: game, settlement and reporter
+// custody. No ledger may freeze claims before the honest side's curve-based reply.
+describe("audit: a carried game's resumed curve keeps game, settlement book and reporter ledger in agreement", () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const YES = 1
 	const NO = 2
@@ -79,20 +78,18 @@ describe("audit: a carried game's fixed response window keeps game, settlement b
 		return { gameEnd, bookEnd: BigInt(await native(question.finalAfter)), reporterEnd: BigInt(await native(reporter.finalAfter)), frozen, reporterFinal, supply: question.outcomeSupplyAttoShares }
 	}
 
-	test('a last-second flip keeps every schedule on the fixed window and nothing freezes early', async () => {
+	test('a last-second flip extends every schedule and the honest side can reply', async () => {
 		const attacker = fixture.owner()
 		const honest = fixture.other()
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		await deposit(honest, sourcePool(), YES, 105n * unit)
+		await deposit(honest, sourcePool(), YES, 150n * unit)
 		await deposit(attacker, sourcePool(), NO, 100n * unit)
 		const parentGame = await gameFor(sourcePool())
 		const parentEnd = await readGame(parentGame, 'getEscalationGameEndDate')
 		await fixture.base.mockWindow.setTime(parentEnd - 600n)
 		const child = await forkUnrelatedAndMaterializeYesChild(sourcePool())
-		const resumedAt = await readGame(child.game, 'forkResumedAt')
-		const windowEnd = resumedAt + 3n * DAY
 		const initial = await schedules(child.game, child.universe)
 		expect(initial.bookEnd).toBe(initial.gameEnd)
 		expect(initial.reporterEnd).toBe(initial.gameEnd)
@@ -101,20 +98,26 @@ describe("audit: a carried game's fixed response window keeps game, settlement b
 		await splitMigrationRep(honest, fixture.base.genesisUniverse, 1_000n * unit, [1n])
 		await approveToken(attacker, getRepTokenAddress(child.universe), child.pool)
 		await approveToken(honest, getRepTokenAddress(child.universe), child.pool)
-		await landNextTransactionAt(windowEnd)
-		await depositRaw(attacker, child.pool, NO, 120n * unit)
+		await landNextTransactionAt(initial.gameEnd)
+		await depositRaw(attacker, child.pool, NO, 51n * unit)
 		const flippedAt = await latestBlockTimestamp()
 		const afterFlip = await schedules(child.game, child.universe)
-		// The curve has long passed the new median, so the fixed window stays the deadline.
-		expect(afterFlip.gameEnd).toBe(windowEnd)
-		expect(flippedAt).toBe(windowEnd)
+		// Raising the median preserves a real reply interval in every ledger.
+		expect(afterFlip.gameEnd).toBeGreaterThan(initial.gameEnd + DAY)
+		expect(flippedAt).toBe(initial.gameEnd)
 		expect(afterFlip.bookEnd).toBe(afterFlip.gameEnd)
 		expect(afterFlip.reporterEnd).toBe(afterFlip.gameEnd)
 		expect(afterFlip.frozen).toBe(0n)
 		expect(afterFlip.reporterFinal).toBe(false)
 		const reporterLedger = await honest.readContract({ ...portfolio(), functionName: 'reporterLedger', args: [child.universe] })
-		await fixture.base.mockWindow.setTime(afterFlip.gameEnd + 1n)
-		expect(await readGame(child.game, 'getFinalQuestionResolution')).toBe(BigInt(NO))
+		await depositRaw(honest, child.pool, YES, 77n * unit)
+		const afterReply = await schedules(child.game, child.universe)
+		expect(afterReply.bookEnd).toBe(afterReply.gameEnd)
+		expect(afterReply.reporterEnd).toBe(afterReply.gameEnd)
+		expect(afterReply.frozen).toBe(0n)
+		expect(afterReply.reporterFinal).toBe(false)
+		await fixture.base.mockWindow.setTime(afterReply.gameEnd + 1n)
+		expect(await readGame(child.game, 'getFinalQuestionResolution')).toBe(BigInt(YES))
 		await expect(honest.simulateContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, 500n * unit] })).rejects.toThrow('Invalid deposit preview')
 		const shares = { abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken }
 		await writeContractAndWait(honest, () => honest.writeContract({ ...shares, functionName: 'migrate', args: [fixture.base.genesisUniverse * 256n + 1n, [1n]] }))

@@ -36,7 +36,7 @@ export const securityPoolForkerContractReference: ContractReference = {
 			call: '`materializePortfolioQuestion(source, targetUniverse)`',
 			caller: 'Anyone',
 			effect:
-				'Prepares the target if absent. With inherited reporting, installs one outcome of the fixed 64-peak snapshot per call; the third call activates the question and resumes reporting at the fixed portfolio time anchor. Without reporter history, activates immediately. Late installation does not postpone finality. An already-final game must agree with the inherited reporter and outstanding-share settlement deadlines, including the minimum response period, or activation reverts. Preparation may be a separate transaction to bound deployment gas.',
+				'Prepares the target if absent. With inherited reporting, installs one outcome of the fixed 64-peak snapshot per call; the third call activates the question and resumes reporting from the child branch activation timestamp. Without reporter history, activates immediately. Late installation does not postpone finality. An already-final game must agree with the inherited reporter and outstanding-share settlement deadlines, including the fixed-outcome response period, or activation reverts. Preparation may be a separate transaction to bound deployment gas.',
 			declarations: [
 				{
 					name: 'materializePortfolioQuestion',

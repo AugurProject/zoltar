@@ -104,7 +104,6 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 		const [stateA] = await e2e.ledgerQuestion(A, q)
 		expect(stateA.balanceAttoRep).toBe(live - haircut)
 		expect(stateA.winnerHaircutPaidByFork).toBe(true)
-		const forkA = await e2e.forkTime(A)
 		// The sibling tie child is untouched and can still fork on its own.
 		expect(await e2e.gameBalance(childB.game)).toBe(live)
 		expect(await owner.readContract({ ...e2e.game(childB.game), functionName: 'canTriggerOwnFork' })).toBe(true)
@@ -120,10 +119,10 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 			expect(await e2e.rep(child, ledger)).toBe(live - haircut)
 			grandchildren.push({ outcome, ...(await e2e.materialize(childA.pool, child)) })
 		}
-		const resumedAt = forkA + 9n * WEEK
 		const table: Record<string, unknown>[] = []
 		const received = new Map<Address, bigint>()
 		for (const { outcome, universe, pool, game } of grandchildren) {
+			const resumedAt = await e2e.activationTime(universe)
 			const g = e2e.game(game)
 			expect(await owner.readContract({ ...g, functionName: 'fixedQuestionOutcome' })).toBe(BigInt(outcome))
 			expect(await owner.readContract({ ...g, functionName: 'winnerHaircutPaidByFork' })).toBe(true)

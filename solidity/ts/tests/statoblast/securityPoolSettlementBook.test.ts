@@ -663,11 +663,10 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(await quote(2n, 1n, 100n)).toEqual([0n, 0n])
 		expect([...(await client.readContract({ ...target(), functionName: 'frozenBooks', args: [1n] }))]).toEqual([0n, 0n, 1n, 0n])
 		expect((await book(2n)).slice(0, 2)).toEqual([250n, 500n])
-		await freeze(2n, 101)
+		await freeze(2n, 100)
 		expect((await book(2n)).slice(0, 2)).toEqual([250n, 500n])
-		await freeze(2n, 100 + 3 * 86_400)
 		expect((await question(2n, 2n))[1]).toBe(0n)
-		await freeze(2n, 101 + 3 * 86_400)
+		await freeze(2n, 101)
 		expect((await book(2n)).slice(0, 2)).toEqual([150n, 300n])
 		expect((await question(2n, 2n))[1]).toBe(2n)
 		expect(await quote(2n, 2n, 200n)).toEqual([100n, 200n])
@@ -804,7 +803,7 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(await client.readContract({ ...target(), functionName: 'hasLiveForkRecoveryRight', args: [1n, 1n, 0] })).toBe(false)
 	})
 
-	test('fork recovery eligibility matches lazy finality, exact cutoffs and nested minimum response periods', async () => {
+	test('fork recovery eligibility preserves exact cutoffs without adding a child response floor', async () => {
 		const live = (bookId: bigint, questionId: bigint, timestamp: number) => client.readContract({ address, abi: parseAbi(['function hasLiveForkRecoveryRight(uint64 bookId,uint256 questionId,uint48 forkTimestamp) view returns(bool)']), functionName: 'hasLiveForkRecoveryRight', args: [bookId, questionId, timestamp] })
 		await mint(1n, 1n, 100n)
 		await mint(1n, 2n, 200n)
@@ -820,10 +819,10 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(await live(1n, 2n, 1_000_000)).toBe(true)
 		await child(1n, 250n)
 		expect(await live(2n, 1n, 101)).toBe(false)
-		expect(await live(2n, 2n, 101)).toBe(true)
-		expect(await live(2n, 2n, 100 + 3 * 86_400)).toBe(true)
+		expect(await live(2n, 2n, 100)).toBe(true)
+		expect(await live(2n, 2n, 101)).toBe(false)
 		expect(await live(2n, 2n, 101 + 3 * 86_400)).toBe(false)
-		await seal(2n, 101)
+		await seal(2n, 100)
 		expect(await live(2n, 2n, 1_000_000)).toBe(true)
 	})
 

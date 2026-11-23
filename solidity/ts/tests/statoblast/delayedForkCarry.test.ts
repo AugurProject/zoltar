@@ -97,7 +97,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 	for (const { offset, name } of [
 		{ offset: -DAY, name: 'a pre-deadline fork preserves the original NO claim through delayed migration and a winner reversal' },
 		{ offset: 0n, name: 'a fork exactly at the deadline preserves every outcome through delayed migration' },
-		{ offset: -1n, name: 'a fork one second before the deadline preserves child recovery and winning claims' },
+		{ offset: -1n, name: 'a fork one second before the deadline preserves child recovery without restarting reporting' },
 		{ offset: DAY, name: 'a fork after genuine settlement retires losing inherited principal' },
 	]) {
 		test(name, async () => {
@@ -154,18 +154,21 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			await resumePool(nextPool.securityPool)
 			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'forkResumedAt' })
 			const responseEnd = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'getEscalationGameEndDate' })
-			assert.ok(responseEnd >= resumedAt + 3n * DAY, 'the next continuation must receive a fresh response period')
-			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'getFinalQuestionResolution' }), BigInt(QuestionOutcome.None))
+			assert.equal(responseEnd, resumedAt + deadline - forkAt, 'the continuation preserves only its remaining curve time')
+			const alreadyFinal = (await mockWindow.getTime()) > responseEnd
+			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'getFinalQuestionResolution' }), BigInt(alreadyFinal ? QuestionOutcome.Yes : QuestionOutcome.None))
 
 			const assertPreservedCarry = () => {
 				assert.equal(delayedFinality, BigInt(QuestionOutcome.None))
 				assert.equal(poolOutcome, BigInt(QuestionOutcome.None))
 				assert.deepStrictEqual(delayedSnapshot[2], beforeFork[2], 'every unresolved outcome must survive delayed snapshot export')
-				assert.equal(inheritedNo.inheritedUnresolvedTotalAttoRep, 80n * ATTO_REP_PER_REP)
-				assert.equal(inheritedNo.balanceAttoRep, 80n * ATTO_REP_PER_REP)
+				assert.equal(inheritedNo.inheritedUnresolvedTotalAttoRep, alreadyFinal ? 0n : 80n * ATTO_REP_PER_REP, 'only genuine child finality may retire losing inherited principal')
+				assert.equal(inheritedNo.balanceAttoRep, 80n * ATTO_REP_PER_REP, 'final stake balances remain available for payout calculations')
 				assert.equal(migratedBacking, 180n * ATTO_REP_PER_REP, 'both inherited outcomes must remain backed')
 			}
-			if (offset === 0n) {
+			if (offset >= -1n) {
+				assert.equal(alreadyFinal, true)
+				await assert.rejects(noDepositor.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Not winning outcome/)
 				assertPreservedCarry()
 				return
 			}

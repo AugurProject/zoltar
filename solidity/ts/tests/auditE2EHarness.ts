@@ -196,6 +196,10 @@ export function createE2E(fixture: Fixture) {
 		await startBranch(parent, outcome, sender)
 		return finalizeBranch(parent, outcome, sender)
 	}
+	const activationTime = async (universe: bigint) => {
+		const [, wallAnchor] = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'clocks', args: [universe] })
+		return BigInt(wallAnchor)
+	}
 	const materialize = async (source: Address, child: bigint, sender = owner()) => {
 		for (let step = 0; step < 3; step++) await writeContractAndWait(sender, () => sender.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [source, child], gas: BRANCH_GAS }))
 		const questionId = await owner().readContract({ abi: poolArtifact.abi, address: source, functionName: 'questionId' })
@@ -364,6 +368,7 @@ export function createE2E(fixture: Fixture) {
 		startBranch,
 		finalizeBranch,
 		activateBranch,
+		activationTime,
 		materialize,
 		deposit,
 		readNodes,
