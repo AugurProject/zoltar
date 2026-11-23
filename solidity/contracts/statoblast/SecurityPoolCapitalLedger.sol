@@ -482,7 +482,10 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
 		}
 		receiverId = _transferTakeoverPosition(id, commitment, receiver, existing, plan, receiverOwner);
-		_clearHealthyLiquidation(id, plan.remainingCommitmentAttoEth, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth));
+		uint256 remainingMaxPrice = maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth);
+		if (plan.remainingCommitmentAttoEth == 0 || (isPriceValid() && remainingMaxPrice >= conservativePrice)) {
+			commitmentIndex.clearLiquidation(id);
+		}
 		receiver.freeAttoRep -= receiverFreePrincipalAttoRep;
 		totalFreeAttoRep -= receiverFreePrincipalAttoRep;
 		emit CommitmentTakenOver(id, receiverId, commitment, 0);

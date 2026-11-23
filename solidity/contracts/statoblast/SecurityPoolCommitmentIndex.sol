@@ -365,7 +365,13 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep, 10_000, multiplier), 1e18, repairPrice);
 		uint256 retained = Math.max(supported, minimumCommitment);
 		require(source.commitment > retained, 'Position requires additional backing');
-		commitment = Math.min(requested, source.commitment - retained);
+		uint256 fullRepair = source.commitment - retained;
+		commitment = Math.min(requested, fullRepair);
+		if (commitment < fullRepair) {
+			uint256 remaining = source.commitment - commitment;
+			uint256 remainingMaxPrice = Math.mulDiv(Math.mulDiv(source.rep, 10_000, multiplier), 1e18, remaining);
+			require(remainingMaxPrice < price || remainingMaxPrice >= repairPrice, 'Partial takeover leaves source in distressed band');
+		}
 	}
 	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) public pure returns (uint256) {
 		require(health >= 10_000 && price > 0, 'Invalid health or price');
