@@ -107,15 +107,15 @@ export const MUTATION_SMOKE_CASES: readonly SourceMutation[] = [
 	{
 		name: 'Trading lifecycle evidence is discarded',
 		filePath: 'augurScan/browser/operations-data.ts',
-		from: 'items: rounds.items,',
-		to: "items: route.kind === 'trading' ? [] : rounds.items,",
+		from: '[primaryKey]: rounds,',
+		to: "[primaryKey]: route.kind === 'trading' ? { ...rounds, items: [] } : rounds,",
 		testCommand: ['bun', 'test', 'augurScan/tests/unit/market-activity-pagination.test.ts'],
 	},
 	{
 		name: 'Trading historical activity is reversed',
 		filePath: 'augurScan/browser/operations-data.ts',
-		from: 'items: decisions.items,',
-		to: "items: route.kind === 'trading' ? [...decisions.items].reverse() : decisions.items,",
+		from: '[secondaryKey]: decisions,',
+		to: "[secondaryKey]: route.kind === 'trading' ? { ...decisions, items: [...decisions.items].reverse() } : decisions,",
 		testCommand: ['bun', 'test', 'augurScan/tests/unit/market-activity-pagination.test.ts'],
 	},
 ]
