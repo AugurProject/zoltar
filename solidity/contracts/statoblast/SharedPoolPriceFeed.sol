@@ -173,7 +173,7 @@ contract SharedPoolPriceFeed {
 		require(address(pool.openOraclePriceCoordinator()) == coordinatorAddress, 'Wrong pool coordinator');
 		require(address(coordinator.reputationToken()) == token && address(pool.repToken()) == token, 'Wrong REP token');
 		require(address(coordinator.openOracle()) == address(openOracle) && address(coordinator.weth()) == address(weth), 'Wrong oracle tokens');
-		require(coordinator.initialReportPriorityFeeAttoEthPerGas() == initialReportPriorityFeeAttoEthPerGas, 'Shared feed priority fee mismatch');
+		require(coordinator.initialReportPriorityFeeAttoEthPerGas() == initialReportPriorityFeeAttoEthPerGas, 'Feed priority fee mismatch');
 		require(pool.universeId() == universe, 'Wrong pool universe');
 		require(ISecurityPoolFactory(securityPoolFactory).getSecurityPoolPortfolio(pool) == portfolio, 'Wrong pool portfolio');
 		require(ISecurityPoolFactory(securityPoolFactory).sharedPriceFeeds(portfolio, universe) == address(this), 'Feed is not canonical');
@@ -390,10 +390,11 @@ contract SharedPoolPriceFeed {
 		processingReport = true;
 		reports[reportId].outcome = accepted ? REPORT_ACCEPTED : REPORT_REJECTED;
 		_clearLatestReport(reportId);
-		if (accepted) {
+		// Equal-time reports retain operation authority without replacing shared values.
+		if (accepted && priceTimestamp > lastSettlementTimestamp) {
 			uint256 nextPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
 			uint256 validForSeconds = priceValidityWindowSeconds();
-			require(priceTimestamp + validForSeconds <= type(uint48).max, 'Price validity clock exhausted');
+			require(priceTimestamp + validForSeconds <= type(uint48).max, 'Price clock overflow');
 			// Final report collateral may increase during disputes. Only its actually
 			// challenged final amount grants capacity, never a pending candidate.
 			acceptedExposureLimitAttoEth = (amount1 - minimumReportCollateral) * OPEN_INTEREST_DIVIDER;
@@ -402,14 +403,15 @@ contract SharedPoolPriceFeed {
 			lastSettlementTimestamp = priceTimestamp;
 			lastPrice = nextPrice;
 			ISharedPoolPortfolioPriceCheckpoint(portfolio).onSharedPriceAccepted(universeId(), nextPrice, uint48(priceTimestamp + validForSeconds));
-			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
-			_executeReportOperations(reportId, candidate.sponsor);
-		} else {
+		} else if (!accepted) {
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
-			// Rejection grants no price authority. Independently secured canonical
-			// prices can still satisfy the sponsor's signed operation bounds.
-			if (canonicalOperations) _executeReportOperations(reportId, candidate.sponsor);
 		}
+		// Every accepted report remains observable to receipt consumers, even
+		// when the canonical observation was already accepted at this timestamp.
+		if (accepted) emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
+		// Rejection grants no price authority. Independently secured canonical
+		// prices can still satisfy the sponsor's signed operation bounds.
+		if (accepted || canonicalOperations) _executeReportOperations(reportId, candidate.sponsor);
 		processingReport = false;
 		return true;
 	}
@@ -436,7 +438,7 @@ contract SharedPoolPriceFeed {
 		// Starving any promised attempt rolls back acceptance and earlier operations.
 		// A failing operation itself consumes only its own allowance and rolls back
 		// only that operation. Later operations are still attempted in order.
-		require(gasleft() > uint256(batch.gasLimit) + REPORT_OPERATION_GAS_OVERHEAD, 'Insufficient operations callback gas');
+		require(gasleft() > uint256(batch.gasLimit) + REPORT_OPERATION_GAS_OVERHEAD, 'Report operations gas too low');
 		address ledger = address(ISharedPoolPortfolioPriceCheckpoint(portfolio).capitalLedger(universeId()));
 		for (uint256 index = 0; index < batch.operations.length; index++) {
 			IReportOperations.Operation storage operation = batch.operations[index];
@@ -448,7 +450,7 @@ contract SharedPoolPriceFeed {
 				if (ownerData.length >= 4 && _isReportOperation(bytes4(ownerData))) {
 					bytes memory data = abi.encodeCall(IReportOperations.executeReportOperation, (sponsor, ownerData));
 					uint256 operationGas = uint256(operation.gasLimit);
-					require(gasleft() > operationGas + Math.ceilDiv(operationGas, 63) + REPORT_OPERATION_GAS_OVERHEAD, 'Insufficient operation callback gas');
+					require(gasleft() > operationGas + Math.ceilDiv(operationGas, 63) + REPORT_OPERATION_GAS_OVERHEAD, 'Operation gas too low');
 					(success, ) = ledger.call{gas: operation.gasLimit}(data);
 				}
 			}

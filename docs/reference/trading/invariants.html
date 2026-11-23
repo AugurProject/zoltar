@@ -18,12 +18,11 @@
 			<section id="pair-custody">
 				<h2>Pair custody</h2>
 				<ul>
-					<li>The pair's Yes balance is greater than or equal to its stored Yes reserve.</li>
-					<li>The pair's No balance is greater than or equal to its stored No reserve.</li>
+					<li>Yes and No reserves are the current ShareToken balances, read directly without a stored copy.</li>
 					<li>The pair's Invalid balance is exactly zero.</li>
-					<li>An LP withdrawal cannot claim more Yes or No shares than the pair owns. Withdrawal amounts are proportional to synchronized reserves and the liquidity burned.</li>
+					<li>An LP withdrawal cannot claim more Yes or No shares than the pair owns. Withdrawal amounts are proportional to current balances and the liquidity burned.</li>
 				</ul>
-				<p>Unsolicited Yes or No donations can make a balance greater than its stored reserve. Before reserve-dependent mutations, the pair synchronizes stored reserves upward to those effective balances. Invalid shares are never a trading asset and cannot be donated through an accepted ERC-1155 callback.</p>
+				<p>Unsolicited Yes or No donations immediately increase reserves and accrue to existing LPs. Invalid shares are never a trading asset and cannot be donated through an accepted ERC-1155 callback.</p>
 			</section>
 			<section id="router-custody">
 				<h2>Router custody</h2>
@@ -32,7 +31,7 @@
 			<section id="swaps">
 				<h2>Swaps</h2>
 				<ul>
-					<li>For every successful exact-input or exact-output swap, <code>k_after ≥ k_before</code>, where <code>k</code> is the synchronized effective Yes reserve multiplied by the synchronized effective No reserve.</li>
+					<li>For every successful exact-input or exact-output swap, <code>k_after ≥ k_before</code>, where <code>k</code> is the Yes balance multiplied by the No balance.</li>
 					<li>An exact-output swap delivers exactly the requested output amount.</li>
 					<li>An exact-output swap never charges more than the caller's <code>maxAmountIn</code>.</li>
 				</ul>

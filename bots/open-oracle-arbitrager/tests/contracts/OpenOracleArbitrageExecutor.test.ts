@@ -82,7 +82,7 @@ describe('OpenOracle arbitrage executor', () => {
 	}
 
 	/** Hedges report token2 against token1 through `router` in the next block and funds a 1_200 token1 dispute. */
-	const hedgeAndDispute = async (route: { hedgeWethLimitAttoEth: bigint; newAmount2: bigint; router: Address; venue: 0 | 1 | 2 }, token1: Address, token2: Address) => {
+	const hedgeAndDispute = async (route: { hedgeWethLimitAttoEth: bigint; newAmount2: bigint; router: Address; venue: 0 | 1 | 2 }, token1: Address, token2: Address, oracleGame = game(token1, token2)) => {
 		const parent = await parentBlock()
 		return await writeContractAndWait(client, () =>
 			client.writeContract({
@@ -102,7 +102,7 @@ describe('OpenOracle arbitrage executor', () => {
 						swapDeadline: parent.timestamp + 1_000n,
 						venue: route.venue,
 					},
-					game(token1, token2),
+					oracleGame,
 					helper(),
 					{ ...timing, blockNumber: parent.number },
 				],
@@ -142,6 +142,20 @@ describe('OpenOracle arbitrage executor', () => {
 		const window = getAnvilWindowEthereum()
 		client = createWriteClient(window, ensureDefined(TEST_ADDRESSES[0], 'test account missing'))
 	})
+
+	for (const flags of [0, 32]) {
+		for (const escalationHalt of [999n, 1_000n, 1_001n]) {
+			test(`#1558 contributions match fee flag ${flags} at halt ${escalationHalt}`, async () => {
+				const [token1, token2] = await deployTokenPair()
+				const oracleGame = { ...game(token1, token2), flags, escalationHalt, feePercentage: 100_000, protocolFee: 200_000 }
+				const fees = flags === 32 && escalationHalt > 1_000n ? 0n : 30n
+				const sell = await client.readContract({ abi: executorArtifact.abi, address: executor, functionName: 'contributions', args: [oracleGame, 1_200n, 900n] })
+				expect([...sell]).toEqual([2_200n + fees, 0n])
+				const buy = await client.readContract({ abi: executorArtifact.abi, address: executor, functionName: 'contributions', args: [oracleGame, 1_200n, 1_500n] })
+				expect([...buy]).toEqual([200n, 2_500n + fees])
+			})
+		}
+	}
 
 	test('funds a vanilla-token dispute atomically and retains no operation-pulled token or allowance', async () => {
 		const [token1, token2] = await deployTokenPair()
@@ -327,7 +341,7 @@ describe('OpenOracle arbitrage executor', () => {
 		expect(await client.getBalance({ address: executor })).toBe(0n)
 	})
 
-	test('atomically buys the report token through a hookless Uniswap V4 native-ETH pool', async () => {
+	test.each([false, true])('#1558 atomically buys through V4 with fees-only-at-halt: %s', async feesOnlyAtHalt => {
 		const weth = await deploy(wethArtifact)
 		const token = await deploy(tokenArtifact, ['Token 2', 'TK2'])
 		const staleSyncedToken = await deploy(tokenArtifact, ['Stale Synced Token', 'STALE'])
@@ -339,7 +353,7 @@ describe('OpenOracle arbitrage executor', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: v4PoolManagerArtifact.abi, address: poolManager, functionName: 'seedSyncedCurrency', args: [staleSyncedToken] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: wethArtifact.abi, address: weth, functionName: 'approve', args: [executor, 1_300n] }))
 		await approveToken(token, executor, 1_300n)
-		await hedgeAndDispute({ hedgeWethLimitAttoEth: 1_100n, newAmount2: 1_300n, router: poolManager, venue: 2 }, weth, token)
+		await hedgeAndDispute({ hedgeWethLimitAttoEth: 1_100n, newAmount2: 1_300n, router: poolManager, venue: 2 }, weth, token, { ...game(weth, token), flags: feesOnlyAtHalt ? 32 : 0, feePercentage: feesOnlyAtHalt ? 100_000 : 0, protocolFee: feesOnlyAtHalt ? 200_000 : 0 })
 		expect(await wethBalanceAttoEth(weth, client.account.address)).toBe(8_800n)
 		expect(await tokenBalance(token, client.account.address)).toBe(8_700n)
 		expect(await wethBalanceAttoEth(weth, target)).toBe(200n)

@@ -281,6 +281,27 @@ describe('factory, pair, and router integration', () => {
 		expect(await tokenBalance(pair, 0n)).toBe(0n)
 	})
 
+	for (const mode of ['swapExactInput', 'swapExactOutput', 'removeLiquidity'] as const) {
+		test(`#1556 callback reserves match final balances during ${mode}`, async () => {
+			await initialize()
+			const recipient = await deploy(mocks.TradingReserveReader)
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingReserveReader.abi, address: recipient, functionName: 'configure', args: [pair] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+			if (mode === 'removeLiquidity') {
+				await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: mode, args: [rate, 0n, 0n, recipient, NO_DEADLINE] }))
+			} else {
+				await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: mode, args: [true, rate, mode === 'swapExactInput' ? 1n : 100n * rate, recipient, NO_DEADLINE] }))
+			}
+			for (const [name, outcome] of [
+				['observedYes', 1n],
+				['observedNo', 2n],
+			] as const)
+				expect(await client.readContract({ abi: mocks.TradingReserveReader.abi, address: recipient, functionName: name })).toBe(await tokenBalance(pair, outcome))
+			expect(await client.readContract({ abi: mocks.TradingReserveReader.abi, address: recipient, functionName: 'callbacks' })).toBe(1n)
+			expect(await tokenBalance(pair, 0n)).toBe(0n)
+		})
+	}
+
 	test('blocks recipient callback reentrancy without rolling back the intended swap', async () => {
 		await initialize()
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
@@ -454,15 +475,15 @@ describe('factory, pair, and router integration', () => {
 		}
 	})
 
-	test('keeps pair YES and NO balances at or above their stored reserves', async () => {
+	test('reports live reserves immediately after donations', async () => {
 		await initialize()
 		const donation = 7n * rate
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 1n, donation] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeTransferFrom', args: [account, pair, (universe << 8n) | 1n, donation, '0x'] }))
 		const reserves = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
-		expect(await tokenBalance(pair, 1n)).toBeGreaterThanOrEqual(reserves[0])
-		expect(await tokenBalance(pair, 2n)).toBeGreaterThanOrEqual(reserves[1])
+		expect(await tokenBalance(pair, 1n)).toBe(reserves[0])
+		expect(await tokenBalance(pair, 2n)).toBe(reserves[1])
 	})
 
 	test('keeps the pair INVALID balance at zero across liquidity and swap mutations', async () => {

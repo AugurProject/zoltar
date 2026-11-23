@@ -5,6 +5,8 @@ import { expectedWithdrawalToken2, hedgedProfitBeforeGasToken1 } from '#core/pos
 import { plannedGasPriceAttoEth, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
 import {
 	calculateFee,
+	chargesFees,
+	gameFee,
 	calculateNextAmount1,
 	calculateTrackedNetProfitEth,
 	deriveTokenToSwap,
@@ -164,8 +166,9 @@ export async function executeDispute(
 	const collateralPosition = { collateral }
 	if (executionSnapshot.token1 < funding.token1 || executionSnapshot.token < funding.token2) throw new Error('Canonical execution snapshot no longer has the inventory required by the signed bundle')
 	const lockedToken = expectedWithdrawalToken2(refreshedQuote.direction, game.currentAmount2, newAmount2)
-	const replacementCredit1 = 2n * newAmount1 + calculateFee(newAmount1, game.feePercentage)
-	const replacementCredit2 = 2n * newAmount2 + calculateFee(newAmount2, game.feePercentage)
+	const replacementFeePercentage = chargesFees({ ...game, currentAmount1: newAmount1 }) ? game.feePercentage : 0n
+	const replacementCredit1 = 2n * newAmount1 + calculateFee(newAmount1, replacementFeePercentage)
+	const replacementCredit2 = 2n * newAmount2 + calculateFee(newAmount2, replacementFeePercentage)
 	const internalAllowanceError = lifecycleAllowanceMismatch({ token1: executionSnapshot.internalAllowance1, token2: executionSnapshot.internalAllowance2 }, { token1: replacementCredit1 > newAmount1 ? replacementCredit1 : newAmount1, token2: replacementCredit2 > lockedToken ? replacementCredit2 : lockedToken })
 	if (internalAllowanceError !== undefined) throw new Error(internalAllowanceError)
 	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
@@ -262,7 +265,7 @@ export async function executeDispute(
 		reportAmount1: newAmount1.toString(),
 		reportAmount2: newAmount2.toString(),
 		reportDisputeIndex: game.numReports.toString(),
-		reportFeePercentage: game.feePercentage.toString(),
+		reportFeePercentage: replacementFeePercentage.toString(),
 		realizedNetProfitEth: undefined,
 		reportId,
 		status: 'pending-entry',
@@ -509,7 +512,7 @@ export async function executeDispute(
 	if (confirmedPosition === undefined) {
 		const hedgeExecution = hedgeExecutionFromLogs(executionLogs, executor)
 		if (hedgeExecution.reportId !== report.helper.reportId) throw new Error('Executor hedge event report id does not match the submitted report')
-		const hedgedProfitBeforeGas = attoWethValue(refreshedQuote.valuation, hedgedProfitBeforeGasToken1(refreshedQuote.direction, hedgeExecution.hedgeAmountAttoWeth, game.currentAmount1, calculateFee(game.currentAmount1, game.feePercentage), calculateFee(game.currentAmount1, game.protocolFee)), 'down')
+		const hedgedProfitBeforeGas = attoWethValue(refreshedQuote.valuation, hedgedProfitBeforeGasToken1(refreshedQuote.direction, hedgeExecution.hedgeAmountAttoWeth, game.currentAmount1, gameFee(game, game.currentAmount1, game.feePercentage), gameFee(game, game.currentAmount1, game.protocolFee)), 'down')
 		confirmedPosition = {
 			...stagedPosition,
 			actualEntryGasCostEth: decimalWeth(actualGasCost),
