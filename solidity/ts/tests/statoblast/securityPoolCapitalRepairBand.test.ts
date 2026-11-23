@@ -153,7 +153,7 @@ describe('capital repairs never leave a position between the liquidation and con
 		expect((await position(aliceId)).remainingCommitment).toBe(4n * MIN)
 		// At 3x the price Alice supports ~3.33 minimums, below her 4-minimum target.
 		await price(3n * E)
-		// Taking just enough to push Alice 1 wei below her retained target.
+		// Taking just enough to push Alice 1 attoETH below her retained target.
 		await take(bob, aliceId, 6n * MIN + 1n)
 		const bobId = (await account(bob)).positionId
 		const receiver = await position(bobId)

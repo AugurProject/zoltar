@@ -164,7 +164,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 			result = engine.finalize(eligible ? targetLots : 0, floorAttoRepPerLot);
 			engine.withdrawRaised(payable(address(this)));
 			// Equal lots round up, so a full fill can exceed the deficit: by less
-			// than one wei per lot once the deficit spans at least one minimum
+			// than one attoETH per lot once the deficit spans at least one minimum
 			// commitment, and otherwise by up to the minimum lot. The child book
 			// accepts at most the deficit, and the surplus has no owner, so it is burned.
 			IERC20 collateral = ICollateralConfig(address(portfolio)).collateralToken();

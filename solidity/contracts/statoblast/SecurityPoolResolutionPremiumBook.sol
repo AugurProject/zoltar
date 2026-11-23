@@ -17,7 +17,7 @@ contract SecurityPoolResolutionPremiumBook {
 	uint256 private constant MAXIMUM_INHERITED_UNITS_PER_CASH = 1e12;
 	// Rates are units per second and portfolio times fit uint48, so rate integrals stay within
 	// uint256 while rates fit uint208. A child prices new premium at its inherited units per
-	// cash, at most about 1e21 below the dust limit; this domain still holds about 2^138 wei.
+	// cash, at most about 1e21 below the dust limit; this domain still holds about 2^138 attoETH.
 	uint256 private constant MAXIMUM_BOOK_UNITS = type(uint208).max;
 	address public immutable services;
 	uint256 public totalCash;

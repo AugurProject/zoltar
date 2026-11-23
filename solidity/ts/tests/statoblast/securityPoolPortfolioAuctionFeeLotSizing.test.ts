@@ -13,7 +13,7 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 
 describe('Statoblast: repair auction lots under a holding fee', () => {
 	// The default fixture charges a 10% annual holding fee, so the branch deficit
-	// is a wei-precision amount rather than a whole number of minimum commitments.
+	// is an attoETH-precision amount rather than a whole number of minimum commitments.
 	const fixture = useSecurityPoolPortfolioFixture()
 
 	test('#1551 a fee-accrued deficit is sold in minimum-size lots and finalizes with exact conservation', async () => {

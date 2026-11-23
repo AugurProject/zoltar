@@ -7,7 +7,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 
 // A fork child inherits all parent premium units on only its chosen share of cash, so a thin
-// but surviving branch prices new premium at many units per wei. The unit domain must leave
+// but surviving branch prices new premium at many units per attoETH. The unit domain must leave
 // such a book room for any realistic premium, while funding, schedules and finality settle
 // exactly. Only shares beyond the inherited-ratio dust limit are burned.
 const ether = 10n ** 18n
@@ -95,10 +95,10 @@ describe('premium book: a diluted but surviving fork child keeps its funding cap
 
 	test('one fork at a 1e-12 share funds a million ETH of premium and settles it exactly', async () => {
 		const { universe, book } = await buildLineage([[1n, 10n ** 12n]])
-		// 1e27 scaled units on 1e6 wei: 1e21 units per wei, exactly at the dust limit.
+		// 1e27 scaled units on 1e6 attoETH: 1e21 units per attoETH, exactly at the dust limit.
 		expect(book).toMatchObject({ cash: 10n ** 6n, units: 10n ** 27n })
 		await fund(book, universe, 50n, 10n ** 6n * ether)
-		// Even 2^128 wei more, beyond all ETH in existence, still fits the unit domain.
+		// Even 2^128 attoETH more, beyond all ETH in existence, still fits the unit domain.
 		await client.simulateContract({ ...target(), functionName: 'fund', args: [universe, 51n, 1n << 128n] })
 		// The domain itself stays bounded.
 		await expect(client.simulateContract({ ...target(), functionName: 'fund', args: [universe, 51n, 10n ** 42n] })).rejects.toThrow('Premium unit domain exceeded')

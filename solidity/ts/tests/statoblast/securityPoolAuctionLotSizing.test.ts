@@ -75,7 +75,7 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		expect(result.lots * result.lot).toBe(shortfall)
 		expect(result.gas).toBeLessThan(3_000_000n)
 	})
-	test('#1551 a one-wei-odd deficit still sells about one minimum-size lot per minimum commitment', async () => {
+	test('#1551 a deficit one attoETH above a round amount still sells about one minimum-size lot per minimum commitment', async () => {
 		const shortfall = 1_000n * unit + 1n
 		const result = await open(shortfall, unit)
 		expect([result.lots, result.lot]).toEqual([1_000n, unit + 1n])
