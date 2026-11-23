@@ -448,7 +448,8 @@ const stringify = (value: unknown) => JSON.stringify(value, (_key, item: unknown
 
 const KNOWN_REVERTS = [
 	'Position is liquidating',
-	'Repairs pay future income only',
+	'Takeover award below minimum',
+	'Takeover commitment below minimum',
 	'Position requires additional backing',
 	'Receiver commitment below minimum',
 	'Portfolio backing insufficient',

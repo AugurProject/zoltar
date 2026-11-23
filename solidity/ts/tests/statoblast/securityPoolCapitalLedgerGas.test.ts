@@ -112,15 +112,15 @@ describe('Statoblast: production bounded takeover gas', () => {
 				const hash = await writeContractAndWait(buyer, () => buyer.writeContract({ ...request, gas: estimate }))
 				const used = (await buyer.waitForTransactionReceipt({ hash })).gasUsed
 				expect(estimate).toBeGreaterThan(used)
-				// Keeping the source alive requires both source and receiver tree rekeys.
+				// A mature full fill closes the source and inserts a funded receiver.
 				// The bound also includes allocating the receiver’s immutable FIFO request across at most 65 sum slots.
 				expect(estimate).toBeLessThan(5_500_000n)
-				expect((await fixture.position(id)).rep).toBe(source.rep)
-				expect((await fixture.position(id)).commitment).toBeGreaterThan(0n)
+				expect((await fixture.position(id)).rep).toBe(0n)
+				expect((await fixture.position(id)).commitment).toBe(0n)
 				const receiver = await fixture.owner(1)
 				expect(receiver.freeAttoRep).toBe(0n)
 				const repaired = await fixture.position(receiver.positionId)
-				expect(repaired).toMatchObject({ owner: buyer.account.address, rep: owner.freeAttoRep, batch: source.batch })
+				expect(repaired).toMatchObject({ owner: buyer.account.address, rep: owner.freeAttoRep + source.rep, batch: source.batch })
 				expect(repaired.commitment + (await fixture.position(id)).commitment).toBe(source.commitment)
 				expect((await buyer.readContract({ ...fixture.capital, functionName: 'totals' }))[1]).toBe(demand)
 				measurements.push({ owners: count, estimate, used })

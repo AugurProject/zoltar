@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, parseAbiItem, toEventSelector, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
@@ -198,7 +198,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 			const exactFees = scenarios % 2 === 1
 			const bidCount = 2 + below(4)
 			const repPerLot = GRID * (BigInt(below(3)) * 10n ** 14n + 8n * 10n ** 13n + BigInt(below(1_000_000)))
-			const bids: { id: bigint; lots: bigint; health: bigint; owner: WriteClient; vault: Address; materialized: boolean; takenOver: boolean; expectedAttoEth: bigint; expectedAttoEthScaled: bigint }[] = []
+			const bids: { id: bigint; lots: bigint; health: bigint; owner: WriteClient; vault: Address; materialized: boolean; takenOver: boolean; award: bigint; removed: bigint; expectedAttoEth: bigint; expectedAttoEthScaled: bigint }[] = []
 			for (let position = 0; position < bidCount; position++) {
 				const owner = bidders[position % bidders.length]
 				if (owner === undefined) throw new Error('Bidder client missing')
@@ -207,7 +207,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 				const lots = BigInt(1 + below(4))
 				const health = pick([10_000n, 12_000n, 15_000n])
 				await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setBid', args: [id, vault, health, lots] }))
-				bids.push({ id, lots, health, owner, vault, materialized: false, takenOver: false, expectedAttoEth: 0n, expectedAttoEthScaled: 0n })
+				bids.push({ id, lots, health, owner, vault, materialized: false, takenOver: false, award: 0n, removed: 0n, expectedAttoEth: 0n, expectedAttoEthScaled: 0n })
 			}
 			const totalLots = bids.reduce((sum, bid) => sum + bid.lots, 0n)
 			const context = () => `repPerLot=${repPerLot} bids=[${bids.map(bid => `#${bid.id % 1000n}:${bid.lots}lots@${bid.health}${bid.materialized ? 'M' : ''}${bid.takenOver ? 'T' : ''}`).join(' ')}]`
@@ -234,10 +234,10 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 				for (const bid of bids) {
 					const position = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [bid.id] })
 					if (getAddress(position.vault) !== bid.vault || position.materialized !== bid.materialized) throw new Error(`${label}: bid ${bid.id} vault or materialized flag wrong: ${context()}`)
-					if (position.principal !== bid.lots * repPerLot || (!bid.takenOver && position.commitment !== bid.lots * LOT) || position.targetHealthFactorBps !== bid.health)
+					if (position.principal !== bid.lots * repPerLot - bid.award || position.commitment !== bid.lots * LOT - bid.removed || position.targetHealthFactorBps !== bid.health)
 						throw new Error(`${label}: bid ${bid.id} principal ${position.principal} commitment ${position.commitment} target ${position.targetHealthFactorBps}, expected ${bid.lots} lots: ${context()}`)
 					const collateral = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [bid.vault] })
-					if (collateral[0] !== bid.lots * repPerLot || (!bid.takenOver && collateral[1] !== bid.lots * LOT)) throw new Error(`${label}: ownerCollateral of bid ${bid.id} is ${collateral[0]}/${collateral[1]}: ${context()}`)
+					if (collateral[0] !== bid.lots * repPerLot - bid.award || collateral[1] !== bid.lots * LOT - bid.removed) throw new Error(`${label}: ownerCollateral of bid ${bid.id} is ${collateral[0]}/${collateral[1]}: ${context()}`)
 					earned += position.earnedAttoEth
 					if (exactFees) {
 						// Exact share is expectedAttoEthScaled / totalLots. Integer splits move less than an attoETH per
@@ -247,6 +247,8 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 						if (deviation > BigInt(2 * credits + bids.length + 2)) throw new Error(`${label}: bid ${bid.id} earned ${position.earnedAttoEth}, exact ${bid.expectedAttoEthScaled}/${totalLots}: ${context()}`)
 					}
 				}
+				const keeperPrincipal = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [keeper.account.address] })
+				expect(keeperPrincipal[0]).toBe(keeperDeposit + bids.reduce((sum, bid) => sum + bid.award, 0n))
 				if (earned > credited) throw new Error(`${label}: winners are owed ${earned} of ${credited} credited: ${context()}`)
 				const wethBalanceAttoEth = await caller.readContract({ abi: wethArtifact.abi, address: weth, functionName: 'balanceOf', args: [capital] })
 				// Healthy cohorts keep every credited attoETH; fees of unhealthy intervals are burned by design.
@@ -299,11 +301,28 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [keeper.account.address, deposit] }))
 					keeperDeposit += deposit
 					const bounds = { maximumOwnerPrincipal: 100n * principal, maximumOwnerCommitment: bid.lots * LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }
-					const outcome = await reasonOf(() => writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [bid.id, bid.lots * LOT, 0n, keeperDeposit, bounds] })))
+					let takeoverHash: Hex | undefined
+					const outcome = await reasonOf(async () => {
+						takeoverHash = await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [bid.id, bid.lots * LOT, 0n, keeperDeposit, bounds] }))
+					})
 					if (outcome !== 'no revert') {
 						if (!outcome.includes('Position requires additional backing') && !outcome.includes('Receiver commitment below minimum')) throw new Error(`keeper takeover reverted unexpectedly: ${outcome}: ${context()}`)
 						await check('minimum repair remains atomic')
 						continue
+					}
+					if (takeoverHash === undefined) throw new Error('Missing takeover receipt')
+					const receipt = await keeper.waitForTransactionReceipt({ hash: takeoverHash })
+					for (const log of receipt.logs) {
+						if (
+							getAddress(log.address) !== getAddress(capital) ||
+							(log.topics[0] !== toEventSelector(parseAbiItem('event CommitmentTakenOver(uint96 indexed sourceId,uint96 indexed receiverId,uint256 commitment,uint256 awardAttoRep)')) && log.topics[0] !== toEventSelector(parseAbiItem('event CommitmentCured(uint96 indexed positionId,uint256 removedCommitment)')))
+						)
+							continue
+						const event = decodeEventLog({ abi: capitalArtifact.abi, data: log.data, topics: log.topics })
+						if (event.eventName === 'CommitmentTakenOver') {
+							bid.award += event.args.awardAttoRep
+							bid.removed += event.args.commitment
+						} else if (event.eventName === 'CommitmentCured') bid.removed += event.args.removedCommitment
 					}
 					bid.materialized = true
 					bid.takenOver = true

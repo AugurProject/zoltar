@@ -247,11 +247,11 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				'takeover transfers queued reduction and inherited residual intent',
 				() => writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'takeOver', args: [aliceId, 50n * U, 0n, 500n * U] })),
 				() => {
-					alice.principal = 126n * U
+					alice.principal = 63n * U
 					alice.commitment = 50n * U
 					alice.remaining = 0n
 					alice.queued = false
-					keeper.principal = 500n * U
+					keeper.principal = 563n * U
 					keeper.commitment = 50n * U
 					keeper.remaining = 10n * U
 					keeper.queued = true

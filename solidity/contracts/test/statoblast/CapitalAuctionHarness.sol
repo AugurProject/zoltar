@@ -68,7 +68,6 @@ contract AuctionLotSizingHarness is CapitalLedgerHarness {
 	uint256 public lastSettlementTimestamp;
 	uint256 public priceValidUntil;
 	uint256 public constant acceptedExposureLimitAttoEth = type(uint256).max;
-	uint256 public constant acceptedRepExposureLimitAttoRep = type(uint256).max;
 	constructor(CapitalLedgerTestComponents components) CapitalLedgerHarness(components) {
 		lastSettlementTimestamp = block.timestamp;
 		priceValidUntil = block.timestamp + 7 days;

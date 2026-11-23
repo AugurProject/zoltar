@@ -25,12 +25,11 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 			if (confirmed.hash !== receipt.blockHash) throw new Error('Takeover receipt block changed during reconciliation')
 			if (submission.hash === undefined) throw new Error('Takeover submission block is missing')
 			const atReceipt = { address: ledger, abi: securityPoolCapitalLedgerAbi, blockNumber } as const
-			const [epoch, oldDemand, demand, index, priceValidUntil, importing, frozen, zoltar, universeId] = await Promise.all([
+			const [epoch, oldDemand, demand, index, importing, frozen, zoltar, universeId] = await Promise.all([
 				client.readContract({ ...atReceipt, functionName: 'acceptedPriceEpoch' }),
 				client.readContract({ ...atReceipt, functionName: 'demandAttoEth', blockNumber: intent.submissionBlock }),
 				client.readContract({ ...atReceipt, functionName: 'demandAttoEth' }),
 				client.readContract({ ...atReceipt, functionName: 'commitmentIndex' }),
-				client.readContract({ ...atReceipt, functionName: 'priceValidUntil', blockNumber: intent.submissionBlock }),
 				client.readContract({ ...atReceipt, functionName: 'importing' }),
 				client.readContract({ ...atReceipt, functionName: 'frozen' }),
 				client.readContract({ ...atReceipt, functionName: 'zoltar' }),
@@ -42,15 +41,13 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 			const priorPosition = call.functionName === 'takeOverWithBounds' ? await client.readContract({ address: index, abi: securityPoolCommitmentIndexAbi, functionName: 'accountOf', args: [target], blockNumber: intent.submissionBlock }) : undefined
 			const [receiptCheck, submissionCheck] = await Promise.all([client.getBlock({ blockNumber }), client.getBlock({ blockNumber: intent.submissionBlock })])
 			if (receiptCheck.hash !== confirmed.hash || submissionCheck.hash !== submission.hash) throw new Error('Takeover evidence changed during reconciliation')
-			// The ledger's `_requireFresh` and `_requireOpen` at inclusion: the price signed against has lapsed, or the universe forked, froze or is importing.
-			const priceStale = confirmed.timestamp >= priceValidUntil
+			// Price expiry cannot invalidate an existing auction. Universe lifecycle guards still apply.
 			const inactive = importing || frozen || forkTime !== 0n
-			return { endpoint, value: { epoch, oldDemand, demand, position, priorPosition, priceStale, inactive, submissionHash: submission.hash } }
+			return { endpoint, value: { epoch, oldDemand, demand, position, priorPosition, inactive, submissionHash: submission.hash } }
 		}),
 		quorum,
 	)
 	if (state.inactive) return 'Capital universe inactive'
-	if (state.priceStale) return 'Capital price stale'
 	if (state.epoch !== bounds.expectedAcceptedPriceEpoch) return 'Accepted price epoch changed'
 	if (state.oldDemand !== state.demand) return 'Portfolio demand changed'
 	if (state.position !== undefined && state.position.commitment === 0n) return 'Target position is no longer live'

@@ -69,6 +69,9 @@ export type ModelPosition = {
 	retired: boolean
 	repClaimed: boolean
 	distress: bigint | undefined
+	auctionStart?: bigint | undefined
+	awardStarted?: bigint
+	awarded?: bigint
 	ethFees: bigint
 	repFees: bigint
 	dust: bigint
@@ -273,6 +276,7 @@ const settle = (m: Model, o: number) => {
 }
 const clear = (p: ModelPosition) => {
 	p.distress = undefined
+	p.auctionStart = undefined
 }
 const reinsert = (p: ModelPosition) => {
 	if (p.remaining !== 0n && p.k <= p.remaining) {
@@ -397,8 +401,13 @@ export const cure = (m: Model, id: bigint, target: bigint, ownerExit: boolean, p
 const observe = (m: Model) => {
 	m.observedPrice = m.liq
 	for (const p of live(m)) {
-		if (p.price >= m.liq) p.distress = undefined
-		else if (p.distress === undefined) p.distress = m.now
+		if (p.price >= m.liq) clear(p)
+		else if (p.distress === undefined) {
+			p.distress = m.now
+			if (p.auctionStart === undefined) {
+				p.auctionStart = m.now
+			}
+		}
 	}
 }
 export const virtualBid = (m: Model, o: number) => Object.values(m.bids).find(bid => m.cohortId !== 0n && bid.owner === o && bid.positionId === 0n && bid.lots !== 0n)
@@ -454,24 +463,33 @@ export type Operation =
 
 export type TakeoverResult = { cured: boolean; full: boolean; merged: boolean; award: bigint; debit: bigint; sourceOwner: number; sourceBatch: bigint; receiverPrincipal: bigint; receiverCommitment: bigint }
 const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, maxOwn: bigint, bounds: Bounds | undefined, sponsored = false): TakeoverResult => {
-	requireModel(minAward === 0n, 'Repairs pay future income only')
 	if (started(m, id) === 0n) fail('Adverse observation missing')
 	const source = positionOf(m, id)
 	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')
 	requireModel(k > 0n && k <= source.k, 'Invalid takeover commitment')
+	const start = source.auctionStart ?? started(m, id)
+	const paid = source.awardStarted === start ? (source.awarded ?? 0n) : 0n
 	// A cure limited by nominal spare continues into a receiver-funded repair.
-	if (cure(m, id, 0n, false, m.cons) !== 0n && (!inTree(source) || source.price >= m.cons || source.k <= MINC)) {
+	if (cure(m, id, 0n, false, m.cons) !== 0n && (!inTree(source) || source.price >= m.cons)) {
 		return { cured: true, full: false, merged: false, award: 0n, debit: 0n, sourceOwner: source.owner, sourceBatch: source.batch, receiverPrincipal: 0n, receiverCommitment: 0n }
 	}
+	requireModel(start !== 0n, 'Adverse observation missing')
 	requireModel(k > 0n, 'Invalid takeover commitment')
-	const backing = (source.rep * BPS) / MULTIPLIER
-	const retained = max((backing * WAD) / m.cons, MINC)
-	requireModel(source.k > retained, 'Position requires additional backing')
-	k = min(k, source.k - retained)
-	// A partial repair leaves the source fully repaired or still below the liquidation price (#1570).
-	requireModel(source.k - k === retained || source.k - k > (backing * WAD) / m.liq, 'Takeover would strand source between prices')
-	const award = 0n
-	const debit = 0n
+	const elapsed = max(0n, m.now - start)
+	const vested = ((source.rep + paid) * min(elapsed, HOUR)) / HOUR
+	const offered = max(0n, vested - paid)
+	const supported = ((((source.rep - offered) * BPS) / MULTIPLIER) * WAD) / m.cons
+	let fullK = source.k - min(source.k, supported)
+	if (source.k - fullK < MINC) fullK = source.k
+	requireModel(fullK !== 0n, 'Position does not need takeover')
+	k = min(k, fullK)
+	if (source.k - k !== 0n && source.k - k < MINC) k = source.k - min(source.k, MINC)
+	requireModel(k !== 0n, 'Takeover commitment below minimum')
+	const award = (offered * k) / fullK
+	const remainingBacking = ((source.rep - award) * BPS) / MULTIPLIER
+	requireModel(k === fullK || source.k - k <= (remainingBacking * WAD) / m.cons || source.k - k > (remainingBacking * WAD) / m.liq, 'Takeover would strand source between prices')
+	const debit = k === source.k ? source.rep : award
+	requireModel(award >= minAward, 'Takeover award below minimum')
 	settle(m, o)
 	const receiver = ownerOf(m, o)
 	const sourceBatch = source.batch
@@ -496,6 +514,8 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 		requireModel(existingRep + received <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit')
 		requireModel(existingK + k <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit')
 	}
+	source.awardStarted = start
+	source.awarded = paid + award
 	source.rep = remainingRep
 	source.k = remainingK
 	source.price = maxHealthyPrice(remainingRep, remainingK)
@@ -556,6 +576,7 @@ const materialize = (m: Model, bidId: bigint) => {
 	source.k -= k
 	const id = create(m, bid.owner, 0n, principal, k, source.price, 0n)
 	positionOf(m, id).distress = source.distress
+	positionOf(m, id).auctionStart = source.auctionStart
 	bid.positionId = id
 	m.cohortLots -= bid.lots
 	owner.positionId = id
@@ -722,7 +743,6 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 		case 'takeover':
 			requireOpen(m)
 			requireFresh(m)
-			requireModel(op.minAward === 0n, 'Repairs pay future income only')
 			checkpoint(m)
 			serve(m, 0n)
 			return takeover(m, op.o, op.id, op.k, op.minAward, op.maxOwn, op.bounds, op.sponsored === true)

@@ -17,7 +17,7 @@ const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentFor
 describe('manual takeover against native portfolio contracts', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	for (const scenario of ['success', 'changed-price', 'rejected-bounds'] as const)
-		test(`manual takeover preserves ownership through ${scenario}`, async () => {
+		test(`manual takeover applies pledged awards atomically through ${scenario}`, async () => {
 			await fixture.prepare()
 			await fixture.mint(200n * unit)
 			const owner = fixture.owner()
@@ -29,16 +29,16 @@ describe('manual takeover against native portfolio contracts', () => {
 			const initialSource = distressed.positions[0]
 			if (initialSource === undefined) throw new Error('Missing distressed position')
 			expect(initialSource.liquidationStarted).toBeGreaterThan(0n)
-			// Keep quotes fresh while the reward matures; a stale gap restarts its clock.
-			for (let renewal = 0; renewal < 8; renewal++) await fixture.refreshPrice(fixture.base.questionId, 3n * unit)
+			// Let the triggering quote expire without renewal while the auction reaches full terms.
+			await fixture.base.mockWindow.advanceTime(3601n)
 			const snapshot = { ...(await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })), collateral: { symbol: 'WETH', decimals: 18 } }
 			const original = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })
 			const source = original.positions[0]
 			if (source === undefined) throw new Error('Missing distressed position')
 			expect(source.liquidationStarted).toBe(initialSource.liquidationStarted)
 			expect(snapshot.timestamp - source.liquidationStarted).toBeGreaterThanOrEqual(3600n)
-			expect(snapshot.priceValid).toBe(true)
-			expect(snapshot.timestamp).toBeLessThan(snapshot.priceValidUntil)
+			expect(snapshot.priceValid).toBe(false)
+			expect(snapshot.timestamp).toBeGreaterThanOrEqual(snapshot.priceValidUntil)
 			const backend = { ...createFakeBackend({ accountAddress: keeper.account.address }), createReadClient: () => keeper }
 			installActiveEnvironmentForTesting(backend)
 			let submitted = false
@@ -103,10 +103,10 @@ describe('manual takeover against native portfolio contracts', () => {
 			)
 			const acquired = await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })
 			expect(acquired.ownerCommitmentAttoEth).toBeGreaterThan(0n)
-			expect(acquired.ownerCommitmentAttoEth).toBeLessThan(200n * unit)
+			expect(acquired.ownerCommitmentAttoEth).toBe(200n * unit)
 			const retained = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })
-			expect(retained.ownerPrincipalAttoRep).toBe(original.ownerPrincipalAttoRep)
+			expect(retained.ownerPrincipalAttoRep).toBe(0n)
 			expect(retained.ownerCommitmentAttoEth + acquired.ownerCommitmentAttoEth).toBe(original.ownerCommitmentAttoEth)
-			expect(acquired.ownerPrincipalAttoRep).toBe(snapshot.ownerPrincipalAttoRep)
+			expect(acquired.ownerPrincipalAttoRep).toBe(snapshot.ownerPrincipalAttoRep + original.ownerPrincipalAttoRep)
 		}, 300_000)
 })

@@ -17,7 +17,7 @@ describe('Statoblast: takeover owner consent bounds', () => {
 		await fixture.price(2n * E)
 		await fixture.getAnvilWindowEthereum().advanceTime(3601n)
 		const epoch = await fixture.client().readContract({ ...fixture.capital, functionName: 'acceptedPriceEpoch' })
-		return { source, bounds: { maximumOwnerPrincipal: 500n * E, maximumOwnerCommitment: receiverCommitment + 50n * E, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: epoch, expectedSourceBatch: 0n } }
+		return { source, bounds: { maximumOwnerPrincipal: (5525n * E) / 10n, maximumOwnerCommitment: receiverCommitment + 50n * E, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: epoch, expectedSourceBatch: 0n } }
 	}
 	test('#1255 an active keeper repairs a target that queued retirement before becoming distressed', async () => {
 		await fixture.fundOwners()
@@ -33,8 +33,8 @@ describe('Statoblast: takeover owner consent bounds', () => {
 		await fixture.getAnvilWindowEthereum().advanceTime(3601n)
 		const buyer = fixture.client(1)
 		await writeContractAndWait(buyer, () => buyer.writeContract({ ...fixture.capital, functionName: 'takeOver', args: [source, 50n * E, 0n, 0n] }))
-		expect(await fixture.position(receiver)).toMatchObject({ rep: 500n * E, commitment: 150n * E, batch: 0n, remainingCommitment: 0n })
-		expect(await fixture.position(source)).toMatchObject({ rep: 105n * E, commitment: 50n * E, batch: queued.batch })
+		expect(await fixture.position(receiver)).toMatchObject({ rep: (5525n * E) / 10n, commitment: 150n * E, batch: 0n, remainingCommitment: 0n })
+		expect(await fixture.position(source)).toMatchObject({ rep: (525n * E) / 10n, commitment: 50n * E, batch: queued.batch })
 	})
 
 	test('a bounded takeover accepts the exact final principal and commitment consent', async () => {
@@ -42,7 +42,7 @@ describe('Statoblast: takeover owner consent bounds', () => {
 		const buyer = fixture.client(1)
 		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 0n, 500n * E, bounds] }))
 		expect(await fixture.position((await fixture.owner(1)).positionId)).toMatchObject({ rep: bounds.maximumOwnerPrincipal, commitment: bounds.maximumOwnerCommitment })
-		expect(await fixture.position(source)).toMatchObject({ rep: 105n * E, commitment: 50n * E })
+		expect(await fixture.position(source)).toMatchObject({ rep: (525n * E) / 10n, commitment: 50n * E })
 	})
 	test('an existing receiver must consent to its entire resulting position, including previous principal and commitment', async () => {
 		const { source, bounds } = await prepare(100n * E)

@@ -43,6 +43,8 @@ const abi = parseAbi([
 	'function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)',
 	'function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)',
 	'function liquidationStarted(uint96 id) view returns (uint48)',
+	'function liquidationAwarded(uint96 id) view returns (uint256)',
+	'function liquidationElapsed(uint96 id) view returns (uint256)',
 	'function depositFor(address owner,uint256 amount)',
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
@@ -89,6 +91,8 @@ type PortfolioCapitalPosition = {
 	feesAttoEth: bigint
 	feesAttoRep: bigint
 	liquidationStarted: bigint
+	liquidationAwarded?: bigint
+	liquidationElapsed?: bigint
 	remainingCommitment: bigint
 	/** Advisory at this snapshot block, before the next ledger checkpoint. */
 	retirementPreview: PortfolioRetirementPreview | undefined
@@ -226,13 +230,8 @@ export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalReq
 	return request(parameters, 'claimEarnings', [decodeAddress(parameters.recipient ?? parameters.owner, 'Recipient')])
 }
 /** @public Keeper takeover: a new receiver commits all idle principal within maximumOwnRep; an existing receiver must be active or share the target cohort. */
-function noRepairAward(value: bigint) {
-	if (decodeUint(value, 'Minimum REP award') !== 0n) throw new Error('Repairs pay future income only.')
-	return 0n
-}
-
 export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint }) {
-	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), noRepairAward(parameters.minimumAward), decodeUint(parameters.maximumOwnRep, 'Maximum own REP')])
+	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), decodeUint(parameters.minimumAward, 'Minimum REP award'), decodeUint(parameters.maximumOwnRep, 'Maximum own REP')])
 }
 
 /** Bind an automated acquisition to its quoted price epoch, owner policy and final exposure. */
@@ -243,7 +242,7 @@ export function buildPortfolioCapitalTakeOverWithBoundsRequest(parameters: Capit
 	return request(parameters, 'takeOverWithBounds', [
 		positive(parameters.positionId, 'Position id', 96),
 		positive(parameters.commitment, 'Takeover commitment'),
-		noRepairAward(parameters.minimumAward),
+		decodeUint(parameters.minimumAward, 'Minimum REP award'),
 		decodeUint(parameters.maximumOwnRep, 'Maximum own REP'),
 		[decodeUint(bounds.maximumOwnerPrincipal, 'Maximum owner principal'), decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), expectedTargetHealthFactorBps, decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), decodeUint(bounds.expectedSourceBatch, 'Expected source cohort', 96)],
 	])
@@ -339,7 +338,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(decodeAddress(bookValue, 'Settlement book'), 'minimumOutcomeExchangeRate')])
 	const positions = await Promise.all(
 		(account.positionId === 0n ? [] : [account.positionId]).map(async id => {
-			const [value, liquidation] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'liquidationStarted', [id])])
+			const [value, liquidation, awarded, elapsed] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'liquidationStarted', [id]), read(capitalLedger, 'liquidationAwarded', [id]), read(capitalLedger, 'liquidationElapsed', [id])])
 			const [holder, batch, rep, commitment, maximum, released, eth, repFees, remaining] = decodeFields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees', 'remainingCommitment'], 'Invalid capital accounting response.')
 			if (decodeAddress(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
 			const cohort = decodeUint(batch, 'Cohort id', 96)
@@ -356,6 +355,8 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 				feesAttoEth: decodeUint(eth, 'ETH earnings'),
 				feesAttoRep: decodeUint(repFees, 'REP earnings'),
 				liquidationStarted: decodeUint(liquidation, 'Liquidation start', 48),
+				liquidationAwarded: decodeUint(awarded, 'Liquidation awards'),
+				liquidationElapsed: decodeUint(elapsed, 'Liquidation elapsed'),
 				remainingCommitment: decodeUint(remaining, 'Remaining commitment'),
 				retirementPreview: preview,
 			}

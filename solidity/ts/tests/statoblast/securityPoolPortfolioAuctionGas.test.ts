@@ -289,9 +289,11 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		// The incumbent first retires its spare capacity so distressed commitment
 		// is needed by claims and must be taken over instead of simply cured.
 		await gasOf('retirement: incumbent retires all spare capacity', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [0n] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'transfer', args: [keeper.account.address, 60n * unit] }))
+		await addRepToMigrationBalance(owner, context.source, 1_000n * unit)
+		await splitMigrationRep(owner, context.source, 1_000n * unit, [1])
+		await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'transfer', args: [keeper.account.address, 600n * unit] }))
 		await approveToken(keeper, context.token, context.capital)
-		await gasOf('liquidation: keeper deposits principal', keeper, () => keeper.writeContract({ ...capital, functionName: 'depositFor', args: [keeper.account.address, 60n * unit] }))
+		await gasOf('liquidation: keeper deposits principal', keeper, () => keeper.writeContract({ ...capital, functionName: 'depositFor', args: [keeper.account.address, 600n * unit] }))
 		await renewDistressedPrice()
 		const distressStart = await owner.readContract({ ...capital, functionName: 'liquidationStarted', args: [cohort[1]] })
 		expect(distressStart).toBeGreaterThan(0n)
@@ -310,9 +312,9 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		// capacity the cure has nothing to remove and the whole exit waits in the retirement queue.
 		await vaultCall(totalCommitment > demand ? 'liquidation: winner cures its unmaterialized vault' : 'liquidation: winner exit without spare capacity only materializes and queues', other, winner.vault, context.capital, setCommitmentData(0n))
 		await restore(liquidation)
-		const takeoverBounds = { maximumOwnerPrincipal: 100n * unit, maximumOwnerCommitment: 10n * unit, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: acceptedPriceEpoch, expectedSourceBatch: 0n }
+		const takeoverBounds = { maximumOwnerPrincipal: 1_000n * unit, maximumOwnerCommitment: 10n * unit, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: acceptedPriceEpoch, expectedSourceBatch: 0n }
 		const winnerCommitment = (await owner.readContract({ ...capital, functionName: 'auctionPosition', args: [winner.id] })).commitment
-		await revertedGasOf('liquidation failure: takeover rejected by bounds', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, { ...takeoverBounds, maximumOwnerPrincipal: 1n }] }))
+		await revertedGasOf('liquidation failure: takeover rejected by bounds', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 600n * unit, { ...takeoverBounds, maximumOwnerPrincipal: 1n }] }))
 		const winnerPosition = await owner.readContract({ ...capital, functionName: 'auctionPosition', args: [winner.id] })
 		const conservativePrice = await owner.readContract({ ...capital, functionName: 'conservativePrice' })
 		const liquidationPrice = await owner.readContract({ ...capital, functionName: 'liquidationPrice' })
@@ -322,13 +324,13 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 			{ rep: winnerPosition.principal, commitment: winnerPosition.commitment, batch: 0n, remainingCommitment: 0n },
 		)
 		const repairable = repair.healthy || repair.maximumTakeoverCommitment >= unit
-		if (repairable) await gasOf('liquidation: keeper repairs an unmaterialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
-		else await revertedGasOf('minimum winner requires additional backing', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
+		if (repairable) await gasOf('liquidation: keeper repairs an unmaterialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 600n * unit, takeoverBounds] }))
+		else await revertedGasOf('minimum winner requires additional backing', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 600n * unit, takeoverBounds] }))
 		await restore(liquidation)
 		await writeContractAndWait(stranger, () => stranger.writeContract({ ...capital, functionName: 'materializeAuctionBid', args: [winner.id] }))
 		const materializedId = await positionIdOf(winner.vault)
-		if (repairable) await gasOf('liquidation: keeper repairs a materialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverWithBounds', args: [materializedId, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
-		else await revertedGasOf('materialized minimum winner requires additional backing', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverWithBounds', args: [materializedId, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
+		if (repairable) await gasOf('liquidation: keeper repairs a materialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverWithBounds', args: [materializedId, winnerCommitment, 0n, 600n * unit, takeoverBounds] }))
+		else await revertedGasOf('materialized minimum winner requires additional backing', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverWithBounds', args: [materializedId, winnerCommitment, 0n, 600n * unit, takeoverBounds] }))
 		await restore(finalized)
 
 		// Fork transition: the winner's first operation after the child forks is
