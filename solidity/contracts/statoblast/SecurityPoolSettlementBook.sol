@@ -197,13 +197,13 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		book.recoveryAttoRep += recoveryAttoRep;
 		uint256 addedUnits = _mintUnits(bookId, book, cashAttoEth);
 		state.feePrincipalAttoEth += SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, outcomeShares, addedUnits);
-		require(state.feePrincipalAttoEth < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
+		require(state.feePrincipalAttoEth < RECOVERY_SCALE, 'Principal above precision bound');
 		state.units += addedUnits;
 		state.outcomeSupplyAttoShares += outcomeShares;
 		book.cashAttoEth += cashAttoEth;
 		book.units += addedUnits;
 		SettlementMath.netCash(book.cashAttoEth, feeRemainders[bookId]);
-		require(book.units < RECOVERY_SCALE, 'Settlement units exceed precision bound');
+		require(book.units < RECOVERY_SCALE, 'Units exceed precision bound');
 		uint256 correction;
 		unchecked {
 			correction = entitlement + recoveryAttoRep * RECOVERY_SCALE - state.units * recoveryStates[bookId].index;

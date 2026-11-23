@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { estimateMintCheckpoint } from '../../../../ui/statoblastShared/ts/features/markets/lib/trading.js'
 import { readRequiredMulticall } from '../../../../ui/zoltarShared/ts/protocol/core.js'
-import { statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact } from '../../types/contractArtifact'
+import { ReputationToken_ReputationToken as erc20Artifact, statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact } from '../../types/contractArtifact'
 import { loadCentralPortfolioQuestion } from '../../../../ui/statoblastShared/ts/protocol/securityPoolPortfolioState.js'
 import { loadMintFees } from '../../../../ui/trading/ts/protocol/minting.js'
 import { portfolioMintFee, portfolioMintWithinBudget } from '@zoltar/trading-shared/trading/portfolioMint'
@@ -20,10 +20,12 @@ import { unit, useSecurityPoolPortfolioFixture } from '../statoblast/securityPoo
 
 describe('Trading: portfolio-funded complete sets', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
-	test('initializes liquidity through the portfolio and returns all unspent fee budget', async () => {
+	test.each([0n, 30n, 120n])('#1557 quoted fee equals charged fee without router collateral or approval residue (elapsed: %s)', async elapsed => {
 		await fixture.prepare()
 		const owner = fixture.owner()
 		const native = fixture.poolFor(fixture.base.questionId)
+		await fixture.mint(unit)
+		await fixture.base.mockWindow.advanceTime(elapsed)
 		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
 		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
 		const [fee] = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, unit] })
@@ -31,6 +33,10 @@ describe('Trading: portfolio-funded complete sets', () => {
 			owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, owner.account.address, fixture.base.questionData.endTime - 1n], value: unit + fee + unit / 10n }),
 		)
 		expect(await owner.getBalance({ address: router })).toBe(0n)
+		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		const services = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
+		expect(await owner.readContract({ abi: erc20Artifact.abi, address: collateral, functionName: 'balanceOf', args: [router] })).toBe(0n)
+		expect(await owner.readContract({ abi: erc20Artifact.abi, address: collateral, functionName: 'allowance', args: [router, services] })).toBe(0n)
 		for (const outcome of [0n, 1n, 2n]) expect(await owner.readContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'balanceOf', args: [router, outcome] })).toBe(0n)
 		const pair = await owner.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native.securityPool] })
 		expect(await owner.readContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'balanceOf', args: [pair, 1n] })).toBeGreaterThan(0n)

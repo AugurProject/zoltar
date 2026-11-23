@@ -30,7 +30,7 @@
 			<section id="through-the-pair">
 				<h2>Remove through the trading pool contract</h2>
 				<ol>
-					<li>Compute the outputs from <code>getEffectiveReserves()</code>: each reserve × <code>liquidity</code> ÷ LP total supply, rounded down. Removal first synchronizes the reserves, so donated shares count.</li>
+					<li>Compute the outputs from <code>getEffectiveReserves()</code>: each reserve × <code>liquidity</code> ÷ LP total supply, rounded down. Removal uses current balances, so donated shares count.</li>
 					<li>Call the trading pool's <code>removeLiquidity(liquidity, minYes, minNo, recipient, deadline)</code> with <code>minYes</code> and <code>minNo</code> set from those outputs and your tolerance. The deadline is enforced on chain.</li>
 				</ol>
 				<p>After either path, your LP balance has fallen by <code>liquidity</code>, your Yes and No balances have risen by the outputs, and the trading pool has emitted <code>LiquidityRemoved</code>.</p>

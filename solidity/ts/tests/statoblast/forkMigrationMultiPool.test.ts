@@ -141,6 +141,15 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 			}),
 			/ShareToken migrated source balance is locked/,
 		)
+		// #1561: both production burn entrypoints reject the forked source pool.
+		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: securityPoolAddresses.securityPool, functionName: 'redeemShares' }), /Pool inactive/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: securityPoolAddresses.securityPool, functionName: 'redeemCompleteSet', args: [1n] }), /Forked/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: securityPoolAddresses.shareToken, functionName: 'burnCompleteSets', args: [genesisUniverse, holderAddress, 1n] }), /not authorized/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: securityPoolAddresses.shareToken, functionName: 'burnTokenIdAndGetRemainingSupply', args: [parentYesTokenId, holderAddress] }), /not authorized/)
+		// Recovery consumes independent rights, not locked branch entitlements.
+		const recoveryController = await controller()
+		await writeContractAndWait(openInterestHolder, () => openInterestHolder.writeContract({ ...recoveryController, functionName: 'recoverUnchosenCash', args: [genesisUniverse, questionId, 1n] }))
+		assert.deepStrictEqual(await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress), parentBalancesBeforeMigration)
 	})
 
 	test('rejects malformed and missing-child bulk targets while lazily creating one migration child', async () => {

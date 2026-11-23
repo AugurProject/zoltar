@@ -22,6 +22,7 @@ import {
 const weth = '0x0000000000000000000000000000000000000001' as Address
 const rep = '0x0000000000000000000000000000000000000002' as Address
 const game = {
+	flags: 0n,
 	currentAmount1: 1_000_000n,
 	currentAmount2: 2_000_000n,
 	escalationHalt: 10_000_000n,
@@ -30,9 +31,20 @@ const game = {
 	protocolFee: 100_000n,
 	token1: weth,
 	token2: rep,
-} satisfies Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'escalationHalt' | 'feePercentage' | 'multiplier' | 'protocolFee' | 'token1' | 'token2'>
+} satisfies Pick<OpenOracleGame, 'flags' | 'currentAmount1' | 'currentAmount2' | 'escalationHalt' | 'feePercentage' | 'multiplier' | 'protocolFee' | 'token1' | 'token2'>
 
 describe('OpenOracle arbitrage strategy', () => {
+	test.each([999_999n, 1_000_000n, 1_000_001n])('#1558 fee-only-at-halt funding and hedges at threshold %s', escalationHalt => {
+		const flagged = { ...game, flags: 32n, escalationHalt }
+		const charge = game.currentAmount1 >= escalationHalt
+		const sell = evaluateSellRep(flagged, 2_000_000n, 0n, WETH_VALUATION)
+		const buy = evaluateBuyRep(flagged, 500_000n, 0n, WETH_VALUATION)
+		expect(sell.hedgeCostToken1).toBe(charge ? 1_011_000n : 1_000_000n)
+		expect(buy.hedgeAmountAttoRep).toBe(charge ? 2_022_000n : 2_000_000n)
+		expect(executorFunding(flagged, 1_200_000n, 1_800_000n, 0n).token1).toBe(charge ? 2_211_000n : 2_200_000n)
+		expect(executorFunding(flagged, 1_200_000n, 2_500_000n, 0n).token2).toBe(2_500_000n)
+	})
+
 	test('serializes negative modeled opportunity profit with the sign before the whole number', () => {
 		expect(decimalSignedEth(-255_235_735_754_674_523n)).toBe('-0.255235735754674523')
 	})
