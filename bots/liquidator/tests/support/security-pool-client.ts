@@ -120,6 +120,8 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 		lastPositionId: 1n,
 		balanceOf: observation.walletRep,
 		liquidationStarted: 100n,
+		liquidationAwarded: 0n,
+		liquidationElapsed: snapshot.timestamp - 100n,
 		accountOf: { owner: targetAddress, batch: 0n, rep: 99n * 10n ** 18n, commitment: snapshot.totalCommitmentAttoEth, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n },
 		...overrides,
 	}

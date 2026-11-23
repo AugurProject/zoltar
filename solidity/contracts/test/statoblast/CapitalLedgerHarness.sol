@@ -82,6 +82,9 @@ contract CapitalLedgerHarness {
 		return address(this);
 	}
 	function validateExposure() external pure {}
+	function acceptedRepExposureLimitAttoRep() external pure returns (uint256) {
+		return type(uint256).max;
+	}
 	function setPriceError(uint256 priceError) external {
 		targetPriceErrorForDispute = priceError;
 	}

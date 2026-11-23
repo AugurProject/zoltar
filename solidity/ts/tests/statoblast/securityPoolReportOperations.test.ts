@@ -81,7 +81,10 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const gasLimit = operations.reduce((sum, operation) => sum + operation.gasLimit + 100_000n, 0n)
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
-		const args = [price, 10n * unit, bounty, { gasLimit, minimumPrice: price, maximumPrice: price, deadline: timestamp + 1000n, operations }] as const
+		const minimum = await sponsor.readContract({ ...feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [price] })
+		const funding = minimum > 10n * unit ? minimum : 10n * unit
+		if (submit === undefined) await wrapWeth(sponsor, funding)
+		const args = [price, funding, bounty, { gasLimit, minimumPrice: price, maximumPrice: price, deadline: timestamp + 1000n, operations }] as const
 		if (submit === undefined) await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args, value: bounty }))
 		else await submit(encodeFunctionData({ abi: batchAbi, functionName: 'requestSecurityPoolPriceWithOperations', args }), bounty)
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
@@ -251,10 +254,12 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		}))
 		expect((await run(context, operations, 4n * unit)).map(event => event.success)).toEqual([true, true])
 		const receiver = await context.sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [context.sponsor.account.address] })
-		expect(receiver[0]).toBe(3000n * unit)
+		expect(receiver[0]).toBe(3800n * unit)
 		expect(receiver[1]).toBeGreaterThan(100n * unit)
-		expect(receiver[1]).toBeLessThan(200n * unit)
-		for (const provider of [fixture.owner(), third]) expect((await provider.readContract({ ...capital(), functionName: 'ownerCollateral', args: [provider.account.address] }))[0]).toBe(400n * unit)
+		expect(receiver[1]).toBe(200n * unit)
+		let remaining = 0n
+		for (const provider of [fixture.owner(), third]) remaining += (await provider.readContract({ ...capital(), functionName: 'ownerCollateral', args: [provider.account.address] }))[0]
+		expect(remaining + receiver[0]).toBe(3800n * unit)
 	})
 
 	test('deposits, health targets, commitment changes, withdrawals and earnings share sponsor authorization', async () => {
@@ -298,7 +303,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const receiver = await deployContract(owner, encodeDeployData({ abi: receiverArtifact.abi, bytecode: `0x${receiverArtifact.evm.bytecode.object}` }))
 		const execute = (target: `0x${string}`, data: Hex, value = 0n) => writeContractAndWait(owner, () => owner.writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'execute', args: [target, data], value }))
 		const rep = await owner.readContract({ ...capital(), functionName: 'repToken' })
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: rep, functionName: 'transfer', args: [receiver, 3020n * unit] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: rep, functionName: 'transfer', args: [receiver, 3200n * unit] }))
 		await execute(rep, encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'approve', args: [fixture.capitalLedger, 3000n * unit] }))
 		await execute(fixture.capitalLedger, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'depositFor', args: [receiver, 3000n * unit] }))
 		await execute(fixture.capitalLedger, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setCommitment', args: [100n * unit] }))
@@ -314,15 +319,16 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		await fixture.base.mockWindow.advanceTime(1300n)
 		const feed = { abi: feedArtifact.abi, address: await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] }) }
 		const weth = await owner.readContract({ ...feed, functionName: 'weth' })
-		await wrapWeth(owner, 10n * unit)
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: weth, functionName: 'transfer', args: [receiver, 10n * unit] }))
-		for (const token of [weth, rep]) await execute(token, encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'approve', args: [feed.address, 20n * unit] }))
+		await wrapWeth(owner, 100n * unit)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: weth, functionName: 'transfer', args: [receiver, 100n * unit] }))
+		for (const token of [weth, rep]) await execute(token, encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'approve', args: [feed.address, 200n * unit] }))
 		let nestedReport: bigint | undefined
 		const beforeSettlement = async () => {
 			if (mode === 'withdraw') return
 			for (const token of [weth, rep]) await approveToken(owner, token, feed.address)
+			await wrapWeth(owner, 100n * unit)
 			const bounty = 3n * (await owner.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
-			await writeContractAndWait(owner, () => owner.writeContract({ ...feed, functionName: 'requestSecurityPoolPrice', args: [2n * unit, 10n * unit, bounty], value: bounty }))
+			await writeContractAndWait(owner, () => owner.writeContract({ ...feed, functionName: 'requestSecurityPoolPrice', args: [2n * unit, 100n * unit, bounty], value: bounty }))
 			nestedReport = await owner.readContract({ ...feed, functionName: 'pendingReportId' })
 			const state = (await loadOpenOracleEventState(owner, nestedReport)).latest
 			const data = encodeFunctionData({ abi: oracleArtifact.abi, functionName: 'settle', args: [nestedReport, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper)] })

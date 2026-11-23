@@ -73,6 +73,8 @@ export async function loadSecurityPoolAuctionPosition(client: ReadClient, snapsh
 	const [position, fill] = await Promise.all([client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'auctionPosition', args: [bidId], blockNumber }), client.readContract({ address: auction.engine, abi: engineAbi, functionName: 'previewBid', args: [bidId], blockNumber })])
 	// A materialized bid belongs exclusively to the ordinary position registry.
 	if (position.materialized || fill.filledLots === 0n) return undefined
+	const cohort = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'auctionCohort', blockNumber })
+	const elapsed = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'liquidationElapsed', args: [cohort[1]], blockNumber })
 	const vault = getAddress(position.vault)
 	// The vault must be the exact clone the auction created for this bidder, ledger and bid.
 	verifyAuctionVaultCode(await client.getCode({ address: vault, blockNumber }), { implementation: auction.vaultImplementation, owner: getAddress(fill.bidder), capital: snapshot.capitalLedger, auction: auction.address, bidId })
@@ -95,6 +97,8 @@ export async function loadSecurityPoolAuctionPosition(client: ReadClient, snapsh
 		maxHealthyPrice: threshold,
 		remainingCommitment: 0n,
 		liquidationStarted: BigInt(position.liquidationStarted),
+		liquidationElapsed: BigInt(elapsed),
+		liquidationAwarded: 0n,
 		retirementStatus: 'Not retiring',
 		stalledRetirement: false,
 	}

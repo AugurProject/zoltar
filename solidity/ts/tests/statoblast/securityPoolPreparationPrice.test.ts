@@ -217,10 +217,11 @@ describe('Statoblast: child security pool price preparation', () => {
 		const owner = fixture.owner()
 		const feed = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		const weth = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'weth' })
-		// A fresh renewal covers current exposure.
+		// At two REP per ETH, the renewal's pledged-REP budget exceeds its collateral floor.
 		const budget = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [2n * unit] })
 		const floor = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumReportCollateral' })
-		expect(budget).toBe(floor + 2n * unit)
+		expect(budget).toBe(5n * unit)
+		expect(budget).toBeGreaterThan(floor + 2n * unit)
 		await wrapWeth(owner, budget)
 		await approveToken(owner, weth, feed)
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), feed)

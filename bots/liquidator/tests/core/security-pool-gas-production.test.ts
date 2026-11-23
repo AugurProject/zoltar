@@ -149,11 +149,11 @@ describe('security pool operator production gas execution', () => {
 			expect(transaction.gas).toBe(paddedTransactionGas(estimate.gas + SECURITY_POOL_CHECKPOINT_GAS_RESERVE))
 			expect(receipt.status).toBe('success')
 			expect(estimate.gas).toBeGreaterThan(receipt.gasUsed)
-			expect((await fixture.position(sourceId)).rep).toBe(source.rep)
-			expect((await fixture.position(sourceId)).commitment).toBeGreaterThan(0n)
+			expect((await fixture.position(sourceId)).rep).toBe(0n)
+			expect((await fixture.position(sourceId)).commitment).toBe(0n)
 			const receiver = await sender.readContract({ ...fixture.capital, functionName: 'ownerAccount', args: [account.address] })
 			const repaired = await fixture.position(receiver.positionId)
-			expect(repaired).toMatchObject({ owner: account.address, rep: 100n * E, batch: source.batch })
+			expect(repaired).toMatchObject({ owner: account.address, rep: 100n * E + source.rep, batch: source.batch })
 			expect(repaired.commitment + (await fixture.position(sourceId)).commitment).toBe(source.commitment)
 			expect(state.pendingTransactions).toHaveLength(0)
 			expect(state.paused).toBe(false)
@@ -226,7 +226,7 @@ describe('atomic unpaid cure and security pool takeover', () => {
 			const target = current.observation.positions[0]
 			if (target === undefined) throw new Error('Missing test target')
 			expect(target).toMatchObject({ rep: 105n * E, commitment: 100n * E, batch: retainedCommitment === 0n ? 0n : 1n, remainingCommitment: retainedCommitment })
-			expect(securityPoolTakeoverPlan(current.observation, target, settings, current.totalPrincipal, true).plan).toMatchObject({ commitment: 40n * E, minimumAward: 0n, ownFunding: 0n, expectedSourceBatch: 0n })
+			expect(securityPoolTakeoverPlan(current.observation, target, settings, current.totalPrincipal, true).plan).toMatchObject({ commitment: 90n * E, minimumAward: 105n * E, ownFunding: 0n, expectedSourceBatch: 0n })
 			let submitted = 0
 			const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
 				await call.preSubmit?.()
@@ -238,10 +238,10 @@ describe('atomic unpaid cure and security pool takeover', () => {
 			}
 			await executeSecurityPoolTakeover(wallet, settings, state, pool, current.observation, 1n, async () => true, { refresh, submit })
 			expect(submitted).toBe(1)
-			expect(await fixture.position(1n)).toMatchObject({ rep: 105n * E, commitment: 50n * E })
+			expect(await fixture.position(1n)).toMatchObject({ rep: 0n, commitment: 0n })
 			const receiver = await buyer.readContract({ ...fixture.capital, functionName: 'ownerAccount', args: [account.address] })
 			expect(receiver.feesAttoRep).toBe(0n)
-			expect(await fixture.position(receiver.positionId)).toMatchObject({ rep: 200n * E, commitment: 40n * E, batch: 0n, remainingCommitment: 0n })
+			expect(await fixture.position(receiver.positionId)).toMatchObject({ rep: 305n * E, commitment: 90n * E, batch: 0n, remainingCommitment: 0n })
 		})
 })
 
@@ -278,6 +278,7 @@ describe('direct takeover against a holding-fee security pool', () => {
 		const { plan, reason } = securityPoolTakeoverPlan(first, target, settings, first.managedPrincipalAttoRep ?? 0n, true)
 		if (plan === undefined) throw new Error(`Keeper could not quote the distressed position: ${reason}`)
 		expect(plan.minimumAward).toBe(0n)
+		expect(plan.requestedCommitment).toBeGreaterThan(plan.commitment)
 		expect(plan.ownFunding).toBe(0n)
 		const refresh: typeof refreshSecurityPoolExecution = async () => {
 			const observation = await observe()
@@ -298,7 +299,7 @@ describe('direct takeover against a holding-fee security pool', () => {
 		expect(state.paused).toBe(false)
 		expect(after.snapshot.demandAttoEth).toBeLessThan(first.snapshot.demandAttoEth)
 		expect(after.snapshot.ownerCommitmentAttoEth).toBeGreaterThan(0n)
-		expect(after.snapshot.ownerCommitmentAttoEth).toBeLessThan(plan.commitment)
-		expect(after.positions.find(position => position.owner === source.account.address)?.rep).toBe(target.rep)
+		expect(after.snapshot.ownerCommitmentAttoEth).toBeLessThanOrEqual(plan.requestedCommitment ?? plan.commitment)
+		expect((after.positions.find(position => position.owner === source.account.address)?.rep ?? 0n) + after.snapshot.ownerPrincipalAttoRep).toBe(target.rep + first.snapshot.ownerPrincipalAttoRep)
 	})
 })

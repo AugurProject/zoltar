@@ -13,6 +13,14 @@ test('a position supporting zero commitment may still be removed entirely', () =
 	expect(securityPoolTakeoverSource(snapshot, { ...position, rep: 0n })).toMatchObject({ removed: unit, commitment: 0n, healthy: true })
 })
 
+test('half-hour quotes account for the source REP bonus before sizing the commitment transfer', () => {
+	const state = { ...snapshot, timestamp: 2800n, conservativePrice: unit, liquidationPrice: unit, securityMultiplierBps: 20_000n, totalCommitmentAttoEth: 100n * unit }
+	const target = { ...position, rep: 150n * unit, commitment: 100n * unit, liquidationStarted: 1000n, liquidationAwarded: 0n }
+	expect(securityPoolTakeoverSource(state, target)).toMatchObject({ maximumTakeoverAward: 75n * unit, maximumTakeoverCommitment: (625n * unit) / 10n })
+	const remainder = { ...target, rep: (1125n * unit) / 10n, commitment: (6875n * unit) / 100n, liquidationAwarded: (375n * unit) / 10n }
+	expect(securityPoolTakeoverSource(state, remainder)).toMatchObject({ maximumTakeoverAward: (375n * unit) / 10n, maximumTakeoverCommitment: (3125n * unit) / 100n })
+})
+
 test('#1571 the cure measures health at the conservative repair price, not the liquidation price', () => {
 	// 2% uncertainty around 1.2: liquidation 1.17647, conservative 1.22449; 50 of nominal spare.
 	const band = { ...snapshot, conservativePrice: 1224489795918367347n, liquidationPrice: 1176470588235294117n, totalCommitmentAttoEth: 200n * unit, demandAttoEth: 150n * unit }
@@ -40,4 +48,27 @@ test('#1570 a partial takeover may not leave the source between the liquidation 
 	expect(securityPoolTakeoverTransfer(source, 100n * unit)).toBe(source.maximumTakeoverCommitment)
 	expect(securityPoolTakeoverTransfer(source, source.maximumPartialCommitment)).toBe(source.maximumPartialCommitment)
 	expect(securityPoolTakeoverTransfer(source, source.maximumPartialCommitment + 1n)).toBeUndefined()
+})
+
+test('partial repair safety uses backing after its proportional bonus', () => {
+	const band = { ...snapshot, timestamp: 1900n, conservativePrice: 4421052631578947369n, liquidationPrice: 4n * unit, totalCommitmentAttoEth: 200n * unit, demandAttoEth: 200n * unit }
+	const source = securityPoolTakeoverSource(band, { rep: 400n * unit, commitment: 100n * unit, batch: 0n, remainingCommitment: 0n, liquidationStarted: 1000n })
+	expect(source.maximumTakeoverAward).toBe(100n * unit)
+	expect(securityPoolTakeoverTransfer(source, 10n * unit)).toBe(10n * unit)
+	expect(securityPoolTakeoverTransfer(source, 20n * unit)).toBeUndefined()
+	expect(securityPoolTakeoverTransfer(source, 100n * unit)).toBe(source.maximumTakeoverCommitment)
+})
+
+test('a proportional fill that fully repairs the source after rounding remains valid', () => {
+	const state = { ...snapshot, timestamp: 4600n, conservativePrice: unit, liquidationPrice: unit, securityMultiplierBps: 10_500n, totalCommitmentAttoEth: 101n * unit, demandAttoEth: 101n * unit }
+	const source = securityPoolTakeoverSource(state, { ...position, rep: 105n * unit - 1n, commitment: 100n * unit, liquidationStarted: 1000n })
+	expect(securityPoolTakeoverTransfer(source, 50n * unit)).toBe(50n * unit)
+})
+
+test('rounded proportional fills check exact backing even below the partial search bound', () => {
+	const state = { ...snapshot, conservativePrice: (101n * unit) / 100n, liquidationPrice: unit, securityMultiplierBps: 10_500n, totalCommitmentAttoEth: 100n, demandAttoEth: 100n, economics: { minimumCommitmentAttoEth: 1n } }
+	const source = securityPoolTakeoverSource(state, { ...position, rep: 104n, commitment: 100n, liquidationElapsed: 3600n })
+	expect(source.maximumPartialCommitment).toBeGreaterThan(60n)
+	expect(securityPoolTakeoverTransfer(source, 60n)).toBeUndefined()
+	expect(securityPoolTakeoverTransfer(source, source.maximumPartialCommitment)).toBe(source.maximumPartialCommitment)
 })

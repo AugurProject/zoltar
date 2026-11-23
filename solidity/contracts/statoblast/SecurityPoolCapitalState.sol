@@ -12,6 +12,21 @@ import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCa
 /// holds assets or authorizes calls. Keep all mutable ledger state here.
 abstract contract SecurityPoolCapitalState {
 	uint256 internal constant BPS = 10_000;
+	struct TakeoverPlan {
+		uint256 remainingCommitmentAttoEth;
+		uint256 remainingPrincipalAttoRep;
+		uint256 receivedPrincipalAttoRep;
+	}
+	struct TakeoverBounds {
+		uint256 maximumOwnerPrincipal;
+		uint256 maximumOwnerCommitment;
+		uint256 expectedTargetHealthFactorBps;
+		uint256 expectedAcceptedPriceEpoch;
+		uint96 expectedSourceBatch;
+	}
+
+	event CommitmentCured(uint96 indexed positionId, uint256 removedCommitment);
+	event CommitmentTakenOver(uint96 indexed sourceId, uint96 indexed receiverId, uint256 commitment, uint256 awardAttoRep);
 	SecurityPoolCommitmentIndex public commitmentIndex;
 	ICapitalFeeStreams public feeStreams;
 	address public services;

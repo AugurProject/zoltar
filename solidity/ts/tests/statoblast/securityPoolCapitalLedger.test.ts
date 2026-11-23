@@ -306,7 +306,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(await collateralBalance(alice, harness, ledger)).toBe(0n)
 	})
 
-	test('a receiver-funded repair preserves source principal and adds no nominal commitment', async () => {
+	test('an auction bonus moves only source principal and adds no nominal commitment', async () => {
 		await deposit(alice, 105n * E)
 		await deposit(bob, 210n * E)
 		await deposit(keeper, 500n * E)
@@ -318,11 +318,11 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [a, 50n * E, 0n, 500n * E - 1n] }))).rejects.toThrow('Receiver consent exceeded')
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [a, 50n * E, 0n, 500n * E] }))
 		expect((await position(b)).rep).toBe(210n * E)
-		expect((await position(a)).rep).toBe(105n * E)
+		expect((await position(a)).rep).toBe((105n * E) / 2n)
 		expect((await position(a)).commitment).toBe(50n * E)
 		expect((await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'totals' }))[1]).toBe(200n * E)
 		expect((await account(keeper)).freeAttoRep).toBe(0n)
-		expect((await position((await account(keeper)).positionId)).rep).toBe(500n * E)
+		expect((await position((await account(keeper)).positionId)).rep).toBe((1105n * E) / 2n)
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
 		await expect(demand(201n * E)).rejects.toThrow('Healthy commitment insufficient')
 	})
@@ -339,7 +339,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [source, 50n * E, 0n, 0n] }))
 		expect(await position(receiver)).toMatchObject({ commitment: 150n * E, batch: 0n, remainingCommitment: 0n })
-		expect(await position(source)).toMatchObject({ rep: 105n * E, commitment: 50n * E, batch: 0n })
+		expect(await position(source)).toMatchObject({ rep: (105n * E) / 2n, commitment: 50n * E, batch: 0n })
 	})
 
 	test('a takeover into an existing receiver requires its entire chosen health target without pledging new principal', async () => {
@@ -356,13 +356,13 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const takeover = (maximumOwn: bigint) => writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: source, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: maximumOwn })))
 		await expect(takeover(0n)).rejects.toThrow('Receiver collateral insufficient')
 		expect((await position(receiver)).rep).toBe(210n * E)
-		await deposit(keeper, (525n * E) / 2n - 1n)
+		await deposit(keeper, 210n * E - 1n)
 		await expect(takeover(0n)).rejects.toThrow('Receiver collateral insufficient')
 		await deposit(keeper, 1n)
 		await takeover(0n)
 		expect(await position(receiver)).toMatchObject({ rep: (945n * E) / 2n, commitment: 150n * E })
 		expect((await account(keeper)).freeAttoRep).toBe(0n)
-		expect((await position(source)).rep).toBe(105n * E)
+		expect((await position(source)).rep).toBe((105n * E) / 2n)
 		expect((await position(source)).commitment).toBe(50n * E)
 	})
 
@@ -385,7 +385,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const takeover = () => writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await takeover()
-		expect((await position(id)).rep).toBe(210n * E)
+		expect((await position(id)).rep).toBe(105n * E)
 	})
 
 	test('a receiver must restore aggregate health before takeover and cannot retain an older liquidation interval', async () => {
@@ -407,7 +407,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [receiver] })).toBe(0n)
 		await writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: source, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
-		expect(await position(receiver)).toMatchObject({ rep: 315n * E, commitment: 150n * E })
+		expect(await position(receiver)).toMatchObject({ rep: (735n * E) / 2n, commitment: 150n * E })
 		await price(3n * E)
 		const nextStart = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [receiver] })
 		expect(nextStart).toBe((await alice.getBlock()).timestamp)
@@ -415,7 +415,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const takeover = () => writeContractAndWait(bob, () => bob.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: receiver, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await takeover()
-		expect(await position(receiver)).toMatchObject({ rep: 315n * E, commitment: 100n * E })
+		expect(await position(receiver)).toMatchObject({ rep: 245n * E, commitment: 100n * E })
 	})
 
 	test('triggered liquidation rejects fresh and stale top-ups while fresh observations after gaps restart eligibility', async () => {
@@ -451,7 +451,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const takeover = () => writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await takeover()
-		expect((await position(id)).rep).toBe(105n * E)
+		expect((await position(id)).rep).toBe((105n * E) / 2n)
 	})
 
 	test('the public liquidation timer immediately reflects a price-only recovery', async () => {
@@ -480,7 +480,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const takeover = () => writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await takeover()
-		expect((await position(id)).rep).toBe(105n * E)
+		expect((await position(id)).rep).toBe((105n * E) / 2n)
 	})
 
 	test('oracle updates that never restore health preserve the distress interval', async () => {
@@ -495,7 +495,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await price(2n * E)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(started)
 		await writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
-		expect((await position(id)).rep).toBe(105n * E)
+		expect((await position(id)).rep).toBe((105n * E) / 2n)
 	})
 
 	test('partial takeover rounding that restores source health clears its previous interval', async () => {
@@ -508,15 +508,15 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await price(E)
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
-		expect(await position(id)).toMatchObject({ rep: 105n * E - 1n, commitment: 100n * E - 1n })
+		expect(await position(id)).toMatchObject({ rep: (105n * E) / 2n, commitment: 50n * E })
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 		await price(2n * E)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe((await alice.getBlock()).timestamp)
 		const takeover = () => writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id, commitment: 50n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await takeover()
-		expect((await position(id)).commitment).toBeGreaterThan(0n)
-		expect((await position(id)).rep).toBe(105n * E - 1n)
+		expect((await position(id)).commitment).toBe(0n)
+		expect((await position(id)).rep).toBe(0n)
 	})
 
 	test('returned demand closes retirement into exact cash and unrelated deficits cannot seize that cash', async () => {
@@ -761,9 +761,10 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await getAnvilWindowEthereum().advanceTime(21n)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'isPriceValid' })).toBe(false)
 		await price(2n * E)
-		await expect(writeContractAndWait(bob, () => bob.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id, commitment: 100n * E, minimumAward: 1n, maximumOwnRep: 1_000n * E })))).rejects.toThrow('Repairs pay future income only')
+		await expect(writeContractAndWait(bob, () => bob.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id, commitment: 100n * E, minimumAward: 106n * E, maximumOwnRep: 1_000n * E })))).rejects.toThrow('Takeover award below minimum')
 		await writeContractAndWait(bob, () => bob.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id, commitment: 100n * E, minimumAward: 0n, maximumOwnRep: 1_000n * E })))
-		expect((await position(id)).rep).toBe(105n * E)
+		expect((await position(id)).rep).toBeLessThanOrEqual(105n * E)
+		expect((await position(id)).rep + (await position((await account(bob)).positionId)).rep).toBe(1105n * E)
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
 		expect((await account(bob)).feesAttoEth).toBe(0n)
 	})

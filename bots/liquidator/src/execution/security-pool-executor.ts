@@ -53,12 +53,12 @@ export async function executeSecurityPoolTakeover(
 ) {
 	if (!settings.securityPoolPolicy.allowFundedTakeovers || !settings.runtime.execute) throw new Error('Funded security pool automation is disabled')
 	if (state.pendingTransactions.length !== 0) throw new Error('Pending recovery blocks security pool exposure changes')
-	const refresh = async () => {
+	const refresh = async (requestedCommitment?: bigint) => {
 		const current = await execution.refresh(wallet, settings, state.securityPoolScopes, pool, target, positionId)
 		const position = current.observation.positions.find(position => sameSecurityPoolTarget(securityPoolTarget(position), positionId))
 		if (position === undefined) throw new SecurityPoolOpportunityExpired('Security pool target position is missing')
 		const marketAllowed = await priceAllowed(current.observation)
-		const result = securityPoolTakeoverPlan(current.observation, position, settings, current.totalPrincipal, marketAllowed)
+		const result = securityPoolTakeoverPlan(current.observation, position, settings, current.totalPrincipal, marketAllowed, requestedCommitment)
 		if (result.plan === undefined) throw new SecurityPoolOpportunityExpired(result.reason)
 		return { ...current, plan: result.plan }
 	}
@@ -72,7 +72,7 @@ export async function executeSecurityPoolTakeover(
 	let action: 'approval' | 'principal' | 'takeover'
 	if (plan.ownFunding > 0n && current.allowance < plan.ownFunding) {
 		action = 'approval'
-		request = { to: observation.snapshot.repToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [base.capitalLedger, plan.ownFunding] }), value: 0n }
+		request = { to: observation.snapshot.repToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [base.capitalLedger, plan.approvalRep] }), value: 0n }
 		label = 'Approve bounded REP funding for the security pool'
 	} else if (plan.ownFunding > 0n) {
 		action = 'principal'
@@ -86,17 +86,17 @@ export async function executeSecurityPoolTakeover(
 				? buildSecurityPoolCapitalTakeOverWithBoundsRequest({
 						...base,
 						positionId: plan.positionId,
-						commitment: plan.commitment,
+						commitment: plan.requestedCommitment ?? plan.commitment,
 						minimumAward: plan.minimumAward,
 						maximumOwnRep: plan.maximumOwnRep,
 						bounds,
 					})
-				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.commitment, plan.minimumAward, plan.maximumOwnRep, bounds] }) }
+				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.requestedCommitment ?? plan.commitment, plan.minimumAward, plan.maximumOwnRep, bounds] }) }
 		label = typeof positionId === 'bigint' ? `Take over security pool position ${positionId}` : `Take over auction bid ${positionId.bidId} vault ${positionId.vault}`
 		if (plan.unpaidCure) label = typeof positionId === 'bigint' ? `Cure security pool position ${positionId} without an award` : `Cure auction bid ${positionId.bidId} vault ${positionId.vault} without an award`
 	}
 	const preSubmit = async () => {
-		const latest = await refresh()
+		const latest = await refresh(action === 'takeover' && plan.requestedCommitment === undefined ? plan.commitment : undefined)
 		assertSecurityPoolPlanStillAllowed(plan, latest.plan, action)
 		if (latest.observation.acceptedPriceEpoch !== expectedAcceptedPriceEpoch) throw new SecurityPoolOpportunityExpired('Security pool accepted price epoch changed before signing')
 	}
@@ -125,7 +125,8 @@ export async function executeSecurityPoolTakeover(
 /** @internal Revalidate funding, exposure and cohort consent after each prerequisite. */
 export function assertSecurityPoolPlanStillAllowed(original: SecurityPoolTakeover, current: SecurityPoolTakeover, action: 'approval' | 'principal' | 'takeover') {
 	if (original.expectedTotalCommitment !== current.expectedTotalCommitment || original.expectedDemand !== current.expectedDemand) throw new SecurityPoolOpportunityExpired('Security pool cure capacity changed before submission')
-	if (original.commitment !== current.commitment || original.expectedSourceBatch !== current.expectedSourceBatch || original.maximumOwnerPrincipal > current.maximumOwnerPrincipal || original.maximumOwnerCommitment > current.maximumOwnerCommitment)
+	const commitmentCovered = original.requestedCommitment !== undefined && current.commitment >= original.commitment && current.commitment <= original.requestedCommitment
+	if ((!commitmentCovered && original.commitment !== current.commitment) || original.expectedSourceBatch !== current.expectedSourceBatch || original.maximumOwnerPrincipal > current.maximumOwnerPrincipal || original.maximumOwnerCommitment > current.maximumOwnerCommitment)
 		throw new SecurityPoolOpportunityExpired('Security pool exposure or cohort changed before submission')
 	if (original.unpaidCure !== current.unpaidCure) throw new SecurityPoolOpportunityExpired('Security pool takeover terms changed before submission')
 	if ((action === 'approval' || action === 'principal') && original.ownFunding !== current.ownFunding) throw new SecurityPoolOpportunityExpired('Security pool funding requirement changed before submission')

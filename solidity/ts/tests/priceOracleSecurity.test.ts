@@ -914,8 +914,11 @@ describe('Shared security pool oracle security regressions', () => {
 		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumToken1ReportAttoEth' }), expected)
 		await requestPrice(client, priceOracle)
 		const report = await getOpenOracleReportMeta(client, await getPendingReportId(client, priceOracle))
-		assert.strictEqual(report.exactToken1Report, expected)
-		assert.strictEqual(report.escalationHalt, expected * 10n)
+		// At one REP per ETH, funding all 1,000 pledged REP binds above the collateral floor.
+		const repBudget = 10n * 10n ** 18n
+		assert.ok(repBudget > expected, 'pledged REP should be the binding budget for this quote')
+		assert.strictEqual(report.exactToken1Report, repBudget)
+		assert.strictEqual(report.escalationHalt, repBudget * 10n)
 	})
 	test('a larger committed bounty rewards settlement without relaxing the report basefee safety cap', async () => {
 		const bounty = 10n ** 18n

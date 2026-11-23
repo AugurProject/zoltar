@@ -87,7 +87,7 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 
 	test('all winners immediately back claims at one price before any bid is materialized', async () => {
 		const context = await prepare()
-		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'oracleRepExposure', args: [context.child] })).toBe(1_000n * unit)
+		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'oracleRepExposure', args: [context.child] })).toBe(2_000n * unit)
 		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'oracleExposure', args: [context.child] })).toBe(205n * unit)
 		await expect(context.open()).rejects.toThrow('quote is not funded and fresh')
 		await context.report()
@@ -304,9 +304,9 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 
 	test('the REP inventory challenge requirement cannot be bypassed with a cheap proposed REP price', async () => {
 		const context = await prepare()
-		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'minimumToken2ReportAttoRep' })).toBe(10n * unit)
+		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'minimumToken2ReportAttoRep' })).toBe(20n * unit)
 		const minimum = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [unit / 10n] })
-		expect(minimum).toBe(100n * unit)
-		await expect(context.report(unit / 10n)).rejects.toThrow('Report funding below minimum')
+		expect(minimum).toBe(200n * unit)
+		await expect(context.report(unit / 10n, 10n * unit)).rejects.toThrow('Report funding below minimum')
 	})
 })

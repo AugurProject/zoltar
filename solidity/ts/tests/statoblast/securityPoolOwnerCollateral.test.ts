@@ -147,7 +147,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect(laterAlice).toBe(laterBob)
 	})
 
-	test('a partial repair retains all source REP and uses only receiver funding', async () => {
+	test('a partial repair transfers a proportional pledged bonus without changing custody', async () => {
 		await deposit(alice, 105n * E)
 		await deposit(keeper, 200n * E)
 		const id = await authorize(alice, 100n * E)
@@ -157,8 +157,9 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'takeOver', args: [id, 50n * E, 0n, 200n * E] }))
 		const source = await position(id)
 		const receiver = await position((await account(keeper)).positionId)
-		expect(receiver.rep).toBe(200n * E)
-		expect(source).toMatchObject({ rep: 105n * E, commitment: 50n * E })
+		expect(receiver.rep).toBeGreaterThan(200n * E)
+		expect(source.commitment).toBe(50n * E)
+		expect(source.rep).toBeLessThan(105n * E)
 		expect((await account(alice)).freeAttoRep).toBe(0n)
 		expect(source.rep + receiver.rep).toBe(305n * E)
 	})
