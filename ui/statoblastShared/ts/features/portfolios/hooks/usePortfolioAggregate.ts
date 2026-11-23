@@ -1,7 +1,7 @@
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { encodeFunctionData, formatEther, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildPortfolioCapitalDepositRequest,
@@ -118,7 +118,8 @@ export function usePortfolioAggregate(
 		if (reportId === undefined || reportId === 0n) proofReason = capitalCopy.reportInvalid
 		else proofReason = proof.value?.key === proofKey && !proof.value.pending ? proof.value.error : capitalCopy.reportChecking
 	}
-	useEffect(() => {
+	// Initialize drafts before an interactive render can accept input for the new identity.
+	useLayoutEffect(() => {
 		if (snapshot === undefined) return
 		const key = `${snapshot.chainId}:${snapshot.portfolio}:${snapshot.owner}:${snapshot.universeId}`
 		const savedHealth = snapshot.ownerAccount.targetHealthFactorBps || 10_000n

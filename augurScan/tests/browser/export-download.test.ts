@@ -5,7 +5,7 @@ import { browserTest, origin, qaViewports, writeScreenshot } from './browser-tes
 browserTest('historical log export downloads one page at a time with a visible continuation', async () => {
 	for (const viewport of qaViewports) {
 		await withBrowserPage(`${origin}/operations/integrity?demo=1&chainId=1`, viewport, async session => {
-			await session.waitFor(`document.querySelector('#operations-content').textContent.includes('Selected-chain historical exports')`)
+			await session.waitFor(`document.querySelector('#operations-content')?.textContent.includes('Selected-chain historical exports') === true`)
 			await session.evaluate(`(() => {
 				window.exportRequests = []
 				window.exportFiles = []
