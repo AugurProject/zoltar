@@ -155,7 +155,7 @@ describe('collateral-independent outcome disputes', () => {
 				functionName: 'balanceOf',
 				args: [owner.account.address],
 			})
-			await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'claimEarnings' }))
+			await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'claimEarnings', args: [owner.account.address] }))
 			expect(
 				await owner.readContract({
 					...token,

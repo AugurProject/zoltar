@@ -29,7 +29,7 @@ export async function executePortfolioEarnings(wallet: Wallet, settings: Operato
 		{
 			to: current.snapshot.capitalLedger,
 			value: 0n,
-			data: encodeFunctionData({ abi: capitalAbi, functionName: 'claimEarnings' }),
+			data: encodeFunctionData({ abi: capitalAbi, functionName: 'claimEarnings', args: [wallet.account.address] }),
 			gas: 'estimate',
 			label: 'Collect portfolio earned fees',
 			preSubmit: refresh,

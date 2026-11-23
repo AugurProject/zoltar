@@ -255,7 +255,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await ownerAccount()).toEqual(accountBefore)
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'acceptedPrice' })).toBe(acceptedPrice)
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'priceValidUntil' })).toBe(validUntil)
-		const receipt = await fixture.owner().waitForTransactionReceipt({ hash: await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'claimEarnings' })) })
+		const receipt = await fixture.owner().waitForTransactionReceipt({ hash: await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'claimEarnings', args: [fixture.owner().account.address] })) })
 		expect(receipt.gasUsed).toBeLessThan(500_000n)
 	})
 

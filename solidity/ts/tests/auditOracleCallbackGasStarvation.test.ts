@@ -79,7 +79,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 
 	test('rejects an operation batch whose callback could not be settled in one transaction', async () => {
 		const { sponsor, feed } = await prepare()
-		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) }]
+		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [sponsor.account.address] }) }]
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		await expect(sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 6_000_001, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty })).rejects.toThrow(
@@ -93,16 +93,17 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 	// failed at any settler gas, and the price was accepted only if someone recovered the report.
 	test('rejects operation data too long for the per-operation callback overhead to read back', async () => {
 		const { sponsor, feed } = await prepare()
-		const claimEarnings = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' })
+		// 36 bytes of selector and recipient leave 476 bytes of padding below the 512-byte limit.
+		const claimEarnings = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [sponsor.account.address] })
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const request = (data: Hex) =>
 			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [{ gasLimit: 500_000n, data }] }], value: bounty })
 		await expect(request(`${claimEarnings}${'00'.repeat(96_000)}`)).rejects.toThrow('Operation data too large')
-		await expect(request(`${claimEarnings}${'00'.repeat(509)}`)).rejects.toThrow('Operation data too large')
+		await expect(request(`${claimEarnings}${'00'.repeat(477)}`)).rejects.toThrow('Operation data too large')
 
 		// Padding up to the limit still settles with the callback accepting the price.
-		await writeContractAndWait(sponsor, () => request(`${claimEarnings}${'00'.repeat(508)}`))
+		await writeContractAndWait(sponsor, () => request(`${claimEarnings}${'00'.repeat(476)}`))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
 		const attacker = fixture.owner()

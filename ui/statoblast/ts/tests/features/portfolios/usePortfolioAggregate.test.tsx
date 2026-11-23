@@ -18,7 +18,7 @@ const abi = parseAbi([
 	'function setCommitmentWithReport(uint256 reportId,uint256 commitment)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
-	'function claimEarnings()',
+	'function claimEarnings(address recipient)',
 	'function serveRetirement(uint96 id)',
 ])
 async function setup(snapshot = capitalSnapshot()) {

@@ -211,7 +211,8 @@ describe('Statoblast: owner health policy', () => {
 		await target(alice, 15_000n)
 		expect([...(await collateral(alice))]).toEqual([126n * E, 80n * E, 0n])
 		await demand(0n)
-		await expect(writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))).rejects.toThrow('Only retirement owner')
+		// Anyone may serve a request; a position with no pending request is unchanged.
+		await writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))
 		expect(await position(id)).toMatchObject({ rep: 126n * E, commitment: 80n * E, batch: 0n })
 	})
 

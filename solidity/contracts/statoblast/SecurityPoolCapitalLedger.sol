@@ -261,10 +261,14 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_serveRetirement(id);
 	}
 
+	/// @notice Execute any owner's ready retirement request. Serving only carries out
+	/// the owner's own request and its REP stays with that owner, so anyone may call
+	/// it; an owner cannot keep an ineligible request reserving spare it does not supply.
+	/// A position without a pending request is left unchanged.
 	function serveRetirement(uint96 id) external nonReentrant {
 		_requireOpen();
-		require(id != 0 && commitmentIndex.accountOf(id).owner == _capitalOwner(), 'Only retirement owner');
 		_checkpoint();
+		require(id == 0 || id != auctionCohort.positionId, 'Materialize an individual auction vault');
 		_serveRetirement(id);
 	}
 	function _serveRetirement(uint96 id) private {
@@ -394,16 +398,21 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		feeStreams.addStream(cash, repAmount);
 	}
 
-	function claimEarnings() external nonReentrant {
+	function claimEarnings(address recipient) external nonReentrant {
 		_checkpoint();
-		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.claimEarnings, ()));
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.claimEarnings, (recipient)));
 	}
 
 	/// @dev Cut unbacked commitment down to `target`. Only the owner's own
 	/// `setCommitment` and a takeover, which needs an adverse observation, cure.
-	function _cure(uint96 id, uint256 target, bool ownerExit) private returns (uint256 removed) {
+	function _cure(uint96 id, uint256 target, bool ownerExit) private returns (uint256) {
+		_requireIndividualPosition(id);
+		return _applyCure(id, commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit));
+	}
+	function _requireIndividualPosition(uint96 id) private view {
 		require(id != 0 && id != auctionCohort.positionId, 'Materialize an individual auction vault');
-		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit);
+	}
+	function _applyCure(uint96 id, SecurityPoolCommitmentIndex.Cure memory result) private returns (uint256 removed) {
 		removed = result.removed;
 		if (removed != 0) {
 			owners[result.owner].account.freeAttoRep += result.freedRep;
@@ -445,17 +454,12 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireFresh();
 		require(minimumAward == 0, 'Repairs pay future income only');
 		_checkpoint();
-		require(commitmentIndex.liquidationStarted(id) != 0, 'Adverse observation missing');
-		SecurityPoolCommitmentIndex.Account memory beforeCure = commitmentIndex.accountOf(id);
-		require(beforeCure.owner != receiverOwner && beforeCure.maxHealthyPrice < liquidationPrice, 'Position does not need takeover');
-		require(commitment > 0 && commitment <= beforeCure.commitment, 'Invalid takeover commitment');
-		uint256 cured = _cure(id, 0, false);
 		// A keeper must be able to leave a successful cure in place. No assets
-		// transfer and no award is paid when nominal excess alone restores health.
-		if (cured != 0 && commitmentIndex.liquidationStarted(id) == 0) {
-			return 0;
-		}
-		(SecurityPoolCommitmentIndex.Account memory source, uint256 repaired) = commitmentIndex.takeoverQuote(id, receiverOwner, commitment, minimumCommitmentAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
+		// transfer and no award is paid when nominal excess alone settles the
+		// position. A cure limited by nominal spare continues into a receiver-funded repair.
+		(SecurityPoolCommitmentIndex.Cure memory cured, SecurityPoolCommitmentIndex.Account memory source, uint256 repaired) = commitmentIndex.takeover(id, auctionCohort.positionId, receiverOwner, commitment, minimumCommitmentAttoEth, demandAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
+		_applyCure(id, cured);
+		if (cured.settled) return 0;
 		commitment = repaired;
 		_settleOwner(receiverOwner);
 		Owner storage receiver = owners[receiverOwner].account;
@@ -493,14 +497,14 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		uint256 receiverPrincipalAttoRep;
 		uint256 receiverCommitmentAttoEth;
 		if (receiverId == 0) {
-			receiverId = commitmentIndex.split(id, receiverOwner, 0, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment));
+			receiverId = commitmentIndex.split(id, receiverOwner, 0, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment), minimumCommitmentAttoEth);
 			receiver.positionId = receiverId;
 			receiverPrincipalAttoRep = plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = commitment;
 		} else {
 			receiverPrincipalAttoRep = existing.rep + plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = existing.commitment + commitment;
-			commitmentIndex.transferTo(id, receiverId, 0, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth));
+			commitmentIndex.transferTo(id, receiverId, 0, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth), minimumCommitmentAttoEth);
 		}
 		// Balanced transfer preserved a closed cohort's commitment. This replacement only
 		// adjusts collateral and therefore cannot refill that cohort.

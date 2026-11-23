@@ -118,7 +118,7 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		const token = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
 		const collateralBefore = await getERC20Balance(client, token, owner)
 		const nativeBefore = await client.getBalance({ address: owner })
-		const receipt = await client.waitForTransactionReceipt({ hash: await writeContractAndWait(client, () => client.writeContract({ ...capital(), functionName: 'claimEarnings' })) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await writeContractAndWait(client, () => client.writeContract({ ...capital(), functionName: 'claimEarnings', args: [client.account.address] })) })
 		if (receipt.effectiveGasPrice === undefined) throw new Error('The claim receipt has no gas price.')
 		const received = (await getERC20Balance(client, token, owner)) - collateralBefore
 		expect(nativeBefore - (await client.getBalance({ address: owner }))).toBe(receipt.gasUsed * receipt.effectiveGasPrice)

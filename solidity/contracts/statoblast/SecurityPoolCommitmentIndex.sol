@@ -42,6 +42,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 removed;
 		uint256 freedRep;
 		address owner;
+		// A cut that alone repairs the position, or leaves only the economic minimum.
+		bool settled;
 	}
 
 	struct Retirement {
@@ -147,7 +149,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @dev Fees remain attached to the old owner. The receiver gets a fresh ID
 	/// in precisely the source cohort; its insertion is balanced by source removal.
-	function split(uint96 id, address receiver, uint256 rep, uint256 commitment, uint256 remainingMaxPrice, uint256 receiverMaxPrice) external onlyCapitalLedger operational returns (uint96 receiverId) {
+	function split(uint96 id, address receiver, uint256 rep, uint256 commitment, uint256 remainingMaxPrice, uint256 receiverMaxPrice, uint256 minimumCommitment) external onlyCapitalLedger operational returns (uint96 receiverId) {
 		_touch(id);
 		Position storage source = positions[id];
 		Node storage leaf = nodes[source.node];
@@ -159,6 +161,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		leaf.commitment -= commitment;
 		leaf.price = remainingMaxPrice;
 		uint256 remaining = _transferRemaining(source, leaf.commitment);
+		// A residual target below the economic minimum becomes a full exit (#1563).
+		if (remaining < minimumCommitment) remaining = 0;
 		_reinsert(source);
 		receiverId = _create(receiver, batch, rep, commitment, receiverMaxPrice, remaining);
 	}
@@ -189,7 +193,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @dev Supports an existing receiver slot without refreshing retirement
 	/// priority. Both old fee entitlements stay with their respective owners.
-	function transferTo(uint96 sourceId, uint96 receiverId, uint256 rep, uint256 commitment, uint256 sourceMaxPrice, uint256 receiverMaxPrice) external onlyCapitalLedger operational {
+	function transferTo(uint96 sourceId, uint96 receiverId, uint256 rep, uint256 commitment, uint256 sourceMaxPrice, uint256 receiverMaxPrice, uint256 minimumCommitment) external onlyCapitalLedger operational {
 		require(sourceId != receiverId, 'Same commitment position');
 		_touch(sourceId);
 		_touch(receiverId);
@@ -216,7 +220,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		to.commitment += commitment;
 		to.price = receiverMaxPrice;
 		uint256 transferredRemaining = _transferRemaining(source, from.commitment);
-		if (receiver.batch != 0) receiver.remainingCommitment += transferredRemaining;
+		// Never leave the receiver a residual target below the economic minimum (#1563).
+		if (receiver.batch != 0 && receiver.remainingCommitment + transferredRemaining >= minimumCommitment) receiver.remainingCommitment += transferredRemaining;
 		_reinsert(source);
 		_reinsert(receiver);
 	}
@@ -295,7 +300,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// leaving entirely, whose rest is queued for retirement whatever its size.
 	/// An owner's own reduction (`ownerExit` or a nonzero target) whose deficit is
 	/// below the minimum cuts nothing and queues instead; only a takeover cures it.
-	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target, bool ownerExit) external onlyCapitalLedger operational returns (Cure memory result) {
+	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target, bool ownerExit) public onlyCapitalLedger operational returns (Cure memory result) {
 		Account memory account = accountOf(id);
 		require(account.owner != address(0) && account.commitment > target, 'Position is not live');
 		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, price);
@@ -344,6 +349,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			}
 		}
 		if (remaining <= supported) positions[id].healthyMutationEpoch = healthObservationEpoch;
+		result.settled = removed != 0 && (remaining <= supported || remaining <= minimumCommitment);
 	}
 
 	function eligibleCommitment(uint256 acceptedPrice) public view returns (uint256) {
@@ -355,17 +361,28 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Repair transfers only unsupported commitment. Principal and past
 	/// income stay with the source; the receiver supplies its own backing and
 	/// earns future fees. Elapsed time and repeated repairs preserve source ownership.
-	/// Keep the source's economic minimum: replacing its final commitment needs
-	/// additional healthy capacity and the ordinary retirement queue.
-	function takeoverQuote(uint96 id, address receiver, uint256 requested, uint256 minimumCommitment, uint256 price, uint256 repairPrice, uint256 multiplier) external view onlyCapitalLedger returns (Account memory source, uint256 commitment) {
+	/// Eligibility is checked at the liquidation price before an unpaid cure,
+	/// which measures health at the conservative repair price (#1571). If that cure
+	/// settles the position, no transfer follows. Otherwise the transfer keeps the
+	/// source's economic minimum: replacing its final commitment needs additional
+	/// healthy capacity and the ordinary retirement queue. A partial repair must
+	/// leave the source either fully repaired or still below the liquidation price:
+	/// between the two prices it would earn nothing and nobody could take it over (#1570).
+	function takeover(uint96 id, uint96 cohort, address receiver, uint256 requested, uint256 minimumCommitment, uint256 demand, uint256 price, uint256 repairPrice, uint256 multiplier) external onlyCapitalLedger operational returns (Cure memory cured, Account memory source, uint256 commitment) {
+		require(liquidationStarted(id) != 0, 'Adverse observation missing');
 		source = accountOf(id);
 		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
-		require(liquidationStarted(id) != 0, 'Adverse observation missing');
-		require(requested > 0, 'Invalid takeover commitment');
-		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep, 10_000, multiplier), 1e18, repairPrice);
-		uint256 retained = Math.max(supported, minimumCommitment);
+		require(requested > 0 && requested <= source.commitment, 'Invalid takeover commitment');
+		require(id != cohort, 'Materialize an individual auction vault');
+		cured = cure(id, repairPrice, multiplier, minimumCommitment, demand, 0, false);
+		if (cured.settled) return (cured, source, 0);
+		source = accountOf(id);
+		uint256 backing = Math.mulDiv(source.rep, 10_000, multiplier);
+		uint256 retained = Math.max(Math.mulDiv(backing, 1e18, repairPrice), minimumCommitment);
 		require(source.commitment > retained, 'Position requires additional backing');
 		commitment = Math.min(requested, source.commitment - retained);
+		uint256 rest = source.commitment - commitment;
+		require(rest == retained || rest > Math.mulDiv(backing, 1e18, price), 'Takeover would strand source between prices');
 	}
 	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) public pure returns (uint256) {
 		require(health >= 10_000 && price > 0, 'Invalid health or price');
@@ -432,7 +449,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		return (ethAmount - assignedEth, repAmount - assignedRep);
 	}
 
-	/// @notice Owners serve their own ready requests. Zero never processes other owners.
+	/// @notice Serves exactly the requested position when ready. Zero never processes other positions.
 	function retire(uint256 acceptedPrice, uint256 demand, uint96 id) external onlyCapitalLedger operational returns (Retirement memory result) {
 		if (id != 0) return _retirePosition(id, acceptedPrice, demand);
 	}
