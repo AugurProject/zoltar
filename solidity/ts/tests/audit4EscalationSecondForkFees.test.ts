@@ -60,14 +60,14 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		const { base } = fixture
 		const trader = fixture.other()
 		const childA = await e2e.materialize(source, A)
-		const anchorA = fork0 + 9n * WEEK
+		const anchorA = await e2e.activationTime(A)
 		// The continuation resumes at the recapitalization deadline with the origin's elapsed time and cost.
 		expect(await read(childA.game, 'forkResumedAt')).toBe(anchorA)
 		expect(await read(childA.game, 'forkElapsedAtStart')).toBe(fork0 - activation)
 		expect(await base.mockWindow.getTime()).toBeLessThan(anchorA + DAY)
 		const remaining0 = end0 - fork0
 		const endA0 = await read(childA.game, 'getEscalationGameEndDate')
-		expect(endA0).toBe(anchorA + (remaining0 > 3n * DAY ? remaining0 : 3n * DAY))
+		expect(endA0).toBe(anchorA + remaining0)
 		expect(await read(childA.game, 'getFinalQuestionResolution')).toBe(NONE)
 		// The curve only moved by the seconds since the anchor.
 		expect(await read(childA.game, 'totalCostAttoRep')).toBeGreaterThanOrEqual(cost0)
@@ -83,7 +83,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		expect(await e2e.gameBalance(childA.game)).toBe(backing)
 		const endA = await read(childA.game, 'getEscalationGameEndDate')
 		const earliest = await owner.readContract({ ...e2e.zoltar(), functionName: 'getEarliestForkTime', args: [A] })
-		expect(earliest).toBe(anchorA + WEEK)
+		expect(earliest).toBe(fork0 + 10n * WEEK)
 		expect(earliest).toBeLessThan(endA)
 		await base.mockWindow.setTime(earliest + DAY)
 		await accrue(r6, childA.pool)
@@ -98,7 +98,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		await expect(r2.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, 10n * K] })).rejects.toThrow()
 		await e2e.choose(owner, A, YES)
 		const AA = await e2e.activateBranch(A, YES)
-		const anchorAA = forkA + 9n * WEEK
+		const anchorAA = await e2e.activationTime(AA)
 		for (const reporter of [r2, r3, r5, r6]) await e2e.migrateWalletRep(reporter, A, 100n * K, [YES, NO])
 
 		// ---- prompt grandchild AA ----
@@ -109,16 +109,14 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		expect(await e2e.gameBalance(childAA.game)).toBe(backing)
 		expect(await read(childAA.game, 'getFinalQuestionResolution')).toBe(NONE)
 		const remainingA = endA - forkA
-		// The interrupted child's remaining curve time is rebased onto the grandchild, which also gets its own three days.
-		const curveEndA = remainingA
+		// The grandchild resumes only the interrupted child's remaining curve time.
 		const endAA = await read(childAA.game, 'getEscalationGameEndDate')
-		expect(endAA).toBeGreaterThanOrEqual(anchorAA + 3n * DAY)
-		if (curveEndA > 3n * DAY) expect(endAA).toBe(anchorAA + curveEndA)
+		expect(endAA).toBe(anchorAA + remainingA)
 		// The cost resumes from the frozen value and the provisional leader is unchanged.
 		const costAA = await read(childAA.game, 'totalCostAttoRep')
 		expect(costAA).toBeGreaterThanOrEqual(costA)
 		expect(await read(childAA.game, 'getQuestionResolution')).toBe(provisionalA)
-		// Any start-bond response is accepted throughout the three days, and a change of leader restarts nothing.
+		// A start-bond response is accepted while the resumed curve remains open.
 		await base.mockWindow.setTime(anchorAA + 3n * DAY - 60n)
 		await accrue(r6, childAA.pool)
 		expect(await e2e.deposit(r5, childAA.pool, NO, 25n * K)).toBe(25n * K)
@@ -143,15 +141,15 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		expect(await e2e.rep(AA, ledger)).toBe(0n)
 		expect(supplyAA - (await e2e.supply(AA))).toBe(backing + 25n * K - settled.paid - local)
 
-		// ---- late grandchild AB: materialized long after its response period elapsed ----
+		// ---- late grandchild AB: activation resumes its own full remaining time ----
 		const AB = await e2e.activateBranch(A, NO)
-		const anchorAB = anchorAA
-		expect(await base.mockWindow.getTime()).toBeGreaterThan(anchorAB + 3n * DAY)
+		const anchorAB = await e2e.activationTime(AB)
+		expect(anchorAB).toBeGreaterThan(anchorAA)
 		const childAB = await e2e.materialize(childA.pool, AB)
 		expect(await read(childAB.game, 'forkResumedAt')).toBe(anchorAB)
 		expect(await read(childAB.game, 'forkElapsedAtStart')).toBe(elapsedA)
 		const endAB = await read(childAB.game, 'getEscalationGameEndDate')
-		expect(endAB).toBe(endAA)
+		expect(endAB).toBe(anchorAB + remainingA)
 		const now = await base.mockWindow.getTime()
 		const finalAB = await read(childAB.game, 'getFinalQuestionResolution')
 		// Game finality and reporter custody finality agree whichever side of the deadline we are on.
@@ -193,7 +191,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		const { owner, q, source, game0, activation, fork0, A, ledger, read, reporters } = await start()
 		const { r6 } = reporters
 		const { base } = fixture
-		const anchorA = fork0 + 9n * WEEK
+		const anchorA = await e2e.activationTime(A)
 		// Two of the three installation steps run in A; the third never does before A forks.
 		await step(r6, source, A)
 		await step(r6, source, A)
@@ -212,7 +210,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		expect(await read(gameA, 'getFinalQuestionResolution')).toBe(NONE)
 		await e2e.choose(owner, A, YES)
 		const AA = await e2e.activateBranch(A, YES)
-		const anchorAA = forkA + 9n * WEEK
+		const anchorAA = await e2e.activationTime(AA)
 		// The half installed pool is not the last live reporter source; the origin still is.
 		await expect(r6.simulateContract({ ...e2e.forker(), functionName: 'materializePortfolioQuestion', args: [poolA, AA], gas: BRANCH_GAS })).rejects.toThrow('Use last live reporter source')
 		const childAA = await e2e.materialize(source, AA)

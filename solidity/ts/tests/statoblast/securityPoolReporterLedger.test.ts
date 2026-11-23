@@ -35,13 +35,13 @@ describe('Statoblast: central reporter custody', () => {
 	}
 	const deposit = async (game: Address, amount: bigint) => await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: game, functionName: 'deposit', args: [amount] }))
 	/** Funds a source game with 10 REP scheduled to finalize at 1_001, then forks universe 0 on the question at time 1_000. */
-	const forkWithScheduledSource = async () => {
+	const forkWithScheduledSource = async (deadline = 1_001, forkQuestion = questionId) => {
 		const source = await createGame(questionId)
 		await deposit(source, 10n * unit)
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: source, functionName: 'schedule', args: [1_001] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: source, functionName: 'schedule', args: [deadline] }))
 		await approveToken(owner, getRepTokenAddress(0n), getZoltarAddress())
 		await ethereum.setTime(1_000n)
-		await forkUniverse(owner, 0n, questionId)
+		await forkUniverse(owner, 0n, forkQuestion)
 		return source
 	}
 	const withdraw = async (game: Address, amount: bigint) => await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: game, functionName: 'withdraw', args: [owner.account.address, amount] }))
@@ -168,12 +168,15 @@ describe('Statoblast: central reporter custody', () => {
 		await expect(createChild(1n)).rejects.toThrow('Reporter child already exists')
 	})
 
-	test('finalizes an untouched inherited deadline after the response floor and permits later direct claims', async () => {
-		const source = await forkWithScheduledSource()
+	test('finalizes an untouched inherited deadline without a new response floor and permits later direct claims', async () => {
+		const forkQuestion = { ...makeQuestion('unrelated fork preserves reporter curve time'), startTime: 0n, endTime: 0n }
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(owner, forkQuestion, outcomes)
+		const source = await forkWithScheduledSource(2_000, getQuestionId(forkQuestion, outcomes))
 		await rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'freezeFork', args: [0n] }))
 		const child = await createChild(1n)
 		const unrelated = await createGame(questionId + 2n, child)
-		const floor = 1_001n + 3n * 86_400n
+		const floor = 2_000n
 		await ethereum.setTime(floor - 1n)
 		await deposit(unrelated, 0n)
 		expect((await book(child))[0]).toBe(10n * unit)

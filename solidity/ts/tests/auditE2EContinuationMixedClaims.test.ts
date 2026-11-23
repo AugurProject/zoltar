@@ -4,7 +4,7 @@ import { statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/c
 import type { WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { SparseNullifierTree } from './carryProofHelpers'
-import { createE2E, expectedWinningClaim, INVALID, median, NO, NONE, OUTCOMES, WEEK, YES, type CarryLeaf } from './auditE2EHarness'
+import { createE2E, expectedWinningClaim, INVALID, median, NO, NONE, OUTCOMES, YES, type CarryLeaf } from './auditE2EHarness'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
 const K = 1_000n * unit
@@ -43,12 +43,12 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		// The 5k minimum is ordinary surplus: it left reporter custody before the fork.
 		const inheritedBacking = 120n * K
 		expect(await e2e.gameBalance(game0)).toBe(inheritedBacking)
-		const fork0 = await e2e.forkOn(r6, U0, await e2e.unrelatedQuestion('auditE2E continuation: first unrelated fork'))
+		await e2e.forkOn(r6, U0, await e2e.unrelatedQuestion('auditE2E continuation: first unrelated fork'))
 		await e2e.choose(owner, U0, YES)
 		const A = await e2e.activateBranch(U0, YES)
 		const childA = await e2e.materialize(source, A)
 		const gA = e2e.game(childA.game)
-		const resumedAt = fork0 + 9n * WEEK
+		const resumedAt = await e2e.activationTime(A)
 		expect(await owner.readContract({ ...gA, functionName: 'forkResumedAt' })).toBe(resumedAt)
 		expect(await owner.readContract({ ...gA, functionName: 'nonDecisionState' })).toBe(0n)
 		expect(await owner.readContract({ ...gA, functionName: 'winnerHaircutPaidByFork' })).toBe(false)

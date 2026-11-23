@@ -92,12 +92,13 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...p, functionName: 'forkController' }) }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
 		const child = getChildUniverseId(base.genesisUniverse, 1),
-			W = firstFork + 63n * DAY
-		await base.mockWindow.setTime(W)
+			earliestActivation = firstFork + 63n * DAY
+		await base.mockWindow.setTime(earliestActivation)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [child] }))
+		const W = (await owner.getBlock()).timestamp
 		const remaining = sourceEnd - firstFork
-		const expectedEnd = W + (remaining > 3n * DAY ? remaining : 3n * DAY)
+		const expectedEnd = W + remaining
 		await base.mockWindow.setTime(materializationOffset === undefined ? W + 10n : expectedEnd + materializationOffset)
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'preparePortfolioQuestion', args: [source, child] }))

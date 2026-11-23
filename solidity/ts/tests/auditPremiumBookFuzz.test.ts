@@ -190,7 +190,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 		case 'create': {
 			if (book === undefined || !book.isSealed || model.books.has(op.child)) return reject('invalid child')
 			const cash = model.branchCash.get(op.child) ?? 0n
-			const child = newBook(book.ts, book.ts + RESPONSE, book.depth + 1)
+			const child = newBook(book.ts, book.ts, book.depth + 1)
 			let burned = 0n
 			if (cash === 0n || book.units / cash > MAX_INHERITED) {
 				// The branch starts empty. Its dust leaves the source's assigned cash and custody

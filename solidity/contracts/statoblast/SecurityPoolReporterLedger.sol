@@ -264,13 +264,13 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 			zoltar.splitMigrationRep(sourceUniverseId, source.liveAttoRep, outcomes);
 		} else if (address(zoltar.getRepToken(childUniverseId)) == address(0))
 			zoltar.deployChild(sourceUniverseId, outcomeIndex);
-		books[childUniverseId] = Book(source.liveAttoRep, 0, source.questionRoot, source.finalityRoot, source.frozenRoot, source.timestamp, true, false, source.timestamp + Constants.FORK_RESPONSE_DELAY, source.finalizedRepPrefix);
+		books[childUniverseId] = Book(source.liveAttoRep, 0, source.questionRoot, source.finalityRoot, source.frozenRoot, source.timestamp, true, false, source.timestamp, source.finalizedRepPrefix);
 		(, uint256 forkQuestionId, , , ) = zoltar.universes(sourceUniverseId);
 		(Question memory fixedQuestion, bool alreadyFinal) = _question(childUniverseId, forkQuestionId);
 		if (!alreadyFinal && fixedQuestion.balanceAttoRep != 0) {
 			Book storage child = books[childUniverseId];
 			_changeFinality(child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, false);
-			fixedQuestion.finalAfter = child.minimumFinalAfter;
+			fixedQuestion.finalAfter = child.minimumFinalAfter + Constants.FORK_RESPONSE_DELAY;
 			fixedQuestion.scheduledUniverseId = childUniverseId;
 			_changeFinality(child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, true);
 			_writeQuestion(child, forkQuestionId, fixedQuestion);

@@ -180,7 +180,7 @@ export function projectEscalationDeposit({
  * The contract's `getEscalationGameEndDate` for an unresolved game without a
  * fixed outcome, given `balancesAttoRep`: the last second the forward curve is at or
  * below the median balance. A resumed continuation rebases the curve to its
- * resume time and never ends before its fixed response period.
+ * branch activation time without adding a new response period.
  */
 export function projectEscalationEndTime({
 	activationTime,
@@ -202,8 +202,7 @@ export function projectEscalationEndTime({
 	const finalityElapsed = computeEscalationFinalityElapsed(startBondAttoRep, nonDecisionThresholdAttoRep, medianBalanceAttoRep ?? 0n)
 	if (continuation === undefined) return activationTime + finalityElapsed
 	const curveEnd = finalityElapsed <= continuation.forkElapsedAtStart ? continuation.forkResumedAt : continuation.forkResumedAt + finalityElapsed - continuation.forkElapsedAtStart
-	const responseEnd = continuation.forkResumedAt + ESCALATION_ACTIVATION_DELAY
-	return curveEnd > responseEnd ? curveEnd : responseEnd
+	return curveEnd
 }
 
 function getWinningWithdrawalAmount({

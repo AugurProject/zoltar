@@ -4,7 +4,7 @@ import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_Securi
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { SparseNullifierTree } from './carryProofHelpers'
-import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, OUTCOMES, WEEK, YES } from './auditE2EHarness'
+import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, OUTCOMES, YES } from './auditE2EHarness'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
 type Variant = 'own-fork' | 'third-party-fork-in-non-decision' | 'third-party-fork-while-contested'
@@ -115,7 +115,6 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 		const [state0] = await e2e.ledgerQuestion(U0, q)
 		expect(state0.balanceAttoRep).toBe(liveBefore - haircut)
 		expect(state0.winnerHaircutPaidByFork).toBe(variant === 'own-fork')
-		const fork = await e2e.forkTime(U0)
 		expect((await e2e.ledgerBook(U0)).isSealed).toBe(true)
 
 		// The parent pays nothing after its universe forked.
@@ -135,10 +134,10 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 			expect(await e2e.rep(child, ledger)).toBe(liveBefore - haircut)
 			children.push({ outcome, child, ...(await e2e.materialize(source, child)) })
 		}
-		const resumedAt = fork + 9n * WEEK
 		let claimedTotal = 0n
 		const table: Record<string, unknown>[] = []
 		for (const { outcome, child, pool, game } of children) {
+			const resumedAt = await e2e.activationTime(child)
 			const g = e2e.game(game)
 			expect(await owner.readContract({ ...g, functionName: 'fixedQuestionOutcome' })).toBe(BigInt(outcome))
 			expect(await owner.readContract({ ...g, functionName: 'winnerHaircutPaidByFork' })).toBe(variant === 'own-fork')

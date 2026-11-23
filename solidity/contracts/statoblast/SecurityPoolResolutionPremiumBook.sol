@@ -110,9 +110,8 @@ contract SecurityPoolResolutionPremiumBook {
 			state.portfolioFundedEndTime = book.portfolioTimestamp + MAXIMUM_REPORTING_WINDOW;
 		}
 		uint256 maximumEnd = state.portfolioFundedEndTime;
-		// A child book defers refunds through its response window, so a question can still
-		// hold its unearned tail after the prepaid window ended. Nothing later can be funded:
-		// the scheduled refund stays in place and reporting continues without a premium.
+		// A report cannot extend the original prepaid funding horizon. Once it ends,
+		// keep its scheduled refund and allow reporting to continue without a premium.
 		if (previousEnd != 0 && maximumEnd <= book.portfolioTimestamp) return;
 		uint48 newEnd = uint48(finalAfterPortfolioTime == 0 ? maximumEnd : Math.min(finalAfterPortfolioTime, maximumEnd));
 		require(newEnd >= book.portfolioTimestamp, 'Premium finality already elapsed');
@@ -187,10 +186,10 @@ contract SecurityPoolResolutionPremiumBook {
 			parent.cash -= cash;
 			totalCash -= cash;
 			branchCash[child] = 0;
-			books[child] = Book(0, 0, 0, 0, 0, 0, 0, 0, parent.portfolioTimestamp, parent.portfolioTimestamp + Constants.FORK_RESPONSE_DELAY, parent.refundedBefore, true, false);
+			books[child] = Book(0, 0, 0, 0, 0, 0, 0, 0, parent.portfolioTimestamp, parent.portfolioTimestamp, parent.refundedBefore, true, false);
 			return cash;
 		}
-		books[child] = Book(cash, parent.units, 0, 0, parent.refundedPrefix, parent.questionRoot, parent.rateRoot, parent.tailRoot, parent.portfolioTimestamp, parent.portfolioTimestamp + Constants.FORK_RESPONSE_DELAY, parent.refundedBefore, true, false);
+		books[child] = Book(cash, parent.units, 0, 0, parent.refundedPrefix, parent.questionRoot, parent.rateRoot, parent.tailRoot, parent.portfolioTimestamp, parent.portfolioTimestamp, parent.refundedBefore, true, false);
 	}
 	function recover(uint248 source, uint256 id, uint256 shares, uint256 supply) external onlyServices returns (uint256 cash) {
 		Book storage book = books[source];

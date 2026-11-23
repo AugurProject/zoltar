@@ -232,12 +232,12 @@ const apply = (model: Model, op: Op, time: number, environment: Environment, rea
 			if (!book.isSealed) return reject('source not sealed')
 			const childId = `${op.u}${op.outcome}`
 			if (model.books.has(childId)) return reject('child exists')
-			const child: ModelBook = { live: book.live, final: 0n, ts: book.ts, isSealed: false, minimumFinalAfter: book.ts + RESPONSE, registered: new Set(), questions: new Map([...book.questions].map(([id, state]) => [id, { ...state }])) }
+			const child: ModelBook = { live: book.live, final: 0n, ts: book.ts, isSealed: false, minimumFinalAfter: book.ts, registered: new Set(), questions: new Map([...book.questions].map(([id, state]) => [id, { ...state }])) }
 			const forkQuestion = model.forkQuestion.get(op.u)
 			if (forkQuestion === undefined) throw new Error('MODEL: sealed universe without fork question')
 			const fixed = child.questions.get(forkQuestion)
 			if (fixed !== undefined && fixed.finalIn === undefined && fixed.balance !== 0n) {
-				fixed.finalAfter = child.minimumFinalAfter
+				fixed.finalAfter = child.minimumFinalAfter + RESPONSE
 				fixed.scheduledIn = childId
 			}
 			model.books.set(childId, child)

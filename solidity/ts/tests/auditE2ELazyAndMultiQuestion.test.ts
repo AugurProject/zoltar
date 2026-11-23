@@ -109,8 +109,8 @@ describe('auditE2E: lazy materialization and a second escalated question keep re
 		expect(fork0).toBeLessThan(end0)
 		await e2e.choose(owner, U0, YES)
 		const A = await e2e.activateBranch(U0, YES)
-		// The child clock resumes at the recapitalization deadline with the origin's remaining time.
-		const inheritedEnd = fork0 + 9n * WEEK + (end0 - fork0)
+		// The child clock resumes at actual activation with the origin's remaining time.
+		const inheritedEnd = (await e2e.activationTime(A)) + end0 - fork0
 		await e2e.migrateWalletRep(r6, U0, 700n * K, [YES])
 		await base.mockWindow.setTime(inheritedEnd + DAY)
 		await e2e.forkOn(r6, A, await e2e.unrelatedQuestion('auditE2E lazy: second unrelated fork'))
