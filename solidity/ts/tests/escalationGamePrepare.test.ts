@@ -1,13 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeDeployData, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import {
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_EscalationGame_EscalationGame as gameArtifact,
-	statoblast_factories_EscalationGameFactory_EscalationGameFactory as gameFactoryArtifact,
-	test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool as harnessPoolArtifact,
-} from '../types/contractArtifact'
-import { deployContract } from '../testSupport/deployContract'
-import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
+import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as gameFactoryArtifact } from '../types/contractArtifact'
+import { createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
@@ -57,14 +51,16 @@ describe('escalation game preparation', () => {
 	test('a reused game address can never be started twice, on either start path', async () => {
 		const owner = fixture.owner()
 		const target = await factory()
-		const harnessPool = await deployContract(owner, encodeDeployData({ abi: harnessPoolArtifact.abi, bytecode: `0x${harnessPoolArtifact.evm.bytecode.object}`, args: [getRepTokenAddress(fixture.base.genesisUniverse)] }))
-		const harness = { abi: harnessPoolArtifact.abi, address: harnessPool }
-		await writeContractAndWait(owner, () => owner.writeContract({ ...harness, functionName: 'deployForkedGame', args: [target.address, unit, 2n * unit, 0n] }))
-		const game = await owner.readContract({ ...target, functionName: 'escalationGameAddress', args: [harnessPool] })
+		// Exercise the real portfolio-bound pool caller, rather than an unbound standalone harness.
+		await fixture.base.mockWindow.impersonateAccount(pool())
+		await fixture.base.mockWindow.setBalance(pool(), unit)
+		const poolClient = createWriteClient(fixture.base.mockWindow, BigInt(pool()))
+		await writeContractAndWait(poolClient, () => poolClient.writeContract({ ...target, functionName: 'deployEscalationGameFromFork', args: [unit, 2n * unit, 0n, 3] }))
+		const game = await owner.readContract({ ...target, functionName: 'escalationGameAddress', args: [pool()] })
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'startBondAttoRep' })).toBe(unit)
 		// The factory reuses the game at its CREATE2 address; the game itself refuses a second start.
-		await expect(owner.simulateContract({ ...harness, functionName: 'deployForkedGame', args: [target.address, 3n * unit, 4n * unit, 1n] })).rejects.toThrow('Invalid game start')
-		await expect(owner.simulateContract({ ...harness, functionName: 'deployStartedGame', args: [target.address, 3n * unit, 4n * unit] })).rejects.toThrow('Invalid game start')
+		await expect(poolClient.simulateContract({ ...target, functionName: 'deployEscalationGameFromFork', args: [3n * unit, 4n * unit, 1n, 3] })).rejects.toThrow('Invalid game start')
+		await expect(poolClient.simulateContract({ ...target, functionName: 'deployEscalationGame', args: [3n * unit, 4n * unit] })).rejects.toThrow('Invalid game start')
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'startBondAttoRep' })).toBe(unit)
 	})
 

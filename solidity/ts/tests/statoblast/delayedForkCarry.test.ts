@@ -104,6 +104,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const { client, mockWindow } = fixture
 			const { noDepositor, pool, game, universe, deadline, proof, secondQuestionId } = await setupInheritedDispute()
 			const beforeFork = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
+			const beforeForkRoots = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarryRoots' })
 			// The fixture includes each transaction at latest block time + 1.
 			const forkAt = deadline + offset
 			await mockWindow.setTime(forkAt - 1n)
@@ -148,7 +149,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const reporter = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'reporterLedger', args: [nextUniverse] })
 			const migratedBacking = await client.readContract({ abi: reporterArtifact.abi, address: reporter, functionName: 'balanceOfGame', args: [nextGame] })
 			const inheritedNo = await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)
-			assert.deepStrictEqual(inheritedNo.snapshotPeaks, beforeFork[0][QuestionOutcome.No], 'the original proof commitment must reach the next continuation')
+			assert.deepStrictEqual(inheritedNo.snapshotCarryRoot, beforeForkRoots[QuestionOutcome.No], 'the original proof commitment must reach the next continuation')
 			assert.equal(inheritedNo.currentNullifierRoot, beforeFork[3][QuestionOutcome.No])
 			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'isForkCarryFundingComplete' }), true)
 			await resumePool(nextPool.securityPool)

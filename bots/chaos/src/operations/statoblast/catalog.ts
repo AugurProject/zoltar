@@ -17,7 +17,7 @@ import { forkDefinition, resumeEscalation } from './forks.ts'
 
 import { auctionDefinition, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids, startCollateralRepairAuction } from './auctions.ts'
 
-import { sweepResidualEscalation, withdrawForkedCarry, prepareInheritedClaim } from './carry.ts'
+import { sweepResidualEscalation, withdrawForkedCarry } from './carry.ts'
 
 export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
 	initializeChildHistory,
@@ -49,7 +49,6 @@ export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
 	auctionDefinition('withdraw-refund'),
 	withdrawEscalation,
 	withdrawForkedCarry,
-	prepareInheritedClaim,
 	sweepResidualEscalation,
 	refundLosingAuctionBids,
 ]

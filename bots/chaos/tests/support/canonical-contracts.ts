@@ -34,7 +34,6 @@ export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingCon
 	{ artifactSource: 'contracts/statoblast/SecurityPoolForker.sol', contract: 'SecurityPoolForker', exposure: 'static-endpoint' },
 	{ artifactSource: 'contracts/statoblast/factories/EscalationGameFactory.sol', contract: 'EscalationGameFactory', exposure: 'static-endpoint' },
 	{ artifactSource: 'contracts/statoblast/EscalationGame.sol', contract: 'EscalationGame', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol', contract: 'EscalationGameClaimDelegate', exposure: 'fallback-module' },
 	{ artifactSource: 'contracts/statoblast/EscalationGameDepositDelegate.sol', contract: 'EscalationGameDepositDelegate', exposure: 'delegate-module' },
 	{ artifactSource: 'contracts/statoblast/factories/ShareTokenFactory.sol', contract: 'ShareTokenFactory', exposure: 'static-endpoint' },
 	{ artifactSource: 'contracts/statoblast/tokens/ShareToken.sol', contract: 'ShareToken', exposure: 'dynamic-endpoint' },

@@ -21,7 +21,7 @@ import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 abstract contract EscalationGameCarry is EscalationGameCalculations {
 	bytes32 private constant CARRY_DEPOSIT_CONSUMED_SIGNATURE = keccak256('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)');
 	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep, bytes32 nullifierRoot) external {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.initializeForkCarryOutcome, (sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot, proofVerifier, claimDelegate, EMPTY_NULLIFIER_ROOT)));
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.initializeForkCarryOutcome, (sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot, proofVerifier, EMPTY_NULLIFIER_ROOT)));
 	}
 
 	// Each call installs one complete outcome. No partial snapshot is economically active.
@@ -44,7 +44,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		) = _getCurrentCarrySnapshot(outcomeIndex);
 		stateView.balanceAttoRep = state.balanceAttoRep;
 		stateView.snapshotLeafCount = state.snapshotLeafCount;
-		stateView.snapshotPeaks = state.snapshotPeaks;
+		stateView.snapshotCarryRoot = state.snapshotCarryRoot;
 		stateView.inheritedUnresolvedTotalAttoRep = _getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex);
 		stateView.currentNullifierRoot = _getCurrentNullifierRoot(outcomeIndex);
 		stateView.localHeadNodeId = state.localHeadNodeId;
@@ -165,7 +165,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(forkCarrySnapshotInitialized(), 'Fork snapshot incomplete');
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
 		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.leafIndex, proof.nullifierSiblings);
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeCarriedDeposit, (outcomeIndex, proof.parentDepositIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep, proof.leafIndex, _getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex))));
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeCarriedDeposit, (outcomeIndex, proof.parentDepositIndex, proof.amountAttoRep, _getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex))));
 	}
 
 	function _consumeLocalDeposit(uint8 outcomeIndex, uint256 depositIndex, CarryConsumptionReason reason) internal returns (Deposit memory deposit) {
@@ -228,7 +228,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(proof.amountAttoRep > 0, 'Proof amount zero');
 		leafHash = MerkleMountainRange.hashLeaf(proof.depositor, BinaryOutcomes.BinaryOutcome(outcomeIndex), proof.amountAttoRep, proof.parentDepositIndex, proof.cumulativeAmountAttoRep, proof.sourceNodeId);
 		bytes32 computedRoot = proofVerifier.computeMerkleMountainRangeRootFromProof(leafHash, leafCount, proof.leafIndex, proof.merkleMountainRangePeakIndex, proof.merkleMountainRangeSiblings);
-		require(computedRoot == proofVerifier.bagCarryPeaks(state.snapshotPeaks, state.snapshotLeafCount), 'Bad carry proof');
+		require(computedRoot == state.snapshotCarryRoot, 'Bad carry proof');
 	}
 
 	function _verifyAndAdvanceNullifier(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 leafIndex, bytes32[] calldata siblings) private {
@@ -249,7 +249,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		state.localUnresolvedTotalAttoRep -= amountAttoRep;
 		uint256 nodeId = state.localNodeIds[depositIndex];
 		_clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
-		_consumeUnresolvedRepForClaimOwners(depositor, outcomeIndex, amountAttoRep, nodes[nodeId].carryLeafIndex);
+		_consumeUnresolvedRepForClaimOwners(depositor, outcomeIndex, amountAttoRep);
 	}
 
 	function _getCurrentCarrySnapshot(uint8 outcomeIndex)

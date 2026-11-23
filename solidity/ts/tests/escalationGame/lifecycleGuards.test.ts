@@ -89,7 +89,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 				data: encodeDeployData({
 					abi: statoblast_EscalationGame_EscalationGame.abi,
 					bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-					args: [securityPool, getRepTokenAddress(0n), infra.escalationGameProofVerifier, infra.escalationGameClaimDelegate, zeroAddress],
+					args: [securityPool, getRepTokenAddress(0n), infra.escalationGameProofVerifier, zeroAddress],
 				}),
 			}),
 			/Deposit delegate/,
@@ -104,7 +104,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 					data: encodeDeployData({
 						abi: statoblast_EscalationGame_EscalationGame.abi,
 						bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-						args: [testSecurityPoolAddress, getRepTokenAddress(0n), zeroAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
+						args: [testSecurityPoolAddress, getRepTokenAddress(0n), zeroAddress, getInfraContractAddresses().escalationGameDepositDelegate],
 					}),
 				}),
 			/Proof verifier has no code/,
@@ -120,7 +120,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 					data: encodeDeployData({
 						abi: statoblast_EscalationGame_EscalationGame.abi,
 						bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-						args: [testSecurityPoolAddress, getRepTokenAddress(0n), incompatibleVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
+						args: [testSecurityPoolAddress, getRepTokenAddress(0n), incompatibleVerifierAddress, getInfraContractAddresses().escalationGameDepositDelegate],
 					}),
 				}),
 			/Proof verifier invalid/,

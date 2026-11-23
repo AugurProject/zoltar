@@ -65,8 +65,7 @@ const curatedAbiBindings = [
 	{ abi: contractAbis.securityPoolCommitmentIndexAbi, artifactSource: 'contracts/statoblast/SecurityPoolCommitmentIndex.sol', contract: 'SecurityPoolCommitmentIndex' },
 	{ abi: contractAbis.securityPoolCapitalLedgerAbi, artifactSource: 'contracts/statoblast/SecurityPoolCapitalLedger.sol', contract: 'SecurityPoolCapitalLedger' },
 	{ abi: contractAbis.securityPoolPortfolioAbi, artifactSource: 'contracts/statoblast/SecurityPoolPortfolio.sol', contract: 'SecurityPoolPortfolio' },
-	{ abi: carryStorageAbi.filter(entry => entry.name !== 'rootClaimSourceGame'), artifactSource: 'contracts/statoblast/EscalationGame.sol', contract: 'EscalationGame', catalogSurface: false },
-	{ abi: carryStorageAbi.filter(entry => entry.name === 'rootClaimSourceGame'), artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol', contract: 'EscalationGameClaimDelegate', catalogSurface: false },
+	{ abi: carryStorageAbi, artifactSource: 'contracts/statoblast/EscalationGame.sol', contract: 'EscalationGame', catalogSurface: false },
 	{ abi: zoltarQuestionDataAbi, artifactSource: 'contracts/ZoltarQuestionData.sol', contract: 'ZoltarQuestionData' },
 	{ abi: zoltarAbi, artifactSource: 'contracts/Zoltar.sol', contract: 'Zoltar' },
 	{ abi: genesisReputationTokenAbi, artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken' },
@@ -79,14 +78,6 @@ const curatedAbiBindings = [
 		abi: escalationGameAbi,
 		artifactSource: 'contracts/statoblast/EscalationGame.sol',
 		contract: 'EscalationGame',
-		delegatedFunctions: [
-			{
-				artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol',
-				contract: 'EscalationGameClaimDelegate',
-				functions: ['getInheritedClaimAllocation', 'getClaimCheckpointProgress', 'getClaimCheckpointState', 'getClaimCheckpointWitnessSegment', 'getClaimIntervalTransform', 'isClaimHistoryFrozen', 'processClaimCheckpoint'],
-				events: ['ClaimCheckpointProgress'],
-			},
-		],
 	},
 	{ abi: openOracleAbi, artifactSource: 'contracts/statoblast/openOracle/OpenOracle.sol', contract: 'OpenOracle' },
 	{ abi: weth9Abi, artifactSource: 'contracts/statoblast/WETH9.sol', contract: 'WETH9' },
@@ -121,7 +112,6 @@ const expectedCanonicalManifest = [
 	'SecurityPoolForker:contracts/statoblast/SecurityPoolForker.sol:static-endpoint',
 	'EscalationGameFactory:contracts/statoblast/factories/EscalationGameFactory.sol:static-endpoint',
 	'EscalationGame:contracts/statoblast/EscalationGame.sol:dynamic-endpoint',
-	'EscalationGameClaimDelegate:contracts/statoblast/EscalationGameClaimDelegate.sol:fallback-module',
 	'EscalationGameDepositDelegate:contracts/statoblast/EscalationGameDepositDelegate.sol:delegate-module',
 	'ShareTokenFactory:contracts/statoblast/factories/ShareTokenFactory.sol:static-endpoint',
 	'ShareToken:contracts/statoblast/tokens/ShareToken.sol:dynamic-endpoint',
@@ -249,10 +239,6 @@ function contractAbi(contracts: Record<string, unknown>, artifactSource: string,
 	return abi
 }
 
-function mutatingFunctions(abi: readonly unknown[]) {
-	return abi.filter(item => typeof item === 'object' && item !== null && 'type' in item && 'name' in item && 'stateMutability' in item && item.type === 'function' && typeof item.name === 'string' && item.stateMutability !== 'view' && item.stateMutability !== 'pure')
-}
-
 function mutatingAbiEntries(abi: readonly unknown[]) {
 	return abi.filter(item => {
 		if (typeof item !== 'object' || item === null || !('type' in item)) return false
@@ -368,9 +354,7 @@ describe('contract operation classification', () => {
 		const orphanFactoryContracts = new Set(['EscalationGameFactory', 'OpenOraclePriceCoordinatorFactory', 'ShareTokenFactory', 'UniformPriceDualCapBatchAuctionFactory'])
 		for (const entry of MUTATING_CONTRACT_SURFACE) {
 			if (helperContracts.has(entry.contract)) {
-				const permissionlessCheckpoint = entry.contract === 'EscalationGameClaimDelegate' && entry.method === 'processClaimCheckpoint'
-				if (permissionlessCheckpoint) expect(entry.classification).toBe('lifecycle-obligation')
-				else expect(['role-restricted', 'excluded-dangerous']).toContain(entry.classification)
+				expect(['role-restricted', 'excluded-dangerous']).toContain(entry.classification)
 			}
 			if (directDelegateContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')
 			if (orphanFactoryContracts.has(entry.contract)) {
@@ -378,18 +362,6 @@ describe('contract operation classification', () => {
 				expect(entry.classification, `${entry.contract}.${entry.method}`).toBe(authenticatedFeedWiring ? 'role-restricted' : 'excluded-dangerous')
 			}
 		}
-	})
-
-	test('tracks the claim checkpoint selector exposed through the escalation-game fallback', () => {
-		const contracts = loadArtifactContracts()
-		const gameAbi = contractAbi(contracts, 'contracts/statoblast/EscalationGame.sol', 'EscalationGame')
-		const constructorAbi = gameAbi.find(item => typeof item === 'object' && item !== null && 'type' in item && item.type === 'constructor')
-		expect(constructorAbi).toMatchObject({ inputs: expect.arrayContaining([{ internalType: 'contract EscalationGameClaimDelegate', name: '_claimDelegate', type: 'address' }]) })
-		expect(gameAbi).toContainEqual(expect.objectContaining({ stateMutability: 'nonpayable', type: 'fallback' }))
-		const delegateMutations = mutatingFunctions(contractAbi(contracts, 'contracts/statoblast/EscalationGameClaimDelegate.sol', 'EscalationGameClaimDelegate'))
-		expect(delegateMutations.map((item, index) => artifactFunctionSignature(item, `EscalationGameClaimDelegate[${index.toString()}]`))).toEqual(['initializeForkClaimCheckpoint(address)', 'processClaimCheckpoint(uint8,uint256,uint256,uint256,uint256,bytes32,(uint256)[])'])
-		expect(classifiedMethod('EscalationGameClaimDelegate', 'initializeForkClaimCheckpoint')).toMatchObject({ classification: 'role-restricted' })
-		expect(classifiedMethod('EscalationGameClaimDelegate', 'processClaimCheckpoint')).toMatchObject({ classification: 'lifecycle-obligation', operationId: 'statoblast.escalation.prepare-claim' })
 	})
 
 	test('classifies canonical receive and fallback entry points by ABI kind', () => {
@@ -407,8 +379,7 @@ describe('contract operation classification', () => {
 			const { abi, contract } = binding
 			for (const item of abi) {
 				if (item.type !== 'function' || item.stateMutability === 'view' || item.stateMutability === 'pure') continue
-				const delegated = 'delegatedFunctions' in binding ? binding.delegatedFunctions.find(source => new Set<string>(source.functions).has(item.name)) : undefined
-				expect(classifiedMethod(delegated?.contract ?? contract, item.name), `${contract}.${item.name}`).toBeDefined()
+				expect(classifiedMethod(contract, item.name), `${contract}.${item.name}`).toBeDefined()
 			}
 		}
 	})
@@ -428,17 +399,7 @@ describe('contract operation classification', () => {
 					.filter(item => typeof item === 'object' && item !== null && 'type' in item && (item.type === 'function' || item.type === 'event'))
 					.map((item, index) => [abiEntryIdentity(item, `${contract}.generated[${index.toString()}]`), item]),
 			)
-			if ('delegatedFunctions' in binding) {
-				for (const delegatedFunction of binding.delegatedFunctions) {
-					const functionNames = new Set<string>(delegatedFunction.functions)
-					const eventNames = new Set<string>('events' in delegatedFunction ? delegatedFunction.events : [])
-					for (const [index, item] of contractAbi(contracts, delegatedFunction.artifactSource, delegatedFunction.contract).entries()) {
-						if (typeof item !== 'object' || item === null || !('type' in item) || !('name' in item) || typeof item.name !== 'string') continue
-						if (item.type === 'function' ? !functionNames.has(item.name) : item.type !== 'event' || !eventNames.has(item.name)) continue
-						generatedEntries.set(abiEntryIdentity(item, `${delegatedFunction.contract}.generated[${index.toString()}]`), item)
-					}
-				}
-			}
+
 			for (const [index, item] of abi.entries()) {
 				if (item.type !== 'function' && item.type !== 'event') continue
 				const label = `${contract}.curated[${index.toString()}]`

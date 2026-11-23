@@ -1,7 +1,5 @@
 export type CompilerProfile = 'main' | 'openOracle'
 
-export const SECURITY_POOL_UTILS_SOURCE_PATH = 'contracts/statoblast/SecurityPoolUtils.sol'
-
 type StepDefinition = {
 	artifactPath: string
 	compilerProfile: CompilerProfile
@@ -10,7 +8,6 @@ type StepDefinition = {
 	// from the merged artifact path (the OpenOracle pass compiles under its
 	// upstream layout).
 	inputPath?: string
-	linksLibraries?: boolean
 }
 
 // Manifest derivedContracts that no proxy-deployer step creates. Each is
@@ -61,11 +58,6 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'Zoltar',
 	},
-	securityPoolUtils: {
-		artifactPath: SECURITY_POOL_UTILS_SOURCE_PATH,
-		compilerProfile: 'main',
-		contractName: 'SecurityPoolUtils',
-	},
 	securityPoolCapitalLedgerDeployer: {
 		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
 		compilerProfile: 'main',
@@ -115,13 +107,11 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		artifactPath: 'contracts/statoblast/SecurityPoolEventEmitter.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolEventEmitter',
-		linksLibraries: true,
 	},
 	securityPoolOperationsDelegate: {
 		artifactPath: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolOperationsDelegate',
-		linksLibraries: true,
 	},
 	openOracle: {
 		artifactPath: 'contracts/statoblast/openOracle/OpenOracle.sol',
@@ -138,36 +128,26 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
 		compilerProfile: 'main',
 		contractName: 'PriceCoordinatorDeploymentWorker',
-		linksLibraries: true,
 	},
 	sharedPoolPriceFeedDeploymentWorker: {
 		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
 		compilerProfile: 'main',
 		contractName: 'SharedPoolPriceFeedDeploymentWorker',
-		linksLibraries: true,
 	},
 	openOraclePriceCoordinatorFactory: {
 		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
 		compilerProfile: 'main',
 		contractName: 'OpenOraclePriceCoordinatorFactory',
-		linksLibraries: true,
 	},
 	securityPoolForkerPortfolioDelegate: {
 		artifactPath: 'contracts/statoblast/SecurityPoolForkerPortfolioDelegate.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolForkerPortfolioDelegate',
-		linksLibraries: true,
 	},
 	securityPoolForker: {
 		artifactPath: 'contracts/statoblast/SecurityPoolForker.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolForker',
-		linksLibraries: true,
-	},
-	escalationGameClaimDelegate: {
-		artifactPath: 'contracts/statoblast/EscalationGameClaimDelegate.sol',
-		compilerProfile: 'main',
-		contractName: 'EscalationGameClaimDelegate',
 	},
 	escalationGameDepositDelegate: {
 		artifactPath: 'contracts/statoblast/EscalationGameDepositDelegate.sol',
@@ -183,6 +163,5 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		artifactPath: 'contracts/statoblast/factories/SecurityPoolFactory.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolFactory',
-		linksLibraries: true,
 	},
 }

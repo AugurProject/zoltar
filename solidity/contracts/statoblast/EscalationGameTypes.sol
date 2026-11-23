@@ -43,13 +43,10 @@ struct OutcomeState {
 	// Local deposits are represented by localNodeIds and the authoritative nodes mapping.
 	// The inherited carry snapshot this escalation game started with for this outcome.
 	uint256 snapshotLeafCount;
-	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
+	bytes32 snapshotCarryRoot;
 	uint256 inheritedUnresolvedTotalAttoRep;
 	uint256 inheritedConsumedSourceAttoRep;
 	uint256 inheritedConsumedRetainedAttoRep;
-	// One-based Fenwick index -> consumed principal sum in attoREP, in immutable MMR leaf order.
-	// Used to compact exported intervals.
-	mapping(uint256 => uint256) consumedPrincipalTree;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
 	// The current unresolved carry state after local and inherited deposits are consumed.
@@ -68,7 +65,7 @@ struct OutcomeState {
 struct OutcomeStateView {
 	uint256 balanceAttoRep;
 	uint256 snapshotLeafCount;
-	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
+	bytes32 snapshotCarryRoot;
 	uint256 inheritedUnresolvedTotalAttoRep;
 	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;

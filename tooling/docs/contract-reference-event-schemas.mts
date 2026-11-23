@@ -15,11 +15,6 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	},
 	{
-		name: 'ClaimCheckpointProgress',
-		parameters: 'bytes32 indexed claimId,address nextSourceGame,uint256 pendingSteps,bool complete',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol',
-	},
-	{
 		name: 'Transfer',
 		parameters: 'address indexed from,address indexed to,uint256 value',
 		sourcePath: 'solidity/contracts/IERC20.sol',
@@ -136,4 +131,4 @@ export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArgum
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = '48e46bf29dfa6329a566bfb1771c3b52127ca895b4a58fee4448ff6847da11e5'
+export const referencedEventAbiFingerprint = 'bbedbb4e1c8e5b4a331770d93e75a5334669a59c030014d30a08a13c62fb77bd'

@@ -105,8 +105,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 			[parentInvalidCarryTotal, parentYesCarryTotal, 0n],
 			[parentInvalidNullifierRoot, parentYesNullifierRoot, zeroHash()],
 		)
-		const childRootSource = await client.call({ to: child.escalationGameAddress, data: '0xc028bc2a' })
-		assert.strictEqual(addressString(BigInt(childRootSource.data ?? '0x')).toLowerCase(), parent.escalationGameAddress.toLowerCase())
+		await assert.rejects(client.call({ to: child.escalationGameAddress, data: '0xc028bc2a' }), /revert/, 'The removed root-claim-source selector must be unreachable')
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const { peaks: childInvalidPeaks, leafCount: childInvalidLeafCount, carryTotal: childInvalidCarryTotal, nullifierRoot: childInvalidNullifierRoot } = await readOutcomeCarrySnapshot(child.escalationGameAddress, QuestionOutcome.Invalid)

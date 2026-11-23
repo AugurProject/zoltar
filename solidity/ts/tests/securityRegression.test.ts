@@ -5,7 +5,7 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { deployContract } from '../testSupport/deployContract'
-import { applyLibraries, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { getScalarOutcomeIndex } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -40,7 +40,7 @@ describe('portfolio security regression coverage', () => {
 
 	test.each([10n, 30n])('funded receiver reentrancy reaches the guard with %s ETH capacity', async capacity => {
 		await fixture.prepare(1_000n * unit, capacity * unit)
-		const receiver = await deployContract(fixture.owner(), encodeDeployData({ abi: receiverArtifact.abi, bytecode: applyLibraries(receiverArtifact.evm.bytecode.object), args: [fixture.portfolio, fixture.base.genesisUniverse, fixture.base.questionId] }))
+		const receiver = await deployContract(fixture.owner(), encodeDeployData({ abi: receiverArtifact.abi, bytecode: `0x${receiverArtifact.evm.bytecode.object}`, args: [fixture.portfolio, fixture.base.genesisUniverse, fixture.base.questionId] }))
 		const before = await fixture.owner().getBlockNumber()
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'attack', args: [6n * unit, 6n * unit], value: 20n * unit, gas: 15_000_000n }))
 		expect(await fixture.owner().readContract({ abi: parseAbi(['function reentryRevertReason() view returns (string)']), address: receiver, functionName: 'reentryRevertReason' })).toBe('Portfolio operation active')
