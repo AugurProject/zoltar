@@ -78,7 +78,6 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(liquidationPrice != 0, 'Liquidation price rounds to zero');
 		if (!importing && block.timestamp >= priceValidUntil) commitmentIndex.restartLiquidationClock();
 		priceValidUntil = validUntil;
-		commitmentIndex.recordPriceValidity(validUntil);
 		// Child reports can fund the fork auction before capital activation.
 		// Imported positions have no operating health history until imports seal.
 		if (!importing) commitmentIndex.observeHealthy(liquidationPrice);

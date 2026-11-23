@@ -246,9 +246,9 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		}))
 		expect((await run(context, operations, 4n * unit)).map(event => event.success)).toEqual([true, true])
 		const receiver = await context.sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [context.sponsor.account.address] })
-		expect(receiver[0]).toBeGreaterThan(3000n * unit)
+		expect(receiver[0]).toBe(3800n * unit)
 		expect(receiver[1]).toBeGreaterThan(100n * unit)
-		expect(receiver[1]).toBeLessThan(200n * unit)
+		expect(receiver[1]).toBe(200n * unit)
 		let remaining = 0n
 		for (const provider of [fixture.owner(), third]) remaining += (await provider.readContract({ ...capital(), functionName: 'ownerCollateral', args: [provider.account.address] }))[0]
 		expect(remaining + receiver[0]).toBe(3800n * unit)

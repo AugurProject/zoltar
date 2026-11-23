@@ -61,7 +61,9 @@ describe('native portfolio report discovery', () => {
 			const config = { collateralTokens: [], network, openOracle: getInfraContractAddresses().openOracle, operatorSettings: settings, execute: true, connectivity: settings.connectivity, quorumRpcUrls: [], rpcQuorum: 1 as const }
 			const request = async () => {
 				const bounty = await context.owner.readContract({ address: context.feed, abi: sharedPoolPriceFeedAbi, functionName: 'getRequestPriceCostAttoEth' })
-				await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.feed, abi: sharedPoolPriceFeedAbi, functionName: 'requestPortfolioPrice', args: [unit, 10n * unit, bounty], value: bounty }))
+				const minimum = await context.owner.readContract({ address: context.feed, abi: sharedPoolPriceFeedAbi, functionName: 'minimumToken1ReportAttoEthForPrice', args: [unit] })
+				const funding = minimum > 10n * unit ? minimum : 10n * unit
+				await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.feed, abi: sharedPoolPriceFeedAbi, functionName: 'requestPortfolioPrice', args: [unit, funding, bounty], value: bounty }))
 				return context.owner.readContract({ address: context.feed, abi: sharedPoolPriceFeedAbi, functionName: 'pendingReportId' })
 			}
 			const first = await request()

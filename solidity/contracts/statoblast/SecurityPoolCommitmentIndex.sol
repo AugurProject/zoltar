@@ -27,9 +27,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	uint48 private distressRestart;
 	uint256 private observedPrice;
 	mapping(uint64 => uint48) private observationTimes;
-	mapping(uint64 => uint256) private observationPaused;
-	uint256 private auctionPausedSeconds;
-	uint48 private auctionPriceValidUntil;
 	struct Account {
 		address owner;
 		uint96 batch;
@@ -246,16 +243,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		distressRestart = CheckedCast.toUint48(block.timestamp);
 	}
 
-	function recordPriceValidity(uint48 validUntil) external onlyCapitalLedger {
-		if (auctionPriceValidUntil != 0 && block.timestamp > auctionPriceValidUntil)
-			auctionPausedSeconds += block.timestamp - auctionPriceValidUntil;
-		auctionPriceValidUntil = validUntil;
-	}
 	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
 		observationTimes[epoch] = CheckedCast.toUint48(block.timestamp);
-		observationPaused[epoch] = auctionPausedSeconds;
 		observedPrice = price;
 		_observeHealthy(roots[0], price, epoch);
 		if (currentBatch != 0) _observeHealthy(roots[currentBatch], price, epoch);
@@ -292,15 +283,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint64 observation = _distressObservation(id);
 		return observation == 0 ? 0 : CheckedCast.toUint48(Math.max(observationTimes[observation], distressRestart));
 	}
-	/// @notice Only time covered by fresh prices advances auction compensation.
+	/// @notice Wall-clock time advances compensation even while execution awaits a fresh price.
 	function liquidationElapsed(uint96 id) public view returns (uint256) {
 		uint64 observation = _distressObservation(id);
-		if (observation == 0) return 0;
-		uint256 through =
-			auctionPriceValidUntil == 0 ? block.timestamp : Math.min(block.timestamp, auctionPriceValidUntil);
-		uint256 start = observationTimes[observation];
-		uint256 paused = auctionPausedSeconds - observationPaused[observation];
-		return through > start + paused ? through - start - paused : 0;
+		return observation == 0 ? 0 : block.timestamp - observationTimes[observation];
 	}
 
 	/// @dev The controller calls only after an actual healthy mutation at a fresh

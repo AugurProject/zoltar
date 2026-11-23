@@ -70,7 +70,6 @@ export type ModelPosition = {
 	repClaimed: boolean
 	distress: bigint | undefined
 	auctionStart?: bigint | undefined
-	auctionPausedAtStart?: bigint | undefined
 	awardStarted?: bigint
 	awarded?: bigint
 	ethFees: bigint
@@ -87,7 +86,6 @@ export type Model = {
 	harnessEpoch: bigint
 	priceError: bigint
 	validUntil: bigint
-	auctionPaused?: bigint
 	demand: bigint
 	totalFree: bigint
 	retCash: bigint
@@ -279,7 +277,6 @@ const settle = (m: Model, o: number) => {
 const clear = (p: ModelPosition) => {
 	p.distress = undefined
 	p.auctionStart = undefined
-	p.auctionPausedAtStart = undefined
 }
 const reinsert = (p: ModelPosition) => {
 	if (p.remaining !== 0n && p.k <= p.remaining) {
@@ -408,7 +405,6 @@ const observe = (m: Model) => {
 			p.distress = m.now
 			if (p.auctionStart === undefined) {
 				p.auctionStart = m.now
-				p.auctionPausedAtStart = m.auctionPaused ?? 0n
 			}
 		}
 	}
@@ -478,7 +474,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	requireModel(start !== 0n, 'Adverse observation missing')
 	requireModel(k > 0n, 'Invalid takeover commitment')
 	const paid = source.awardStarted === start ? (source.awarded ?? 0n) : 0n
-	const elapsed = max(0n, min(m.now, m.validUntil) - start - ((m.auctionPaused ?? 0n) - (source.auctionPausedAtStart ?? 0n)))
+	const elapsed = max(0n, m.now - start)
 	const vested = ((source.rep + paid) * min(elapsed, HOUR)) / HOUR
 	const offered = max(0n, vested - paid)
 	const supported = ((((source.rep - offered) * BPS) / MULTIPLIER) * WAD) / m.cons
@@ -576,7 +572,6 @@ const materialize = (m: Model, bidId: bigint) => {
 	const id = create(m, bid.owner, 0n, principal, k, source.price, 0n)
 	positionOf(m, id).distress = source.distress
 	positionOf(m, id).auctionStart = source.auctionStart
-	positionOf(m, id).auctionPausedAtStart = source.auctionPausedAtStart
 	bid.positionId = id
 	m.cohortLots -= bid.lots
 	owner.positionId = id
@@ -613,7 +608,6 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 				if (!m.importing && m.now >= m.validUntil) {
 					for (const position of live(m)) position.distress = undefined
 				}
-				if (m.validUntil !== 0n && m.now > m.validUntil) m.auctionPaused = (m.auctionPaused ?? 0n) + m.now - m.validUntil
 				m.validUntil = op.until
 				if (!m.importing) observe(m)
 			}

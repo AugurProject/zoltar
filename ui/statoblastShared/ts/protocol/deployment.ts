@@ -45,7 +45,7 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	openOraclePriceCoordinatorFactory: '0xce92ecf5a7223f8099f172d451844a67a0c89a9380a49a1d3eb632a4c691c7c5',
 	priceCoordinatorDeploymentWorker: '0x098071f12c722141ed4ae18b7cfdc94c0b912ac4706cce8c129873809c8abe99',
 	securityPoolEventEmitter: '0xd6334e44947bed787f35654d650504061ec1f632f1bf6f7e7370b0e108609e73',
-	securityPoolFactory: '0x805fee2e04e7678dfa5191bed36ad71af99c683b1db273fcc7a24cf8e906fc79',
+	securityPoolFactory: '0x77b6e277d068b665657415c698c396737a8831e7c7200f46895e10870b1c23ae',
 	securityPoolForker: '0xcc596714ca1fd15f1769dc9d137d4286e97124c809b896e6cf81e2b5f06462f2',
 	securityPoolOperationsDelegate: '0xf36906d0baf47720831d3de59569a335c42978ab78ed3c3c5d534b76f2da157a',
 	shareTokenFactory: '0xc3a0a69d9d4694d020b2d8c0051d6fac70ef6ca2c051e09cd6535b48ac8a9b6c',
@@ -54,7 +54,7 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x2d84749b38b68954796b44b8c037554ec578717e7fe7e57b6696c7aadc5794b3',
+	securityPoolFactory: '0x0a6cfbcb137009eb33c39aaa6193f313e626869592bc74372313f6197938b393',
 	securityPoolForker: '0xe00dabef95e6bebce45e0a77aec3ec3e1f1d64c4cb6bc8fae6911d3f178a5ebb',
 	shareTokenFactory: '0x3d2cb6a56cbd26e7ec43415f14778d044374b0f25bd1457ebb6f15726ed1b644',
 }
@@ -107,7 +107,7 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	openOraclePriceCoordinatorFactory: '0x28620a0a01096a744109e32785d66a126215b13273edd1c273ff38f8fdb39c21',
 	priceCoordinatorDeploymentWorker: '0x098071f12c722141ed4ae18b7cfdc94c0b912ac4706cce8c129873809c8abe99',
 	securityPoolEventEmitter: '0xd6334e44947bed787f35654d650504061ec1f632f1bf6f7e7370b0e108609e73',
-	securityPoolFactory: '0xbb3c03876f64841897121aa763581d0fad0a09f7ffd243a37ba823b0114ebea4',
+	securityPoolFactory: '0x04e9fedcfbf3db642c3b1c7fb4e115ab78167dddf7ea442a4b006b8d45e935b5',
 	securityPoolForker: '0xc3bbdbfc583ebf8f3e62f0d5fe9c707472815ac354091a49db7fbd96b6c2eb42',
 	securityPoolOperationsDelegate: '0xf36906d0baf47720831d3de59569a335c42978ab78ed3c3c5d534b76f2da157a',
 	shareTokenFactory: '0xd9c06b4ff525a055f2597a2ed5e986286311e5a0bcad5f4554cf62eab27609ae',
@@ -116,7 +116,7 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xbc9af163567e1c6d7d797aeeeec951d05bc104837c185465e473fcfb84d96166',
+	securityPoolFactory: '0x27a380ff4c23cc3869ebb02a8504c9f2aae8356af49988fbf05e05b15c05898a',
 	securityPoolForker: '0x26c3f8e6deef73653f5c8c3abb04f01e099ebf9daeef0d9cab07e65f5b62bd8b',
 	shareTokenFactory: '0xfbd6d351050d0685d0477d5470b8036825dd1ba102111369bb968959886c1ced',
 }
