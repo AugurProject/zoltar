@@ -445,7 +445,7 @@ describe('standalone trading UI model', () => {
 		const activeWithoutPool = { canonicalPool: undefined, branchActive: true }
 		const inactive = { canonicalPool: undefined, branchActive: false }
 		expect(forkMigrationBranchBlocker([ready, activeWithoutPool])).toBeUndefined()
-		expect(forkMigrationBranchBlocker([inactive])).toContain('prepare, start, and activate that branch before migrating')
+		expect(forkMigrationBranchBlocker([inactive])).toContain('Activate this branch in Statoblast')
 		expect(forkMigrationBranchBlocker([ready, inactive])).toContain('Fork choices and recovery')
 	})
 

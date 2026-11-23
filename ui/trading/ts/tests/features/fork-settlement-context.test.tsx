@@ -252,7 +252,7 @@ describe('live fork settlement context', () => {
 		await settleEffects()
 
 		expect(document.body.textContent).toContain('Branch not active')
-		expect(document.body.textContent).toContain('In Statoblast, open Fork choices and recovery for this portfolio, then prepare, start, and activate that branch before migrating.')
+		expect(document.body.textContent).toContain('Activate this branch in Statoblast under Fork choices and recovery before migrating.')
 		expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
 		expect(submissions).toBe(0)
 	})
