@@ -41,10 +41,10 @@ export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2088],
 		['bots/open-oracle-arbitrager/tests/dashboard/dashboard-refresh.test.ts', 1576],
 		['shared/core/ts/evm/ethereum.test.ts', 3826],
-		['solidity/ts/tests/coverageHelpers.test.ts', 1778],
+		['solidity/ts/tests/coverageHelpers.test.ts', 1750],
 		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
 		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1881],
 		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2371],
-		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3024],
+		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3021],
 	]),
 ])

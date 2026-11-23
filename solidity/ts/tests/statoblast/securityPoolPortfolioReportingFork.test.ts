@@ -6,7 +6,6 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
-	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as claimArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 } from '../../types/contractArtifact'
@@ -142,9 +141,9 @@ describe('Statoblast: native fork reporter registration', () => {
 
 	test('portfolio reporter history freezes without the removed standalone fork registry', async () => {
 		const game = await prepareReport()
-		expect(await fixture.owner().readContract({ abi: claimArtifact.abi, address: game, functionName: 'isClaimHistoryFrozen' })).toBe(false)
 		await activateUnrelatedFork(true)
-		expect(await fixture.owner().readContract({ abi: claimArtifact.abi, address: game, functionName: 'isClaimHistoryFrozen' })).toBe(true)
+		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName: 'getFinalQuestionResolution' })).toBe(3n)
+		await expect(fixture.other().writeContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'withdrawFromEscalationGame', args: [1, [0n]] })).rejects.toThrow()
 	})
 
 	test('a reporter claim finalized before a fork stays live and withdrawable in its parent', async () => {
@@ -156,9 +155,7 @@ describe('Statoblast: native fork reporter registration', () => {
 		await createQuestion(owner, question, fixture.base.outcomes)
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(owner, fixture.base.genesisUniverse, getQuestionId(question, fixture.base.outcomes))
-		expect(await owner.readContract({ abi: claimArtifact.abi, address: game, functionName: 'isClaimHistoryFrozen' })).toBe(false)
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'withdrawFromEscalationGame', args: [1, [0n]] }))
-		expect(await owner.readContract({ abi: claimArtifact.abi, address: game, functionName: 'isClaimHistoryFrozen' })).toBe(false)
 	})
 
 	test('an outsider cannot register an unfinished child game and overwrite its live reporter source', async () => {

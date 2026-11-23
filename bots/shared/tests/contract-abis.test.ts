@@ -7,7 +7,6 @@ import {
 	GenesisReputationToken_GenesisReputationToken,
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGame_EscalationGame,
-	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_Multicall3_Multicall3,
 	statoblast_openOracle_OpenOracle_OpenOracle,
@@ -35,7 +34,6 @@ import {
 const items = (abi: readonly unknown[]): readonly unknown[] => abi
 const event = (abi: readonly { type: string; name?: string }[], name: string): unknown => abi.find(item => item.type === 'event' && item.name === name)
 const generated = (value: unknown): unknown => value
-const delegatedEscalationGameFunctions = new Set(['getInheritedClaimAllocation', 'getClaimCheckpointProgress', 'getClaimCheckpointState', 'getClaimCheckpointWitnessSegment', 'getClaimIntervalTransform', 'isClaimHistoryFrozen', 'processClaimCheckpoint'])
 const erc20Functions = new Set(['allowance', 'approve', 'balanceOf', 'decimals', 'name', 'symbol', 'totalSupply', 'transfer', 'transferFrom'])
 
 describe('generated bot contract ABIs', () => {
@@ -71,10 +69,8 @@ describe('generated bot contract ABIs', () => {
 		for (const [abi, artifact] of expected) expect(items(abi)).toEqual(artifact)
 	})
 
-	test('the escalation game ABI composes the proxy artifact with the claim-delegate functions it exposes', () => {
-		const delegatedFunctions = statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi.filter(item => item.type === 'function' && delegatedEscalationGameFunctions.has(item.name))
-		expect(delegatedFunctions).toHaveLength(delegatedEscalationGameFunctions.size)
-		expect(items(abis.escalationGameAbi)).toEqual([...statoblast_EscalationGame_EscalationGame.abi, ...delegatedFunctions])
+	test('the escalation game ABI matches the game artifact', () => {
+		expect(items(abis.escalationGameAbi)).toEqual(statoblast_EscalationGame_EscalationGame.abi)
 	})
 
 	test('the generic ERC-20 ABI is the standard token surface of the compiled ReputationToken artifact', () => {

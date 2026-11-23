@@ -11,7 +11,6 @@ export type ForkAuctionAction =
 	| 'prepareChildDependencies'
 	| 'createChildUniverse'
 	| 'initializeChildHistory'
-	| 'prepareForkClaim'
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
 	| 'claimParentEscalationDeposits'
@@ -203,8 +202,6 @@ export type AuthenticatedForkClaim = {
 
 export type ImportedEscalationDeposit = {
 	claimIdentity?: AuthenticatedForkClaim
-	claimCheckpoint?: { nextSourceGame: Address; pendingSteps: bigint; complete: boolean; ready: boolean }
-	claimAllocation?: { retainedAmountAttoRep: bigint; rewardAmountAttoRep: bigint; retainedCumulativeAttoRep: bigint } | undefined
 	amountAttoRep: bigint
 	cumulativeAmountAttoRep: bigint
 	depositor: Address

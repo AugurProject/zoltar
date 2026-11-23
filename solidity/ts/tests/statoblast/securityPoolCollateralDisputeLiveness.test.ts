@@ -9,7 +9,6 @@ import {
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
-import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { forkUniverse, getZoltarAddress, getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -25,7 +24,7 @@ describe('collateral-independent outcome disputes', () => {
 			owner,
 			encodeDeployData({
 				abi: tokenArtifact.abi,
-				bytecode: applyLibraries(tokenArtifact.evm.bytecode.object),
+				bytecode: `0x${tokenArtifact.evm.bytecode.object}`,
 				args: [18],
 			}),
 		)

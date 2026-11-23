@@ -511,7 +511,6 @@ describe('testnet deployment plan', () => {
 		const bootstrapDescendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
 		const trading = getTradingDeploymentPlan({ chainId: 11_155_111, chainName: 'Sepolia', defaultRpcUrl: '', genesisOutcome: 'yes', id: 'sepolia', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: infrastructure.securityPoolFactory, zoltar: infrastructure.zoltar }, 30)
 		const directInfrastructure = [
-			infrastructure.escalationGameClaimDelegate,
 			infrastructure.escalationGameDepositDelegate,
 			infrastructure.escalationGameFactory,
 			infrastructure.multicall3,
@@ -533,7 +532,6 @@ describe('testnet deployment plan', () => {
 			infrastructure.securityPoolPortfolioServicesDeployer,
 			infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
 			infrastructure.securityPoolPortfolioAuctionDeployer,
-			infrastructure.securityPoolUtils,
 			infrastructure.shareTokenFactory,
 			infrastructure.zoltar,
 			infrastructure.zoltarQuestionData,
@@ -579,12 +577,12 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolAuctionCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(35)
+		expect(plan).toHaveLength(33)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		for (const step of plan) expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
 		const deterministicPlan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(31_337))
-		expect(deterministicPlan).toHaveLength(40)
+		expect(deterministicPlan).toHaveLength(38)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(deterministicPlan.map(step => step.id).sort())
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {

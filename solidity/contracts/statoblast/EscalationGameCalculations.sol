@@ -149,15 +149,10 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			proofVerifier.computeAllocatedWinningWithdrawal(principalAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 	}
 
-	function _computeCarriedWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
-		(
-			,
-			uint256 principalAttoRep,
-			uint256 rewardAmountAttoRep,
-			uint256 rewardCumulativeAttoRep
-		) = _getInheritedClaimAllocation(outcomeIndex, depositAmountAttoRep, cumulativeAmountAttoRep, leafIndex);
+	function _computeCarriedWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		// Live reporter custody preserves the authenticated leaf's principal and reward coordinates.
 		return
-			_computeAllocatedWinningWithdrawal(outcomeIndex, principalAttoRep, rewardAmountAttoRep, rewardCumulativeAttoRep);
+			_computeAllocatedWinningWithdrawal(outcomeIndex, depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}
 
 	function _getOutcomeBalances()

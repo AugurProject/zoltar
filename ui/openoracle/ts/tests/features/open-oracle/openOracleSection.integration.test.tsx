@@ -1,6 +1,5 @@
 import { test_statoblast_CollateralTestToken_CollateralTestToken as collateralArtifact } from '../../../../../../solidity/ts/types/contractArtifact.js'
 import { deployContract } from '../../../../../../solidity/ts/testSupport/deployContract.js'
-import { applyLibraries } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 /// <reference types="bun-types" />
@@ -345,7 +344,7 @@ describe.serial('OpenOracleSection integration', () => {
 	})
 
 	test('creates a six-decimal report by raising an existing allowance in one approval', async () => {
-		const token = await deployContract(client, encodeDeployData({ abi: collateralArtifact.abi, bytecode: applyLibraries(collateralArtifact.evm.bytecode.object), args: [6] }))
+		const token = await deployContract(client, encodeDeployData({ abi: collateralArtifact.abi, bytecode: `0x${collateralArtifact.evm.bytecode.object}`, args: [6] }))
 		await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: token, abi: collateralArtifact.abi, functionName: 'mint', args: [walletAddress, 1_000_000_000n] }) })
 		await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: token, abi: collateralArtifact.abi, functionName: 'approve', args: [getOpenOracleAddress(), 1n] }) })
 		const rendered = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)

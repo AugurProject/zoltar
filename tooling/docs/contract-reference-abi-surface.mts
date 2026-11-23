@@ -86,10 +86,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': {
 		initializeForkCarryOutcome: ['external(address,bytes32,bytes32[64],uint256,uint256,uint256,bytes32)'],
 	},
-	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': {
-		processClaimCheckpoint: ['external(uint8,uint256,uint256,uint256,uint256,bytes32,EscalationClaimTransform[])'],
-		initializeForkClaimCheckpoint: ['external(address)'],
-	},
 	'solidity/contracts/statoblast/OpenOraclePriceSource.sol': {
 		requestPrice: ['public(uint256,uint256,uint256)'],
 		recoverSettledPendingReport: ['public()'],
@@ -132,7 +128,6 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGame.sol': '318f27df64ff36dbeaf147d822f83175b5753025b95bc8439e22c121974bd1c4',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': '7a09d1ce16324a2165c74fa4548c45410fd1177fb66929adee8732a572a90301',
-	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': '995cac2d2b605782625d4d84126569bb3a13c6f37b17a91c9d2c3badba80df38',
 	'solidity/contracts/statoblast/EscalationGameSettlement.sol': 'c0e413e31690d76b60a8ddc3bfe7481ffbddd79cb3c7ff4e7939f338a9d46feb',
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -146,7 +141,6 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 }
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkPortfolioTime', 'settlement'],
-	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': ['securityPool', 'securityPoolForker', 'systemState', 'forkData'],
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'operationsDelegate'],
 }

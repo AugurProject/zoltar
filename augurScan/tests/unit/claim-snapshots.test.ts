@@ -64,9 +64,9 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; recordedForkThreshold?: bigint; forkTime?: bigint } = {}): StateRead =>
+	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; recordedForkThreshold?: bigint; forkTime?: bigint } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
-		const kind = ['getInheritedClaimAllocation', 'getClaimCheckpointProgress'].includes(name) ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
+		const kind = fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
 		const abi = abiForKind(kind)
 		if (abi === undefined) throw new Error(`Missing compiled claim ABI ${kind}`)
@@ -99,7 +99,7 @@ const fixtureRead =
 				return {
 					balanceAttoRep: 150n,
 					snapshotLeafCount: target === child && outcome === 1 ? 3n : 0n,
-					snapshotPeaks: target === child && outcome === 1 && !options.badRoot ? peaks : Array.from({ length: 64 }, () => zero),
+					snapshotCarryRoot: target === child && outcome === 1 && !options.badRoot ? buildCarryMerkleMountainRangeProof(hashes, 0).root : zero,
 					currentNullifierRoot: options.badNullifier ? zero : createSparseNullifier(target === child && outcome === 1 ? (options.consumed ?? []) : []).getRoot(),
 					localHeadNodeId: target === root && outcome === 1 ? 3n : 0n,
 				}
@@ -112,10 +112,6 @@ const fixtureRead =
 			}
 			case 'getProofConsumedCarriedDepositIndexesByOutcome':
 				return target === child && outcome === 1 ? (options.consumed ?? []) : []
-			case 'getClaimCheckpointProgress':
-				return [root, 0n, false, !options.checkpointRequired]
-			case 'getInheritedClaimAllocation':
-				return [50n, 50n, 33n, (Number(args[3]) + 1) * 33 + '']
 			default:
 				throw new Error(`Unexpected ${name}`)
 		}
@@ -125,7 +121,7 @@ test('reconstructs inherited membership and independent unspent proofs with tagg
 	const result = await sampleClaimPositions(child, fixtureRead(), state)
 	expect(result.status).toBe('available')
 	expect(result.positions).toHaveLength(3)
-	expect(result.positions[2]).toMatchObject({ kind: 'inherited', status: 'claimable', retained_principal_atto_rep: '50', payout_atto_rep: '31', burn_atto_rep: '8', proof: { leafIndex: '2', merkleMountainRangePeakIndex: '0', merkleMountainRangeSiblings: [peaks[1]] } })
+	expect(result.positions[2]).toMatchObject({ kind: 'inherited', status: 'claimable', retained_principal_atto_rep: '50', payout_atto_rep: '35', burn_atto_rep: '13', proof: { leafIndex: '2', merkleMountainRangePeakIndex: '0', merkleMountainRangeSiblings: [peaks[1]] } })
 	expect(result.positions.every(position => !('auction_haircut_atto_rep' in position))).toBe(true)
 	expect(result.positions[2]?.['membership_root']).toBe(buildCarryMerkleMountainRangeProof(hashes, 2).root)
 	expect(result.positions.every(position => position['nullifier_root'] === createSparseNullifier([]).getRoot())).toBe(true)
@@ -156,7 +152,7 @@ test('claim snapshots continue past empty consumed-node pages', async () => {
 	const cursors: unknown[] = []
 	const sparseRead: StateRead = async (target, abi, name, args = []) => {
 		if (name === 'getOutcomeState' && args[0] === 1) {
-			return { balanceAttoRep: 150n, snapshotLeafCount: target === child ? 128n : 0n, snapshotPeaks: Array.from({ length: 64 }, (_, index) => (index === 7 ? rootHash : zero)), currentNullifierRoot: createSparseNullifier([]).getRoot(), localHeadNodeId: target === root ? 128n : 0n }
+			return { balanceAttoRep: 150n, snapshotLeafCount: target === child ? 128n : 0n, snapshotCarryRoot: rootHash, currentNullifierRoot: createSparseNullifier([]).getRoot(), localHeadNodeId: target === root ? 128n : 0n }
 		}
 		if (name === 'getCarryLeafPageByOutcome' && target === root && args[0] === 1) {
 			cursors.push(args[1])
@@ -229,7 +225,7 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 			case 'settlementForkThresholdAttoRep':
 				return 0n
 			case 'getOutcomeState':
-				return { balanceAttoRep: 0n, snapshotLeafCount: 0n, snapshotPeaks: Array.from({ length: 64 }, () => zero), currentNullifierRoot: createSparseNullifier([]).getRoot(), localHeadNodeId: 0n }
+				return { balanceAttoRep: 0n, snapshotLeafCount: 0n, snapshotCarryRoot: zero, currentNullifierRoot: createSparseNullifier([]).getRoot(), localHeadNodeId: 0n }
 			case 'getCarryLeafPageByOutcome':
 				return [[], 0n]
 			case 'getProofConsumedCarriedDepositIndexesByOutcome':
@@ -242,14 +238,14 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 	await expect(sampleClaimPositions(game(32), read, state)).rejects.toThrow('32-generation limit')
 })
 
-test('keeps authenticated proofs and withholds payout quotes until a deep claim checkpoint is ready', async () => {
-	const result = await sampleClaimPositions(child, fixtureRead({ checkpointRequired: true }), state)
+test('authenticated claims need no ancestor preparation', async () => {
+	const result = await sampleClaimPositions(child, fixtureRead(), state)
 	expect(result.positions).toHaveLength(3)
-	expect(result.positions[0]).toMatchObject({ status: 'checkpoint-required', kind: 'inherited', proof: { leafIndex: '0' } })
 	for (const position of result.positions) {
-		expect(position['retained_principal_atto_rep']).toBeUndefined()
-		expect(position['source_principal_atto_rep']).toBeUndefined()
-		expect(position['reward_amount_atto_rep']).toBeUndefined()
-		expect(position['payout_atto_rep']).toBeUndefined()
+		expect(position['status']).toBe('claimable')
+		expect(position['source_principal_atto_rep']).toBe(position['principal_atto_rep'])
+		expect(position['retained_principal_atto_rep']).toBe(position['principal_atto_rep'])
+		expect(position['reward_amount_atto_rep']).toBe(position['principal_atto_rep'])
+		expect(position['payout_atto_rep']).toBeDefined()
 	}
 })

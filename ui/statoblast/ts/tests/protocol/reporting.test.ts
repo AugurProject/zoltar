@@ -1,3 +1,4 @@
+import { bagCarryPeaks } from '@zoltar/core-shared/evm/carryProof'
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
@@ -895,7 +896,7 @@ describe('reporting protocol client', () => {
 						currentNullifierRoot: zeroHash,
 						localHeadNodeId: request.address === parentEscalationGameAddress ? 1n : 0n,
 						snapshotLeafCount: 0n,
-						snapshotPeaks: Array.from({ length: 64 }, () => zeroHash),
+						snapshotCarryRoot: zeroHash,
 					}
 				if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
 				if (request.functionName === 'forkContinuation') return false
@@ -962,7 +963,7 @@ describe('reporting protocol client', () => {
 		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, firstLeaf.sourceNodeId)
 		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, secondLeaf.sourceNodeId)
 		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
-		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
+		const snapshotPeaks: Hex[] = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
 		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
@@ -990,7 +991,7 @@ describe('reporting protocol client', () => {
 						currentLeafCount: 2n,
 						currentNullifierRoot: emptyNullifierRoot,
 						snapshotLeafCount: 2n,
-						snapshotPeaks,
+						snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks),
 					}
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return false
@@ -1044,7 +1045,7 @@ describe('reporting protocol client', () => {
 		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, inheritedLeaf.sourceNodeId)
 		const childLocalLeafHash = hashCarryLeafForTest(childLocalLeaf.depositor, 1n, childLocalLeaf.amountAttoRep, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmountAttoRep, childLocalLeaf.sourceNodeId)
 		const parentCarryRoot = hashCarryParentForTest(inheritedLeafHash, childLocalLeafHash)
-		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
+		const snapshotPeaks: Hex[] = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = parentCarryRoot
 		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
@@ -1073,7 +1074,7 @@ describe('reporting protocol client', () => {
 						currentLeafCount: 0n,
 						currentNullifierRoot: emptyNullifierRoot,
 						snapshotLeafCount: 2n,
-						snapshotPeaks,
+						snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks),
 					}
 				}
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getOutcomeState') {
@@ -1138,7 +1139,7 @@ describe('reporting protocol client', () => {
 		}
 		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, inheritedLeaf.sourceNodeId)
 		const frozenRoot = hashCarryParentForTest(inheritedLeafHash, zeroHash)
-		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
+		const snapshotPeaks: Hex[] = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
 		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
@@ -1159,7 +1160,7 @@ describe('reporting protocol client', () => {
 					return { currentNullifierRoot: emptyNullifierRoot, localHeadNodeId: 1n, snapshotLeafCount: 0n }
 				}
 				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
-					return { currentNullifierRoot: emptyNullifierRoot, snapshotLeafCount: 2n, snapshotPeaks }
+					return { currentNullifierRoot: emptyNullifierRoot, snapshotLeafCount: 2n, snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks) }
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'forkContinuation') return false
@@ -1202,7 +1203,7 @@ describe('reporting protocol client', () => {
 		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, firstLeaf.sourceNodeId)
 		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, secondLeaf.sourceNodeId)
 		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
-		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
+		const snapshotPeaks: Hex[] = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
 		const inheritedNullifierRoot = computeSingleConsumedNullifierRootForTest(0n)
 		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
@@ -1218,7 +1219,7 @@ describe('reporting protocol client', () => {
 				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
-					return { currentNullifierRoot: inheritedNullifierRoot, snapshotLeafCount: 2n, snapshotPeaks }
+					return { currentNullifierRoot: inheritedNullifierRoot, snapshotLeafCount: 2n, snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks) }
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
 					return { currentNullifierRoot: inheritedNullifierRoot, localHeadNodeId: 0n, snapshotLeafCount: 2n }
@@ -1284,7 +1285,7 @@ describe('reporting protocol client', () => {
 				readContract: createReadContractStub(async request => {
 					if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 					if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
-						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), snapshotLeafCount: BigInt(leafCount), snapshotPeaks }
+						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), snapshotLeafCount: BigInt(leafCount), snapshotCarryRoot: getCarrySnapshotRoot(BigInt(leafCount), snapshotPeaks) }
 					}
 					if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
 						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), localHeadNodeId: BigInt(leafCount), snapshotLeafCount: 0n }
@@ -1402,4 +1403,8 @@ for (const _advanceDuring of ['initial', 'deposit', 'preview'] as const) {
 }
 
 for (const _delayedStep of [0, 1]) {
+}
+
+function getCarrySnapshotRoot(leafCount: bigint, snapshotPeaks: readonly Hex[]) {
+	return bagCarryPeaks(snapshotPeaks.filter((_peak, height) => (leafCount & (1n << BigInt(height))) !== 0n))
 }

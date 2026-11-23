@@ -1,20 +1,36 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
-import {
-	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as claimDelegateArtifact,
-	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate as depositDelegateArtifact,
-	statoblast_factories_EscalationGameFactory_EscalationGameFactory as factoryArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-} from '../types/contractArtifact'
+import { statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate as depositDelegateArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as factoryArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, YES } from './auditE2EHarness'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
+// Removed public selectors must remain unreachable through the signed-deposit fallback.
+const claimDelegateArtifact = {
+	abi: [
+		{ type: 'function', name: 'initializeForkClaimCheckpoint', stateMutability: 'nonpayable', inputs: [{ name: 'source', type: 'address' }], outputs: [] },
+		{
+			type: 'function',
+			name: 'processClaimCheckpoint',
+			stateMutability: 'nonpayable',
+			inputs: [
+				{ name: 'outcome', type: 'uint8' },
+				{ name: 'amount', type: 'uint256' },
+				{ name: 'cumulative', type: 'uint256' },
+				{ name: 'leaf', type: 'uint256' },
+				{ name: 'steps', type: 'uint256' },
+				{ name: 'base', type: 'bytes32' },
+				{ name: 'transforms', type: 'tuple[]', components: [{ name: 'consumedBeforeAttoRep', type: 'uint256' }] },
+			],
+			outputs: [{ name: '', type: 'bool' }],
+		},
+	] as const,
+}
+
 const K = 1_000n * unit
 
-// Audit pass 4, target 4: the claim-checkpoint path predates central reporter custody and is
-// still part of the deployed game; the export and forked-escrow paths were removed. No privileged
+// The checkpoint, export and forked-escrow selectors are absent from production. No privileged
 // or delegate entry point can be reached by an outside caller to move REP or change a payout, in
 // a frozen parent game or in a live continuation, whether called on the game, through its
 // fallback, or on a shared delegate.
@@ -56,7 +72,7 @@ describe('audit4: privileged and claim-checkpoint entry points are inert', () =>
 		const [firstLeaf] = leaves
 		if (firstLeaf === undefined) throw new Error('Missing carried leaf')
 
-		const { snapshotPeaks: peaks } = await owner.readContract({ ...e2e.game(child.game), functionName: 'getOutcomeState', args: [YES] })
+		const { currentPeaks: peaks } = await owner.readContract({ ...e2e.game(child.game), functionName: 'getOutcomeState', args: [YES] })
 		const state = async (game: Address) => ({
 			custody: await e2e.gameBalance(game),
 			staked: await owner.readContract({ ...e2e.game(game), functionName: 'totalDisputeStakedAttoRep' }),
@@ -86,8 +102,8 @@ describe('audit4: privileged and claim-checkpoint entry points are inert', () =>
 					['fallback transferReporterRep', () => caller.simulateContract({ ...viaDeposit, functionName: 'transferReporterRep', args: [caller.account.address, K] })],
 					['fallback creditClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'creditClaimOwners', args: [caller.account.address, K] })],
 					['fallback creditExternalClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'creditExternalClaimOwners', args: [game0, caller.account.address, 0n, K, 0n] })],
-					['fallback consumeCarriedDeposit', () => caller.simulateContract({ ...viaDeposit, functionName: 'consumeCarriedDeposit', args: [YES, firstLeaf.parentDepositIndex, firstLeaf.amount, firstLeaf.cumulative, firstLeaf.leafIndex, 1_000n * K] })],
-					['fallback consumeUnresolvedRepForClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'consumeUnresolvedRepForClaimOwners', args: [r2.account.address, YES, K, 0n] })],
+					['fallback consumeCarriedDeposit', () => caller.simulateContract({ ...viaDeposit, functionName: 'consumeCarriedDeposit', args: [YES, firstLeaf.parentDepositIndex, firstLeaf.amount, 1_000n * K] })],
+					['fallback consumeUnresolvedRepForClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'consumeUnresolvedRepForClaimOwners', args: [r2.account.address, YES, K] })],
 					['fallback recordDeposit', () => caller.simulateContract({ ...viaDeposit, functionName: 'recordDeposit', args: [caller.account.address, YES, K, 1_000n * K] })],
 					['fallback settleOrdinaryGame', () => caller.simulateContract({ ...viaDeposit, functionName: 'settleOrdinaryGame', args: [verifier, true] })],
 					['fallback initializeForkClaimCheckpoint', () => caller.simulateContract({ ...viaClaim, functionName: 'initializeForkClaimCheckpoint', args: [game0] })],
@@ -96,7 +112,6 @@ describe('audit4: privileged and claim-checkpoint entry points are inert', () =>
 					['delegate creditClaimOwners', () => caller.simulateContract({ abi: depositDelegateArtifact.abi, address: infra.escalationGameDepositDelegate, functionName: 'creditClaimOwners', args: [caller.account.address, K] })],
 					['delegate recordDeposit', () => caller.simulateContract({ abi: depositDelegateArtifact.abi, address: infra.escalationGameDepositDelegate, functionName: 'recordDeposit', args: [caller.account.address, YES, K, K] })],
 					['delegate resumeFromFork', () => caller.simulateContract({ abi: depositDelegateArtifact.abi, address: infra.escalationGameDepositDelegate, functionName: 'resumeFromFork' })],
-					['delegate processClaimCheckpoint', () => caller.simulateContract({ abi: claimDelegateArtifact.abi, address: infra.escalationGameClaimDelegate, functionName: 'processClaimCheckpoint', args: [YES, firstLeaf.amount, firstLeaf.cumulative, firstLeaf.leafIndex, 8n, zeroHash, []] })],
 				]
 				for (const [label, attempt] of attempts) await expect(attempt(), `${phase}: ${label} by ${caller.account.address}`).rejects.toThrow()
 			}
@@ -105,19 +120,17 @@ describe('audit4: privileged and claim-checkpoint entry points are inert', () =>
 
 		await probe(game0, 'frozen parent')
 		await probe(child.game, 'live continuation')
-		for (const delegate of [infra.escalationGameDepositDelegate, infra.escalationGameClaimDelegate]) for (const universe of [U0, A]) expect(await e2e.rep(universe, delegate)).toBe(0n)
+		for (const delegate of [infra.escalationGameDepositDelegate]) for (const universe of [U0, A]) expect(await e2e.rep(universe, delegate)).toBe(0n)
 
-		// The one legacy mutation an outsider can run: claim checkpoints, for real and for invented claims.
+		// Removed checkpoint mutations reject both real and invented claim coordinates.
 		const checkpoint = (game: Address, amount: bigint, cumulative: bigint, leafIndex: bigint) => writeContractAndWait(r6, () => r6.writeContract({ abi: claimDelegateArtifact.abi, address: game, functionName: 'processClaimCheckpoint', args: [YES, amount, cumulative, leafIndex, 8n, zeroHash, []], gas: BRANCH_GAS }))
 		const beforeCheckpoint = await state(child.game)
-		for (const leaf of leaves) await checkpoint(child.game, leaf.amount, leaf.cumulative, leaf.leafIndex)
+		for (const leaf of leaves) await expect(checkpoint(child.game, leaf.amount, leaf.cumulative, leaf.leafIndex)).rejects.toThrow()
 		// An invented claim that would start the first deposit's reward coordinates at zero with ten times its size.
-		await checkpoint(child.game, firstLeaf.amount * 10n, firstLeaf.amount * 10n, firstLeaf.leafIndex)
-		await checkpoint(child.game, 1n, 1_000_000n * K, 5n)
-		await checkpoint(game0, firstLeaf.amount, firstLeaf.cumulative, firstLeaf.leafIndex)
+		await expect(checkpoint(child.game, firstLeaf.amount * 10n, firstLeaf.amount * 10n, firstLeaf.leafIndex)).rejects.toThrow()
+		await expect(checkpoint(child.game, 1n, 1_000_000n * K, 5n)).rejects.toThrow()
+		await expect(checkpoint(game0, firstLeaf.amount, firstLeaf.cumulative, firstLeaf.leafIndex)).rejects.toThrow()
 		expect(await state(child.game)).toEqual(beforeCheckpoint)
-		const allocation = await owner.readContract({ abi: claimDelegateArtifact.abi, address: child.game, functionName: 'getInheritedClaimAllocation', args: [YES, firstLeaf.amount, firstLeaf.cumulative, firstLeaf.leafIndex] })
-		expect([...allocation]).toEqual([firstLeaf.amount, firstLeaf.amount, firstLeaf.amount, firstLeaf.cumulative])
 
 		// ---- the game then settles exactly as if nothing had been tried ----
 		const g = e2e.game(child.game)

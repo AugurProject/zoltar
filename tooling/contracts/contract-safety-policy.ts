@@ -47,11 +47,6 @@ export const contractSafetyPolicy = {
 			reason: 'Deposits mutate EscalationGame storage through delegatecall.',
 		},
 		{
-			host: { sourcePath: 'contracts/statoblast/EscalationGame.sol', contractName: 'EscalationGame' },
-			delegate: { sourcePath: 'contracts/statoblast/EscalationGameClaimDelegate.sol', contractName: 'EscalationGameClaimDelegate' },
-			reason: 'Claim accounting reads and mutates EscalationGame storage through delegatecall.',
-		},
-		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
 			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
 			reason: 'Native fee accounting and portfolio credits mutate SecurityPool storage through this fixed delegate.',

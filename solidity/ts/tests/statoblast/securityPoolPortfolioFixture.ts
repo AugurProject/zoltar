@@ -13,7 +13,7 @@ import {
 import { deployContract } from '../../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { applyLibraries, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -59,7 +59,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 			maximumQuestionHorizonSeconds,
 			questionAdmissionPolicy: policy,
 			economics: configuration,
-			creationCode: applyLibraries(portfolioArtifact.evm.bytecode.object),
+			creationCode: `0x${portfolioArtifact.evm.bytecode.object}`,
 		})
 		const receipt = await owner().waitForTransactionReceipt({ hash: await owner().sendTransaction({ ...request, gas: 16_777_216n }) })
 		if (receipt.status !== 'success') throw new Error('Portfolio deployment must succeed within the transaction gas limit')
@@ -131,7 +131,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 	beforeAll(async () => {
 		await wrapWeth(owner(), 10_000n * unit)
 		await wrapWeth(other(), 10_000n * unit)
-		questionAdmissionPolicy = await deployContract(owner(), encodeDeployData({ abi: openAdmissionArtifact.abi, bytecode: applyLibraries(openAdmissionArtifact.evm.bytecode.object) }))
+		questionAdmissionPolicy = await deployContract(owner(), encodeDeployData({ abi: openAdmissionArtifact.abi, bytecode: `0x${openAdmissionArtifact.evm.bytecode.object}` }))
 		portfolio = await deployPortfolio()
 		capitalLedger = await capitalFor()
 		await register(base.questionId)
