@@ -15,6 +15,10 @@ contract SecurityPoolResolutionPremiumBook {
 	uint256 public constant UNIT_SCALE = 1e9;
 	uint48 public constant MAXIMUM_REPORTING_WINDOW = Constants.RESOLUTION_PREMIUM_WINDOW;
 	uint256 private constant MAXIMUM_INHERITED_UNITS_PER_CASH = 1e12;
+	// Rates are units per second and portfolio times fit uint48, so rate integrals stay within
+	// uint256 while rates fit uint208. A child prices new premium at its inherited units per
+	// cash, at most about 1e21 below the dust limit; this domain still holds about 2^138 wei.
+	uint256 private constant MAXIMUM_BOOK_UNITS = type(uint208).max;
 	address public immutable services;
 	uint256 public totalCash;
 	SecurityPoolMaturityMap.Store private tree;
@@ -39,7 +43,7 @@ contract SecurityPoolResolutionPremiumBook {
 	}
 	struct Question {
 		uint256 units;
-		uint128 rate;
+		uint208 rate;
 		uint48 portfolioStartTime;
 		uint48 portfolioEndTime;
 		uint48 portfolioFundedEndTime;
@@ -82,7 +86,7 @@ contract SecurityPoolResolutionPremiumBook {
 		units = book.units == 0 ? cash * UNIT_SCALE : Math.mulDiv(cash, book.units, book.cash, Math.Rounding.Ceil);
 		state.units += units;
 		book.units += units;
-		require(book.units <= type(uint128).max, 'Premium unit domain exceeded');
+		require(book.units <= MAXIMUM_BOOK_UNITS, 'Premium unit domain exceeded');
 		book.cash += cash;
 		totalCash += cash;
 		_write(book, id, state);
@@ -96,12 +100,12 @@ contract SecurityPoolResolutionPremiumBook {
 		if (state.units == 0) return;
 		uint48 previousEnd = state.portfolioEndTime;
 		if (previousEnd == 0) {
-			// Scaled units preserve fractional premium rates within the uint128 domain.
+			// Scaled units preserve fractional premium rates within the uint208 domain.
 			// The original funded deadline stays fixed when reporting is extended;
 			// any fractional rate tail earns in full at that deadline.
 			uint256 rate = state.units / MAXIMUM_REPORTING_WINDOW;
-			require(rate <= type(uint128).max, 'Premium rate exceeds question domain');
-			state.rate = uint128(rate);
+			require(rate <= type(uint208).max, 'Premium rate exceeds question domain');
+			state.rate = uint208(rate);
 			require(uint256(book.portfolioTimestamp) + MAXIMUM_REPORTING_WINDOW <= type(uint48).max, 'Premium clock exhausted');
 			state.portfolioFundedEndTime = book.portfolioTimestamp + MAXIMUM_REPORTING_WINDOW;
 		}
@@ -237,7 +241,7 @@ contract SecurityPoolResolutionPremiumBook {
 		return (tree.total(book.rateRoot) - endedRate) * portfolioTimestamp + weightedEnds;
 	}
 
-	function _changeRate(Book storage book, uint48 end, uint128 rate, bool increase) private {
+	function _changeRate(Book storage book, uint48 end, uint208 rate, bool increase) private {
 		if (rate == 0) return;
 		if (!increase) {
 			(uint256 prior, ) = tree.get(book.rateRoot, end);
