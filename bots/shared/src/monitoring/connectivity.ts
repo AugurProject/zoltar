@@ -1,4 +1,5 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import type { Address, Hex, JsonValue } from '../ethereum.ts'
 import { bigintToSafeNumber, getAddress, keccak256 } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
@@ -66,17 +67,6 @@ function endpointMethodFailure(error: unknown, url: string, method: string) {
 	if (error instanceof EndpointTransportError) return new EndpointTransportError(message, { cause: error })
 	if (error instanceof EndpointSafetyError) return new EndpointSafetyError(message, { cause: error, rpcError: error.rpcError })
 	return new Error(message, { cause: error })
-}
-
-type JsonRpcResponse = {
-	error?: {
-		code?: number
-		message?: string
-		data?: JsonValue
-	}
-	id?: number | string | null
-	jsonrpc?: '2.0'
-	result?: JsonValue
 }
 
 export class EndpointCheckFailure extends Error {
@@ -147,16 +137,25 @@ async function rawRpcRequest(url: string, method: string, params: readonly unkno
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new Error(message)
 	}
-	let value: JsonRpcResponse
+	let value: JsonValue
 	try {
-		value = (await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'RPC')) as JsonRpcResponse
+		value = await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'RPC')
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`RPC returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
-	if (value.error !== undefined)
-		throw new EndpointSafetyError(`RPC ${value.error.code?.toString() ?? 'error'}: ${value.error.message ?? 'Unknown error'}`, { rpcError: typeof value.error.code === 'number' ? { code: value.error.code, message: typeof value.error.message === 'string' ? value.error.message : '' } : undefined })
-	return value.result
+	if (!isPlainRecord(value) || value['jsonrpc'] !== '2.0' || value['id'] !== 1 || 'error' in value === 'result' in value) {
+		throw new EndpointSafetyError('RPC returned a malformed JSON-RPC 2.0 response')
+	}
+	if ('error' in value) {
+		const error = value['error']
+		if (!isPlainRecord(error) || typeof error['code'] !== 'number' || !Number.isSafeInteger(error['code']) || typeof error['message'] !== 'string') {
+			throw new EndpointSafetyError('RPC returned a malformed JSON-RPC 2.0 error')
+		}
+		const rpcError = { code: error['code'], message: error['message'] }
+		throw new EndpointSafetyError(`RPC ${rpcError.code}: ${rpcError.message}`, { rpcError })
+	}
+	return value['result']
 }
 
 async function rpcRequest(url: string, method: string, params: readonly unknown[], timeoutMilliseconds: number) {

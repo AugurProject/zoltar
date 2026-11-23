@@ -79,6 +79,45 @@ export const showOperationsDetailTab = (content: ParentNode, requested: string |
 	for (const group of content.querySelectorAll<HTMLElement>('.operations-grid > [data-detail-tab]')) group.hidden = group.dataset['detailTab'] !== active
 }
 
+function bindDetailPagination(
+	button: HTMLButtonElement,
+	status: HTMLElement,
+	captureContext: OperationsDetailDeps['captureContext'],
+	{
+		load,
+		loadingMessage,
+		failureMessage,
+		retryLabel,
+		onStatusChange,
+	}: {
+		load: (context: OperationsRenderContext) => Promise<boolean>
+		loadingMessage: string
+		failureMessage: string
+		retryLabel: string
+		onStatusChange?: () => void
+	},
+) {
+	status.setAttribute('role', 'status')
+	status.setAttribute('aria-live', 'polite')
+	button.addEventListener('click', async () => {
+		const context = captureContext()
+		button.disabled = true
+		button.setAttribute('aria-busy', 'true')
+		status.textContent = loadingMessage
+		onStatusChange?.()
+		const loaded = await load(context)
+		if (loaded || !button.isConnected) return
+		button.disabled = false
+		button.removeAttribute('aria-busy')
+		button.textContent = retryLabel
+		button.setAttribute('aria-label', retryLabel)
+		status.textContent = failureMessage
+		const { activeElement, body } = button.ownerDocument
+		if (activeElement === button || activeElement === body) button.focus({ preventScroll: true })
+		onStatusChange?.()
+	})
+}
+
 const isPlainPrimaryClick = (event: MouseEvent): boolean => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
 export const renderOperationsDetail = (deps: OperationsDetailDeps, response: OperationsResponse, route: OperationsDetailRoute, preservedContext?: OperationsRenderContext, live = false) => {
@@ -250,17 +289,11 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			const more = element('button', 'secondary compact', 'Show older market activity')
 			more.type = 'button'
 			const status = element('p', 'activity-summary')
-			status.setAttribute('role', 'status')
-			more.addEventListener('click', async () => {
-				more.disabled = true
-				more.setAttribute('aria-busy', 'true')
-				status.textContent = 'Loading older market activity…'
-				const loaded = await loadOperations({ live: true, activityTargetCount: activityItems.length + 100, preservedContext: captureOperationsRenderContext() })
-				if (!loaded && more.isConnected) {
-					more.disabled = false
-					more.removeAttribute('aria-busy')
-					status.textContent = 'Older market activity could not be loaded. Try again.'
-				}
+			bindDetailPagination(more, status, captureOperationsRenderContext, {
+				load: preservedContext => loadOperations({ live: true, activityTargetCount: activityItems.length + 100, preservedContext }),
+				loadingMessage: 'Loading older market activity…',
+				failureMessage: 'Older market activity could not be loaded.',
+				retryLabel: 'Retry older market activity',
 			})
 			activityPanel.append(more, status)
 		}
@@ -308,25 +341,11 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			loadMore.textContent = 'Show older decisions'
 			loadMore.setAttribute('aria-label', 'Show older coordinator decisions')
 			const loadMoreStatus = element('p', 'activity-summary')
-			loadMoreStatus.setAttribute('role', 'status')
-			loadMoreStatus.setAttribute('aria-live', 'polite')
-			loadMore.addEventListener('click', async () => {
-				const paginationContext = captureOperationsRenderContext()
-				loadMore.disabled = true
-				loadMore.setAttribute('aria-busy', 'true')
-				loadMoreStatus.textContent = 'Loading older coordinator decisions…'
-				const loaded = await loadOperations({
-					live: true,
-					decisionTargetCount: decisionItems.length + 100,
-					preservedContext: paginationContext,
-				})
-				if (!loaded && loadMore.isConnected) {
-					loadMore.disabled = false
-					loadMore.removeAttribute('aria-busy')
-					loadMore.textContent = 'Retry older decisions'
-					loadMoreStatus.textContent = 'Older coordinator decisions could not be loaded.'
-					loadMore.focus({ preventScroll: true })
-				}
+			bindDetailPagination(loadMore, loadMoreStatus, captureOperationsRenderContext, {
+				load: preservedContext => loadOperations({ live: true, decisionTargetCount: decisionItems.length + 100, preservedContext }),
+				loadingMessage: 'Loading older coordinator decisions…',
+				failureMessage: 'Older coordinator decisions could not be loaded.',
+				retryLabel: 'Retry older decisions',
 			})
 			decisionPanel.append(loadMore, loadMoreStatus)
 		} else if (renderContext.focusDetailCollection === 'decisions') {
@@ -366,8 +385,6 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			loadMore.textContent = 'Show older evidence'
 			loadMore.setAttribute('aria-label', 'Show older pool risk history')
 			const loadMoreStatus = element('p', 'operations-history-status')
-			loadMoreStatus.setAttribute('role', 'status')
-			loadMoreStatus.setAttribute('aria-live', 'polite')
 			const pagination = element('div', 'operations-history-pagination')
 			const recordPaginationLayout = () => {
 				window.requestAnimationFrame(() => {
@@ -378,25 +395,12 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 					pagination.dataset['layout'] = separated ? 'separated' : 'overlap'
 				})
 			}
-			loadMore.addEventListener('click', async () => {
-				const paginationContext = captureOperationsRenderContext()
-				loadMore.disabled = true
-				loadMore.setAttribute('aria-busy', 'true')
-				loadMoreStatus.textContent = 'Loading older pool evidence…'
-				recordPaginationLayout()
-				const loaded = await loadOperations({
-					live: true,
-					historyTargetOffset: nextHistoryOffset,
-					preservedContext: paginationContext,
-				})
-				if (!loaded && loadMore.isConnected) {
-					loadMore.disabled = false
-					loadMore.removeAttribute('aria-busy')
-					loadMore.textContent = 'Retry older evidence'
-					loadMoreStatus.textContent = 'Older pool evidence could not be loaded.'
-					loadMore.focus({ preventScroll: true })
-					recordPaginationLayout()
-				}
+			bindDetailPagination(loadMore, loadMoreStatus, captureOperationsRenderContext, {
+				load: preservedContext => loadOperations({ live: true, historyTargetOffset: nextHistoryOffset, preservedContext }),
+				loadingMessage: 'Loading older pool evidence…',
+				failureMessage: 'Older pool evidence could not be loaded.',
+				retryLabel: 'Retry older pool risk history',
+				onStatusChange: recordPaginationLayout,
 			})
 			pagination.append(loadMore, loadMoreStatus)
 			coveragePanel.append(pagination)
@@ -519,25 +523,11 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			loadMore.textContent = 'Show older evidence'
 			loadMore.setAttribute('aria-label', 'Show older canonical evidence')
 			const loadMoreStatus = element('p', 'activity-summary')
-			loadMoreStatus.setAttribute('role', 'status')
-			loadMoreStatus.setAttribute('aria-live', 'polite')
-			loadMore.addEventListener('click', async () => {
-				const paginationContext = captureOperationsRenderContext()
-				loadMore.disabled = true
-				loadMore.setAttribute('aria-busy', 'true')
-				loadMoreStatus.textContent = 'Loading older canonical evidence…'
-				const loaded = await loadOperations({
-					live: true,
-					detailTargetCount: evidenceItems.length + 100,
-					preservedContext: paginationContext,
-				})
-				if (!loaded && loadMore.isConnected) {
-					loadMore.disabled = false
-					loadMore.removeAttribute('aria-busy')
-					loadMore.textContent = 'Retry older evidence'
-					loadMoreStatus.textContent = 'Older canonical evidence could not be loaded.'
-					loadMore.focus({ preventScroll: true })
-				}
+			bindDetailPagination(loadMore, loadMoreStatus, captureOperationsRenderContext, {
+				load: preservedContext => loadOperations({ live: true, detailTargetCount: evidenceItems.length + 100, preservedContext }),
+				loadingMessage: 'Loading older canonical evidence…',
+				failureMessage: 'Older canonical evidence could not be loaded.',
+				retryLabel: 'Retry older evidence',
 			})
 			evidencePanel.append(loadMore, loadMoreStatus)
 		} else if (renderContext.focusDetailCollection === 'evidence') {
