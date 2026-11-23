@@ -2,7 +2,7 @@ import { requiredPortfolioCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useId, useRef } from 'preact/hooks'
-import { buildPortfolioCapitalCureRequest, buildPortfolioCapitalTakeOverWithBoundsRequest, portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioCapitalCureRequest, buildPortfolioCapitalTakeOverWithBoundsRequest, portfolioTakeoverSource, portfolioTakeoverTransfer } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -108,11 +108,12 @@ export function PortfolioTakeover({ model, actions }: { model: { snapshot: Takeo
 	if (cureReason === undefined && !curable) cureReason = copy.takeOverInstead
 	if (reason === undefined && (commitment === undefined || commitment === 0n || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
 	if (reason === undefined && snapshot !== undefined && source !== undefined && commitment !== undefined && maximumOwnRep !== undefined && maximumOwnerPrincipal !== undefined && maximumOwnerCommitment !== undefined) {
-		const transferred = commitment < source.maximumTakeoverCommitment ? commitment : source.maximumTakeoverCommitment
+		const transferred = portfolioTakeoverTransfer(source, commitment) ?? 0n
 		const receiver = snapshot.positions.find(position => position.id === snapshot.ownerAccount.positionId)
 		const principal = (receiver?.rep ?? 0n) + snapshot.ownerAccount.freeAttoRep
 		const totalCommitment = (receiver?.commitment ?? 0n) + transferred
-		if (snapshot.ownerAccount.positionId !== 0n && receiver === undefined) reason = copy.receiverMissing
+		if (portfolioTakeoverTransfer(source, commitment) === undefined) reason = copy.strandsSource
+		else if (snapshot.ownerAccount.positionId !== 0n && receiver === undefined) reason = copy.receiverMissing
 		else if (receiver !== undefined && receiver.batch !== 0n && receiver.batch !== source.batch) reason = copy.receiverCohort
 		else if (snapshot.ownerAccount.freeAttoRep > maximumOwnRep) reason = copy.receiverConsent
 		else if (principal < requiredPortfolioCollateral(snapshot, totalCommitment)) reason = copy.receiverCollateral

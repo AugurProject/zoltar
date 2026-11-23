@@ -19,6 +19,10 @@ interface IShareTokenPortfolioForkAuthority {
 	function forkPortfolioTime(uint248 universeId) external view returns (uint48);
 }
 
+interface IShareTokenForkBranchReadiness {
+	function isReady(uint248 universeId) external view returns (bool);
+}
+
 /**
  * @title Share Token
  * @notice ERC1155 contract to hold all share token balances
@@ -218,6 +222,11 @@ contract ShareToken is ERC1155, IShareToken {
 			ISecurityPool targetPool = canonicalPoolByUniverse[targetUniverseId];
 			if (address(targetPool) == address(0x0)) {
 				require(targetOutcomeIndexesLength == 1, 'ShareToken bulk migration requires canonical child pools');
+				// Activating a branch together with materializing its question can exceed the
+				// per-transaction gas cap, so migration only materializes into an active branch.
+				// The branch steps are separate permissionless coordinator transactions.
+				address portfolio = sourcePool.securityPoolFactory().getSecurityPoolPortfolio(sourcePool);
+				require(portfolio != address(0) && IShareTokenForkBranchReadiness(IShareTokenPortfolioForkAuthority(portfolio).forkController()).isReady(targetUniverseId), 'Fork branch not active: run prepareBranch, startBranch and finalizeBranch first');
 				forker.createChildUniverse(sourcePool, outcomeIndex);
 				targetPool = canonicalPoolByUniverse[targetUniverseId];
 			}

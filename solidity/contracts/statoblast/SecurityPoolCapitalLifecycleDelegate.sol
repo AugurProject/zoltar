@@ -147,15 +147,18 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		host.repToken().safeTransfer(recipient, amount);
 		emit PrincipalWithdrawn(_capitalOwner(), recipient, amount);
 	}
-	function claimEarnings() external onlyDelegateCall {
+	/// @dev Pays to a recipient the owner chooses, so a token that refuses the owner
+	/// cannot strand either the REP or the collateral earnings.
+	function claimEarnings(address recipient) external onlyDelegateCall {
+		require(recipient != address(0), 'Invalid earnings recipient');
 		_settleOwner(_capitalOwner());
 		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 ethAmount = owner.feesAttoEth;
 		uint256 repAmount = owner.feesAttoRep;
 		owner.feesAttoEth = 0;
 		owner.feesAttoRep = 0;
-		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(_capitalOwner(), repAmount);
-		_sendEth(_capitalOwner(), ethAmount);
+		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(recipient, repAmount);
+		_sendEth(recipient, ethAmount);
 		emit EarningsClaimed(_capitalOwner(), ethAmount, repAmount);
 	}
 

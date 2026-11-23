@@ -7,6 +7,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolForkerPortfolioDelegate } from './SecurityPoolForkerPortfolioDelegate.sol';
 import { ISecurityPoolPortfolioNative } from './interfaces/ISecurityPoolPortfolioNative.sol';
 import { DelegateCall } from './DelegateCall.sol';
+import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 
 contract SecurityPoolForker {
 	Zoltar public immutable zoltar;
@@ -46,9 +47,18 @@ contract SecurityPoolForker {
 	}
 
 	/// @notice Forks the universe on the pool's own question once its escalation game allows it, burning reporter-ledger REP; callable by anyone.
+	/// @dev When the live fork threshold exceeds the question's escrow (genesis supply grew after the game started),
+	/// the caller pays the shortfall from REP approved to the reporter ledger; see `getOwnForkAdmissionShortfall`.
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external {
-		ISecurityPoolPortfolioNative(securityPool.securityPoolFactory().getSecurityPoolPortfolio(securityPool)).forkWithReporterQuestion(securityPool);
+		ISecurityPoolPortfolioNative(securityPool.securityPoolFactory().getSecurityPoolPortfolio(securityPool)).forkWithReporterQuestion(securityPool, msg.sender);
 		securityPool.activateForkMode();
+	}
+
+	/// @notice Returns the reporter ledger a caller of `forkZoltarWithOwnEscalationGame` must approve and the REP it pulls from that caller.
+	function getOwnForkAdmissionShortfall(ISecurityPool securityPool) external view returns (address reporterLedger, uint256 shortfallAttoRep) {
+		uint248 universeId = securityPool.universeId();
+		reporterLedger = ISecurityPoolPortfolioNative(securityPool.securityPoolFactory().getSecurityPoolPortfolio(securityPool)).reporterLedger(universeId);
+		shortfallAttoRep = SecurityPoolReporterLedger(reporterLedger).forkAdmissionShortfallAttoRep(universeId, securityPool.questionId());
 	}
 
 	/// @notice Returns the pool's final question outcome, or None while unresolved or while the pool is forked.

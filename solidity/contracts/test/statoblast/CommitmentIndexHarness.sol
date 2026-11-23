@@ -90,10 +90,10 @@ contract CommitmentIndexHarness {
 		index.replace(id, rep, commitment, price);
 	}
 	function split(uint96 id, address owner, uint256 rep, uint256 commitment, uint256 oldPrice, uint256 newPrice) external returns (uint96) {
-		return index.split(id, owner, rep, commitment, oldPrice, newPrice);
+		return index.split(id, owner, rep, commitment, oldPrice, newPrice, 0);
 	}
 	function transferTo(uint96 source, uint96 receiver, uint256 rep, uint256 commitment, uint256 oldPrice, uint256 newPrice) external {
-		index.transferTo(source, receiver, rep, commitment, oldPrice, newPrice);
+		index.transferTo(source, receiver, rep, commitment, oldPrice, newPrice, 0);
 	}
 	function request(uint96 id) external {
 		index.requestRetirement(id, 0, 1);

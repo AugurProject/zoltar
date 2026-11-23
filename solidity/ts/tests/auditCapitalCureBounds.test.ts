@@ -68,14 +68,16 @@ describe('audit: the unpaid cure never leaves a commitment below the minimum', (
 	})
 
 	// Three minimums backed for only 0.6 of one, with spare of two and a half: the uncovered 2.4
-	// would leave 0.6. The cut shrinks to two minimums, so exactly the minimum is left, and that
-	// remainder, still under water, is what the keeper takes over.
+	// would leave 0.6. The cut shrinks to two minimums, so exactly the minimum is left. Only
+	// additional capacity and ordinary retirement can replace it, so the takeover call keeps
+	// the unpaid cure and transfers nothing.
 	test('a minimum residual requires additional capacity and cannot be seized', async () => {
 		const commitment = 3n * MINIMUM
 		const { id, required } = await underwater(commitment, 100n * E + MINIMUM / 2n, 5n * E)
 		await fixture.deposit(keeper, 1_000n * E)
-		await expect(takeOver(id, commitment)).rejects.toThrow('Position requires additional backing')
-		expect(await fixture.position(id)).toMatchObject({ rep: required, commitment })
+		await takeOver(id, commitment)
+		expect(await fixture.position(id)).toMatchObject({ rep: required, commitment: MINIMUM })
+		await expect(takeOver(id, MINIMUM)).rejects.toThrow('Position requires additional backing')
 		expect((await fixture.owner(keeper)).positionId).toBe(0n)
 	})
 

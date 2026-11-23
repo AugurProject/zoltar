@@ -227,7 +227,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect(await healthy()).toBe(0n)
 		expect([...(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'ownerCollateral', args: [alice.account.address] }))]).toEqual([105n * E, 100n * E, 0n])
 		const before = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [alice.account.address] })
-		await writeContractAndWait(alice, () => alice.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'claimEarnings' }))
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'claimEarnings', args: [alice.account.address] }))
 		const after = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [alice.account.address] })
 		expect(after - before).toBeGreaterThanOrEqual(200n * E)
 		expect((await position(id)).rep).toBe(105n * E)

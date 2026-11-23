@@ -3,13 +3,14 @@ import { bagCarryPeaks } from '@zoltar/core-shared/evm/carryProof'
 
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { approveReportingRep, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { approveOwnForkAdmission, approveReportingRep, forkWithOwnEscalationGame, loadOwnForkAdmission, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { EscalationSide } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import * as portfolioCopy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -246,6 +247,53 @@ describe('reporting protocol client', () => {
 		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)
 		expect(previews[1]?.functionName).toBe('depositWalletRepToEscalationGame')
 		expect(previews[1]?.args).toEqual([1, 7n])
+	})
+
+	describe('own-question fork admission shortfall', () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000b1')
+		const reporterLedgerAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const createShortfallClient = (shortfallAttoRep: bigint, allowanceAttoRep: bigint, previews: TransactionRequestPreview[]) => {
+			const client = asWriteClient({
+				...createMockWriteClient(
+					() => undefined,
+					async request => {
+						if (request.functionName === 'getOwnForkAdmissionShortfall') return [reporterLedgerAddress, shortfallAttoRep]
+						if (request.functionName === 'repToken') return repTokenAddress
+						if (request.functionName === 'allowance') return allowanceAttoRep
+						throw new Error(`Unexpected readContract function: ${request.functionName}`)
+					},
+				),
+				account: { address: walletAddress, type: 'json-rpc' },
+			})
+			client.onTransactionPrepared = preview => previews.push(preview)
+			return client
+		}
+
+		test('loads the shortfall, the reporter ledger allowance and a supply-growth buffer recommendation', async () => {
+			expect(await loadOwnForkAdmission(createShortfallClient(40n, 7n, []), securityPoolAddress, walletAddress)).toEqual({ allowanceAttoRep: 7n, recommendedApprovalAttoRep: 40n + 10n ** 18n, shortfallAttoRep: 40n })
+			expect(await loadOwnForkAdmission(createShortfallClient(40n, 7n, []), securityPoolAddress, undefined)).toEqual({ allowanceAttoRep: undefined, recommendedApprovalAttoRep: 40n + 10n ** 18n, shortfallAttoRep: 40n })
+			expect(await loadOwnForkAdmission(createShortfallClient(0n, 7n, []), securityPoolAddress, walletAddress)).toEqual({ allowanceAttoRep: 7n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
+		})
+
+		test('approves the reporter ledger for exactly the selected amount', async () => {
+			const previews: TransactionRequestPreview[] = []
+			expect(await approveOwnForkAdmission(createShortfallClient(40n, 0n, previews), securityPoolAddress, 55n)).toBe(mockTransactionHash)
+			expect(previews.map(preview => [preview.functionName, preview.args])).toEqual([['approve', [reporterLedgerAddress, 55n]]])
+		})
+
+		test('the fork sends only the fork and refuses while the allowance is below the shortfall', async () => {
+			const blocked: TransactionRequestPreview[] = []
+			await expect(forkWithOwnEscalationGame(createShortfallClient(40n, 39n, blocked), securityPoolAddress)).rejects.toThrow(portfolioCopy.forkAdmissionApprovalRequired)
+			expect(blocked).toEqual([])
+			for (const [shortfallAttoRep, allowanceAttoRep] of [
+				[0n, 0n],
+				[40n, 40n],
+			] as const) {
+				const previews: TransactionRequestPreview[] = []
+				expect(await forkWithOwnEscalationGame(createShortfallClient(shortfallAttoRep, allowanceAttoRep, previews), securityPoolAddress)).toBe(mockTransactionHash)
+				expect(previews.map(preview => preview.functionName)).toEqual(['forkZoltarWithOwnEscalationGame'])
+			}
+		})
 	})
 
 	test('#1453: a first report deploys the unstarted escalation game in its own transaction, then reports', async () => {

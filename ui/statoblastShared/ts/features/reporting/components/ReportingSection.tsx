@@ -42,6 +42,7 @@ import { getEscalationPhase, getReportingMaxProfitContribution, getReportingMini
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { getEffectiveReportingDetails, getEscalationGameStartTimestamp, getReportingStagePresentation } from '../lib/reportingStagePresentation.js'
 import { ReportingSettlementSection } from './ReportingSettlementSection.js'
+import { ForkTriggeredActions } from './ForkTriggeredActions.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -118,6 +119,7 @@ export function ReportingSection({
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
+	triggerZoltarForkApproval,
 	triggerZoltarForkAvailability,
 	triggerZoltarForkPending = false,
 }: ReportingSectionProps) {
@@ -279,14 +281,13 @@ export function ReportingSection({
 	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability?.disabled === true || forkUnavailableReason === undefined ? (triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }) : { disabled: true, reason: forkUnavailableReason }
 	const forkTriggeredActions =
 		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
-			<div className='actions'>
-				{showTriggerZoltarForkAction ? <TransactionActionButton idleLabel={reportingCopy.triggerZoltarFork} pendingLabel={reportingCopy.triggeringZoltarFork} onClick={onTriggerZoltarFork} pending={triggerZoltarForkPending} tone='primary' availability={resolvedTriggerZoltarForkAvailability} /> : undefined}
-				{showForkWorkflowAction ? (
-					<button className='secondary' type='button' onClick={onOpenForkWorkflow}>
-						{reportingCopy.openForkAndMigration}
-					</button>
-				) : undefined}
-			</div>
+			<ForkTriggeredActions
+				approval={showTriggerZoltarForkAction ? triggerZoltarForkApproval : undefined}
+				forkButton={showTriggerZoltarForkAction ? <TransactionActionButton idleLabel={reportingCopy.triggerZoltarFork} pendingLabel={reportingCopy.triggeringZoltarFork} onClick={onTriggerZoltarFork} pending={triggerZoltarForkPending} tone='primary' availability={resolvedTriggerZoltarForkAvailability} /> : undefined}
+				forkPending={triggerZoltarForkPending}
+				onOpenForkWorkflow={showForkWorkflowAction ? onOpenForkWorkflow : undefined}
+				securityPoolAddress={activeReportingDetails?.securityPoolAddress}
+			/>
 		)
 	useEffect(() => {
 		if (activeReportingDetails === undefined) return

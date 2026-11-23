@@ -240,9 +240,9 @@ const creditEarnings = (m: Model, eth: bigint, rep: bigint) => {
 export const checkpoint = (m: Model) => {
 	if (m.importing) return
 	const effective = m.forkTime !== 0n ? min(m.now, m.forkTime) : m.now
-	// Prepaid fees belong to the existing backing through stale live time.
-	// A terminal parent without a fresh fork-time price stops at its fork.
-	const through = m.forkTime !== 0n && m.forkTime >= m.validUntil ? effective : m.now
+	// Prepaid fees belong to the commitments at the last accepted price through stale
+	// live time and after a fork, exactly as the ledger's stream checkpoint credits them.
+	const through = m.accepted !== 0n ? m.now : min(effective, m.validUntil)
 	let eth = 0n
 	let rep = 0n
 	if (through > m.releasedThrough) [eth, rep] = release(m, through)
@@ -355,11 +355,12 @@ export const serve = (m: Model, id: bigint) => {
 		ledgerReplace(m, boundary.id, boundary.rep, boundary.k)
 	}
 }
-export const cure = (m: Model, id: bigint, target: bigint, ownerExit: boolean) => {
+// Owners cure at the liquidation price; a takeover cures to the conservative price it repairs to (#1571).
+export const cure = (m: Model, id: bigint, target: bigint, ownerExit: boolean, price = m.liq) => {
 	requireModel(id !== 0n && id !== m.cohortId, 'Materialize an individual auction vault')
 	const p = findPosition(m, id)
 	if (p === undefined || !inTree(p) || !(p.k > target)) return fail('Position is not live')
-	const supported = (((p.rep * BPS) / MULTIPLIER) * WAD) / m.liq
+	const supported = (((p.rep * BPS) / MULTIPLIER) * WAD) / price
 	if (supported >= p.k) {
 		clear(p)
 		return 0n
@@ -458,17 +459,17 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	const source = positionOf(m, id)
 	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')
 	requireModel(k > 0n && k <= source.k, 'Invalid takeover commitment')
-	if (cure(m, id, 0n, false) !== 0n && (!inTree(source) || source.price >= m.liq)) {
+	// A cure limited by nominal spare continues into a receiver-funded repair.
+	if (cure(m, id, 0n, false, m.cons) !== 0n && (!inTree(source) || source.price >= m.cons || source.k <= MINC)) {
 		return { cured: true, full: false, merged: false, award: 0n, debit: 0n, sourceOwner: source.owner, sourceBatch: source.batch, receiverPrincipal: 0n, receiverCommitment: 0n }
 	}
-	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')
-	const start = started(m, id)
-	requireModel(start !== 0n, 'Adverse observation missing')
 	requireModel(k > 0n, 'Invalid takeover commitment')
-	const supported = (((source.rep * BPS) / MULTIPLIER) * WAD) / m.cons
-	const retained = max(supported, MINC)
+	const backing = (source.rep * BPS) / MULTIPLIER
+	const retained = max((backing * WAD) / m.cons, MINC)
 	requireModel(source.k > retained, 'Position requires additional backing')
 	k = min(k, source.k - retained)
+	// A partial repair leaves the source fully repaired or still below the liquidation price (#1570).
+	requireModel(source.k - k === retained || source.k - k > (backing * WAD) / m.liq, 'Takeover would strand source between prices')
 	const award = 0n
 	const debit = 0n
 	settle(m, o)
@@ -503,16 +504,18 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 		transferred = source.remaining - source.k
 		source.remaining = source.k
 	}
+	// A receiver never inherits a residual target below the economic minimum (#1563).
+	const receiverRemaining = transferred < MINC ? 0n : transferred
 	reinsert(source)
 	let receiverId = receiver.positionId
 	if (existing === undefined) {
-		receiverId = create(m, o, sourceBatch, debit, k, maxHealthyPrice(received, k), transferred)
+		receiverId = create(m, o, sourceBatch, debit, k, maxHealthyPrice(received, k), receiverRemaining)
 		receiver.positionId = receiverId
 	} else {
 		existing.rep += debit
 		existing.k += k
 		if (existing.batch !== 0n) {
-			existing.remaining += transferred
+			if (existing.remaining + transferred >= MINC) existing.remaining += transferred
 			existing.order = m.positions.reduce((last, q) => max(last, q.order), 0n) + 1n
 		}
 		reinsert(existing)
@@ -709,7 +712,6 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 		}
 		case 'serve':
 			requireOpen(m)
-			requireModel(op.id !== 0n && findPosition(m, op.id)?.owner === op.o, 'Only retirement owner')
 			checkpoint(m)
 			serve(m, op.id)
 			return undefined

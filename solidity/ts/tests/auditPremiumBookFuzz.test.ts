@@ -23,7 +23,7 @@ const WINDOW = 259_200 + 7 * 604_800
 const RESPONSE = 259_200
 const UNIT_SCALE = 10n ** 9n
 const visibleUnits = (units: bigint) => (units + UNIT_SCALE - 1n) / UNIT_SCALE
-const MAX_UNITS = (1n << 128n) - 1n
+const MAX_UNITS = (1n << 208n) - 1n
 const MAX_INHERITED = 10n ** 12n * UNIT_SCALE
 const MAX_TIME = (1 << 24) * (1 << 24) - 1
 const START = 1_000

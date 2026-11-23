@@ -48,6 +48,11 @@ export function forkMigrationBatchBlocker(targets: readonly Pick<ForkTarget, 'ca
 	return settlementCopy.missingChildPoolBlocker
 }
 
+/** Migrating into a child universe without a pool creates the pool only once its fork branch is active; activating the branch is separate Statoblast work. */
+export function forkMigrationBranchBlocker(targets: readonly Pick<ForkTarget, 'canonicalPool' | 'branchActive'>[]) {
+	return targets.some(target => target.canonicalPool === undefined && !target.branchActive) ? settlementCopy.inactiveBranchBlocker : undefined
+}
+
 export function forkMigrationBatchWarning(targets: readonly Pick<ForkTarget, 'canonicalPool'>[]) {
 	if (forkMigrationBatchBlocker(targets) === undefined) return undefined
 	return settlementCopy.missingChildPoolWarning

@@ -1,6 +1,12 @@
 import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
-import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import {
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator,
+	statoblast_SecurityPool_SecurityPool,
+	statoblast_tokens_ShareToken_ShareToken,
+} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { ForkQuestionDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
@@ -11,6 +17,9 @@ const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi
 const zoltarForkAbi = Zoltar_Zoltar.abi
 const forkQuestionAbi = ZoltarQuestionData_ZoltarQuestionData.abi
 const shareForkAbi = statoblast_tokens_ShareToken_ShareToken.abi
+const factoryForkAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
+const portfolioForkAbi = statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.abi
+const coordinatorForkAbi = statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator.abi
 
 /** Shares of each source outcome the account has already migrated into one child universe. */
 type MigratedShareAmounts = Readonly<{ invalid: bigint; yes: bigint; no: bigint }>
@@ -22,6 +31,11 @@ export type ForkTarget = Readonly<{
 	universeId: bigint
 	label: string
 	canonicalPool: Address | undefined
+	/**
+	 * Whether the portfolio's fork branch into this child universe is active. Without a canonical pool, ShareToken.migrate
+	 * creates the child pool only in an active branch; the branch's preparation, start, and activation are separate transactions.
+	 */
+	branchActive: boolean
 	/** What the account already migrated here; zero without an account. ShareToken.migrate locks the source balance and records this amount instead of burning it. */
 	migrated: MigratedShareAmounts
 }>
@@ -53,7 +67,7 @@ async function loadOutcomeLabels(client: PublicClient, questionData: Address, qu
 	}
 }
 
-/** A migration always lands in a child universe with a canonical pool (it creates one when needed), so a universe without one holds nothing migrated. */
+/** A migration always lands in a child universe with a canonical pool (it creates one in an active fork branch), so a universe without one holds nothing migrated. */
 async function loadMigratedShares(client: PublicClient, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, universeId: bigint, account: Address | undefined, canonicalPool: Address | undefined): Promise<MigratedShareAmounts> {
 	if (account === undefined || canonicalPool === undefined) return NO_MIGRATED_SHARES
 	const sourceTokenId = market.universeId << 8n
@@ -62,14 +76,32 @@ async function loadMigratedShares(client: PublicClient, market: Pick<LiveMarket,
 	return { invalid, yes, no }
 }
 
-async function targetWithCanonicalPool(client: PublicClient, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, outcomeIndex: bigint, label: string, account: Address | undefined, knownUniverseId?: bigint): Promise<ForkTarget> {
+type BranchReadiness = (universeId: bigint) => Promise<boolean>
+
+/** Reads branch activation from the source pool's portfolio fork coordinator, resolving the coordinator once and only when a child universe lacks a pool. */
+function branchReadiness(client: PublicClient, pool: Address): BranchReadiness {
+	let coordinator: Promise<Address> | undefined
+	const loadCoordinator = async () => {
+		const factory = await client.readContract({ abi: poolForkAbi, address: pool, functionName: 'securityPoolFactory' })
+		const portfolio = await client.readContract({ abi: factoryForkAbi, address: getAddress(factory), functionName: 'getSecurityPoolPortfolio', args: [pool] })
+		if (portfolio === zeroAddress) throw new Error('Security pool has no portfolio')
+		return getAddress(await client.readContract({ abi: portfolioForkAbi, address: getAddress(portfolio), functionName: 'forkController' }))
+	}
+	return async universeId => {
+		coordinator ??= loadCoordinator()
+		return await client.readContract({ abi: coordinatorForkAbi, address: await coordinator, functionName: 'isReady', args: [universeId] })
+	}
+}
+
+async function targetWithCanonicalPool(client: PublicClient, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, isBranchActive: BranchReadiness, outcomeIndex: bigint, label: string, account: Address | undefined, knownUniverseId?: bigint): Promise<ForkTarget> {
 	const universeId = knownUniverseId ?? getChildUniverseId(market.universeId, outcomeIndex)
 	const canonicalPoolAddress = await client.readContract({ abi: shareForkAbi, address: market.shareToken, functionName: 'canonicalPoolByUniverse', args: [universeId] })
 	const canonicalPool = canonicalPoolAddress === zeroAddress ? undefined : getAddress(canonicalPoolAddress)
-	return { outcomeIndex, universeId, label, canonicalPool, migrated: await loadMigratedShares(client, market, universeId, account, canonicalPool) }
+	const branchActive = canonicalPool !== undefined || (await isBranchActive(universeId))
+	return { outcomeIndex, universeId, label, canonicalPool, branchActive, migrated: await loadMigratedShares(client, market, universeId, account, canonicalPool) }
 }
 
-async function loadScalarTargets(client: PublicClient, zoltar: Address, questionData: Address, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, questionId: bigint, account: Address | undefined) {
+async function loadScalarTargets(client: PublicClient, zoltar: Address, questionData: Address, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, isBranchActive: BranchReadiness, questionId: bigint, account: Address | undefined) {
 	const targets: ForkTarget[] = []
 	for (let start = 0n; ; start += FORK_PAGE_SIZE) {
 		const page = await client.readContract({ abi: zoltarForkAbi, address: zoltar, functionName: 'getDeployedChildUniverses', args: [market.universeId, start, FORK_PAGE_SIZE] })
@@ -81,7 +113,7 @@ async function loadScalarTargets(client: PublicClient, zoltar: Address, question
 				const universeId = childUniverseIds[index]
 				const label = labels[index]
 				if (universeId === undefined || label === undefined) throw new Error('Malformed deployed child universe page')
-				return await targetWithCanonicalPool(client, market, outcomeIndex, label, account, universeId)
+				return await targetWithCanonicalPool(client, market, isBranchActive, outcomeIndex, label, account, universeId)
 			}),
 		)
 		targets.push(...pageTargets)
@@ -97,6 +129,8 @@ export function createScalarForkTarget(context: Extract<ForkMigrationContext, { 
 		universeId: getChildUniverseId(context.parentUniverseId, outcomeIndex),
 		label: formatScalarOutcomeIndexLabel(context, outcomeIndex),
 		canonicalPool: undefined,
+		// An undeployed child universe has no prepared fork branch; preparing the branch deploys it.
+		branchActive: false,
 		migrated: NO_MIGRATED_SHARES,
 	}
 }
@@ -117,13 +151,14 @@ export async function loadForkMigrationContext(client: PublicClient, market: Pic
 	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = storedQuestion
 	const questionFields = { title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }
 	const question: ForkQuestionDetails = { ...questionFields, createdAt, questionId: formatQuestionIdHex(forkQuestionId), marketType: getMarketType(questionFields, outcomeLabels), outcomeLabels, outcomesComplete: true }
+	const isBranchActive = branchReadiness(client, market.pool)
 	if (outcomeLabels.length > 0) {
 		const entries = [{ outcomeIndex: 0n, label: 'Invalid' }, ...outcomeLabels.map((label, index) => ({ outcomeIndex: BigInt(index + 1), label }))]
-		const availableTargets = await Promise.all(entries.map(async entry => await targetWithCanonicalPool(client, market, entry.outcomeIndex, entry.label, account)))
+		const availableTargets = await Promise.all(entries.map(async entry => await targetWithCanonicalPool(client, market, isBranchActive, entry.outcomeIndex, entry.label, account)))
 		return { kind: 'categorical', parentUniverseId: market.universeId, questionId: forkQuestionId, question, availableTargets }
 	}
 	if (numTicks === 0n) throw new Error('Fork question has neither categorical outcomes nor scalar ticks')
-	const availableTargets = await loadScalarTargets(client, zoltar, questionData, market, forkQuestionId, account)
+	const availableTargets = await loadScalarTargets(client, zoltar, questionData, market, isBranchActive, forkQuestionId, account)
 	return {
 		kind: 'scalar',
 		parentUniverseId: market.universeId,

@@ -1,14 +1,11 @@
 import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
 import { getReportingOutcomeLabel } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { InheritedReporterClaims } from '@zoltar/ui-statoblast-shared/features/reporting/components/InheritedReporterClaims.js'
 import { useEffect, useState } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
 import { getAddress, isAddress } from '@zoltar/core-shared/evm/ethereum'
-import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
-import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { useOwnForkTrigger } from '../hooks/useOwnForkTrigger.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { AddressText } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -21,8 +18,6 @@ import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/co
 import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
 import { loadSecurityPoolListing, loadSelectedSecurityPool, type UnavailableSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
-import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
-import { statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { AccountState, WriteOperationsParameters } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -50,8 +45,6 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 	useBlockRefresh(event => {
 		if (event.reason === 'invalidate') setRefresh(value => value + 1)
 	}, enabled)
-	const forkError = useSignal<string | undefined>(undefined)
-	const forkPending = useSignal(false)
 	const selected = questions.find(question => question.securityPoolAddress.toLowerCase() === selectedAddress.toLowerCase())
 	const reporting = useReportingOperations({ ...parameters, selectedSecurityPoolAddress: selectedAddress })
 	const trading = useTradingOperations({ ...parameters, deploymentStatuses, enabled: enabled && selected !== undefined, selectedSecurityPoolAddress: selectedAddress })
@@ -91,42 +84,18 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 		reporting.setReportingForm(form => ({ ...form, securityPoolAddress: selected.securityPoolAddress }))
 		void reporting.loadReporting()
 	}, [selected?.securityPoolAddress, environmentKey, refresh])
-	const triggerFork = async () => {
-		if (forkPending.value || selected === undefined || !isAddress(selectedAddress)) return
-		const question = selected
-		forkPending.value = true
-		forkError.value = undefined
-		try {
-			await runWriteAction(
-				buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, forkError, commonCopy.formatConnectWalletBefore('triggering a universe fork'), {
-					action: 'forkQuestion',
-					source: 'Question reporting',
-					submittedTitle: copy.triggerUniverseFork,
-					universeId: question.universeId,
-				}),
-				async (account, context) => {
-					const client = createWalletWriteClient(account, { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted })
-					const hash = await writeContractAndWait(client, () => ({
-						address: getInfraContractAddresses().securityPoolForker,
-						abi: forkerArtifact.abi,
-						functionName: 'forkZoltarWithOwnEscalationGame',
-						args: [getAddress(question.securityPoolAddress)],
-						reviewTitle: copy.triggerUniverseFork,
-						reviewDescription: copy.triggerUniverseForkDescription,
-					}))
-					return { hash }
-				},
-				'Unable to trigger the universe fork.',
-				async result => {
-					setRefresh(value => value + 1)
-					await reporting.loadReporting()
-					parameters.onTransactionPresented({ hash: result.hash, title: copy.universeForkTriggered, tone: 'success', showStatusDialog: false, universeId: question.universeId })
-				},
-			)
-		} finally {
-			forkPending.value = false
-		}
-	}
+	const ownFork = useOwnForkTrigger({
+		active: selected !== undefined && !selected.universeHasForked && reporting.reportingDetails?.status === 'active' && reporting.reportingDetails.hasReachedNonDecision && reporting.reportingDetails.canTriggerOwnFork !== false,
+		onForked: async hash => {
+			if (selected === undefined) return
+			setRefresh(value => value + 1)
+			await reporting.loadReporting()
+			parameters.onTransactionPresented({ hash, title: copy.universeForkTriggered, tone: 'success', showStatusDialog: false, universeId: selected.universeId })
+		},
+		parameters,
+		question: selected,
+		refreshKey: refresh,
+	})
 	if (selectedAddress !== '' && selected === undefined) return <EmptyState title={loading ? copy.loadingQuestion : copy.questionUnavailable} detail={loadError ?? copy.selectRegisteredQuestion} actions={<a href='#/portfolios'>{copy.openPortfolios}</a>} />
 	if (selected === undefined)
 		return (
@@ -179,7 +148,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 	return (
 		<div className='route-view-flow'>
 			<RouteHeader title={getQuestionTitle(selected.marketDetails)} actions={<a href={`#/portfolios?portfolio=${selected.portfolioAddress}&universe=${selected.universeId}`}>{copy.manageBackingAndRecovery}</a>} />
-			<ErrorNotice message={forkError.value} />
+			<ErrorNotice message={ownFork.error} />
 			<TradingSection
 				accountState={accountState}
 				loadingTradingDetails={trading.loadingTradingDetails}
@@ -220,8 +189,10 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				onOpenForkWorkflow={() => {
 					window.location.hash = `#/portfolios?portfolio=${selected.portfolioAddress}&universe=${selected.universeId}`
 				}}
-				onTriggerZoltarFork={() => void triggerFork()}
-				triggerZoltarForkPending={forkPending.value}
+				onTriggerZoltarFork={() => void ownFork.triggerFork()}
+				triggerZoltarForkApproval={ownFork.approval}
+				triggerZoltarForkAvailability={ownFork.triggerForkAvailability}
+				triggerZoltarForkPending={ownFork.forkPending}
 				showSecurityPoolAddressInput={false}
 			/>
 			<InheritedReporterClaims parameters={parameters} accountState={accountState} details={reporting.reportingDetails} onRefresh={reporting.loadReporting} />

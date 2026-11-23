@@ -283,6 +283,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolCommitmentIndex', 'sealImports', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolCommitmentIndex', 'split', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolCommitmentIndex', 'splitAuctionPosition', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
+	entry('SecurityPoolCommitmentIndex', 'takeover', 'role-restricted', undefined, 'Only the bound capital ledger checks eligibility, cures and quotes a takeover before its receiver accounting.'),
 	entry('SecurityPoolCommitmentIndex', 'transferTo', 'role-restricted', undefined, 'Only the bound protocol accounting, portfolio, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolForkerPortfolioDelegate', 'materializeImmediatePortfolioChild', 'excluded-dangerous', undefined, 'This storage-coupled module must execute through its canonical host rather than against isolated delegate storage.'),
 	entry('SecurityPoolForkerPortfolioDelegate', 'materializePortfolioQuestion', 'excluded-dangerous', undefined, 'This storage-coupled module must execute through its canonical host rather than against isolated delegate storage.'),
