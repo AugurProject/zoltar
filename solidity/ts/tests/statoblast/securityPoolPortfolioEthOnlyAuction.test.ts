@@ -184,7 +184,9 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.mock.setTime(forkTime + 56n * DAY)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: forkArtifact.abi, address: context.forks, functionName: 'startBranch', args: [context.child, 1n] }))
 		const before = await context.balance(context.other.account.address)
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'executeAndSweep', args: [context.capital, 0n, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [bid.vault] }), context.token, context.other.account.address] }))
+		await writeContractAndWait(context.other, () =>
+			context.other.writeContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'executeAndSweep', args: [context.capital, 0n, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [bid.vault] }), context.token, context.other.account.address] }),
+		)
 		expect(await context.balance(context.other.account.address)).toBe(before + result.roundingAttoRep)
 		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })).earnedAttoRep).toBe(0n)
 	})

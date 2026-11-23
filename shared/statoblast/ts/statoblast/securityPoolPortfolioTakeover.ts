@@ -2,10 +2,7 @@
  * The ledger applies this unpaid cure before quoting a takeover. No REP leaves the target during cure. It measures
  * health at the conservative repair price; `healthy` means the cure alone settles the takeover with no transfer.
  */
-export function portfolioTakeoverSource(
-	snapshot: { conservativePrice: bigint; securityMultiplierBps: bigint; totalCommitmentAttoEth: bigint; demandAttoEth: bigint; economics: { minimumCommitmentAttoEth: bigint } },
-	position: { rep: bigint; commitment: bigint; batch: bigint; remainingCommitment: bigint },
-) {
+export function portfolioTakeoverSource(snapshot: { conservativePrice: bigint; securityMultiplierBps: bigint; totalCommitmentAttoEth: bigint; demandAttoEth: bigint; economics: { minimumCommitmentAttoEth: bigint } }, position: { rep: bigint; commitment: bigint; batch: bigint; remainingCommitment: bigint }) {
 	if (snapshot.conservativePrice <= 0n || snapshot.securityMultiplierBps <= 0n) throw new Error('Takeover requires a valid collateral price and multiplier')
 	const minimum = snapshot.economics.minimumCommitmentAttoEth
 	const supported = (((position.rep * 10_000n) / snapshot.securityMultiplierBps) * 10n ** 18n) / snapshot.conservativePrice

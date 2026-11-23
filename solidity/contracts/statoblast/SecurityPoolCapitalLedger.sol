@@ -407,7 +407,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// `setCommitment` and a takeover, which needs an adverse observation, cure.
 	function _cure(uint96 id, uint256 target, bool ownerExit) private returns (uint256) {
 		_requireIndividualPosition(id);
-		return _applyCure(id, commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit));
+		return
+			_applyCure(id, commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit));
 	}
 	function _requireIndividualPosition(uint96 id) private view {
 		require(id != 0 && id != auctionCohort.positionId, 'Materialize an individual auction vault');
@@ -457,7 +458,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		// A keeper must be able to leave a successful cure in place. No assets
 		// transfer and no award is paid when nominal excess alone settles the
 		// position. A cure limited by nominal spare continues into a receiver-funded repair.
-		(SecurityPoolCommitmentIndex.Cure memory cured, SecurityPoolCommitmentIndex.Account memory source, uint256 repaired) = commitmentIndex.takeover(id, auctionCohort.positionId, receiverOwner, commitment, minimumCommitmentAttoEth, demandAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
+		(
+			SecurityPoolCommitmentIndex.Cure memory cured,
+			SecurityPoolCommitmentIndex.Account memory source,
+			uint256 repaired
+		) = commitmentIndex.takeover(id, auctionCohort.positionId, receiverOwner, commitment, minimumCommitmentAttoEth, demandAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
 		_applyCure(id, cured);
 		if (cured.settled) return 0;
 		commitment = repaired;

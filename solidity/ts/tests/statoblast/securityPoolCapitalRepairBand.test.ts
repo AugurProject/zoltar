@@ -1,10 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import {
-	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as artifact,
-	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
-	test_statoblast_CapitalLedgerHarness_CapitalLedgerHarness as harnessArtifact,
-} from '../../types/contractArtifact'
+import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as artifact, statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact, test_statoblast_CapitalLedgerHarness_CapitalLedgerHarness as harnessArtifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'

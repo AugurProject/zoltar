@@ -221,7 +221,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		to.price = receiverMaxPrice;
 		uint256 transferredRemaining = _transferRemaining(source, from.commitment);
 		// Never leave the receiver a residual target below the economic minimum (#1563).
-		if (receiver.batch != 0 && receiver.remainingCommitment + transferredRemaining >= minimumCommitment) receiver.remainingCommitment += transferredRemaining;
+		if (receiver.batch != 0 && receiver.remainingCommitment + transferredRemaining >= minimumCommitment)
+			receiver.remainingCommitment += transferredRemaining;
 		_reinsert(source);
 		_reinsert(receiver);
 	}

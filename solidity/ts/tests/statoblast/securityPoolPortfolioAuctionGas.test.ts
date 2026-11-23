@@ -316,10 +316,7 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		const winnerPosition = await owner.readContract({ ...capital, functionName: 'auctionPosition', args: [winner.id] })
 		const conservativePrice = await owner.readContract({ ...capital, functionName: 'conservativePrice' })
 		const securityMultiplierBps = await owner.readContract({ ...capital, functionName: 'securityMultiplierBps' })
-		const repair = portfolioTakeoverSource(
-			{ conservativePrice, securityMultiplierBps, totalCommitmentAttoEth: totalCommitment, demandAttoEth: demand, economics: { minimumCommitmentAttoEth: unit } },
-			{ rep: winnerPosition.principal, commitment: winnerPosition.commitment, batch: 0n, remainingCommitment: 0n },
-		)
+		const repair = portfolioTakeoverSource({ conservativePrice, securityMultiplierBps, totalCommitmentAttoEth: totalCommitment, demandAttoEth: demand, economics: { minimumCommitmentAttoEth: unit } }, { rep: winnerPosition.principal, commitment: winnerPosition.commitment, batch: 0n, remainingCommitment: 0n })
 		const repairable = repair.healthy || repair.maximumTakeoverCommitment >= unit
 		if (repairable) await gasOf('liquidation: keeper repairs an unmaterialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
 		else await revertedGasOf('minimum winner requires additional backing', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))
