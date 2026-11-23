@@ -1,3 +1,4 @@
+import { auditFuzzSeeds, positiveFuzzInteger } from './auditFuzzBudget'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
@@ -70,7 +71,7 @@ import {
 // list of streams integrated directly. Every step is executed on-chain and in the model, the
 // complete observable state is compared, and independent conservation, health, liquidation
 // and liveness properties are asserted on top.
-// Long run: AUDIT_FUZZ_SEEDS=<n> (replaces the time budget) AUDIT_FUZZ_SEED_START=1 AUDIT_FUZZ_STEPS=70 AUDIT_FUZZ_BUDGET_MS=75000 AUDIT_FUZZ_SHRINK=0 (skip shrinking) AUDIT_FUZZ_MAX_FAILURES=3 bun ./tooling/testing/bun-test.mts --timeout 3600000 solidity/ts/tests/auditCapitalLedgerFuzz.test.ts
+// Long run: AUDIT_FUZZ_SEEDS=<n> AUDIT_FUZZ_SEED_START=1 AUDIT_FUZZ_STEPS=70 AUDIT_FUZZ_SHRINK=0 (skip shrinking) AUDIT_FUZZ_MAX_FAILURES=3 bun ./tooling/testing/bun-test.mts --timeout 3600000 solidity/ts/tests/auditCapitalLedgerFuzz.test.ts
 
 // ---------------------------------------------------------------- deterministic generator
 
@@ -1017,7 +1018,7 @@ const compare = (m: Model, a: Snapshot, owners: number, addressOf: (o: number) =
 const principalOf = (a: Snapshot, o: number) => a.collaterals[o]?.[0] ?? 0n
 
 /** Independent transition properties over the chain state before and after one successful step. */
-const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: number, result: TakeoverResult | undefined, unmaterialized: (o: number) => boolean) => {
+const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: number, result: TakeoverResult | undefined, unmaterialized: (o: number) => boolean, queueOrder: ReadonlyMap<bigint, bigint>) => {
 	const issues: string[] = []
 	if (op.c === 'beginImport' || op.c === 'installAuction' || op.c === 'setBid' || op.c === 'importChoice' || op.c === 'finishImport') return issues
 	// (b) a non-price operation never deepens an existing shortfall of healthy commitment.
@@ -1045,12 +1046,12 @@ const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: nu
 		if (target !== undefined && served !== undefined && served.commitment < target.commitment) {
 			const spare = after.eligibleCommitment > after.demand ? after.eligibleCommitment - after.demand : 0n
 			let reserved = 0n
-			for (const account of after.accounts) {
-				if (account.commitment === 0n || account.batch === 0n || account.maxHealthyPrice < after.conservative) continue
-				const earlierCohort = account.batch !== target.batch && account.batch === before.currentBatch
-				const earlierInCohort = account.batch === target.batch && target.maxHealthyPrice >= before.conservative && account.maxHealthyPrice > target.maxHealthyPrice
-				const anyHealthyBeforeUnhealthy = account.batch === target.batch && target.maxHealthyPrice < before.conservative
-				if (earlierCohort || earlierInCohort || anyHealthyBeforeUnhealthy) reserved += account.commitment - account.remainingCommitment
+			const targetOrder = queueOrder.get(op.id)
+			if (targetOrder === undefined || targetOrder === 0n) throw new Error('Served FIFO target lacked a request order')
+			for (const [offset, account] of after.accounts.entries()) {
+				if (account.commitment === 0n || account.batch === 0n) continue
+				const order = queueOrder.get(BigInt(offset + 1))
+				if (order !== undefined && order !== 0n && order < targetOrder) reserved += account.commitment - account.remainingCommitment
 			}
 			if (spare < reserved) issues.push(`ORDER.reserved: targeted service of ${op.id} left spare ${spare} below earlier healthy requests ${reserved}`)
 			if (after.eligibleCommitment < after.demand) issues.push(`ORDER.demand: targeted service of ${op.id} left healthy ${after.eligibleCommitment} below demand ${after.demand}`)
@@ -1193,6 +1194,7 @@ describe('audit fuzz: capital ledger against a naive reference model', () => {
 					if (stringify(actualChoice) !== stringify(expectedChoice) || target !== targetOf(ownerOf(exported, op.o))) exportIssue = `EXPORT: choice ${stringify(actualChoice)} target ${target}, expected ${stringify(expectedChoice)} target ${targetOf(ownerOf(exported, op.o))}`
 				}
 			}
+			const queueOrder = new Map(op.c === 'serve' ? live(m).map(position => [position.id, position.order] as const) : [])
 			const next = structuredClone(m)
 			let expected: string | undefined
 			let result: TakeoverResult | undefined
@@ -1252,7 +1254,7 @@ describe('audit fuzz: capital ledger against a naive reference model', () => {
 			}
 			if (issues.length === 0) {
 				issues.push(...compare(m, after, owners, driver.ownerAddress, driver.addresses().adapter))
-				if (succeeded && op.c !== 'time') issues.push(...properties(snapshot, after, op, owners, result, o => virtualBid(m, o) !== undefined))
+				if (succeeded && op.c !== 'time') issues.push(...properties(snapshot, after, op, owners, result, o => virtualBid(m, o) !== undefined, queueOrder))
 			}
 			snapshot = after
 			if (issues.length !== 0) {
@@ -1307,21 +1309,19 @@ describe('audit fuzz: capital ledger against a naive reference model', () => {
 	test('random operation sequences keep the ledger equal to the reference model and every invariant intact', async () => {
 		// The shared fixture reverts to its own snapshot before each test, which consumes ours.
 		baseline = ''
-		const firstSeed = Number(process.env['AUDIT_FUZZ_SEED_START'] ?? '1')
-		const requested = process.env['AUDIT_FUZZ_SEEDS']
-		const steps = Number(process.env['AUDIT_FUZZ_STEPS'] ?? '70')
-		const budget = Number(process.env['AUDIT_FUZZ_BUDGET_MS'] ?? '10000')
-		const startedAt = Date.now()
+		const steps = positiveFuzzInteger('AUDIT_FUZZ_STEPS', 70)
 		const failures: string[] = []
-		for (let seed = firstSeed; requested === undefined ? Date.now() - startedAt < budget : seed < firstSeed + Number(requested); seed++) {
+		const seeds = auditFuzzSeeds([1, 8, 30, 54, 65, 74, 93, 96])
+		for (const seed of seeds) {
 			const outcome = await run(seed, steps, undefined)
-			if (seed === firstSeed) await driver.verifyDecoding()
+			if (seed === seeds[0]) await driver.verifyDecoding()
 			if (outcome.failure === undefined) continue
 			const failing = outcome.trace.slice(0, outcome.failure.step + 1)
 			const minimal = process.env['AUDIT_FUZZ_SHRINK'] === '0' ? failing : await shrink(seed, steps, failing, outcome.failure.tag)
 			const replay = await run(seed, steps, minimal)
 			const report = [
 				`seed ${seed} step ${outcome.failure.step} tag ${outcome.failure.tag}`,
+				`Replay: AUDIT_FUZZ_SEEDS=1 AUDIT_FUZZ_SEED_START=${seed} AUDIT_FUZZ_STEPS=${steps} bun ./tooling/testing/bun-test.mts solidity/ts/tests/auditCapitalLedgerFuzz.test.ts`,
 				...outcome.failure.issues.slice(0, 12),
 				`minimal sequence (${minimal.length} operations, owners ${createScenario(createRandom(seed), steps, genesis).owners}):`,
 				...minimal.map((op, position) => `  ${position}: ${stringify(op)}`),
@@ -1330,7 +1330,7 @@ describe('audit fuzz: capital ledger against a naive reference model', () => {
 			].join('\n')
 			console.log(`\nFUZZ FAILURE\n${report}\n`)
 			failures.push(report)
-			if (failures.length >= Number(process.env['AUDIT_FUZZ_MAX_FAILURES'] ?? '3')) break
+			if (failures.length >= positiveFuzzInteger('AUDIT_FUZZ_MAX_FAILURES', 3)) break
 		}
 		expect(failures).toEqual([])
 	})

@@ -18,13 +18,17 @@ export type TestTimingObservation = {
 	elapsedSeconds: number
 	fingerprintsByFile?: Record<string, string>
 	testCaseSecondsByFile: Record<string, number>
+	fileWallSecondsByFile?: Record<string, number>
+	skippedOnlyTestFiles?: string[]
 	testFiles: string[]
 	domain?: string
 	shardIndex?: number
 	shardCount?: number
 	executedTestFiles?: string[]
+	reportedTestFiles?: string[]
+	runnerOverheadSeconds?: number
 	selectedManifestHash?: string
-	executedManifestHash?: string
+	reportedManifestHash?: string
 	exitStatus?: number
 	completionStatus?: 'complete' | 'incomplete'
 	contextFingerprint?: string
@@ -40,6 +44,10 @@ type TestTimingRegression = {
 
 export type TestTimingReport = {
 	currentSecondsByFile: Map<string, number>
+	skippedOnlyTestFiles?: string[]
+	selectedFileCount?: number
+	executedFileCount?: number
+	runnerOverheadSeconds?: number
 	regressions: TestTimingRegression[]
 	shardBalance?: { fastestSeconds: number; imbalanceRatio: number; slowestSeconds: number }
 	slowestFiles: { filePath: string; seconds: number }[]
@@ -169,11 +177,41 @@ export function createTestTimingObservation(junitXml: string, elapsedSeconds: nu
 	if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < 0) throw new Error('Test shard elapsed time must be a non-negative finite number')
 	const normalizedFiles = [...new Set(testFiles.map(normalizeTestPath))].sort((left, right) => left.localeCompare(right))
 	const parsedSeconds = parseJunitTestCaseSeconds(junitXml)
+	const wallSeconds = new Map<string, number>()
+	const filesWithExecutedCases = new Set<string>()
+	let junitSeconds: number | undefined
+	let currentCaseFile: string | undefined
+	let skipped = false
+	for (const tag of scanXmlTags(junitXml)) {
+		if (/^<testsuites\b/.test(tag)) {
+			const time = getXmlAttribute(tag, 'time')
+			if (time !== undefined && Number.isFinite(Number(time)) && Number(time) >= 0) junitSeconds = Number(time)
+		} else if (/^<testsuite\b/.test(tag)) {
+			const file = getXmlAttribute(tag, 'file')
+			const time = getXmlAttribute(tag, 'time')
+			if (file !== undefined && time !== undefined) {
+				const seconds = Number(time)
+				if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`Malformed JUnit suite time: ${time}`)
+				const key = normalizeTestPath(file)
+				if (!wallSeconds.has(key)) wallSeconds.set(key, seconds)
+			}
+		} else if (/^<testcase\b/.test(tag)) {
+			const file = getXmlAttribute(tag, 'file')
+			currentCaseFile = file === undefined ? undefined : normalizeTestPath(file)
+			skipped = false
+			if (currentCaseFile !== undefined && tag.endsWith('/>')) filesWithExecutedCases.add(currentCaseFile)
+		} else if (/^<skipped\b/.test(tag)) skipped = true
+		else if (tag.startsWith('</testcase') && currentCaseFile !== undefined && !skipped) filesWithExecutedCases.add(currentCaseFile)
+	}
 	return {
 		version: TEST_TIMING_HISTORY_VERSION,
 		elapsedSeconds,
 		testCaseSecondsByFile: Object.fromEntries(normalizedFiles.map(filePath => [filePath, parsedSeconds.get(filePath) ?? 0])),
 		testFiles: normalizedFiles,
+		executedTestFiles: [...filesWithExecutedCases].sort((left, right) => left.localeCompare(right)),
+		...(junitSeconds === undefined ? {} : { runnerOverheadSeconds: Math.max(0, elapsedSeconds - junitSeconds) }),
+		...(wallSeconds.size === 0 ? {} : { fileWallSecondsByFile: Object.fromEntries(wallSeconds) }),
+		...(filesWithExecutedCases.size === parsedSeconds.size ? {} : { skippedOnlyTestFiles: [...parsedSeconds.keys()].filter(file => !filesWithExecutedCases.has(file)) }),
 	}
 }
 
@@ -184,6 +222,8 @@ export function haveExactManifestUnion(actualFiles: readonly string[], expectedF
 }
 
 function estimateObservationFileSeconds(observation: TestTimingObservation) {
+	const wallSeconds = observation.fileWallSecondsByFile
+	if (wallSeconds !== undefined && observation.testFiles.every(file => Number.isFinite(wallSeconds[file]))) return new Map(observation.testFiles.map(file => [file, wallSeconds[file] ?? 0]))
 	const testCaseTotal = observation.testFiles.reduce((total, filePath) => total + (observation.testCaseSecondsByFile[filePath] ?? 0), 0)
 	const scale = testCaseTotal > observation.elapsedSeconds && testCaseTotal > 0 ? observation.elapsedSeconds / testCaseTotal : 1
 	const unreportedSeconds = Math.max(0, observation.elapsedSeconds - testCaseTotal * scale)
@@ -297,13 +337,20 @@ export function createTestTimingReport(history: TestTimingHistory | undefined, o
 		.filter(file => file.maximumSeconds - file.minimumSeconds > MINIMUM_TIMING_REGRESSION_SECONDS && file.spreadRatio > MAXIMUM_TIMING_REGRESSION_RATIO)
 		.sort((left, right) => right.spreadRatio - left.spreadRatio || left.filePath.localeCompare(right.filePath))
 		.slice(0, 10)
-	return { currentSecondsByFile, regressions, ...(shardBalance === undefined ? {} : { shardBalance }), slowestFiles, unstableFiles }
+	const skippedOnlyTestFiles = [...new Set(observations.flatMap(observation => observation.skippedOnlyTestFiles ?? []))].sort()
+	const selectedFileCount = new Set(observations.flatMap(observation => observation.testFiles)).size
+	const executedFileCount = new Set(observations.flatMap(observation => observation.executedTestFiles ?? observation.testFiles)).size
+	const runnerOverheadSeconds = observations.every(observation => observation.runnerOverheadSeconds !== undefined) ? observations.reduce((total, observation) => total + (observation.runnerOverheadSeconds ?? 0), 0) : undefined
+	return { currentSecondsByFile, skippedOnlyTestFiles, selectedFileCount, executedFileCount, ...(runnerOverheadSeconds === undefined ? {} : { runnerOverheadSeconds }), regressions, ...(shardBalance === undefined ? {} : { shardBalance }), slowestFiles, unstableFiles }
 }
 
 const formatSeconds = (seconds: number) => `${seconds.toFixed(1)}s`
 
 export function renderTestTimingMarkdown(report: TestTimingReport) {
 	const lines = ['# Test timing summary', '', '| Slowest test file | Estimated wall time |', '| --- | ---: |', ...report.slowestFiles.map(file => `| \`${file.filePath}\` | ${formatSeconds(file.seconds)} |`)]
+	if (report.selectedFileCount !== undefined) lines.push('', `Selected files: ${report.selectedFileCount}, with executed cases: ${report.executedFileCount ?? 0}`)
+	if (report.runnerOverheadSeconds !== undefined) lines.push('', `Shard runner overhead: ${formatSeconds(report.runnerOverheadSeconds)} across shards`)
+	if (report.skippedOnlyTestFiles?.length) lines.push('', '## Skipped-only test files', '', ...report.skippedOnlyTestFiles.map(file => `- \`${file}\``))
 	if (report.shardBalance !== undefined) lines.push('', `Shard balance: ${formatSeconds(report.shardBalance.fastestSeconds)} fastest, ${formatSeconds(report.shardBalance.slowestSeconds)} slowest (${report.shardBalance.imbalanceRatio.toFixed(2)}x)`)
 	if (report.unstableFiles.length > 0) lines.push('', '## Unstable test durations', '', ...report.unstableFiles.map(file => `- \`${file.filePath}\`: ${formatSeconds(file.minimumSeconds)}–${formatSeconds(file.maximumSeconds)} (${file.spreadRatio.toFixed(2)}x spread)`))
 	if (report.regressions.length === 0) {
@@ -325,8 +372,8 @@ export async function writeTestTimingObservation(outputPath: string, junitPath: 
 	const junitXml = await fs.readFile(junitPath, 'utf8')
 	validateJunitDocument(junitXml)
 	const observation = createTestTimingObservation(junitXml, elapsedSeconds, testFiles)
-	const executedTestFiles = [...parseJunitTestCaseSeconds(junitXml).keys()].sort((left, right) => left.localeCompare(right))
-	if (executedTestFiles.length === 0 || JSON.stringify(executedTestFiles) !== JSON.stringify(observation.testFiles)) throw new Error('JUnit execution manifest does not exactly match the selected shard manifest')
+	const reportedTestFiles = [...parseJunitTestCaseSeconds(junitXml).keys()].sort((left, right) => left.localeCompare(right))
+	if (reportedTestFiles.length === 0 || JSON.stringify(reportedTestFiles) !== JSON.stringify(observation.testFiles)) throw new Error('JUnit reported manifest does not exactly match the selected shard manifest')
 	observation.fingerprintsByFile = await createTestFingerprints(observation.testFiles, contextPaths)
 	const manifestHash = new Bun.CryptoHasher('sha256').update(observation.testFiles.join('\n')).digest('hex')
 	const contextHasher = new Bun.CryptoHasher('sha256')
@@ -336,7 +383,7 @@ export async function writeTestTimingObservation(outputPath: string, junitPath: 
 		contextHasher.update(await fs.readFile(contextPath))
 	}
 	const contextFingerprint = contextHasher.digest('hex')
-	Object.assign(observation, { completionStatus: 'complete', contextFingerprint, executedManifestHash: manifestHash, executedTestFiles, exitStatus: 0, selectedManifestHash: manifestHash })
+	Object.assign(observation, { completionStatus: 'complete', contextFingerprint, reportedManifestHash: manifestHash, reportedTestFiles, exitStatus: 0, selectedManifestHash: manifestHash })
 	await fs.mkdir(path.dirname(outputPath), { recursive: true })
 	await fs.writeFile(outputPath, `${JSON.stringify(observation, undefined, 2)}\n`)
 }

@@ -1,8 +1,8 @@
 import { sharedPackages } from '../repo/sharedPackages.ts'
 import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames, getMutationTestPath, MUTATION_SMOKE_CASES, pinMutationTestToTypeScript } from './mutation-support.mts'
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 let survived = 0
 async function runTest(command: string[], junitPath: string) {
@@ -16,10 +16,14 @@ for (const mutation of MUTATION_SMOKE_CASES) {
 	let result: ReturnType<typeof classifyMutantResult>
 	try {
 		for (const entry of sharedPackages) await cp(`${entry.path}/ts`, join(mutationDirectory, entry.path, 'ts'), { recursive: true })
+		if (mutation.filePath.startsWith('augurScan/')) {
+			for (const directory of ['browser', 'config', 'src', 'tests']) await cp(`augurScan/${directory}`, join(mutationDirectory, 'augurScan', directory), { recursive: true })
+			await symlink(resolve('node_modules'), join(mutationDirectory, 'node_modules'), 'dir')
+		}
 		const copiedTestPath = join(mutationDirectory, getMutationTestPath(mutation))
 		const copiedTestSource = await readFile(copiedTestPath, 'utf8')
 		await writeFile(copiedTestPath, pinMutationTestToTypeScript(copiedTestSource, mutation))
-		const command = mutation.testCommand.map(argument => (argument.startsWith('shared/') ? join(mutationDirectory, argument) : argument))
+		const command = mutation.testCommand.map(argument => (argument.startsWith('shared/') || argument.startsWith('augurScan/') ? join(mutationDirectory, argument) : argument))
 		const controlJunitPath = join(mutationDirectory, 'control.xml')
 		const control = await runTest(command, controlJunitPath)
 		const controlJunit = await readFile(controlJunitPath, 'utf8')

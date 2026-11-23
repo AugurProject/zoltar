@@ -144,7 +144,7 @@ const config = (options => {
 			},
 			augurScan: {
 				entry: [
-					...productionOnly(['src/indexer-process.ts!']),
+					...productionOnly(['src/indexer-process.ts!', 'scripts/test-chromium.ts!']),
 					'browser/app.ts!',
 					'tests/**/*.ts',
 					'scripts/{build-browser,build-metadata,prepare-tests,check-import-boundaries,check-project-metadata,dev,report-abi-coverage,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!',

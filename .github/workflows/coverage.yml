@@ -1,8 +1,9 @@
 name: Coverage
 
-# Full coverage is resource-intensive; run this workflow only by manual dispatch.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '25 3 * * 1'
 
 permissions:
   contents: read
@@ -12,8 +13,47 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  coverage-baseline:
+    name: Report ${{ matrix.domain }} coverage
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - domain: typescript
+            profile: full
+            command: coverage:typescript
+            report: coverage/typescript
+          - domain: solidity
+            profile: contracts
+            command: coverage:contracts:bytecode
+            report: solidity/coverage
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-ci
+        with:
+          profile: ${{ matrix.profile }}
+      - name: Capture coverage and record provenance
+        env:
+          COVERAGE_COMMAND: ${{ matrix.command }}
+          COVERAGE_REPORT: ${{ matrix.report }}
+        run: |
+          started_at="${SECONDS}"
+          bun run "${COVERAGE_COMMAND}"
+          printf '%s\n' "${GITHUB_SHA}" > "${COVERAGE_REPORT}/commit.txt"
+          printf '| Commit | Capture time |\n| --- | ---: |\n| %s | %ss |\n' "${GITHUB_SHA}" "$((SECONDS - started_at))" >> "${GITHUB_STEP_SUMMARY}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-baseline-${{ matrix.domain }}
+          path: ${{ matrix.report }}
+          if-no-files-found: error
+          retention-days: 21
+
   coverage:
     name: Full coverage policy
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
