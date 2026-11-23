@@ -87,3 +87,22 @@ test('accepts only known local node services as non-loopback HTTP RPCs', () => {
 	})
 	expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://other-service:8545'], readRpcUrl: 'http://other-service:8545' })).toThrow('HTTPS or HTTP on loopback, anvil, or reth')
 })
+
+for (const envelope of [
+	{ id: 2, jsonrpc: '2.0', result: '0x1' },
+	{ id: 1, jsonrpc: '1.0', result: '0x1' },
+	{ id: 1, jsonrpc: '2.0' },
+	{ id: 1, jsonrpc: '2.0', result: '0x1', error: { code: -32602, message: 'Invalid params' } },
+	{ id: 1, jsonrpc: '2.0', error: { code: '-32602', message: 'Invalid params' } },
+]) {
+	test(`rejects malformed RPC response ${JSON.stringify(envelope)}`, async () => {
+		const respond = async () => Response.json(envelope)
+		respond.preconnect = globalThis.fetch.preconnect
+		const fetchMock = spyOn(globalThis, 'fetch').mockImplementation(respond)
+		try {
+			await expect(readRpcChainId('https://rpc.example.test')).rejects.toThrow('malformed JSON-RPC 2.0')
+		} finally {
+			fetchMock.mockRestore()
+		}
+	})
+}

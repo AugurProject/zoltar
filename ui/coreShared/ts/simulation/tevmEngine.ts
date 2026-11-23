@@ -21,11 +21,11 @@ import { withTransactionCallbacks } from './writeClientCallbacks.js'
 import { createSimulationProfile } from '../wallet/networkProfile.js'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken, type BootstrapScenarioApplyParameters } from './bootstrap.js'
-import { advanceSimulationTime, advanceNextSimulationBlock, initializeSimulationClock } from './clock.js'
-import { formatTevmErrors, requireSuccessfulLoadState, type DumpedTevmState } from './dumpedState.js'
+import { advanceSimulationTime, advanceNextSimulationBlock } from './clock.js'
+import { exportSimulationSnapshot, restoreSimulationSnapshot } from './simulationSnapshotState.js'
 import { createSimulationChain, type SimulationTransactionParameters } from './simulationChain.js'
 import type { SimulationScenario } from './scenarios.js'
-import { getSimulationSource, serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization } from './savedStates.js'
+import { getSimulationSource, type SavedSimulationStateEnvelopeV1, type SimulationInitialization } from './savedStates.js'
 import { getBundledSimulationSnapshotKey } from './scenarioSnapshots.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationBootstrapParameters, SimulationWorkerState } from './tevmWorkerProtocol.js'
@@ -125,16 +125,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		const restored = await createSimulationChain(profile)
 		impersonatedAccounts.clear()
 		await initializeSimulationAccounts(restored)
-		await requireSuccessfulLoadState(restored.memoryClient, envelope.state.snapshot as DumpedTevmState)
-		await initializeSimulationAccounts(restored)
-		if (envelope.state.blocks !== undefined && envelope.state.blocks.length > 0) {
-			// The saved blocks bring back logs, receipts and numbering; one fresh block ties the loaded state to the head.
-			await restored.restoreHistory(envelope.state.blocks)
-			await advanceNextSimulationBlock(restored.memoryClient)
-		} else {
-			// Loading state leaves the chain at genesis time; the saved contracts expect the clock they were saved under.
-			await initializeSimulationClock(restored.memoryClient, envelope.state.currentTimestamp)
-		}
+		await restoreSimulationSnapshot(restored, envelope.state, () => initializeSimulationAccounts(restored))
 		chain = restored
 		queryDelayMilliseconds = clampDelayMilliseconds(envelope.state.queryDelayMilliseconds)
 		repPerEthPrice = envelope.state.repPerEthPrice
@@ -424,31 +415,16 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		exportState: async name => {
 			await awaitSeeding()
 			if (!bootstrapped) throw new Error('Simulation scenario must be bootstrapped before exporting state')
-			// One locked unit on one chain, so the dumped state and the exported blocks describe the same chain.
-			const activeChain = chain
-			const { blocks, snapshot } = await activeChain.withLock(async () => ({ blocks: await activeChain.exportHistory(), snapshot: await activeChain.memoryClient.tevmDumpState() }))
-			if (snapshot.errors !== undefined && snapshot.errors.length > 0) throw new Error(formatTevmErrors(snapshot.errors))
-			const normalizedName = name.trim()
-			if (normalizedName === '') throw new Error('Saved simulation state name is required')
-			return serializeSavedSimulationStateEnvelope({
-				baseScenario,
-				genesisOutcome,
-				name: normalizedName,
-				savedAt: new Date().toISOString(),
-				state: {
-					blocks,
-					blockCountSinceReset,
-					currentTimestamp,
-					queryDelayMilliseconds,
-					repPerEthPrice,
-					repPerUsdcPrice,
-					selectedAccount,
-					snapshot: snapshot.state,
-					transactionCountSinceReset,
-					transactionDelayMilliseconds,
-				},
-				version: 1,
-			})
+			return exportSimulationSnapshot(chain, { baseScenario, genesisOutcome, name }, () => ({
+				blockCountSinceReset,
+				currentTimestamp,
+				queryDelayMilliseconds,
+				repPerEthPrice,
+				repPerUsdcPrice,
+				selectedAccount,
+				transactionCountSinceReset,
+				transactionDelayMilliseconds,
+			}))
 		},
 		getAccounts: async () => [selectedAccount],
 		getChainId: async () => profile.chainIdHex,
