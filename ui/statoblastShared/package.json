@@ -305,81 +305,81 @@
 			"bun": "./ts/copy/glossary.ts",
 			"default": "./js/copy/glossary.js"
 		},
-		"./features/portfolios/components/PortfoliosSection.js": {
-			"bun": "./ts/features/portfolios/components/PortfoliosSection.tsx",
-			"default": "./js/features/portfolios/components/PortfoliosSection.js"
+		"./features/security-pools/components/SecurityPoolsSection.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolsSection.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolsSection.js"
 		},
-		"./features/portfolios/components/PortfolioAggregatePanel.js": {
-			"bun": "./ts/features/portfolios/components/PortfolioAggregatePanel.tsx",
-			"default": "./js/features/portfolios/components/PortfolioAggregatePanel.js"
+		"./features/security-pools/components/SecurityPoolAggregatePanel.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolAggregatePanel.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolAggregatePanel.js"
 		},
-		"./features/portfolios/hooks/usePortfolio.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolio.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolio.js"
+		"./features/security-pools/hooks/useSecurityPool.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPool.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPool.js"
 		},
-		"./features/portfolios/hooks/usePortfolioActions.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioActions.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioActions.js"
+		"./features/security-pools/hooks/useSecurityPoolActions.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolActions.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolActions.js"
 		},
-		"./features/portfolios/hooks/usePortfolioPurchase.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioPurchase.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioPurchase.js"
+		"./features/security-pools/hooks/useSecurityPoolPurchase.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolPurchase.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolPurchase.js"
 		},
-		"./features/portfolios/hooks/usePortfolioAggregate.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioAggregate.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioAggregate.js"
+		"./features/security-pools/hooks/useSecurityPoolAggregate.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolAggregate.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolAggregate.js"
 		},
-		"./features/portfolios/hooks/usePortfolioSharedFork.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioSharedFork.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioSharedFork.js"
+		"./features/security-pools/hooks/useSecurityPoolSharedFork.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolSharedFork.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolSharedFork.js"
 		},
-		"./features/portfolios/lib/capital.js": {
-			"bun": "./ts/features/portfolios/lib/capital.ts",
-			"default": "./js/features/portfolios/lib/capital.js"
+		"./features/security-pools/lib/capital.js": {
+			"bun": "./ts/features/security-pools/lib/capital.ts",
+			"default": "./js/features/security-pools/lib/capital.js"
 		},
-		"./features/portfolios/lib/priceWarning.js": {
-			"bun": "./ts/features/portfolios/lib/priceWarning.ts",
-			"default": "./js/features/portfolios/lib/priceWarning.js"
+		"./features/security-pools/lib/priceWarning.js": {
+			"bun": "./ts/features/security-pools/lib/priceWarning.ts",
+			"default": "./js/features/security-pools/lib/priceWarning.js"
 		},
-		"./features/portfolios/lib/draft.js": {
-			"bun": "./ts/features/portfolios/lib/draft.ts",
-			"default": "./js/features/portfolios/lib/draft.js"
+		"./features/security-pools/lib/draft.js": {
+			"bun": "./ts/features/security-pools/lib/draft.ts",
+			"default": "./js/features/security-pools/lib/draft.js"
 		},
-		"./protocol/securityPoolPortfolio.js": {
-			"bun": "./ts/protocol/securityPoolPortfolio.ts",
-			"default": "./js/protocol/securityPoolPortfolio.js"
+		"./protocol/securityPool.js": {
+			"bun": "./ts/protocol/securityPool.ts",
+			"default": "./js/protocol/securityPool.js"
 		},
-		"./protocol/securityPoolPortfolioFork.js": {
-			"bun": "./ts/protocol/securityPoolPortfolioFork.ts",
-			"default": "./js/protocol/securityPoolPortfolioFork.js"
+		"./protocol/securityPoolFork.js": {
+			"bun": "./ts/protocol/securityPoolFork.ts",
+			"default": "./js/protocol/securityPoolFork.js"
 		},
 		"./protocol/securityPoolSharedFork.js": {
 			"bun": "./ts/protocol/securityPoolSharedFork.ts",
 			"default": "./js/protocol/securityPoolSharedFork.js"
 		},
-		"./protocol/securityPoolPortfolioState.js": {
-			"bun": "./ts/protocol/securityPoolPortfolioState.ts",
-			"default": "./js/protocol/securityPoolPortfolioState.js"
+		"./protocol/securityPoolState.js": {
+			"bun": "./ts/protocol/securityPoolState.ts",
+			"default": "./js/protocol/securityPoolState.js"
 		},
-		"./copy/portfolioCapital.js": {
-			"bun": "./ts/copy/portfolioCapital.ts",
-			"default": "./js/copy/portfolioCapital.js"
+		"./copy/securityPoolCapital.js": {
+			"bun": "./ts/copy/securityPoolCapital.ts",
+			"default": "./js/copy/securityPoolCapital.js"
 		},
 		"./protocol/openOracleSettlement.js": {
 			"bun": "./ts/protocol/openOracleSettlement.ts",
 			"default": "./js/protocol/openOracleSettlement.js"
 		},
-		"./simulation/portfolioScenarioMint.js": {
-			"bun": "./ts/simulation/portfolioScenarioMint.ts",
-			"default": "./js/simulation/portfolioScenarioMint.js"
+		"./simulation/securityPoolScenarioMint.js": {
+			"bun": "./ts/simulation/securityPoolScenarioMint.ts",
+			"default": "./js/simulation/securityPoolScenarioMint.js"
 		},
-		"./features/portfolios/lib/creation.js": {
-			"bun": "./ts/features/portfolios/lib/creation.ts",
-			"default": "./js/features/portfolios/lib/creation.js"
+		"./features/security-pools/lib/creation.js": {
+			"bun": "./ts/features/security-pools/lib/creation.ts",
+			"default": "./js/features/security-pools/lib/creation.js"
 		},
-		"./protocol/securityPoolPortfolioAdmission.js": {
-			"bun": "./ts/protocol/securityPoolPortfolioAdmission.ts",
-			"default": "./js/protocol/securityPoolPortfolioAdmission.js"
+		"./protocol/securityPoolAdmission.js": {
+			"bun": "./ts/protocol/securityPoolAdmission.ts",
+			"default": "./js/protocol/securityPoolAdmission.js"
 		},
 		"./features/open-oracle/components/PriceRequestStatusSection.js": {
 			"bun": "./ts/features/open-oracle/components/PriceRequestStatusSection.tsx",
@@ -393,37 +393,37 @@
 			"bun": "./ts/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.ts",
 			"default": "./js/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.js"
 		},
-		"./features/portfolios/components/PortfolioPriceReport.js": {
-			"bun": "./ts/features/portfolios/components/PortfolioPriceReport.tsx",
-			"default": "./js/features/portfolios/components/PortfolioPriceReport.js"
+		"./features/security-pools/components/SecurityPoolPriceReport.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolPriceReport.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolPriceReport.js"
 		},
-		"./features/portfolios/hooks/usePortfolioPrice.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioPrice.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioPrice.js"
+		"./features/security-pools/hooks/useSecurityPoolPrice.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolPrice.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolPrice.js"
 		},
-		"./features/portfolios/components/PortfolioAuction.js": {
-			"bun": "./ts/features/portfolios/components/PortfolioAuction.tsx",
-			"default": "./js/features/portfolios/components/PortfolioAuction.js"
+		"./features/security-pools/components/SecurityPoolAuction.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolAuction.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolAuction.js"
 		},
-		"./features/portfolios/hooks/usePortfolioAuction.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioAuction.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioAuction.js"
+		"./features/security-pools/hooks/useSecurityPoolAuction.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolAuction.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolAuction.js"
 		},
-		"./copy/portfolioAuction.js": {
-			"bun": "./ts/copy/portfolioAuction.ts",
-			"default": "./js/copy/portfolioAuction.js"
+		"./copy/securityPoolAuction.js": {
+			"bun": "./ts/copy/securityPoolAuction.ts",
+			"default": "./js/copy/securityPoolAuction.js"
 		},
-		"./copy/portfolioPrice.js": {
-			"bun": "./ts/copy/portfolioPrice.ts",
-			"default": "./js/copy/portfolioPrice.js"
+		"./copy/securityPoolPrice.js": {
+			"bun": "./ts/copy/securityPoolPrice.ts",
+			"default": "./js/copy/securityPoolPrice.js"
 		},
-		"./protocol/securityPoolPortfolioAuction.js": {
-			"bun": "./ts/protocol/securityPoolPortfolioAuction.ts",
-			"default": "./js/protocol/securityPoolPortfolioAuction.js"
+		"./protocol/securityPoolAuction.js": {
+			"bun": "./ts/protocol/securityPoolAuction.ts",
+			"default": "./js/protocol/securityPoolAuction.js"
 		},
-		"./protocol/securityPoolPortfolioPrice.js": {
-			"bun": "./ts/protocol/securityPoolPortfolioPrice.ts",
-			"default": "./js/protocol/securityPoolPortfolioPrice.js"
+		"./protocol/securityPoolPrice.js": {
+			"bun": "./ts/protocol/securityPoolPrice.ts",
+			"default": "./js/protocol/securityPoolPrice.js"
 		},
 		"./protocol/wethFunding.js": {
 			"bun": "./ts/protocol/wethFunding.ts",
@@ -433,33 +433,33 @@
 			"bun": "./ts/features/reporting/components/InheritedReporterClaims.tsx",
 			"default": "./js/features/reporting/components/InheritedReporterClaims.js"
 		},
-		"./simulation/portfolioScenarioFork.js": {
-			"bun": "./ts/simulation/portfolioScenarioFork.ts",
-			"default": "./js/simulation/portfolioScenarioFork.js"
+		"./simulation/securityPoolScenarioFork.js": {
+			"bun": "./ts/simulation/securityPoolScenarioFork.ts",
+			"default": "./js/simulation/securityPoolScenarioFork.js"
 		},
-		"./copy/portfolio.js": {
-			"bun": "./ts/copy/portfolio.ts",
-			"default": "./js/copy/portfolio.js"
+		"./copy/securityPool.js": {
+			"bun": "./ts/copy/securityPool.ts",
+			"default": "./js/copy/securityPool.js"
 		},
 		"./copy/collateral.js": {
 			"bun": "./ts/copy/collateral.ts",
 			"default": "./js/copy/collateral.js"
 		},
-		"./features/portfolios/components/PortfolioTakeover.js": {
-			"bun": "./ts/features/portfolios/components/PortfolioTakeover.tsx",
-			"default": "./js/features/portfolios/components/PortfolioTakeover.js"
+		"./features/security-pools/components/SecurityPoolTakeover.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolTakeover.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolTakeover.js"
 		},
-		"./features/portfolios/hooks/usePortfolioQuestionDetails.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioQuestionDetails.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioQuestionDetails.js"
+		"./features/security-pools/hooks/useSecurityPoolQuestionDetails.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolQuestionDetails.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolQuestionDetails.js"
 		},
-		"./features/portfolios/components/PortfolioSharedFork.js": {
-			"bun": "./ts/features/portfolios/components/PortfolioSharedFork.tsx",
-			"default": "./js/features/portfolios/components/PortfolioSharedFork.js"
+		"./features/security-pools/components/SecurityPoolSharedFork.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolSharedFork.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolSharedFork.js"
 		},
-		"./copy/portfolioSharedFork.js": {
-			"bun": "./ts/copy/portfolioSharedFork.ts",
-			"default": "./js/copy/portfolioSharedFork.js"
+		"./copy/securityPoolSharedFork.js": {
+			"bun": "./ts/copy/securityPoolSharedFork.ts",
+			"default": "./js/copy/securityPoolSharedFork.js"
 		}
 	},
 	"version": "1.0.0"

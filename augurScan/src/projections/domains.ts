@@ -25,7 +25,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'question', ['QuestionCreated'], ['questionId']),
 	...definitions('system', 'deployment', ['DeploymentAddressesSet']),
 	...definitions('system', 'reputation-token', ['ReputationTokenInitialized', 'TheoreticalSupplySet', 'Mint', 'Burn']),
-	...definitions('system', 'share-token', ['ApprovalForAll', 'AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate', 'PortfolioRecoveryRightsTransferred', 'PortfolioRecoveryRightsConsumed']),
+	...definitions('system', 'share-token', ['ApprovalForAll', 'AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate', 'SecurityPoolRecoveryRightsTransferred', 'SecurityPoolRecoveryRightsConsumed']),
 	...definitions('risk', 'pool', ['CompleteSetRedeemedByTransfer'], ['questionLedger']),
 	...definitions('system', 'token-authorization', ['AuthorizationUsed', 'AuthorizationCanceled']),
 	...definitions('system', 'weth', ['Deposit', 'Withdrawal']),
@@ -58,18 +58,18 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	// A materialized auction bid becomes the position of the vault that won it, so the vault is the owner.
 	...definitions('risk', 'vault', ['AuctionBidMaterialized'], ['vault']),
 	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled'], ['positionId', 'sourceId']),
-	...definitions('risk', 'portfolio', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
-	...definitions('risk', 'portfolio', ['PortfolioDeployed', 'PortfolioRegistered'], ['portfolio']),
+	...definitions('risk', 'security-pool', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
+	...definitions('risk', 'security-pool', ['SecurityPoolDeployed', 'SecurityPoolRegistered'], ['securityPool']),
 	...definitions('oracle', 'price-feed', ['SharedPriceFeedRegistered'], ['priceFeed']),
-	// The portfolio auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.
-	...definitions('risk', 'portfolio-auction', ['AuctionOpened', 'BidVaultCreated', 'AuctionClosed']),
-	...definitions('fork', 'portfolio-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen'], ['universeId']),
+	// The security pool auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.
+	...definitions('risk', 'security-pool-auction', ['AuctionOpened', 'BidVaultCreated', 'AuctionClosed']),
+	...definitions('fork', 'security-pool-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen'], ['universeId']),
 	// The reporter ledger creates a child's reporter escrow under the forked source universe.
-	...definitions('fork', 'portfolio-branch', ['ReporterChildCreated'], ['sourceUniverseId']),
-	// One settlement book contract serves a portfolio; each universe owns one numbered book in it.
+	...definitions('fork', 'security-pool-branch', ['ReporterChildCreated'], ['sourceUniverseId']),
+	// One settlement book contract serves a security pool; each universe owns one numbered book in it.
 	...definitions('risk', 'settlement-book', ['BookCreated', 'SettlementMinted', 'SettlementRedeemed', 'FinalityScheduled', 'FinalClaimsFrozen', 'FeeStreamReplaced', 'AggregateFeesAccrued'], ['bookId']),
-	...definitions('risk', 'portfolio-services', ['PremiumFunded', 'PremiumRecovered', 'UnusedServiceCashBurned'], ['universeId']),
-	...definitions('risk', 'portfolio-settlement', ['RecoveryRepPaid', 'RecoveryRepFunded', 'SettlementRepaired'], ['universeId']),
+	...definitions('risk', 'security-pool-services', ['PremiumFunded', 'PremiumRecovered', 'UnusedServiceCashBurned'], ['universeId']),
+	...definitions('risk', 'security-pool-settlement', ['RecoveryRepPaid', 'RecoveryRepFunded', 'SettlementRepaired'], ['universeId']),
 	...definitions('risk', 'settlement-book', ['SettlementBookRepaired'], ['bookId']),
 	// A report escrow completes one funded report for the shared feed that created it, so the event joins that feed's history.
 	...definitions('oracle', 'price-feed', ['ReportCompleted'], ['priceFeed']),
@@ -110,7 +110,7 @@ const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'zoltarQuestionData',
 ]
 
-// Kinds discovered from event arguments or portfolio reads join the guard automatically;
+// Kinds discovered from event arguments or security pool reads join the guard automatically;
 // the Uniswap dependencies among them have their own projection and no semantic taxonomy.
 const dependencyKinds: ReadonlySet<SystemContractKind> = new Set(Object.values(dependencyDiscoveryKinds))
 const taxonomyContractKinds = [...new Set([...listedTaxonomyContractKinds, ...discoveredContractKinds.filter(kind => !dependencyKinds.has(kind))])]
@@ -128,7 +128,7 @@ const unclassifiedEventNames = taxonomyContractKinds.flatMap(kind => {
 if (unclassifiedEventNames.length > 0) throw new Error(`Semantic event taxonomy is missing events emitted by indexed contracts: ${unclassifiedEventNames.join(', ')}`)
 
 // Entities numbered or keyed inside one contract: the identity is the emitter followed by that key.
-const addressScopedEntityTypes: ReadonlySet<string> = new Set(['vault', 'capital-position', 'portfolio-branch', 'settlement-book', 'reporter-ledger', 'portfolio-services', 'portfolio-settlement'])
+const addressScopedEntityTypes: ReadonlySet<string> = new Set(['vault', 'capital-position', 'security-pool-branch', 'settlement-book', 'reporter-ledger', 'security-pool-services', 'security-pool-settlement'])
 
 const domainEntityIdentity = (definition: { readonly domain: string; readonly entityType: string }, address: string, identity: { identitySuffix: string | undefined; reportId: unknown }): string => {
 	if (definition.domain === 'report' && typeof identity.reportId === 'string') return `${address}:${identity.reportId}`

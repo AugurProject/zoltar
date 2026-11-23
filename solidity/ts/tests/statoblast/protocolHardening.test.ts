@@ -3,18 +3,18 @@ import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
 import * as artifacts from '../../types/contractArtifact'
 import { existsSync } from 'node:fs'
-import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier as verifierArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../../types/contractArtifact'
+import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier as verifierArtifact, statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '../../types/contractArtifact'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('protocol boundary hardening', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
-	test('#1355 rejects native ETH at every ERC20 portfolio custody module', async () => {
+	const fixture = useSecurityPoolFixture()
+	test('#1355 rejects native ETH at every ERC20 security pool custody module', async () => {
 		await fixture.register(fixture.base.questionId)
 		const owner = fixture.owner()
-		const target = { abi: portfolioArtifact.abi, address: fixture.portfolio }
-		const addresses = [fixture.portfolio, fixture.poolFor(fixture.base.questionId).questionLedger, await owner.readContract({ ...target, functionName: 'forkController' }), await owner.readContract({ ...target, functionName: 'services' })]
+		const target = { abi: securityPoolArtifact.abi, address: fixture.securityPool }
+		const addresses = [fixture.securityPool, fixture.poolFor(fixture.base.questionId).questionLedger, await owner.readContract({ ...target, functionName: 'forkController' }), await owner.readContract({ ...target, functionName: 'services' })]
 		for (const to of addresses) {
 			const before = await owner.getBalance({ address: to })
 			await expect(writeContractAndWait(owner, () => owner.sendTransaction({ to, value: 1n }))).rejects.toThrow()

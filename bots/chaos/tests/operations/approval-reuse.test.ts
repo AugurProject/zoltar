@@ -1,4 +1,4 @@
-import { capitalFixture } from '../support/portfolio-fixtures.ts'
+import { capitalFixture } from '../support/security-pool-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi } from '@zoltar/bot-shared/contracts/abi'
@@ -21,7 +21,7 @@ const definitions = [
 
 function fixture(definitionId: string) {
 	const snapshot = snapshotFixture()
-	snapshot.portfolioCapital = [capitalFixture(snapshot)]
+	snapshot.securityPoolCapital = [capitalFixture(snapshot)]
 	const pool = snapshot.pools[0]
 	const universe = snapshot.universes[0]
 	if (pool === undefined || universe === undefined) throw new Error('Missing fixtures')

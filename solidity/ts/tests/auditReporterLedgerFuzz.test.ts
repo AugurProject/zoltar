@@ -119,14 +119,14 @@ const sealFork = (model: Model, universe: string, book: ModelBook): string | und
 const apply = (model: Model, op: Op, time: number, environment: Environment, realQuestion: boolean): Outcome => {
 	const book = model.books.get(op.u)
 	const forkTime = model.forkTime.get(op.u)
-	const portfolioTime = forkTime ?? time
+	const securityPoolTime = forkTime ?? time
 	model.now = time
 	switch (op.k) {
 		case 'reg': {
 			if (book === undefined) return reject('universe not registered')
 			if (book.registered.has(op.q)) return reject('game already bound')
 			if (!book.isSealed) {
-				const problem = freeze(op.u, book, portfolioTime)
+				const problem = freeze(op.u, book, securityPoolTime)
 				if (problem !== undefined) return reject(problem)
 			}
 			const state = questionOf(book, op.q)
@@ -186,7 +186,7 @@ const apply = (model: Model, op: Op, time: number, environment: Environment, rea
 		case 'chk': {
 			if (book === undefined) return reject('universe not registered')
 			if (!book.isSealed) {
-				const problem = freeze(op.u, book, portfolioTime)
+				const problem = freeze(op.u, book, securityPoolTime)
 				if (problem !== undefined) return reject(problem)
 			}
 			return { ok: true, touched: [op.u] }

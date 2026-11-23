@@ -98,7 +98,7 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 				'open-oracle.withdraw',
 				'statoblast.complete-set.create',
 				'statoblast.complete-set.redeem',
-				'statoblast.portfolio.add-question',
+				'statoblast.security-pool.add-question',
 				'statoblast.capital.deposit',
 				'statoblast.capital.set-commitment',
 				'trading.liquidity.add-eth',
@@ -190,7 +190,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			const context = runtimeContext(settingsFor(current, proxy, stateFile.path))
 			const scan = await canonicalRescan(context)
 			const created = await executeCanonicalOperation(context, scan, 'zoltar.question.create-binary')
-			const deployment = requiredPlan(created.scan.evaluations, 'statoblast.portfolio.add-question')
+			const deployment = requiredPlan(created.scan.evaluations, 'statoblast.security-pool.add-question')
 			const wrap = requiredPlan(created.scan.evaluations, 'open-oracle.weth.wrap')
 			const rejected: string[] = []
 			const before = proxy.successfulSendRawTransactionParams.length
@@ -206,7 +206,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(proxy.successfulSendRawTransactionParams).toHaveLength(before)
 			expect(selected).toBe(deployment)
 			expect(rejected).toEqual([])
-			await executeCanonicalOperation(context, created.scan, 'statoblast.portfolio.add-question')
+			await executeCanonicalOperation(context, created.scan, 'statoblast.security-pool.add-question')
 		} finally {
 			proxy.dispose()
 			await stateFile.dispose()
@@ -325,7 +325,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			const settings = settingsFor(current, proxy, stateFile.path)
 			const context = runtimeContext(settings)
 			const { plans, scan } = await canonicalPlans(context)
-			const capital = scan.snapshot.portfolioCapital[0]
+			const capital = scan.snapshot.securityPoolCapital[0]
 			if (capital === undefined) throw new Error('Missing native capital ledger')
 			const readClient = createPublicClient({ chain: context.chain, transport: context.pool.transport })
 			const wethBefore = await readClient.readContract({ abi: statoblast_WETH9_WETH9.abi, address: getAddress(WETH_ADDRESS), args: [context.account.address], functionName: 'balanceOf' })
@@ -427,7 +427,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(withdrawnCredit).toBe('1')
 
 			await execute('statoblast.capital.deposit')
-			const depositedCapital = scan.snapshot.portfolioCapital.find(capital => capital.owner.toLowerCase() === context.account.address.toLowerCase())
+			const depositedCapital = scan.snapshot.securityPoolCapital.find(capital => capital.owner.toLowerCase() === context.account.address.toLowerCase())
 			if (depositedCapital === undefined) throw new Error('Deposit did not expose owner capital')
 			expect(BigInt(depositedCapital.principalAttoRep)).toBeGreaterThan(0n)
 			expect(BigInt(depositedCapital.commitmentAttoEth)).toBe(0n)

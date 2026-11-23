@@ -55,7 +55,7 @@ function settings(approvedUniverses = ['101']) {
 			uiHost: '127.0.0.1',
 			uiPort: 4183,
 		},
-		selectedPortfolios: [],
+		selectedSecurityPools: [],
 		strategy: storedStrategyFixture(),
 		submission: {
 			minimumBundleRelaySuccesses: 1,

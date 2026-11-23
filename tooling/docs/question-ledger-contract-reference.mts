@@ -3,11 +3,11 @@ export const questionLedgerContractReference: ContractReference = {
 	compiledAbiFingerprint: 'f275b60774a048940a26b49aa82e844e7a8bd8d30e6d8c45dba3289acea0dcd6',
 	name: 'QuestionLedger',
 	interactionNotes:
-		'All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
-	purpose: 'Question ledger for one shared portfolio, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
+		'All deployed question ledgers belong to a security pool. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered security pool route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
+	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
 	readAbiFingerprint: 'bb7f9551cde59425e97ae1385f4e225183103e0ff33d578edb9bc768302838ce',
 	readSurface:
-		'Read portfolio owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the portfolio collateral token; no token metadata is required. After portfolio binding, question storage mirrors settlement cash, share supply and `lastSettlementPortfolioTime`, the portfolio time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `getTotalPoolHeldAttoRep` is always zero because provider capital is central. `getCurrentMintingCapacityAttoEth` is zero once the question ends or reporting starts; otherwise it includes current question collateral and available shared capacity. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. `getFeeEpochEndTime` is the native fee cutoff, bounded by the universe fork time. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `openOraclePriceCoordinator`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementPortfolioTime`, `awaitingForkContinuation`, `systemState`, `portfolioCustody`.',
+		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `getTotalPoolHeldAttoRep` is always zero because provider capital is central. `getCurrentMintingCapacityAttoEth` is zero once the question ends or reporting starts; otherwise it includes current question collateral and available shared capacity. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. `getFeeEpochEndTime` is the native fee cutoff, bounded by the universe fork time. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `openOraclePriceCoordinator`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
 	securityBoundary:
 		'Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 REP and selected collateral behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 	readDeclarations: [
@@ -93,7 +93,7 @@ export const questionLedgerContractReference: ContractReference = {
 			sourcePath: 'solidity/contracts/statoblast/QuestionLedgerStorage.sol',
 		},
 		{
-			name: 'lastSettlementPortfolioTime',
+			name: 'lastSettlementSecurityPoolTime',
 			sourcePath: 'solidity/contracts/statoblast/QuestionLedgerStorage.sol',
 		},
 		{
@@ -105,19 +105,19 @@ export const questionLedgerContractReference: ContractReference = {
 			sourcePath: 'solidity/contracts/statoblast/QuestionLedgerStorage.sol',
 		},
 		{
-			name: 'portfolioCustody',
+			name: 'securityPoolCustody',
 			sourcePath: 'solidity/contracts/statoblast/QuestionLedgerStorage.sol',
 		},
 	],
 	sourcePath: 'solidity/contracts/statoblast/QuestionLedger.sol',
 	interactions: [
 		{
-			call: '`setPortfolioCustody(custody)`',
-			caller: 'The canonical portfolio',
+			call: '`setSecurityPoolCustody(custody)`',
+			caller: 'The canonical security pool',
 			effect: 'Binds its central capital ledger once and registers the question fee stream.',
 			declarations: [
 				{
-					name: 'setPortfolioCustody',
+					name: 'setSecurityPoolCustody',
 				},
 			],
 			preconditions: 'Nonzero custody; not already bound; caller matches factory registration.',
@@ -126,7 +126,7 @@ export const questionLedgerContractReference: ContractReference = {
 		{
 			call: '`creditEscalationSurplus(amountAttoRep)`',
 			caller: 'The active escalation game',
-			effect: 'Transfers irrevocable surplus REP to the portfolio for vested provider earnings. Reporter principal remains separate.',
+			effect: 'Transfers irrevocable surplus REP to the security pool for vested provider earnings. Reporter principal remains separate.',
 			declarations: [
 				{
 					name: 'creditEscalationSurplus',
@@ -136,12 +136,12 @@ export const questionLedgerContractReference: ContractReference = {
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`refreshPortfolioFees()`',
+			call: '`refreshSecurityPoolFees()`',
 			caller: 'Anyone',
 			effect: 'Refreshes the question linear stream and settlement mirrors.',
 			declarations: [
 				{
-					name: 'refreshPortfolioFees',
+					name: 'refreshSecurityPoolFees',
 				},
 			],
 			preconditions: 'Central accounting is bound.',
@@ -161,8 +161,8 @@ export const questionLedgerContractReference: ContractReference = {
 		},
 		{
 			call: '`createCompleteSet(cash)`',
-			caller: 'The registered portfolio purchase route',
-			effect: 'Mints question complete sets using central settlement cash and shared backing. The portfolio transfers the resulting shares to the buyer.',
+			caller: 'The registered security pool purchase route',
+			effect: 'Mints question complete sets using central settlement cash and shared backing. The security pool transfers the resulting shares to the buyer.',
 			declarations: [
 				{
 					name: 'createCompleteSet',
@@ -174,7 +174,7 @@ export const questionLedgerContractReference: ContractReference = {
 		{
 			call: '`redeemCompleteSet(amountAttoShares)`',
 			caller: 'A complete-set holder',
-			effect: 'Burns complete sets and pays their current collateral and recovery REP entitlement. Released exposure becomes available to the portfolio.',
+			effect: 'Burns complete sets and pays their current collateral and recovery REP entitlement. Released exposure becomes available to the security pool.',
 			declarations: [
 				{
 					name: 'redeemCompleteSet',
@@ -271,7 +271,7 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'activateForkMode',
 				},
 			],
-			effect: 'Freezes shared portfolio accounting and marks the question forked.',
+			effect: 'Freezes shared security pool accounting and marks the question forked.',
 			preconditions: 'No inherited fixed outcome; the central fork checks apply.',
 			signals: '`SystemStateSet` on the transition to forked, and none for a repeated call; relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
@@ -319,7 +319,7 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'setAwaitingForkContinuation',
 				},
 			],
-			effect: 'Stores whether complete-set minting must wait for continuation initialization, then refreshes bound portfolio fee accounting.',
+			effect: 'Stores whether complete-set minting must wait for continuation initialization, then refreshes bound security pool fee accounting.',
 			preconditions: 'No lifecycle or value-change guard.',
 			signals: '`AwaitingForkContinuationSet`, including for a repeated value; bound pools then emit central checkpoints and stream replacement when applicable',
 		},
@@ -331,7 +331,7 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'setSystemState',
 				},
 			],
-			effect: 'Replaces the pool lifecycle state directly, then refreshes bound portfolio fee accounting.',
+			effect: 'Replaces the pool lifecycle state directly, then refreshes bound security pool fee accounting.',
 			preconditions: 'No transition or value-change guard.',
 			signals: '`SystemStateSet`, including for a repeated state; bound pools then emit central checkpoints and stream replacement when applicable',
 		},

@@ -4,7 +4,7 @@ import { writeContractAndWait, type WriteClient } from '../testSupport/simulator
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, WEEK, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
@@ -12,7 +12,7 @@ const K = 1_000n * unit
 // materialized in a child after that child universe forked again, and a second escalated
 // question that rides through another question's own fork.
 describe('auditE2E: lazy materialization and a second escalated question keep reporter claims payable', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 	const thresholdPlan = (N: bigint, [r2, r3, r4, r5]: readonly [WriteClient, WriteClient, WriteClient, WriteClient]): readonly (readonly [WriteClient, number, bigint])[] => [
 		[r5, INVALID, N / 10n],

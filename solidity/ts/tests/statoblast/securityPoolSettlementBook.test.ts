@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, parseAbi, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact,
-	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer as deployerArtifact,
+	statoblast_SecurityPoolModuleDeployers_SecurityPoolSettlementBookDeployer as deployerArtifact,
 	test_statoblast_SettlementPersistentMapHarness_SettlementPersistentMapHarness as mapArtifact,
 } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
@@ -863,8 +863,8 @@ describe('Statoblast: central internal settlement units', () => {
 
 	test('unauthorized callers cannot create virtual funding or consume claims', async () => {
 		const outsider = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1])
-		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'mint', args: [1n, 1n, 100n, 0n, 0] }))).rejects.toThrow('Only portfolio')
-		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'createChildBook', args: [1n, 0n, 0n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'mint', args: [1n, 1n, 100n, 0n, 0] }))).rejects.toThrow('Only security pool')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'createChildBook', args: [1n, 0n, 0n] }))).rejects.toThrow('Only security pool')
 	})
 
 	test('aggregate time fees materialize question units once and preserve replacement boundaries', async () => {

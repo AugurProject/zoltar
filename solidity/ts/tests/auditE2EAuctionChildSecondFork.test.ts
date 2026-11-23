@@ -4,8 +4,8 @@ import {
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
-	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction as auctionArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
+	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 } from '../types/contractArtifact'
@@ -14,13 +14,13 @@ import { DAY } from '../testSupport/simulator/utils/constants'
 import { wrapWeth } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
 import { BRANCH_GAS, createE2E, NO, OUTCOMES, WEEK, YES } from './auditE2EHarness'
-import { preparePortfolioCollateralRepairAuction } from './statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { prepareSecurityPoolCollateralRepairAuction } from './statoblast/securityPoolCollateralRepairAuctionFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Scenario 4: a branch that not every provider chose is repaired by the collateral repair
 // auction, its winners materialize their vaults lazily, and then that child universe forks.
 describe('auditE2E: an auction-repaired child keeps winner rights and conserves assets across a second fork', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	test('tie at the margin, higher closing price, lazy winners, second fork', async () => {
@@ -32,7 +32,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		// A second, still trading question keeps live claims through both forks.
 		await fixture.prepare()
 		await fixture.mint(10n * unit, q2)
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		const owner = context.owner
 		const C = context.child
 		const [loser, b3, b4, b5, forker] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
@@ -126,7 +126,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		const pool1C = (await e2e.materialize(fixture.poolFor(q1).questionLedger, C)).pool
 		await base.mockWindow.setTime(context.deadline + 3n * DAY + 1n)
 		for (const outcome of OUTCOMES) await e2e.migrateShares(trader, U0, outcome, [YES], q1)
-		const q1Quote = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionSettlement', args: [pool1C, 10n * unit] })
+		const q1Quote = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionSettlement', args: [pool1C, 10n * unit] })
 
 		// ---- the repaired child forks on an unrelated question ----
 		await e2e.migrateWalletRep(forker, U0, 700_000n * unit, [YES])
@@ -139,7 +139,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(backing).toBe(2_000n * unit + sold)
 		expect(commitment).toBe(210n * unit)
 		// Half of the unsold recovery REP belongs to the already final fork question and stays here.
-		const q1RecoveryQuote = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionRecoveryRep', args: [pool1C, 10n * unit] })
+		const q1RecoveryQuote = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionRecoveryRep', args: [pool1C, 10n * unit] })
 		expect(recoveryRep + q1RecoveryQuote).toBeLessThanOrEqual(inventory - sold)
 		expect(inventory - sold - recoveryRep - q1RecoveryQuote).toBeLessThanOrEqual(2n)
 
@@ -213,8 +213,8 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 			['G2 (No)', G2, pools.G2],
 		] as const) {
 			for (const outcome of OUTCOMES) expect(await e2e.shareBalance(trader.account.address, universe, outcome, q2)).toBe(10n * unit)
-			const quoteCash = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionSettlement', args: [pool, 10n * unit] })
-			const quoteRep = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionRecoveryRep', args: [pool, 10n * unit] })
+			const quoteCash = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionSettlement', args: [pool, 10n * unit] })
+			const quoteRep = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionRecoveryRep', args: [pool, 10n * unit] })
 			const before = { cash: await e2e.cash(trader.account.address), rep: await e2e.rep(universe, trader.account.address) }
 			await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [10n * unit], gas: BRANCH_GAS }))
 			const got = { cash: (await e2e.cash(trader.account.address)) - before.cash, rep: (await e2e.rep(universe, trader.account.address)) - before.rep }
@@ -268,7 +268,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 	test('an undersubscribed auction retains unpriced inventory while funded winners survive a second fork', async () => {
 		const { base } = fixture
 		const U0 = base.genesisUniverse
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		const owner = context.owner
 		const C = context.child
 		const [b3, b4, forker] = [e2e.account(3), e2e.account(4), e2e.account(6)]

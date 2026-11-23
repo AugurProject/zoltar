@@ -17,7 +17,7 @@ const secondPool = getAddress('0x0000000000000000000000000000000000000055')
 const feed = getAddress('0x0000000000000000000000000000000000000044')
 const other = getAddress('0x0000000000000000000000000000000000000033')
 const hash: Hex = `0x${'ab'.repeat(32)}`
-const portfolio = getAddress('0x0000000000000000000000000000000000000066')
+const securityPool = getAddress('0x0000000000000000000000000000000000000066')
 const escrowFeedCall = encodeFunctionData({ abi: [{ type: 'function', name: 'feed', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }], functionName: 'feed' })
 const entry = { questionLedger: pool, openOraclePriceCoordinator: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }
 
@@ -55,7 +55,7 @@ function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongC
 			}
 			if (to.toLowerCase() !== coordinator.toLowerCase() && (!options.sharedFeed || (to.toLowerCase() !== feed.toLowerCase() && to.toLowerCase() !== other.toLowerCase()))) throw new Error('Untrusted coordinator queried')
 			const call = decodeFunctionData({ abi: [...openOraclePriceCoordinatorAbi, ...sharedPoolPriceFeedAbi], data })
-			if (call.functionName === 'portfolio') return encodeAbiParameters([{ type: 'address' }], [portfolio])
+			if (call.functionName === 'securityPool') return encodeAbiParameters([{ type: 'address' }], [securityPool])
 			if (call.functionName === 'universeId') return encodeAbiParameters([{ type: 'uint248' }], [options.unapproved ? 1n : 0n])
 			if (call.functionName === 'pendingReportId') return encodeAbiParameters([{ type: 'uint256' }], [7n])
 			if (call.functionName === 'reportCandidates') {
@@ -149,7 +149,7 @@ test('retains older authenticated report identities, ignoring absent candidates'
 	expect(policies[0]?.reportEscrows).toEqual({ '6': secondPool, '7': other })
 })
 
-test('discovers questionless portfolio feeds through canonical bindings', async () => {
+test('discovers questionless security pool feeds through canonical bindings', async () => {
 	const policies = await discoverCoordinatorPolicies([reader({ sharedFeed: true, registryCount: 0n }).client], await configuration(), 10n, hash, [], reports)
 	expect(policies.map(policy => policy.coordinator)).toEqual([feed])
 	expect(policies[0]?.reportEscrows).toEqual({ '6': secondPool, '7': other })

@@ -1,7 +1,7 @@
 import { lookupUniverseLineages } from './universe-lookup.ts'
-import { parsePortfolioPolicy, parsePortfolioSelections } from '#config/portfolio-policy'
+import { parseSecurityPoolPolicy, parseSecurityPoolSelections } from '#config/security-pool-policy'
 import { parseRootMarketSettings } from '#config/canonical-deployment'
-import { updateSupportedPortfolio } from '#config/pool-selection'
+import { updateSupportedSecurityPool } from '#config/pool-selection'
 import { parseStrategy, serializedSettings } from '#config/settings'
 import { switchSettingsNetworkProfile } from '#config/settings-store'
 import { validateApprovedUniverseSelection } from '#core/fork-migration'
@@ -98,22 +98,22 @@ export function setNetworkConnectivity(runtime: LiquidatorRuntime, deps: Liquida
 	})
 }
 
-export function setSupportedPortfolio(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
+export function setSupportedSecurityPool(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
 	return deps.configurationMutationGate.run(async () => {
-		await persistSettings(runtime, deps, current => updateSupportedPortfolio(current, value))
-		recordActivity(deps.state, { kind: 'configuration', message: 'Supported portfolios updated', status: 'info' })
+		await persistSettings(runtime, deps, current => updateSupportedSecurityPool(current, value))
+		recordActivity(deps.state, { kind: 'configuration', message: 'Supported security pools updated', status: 'info' })
 		return serializedSettings(runtime.settings, true)
 	})
 }
 
-export function setSelectedPortfolios(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
+export function setSelectedSecurityPools(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
 	return deps.configurationMutationGate.run(async () => {
-		const selectedPortfolios = parsePortfolioSelections(value)
-		await persistSettings(runtime, deps, current => ({ ...current, selectedPortfolios }))
+		const selectedSecurityPools = parseSecurityPoolSelections(value)
+		await persistSettings(runtime, deps, current => ({ ...current, selectedSecurityPools }))
 		recordActivity(deps.state, {
-			details: selectedPortfolios.map(item => `${item.address}:${item.universeId}`).join(', '),
+			details: selectedSecurityPools.map(item => `${item.address}:${item.universeId}`).join(', '),
 			kind: 'configuration',
-			message: 'Portfolio selection saved',
+			message: 'Security pool selection saved',
 			status: 'info',
 		})
 		return serializedSettings(runtime.settings, true)
@@ -124,12 +124,12 @@ export function setStrategy(runtime: LiquidatorRuntime, deps: LiquidatorDeps, va
 	return deps.configurationMutationGate.run(async () => {
 		const strategy = parseStrategy(value)
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Strategy settings must be an object')
-		if (Reflect.get(value, 'portfolioPolicy') === undefined) throw new Error('Portfolio policy is required')
-		const portfolioPolicy = parsePortfolioPolicy(Reflect.get(value, 'portfolioPolicy'))
-		await persistSettings(runtime, deps, current => ({ ...current, strategy, portfolioPolicy }))
+		if (Reflect.get(value, 'securityPoolPolicy') === undefined) throw new Error('Security pool policy is required')
+		const securityPoolPolicy = parseSecurityPoolPolicy(Reflect.get(value, 'securityPoolPolicy'))
+		await persistSettings(runtime, deps, current => ({ ...current, strategy, securityPoolPolicy }))
 		recordActivity(deps.state, {
 			kind: 'configuration',
-			message: 'Portfolio policy saved',
+			message: 'Security pool policy saved',
 			status: 'info',
 		})
 		return serializedSettings(runtime.settings, true)

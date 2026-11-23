@@ -23,7 +23,7 @@ Options:
   --app <ids>          Required. Apps to scan, comma separated (${UI_APP_IDS.join(', ')}). Scan the apps whose UI changed.
   --scenario <ids>     Simulation scenarios, comma separated. Default: every scenario the app registers.
   --viewport <list>    Viewports as WIDTHxHEIGHT, comma separated. Default: ${DEFAULT_VIEWPORTS.map(formatViewport).join(', ')}.
-  --route <hashes>     Only scan these hash routes, for example "#/portfolio,#/questions".
+  --route <hashes>     Only scan these hash routes, for example "#/security pool,#/questions".
   --base-url <url>     Scan an already running server instead of building and serving the app (one app only).
   --out <dir>          Report directory. Default: ${path.join(os.tmpdir(), 'zoltar-layout-scan')}.
   --min-severity <s>   Lowest severity to report: low, medium, or high. Default: low.

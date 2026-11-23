@@ -44,7 +44,7 @@ function TradingSection(props: Parameters<typeof ProductionTradingSection>[0]) {
 
 function createSelectedPool(overrides: Partial<ListedQuestionLedger> = {}): ListedQuestionLedger {
 	const selectedPool: ListedQuestionLedger = {
-		portfolioAddress: zeroAddress,
+		securityPoolAddress: zeroAddress,
 		settlementCollateralAttoEth: 0n,
 		feeEligibleUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
 		hasForkActivity: false,
@@ -120,7 +120,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 				address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 				token: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 				services: '0x0000000000000000000000000000000000000068',
-				portfolio: '0x0000000000000000000000000000000000000022',
+				securityPool: '0x0000000000000000000000000000000000000022',
 				symbol: 'WETH',
 				decimals: 18,
 				balance: overrides.accountState?.ethBalanceAttoEth ?? 10n ** 19n,

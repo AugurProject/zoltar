@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 
-// Capital is held per owner in one ledger per portfolio universe. Current state comes from tagged
+// Capital is held per owner in one ledger per security pool universe. Current state comes from tagged
 // `capital-owner` and `capital-ledger` reads; history comes from the ledger's events and from every retained read.
 
 type PageBoundary = { readonly block: string; readonly log: number; readonly tx: string; readonly limit: number }
@@ -157,7 +157,7 @@ export type LiquidationFilter = {
 
 /**
  * Take-overs, cures and report operations, newest first. A take-over or cure is attributed to its ledger
- * (portfolio and universe) and to the owners of the positions it names; a report operation to the ledger of
+ * (security pool and universe) and to the owners of the positions it names; a report operation to the ledger of
  * the feed that emitted it and to its sponsor. The chain does not tie any of them to a question pool.
  */
 export const liquidationRows = async (sql: SQL, filter: LiquidationFilter) => {
@@ -166,7 +166,7 @@ export const liquidationRows = async (sql: SQL, filter: LiquidationFilter) => {
 		WITH ${latestLedgers(sql, chainId, snapshotBlock)}
 		SELECT entry.block_number::text AS block_number, entry.block_hash, entry.tx_hash, entry.log_index,
 			entry.semantic_event_kind AS event_name, entry.source_contract, entry.summary_data AS event_data, block.timestamp AS block_timestamp,
-			ledger.ledger_address, ledger.read_result->>'portfolio' AS portfolio, ledger.read_result->>'universeId' AS universe_id,
+			ledger.ledger_address, ledger.read_result->>'securityPool' AS "securityPool", ledger.read_result->>'universeId' AS universe_id,
 			ledger.read_result->'collateral' AS collateral,
 			source.owner_address AS source_owner, receiver.owner_address AS receiver_owner
 		FROM protocol_timeline_entries entry

@@ -20,7 +20,7 @@ function startServer(overrides: Partial<DashboardControls> = {}) {
 		isNetworkConfigured: () => true,
 		setApprovedUniverses: value => value,
 		setPaused: value => value,
-		setSelectedPortfolios: value => value,
+		setSelectedSecurityPools: value => value,
 		setSigner: value => value,
 		setStrategy: value => value,
 		...overrides,
@@ -159,7 +159,7 @@ describe('liquidator dashboard server', () => {
 			isNetworkConfigured: () => true,
 			setApprovedUniverses: value => value,
 			setPaused: value => value,
-			setSelectedPortfolios: value => value,
+			setSelectedSecurityPools: value => value,
 			setSigner: value => value,
 			setStrategy: value => value,
 		})
@@ -452,7 +452,7 @@ describe('liquidator dashboard server', () => {
 				pauseMutations += 1
 				return value
 			},
-			setSelectedPortfolios: mutate,
+			setSelectedSecurityPools: mutate,
 			setExecution: mutate,
 			setSigner: mutate,
 			setStrategy: mutate,
@@ -475,7 +475,7 @@ describe('liquidator dashboard server', () => {
 			['/api/market-configuration', {}],
 			['/api/paused', { paused: false }],
 			['/api/reconcile-transaction', {}],
-			['/api/selected-portfolios', []],
+			['/api/selected-security-pools', []],
 			['/api/signer', {}],
 			['/api/strategy', {}],
 			['/api/submission', {}],
@@ -546,13 +546,13 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 			if (fail) throw new Error('RPC secret at /protected/path')
 			return { chainId: 1, snapshotTimestamp: '1789560060', page, pageCount: '0', total: '0', pools: [] }
 		},
-		setSupportedPortfolio: value => {
+		setSupportedSecurityPool: value => {
 			selections.push(value)
 			return {}
 		},
 		setApprovedUniverses: () => ({}),
 		setPaused: () => ({}),
-		setSelectedPortfolios: () => ({}),
+		setSelectedSecurityPools: () => ({}),
 		setSigner: () => ({}),
 		setStrategy: () => ({}),
 	})
@@ -579,17 +579,17 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 	expect(failed.status).toBe(503)
 	expect(await failed.text()).not.toContain('secret')
 	const request = { address: '0x1111111111111111111111111111111111111111', chainId: 1, supported: true }
-	const mutation = new URL('/api/supported-portfolio', server.url)
+	const mutation = new URL('/api/supported-security-pool', server.url)
 	expect((await fetch(mutation, { method: 'PUT', body: JSON.stringify(request), headers: { origin: 'https://foreign.example', 'content-type': 'application/json' } })).status).toBe(403)
 	expect(selections).toEqual([])
 	expect((await fetch(mutation, { method: 'PUT', body: JSON.stringify(request), headers: { origin: server.url.origin, 'content-type': 'application/json' } })).status).toBe(200)
 	expect(selections).toEqual([request])
 })
 
-test('portfolio monitoring responses exclude protected nested metadata', async () => {
-	const server = startServer({ getState: () => ({ portfolios: [{ address: '0x123', privateKey: 'protected', positions: [{ id: '3', takeoverStatus: 'Funded takeover ready', serializedTransaction: 'protected' }] }] }) })
+test('security pool monitoring responses exclude protected nested metadata', async () => {
+	const server = startServer({ getState: () => ({ securityPools: [{ address: '0x123', privateKey: 'protected', positions: [{ id: '3', takeoverStatus: 'Funded takeover ready', serializedTransaction: 'protected' }] }] }) })
 	const body: unknown = await (await fetch(new URL('/api/state', server.url))).json()
-	expect(body).toMatchObject({ portfolios: [{ address: '0x123', positions: [{ id: '3', takeoverStatus: 'Funded takeover ready' }] }] })
+	expect(body).toMatchObject({ securityPools: [{ address: '0x123', positions: [{ id: '3', takeoverStatus: 'Funded takeover ready' }] }] })
 	expect(JSON.stringify(body)).not.toContain('protected')
 })
 

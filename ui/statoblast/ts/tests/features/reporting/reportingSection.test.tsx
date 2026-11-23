@@ -438,7 +438,7 @@ describe('ReportingSection', () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
 		expect(settlementButtonLabel('Yes')).toBe('Clear Yes deposits (worth 0 REP)…')
-		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from portfolio capital.')
+		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.')
 	})
 
 	describe('fork-triggering reports', () => {

@@ -5,7 +5,7 @@ import type { WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { createE2E, expectedWinningClaim, INVALID, median, NO, NONE, OUTCOMES, YES, type CarryLeaf } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
@@ -13,7 +13,7 @@ const K = 1_000n * unit
 // local reports and either settles (inherited proofs and local indexes mixed in any order) or
 // forks again before finality, so the grandchildren pay claims from three generations.
 describe('auditE2E: continuation games mix inherited and local claims across generations', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 	const total = (values: readonly bigint[]) => values.reduce((sum, value) => sum + value, 0n)
 

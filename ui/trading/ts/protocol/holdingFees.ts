@@ -1,4 +1,4 @@
-import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
+import { loadCentralSecurityPoolQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolState.js'
 import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
 import type { WalletClient } from '@zoltar/core-shared/evm/ethereum'
@@ -20,8 +20,8 @@ export type FeeAccounting = Readonly<{
 /** Pin the checkpoint and share supply to the simulation block, including after the user's other transactions. */
 export async function loadTransactionFeeMarket(client: WalletClient, market: LiveMarket, blockNumber: bigint, timestamp: bigint): Promise<LiveMarket> {
 	const abi = statoblast_QuestionLedger_QuestionLedger.abi
-	const capital = await client.readContract({ abi, address: market.pool, functionName: 'portfolioCustody', blockNumber })
-	const central = await loadCentralPortfolioQuestion(client, market.pool, capital, blockNumber)
+	const capital = await client.readContract({ abi, address: market.pool, functionName: 'securityPoolCustody', blockNumber })
+	const central = await loadCentralSecurityPoolQuestion(client, market.pool, capital, blockNumber)
 	const feeEndTime = central.feeEndTimestamp
 	const recovery = central.settlementRecoveryAttoRep
 	const feeAccounting = central

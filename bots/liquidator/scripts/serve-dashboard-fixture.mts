@@ -1,13 +1,13 @@
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { startDashboardServer } from '../src/dashboard/dashboard-server.ts'
-import { parsePortfolioPolicy, serializePortfolioPolicy } from '../src/config/portfolio-policy.ts'
+import { parseSecurityPoolPolicy, serializeSecurityPoolPolicy } from '../src/config/security-pool-policy.ts'
 import { parseStrategy } from '../src/config/settings.ts'
 
 let paused = false
 let configurationRequests = 0
 const longUniverseId = '452312848583266388373324160190187140051835877600158453279131187530910662655'
 let approvedUniverses = ['101', longUniverseId]
-let selectedPortfolios = [{ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', universeId: '0' }]
+let selectedSecurityPools = [{ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', universeId: '0' }]
 let network: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 let networkConfigured = false
 let connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
@@ -47,7 +47,7 @@ const centralizedMarkets = {
 }
 const childMarketConfigurations: unknown[] = []
 let strategy = { maximumGasCostEth: '0.02', walletReserveRep: '100' }
-let portfolioPolicy = serializePortfolioPolicy(parsePortfolioPolicy(undefined))
+let securityPoolPolicy = serializeSecurityPoolPolicy(parseSecurityPoolPolicy(undefined))
 
 function pool(address: string, questionId: string, selected: boolean, isPriceValid: boolean, candidateCount: number, universeId: string, approvedUniverse: boolean, parent = '0x0000000000000000000000000000000000000000', systemState = '0', forkOutcomeIndex?: string) {
 	return {
@@ -134,9 +134,9 @@ function currentConfiguration() {
 		network,
 		networkConfigured,
 		runtime: { execute: false },
-		selectedPortfolios,
+		selectedSecurityPools,
 		strategy,
-		portfolioPolicy,
+		securityPoolPolicy,
 		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 	}
 }
@@ -154,7 +154,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 			...pool,
 			deploymentDate: '1789387200',
 			questionDates: { startTime: '1789473600', endTime: '1792065600' },
-			metrics: { systemState: pool.systemState, portfolio: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: pool.totalPoolHeldRep, sharedCommitmentEth: '650' },
+			metrics: { systemState: pool.systemState, securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: pool.totalPoolHeldRep, sharedCommitmentEth: '650' },
 		}))
 		const unmonitored = Array.from({ length: 10 }, (_, offset) => {
 			const index = offset + 3
@@ -164,21 +164,21 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 				questionId: (42 + index).toString(),
 				universeId: '101',
 				multiplierBps: '12500',
-				...(index === 3 ? {} : { deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', portfolio: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: '125000.123456789', sharedCommitmentEth: '650' } }),
+				...(index === 3 ? {} : { deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: '125000.123456789', sharedCommitmentEth: '650' } }),
 			}
 		})
 		const pools = scope === 'monitored' ? monitored : [...monitored, ...unmonitored]
 		const matches = pools.filter(pool => address === undefined || pool.address.toLowerCase() === address.toLowerCase())
 		return { chainId: network?.chainId ?? 1, snapshotTimestamp: String(Math.floor(Date.now() / 1000) - 12), page, total: String(matches.length), pageCount: String(Math.ceil(matches.length / 12)), pools: matches.slice(page * 12, (page + 1) * 12) }
 	},
-	setSupportedPortfolio: value => {
+	setSupportedSecurityPool: value => {
 		if (typeof value !== 'object' || value === null || Reflect.get(value, 'chainId') !== network?.chainId) throw new Error('Invalid pool selection chain')
 		const address = Reflect.get(value, 'address')
 		if (typeof address !== 'string') throw new Error('Pool address required')
 		const universeId = Reflect.get(value, 'universeId')
 		if (typeof universeId !== 'string') throw new Error('Universe ID required')
-		selectedPortfolios = selectedPortfolios.filter(item => item.address.toLowerCase() !== address.toLowerCase() || item.universeId !== universeId)
-		if (Reflect.get(value, 'supported') === true) selectedPortfolios.push({ address, universeId })
+		selectedSecurityPools = selectedSecurityPools.filter(item => item.address.toLowerCase() !== address.toLowerCase() || item.universeId !== universeId)
+		if (Reflect.get(value, 'supported') === true) selectedSecurityPools.push({ address, universeId })
 		return currentConfiguration()
 	},
 
@@ -226,7 +226,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 			deployedRep: '1636.84',
 			eligiblePoolCount: 1,
 			poolCount: 3,
-			selectedPoolCount: selectedPortfolios.length,
+			selectedPoolCount: selectedSecurityPools.length,
 			walletEth: '2.184',
 			walletRep: '2508.19',
 		},
@@ -248,7 +248,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 				submissionBlock: '8842011',
 			},
 		],
-		portfolios: [
+		securityPools: [
 			{
 				address: '0x5555555555555555555555555555555555555555',
 				universeId: '101',
@@ -328,10 +328,10 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 		paused = Reflect.get(value as object, 'paused') === true
 		return { paused }
 	},
-	setSelectedPortfolios: value => {
+	setSelectedSecurityPools: value => {
 		if (!Array.isArray(value)) throw new Error('Expected selected-pool array')
-		selectedPortfolios = value.map(item => {
-			if (typeof item?.address !== 'string' || typeof item?.universeId !== 'string') throw new Error('Invalid portfolio selection')
+		selectedSecurityPools = value.map(item => {
+			if (typeof item?.address !== 'string' || typeof item?.universeId !== 'string') throw new Error('Invalid security pool selection')
 			return { address: item.address, universeId: item.universeId }
 		})
 		return currentConfiguration()
@@ -379,7 +379,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 			throw new Error('Expected strategy object')
 		}
 		const parsed = parseStrategy(value)
-		portfolioPolicy = serializePortfolioPolicy(parsePortfolioPolicy(Reflect.get(value, 'portfolioPolicy')))
+		securityPoolPolicy = serializeSecurityPoolPolicy(parseSecurityPoolPolicy(Reflect.get(value, 'securityPoolPolicy')))
 		strategy = { maximumGasCostEth: formatDecimalAmount(parsed.maximumGasCostAttoEth), walletReserveRep: formatDecimalAmount(parsed.walletAttoRepReserve) }
 		return currentConfiguration()
 	},

@@ -38,7 +38,7 @@ type PoolSnapshotProjection = {
 	reason: number
 	settlementCollateralAttoEth: AtomicValue
 	shareTokenSupplyAttoShares: AtomicValue
-	lastSettlementPortfolioTime: AtomicValue
+	lastSettlementSecurityPoolTime: AtomicValue
 }
 
 type PoolStateProjection = { type: 'poolState'; poolAddress: string; eventName: string; state: Readonly<Record<string, unknown>> }
@@ -171,7 +171,7 @@ const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	CompleteSetCreated: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	CompleteSetRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	EscalationGameSet: ['escalationGame'],
-	QuestionAccountingCheckpoint: ['settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'lastSettlementPortfolioTime'],
+	QuestionAccountingCheckpoint: ['settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'lastSettlementSecurityPoolTime'],
 	ShareTokenSupplySet: ['shareTokenSupplyAttoShares'],
 	SharesRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	SystemStateSet: ['systemState'],
@@ -353,7 +353,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				reason: accountingReason(args['reason']),
 				settlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
 				shareTokenSupplyAttoShares: integerString(args['shareTokenSupplyAttoShares'], 'shareTokenSupplyAttoShares'),
-				lastSettlementPortfolioTime: integerString(args['lastSettlementPortfolioTime'], 'lastSettlementPortfolioTime'),
+				lastSettlementSecurityPoolTime: integerString(args['lastSettlementSecurityPoolTime'], 'lastSettlementSecurityPoolTime'),
 			},
 		]
 	}

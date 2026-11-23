@@ -95,7 +95,7 @@ export async function discoverPools({
 	const pools: PoolSnapshot[] = []
 	for (const [deploymentIndex, deployment] of deploymentsPage.entries()) {
 		const address = deployment.questionLedger
-		const portfolio = getAddress(await client.readContract({ address: deployments.securityPoolFactory, abi: abis.securityPoolFactoryAbi, functionName: 'getSecurityPoolPortfolio', args: [address], blockNumber }))
+		const securityPool = getAddress(await client.readContract({ address: deployments.securityPoolFactory, abi: abis.securityPoolFactoryAbi, functionName: 'securityPoolOf', args: [address], blockNumber }))
 		const coordinator = deployment.coordinator
 		const cachedDeployment = deploymentIndex < cachedDeploymentCount
 		const authenticatedUniverse = universeById.get(deployment.universeId)
@@ -109,7 +109,7 @@ export async function discoverPools({
 			systemState,
 			awaitingForkContinuation,
 			settlementCollateral,
-			lastSettlementPortfolioTime,
+			lastSettlementSecurityPoolTime,
 			shareTokenSupply,
 			initialEscalationDeposit,
 			priceValid,
@@ -139,7 +139,7 @@ export async function discoverPools({
 			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'systemState' }),
 			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'awaitingForkContinuation' }),
 			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'settlementCollateralAttoEth' }),
-			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'lastSettlementPortfolioTime' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'lastSettlementSecurityPoolTime' }),
 			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'shareTokenSupplyAttoShares' }),
 			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'initialEscalationGameDepositAttoRep' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'isPriceValid' }),
@@ -283,7 +283,7 @@ export async function discoverPools({
 		}
 		const pool: PoolSnapshot = {
 			address,
-			portfolio,
+			securityPool,
 			awaitingForkContinuation,
 			coordinator,
 			...priceFeedSnapshot,
@@ -310,7 +310,7 @@ export async function discoverPools({
 			lastRepPerEthPrice: lastPrice.toString(),
 			lastOracleSettlementTimestamp: lastSettlementTimestamp.toString(),
 			oraclePriceValidUntilTimestamp: priceValidUntil.toString(),
-			lastSettlementPortfolioTime: lastSettlementPortfolioTime.toString(),
+			lastSettlementSecurityPoolTime: lastSettlementSecurityPoolTime.toString(),
 			oraclePriceValid: priceValid,
 			oracleSettlementTime: settlementTime.toString(),
 			parent: getAddress(deployment.parent),

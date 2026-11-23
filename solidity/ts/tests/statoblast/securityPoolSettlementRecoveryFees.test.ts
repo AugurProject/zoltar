@@ -17,7 +17,7 @@ const UNIT_SCALE = 10n ** 9n
 const SHARES = 100n * E18
 const RECOVERY = 1_000n * E18
 const FORK_TIME = 30n * DAY
-// The rate the portfolio installs: principal units * annual fee / (10,000 * 365 days).
+// The rate the security pool installs: principal units * annual fee / (10,000 * 365 days).
 const feeRate = (annualFeeBps: bigint) => (SHARES * UNIT_SCALE * annualFeeBps) / (10_000n * YEAR)
 
 describe('Statoblast: child holding fees preserve inherited recovery REP', () => {

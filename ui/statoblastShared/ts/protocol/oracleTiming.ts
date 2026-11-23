@@ -1,6 +1,6 @@
 import { getRuntimeNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
-/** Standalone coordinator validity; shared portfolio feeds expose their own canonical expiry. */
+/** Standalone coordinator validity; shared security pool feeds expose their own canonical expiry. */
 function getOraclePriceValidityWindowSeconds(chainId = getRuntimeNetworkProfile().chain.id) {
 	return (chainId === SEPOLIA_NETWORK_PROFILE.chain.id ? 60n : 5n) * 60n
 }

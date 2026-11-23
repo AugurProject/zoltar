@@ -40,7 +40,7 @@ export type UiScreenshotSpec = {
 	readonly id: string
 	readonly app: UiAppId
 	readonly scenario: string
-	/** Hash route, for example `#/portfolio`. Defaults to the app's landing route. */
+	/** Hash route, for example `#/securityPool`. Defaults to the app's landing route. */
 	readonly route?: string
 	readonly viewport?: { readonly width: number; readonly height: number }
 	readonly steps?: readonly UiScreenshotStep[]

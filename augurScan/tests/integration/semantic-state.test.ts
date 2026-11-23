@@ -47,14 +47,14 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 			['TransferBatch', { from: zero, to: recipient, ids: ['512', '513', '514'], values: ['21', '21', '21'] }],
 			['TransferBatch', { from: zero, to: giver, ids: ['512', '513', '514'], values: ['5', '5', '5'] }],
 			// The giver transfers rights to the recipient, which first spends those credits and then its own source rights.
-			['PortfolioRecoveryRightsTransferred', { universeId: '2', from: giver, to: recipient, amountsAttoShares: ['5', '5', '5'] }],
-			['PortfolioRecoveryRightsConsumed', { universeId: '2', holder: recipient, amountAttoShares: '5', cumulativeAttoShares: '5' }],
+			['SecurityPoolRecoveryRightsTransferred', { universeId: '2', from: giver, to: recipient, amountsAttoShares: ['5', '5', '5'] }],
+			['SecurityPoolRecoveryRightsConsumed', { universeId: '2', holder: recipient, amountAttoShares: '5', cumulativeAttoShares: '5' }],
 		].entries())
 			await connection`INSERT INTO logs (chain_id, block_number, block_hash, tx_hash, log_index, emitter_address, event_name, arguments, canonical) VALUES (1, 3, ${recoveryHash}, ${recoveryHash}, ${index}, ${token}, ${name}, ${JSON.stringify(data)}::text::jsonb, true)`
 		// Spending exactly the received credits leaves the recipient's own balance transferable; the giver spent its own.
 		expect((await sharePositions(connection, 1, '3', { address: recipient })).items).toEqual([expect.objectContaining({ universe_id: '2', invalid_atto_shares: '21', migration_locked: false, recovery_locked: false })])
 		expect((await sharePositions(connection, 1, '3', { address: giver })).items).toEqual([expect.objectContaining({ universe_id: '2', recovery_locked: true })])
-		await connection`INSERT INTO logs (chain_id, block_number, block_hash, tx_hash, log_index, emitter_address, event_name, arguments, canonical) VALUES (1, 3, ${recoveryHash}, ${recoveryHash}, 10, ${token}, 'PortfolioRecoveryRightsConsumed', ${JSON.stringify({ universeId: '2', holder: recipient, amountAttoShares: '21', cumulativeAttoShares: '26' })}::text::jsonb, true)`
+		await connection`INSERT INTO logs (chain_id, block_number, block_hash, tx_hash, log_index, emitter_address, event_name, arguments, canonical) VALUES (1, 3, ${recoveryHash}, ${recoveryHash}, 10, ${token}, 'SecurityPoolRecoveryRightsConsumed', ${JSON.stringify({ universeId: '2', holder: recipient, amountAttoShares: '21', cumulativeAttoShares: '26' })}::text::jsonb, true)`
 		expect((await sharePositions(connection, 1, '3', { address: recipient })).items).toEqual([expect.objectContaining({ universe_id: '2', yes_atto_shares: '21', recovery_locked: true })])
 		// Before the recovery block nothing is locked.
 		expect((await sharePositions(connection, 1, '2', { address: recipient })).items).toEqual([])
@@ -80,15 +80,15 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		// A later failed read does not hide the immutable collateral token sampled earlier.
 		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5', collateral: usdc })])
 		expect(await auctionCollateral(connection, 1, '1', token)).toEqual(usdc)
-		// Timeline auction entries carry the same collateral token, portfolio entries the collateral their capital ledger samples; other entities carry none.
+		// Timeline auction entries carry the same collateral token, security pool entries the collateral their capital ledger samples; other entities carry none.
 		const ledger = `0x${'6'.repeat(40)}`
 		const services = `0x${'7'.repeat(40)}`
 		await connection`INSERT INTO contracts (chain_id, address, kind, canonical) VALUES (1, ${ledger}, 'securityPoolCapitalLedger', true)`
-		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'capital-ledger', ${ledger}, 1, ${hash}, 'success', ${JSON.stringify({ portfolio: `0x${'8'.repeat(40)}`, universeId: '0', fees: { services }, collateral: usdc })}::text::jsonb, true, '2026-01-01T00:00:00Z')`
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'capital-ledger', ${ledger}, 1, ${hash}, 'success', ${JSON.stringify({ securityPool: `0x${'8'.repeat(40)}`, universeId: '0', fees: { services }, collateral: usdc })}::text::jsonb, true, '2026-01-01T00:00:00Z')`
 		for (const [index, [entityType, eventName, identity]] of [
 			['auction', 'BidSettled', token],
 			['pool', 'SystemStateSet', token],
-			['portfolio-services', 'PremiumFunded', `${services}:0`],
+			['security-pool-services', 'PremiumFunded', `${services}:0`],
 		].entries())
 			await connection`INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, source_contract, source_event, canonical) VALUES (1, ${hash}, ${hash}, ${index}, 1, ${entityType}, ${identity}, ${eventName}, '{}'::jsonb, ${token}, ${eventName}, true)`
 		const timeline = await timelineCatalogRows(connection, {
@@ -101,7 +101,7 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 			limit: 10,
 		})
 		expect(timeline.rows.map((row: Record<string, unknown>) => [row['entity_type'], row['collateral']])).toEqual([
-			['portfolio-services', usdc],
+			['security-pool-services', usdc],
 			['pool', null],
 			['auction', usdc],
 		])

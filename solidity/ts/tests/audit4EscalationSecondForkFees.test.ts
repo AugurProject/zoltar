@@ -4,7 +4,7 @@ import { statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../typ
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, OUTCOMES, WEEK, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
@@ -13,7 +13,7 @@ const K = 1_000n * unit
 // period and reporter custody must all survive, whether the grandchild is materialized
 // promptly, late, or after the intermediate continuation was left half installed.
 describe('audit4: a second fork interrupts a continued game while holding fees accrue', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 	const e2e = createE2E(fixture)
 
 	const start = async () => {
@@ -51,7 +51,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		for (const reporter of [r2, r3, r4, r5, r6]) await e2e.migrateWalletRep(reporter, U0, await e2e.rep(U0, reporter.account.address), [YES])
 		return { owner, U0, q, source, game0, activation, end0, fork0, cost0, A, ledger, read, reporters: { r2, r3, r4, r5, r6 } }
 	}
-	const step = (sender: WriteClient, source: Address, universe: bigint) => writeContractAndWait(sender, () => sender.writeContract({ ...e2e.forker(), functionName: 'materializePortfolioQuestion', args: [source, universe], gas: BRANCH_GAS }))
+	const step = (sender: WriteClient, source: Address, universe: bigint) => writeContractAndWait(sender, () => sender.writeContract({ ...e2e.forker(), functionName: 'materializeSecurityPoolQuestion', args: [source, universe], gas: BRANCH_GAS }))
 	const accrue = (sender: WriteClient, pool: Address) => writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'updateSettlementCollateral', gas: BRANCH_GAS }))
 
 	test('prompt and late grandchildren inherit the exact clock, cost and custody', async () => {
@@ -204,7 +204,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		await base.mockWindow.setTime(earliest)
 		const forkA = await e2e.forkOn(r6, A, await e2e.unrelatedQuestion('audit4 fees: fork over a half installed continuation'))
 		// The stranded continuation can never finish in the forked universe, move REP, or accept reports.
-		await expect(r6.simulateContract({ ...e2e.forker(), functionName: 'materializePortfolioQuestion', args: [source, A], gas: BRANCH_GAS })).rejects.toThrow('Only finalized questions can activate in a forked universe')
+		await expect(r6.simulateContract({ ...e2e.forker(), functionName: 'materializeSecurityPoolQuestion', args: [source, A], gas: BRANCH_GAS })).rejects.toThrow('Only finalized questions can activate in a forked universe')
 		await expect(r6.simulateContract({ abi: poolArtifact.abi, address: poolA, functionName: 'resumeForkedEscalationGame' })).rejects.toThrow('Fork continuation unavailable')
 		await expect(r6.simulateContract({ abi: poolArtifact.abi, address: poolA, functionName: 'depositWalletRepToEscalationGame', args: [YES, 10n * K] })).rejects.toThrow()
 		expect(await read(gameA, 'getFinalQuestionResolution')).toBe(NONE)
@@ -212,7 +212,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		const AA = await e2e.activateBranch(A, YES)
 		const anchorAA = await e2e.activationTime(AA)
 		// The half installed pool is not the last live reporter source; the origin still is.
-		await expect(r6.simulateContract({ ...e2e.forker(), functionName: 'materializePortfolioQuestion', args: [poolA, AA], gas: BRANCH_GAS })).rejects.toThrow('Use last live reporter source')
+		await expect(r6.simulateContract({ ...e2e.forker(), functionName: 'materializeSecurityPoolQuestion', args: [poolA, AA], gas: BRANCH_GAS })).rejects.toThrow('Use last live reporter source')
 		const childAA = await e2e.materialize(source, AA)
 		expect(await read(childAA.game, 'forkResumedAt')).toBe(anchorAA)
 		// The clock kept running through A's live week even though nobody could report there.

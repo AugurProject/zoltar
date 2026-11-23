@@ -1,4 +1,4 @@
-import { deployTestPortfolio } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployTestPortfolio.ts'
+import { deployTestSecurityPool } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployTestSecurityPool.ts'
 import { eip191Signer } from 'micro-eth-signer'
 import { encodeDeployData, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
@@ -267,7 +267,7 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		const outcomes = ['Yes', 'No']
 		const questionId = getQuestionId(question, outcomes)
 		await createQuestion(deployer, question, outcomes)
-		const poolAddresses = await deployTestPortfolio(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+		const poolAddresses = await deployTestSecurityPool(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		const infra = getInfraContractAddresses()
 		const pool = poolAddresses.questionLedger
 		await manipulatePriceOracle(deployer, simulator, poolAddresses.openOraclePriceCoordinator, ONE_TOKEN, 100n * ONE_TOKEN)

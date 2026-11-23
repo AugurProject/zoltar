@@ -534,11 +534,11 @@ describe('testnet deployment plan', () => {
 			infrastructure.securityPoolCommitmentIndexDeployer,
 			infrastructure.securityPoolCapitalFeeStreamsDeployer,
 			infrastructure.securityPoolSettlementBookDeployer,
-			infrastructure.securityPoolPortfolioSettlementDeployer,
+			infrastructure.securityPoolSettlementDeployer,
 			infrastructure.securityPoolReporterLedgerDeployer,
-			infrastructure.securityPoolPortfolioServicesDeployer,
-			infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
-			infrastructure.securityPoolPortfolioAuctionDeployer,
+			infrastructure.securityPoolServicesDeployer,
+			infrastructure.securityPoolForkCoordinatorDeployer,
+			infrastructure.securityPoolAuctionDeployer,
 			infrastructure.shareTokenFactory,
 			infrastructure.zoltar,
 			infrastructure.zoltarQuestionData,
@@ -574,15 +574,15 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.questionLedgerCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.questionLedgerDeploymentWorker, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolCapitalCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolCapitalCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }))
-		expect(bootstrapDescendants['securityPoolServicesCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 1n }))
-		expect(bootstrapDescendants['securityPoolServicesCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolServicesCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolServicesDeployer, nonce: 1n }))
+		expect(bootstrapDescendants['securityPoolServicesCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolServicesDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolSettlementBookCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolSettlementBookCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 2n }))
-		expect(bootstrapDescendants['securityPoolAuctionVaultImplementation']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 3n }))
-		expect(bootstrapDescendants['securityPoolForkCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 1n }))
-		expect(bootstrapDescendants['securityPoolAuctionCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 1n }))
-		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }))
-		expect(bootstrapDescendants['securityPoolAuctionCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolAuctionVaultImplementation']).toBe(getCreateAddress({ from: infrastructure.securityPoolAuctionDeployer, nonce: 3n }))
+		expect(bootstrapDescendants['securityPoolForkCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolForkCoordinatorDeployer, nonce: 1n }))
+		expect(bootstrapDescendants['securityPoolAuctionCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolAuctionDeployer, nonce: 1n }))
+		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolForkCoordinatorDeployer, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolAuctionCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolAuctionDeployer, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
 		expect(plan).toHaveLength(33)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)

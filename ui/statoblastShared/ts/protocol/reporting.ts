@@ -387,7 +387,7 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 			args: [],
 		}),
 	])
-	if (contributionFunding === 'vault') throw new Error('Reports use wallet REP. Withdraw free REP from your portfolio before reporting.')
+	if (contributionFunding === 'vault') throw new Error('Reports use wallet REP. Withdraw free REP from your security pool before reporting.')
 	if (escalationGameAddress !== zeroAddress) {
 		const [escalationEndTime, block] = await Promise.all([client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', args: [] }), client.getBlock()])
 		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime })

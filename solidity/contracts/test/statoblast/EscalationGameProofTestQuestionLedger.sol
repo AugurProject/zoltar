@@ -60,7 +60,7 @@ contract EscalationGameProofTestQuestionLedger {
 		require(msg.sender == address(escalationGame), 'Only game');
 	}
 
-	function refreshPortfolioFees() external view {
+	function refreshSecurityPoolFees() external view {
 		require(msg.sender == address(escalationGame), 'Only game');
 	}
 

@@ -4,7 +4,7 @@ import { statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate 
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Removed public selectors must remain unreachable through the signed-deposit fallback.
 const claimDelegateArtifact = {
@@ -35,7 +35,7 @@ const K = 1_000n * unit
 // a frozen parent game or in a live continuation, whether called on the game, through its
 // fallback, or on a shared delegate.
 describe('audit4: privileged and claim-checkpoint entry points are inert', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	test('no outside caller can move REP or change a claim through a legacy path', async () => {

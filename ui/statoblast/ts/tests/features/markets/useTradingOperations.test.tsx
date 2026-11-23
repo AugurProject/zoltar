@@ -1,6 +1,6 @@
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { capitalClient } from '../portfolios/capitalClient.js'
-import { capitalSnapshot, portfolio, token } from '../portfolios/capitalFixture.js'
+import { capitalClient } from '../security-pools/capitalClient.js'
+import { capitalSnapshot, securityPool, token } from '../security-pools/capitalFixture.js'
 /// <reference types='bun-types' />
 
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -140,7 +140,7 @@ describe('useTradingOperations', () => {
 		if (collateralAvailable) {
 			const source = capitalClient(capitalSnapshot({ collateralToken: collateralDecimals === 6 ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.wethAddress, walletCollateral: 100n * ATTO_ETH_PER_ETH, collateralAllowance: 100n * ATTO_ETH_PER_ETH }))
 			source.setRead('securityPoolFactory', token)
-			source.setRead('getSecurityPoolPortfolio', portfolio)
+			source.setRead('securityPoolOf', securityPool)
 			source.setRead('questionId', zeroHash)
 			source.setRead('purchaseQuote', [0n])
 			replaceEnvironment({ ...getActiveBackend(), createReadClient: () => source.client })

@@ -22,7 +22,7 @@ abstract contract SecurityPoolSettlementState {
 	bool internal constant DECREASE_BALANCE = false;
 	// cashAttoEth is a liability backed by settlement custody; units allocate that cash.
 	// securityPoolSettlementBook.test.ts covers unit conservation, fork copies and both clocks.
-	// Only a fully cash-backed book accrues fees. Finality uses portfolio time.
+	// Only a fully cash-backed book accrues fees. Finality uses security pool time.
 	struct Book {
 		uint256 cashAttoEth;
 		uint256 units;
@@ -30,7 +30,7 @@ abstract contract SecurityPoolSettlementState {
 		uint64 questionRoot;
 		uint64 finalityRoot;
 		uint64 frozenRoot;
-		uint48 portfolioTimestamp;
+		uint48 securityPoolTimestamp;
 		bool isSealed;
 		uint64 feeRateRoot;
 		uint64 feeEndRoot;
@@ -44,7 +44,7 @@ abstract contract SecurityPoolSettlementState {
 
 	// units are cash-allocation weights, not outcome shares; feeStart/feeEnd are native time.
 	// Principal and rates are claim-unit weights internally; question() converts them to cash.
-	// finalAfter is portfolio time and remains independent of the native fee deadline.
+	// finalAfter is security pool time and remains independent of the native fee deadline.
 	struct Question {
 		uint256 units;
 		uint256 outcomeSupplyAttoShares;

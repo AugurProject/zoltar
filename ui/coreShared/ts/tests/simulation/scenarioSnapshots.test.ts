@@ -32,7 +32,7 @@ describe('scenario snapshots', () => {
 		const missing = createFetch({})
 		expect(await fetchSimulationScenarioSnapshot(workerPath, 'deployed', missing.fetchImplementation)).toBeUndefined()
 		const unlisted = createFetch({ 'http://localhost:12347/statoblast/js/simulation/snapshots/manifest.json': { body: manifest } })
-		expect(await fetchSimulationScenarioSnapshot(workerPath, 'portfolio', unlisted.fetchImplementation)).toBeUndefined()
+		expect(await fetchSimulationScenarioSnapshot(workerPath, 'securityPool', unlisted.fetchImplementation)).toBeUndefined()
 		expect(unlisted.requested).toHaveLength(1)
 		const local = createFetch({})
 		expect(await fetchSimulationScenarioSnapshot(new URL('file:///repo/ui/statoblast/ts/simulation/tevmWorker.ts'), 'deployed', local.fetchImplementation)).toBeUndefined()

@@ -1,19 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 import { collateralBalance } from './burnEvidence'
 
 describe('settlement repair underwriting capacity', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	test('#1330 donations cannot create demand exceeding the child commitments', async () => {
 		const owner = fixture.owner()
 		const other = fixture.other()
@@ -25,11 +25,11 @@ describe('settlement repair underwriting capacity', () => {
 		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
-		const settlement = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
-		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		const settlement = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
+		const collateral = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
 		await approveToken(other, collateral, settlement)
-		const before = await collateralBalance(other, fixture.portfolio, other.account.address)
+		const before = await collateralBalance(other, fixture.securityPool, other.account.address)
 		await expect(writeContractAndWait(other, () => other.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'topUp', args: [child, 150n * unit] }))).rejects.toThrow('Repair exceeds underwriting commitment')
-		expect(await collateralBalance(other, fixture.portfolio, other.account.address)).toBe(before)
+		expect(await collateralBalance(other, fixture.securityPool, other.account.address)).toBe(before)
 	})
 })

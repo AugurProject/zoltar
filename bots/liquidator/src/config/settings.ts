@@ -1,5 +1,5 @@
-import { parsePortfolioInstructions, serializePortfolioInstructions, type PortfolioInstruction } from './portfolio-instructions.ts'
-import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolicy, type PortfolioPolicy, type PortfolioSelection } from './portfolio-policy.ts'
+import { parseSecurityPoolInstructions, serializeSecurityPoolInstructions, type SecurityPoolInstruction } from './security-pool-instructions.ts'
+import { parseSecurityPoolPolicy, parseSecurityPoolSelections, serializeSecurityPoolPolicy, type SecurityPoolPolicy, type SecurityPoolSelection } from './security-pool-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -49,18 +49,18 @@ export type OperatorSettings = {
 		uiHost: '0.0.0.0' | '127.0.0.1'
 		uiPort: number
 	}
-	selectedPortfolios: PortfolioSelection[]
-	portfolioInstructions?: PortfolioInstruction[]
-	portfolioPolicy: PortfolioPolicy
+	selectedSecurityPools: SecurityPoolSelection[]
+	securityPoolInstructions?: SecurityPoolInstruction[]
+	securityPoolPolicy: SecurityPoolPolicy
 	strategy: StrategySettings
 	submission: SubmissionSettings
 	version: typeof SETTINGS_VERSION
 }
 
-const ROOT_KEYS = ['approvedUniverses', 'centralizedMarkets', 'childMarketConfigurations', 'connectivity', 'network', 'networkConfigured', 'paused', 'portfolioInstructions', 'portfolioPolicy', 'privateKey', 'runtime', 'selectedPortfolios', 'strategy', 'submission', 'version']
+const ROOT_KEYS = ['approvedUniverses', 'centralizedMarkets', 'childMarketConfigurations', 'connectivity', 'network', 'networkConfigured', 'paused', 'securityPoolInstructions', 'securityPoolPolicy', 'privateKey', 'runtime', 'selectedSecurityPools', 'strategy', 'submission', 'version']
 const RUNTIME_KEYS = ['execute', 'once', 'pollMilliseconds', 'stateFile', 'ui', 'uiHost', 'uiPort']
 const STRATEGY_KEYS = ['maximumGasCostEth', 'walletReserveRep']
-const PORTFOLIO_POLICY_KEYS = ['takeoverIncomeHorizonSeconds', 'allowFundedTakeovers', 'maximumCommitmentEth', 'maximumOwnFundingRep', 'maximumPositionsPerScan', 'maximumPrincipalRep', 'maximumTotalPrincipalRep', 'minimumNetRewardEth', 'stalledRetirementSeconds', 'targetHealthFactorBps', 'walletReserveEth']
+const SECURITY_POOL_POLICY_KEYS = ['takeoverIncomeHorizonSeconds', 'allowFundedTakeovers', 'maximumCommitmentEth', 'maximumOwnFundingRep', 'maximumPositionsPerScan', 'maximumPrincipalRep', 'maximumTotalPrincipalRep', 'minimumNetRewardEth', 'stalledRetirementSeconds', 'targetHealthFactorBps', 'walletReserveEth']
 
 /** Settings removed with standalone pools. An operator file may still carry them; they are ignored and dropped on the next save. */
 const REMOVED_ROOT_KEYS = ['deployment', 'desiredPools', 'selectedPools']
@@ -118,7 +118,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	assertKnownKeys(root, ROOT_KEYS, REMOVED_ROOT_KEYS, 'operator settings')
 	assertKnownKeys(root['runtime'], RUNTIME_KEYS, [], 'runtime')
 	assertKnownKeys(root['strategy'], STRATEGY_KEYS, REMOVED_STRATEGY_KEYS, 'strategy')
-	assertKnownKeys(root['portfolioPolicy'], PORTFOLIO_POLICY_KEYS, [], 'portfolioPolicy')
+	assertKnownKeys(root['securityPoolPolicy'], SECURITY_POOL_POLICY_KEYS, [], 'securityPoolPolicy')
 	const networkConfigured = root['networkConfigured'] === undefined ? root['connectivity'] !== undefined : boolean(root['networkConfigured'], 'networkConfigured')
 	if (networkConfigured && (root['network'] === undefined || root['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
@@ -155,9 +155,9 @@ export function parseSettings(value: unknown): OperatorSettings {
 			uiHost: uiHost(runtime['uiHost']),
 			uiPort: integer(runtime['uiPort'], 'runtime.uiPort', 1, 65_535),
 		},
-		selectedPortfolios: parsePortfolioSelections(root['selectedPortfolios']),
-		portfolioInstructions: parsePortfolioInstructions(root['portfolioInstructions']),
-		portfolioPolicy: parsePortfolioPolicy(root['portfolioPolicy']),
+		selectedSecurityPools: parseSecurityPoolSelections(root['selectedSecurityPools']),
+		securityPoolInstructions: parseSecurityPoolInstructions(root['securityPoolInstructions']),
+		securityPoolPolicy: parseSecurityPoolPolicy(root['securityPoolPolicy']),
 		strategy: parseStrategy(root['strategy']),
 		submission: validateSubmissionSettings(root['submission']),
 		version: SETTINGS_VERSION,
@@ -185,9 +185,9 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		paused: settings.paused,
 		privateKey: redactPrivateKey || settings.privateKey === undefined ? null : settings.privateKey,
 		runtime: settings.runtime,
-		selectedPortfolios: settings.selectedPortfolios.map(selection => ({ address: selection.address, universeId: selection.universeId.toString() })),
-		portfolioInstructions: serializePortfolioInstructions(settings.portfolioInstructions ?? []),
-		portfolioPolicy: serializePortfolioPolicy(settings.portfolioPolicy),
+		selectedSecurityPools: settings.selectedSecurityPools.map(selection => ({ address: selection.address, universeId: selection.universeId.toString() })),
+		securityPoolInstructions: serializeSecurityPoolInstructions(settings.securityPoolInstructions ?? []),
+		securityPoolPolicy: serializeSecurityPoolPolicy(settings.securityPoolPolicy),
 		strategy: {
 			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostAttoEth),
 			walletReserveRep: formatDecimalAmount(settings.strategy.walletAttoRepReserve),

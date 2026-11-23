@@ -2,23 +2,23 @@
 pragma solidity 0.8.35;
 
 import { QuestionLedgerStorage } from './QuestionLedgerStorage.sol';
-import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
+import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
 
-/// @dev Question accounting mirrors the portfolio settlement book.
+/// @dev Question accounting mirrors the security pool settlement book.
 abstract contract QuestionLedgerLinearFees is QuestionLedgerStorage {
 	/// @notice Mirror the central book after accruing fees and reserving any matured claim for this question.
 	function updateLinearFees() public payable {
-		require(portfolioCustody != address(0), 'Portfolio settlement missing');
-		uint48 portfolioTime;
-		(shareTokenSupplyAttoShares, settlementCollateralAttoEth, portfolioTime) = IPortfolioSettlement(address(portfolioAccounting)).checkpointQuestionSettlement();
-		lastSettlementPortfolioTime = portfolioTime;
+		require(securityPoolCustody != address(0), 'Security pool settlement missing');
+		uint48 securityPoolTime;
+		(shareTokenSupplyAttoShares, settlementCollateralAttoEth, securityPoolTime) = ISecurityPoolSettlement(address(securityPoolAccounting)).checkpointQuestionSettlement();
+		lastSettlementSecurityPoolTime = securityPoolTime;
 	}
 
 	/// @notice Synchronize a reporting change and the question's prospective central fee stream.
 	function refreshLinearFeeStream() external payable {
-		require(portfolioCustody != address(0), 'Portfolio settlement missing');
-		uint48 portfolioTime;
-		(shareTokenSupplyAttoShares, settlementCollateralAttoEth, portfolioTime) = IPortfolioSettlement(address(portfolioAccounting)).refreshQuestionSettlement();
-		lastSettlementPortfolioTime = portfolioTime;
+		require(securityPoolCustody != address(0), 'Security pool settlement missing');
+		uint48 securityPoolTime;
+		(shareTokenSupplyAttoShares, settlementCollateralAttoEth, securityPoolTime) = ISecurityPoolSettlement(address(securityPoolAccounting)).refreshQuestionSettlement();
+		lastSettlementSecurityPoolTime = securityPoolTime;
 	}
 }

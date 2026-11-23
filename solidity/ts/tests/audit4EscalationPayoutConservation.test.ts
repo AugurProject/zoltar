@@ -3,7 +3,7 @@ import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier as v
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
@@ -18,7 +18,7 @@ const scaledClaim = (amount: bigint, cumulative: bigint, binding: bigint, winnin
 // Invalid wins in a continuation, and when the fork threshold has fallen below the game's
 // non-decision threshold.
 describe('audit4: escalation payouts conserve escrow under every threshold relation', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	test('the verifier never allocates more than winning principal plus binding capital', async () => {

@@ -3,16 +3,16 @@ import { decodeEventLog, encodeFunctionData, keccak256, parseAbi, type Hex } fro
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact,
 	statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { openOracleSettleWithGasPrice, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-const batchAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
+const batchAbi = parseAbi(['function requestSecurityPoolPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
 const attoEthPerNanoEth = 10n ** 9n
 const REPORT_PENDING = 0n
 const REPORT_ACCEPTED = 1n
@@ -49,7 +49,7 @@ const reportCompletedOutcomes = (logs: readonly Log[], escrow: string) =>
 // may choose the settlement block. A settlement above that ceiling must not void the report:
 // it stays pending until a recovery at or below the ceiling completes it, or it goes stale.
 describe('Statoblast: shared price feed defers settlements above the report base-fee ceiling', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const capital = () => ({ abi: capitalArtifact.abi, address: fixture.capitalLedger })
 	const setNextBlockBaseFee = async (baseFee: bigint) => await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFee.toString(16)}`] })
 
@@ -58,7 +58,7 @@ describe('Statoblast: shared price feed defers settlements above the report base
 		const sponsor = fixture.other()
 		const settler = fixture.owner()
 		await fixture.deposit(3_000n * unit, sponsor)
-		const address = await sponsor.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+		const address = await sponsor.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		const feed = { abi: feedArtifact.abi, address }
 		const weth = await sponsor.readContract({ ...feed, functionName: 'weth' })
 		const reportWeth = await sponsor.readContract({ ...feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [unit] })
@@ -71,7 +71,7 @@ describe('Statoblast: shared price feed defers settlements above the report base
 		// Requested at a 1 nanoETH per gas base fee with the default 10 nanoETH per gas report priority fee: a 33 nanoETH per gas ceiling.
 		await setNextBlockBaseFee(1n * attoEthPerNanoEth)
 		await writeContractAndWait(sponsor, () =>
-			sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, reportWeth, bounty, { gasLimit: 600_000, minimumPrice: unit, maximumPrice: unit, deadline: Number(timestamp + 5_000n), operations }], value: bounty, gasPrice: 2n * attoEthPerNanoEth }),
+			sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, reportWeth, bounty, { gasLimit: 600_000, minimumPrice: unit, maximumPrice: unit, deadline: Number(timestamp + 5_000n), operations }], value: bounty, gasPrice: 2n * attoEthPerNanoEth }),
 		)
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		const [escrow, , , ceiling] = await sponsor.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })

@@ -1,6 +1,6 @@
-import { portfolioSettings } from './portfolio-observation.ts'
+import { securityPoolSettings } from './security-pool-observation.ts'
 
-/** Serves JSON-RPC results from `respond`, which throws for an unexpected method, and returns portfolio settings that read only from that endpoint. */
+/** Serves JSON-RPC results from `respond`, which throws for an unexpected method, and returns security pool settings that read only from that endpoint. */
 export function serveScriptedRpc(respond: (method: unknown, params: unknown) => unknown) {
 	const server = Bun.serve({
 		hostname: '127.0.0.1',
@@ -13,7 +13,7 @@ export function serveScriptedRpc(respond: (method: unknown, params: unknown) => 
 		},
 	})
 	const endpoint = `http://127.0.0.1:${server.port}`
-	const settings = portfolioSettings()
+	const settings = securityPoolSettings()
 	settings.connectivity.readRpcUrl = endpoint
 	settings.connectivity.quorumRpcUrls = []
 	settings.connectivity.rpcQuorum = 1

@@ -6,7 +6,7 @@ import type { DashboardElements } from './dashboard-elements.ts'
 import { actionStatus, put } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import { publicFailure } from './pool-presentation.ts'
-import { parsePortfolioPolicy, serializePortfolioPolicy } from '../config/portfolio-policy.ts'
+import { parseSecurityPoolPolicy, serializeSecurityPoolPolicy } from '../config/security-pool-policy.ts'
 import { strategyReviewRows, validateStrategyReview, type StrategyUpdate } from './strategy-review.ts'
 
 type StrategyFormContext = {
@@ -31,13 +31,13 @@ function setFormValue(form: HTMLFormElement, name: string, value: string | numbe
 /** Fills the strategy form from a loaded configuration. */
 export function loadStrategyForm(elements: DashboardElements, configuration: Configuration) {
 	const form = elements.strategyForm
-	for (const [name, value] of Object.entries({ ...configuration.strategy, ...configuration.portfolioPolicy })) setFormValue(form, name, value)
+	for (const [name, value] of Object.entries({ ...configuration.strategy, ...configuration.securityPoolPolicy })) setFormValue(form, name, value)
 }
 
 /** Names the automatic actions the saved strategy enables: what the running bot does, not what the form currently shows. */
 export function enabledAutomaticActions(configuration: Configuration | undefined) {
 	if (configuration === undefined) return undefined
-	return configuration.portfolioPolicy['allowFundedTakeovers'] === true ? ['funded takeovers', 'earnings claims'] : []
+	return configuration.securityPoolPolicy['allowFundedTakeovers'] === true ? ['funded takeovers', 'earnings claims'] : []
 }
 
 function healthPercent(value: string) {
@@ -63,9 +63,9 @@ function readStrategyForm(form: HTMLFormElement, saved: Configuration): Strategy
 	return {
 		maximumGasCostEth: String(data.get('maximumGasCostEth') ?? ''),
 		walletReserveRep: String(data.get('walletReserveRep') ?? ''),
-		portfolioPolicy: serializePortfolioPolicy(
-			parsePortfolioPolicy({
-				...saved.portfolioPolicy,
+		securityPoolPolicy: serializeSecurityPoolPolicy(
+			parseSecurityPoolPolicy({
+				...saved.securityPoolPolicy,
 				...fields,
 				allowFundedTakeovers: checkboxChecked(form, 'allowFundedTakeovers'),
 				targetHealthFactorBps: Number(data.get('targetHealthFactorBps')),
@@ -101,7 +101,7 @@ export function registerStrategyForm({ state, elements, populateConfiguration, s
 		setFormSubmitting('strategy-form', true)
 		try {
 			const changes = strategyReviewRows(savedConfiguration, next)
-			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review portfolio policy', description: 'Changes to amounts and automation apply on the next scan.', changes, confirmLabel: 'Save policy' }))) {
+			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review security pool policy', description: 'Changes to amounts and automation apply on the next scan.', changes, confirmLabel: 'Save policy' }))) {
 				actionStatus(strategyStatus, '')
 				return
 			}
@@ -110,7 +110,7 @@ export function registerStrategyForm({ state, elements, populateConfiguration, s
 			populateConfiguration(configuration, 'strategy-form')
 			actionStatus(strategyStatus, 'Saved')
 		} catch (error) {
-			actionStatus(strategyStatus, publicFailure(error, 'Could not save portfolio policy. Review the fields and retry.'), true)
+			actionStatus(strategyStatus, publicFailure(error, 'Could not save security pool policy. Review the fields and retry.'), true)
 		} finally {
 			setFormSubmitting('strategy-form', false)
 			syncControls()

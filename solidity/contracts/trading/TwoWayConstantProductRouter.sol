@@ -15,7 +15,7 @@ import { IWeth9 } from '../statoblast/interfaces/IWeth9.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 
-interface ITradingPortfolioSettlement {
+interface ITradingSecurityPoolSettlement {
 	function settlement() external view returns (address);
 	function services() external view returns (address);
 	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium);
@@ -242,13 +242,13 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function _redeemReceivedShares(ReceiveRequest memory request) private {
-		address portfolio = request.questionLedger.securityPoolFactory().getSecurityPoolPortfolio(request.questionLedger);
-		IERC20 collateral = ICollateralConfig(portfolio).collateralToken();
+		address securityPool = request.questionLedger.securityPoolFactory().securityPoolOf(request.questionLedger);
+		IERC20 collateral = ICollateralConfig(securityPool).collateralToken();
 		uint256 ethBefore = collateral.balanceOf(address(this));
 		IERC20 rep = IERC20(address(request.questionLedger.repToken()));
 		uint256 repBefore = rep.balanceOf(address(this));
-		if (request.questionLedger.portfolioCustody() != address(0))
-			callbackSettlement = ITradingPortfolioSettlement(portfolio).settlement();
+		if (request.questionLedger.securityPoolCustody() != address(0))
+			callbackSettlement = ITradingSecurityPoolSettlement(securityPool).settlement();
 		ethCallbackActive = true;
 		request.questionLedger.redeemCompleteSet(request.completeSetShares);
 		ethCallbackActive = false;
@@ -348,12 +348,12 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 
 	function _mintCompleteSets(IQuestionLedger pool, uint256 cash) private returns (uint256 spent) {
 		require(cash > 0, 'Mint amount is zero');
-		address root = pool.securityPoolFactory().getSecurityPoolPortfolio(pool);
-		require(root != address(0), 'Question has no portfolio');
+		address root = pool.securityPoolFactory().securityPoolOf(pool);
+		require(root != address(0), 'Question has no security pool');
 		// Quote after the same-block capital/fee checkpoint used by purchase.
-		pool.refreshPortfolioFees();
-		ITradingPortfolioSettlement portfolio = ITradingPortfolioSettlement(root);
-		(uint256 fee, ) = portfolio.purchaseQuote(pool.universeId(), pool.questionId(), cash);
+		pool.refreshSecurityPoolFees();
+		ITradingSecurityPoolSettlement securityPool = ITradingSecurityPoolSettlement(root);
+		(uint256 fee, ) = securityPool.purchaseQuote(pool.universeId(), pool.questionId(), cash);
 		spent = cash + fee;
 		IERC20 collateral = ICollateralConfig(root).collateralToken();
 		if (collateralBudget != 0) {
@@ -364,8 +364,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 			require(address(collateral) == address(pool.openOraclePriceCoordinator().weth()), 'Use collateral token entry');
 			IWeth9(address(collateral)).deposit{value: spent}();
 		}
-		collateral.safeApprove(portfolio.services(), spent);
-		portfolio.createCompleteSet(pool.universeId(), pool.questionId(), cash, address(this), 0, spent - cash);
+		collateral.safeApprove(securityPool.services(), spent);
+		securityPool.createCompleteSet(pool.universeId(), pool.questionId(), cash, address(this), 0, spent - cash);
 	}
 
 	function _refundBudget(uint256 spent) private {

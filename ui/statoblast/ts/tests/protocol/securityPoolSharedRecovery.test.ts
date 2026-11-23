@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
 import { zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
-import { loadPortfolioSourceRecovery } from '@zoltar/ui-statoblast-shared/protocol/securityPoolSharedFork.js'
+import { loadSecurityPoolSourceRecovery } from '@zoltar/ui-statoblast-shared/protocol/securityPoolSharedFork.js'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { capitalClient } from '../features/portfolios/capitalClient.js'
-import { owner, portfolio, token, capital } from '../features/portfolios/capitalFixture.js'
+import { capitalClient } from '../features/security-pools/capitalClient.js'
+import { owner, securityPool, token, capital } from '../features/security-pools/capitalFixture.js'
 
 test.each([
 	{ rights: [100n, 50n, 120n], availableShares: 50n },
@@ -31,17 +31,17 @@ test.each([
 					return token
 				case 'shareToken':
 					return capital
-				case 'balanceOfPortfolioRecoveryRights':
+				case 'balanceOfSecurityPoolRecoveryRights':
 					return rights
-				case 'isPortfolioRecoveryEligible':
+				case 'isSecurityPoolRecoveryEligible':
 					return true
 				default:
 					throw new Error(`Unexpected read ${request.functionName}`)
 			}
 		}),
 	)
-	const snapshot = { portfolio, owner, universeId: 42n, blockNumber: 10n, blockHash: zeroHash }
-	expect(await loadPortfolioSourceRecovery(client, snapshot, 7n)).toEqual({ pool: zeroAddress, source: token, shareToken: capital, eligible: true, rights: [...rights], availableShares })
+	const snapshot = { securityPool, owner, universeId: 42n, blockNumber: 10n, blockHash: zeroHash }
+	expect(await loadSecurityPoolSourceRecovery(client, snapshot, 7n)).toEqual({ pool: zeroAddress, source: token, shareToken: capital, eligible: true, rights: [...rights], availableShares })
 	expect(new Set(reads.map(read => read.block))).toEqual(new Set([10n]))
 	expect(reads.length).toBeLessThan(12)
 })

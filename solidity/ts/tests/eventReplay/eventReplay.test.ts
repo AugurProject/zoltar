@@ -10,9 +10,9 @@ import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as uniformAuctionArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
@@ -24,7 +24,7 @@ import {
 import { getMigrationRepBalanceAttoRep, getUniverseData, getUniverseTheoreticalSupplyAttoRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { hashCarryLeaf, hashParent } from '../carryProofHelpers'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
-import { unit, useSecurityPoolPortfolioFixture } from '../statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from '../statoblast/securityPoolFixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { advancePastOrdinaryEscalationDeadline, ordinaryEscalationPrincipals } from '../residualCaptureHelpers'
 import { getCanonicalEventIdentity, replayZoltarEvents, type ReplayLog } from './eventReplayModel'
@@ -45,7 +45,7 @@ function createReplayLog(overrides: Partial<ReplayLog> = {}): ReplayLog {
 			reason: 0n,
 			settlementCollateralAttoEth: 1n,
 			shareTokenSupplyAttoShares: 2n,
-			lastSettlementPortfolioTime: 1n,
+			lastSettlementSecurityPoolTime: 1n,
 		},
 		...overrides,
 	}
@@ -58,7 +58,7 @@ describe('event-only replay', () => {
 			blockHash: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
 			blockNumber: 2n,
 			transactionHash: '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-			args: { ...canonicalLog.args, settlementCollateralAttoEth: 3n, lastSettlementPortfolioTime: 2n },
+			args: { ...canonicalLog.args, settlementCollateralAttoEth: 3n, lastSettlementSecurityPoolTime: 2n },
 		})
 		const fullState = replayZoltarEvents([orphanedLog, canonicalLog, canonicalLog])
 		const emitter = canonicalLog.emitter
@@ -960,18 +960,18 @@ describe('event-only replay', () => {
 		if (replayed.coordinators.get(coordinator)?.reports.get(3n)?.status !== 'Reported') throw new Error('coordinator terminal state mismatch')
 	})
 
-	const portfolioFixture = useSecurityPoolPortfolioFixture()
-	const fixture = portfolioFixture.base
+	const securityPoolFixture = useSecurityPoolFixture()
+	const fixture = securityPoolFixture.base
 	const reportBond = 100n * unit
 
 	let client: typeof fixture.client
 	let mockWindow: typeof fixture.mockWindow
-	let questionLedgerAddresses: ReturnType<typeof portfolioFixture.poolFor>
+	let questionLedgerAddresses: ReturnType<typeof securityPoolFixture.poolFor>
 
 	beforeEach(() => {
 		client = fixture.client
 		mockWindow = fixture.mockWindow
-		questionLedgerAddresses = portfolioFixture.poolFor(fixture.questionId)
+		questionLedgerAddresses = securityPoolFixture.poolFor(fixture.questionId)
 	})
 
 	const depositWallet = async (outcome: number, amount: bigint) => {
@@ -985,15 +985,15 @@ describe('event-only replay', () => {
 		await createQuestion(client, question, fixture.outcomes)
 		await approveToken(client, getRepTokenAddress(fixture.genesisUniverse), getZoltarAddress())
 		await forkUniverse(client, fixture.genesisUniverse, getQuestionId(question, fixture.outcomes))
-		const controller = await client.readContract({ abi: portfolioArtifact.abi, address: portfolioFixture.portfolio, functionName: 'forkController' })
+		const controller = await client.readContract({ abi: securityPoolArtifact.abi, address: securityPoolFixture.securityPool, functionName: 'forkController' })
 		const forkTime = (await getUniverseData(client, fixture.genesisUniverse)).forkTime
 		await mockWindow.setTime(forkTime + 63n * DAY)
 		const childUniverseId = getChildUniverseId(fixture.genesisUniverse, 1n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [fixture.genesisUniverse, 1n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [childUniverseId] }))
 		const target = { abi: statoblast_QuestionForker_QuestionForker.abi, address: getInfraContractAddresses().questionForker }
-		const childDeploymentHash = await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'preparePortfolioQuestion', args: [questionLedgerAddresses.questionLedger, childUniverseId] }))
-		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializePortfolioQuestion', args: [questionLedgerAddresses.questionLedger, childUniverseId] }))
+		const childDeploymentHash = await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'prepareSecurityPoolQuestion', args: [questionLedgerAddresses.questionLedger, childUniverseId] }))
+		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializeSecurityPoolQuestion', args: [questionLedgerAddresses.questionLedger, childUniverseId] }))
 		return { childUniverseId, childDeploymentHash }
 	}
 
@@ -1046,10 +1046,10 @@ describe('event-only replay', () => {
 		const questionId = getQuestionId(questionData, fixture.outcomes)
 		await createQuestion(client, questionData, fixture.outcomes)
 		const factory = getInfraContractAddresses().securityPoolFactory
-		const deploymentHash = await portfolioFixture.register(questionId)
+		const deploymentHash = await securityPoolFixture.register(questionId)
 		const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
 		if (receipt.status === 'reverted') throw new Error('origin pool deployment reverted')
-		const addresses = portfolioFixture.poolFor(questionId)
+		const addresses = securityPoolFixture.poolFor(questionId)
 		const blockNumber = receipt.blockNumber
 		const replayLogs = (
 			await Promise.all([
@@ -1087,12 +1087,12 @@ describe('event-only replay', () => {
 	})
 
 	test('shared question accounting and share balances replay across purchases and returns', async () => {
-		await portfolioFixture.prepare()
-		const holder = portfolioFixture.other()
-		for (const question of [fixture.questionId, portfolioFixture.secondQuestionId]) {
-			const pool = portfolioFixture.poolFor(question)
+		await securityPoolFixture.prepare()
+		const holder = securityPoolFixture.other()
+		for (const question of [fixture.questionId, securityPoolFixture.secondQuestionId]) {
+			const pool = securityPoolFixture.poolFor(question)
 			for (const amount of [3n * unit, 5n * unit, 2n * unit]) {
-				await portfolioFixture.mint(amount, question)
+				await securityPoolFixture.mint(amount, question)
 				await writeContractAndWait(holder, () => holder.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'redeemCompleteSet', args: [amount / 2n] }))
 			}
 			await mockWindow.advanceTime(10n)
@@ -1104,7 +1104,7 @@ describe('event-only replay', () => {
 			if (state === undefined) throw new Error('Question accounting event missing')
 			expect(state.settlementCollateralAttoEth).toBe(await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'settlementCollateralAttoEth' }))
 			expect(state.shareTokenSupplyAttoShares).toBe(await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'shareTokenSupplyAttoShares' }))
-			expect(state.lastSettlementPortfolioTime).toBe(await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'lastSettlementPortfolioTime' }))
+			expect(state.lastSettlementSecurityPoolTime).toBe(await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'lastSettlementSecurityPoolTime' }))
 			for (const outcome of [0n, 1n, 2n]) {
 				const id = fixture.genesisUniverse * 256n + outcome
 				expect(replayed.shareTokenBalances.get(pool.shareToken)?.get(id)?.get(holder.account.address)).toBe(await holder.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: pool.shareToken, functionName: 'balanceOf', args: [holder.account.address, id] }))
@@ -1188,7 +1188,7 @@ describe('event-only replay', () => {
 		const { childUniverseId, childDeploymentHash } = await activateChild('event replay child continuation')
 		const receipt = await client.getTransactionReceipt({ hash: childDeploymentHash })
 		const initializedAtBlock = await client.getBlockNumber()
-		const child = portfolioFixture.poolFor(fixture.questionId, childUniverseId, questionLedgerAddresses.questionLedger)
+		const child = securityPoolFixture.poolFor(fixture.questionId, childUniverseId, questionLedgerAddresses.questionLedger)
 		const factory = getInfraContractAddresses().securityPoolFactory
 		const forker = getInfraContractAddresses().questionForker
 		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, initializedAtBlock)

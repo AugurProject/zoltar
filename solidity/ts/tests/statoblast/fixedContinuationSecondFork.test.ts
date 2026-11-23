@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../../types/contractArtifact'
+import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '../../types/contractArtifact'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { createE2E, median, NO, YES } from '../auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('Statoblast: a fixed outcome interrupted after delayed branch activation', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	test.each([
@@ -16,7 +16,7 @@ describe('Statoblast: a fixed outcome interrupted after delayed branch activatio
 		const owner = fixture.owner()
 		const reporter = e2e.account(6)
 		const { base } = fixture
-		const root = { abi: portfolioArtifact.abi, address: fixture.portfolio }
+		const root = { abi: securityPoolArtifact.abi, address: fixture.securityPool }
 		const source = fixture.poolFor(base.questionId).questionLedger
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
@@ -43,7 +43,7 @@ describe('Statoblast: a fixed outcome interrupted after delayed branch activatio
 		const grandchild = await e2e.activateBranch(child, YES)
 		const expectedEnd = (await e2e.activationTime(grandchild)) + fixedEnd - fork1
 		const [inherited] = reports ? await e2e.ledgerQuestion(grandchild, base.questionId) : await e2e.bookQuestion(grandchild, base.questionId)
-		expect(await owner.readContract({ ...root, functionName: 'nativeTimeForPortfolioTime', args: [grandchild, inherited.finalAfter] })).toBe(expectedEnd)
+		expect(await owner.readContract({ ...root, functionName: 'nativeTimeForSecurityPoolTime', args: [grandchild, inherited.finalAfter] })).toBe(expectedEnd)
 		if (late) await base.mockWindow.setTime(expectedEnd + 1n)
 		const continued = await e2e.materialize(fixed.pool, grandchild)
 		if (reports) expect(await owner.readContract({ ...e2e.game(continued.game), functionName: 'getEscalationGameEndDate' })).toBe(expectedEnd)

@@ -56,8 +56,8 @@ export const resumeEscalation: OperationDefinition = {
 
 export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question'): OperationDefinition {
 	const id = `statoblast.fork.${kind}`
-	const method = { initiate: 'initiateQuestionLedgerFork', 'own-question': 'forkZoltarWithOwnEscalationGame', 'create-child': 'preparePortfolioQuestion' }[kind]
-	const label = `Portfolio question fork: ${kind}`
+	const method = { initiate: 'initiateQuestionLedgerFork', 'own-question': 'forkZoltarWithOwnEscalationGame', 'create-child': 'prepareSecurityPoolQuestion' }[kind]
+	const label = `Security pool question fork: ${kind}`
 	function candidates(snapshot: EcosystemSnapshot, options?: PlanningOptions) {
 		return snapshot.pools.flatMap(pool => {
 			const universe = snapshot.universes.find(universe => universe.id === pool.universeId)
@@ -66,7 +66,7 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 			if (kind === 'own-question') return pool.ownQuestionForkReady ? [{ pool, outcome: '0', targetUniverse: '0' }] : []
 			if (pool.systemState !== 1 || universe.forkTime === '0') return []
 			return Object.entries(pool.childPoolPreparations).flatMap(([outcome, preparation]) =>
-				(options === undefined || preparation.branchReady) && preparation.childPool === zeroAddress && (options === undefined || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Portfolio question materialization') === undefined)
+				(options === undefined || preparation.branchReady) && preparation.childPool === zeroAddress && (options === undefined || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Security pool question materialization') === undefined)
 					? [{ pool, outcome, targetUniverse: preparation.childUniverseId }]
 					: [],
 			)
@@ -76,7 +76,7 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 	function build(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof candidates>[number]) {
 		const evidence: OperationEvidence[] =
 			kind === 'create-child'
-				? [{ kind: 'storage-postcondition', contract: candidate.pool.portfolio, abi: 'function getPool(uint256,uint248) view returns (address)', functionName: 'getPool', args: [candidate.pool.questionId, candidate.targetUniverse], relation: 'greater-than', expected: '0' }]
+				? [{ kind: 'storage-postcondition', contract: candidate.pool.securityPool, abi: 'function getPool(uint256,uint248) view returns (address)', functionName: 'getPool', args: [candidate.pool.questionId, candidate.targetUniverse], relation: 'greater-than', expected: '0' }]
 				: [{ kind: 'storage-postcondition', contract: candidate.pool.address, abi: 'function systemState() view returns (uint8)', functionName: 'systemState', args: [], relation: 'equals', expected: '1' }]
 
 		return planBase({
@@ -99,7 +99,7 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 		classification: kind === 'create-child' ? 'lifecycle-obligation' : 'selectable',
 		ecosystem: 'statoblast',
 		risk: 'irreversible',
-		description: 'Advances native portfolio question fork reporting and lazy child preparation.',
+		description: 'Advances native security pool question fork reporting and lazy child preparation.',
 		discoveryInputs: ['native question state', 'universe fork', 'shared branch readiness'],
 		evaluate: (snapshot, options) => eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations disabled', candidates(snapshot, options).length > 0 ? undefined : 'No eligible question fork route'),
 		buildPlan(snapshot, options) {

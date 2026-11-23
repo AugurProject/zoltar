@@ -6,13 +6,13 @@ import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_Es
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // The game's deadline is the last second the forward attrition curve is at or below the
 // median balance. Any deposit of at least the start bond is accepted while the game is open;
 // a change of leader buys no extra response time, and no game outlasts its escalation interval.
 describe('escalation game: pure attrition curve', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const INVALID = 0
 	const YES = 1
 	const NO = 2

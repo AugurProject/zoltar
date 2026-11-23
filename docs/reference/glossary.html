@@ -45,36 +45,36 @@
 			<section id="security-pools">
 				<h2>QuestionLedgers, shares, and vaults</h2>
 				<dl>
-					<dt id="portfolio">Portfolio</dt>
-					<dd>A shared REP capital ledger and ERC-20 settlement system backing questions admitted by its configured policy. Owners retain individual commitments and health settings; questions have separate outcome shares and settlement balances. A portfolio with one fixed question uses the same architecture as a portfolio admitting many questions.</dd>
+					<dt id="securityPool">Security pool</dt>
+					<dd>A shared REP capital ledger and ERC-20 settlement system backing questions admitted by its configured policy. Owners retain individual commitments and health settings; questions have separate outcome shares and settlement balances. A security pool with one fixed question uses the same architecture as a security pool admitting many questions.</dd>
 					<dt id="security-pool">QuestionLedger</dt>
-					<dd>The portfolio-bound contract for one question in one universe. It exposes shares, local reporting and redemption; its portfolio modules hold capital and settlement cash.</dd>
+					<dd>The security-pool-bound contract for one question in one universe. It exposes shares, local reporting and redemption; its security pool modules hold capital and settlement cash.</dd>
 					<dt id="lineage">Lineage</dt>
 					<dd>An origin QuestionLedger and every child pool forked from it. Pools in one lineage share an origin ID and one outcome-share token contract.</dd>
 					<dt id="origin-pool">Origin pool</dt>
-					<dd>A question pool first registered in a portfolio, before any child pool is prepared for its lineage.</dd>
+					<dd>A question pool first registered in a security pool, before any child pool is prepared for its lineage.</dd>
 					<dt id="settlement-collateral">Settlement collateral</dt>
-					<dd>The question’s backing in the portfolio settlement book. Complete sets and winning shares redeem their proportional value; holding fees reduce backing only above the configured floor.</dd>
+					<dd>The question’s backing in the security pool settlement book. Complete sets and winning shares redeem their proportional value; holding fees reduce backing only above the configured floor.</dd>
 					<dt id="open-interest">Open interest</dt>
-					<dd>The exposure created by outstanding question claims. Portfolio settlement demand aggregates the obligations that healthy underwriting commitments must support.</dd>
+					<dd>The exposure created by outstanding question claims. Security pool settlement demand aggregates the obligations that healthy underwriting commitments must support.</dd>
 					<dt id="complete-set">Complete set</dt>
-					<dd>One matching unit each of Invalid, Yes, and No shares, minted against portfolio collateral and redeemable together while the pool is operational.</dd>
+					<dd>One matching unit each of Invalid, Yes, and No shares, minted against security pool collateral and redeemable together while the pool is operational.</dd>
 					<dt id="outcome-share">Outcome share</dt>
 					<dd>An ERC-1155 token representing one outcome claim in one universe-specific QuestionLedger.</dd>
 					<dt id="vault">Vault</dt>
 					<dd>An owner’s capital account: its own REP principal, commitment and fee claims in the shared capital ledger. An auction winner may control a separate vault contract that owns such an account.</dd>
 					<dt id="underwriting-commitment">Underwriting commitment</dt>
-					<dd>An owner’s authorized amount of collateral obligations. Healthy commitments contribute to shared portfolio capacity and earn fees; losses from a distressed position stay with that owner.</dd>
+					<dd>An owner’s authorized amount of collateral obligations. Healthy commitments contribute to shared security pool capacity and earn fees; losses from a distressed position stay with that owner.</dd>
 					<dt id="security-multiplier">Security multiplier</dt>
-					<dd>The portfolio’s fixed protocol backing multiplier, expressed in basis points. Owners can select an additional personal health target; the two settings have different purposes.</dd>
+					<dd>The security pool’s fixed protocol backing multiplier, expressed in basis points. Owners can select an additional personal health target; the two settings have different purposes.</dd>
 					<dt id="vault-health">Vault health</dt>
 					<dd>Whether an owner’s total free and pledged principal covers its commitment at the protocol backing requirement and liquidation REP price. See <a href="../explanation/liquidations.html#capacity-and-health">liquidations</a>.</dd>
 					<dt id="health-factor">Health target</dt>
 					<dd>An owner-selected target of at least 100% relative to the protocol backing requirement. It constrains commitment changes and surplus withdrawals; falling below that personal buffer alone does not trigger liquidation.</dd>
 					<dt id="minting-capacity">Minting capacity</dt>
-					<dd>The healthy portfolio commitment available to support additional settlement demand. Purchases also require a current funded price and an eligible question.</dd>
+					<dd>The healthy security pool commitment available to support additional settlement demand. Purchases also require a current funded price and an eligible question.</dd>
 					<dt id="utilization">Utilization</dt>
-					<dd>The fraction of shared capacity already supporting settlement demand. The portfolio’s configured annual holding-fee rate does not vary with utilization.</dd>
+					<dd>The fraction of shared capacity already supporting settlement demand. The security pool’s configured annual holding-fee rate does not vary with utilization.</dd>
 					<dt id="fee-reserve">Fee reserve</dt>
 					<dd>Fees retained for underwriters rather than for outcome-share redemption. Accumulators credit eligible owners without visiting every question when an owner claims.</dd>
 					<dt id="holding-fee">Holding fee</dt>
@@ -106,15 +106,15 @@
 				<h2>Forks and repair</h2>
 				<dl>
 					<dt id="question-forker">QuestionForker</dt>
-					<dd>The shared contract that prepares question children and their inherited reporting state after portfolio branch migration.</dd>
+					<dd>The shared contract that prepares question children and their inherited reporting state after security pool branch migration.</dd>
 					<dt id="branch-choice-cutoff">Branch-choice cutoff</dt>
-					<dd>The deadline for portfolio owners to record their branch choice, eight weeks after the parent universe forks. Native REP migration can continue after this deadline.</dd>
+					<dd>The deadline for security pool owners to record their branch choice, eight weeks after the parent universe forks. Native REP migration can continue after this deadline.</dd>
 					<dt id="carried-game">Carried game</dt>
 					<dd>A child question’s continuation of an unresolved parent Escalation Game. Frozen history authenticates inherited claims; new wallet REP deposits use the continuation’s current rules.</dd>
 					<dt id="fork-continuation">Fork continuation</dt>
 					<dd>The preparation needed before a child question resumes an inherited unresolved reporting game. Purchases wait until the question and shared branch are ready.</dd>
 					<dt id="collateral-repair-auction">Collateral Repair Auction</dt>
-					<dd>A uniform-price auction of a portfolio branch’s saleable REP for the selected collateral to repair branch claims. Winning bids automatically own separately accounted capital positions. It does not select truth.</dd>
+					<dd>A uniform-price auction of a security pool branch’s saleable REP for the selected collateral to repair branch claims. Winning bids automatically own separately accounted capital positions. It does not select truth.</dd>
 				</dl>
 			</section>
 			<section id="liquidation">
@@ -134,7 +134,7 @@
 					<dt id="open-oracle">OpenOracle</dt>
 					<dd>An economically contestable price-reporting contract used by Statoblast for fresh REP-per-collateral-token prices, not market outcomes.</dd>
 					<dt id="price-coordinator">Price coordinator</dt>
-					<dd>A question-facing adapter to the portfolio’s shared REP/collateral feed. It exposes current prices and requests funded OpenOracle reports; it does not queue vault operations.</dd>
+					<dd>A question-facing adapter to the security pool’s shared REP/collateral feed. It exposes current prices and requests funded OpenOracle reports; it does not queue vault operations.</dd>
 				</dl>
 			</section>
 			<section id="trading">

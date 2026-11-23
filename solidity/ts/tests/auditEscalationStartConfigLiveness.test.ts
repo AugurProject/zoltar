@@ -12,16 +12,16 @@ import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocol
 import { balanceOfShares } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/questionLedger'
 import { statoblast_QuestionLedger_QuestionLedger, Zoltar_Zoltar } from '../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 describe('Audit regression: escalation start configuration liveness', () => {
-	const portfolio = useSecurityPoolPortfolioFixture()
-	const fixture = portfolio.base
+	const securityPool = useSecurityPoolFixture()
+	const fixture = securityPool.base
 	const reportBond = 11n * 10n ** 17n
 
 	test('an existing funded pool remains resolvable when the tracked threshold falls to the configured start bond', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, statoblastSecurityMultiplierBps } = fixture
-		const questionLedgerAddresses = portfolio.poolFor(fixture.questionId)
+		const questionLedgerAddresses = securityPool.poolFor(fixture.questionId)
 		const openInterestAmount = 1n * 10n ** 18n
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
 		const readNonDecisionThreshold = async () =>
@@ -46,10 +46,10 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.ok(reportBond > 10n ** 18n, 'the supply-based floor must exceed the one-REP minimum in this fixture')
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
-		await portfolio.prepare(1_000n * unit, underwritingLimitAttoEth)
-		await portfolio.mint(openInterestAmount, fixture.questionId, { sender: client })
+		await securityPool.prepare(1_000n * unit, underwritingLimitAttoEth)
+		await securityPool.mint(openInterestAmount, fixture.questionId, { sender: client })
 
-		const vaultRepBeforeResolution = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), portfolio.capitalLedger)
+		const vaultRepBeforeResolution = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPool.capitalLedger)
 		const shareSupplyBeforeResolution = await getShareTokenSupplyAttoShares(client, questionLedgerAddresses.questionLedger)
 		const holderSharesBeforeResolution = await balanceOfShares(client, questionLedgerAddresses.shareToken, genesisUniverse, client.account.address)
 		assert.ok(vaultRepBeforeResolution > reportBond, 'the vault REP redemption must represent a funded claim')
@@ -76,11 +76,11 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.strictEqual(await readNonDecisionThreshold(), reportBond, 'the live non-decision threshold must equal the 1 REP start bond')
 		// A newly deployed pool must use the same reduced live supply for its bond,
 		// so the tracked threshold remains safely above that pool's start bond.
-		const fresh = await portfolio.deployPortfolio()
-		await portfolio.register(fixture.questionId, fresh)
+		const fresh = await securityPool.deploySecurityPool()
+		await securityPool.register(fixture.questionId, fresh)
 
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await portfolio.refreshPrice()
+		await securityPool.refreshPrice()
 		assert.strictEqual(await getQuestionLedgersEscalationGame(client, questionLedgerAddresses.questionLedger), zeroAddress, 'the first-deposit path must begin without a game')
 
 		await approveToken(client, getRepTokenAddress(genesisUniverse), questionLedgerAddresses.questionLedger)
@@ -126,11 +126,11 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		await mockWindow.setTime(escalationEndTime + 1n)
 		await withdrawFromEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, [0n])
 		await redeemShares(client, questionLedgerAddresses.questionLedger)
-		await portfolio.refreshPrice()
-		await portfolio.authorize(0n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'withdrawPrincipal', args: [vaultRepBeforeResolution, client.account.address] }))
+		await securityPool.refreshPrice()
+		await securityPool.authorize(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'withdrawPrincipal', args: [vaultRepBeforeResolution, client.account.address] }))
 
 		assert.strictEqual(await getShareTokenSupplyAttoShares(client, questionLedgerAddresses.questionLedger), 0n, 'resolved open interest must be fully redeemable')
-		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), portfolio.capitalLedger), 0n, 'the funded owner principal must be fully redeemable')
+		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPool.capitalLedger), 0n, 'the funded owner principal must be fully redeemable')
 	})
 })

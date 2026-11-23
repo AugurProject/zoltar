@@ -49,7 +49,7 @@ export const contractSafetyPolicy = {
 		{
 			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
 			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol', contractName: 'QuestionLedgerEventEmitter' },
-			reason: 'Native fee accounting and portfolio credits mutate QuestionLedger storage through this fixed delegate.',
+			reason: 'Native fee accounting and security pool credits mutate QuestionLedger storage through this fixed delegate.',
 		},
 		{
 			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
@@ -74,7 +74,7 @@ export const contractSafetyPolicy = {
 			reason: 'Pool accounting events and fee accrual read these exact QuestionLedger slots through the shared storage base.',
 			anchors: [
 				{ label: 'settlementCollateralAttoEth', slot: '1', offset: 0, typeLabel: 'uint256' },
-				{ label: 'lastSettlementPortfolioTime', slot: '4', offset: 0, typeLabel: 'uint256' },
+				{ label: 'lastSettlementSecurityPoolTime', slot: '4', offset: 0, typeLabel: 'uint256' },
 			],
 		},
 	] satisfies readonly AnchoredLayout[],

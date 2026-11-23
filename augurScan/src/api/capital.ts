@@ -12,12 +12,12 @@ const capitalPosition = (row: Record<string, unknown>): Record<string, unknown> 
 	if (row['read_status'] !== 'success') return { ...position, protocol_state: 'unavailable', scanner_severity: 'unavailable', scanner_reason: row['read_failure_reason'] ?? 'Current tagged capital read is awaiting completion' }
 	const state = jsonRecord(row['read_result'])
 	const risk = capitalPositionRisk(state)
-	return { ...position, read_result: state, portfolio: state['portfolio'], universe_id: state['universeId'], protocol_state: risk.protocolState, scanner_severity: risk.scannerSeverity, scanner_reason: risk.scannerReason }
+	return { ...position, read_result: state, securityPool: state['securityPool'], universe_id: state['universeId'], protocol_state: risk.protocolState, scanner_severity: risk.scannerSeverity, scanner_reason: risk.scannerReason }
 }
 
 const capitalLedger = (row: Record<string, unknown>): Record<string, unknown> => {
 	const state = jsonRecord(row['read_result'])
-	return { ...row, read_result: state, portfolio: state['portfolio'], universe_id: state['universeId'] }
+	return { ...row, read_result: state, securityPool: state['securityPool'], universe_id: state['universeId'] }
 }
 
 /** The risk catalog's capital half: every ledger and the positions most at risk at the snapshot block. */

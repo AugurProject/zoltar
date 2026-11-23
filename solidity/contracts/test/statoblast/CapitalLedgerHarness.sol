@@ -7,7 +7,7 @@ import {
 	SecurityPoolCapitalLedgerDeployer,
 	SecurityPoolCommitmentIndexDeployer,
 	SecurityPoolCapitalFeeStreamsDeployer
-} from '../../statoblast/SecurityPoolPortfolioModuleDeployers.sol';
+} from '../../statoblast/SecurityPoolModuleDeployers.sol';
 import { ICapitalFeeStreams } from '../../statoblast/interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from '../../statoblast/SecurityPoolCommitmentIndex.sol';
 import { WETH9 } from '../../statoblast/WETH9.sol';

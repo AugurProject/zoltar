@@ -33,13 +33,13 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'questionForkerAbi', sources: [statoblast('QuestionForker')] },
 	{ name: 'escalationGameAbi', sources: escalationGame },
 	{ name: 'multicall3Abi', sources: [statoblast('Multicall3')] },
-	{ name: 'securityPoolPortfolioAuctionAbi', sources: [statoblast('SecurityPoolPortfolioAuction')] },
+	{ name: 'securityPoolAuctionAbi', sources: [statoblast('SecurityPoolAuction')] },
 	{ name: 'securityPoolUniformPriceAuctionAbi', sources: [statoblast('SecurityPoolUniformPriceAuction')] },
 	{ name: 'securityPoolAuctionVaultAbi', sources: [statoblast('SecurityPoolAuctionVault')] },
 	{ name: 'securityPoolCapitalLedgerAbi', sources: [statoblast('SecurityPoolCapitalLedger')] },
-	{ name: 'securityPoolPortfolioAbi', sources: [statoblast('SecurityPoolPortfolio')] },
+	{ name: 'securityPoolAbi', sources: [statoblast('SecurityPool')] },
 	{ name: 'securityPoolCommitmentIndexAbi', sources: [statoblast('SecurityPoolCommitmentIndex')] },
-	{ name: 'securityPoolPortfolioForkCoordinatorAbi', sources: [statoblast('SecurityPoolPortfolioForkCoordinator')] },
+	{ name: 'securityPoolForkCoordinatorAbi', sources: [statoblast('SecurityPoolForkCoordinator')] },
 	{ name: 'openOracleAbi', sources: [statoblast('openOracle/OpenOracle')] },
 	{ name: 'weth9Abi', sources: [statoblast('WETH9')] },
 	{ name: 'erc1155Abi', sources: [statoblast('tokens/ERC1155')] },
@@ -52,20 +52,20 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'genesisUniswapV3PoolStateAbi', sources: [uniswapSeeder('IGenesisUniswapV3PoolState')] },
 	{ name: 'deployQuestionLedgerEvent', source: statoblast('factories/SecurityPoolFactory'), event: 'DeployQuestionLedger' },
 ]
-const PORTFOLIO_RUNTIME_CONTRACTS = [
-	'SecurityPoolPortfolio',
+const SECURITY_POOL_RUNTIME_CONTRACTS = [
+	'SecurityPool',
 	'SecurityPoolCapitalLedger',
 	'SecurityPoolCommitmentIndex',
 	'SecurityPoolCapitalFeeStreams',
-	'SecurityPoolPortfolioSettlement',
+	'SecurityPoolSettlement',
 	'SecurityPoolSettlementBook',
 	'SecurityPoolReporterLedger',
-	'SecurityPoolPortfolioPurchase',
-	'SecurityPoolPortfolioForkCoordinator',
-	'SecurityPoolPortfolioServices',
+	'SecurityPoolPurchase',
+	'SecurityPoolForkCoordinator',
+	'SecurityPoolServices',
 	'SecurityPoolCapitalLifecycleDelegate',
 	'SecurityPoolCapitalAuctionDelegate',
-	'SecurityPoolPortfolioAuction',
+	'SecurityPoolAuction',
 	'SecurityPoolUniformPriceAuction',
 	'SecurityPoolAuctionVault',
 	'Multicall3',
@@ -74,7 +74,7 @@ const PORTFOLIO_RUNTIME_CONTRACTS = [
 
 function renderRuntimeIdentities(contracts: Record<string, unknown>) {
 	const identities = Object.fromEntries(
-		PORTFOLIO_RUNTIME_CONTRACTS.map(name => {
+		SECURITY_POOL_RUNTIME_CONTRACTS.map(name => {
 			const selection = statoblast(name)
 			const artifact = record(record(contracts[selection.artifactSource], selection.artifactSource)[name], name)
 			const bytecode = record(record(artifact['evm'], `${name}.evm`)['deployedBytecode'], `${name}.runtime`)
@@ -95,7 +95,7 @@ function renderRuntimeIdentities(contracts: Record<string, unknown>) {
 			return [name, { runtimeCodeHash: keccak256(`0x${masked}`), runtimeCodeLength: object.length / 2, immutableReferences: references }]
 		}),
 	)
-	return `export const portfolioRuntimeIdentities = ${JSON.stringify(identities)} as const\n`
+	return `export const securityPoolRuntimeIdentities = ${JSON.stringify(identities)} as const\n`
 }
 
 const outputPath = path.join(repositoryRoot, 'bots', 'shared', 'src', 'contracts', 'abi.generated.ts')

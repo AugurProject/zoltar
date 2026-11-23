@@ -1,4 +1,4 @@
-import { auctionFixture } from '../support/portfolio-fixtures.ts'
+import { auctionFixture } from '../support/security-pool-fixtures.ts'
 import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import { availableHistoryExecutionReady, canonicalScanReadiness } from '../../src/runtime/scan-readiness.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
@@ -137,7 +137,7 @@ function snapshot(): EcosystemSnapshot {
 		deployments: { openOracle: oracle, questionData: wallet, securityPoolFactory: wallet, questionForker: wallet, tradingFactory: wallet, tradingRouter: wallet, weth, zoltar: wallet },
 		escalationDeposits: [],
 		pairs: [],
-		portfolioCapital: [],
+		securityPoolCapital: [],
 		pools: [],
 		questions: [],
 		reports: [],

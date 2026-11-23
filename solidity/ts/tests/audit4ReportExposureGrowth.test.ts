@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeEventLog, encodeFunctionData, keccak256, parseAbi } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../types/contractArtifact'
+import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { openOracleSettle, openOracleSettleWithGasPrice, wrapWeth } from '../testSupport/simulator/utils/contracts/statoblast'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
-const batchAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
+const batchAbi = parseAbi(['function requestSecurityPoolPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
 
 // Renewals cover live exposure. Concurrent growth can reject an exact-minimum report;
 // explicit funding headroom can cover that growth without freezing other users.
 describe('audit4: settlement checks live exposure before accepting a report or its operations', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const capital = () => ({ abi: capitalArtifact.abi, address: fixture.capitalLedger })
 
 	test('#1341 an underfunded price cannot discard bounded operations against a fresh accepted price', async () => {
@@ -20,7 +20,7 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		const sponsor = fixture.other()
 		const griefer = fixture.owner()
 		await fixture.deposit(3_000n * unit, sponsor)
-		const address = await sponsor.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+		const address = await sponsor.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		const feed = { abi: feedArtifact.abi, address }
 		await wrapWeth(sponsor, 200n * unit)
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'weth' }), address)
@@ -34,7 +34,7 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [unit, sponsor.account.address] }) }]
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, minimum, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 2_000n, operations }], value: bounty }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, minimum, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 2_000n, operations }], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		const lastSettlementBefore = await sponsor.readContract({ ...feed, functionName: 'lastSettlementTimestamp' })
 
@@ -69,7 +69,7 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		const sponsor = fixture.other()
 		const griefer = fixture.owner()
 		await fixture.deposit(3_000n * unit, sponsor)
-		const address = await sponsor.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+		const address = await sponsor.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		const feed = { abi: feedArtifact.abi, address }
 		await wrapWeth(sponsor, 200n * unit)
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'weth' }), address)
@@ -84,7 +84,7 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		const bounty = 2n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [unit, sponsor.account.address] }) }]
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, minimum, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 2_000n, operations }], value: bounty }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, minimum, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 2_000n, operations }], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 
 		await writeContractAndWait(griefer, () => griefer.writeContract({ ...capital(), functionName: 'setCommitment', args: [100n * unit + 1n] }))
@@ -94,7 +94,7 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		await approveToken(griefer, await griefer.readContract({ ...feed, functionName: 'weth' }), address)
 		await approveToken(griefer, await griefer.readContract({ ...feed, functionName: 'reputationToken' }), address)
 		const freshBounty = await griefer.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
-		await writeContractAndWait(griefer, () => griefer.writeContract({ ...feed, functionName: 'requestPortfolioPrice', args: [unit, 2n * unit, freshBounty], value: freshBounty }))
+		await writeContractAndWait(griefer, () => griefer.writeContract({ ...feed, functionName: 'requestSecurityPoolPrice', args: [unit, 2n * unit, freshBounty], value: freshBounty }))
 		const fresh = await griefer.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(griefer, fresh)
@@ -114,14 +114,14 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		const sponsor = fixture.other()
 		const griefer = fixture.owner()
 		await fixture.deposit(3_000n * unit, sponsor)
-		const address = await sponsor.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+		const address = await sponsor.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		const feed = { abi: feedArtifact.abi, address }
 		await wrapWeth(sponsor, 200n * unit)
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'weth' }), address)
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'reputationToken' }), address)
 		const minimum = await sponsor.readContract({ ...feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [unit] })
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...feed, functionName: 'requestPortfolioPrice', args: [unit, minimum + 1n, bounty], value: bounty }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...feed, functionName: 'requestSecurityPoolPrice', args: [unit, minimum + 1n, bounty], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await writeContractAndWait(griefer, () => griefer.writeContract({ ...capital(), functionName: 'setCommitment', args: [100n * unit + 1n] }))
 		await fixture.base.mockWindow.advanceTime(481n)

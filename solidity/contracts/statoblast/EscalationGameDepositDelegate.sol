@@ -8,7 +8,7 @@ import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
-import { ISecurityPoolReporterPortfolio } from './interfaces/ISecurityPoolReporterLedger.sol';
+import { ISecurityPoolReporterHost } from './interfaces/ISecurityPoolReporterLedger.sol';
 import { SystemState } from './interfaces/IQuestionLedger.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import {
@@ -205,7 +205,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 
 	function _validateGameForDeposit(IEscalationGameDepositContext game) private view {
 		address poolAddress = game.questionLedger();
-		require(!forkContinuation || (EscalationGameRepCustody.portfolio(poolAddress) != address(0) && forkResumedAt != 0 && fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None), 'Fork game');
+		require(!forkContinuation || (EscalationGameRepCustody.securityPool(poolAddress) != address(0) && forkResumedAt != 0 && fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None), 'Fork game');
 		IEscalationGameQuestionLedgerContext pool = IEscalationGameQuestionLedgerContext(poolAddress);
 		require(pool.escalationGame() == address(this), 'Game inactive');
 		require(pool.systemState() == SystemState.Operational, 'Pool inactive');
@@ -222,7 +222,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		address poolAddress = game.questionLedger();
 		_recordSettlementForkThreshold(poolAddress);
 		_scheduleReporterFinality();
-		IEscalationGameQuestionLedgerContext(poolAddress).refreshPortfolioFees();
+		IEscalationGameQuestionLedgerContext(poolAddress).refreshSecurityPoolFees();
 	}
 
 	function _appendDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
@@ -346,18 +346,18 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			}
 			totalDisputeStakedAttoRep += forkCarryDisputeStakedAttoRep;
 		}
-		address authority = EscalationGameRepCustody.portfolio(game.questionLedger());
+		address authority = EscalationGameRepCustody.securityPool(game.questionLedger());
 		if (authority == address(0)) forkResumedAt = block.timestamp;
 		else {
 			uint248 universeId = IEscalationGameQuestionLedgerContext(game.questionLedger()).universeId();
-			ISecurityPoolReporterPortfolio portfolio = ISecurityPoolReporterPortfolio(authority);
-			uint48 portfolioTimeAnchor = portfolio.portfolioTimeForNative(universeId, 0);
-			forkResumedAt = portfolio.nativeTimeForPortfolioTime(universeId, portfolioTimeAnchor);
-			require(block.timestamp >= forkResumedAt, 'Portfolio response period has not started');
+			ISecurityPoolReporterHost securityPool = ISecurityPoolReporterHost(authority);
+			uint48 securityPoolTimeAnchor = securityPool.securityPoolTimeForNative(universeId, 0);
+			forkResumedAt = securityPool.nativeTimeForSecurityPoolTime(universeId, securityPoolTimeAnchor);
+			require(block.timestamp >= forkResumedAt, 'Security pool response period has not started');
 		}
 		_recordSettlementForkThreshold(game.questionLedger());
 		if (game.getEscalationGameEndDate() >= block.timestamp) _scheduleReporterFinality();
-		IEscalationGameQuestionLedgerContext(game.questionLedger()).refreshPortfolioFees();
+		IEscalationGameQuestionLedgerContext(game.questionLedger()).refreshSecurityPoolFees();
 		emit ForkContinuationResumed(forkResumedAt);
 	}
 

@@ -1,10 +1,10 @@
-import { portfolioRecoveryMintBudget } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { securityPoolRecoveryMintBudget } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { loadRecoveryMintFunding } from './recoveryMintFunding.js'
 import { collateralPresentation } from './collateral.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from './questionLedgerAbi.js'
 import { requireAddressValue, requireBigintValue } from './decoders.js'
-import { loadCentralPortfolioQuestion } from './securityPoolPortfolioState.js'
+import { loadCentralSecurityPoolQuestion } from './securityPoolState.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
 import { encodeFunctionData, getAddress, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
@@ -45,13 +45,13 @@ export async function loadQuestionLedgerMintCapacity(client: Pick<ReadClient, 'g
 		client,
 		[
 			{ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'escalationGame', args: [] },
-			{ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'portfolioCustody', args: [] },
+			{ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'securityPoolCustody', args: [] },
 		],
 		currentBlock.number,
 	)
-	const capital = requireAddressValue(custody, 'portfolio custody')
-	if (capital === zeroAddress) throw new Error('Question ledger is not bound to a portfolio.')
-	const central = await loadCentralPortfolioQuestion(client, questionLedgerAddress, capital, currentBlock.number)
+	const capital = requireAddressValue(custody, 'security pool custody')
+	if (capital === zeroAddress) throw new Error('Question ledger is not bound to a security pool.')
+	const central = await loadCentralSecurityPoolQuestion(client, questionLedgerAddress, capital, currentBlock.number)
 	const escalationGameActive = requireAddressValue(escalationGame, 'escalation game') !== zeroAddress
 	return { ...central, currentTimestamp: currentBlock.timestamp, escalationGameActive, mintingCapacityAttoEth: escalationGameActive ? 0n : central.mintingCapacityAttoEth }
 }
@@ -91,24 +91,24 @@ export async function loadTradingDetails(client: ReadClient, questionLedgerAddre
 	}
 }
 /**
- * The portfolio the factory records for a pool, accepted only when that factory deployed it from its pinned
+ * The security pool the factory records for a pool, accepted only when that factory deployed it from its pinned
  * creation code and module deployers. Its collateral token and spender are not read, and no approval is offered, otherwise.
  */
-export async function requireCanonicalPoolPortfolio(client: Pick<ReadClient, 'readContract'>, factory: Address, pool: Address, blockNumber?: bigint) {
+export async function requireCanonicalSecurityPoolOf(client: Pick<ReadClient, 'readContract'>, factory: Address, pool: Address, blockNumber?: bigint) {
 	const block = blockNumber === undefined ? {} : { blockNumber }
-	const portfolio = getAddress(requireAddressValue(await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'getSecurityPoolPortfolio', args: [pool], ...block }), 'Portfolio'))
-	if (portfolio === zeroAddress) throw new Error('Question has no portfolio.')
-	if ((await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'isPortfolio', args: [portfolio], ...block })) !== true) throw new Error('Market portfolio was not deployed by the canonical factory.')
-	return portfolio
+	const securityPool = getAddress(requireAddressValue(await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'securityPoolOf', args: [pool], ...block }), 'SecurityPool'))
+	if (securityPool === zeroAddress) throw new Error('Question has no security pool.')
+	if ((await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'isSecurityPool', args: [securityPool], ...block })) !== true) throw new Error('Market security pool was not deployed by the canonical factory.')
+	return securityPool
 }
 
 async function loadTradingCollateralIdentity(client: Pick<ReadClient, 'readContract'>, pool: Address, blockNumber?: bigint) {
 	const factory = await client.readContract({ address: pool, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'securityPoolFactory', blockNumber })
-	const portfolio = await requireCanonicalPoolPortfolio(client, factory, pool, blockNumber)
-	const [tokenValue, servicesValue] = await Promise.all([client.readContract({ address: portfolio, abi: purchaseAbi, functionName: 'collateralToken', blockNumber }), client.readContract({ address: portfolio, abi: purchaseAbi, functionName: 'services', blockNumber })])
+	const securityPool = await requireCanonicalSecurityPoolOf(client, factory, pool, blockNumber)
+	const [tokenValue, servicesValue] = await Promise.all([client.readContract({ address: securityPool, abi: purchaseAbi, functionName: 'collateralToken', blockNumber }), client.readContract({ address: securityPool, abi: purchaseAbi, functionName: 'services', blockNumber })])
 	const token = requireAddressValue(tokenValue, 'Collateral token')
 	const services = requireAddressValue(servicesValue, 'Collateral spender')
-	return { ...collateralPresentation(token), token, services, portfolio }
+	return { ...collateralPresentation(token), token, services, securityPool }
 }
 
 async function loadTradingFundingIdentity(client: ReadClient, pool: Address) {
@@ -129,13 +129,13 @@ export async function loadTradingCollateral(client: ReadClient, pool: Address, o
 export async function quoteTradingCollateral(client: ReadClient, collateral: Awaited<ReturnType<typeof loadTradingCollateral>>, amount: bigint, onRecoveryRequirement?: (required: bigint) => void) {
 	const { universeId, questionId } = collateral
 	const [result, recoveryValue] = await Promise.all([
-		client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
-		client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
+		client.readContract({ address: collateral.securityPool, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
+		client.readContract({ address: collateral.securityPool, abi: purchaseAbi, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
 	])
 	const required = requireBigintValue(recoveryValue, 'Recovery REP contribution')
-	portfolioRecoveryMintBudget(required)
+	securityPoolRecoveryMintBudget(required)
 	onRecoveryRequirement?.(required)
-	const recovery = await loadRecoveryMintFunding(client, collateral.portfolio, universeId, collateral.owner, required)
+	const recovery = await loadRecoveryMintFunding(client, collateral.securityPool, universeId, collateral.owner, required)
 	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error('Invalid collateral fee quote.')
 	return { amount, fee: result[0], recovery }
 }
@@ -253,8 +253,8 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 const purchaseAbi = parseAbi([
 	'function collateralToken() view returns (address)',
 	'function services() view returns (address)',
-	'function getSecurityPoolPortfolio(address pool) view returns (address)',
-	'function isPortfolio(address portfolio) view returns (bool)',
+	'function securityPoolOf(address pool) view returns (address)',
+	'function isSecurityPool(address securityPool) view returns (bool)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
 	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
@@ -274,14 +274,14 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	}
 	const questionId = await validateBeforeSubmit()
 	const [universeId, factory] = await Promise.all([readQuestionLedgerUniverseId(client, questionLedgerAddress), client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'securityPoolFactory' })])
-	const portfolio = await requireCanonicalPoolPortfolio(client, factory, questionLedgerAddress)
+	const securityPool = await requireCanonicalSecurityPoolOf(client, factory, questionLedgerAddress)
 	const quote = async () => {
-		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'getPool', args: [questionId, universeId] })
-		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== questionLedgerAddress.toLowerCase()) throw new Error('Portfolio question pool is not canonical.')
+		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'getPool', args: [questionId, universeId] })
+		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== questionLedgerAddress.toLowerCase()) throw new Error('Security pool question pool is not canonical.')
 		const [quoted, capacity, recoveryValue] = await Promise.all([
-			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
-			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'availableMintCapacity', args: [universeId] }),
-			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
+			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
+			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'availableMintCapacity', args: [universeId] }),
+			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
 		])
 		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || quoted.length !== 2 || typeof quoted[1] !== 'bigint') throw new Error('Invalid shared REP purchase quote.')
 		const fee = quoted[0]
@@ -292,13 +292,13 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const collateral = await loadTradingCollateral(client, questionLedgerAddress, client.account.address)
 	const quoted = await quote()
 	const purchaseFee = quoted.fee
-	const maximumRecoveryAttoRep = portfolioRecoveryMintBudget(quoted.recoveryAttoRep)
+	const maximumRecoveryAttoRep = securityPoolRecoveryMintBudget(quoted.recoveryAttoRep)
 	const maximumFee = (purchaseFee * 10_100n + 9_999n) / 10_000n
 	const minimumShares = await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'attoEthToAttoShares', args: [amount] })
 	const args = [universeId, questionId, amount, client.account.address, minimumShares, maximumFee] as const
 	const mintCall = maximumRecoveryAttoRep === 0n ? { functionName: 'createCompleteSet' as const, args } : { functionName: 'createCompleteSetWithRecoveryRep' as const, args: [...args, maximumRecoveryAttoRep] as const }
 	const callParams = {
-		address: portfolio,
+		address: securityPool,
 		abi: purchaseAbi,
 		...mintCall,
 		value: 0n,
@@ -316,7 +316,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 				if (latest.allowance < amount + fresh.fee) throw new Error(collateralCopy.approvalRequired)
 				if (latest.balance < amount + fresh.fee) throw new Error('Insufficient collateral for minting and purchase fees.')
 				if (fresh.recoveryAttoRep > maximumRecoveryAttoRep) throw new Error('Recovery REP quote changed. Review the amount again.')
-				const recovery = await loadRecoveryMintFunding(client, portfolio, universeId, client.account.address, fresh.recoveryAttoRep)
+				const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, client.account.address, fresh.recoveryAttoRep)
 				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
 				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })

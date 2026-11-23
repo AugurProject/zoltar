@@ -12,11 +12,11 @@ type SecurityPoolFactoryAddressInputs = {
 	securityPoolCommitmentIndexDeployer: Address
 	securityPoolCapitalFeeStreamsDeployer: Address
 	securityPoolSettlementBookDeployer: Address
-	securityPoolPortfolioSettlementDeployer: Address
+	securityPoolSettlementDeployer: Address
 	securityPoolReporterLedgerDeployer: Address
-	securityPoolPortfolioForkCoordinatorDeployer: Address
-	securityPoolPortfolioServicesDeployer: Address
-	securityPoolPortfolioAuctionDeployer: Address
+	securityPoolForkCoordinatorDeployer: Address
+	securityPoolServicesDeployer: Address
+	securityPoolAuctionDeployer: Address
 	shareTokenFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
@@ -41,11 +41,11 @@ type InfraContractAddressConfig = {
 	securityPoolCommitmentIndexDeployerBytecode: Hex
 	securityPoolCapitalFeeStreamsDeployerBytecode: Hex
 	securityPoolSettlementBookDeployerBytecode: Hex
-	securityPoolPortfolioSettlementDeployerBytecode: Hex
-	securityPoolPortfolioServicesDeployerBytecode: Hex
+	securityPoolSettlementDeployerBytecode: Hex
+	securityPoolServicesDeployerBytecode: Hex
 	securityPoolReporterLedgerDeployerBytecode: Hex
-	securityPoolPortfolioForkCoordinatorDeployerBytecode: Hex
-	securityPoolPortfolioAuctionDeployerBytecode: Hex
+	securityPoolForkCoordinatorDeployerBytecode: Hex
+	securityPoolAuctionDeployerBytecode: Hex
 	zeroSalt: Hex
 	getZoltarAddress: () => Address
 	getZoltarQuestionDataAddress: () => Address
@@ -69,11 +69,11 @@ type InfraContractAddresses = {
 	securityPoolCommitmentIndexDeployer: Address
 	securityPoolCapitalFeeStreamsDeployer: Address
 	securityPoolSettlementBookDeployer: Address
-	securityPoolPortfolioSettlementDeployer: Address
-	securityPoolPortfolioServicesDeployer: Address
+	securityPoolSettlementDeployer: Address
+	securityPoolServicesDeployer: Address
 	securityPoolReporterLedgerDeployer: Address
-	securityPoolPortfolioForkCoordinatorDeployer: Address
-	securityPoolPortfolioAuctionDeployer: Address
+	securityPoolForkCoordinatorDeployer: Address
+	securityPoolAuctionDeployer: Address
 	shareTokenFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
@@ -87,11 +87,11 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			securityPoolCommitmentIndexDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolCommitmentIndexDeployerBytecode),
 			securityPoolCapitalFeeStreamsDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolCapitalFeeStreamsDeployerBytecode),
 			securityPoolSettlementBookDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolSettlementBookDeployerBytecode),
-			securityPoolPortfolioSettlementDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioSettlementDeployerBytecode),
-			securityPoolPortfolioServicesDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioServicesDeployerBytecode),
+			securityPoolSettlementDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolSettlementDeployerBytecode),
+			securityPoolServicesDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolServicesDeployerBytecode),
 			securityPoolReporterLedgerDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolReporterLedgerDeployerBytecode),
-			securityPoolPortfolioForkCoordinatorDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioForkCoordinatorDeployerBytecode),
-			securityPoolPortfolioAuctionDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioAuctionDeployerBytecode),
+			securityPoolForkCoordinatorDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolForkCoordinatorDeployerBytecode),
+			securityPoolAuctionDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolAuctionDeployerBytecode),
 			openOracle: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOracleBytecode),
 			zoltarQuestionData: config.getZoltarQuestionDataAddress(),
 			zoltar: config.getZoltarAddress(),
@@ -131,11 +131,11 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 					securityPoolCommitmentIndexDeployer: addresses.securityPoolCommitmentIndexDeployer,
 					securityPoolCapitalFeeStreamsDeployer: addresses.securityPoolCapitalFeeStreamsDeployer,
 					securityPoolSettlementBookDeployer: addresses.securityPoolSettlementBookDeployer,
-					securityPoolPortfolioSettlementDeployer: addresses.securityPoolPortfolioSettlementDeployer,
+					securityPoolSettlementDeployer: addresses.securityPoolSettlementDeployer,
 					securityPoolReporterLedgerDeployer: addresses.securityPoolReporterLedgerDeployer,
-					securityPoolPortfolioForkCoordinatorDeployer: addresses.securityPoolPortfolioForkCoordinatorDeployer,
-					securityPoolPortfolioServicesDeployer: addresses.securityPoolPortfolioServicesDeployer,
-					securityPoolPortfolioAuctionDeployer: addresses.securityPoolPortfolioAuctionDeployer,
+					securityPoolForkCoordinatorDeployer: addresses.securityPoolForkCoordinatorDeployer,
+					securityPoolServicesDeployer: addresses.securityPoolServicesDeployer,
+					securityPoolAuctionDeployer: addresses.securityPoolAuctionDeployer,
 					shareTokenFactory: addresses.shareTokenFactory,
 					zoltar: addresses.zoltar,
 					zoltarQuestionData: addresses.zoltarQuestionData,

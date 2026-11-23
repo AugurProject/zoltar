@@ -8,7 +8,7 @@ const address = getAddress('0x1111111111111111111111111111111111111111')
 
 function fixture(
 	total: bigint,
-	options: { missingPortfolio?: boolean; missingCapital?: boolean; stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {},
+	options: { missingSecurityPool?: boolean; missingCapital?: boolean; stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {},
 ) {
 	const reads: { functionName: string; args: readonly unknown[]; blockNumber: bigint }[] = []
 	let blockReads = 0
@@ -58,8 +58,8 @@ function fixture(
 							case 'systemState':
 								if (options.failMetrics) throw new Error('Pool unavailable')
 								return 0n
-							case 'getSecurityPoolPortfolio':
-								return options.missingPortfolio ? zeroAddress : address
+							case 'securityPoolOf':
+								return options.missingSecurityPool ? zeroAddress : address
 							case 'capitalLedger':
 								return options.missingCapital ? zeroAddress : address
 							case 'totals':
@@ -89,7 +89,7 @@ test('browses unselected factory deployments with bounded ranges at a canonical 
 		total: '25',
 		pageCount: '3',
 		page: 2,
-		pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', portfolio: address, sharedCommittedRep: '2', sharedCommitmentEth: '3' } }],
+		pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', securityPool: address, sharedCommittedRep: '2', sharedCommitmentEth: '3' } }],
 	})
 	expect(reads.find(read => read.functionName === 'questionLedgerDeploymentsRange')?.args).toEqual([24n, 1n])
 	expect(reads.every(read => read.blockNumber === 42n)).toBe(true)
@@ -196,8 +196,8 @@ test('returns usable pools when deployment timestamp metadata stalls after log d
 	expect(result.pools[0]?.deploymentDate).toBeUndefined()
 })
 
-test('does not invent capital metrics when the portfolio or universe ledger is unavailable', async () => {
-	for (const options of [{ missingPortfolio: true }, { missingCapital: true }]) {
+test('does not invent capital metrics when the security pool or universe ledger is unavailable', async () => {
+	for (const options of [{ missingSecurityPool: true }, { missingCapital: true }]) {
 		const { client, reads } = fixture(1n, options)
 		const result = await loadPoolCatalog(client, address, 1, 0)
 		expect(result.pools[0]?.metrics).toBeUndefined()

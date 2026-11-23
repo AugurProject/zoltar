@@ -77,7 +77,7 @@ export const createEntityViews = (context: ScannerContext, { evidence, operation
 		retryCanonicalViewOr,
 	})
 
-	const renderAddressProfile = (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) =>
+	const renderAddressProfile = (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options: { live?: boolean; securityPoolFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) =>
 		renderAddressProfilePage(
 			{
 				lookup,

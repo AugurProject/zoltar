@@ -474,7 +474,7 @@ test('labels protocol risk state separately from scanner assessment', () => {
 	expect(operationsRiskPresentation('future-state', 'future-severity')).toEqual({ protocolState: 'Unrecognized pool state', scannerAssessment: 'Unrecognized assessment', scannerTone: 'unavailable' })
 })
 
-test('links a portfolio fork participation row to its universe fork', () => {
+test('links a security pool fork participation row to its universe fork', () => {
 	expect(forkParticipationUniverse({ universe_identity: '0xcccccccccccccccccccccccccccccccccccccccc:7', event_data: { universeId: '7', owner: '0xaa' } })).toBe('7')
 	expect(forkParticipationUniverse({ universe_identity: '7', event_data: { universeId: '7' } })).toBe('7')
 	expect(forkParticipationUniverse({ universe_identity: '0xcccccccccccccccccccccccccccccccccccccccc:7' })).toBe('0xcccccccccccccccccccccccccccccccccccccccc:7')

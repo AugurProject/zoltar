@@ -1,4 +1,4 @@
-import type { PortfolioCapitalSnapshot } from './portfolio-types.ts'
+import type { SecurityPoolCapitalSnapshot } from './security-pool-types.ts'
 import type { ForkedCarryWithdrawalPresenceSnapshot, ForkedCarryWithdrawalSnapshot } from './carry-types.ts'
 import type { UniverseUniswapSnapshot } from './uniswap-types.ts'
 import type { OperationInputValues } from './input-values.ts'
@@ -114,15 +114,15 @@ interface DirectEscalationDepositQuoteSnapshot {
 
 export interface PoolSnapshot {
 	address: Address
-	portfolio: Address
+	securityPool: Address
 	parent: Address
 	universeId: string
 	questionId: string
 	repToken: Address
 	shareToken: Address
 	coordinator: Address
-	childPoolPreparations: Record<string, { portfolio: Address; branchReady: boolean; sourcePool: Address; sourceGame: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean; feedRequired: boolean; dependenciesRequired: boolean }>
-	/** Canonical price authority, shared by portfolio questions and authenticating candidate escrows. */
+	childPoolPreparations: Record<string, { securityPool: Address; branchReady: boolean; sourcePool: Address; sourceGame: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean; feedRequired: boolean; dependenciesRequired: boolean }>
+	/** Canonical price authority, shared by security pool questions and authenticating candidate escrows. */
 	priceFeed: Address
 	/** Creator and callback authenticated for each current or retained shared candidate. */
 	reportEscrows?: Readonly<Record<string, Address>>
@@ -145,7 +145,7 @@ export interface PoolSnapshot {
 	shareTokenSupplyAttoShares: CanonicalUintString
 	currentMintingCapacityAttoEth: CanonicalUintString
 	statoblastSecurityMultiplierBps: string
-	lastSettlementPortfolioTime: string
+	lastSettlementSecurityPoolTime: string
 	poolRepBalanceAttoRep: CanonicalUintString
 	escalationRepBalanceAttoRep: CanonicalUintString
 	escalationResidualSweepExpectedSuccess: boolean
@@ -216,7 +216,7 @@ export interface AuctionSnapshot {
 	collateralAllowance: CanonicalUintString
 	address: Address
 	engine: Address
-	portfolio: Address
+	securityPool: Address
 	universeId: string
 	forkController: Address
 	startTime: string
@@ -316,7 +316,7 @@ export interface EcosystemSnapshot {
 	questions: QuestionSnapshot[]
 	universes: UniverseSnapshot[]
 	pools: PoolSnapshot[]
-	portfolioCapital: PortfolioCapitalSnapshot[]
+	securityPoolCapital: SecurityPoolCapitalSnapshot[]
 	escalationDeposits: EscalationDepositSnapshot[]
 	/** Verified, unconsumed inherited deposits owned by the configured wallet. */
 	forkedCarryWithdrawals?: ForkedCarryWithdrawalSnapshot[]

@@ -176,7 +176,7 @@ describe('documentation screenshots', () => {
 			'<code data-simulation-question-ledger="address">0x1234</code>',
 			`<code data-simulation-question-ledger="address"><span>${previousPool}</span></code>`,
 			`<code data-simulation-question-ledger="market-url">http://localhost:4163/#/market/0x1234</code>`,
-			`<code data-simulation-question-ledger="market-url">http://localhost:4163/#/portfolio/${previousPool}</code>`,
+			`<code data-simulation-question-ledger="market-url">http://localhost:4163/#/security pool/${previousPool}</code>`,
 		]) {
 			await withEmbeddingPage(marked, async (docsRoot, pagePath) => {
 				await expect(updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, currentPool)).rejects.toThrow('docs/existing.html')

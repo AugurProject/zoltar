@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './securityPoolFixture'
 import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact } from '../../types/contractArtifact'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress, getZoltarAddress, forkUniverse, getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -10,7 +10,7 @@ import { DAY } from '../../testSupport/simulator/utils/constants'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 
 describe('Statoblast: fork-time escalation finality', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 
 	async function prepareDisputedPool() {
 		const owner = fixture.owner()

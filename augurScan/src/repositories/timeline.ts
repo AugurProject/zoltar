@@ -55,12 +55,12 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 				invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at,
 				-- Auction amounts are in the auction's collateral token, which its tagged reads sample.
 				CASE WHEN timeline.entity_type = 'auction' THEN ${latestAuctionCollateral(sql, chainId, asOfBlock, sql`timeline.entity_identity`)}
-				-- Portfolio amounts are in the portfolio's collateral token, which its capital ledgers' tagged reads sample.
-				-- Each of these identities starts with the ledger, portfolio, services or settlement-book address.
-				WHEN timeline.entity_type IN ('vault', 'capital-position', 'portfolio', 'portfolio-services', 'settlement-book') THEN (
+				-- SecurityPool amounts are in the securityPool's collateral token, which its capital ledgers' tagged reads sample.
+				-- Each of these identities starts with the ledger, securityPool, services or settlement-book address.
+				WHEN timeline.entity_type IN ('vault', 'capital-position', 'security-pool', 'security-pool-services', 'settlement-book') THEN (
 					SELECT ledger.read_result->'collateral' FROM ledgers ledger
 					WHERE ledger.read_result->'collateral' IS NOT NULL AND lower(split_part(timeline.entity_identity, ':', 1)) IN (
-						ledger.ledger_address, lower(ledger.read_result->>'portfolio'), lower(ledger.read_result->'fees'->>'services'), lower(ledger.read_result->'fees'->>'settlementBook'))
+						ledger.ledger_address, lower(ledger.read_result->>'securityPool'), lower(ledger.read_result->'fees'->>'services'), lower(ledger.read_result->'fees'->>'settlementBook'))
 					LIMIT 1) END AS collateral
 			FROM (SELECT timeline.* FROM protocol_timeline_entries timeline ${timelineFilter()}
 			 AND (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash, timeline.entity_type, timeline.entity_identity) <

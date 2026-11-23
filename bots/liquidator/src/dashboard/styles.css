@@ -744,25 +744,25 @@ body[data-page="pools"] #network-badge::before {
 	text-decoration: underline;
 }
 
-.portfolio-card {
+.security-pool-card {
 	margin-top: 1rem;
 	min-width: 0;
 }
-.portfolio-card p,
-.portfolio-card h3 {
+.security-pool-card p,
+.security-pool-card h3 {
 	overflow-wrap: anywhere;
 }
-.portfolio-address {
+.security-pool-address {
 	font-family: var(--font-mono, monospace);
 }
-.portfolio-positions {
+.security-pool-positions {
 	padding-left: 1.25rem;
 }
-.portfolio-positions li {
+.security-pool-positions li {
 	margin-top: 1rem;
 }
 
-.portfolio-guidance summary {
+.security-pool-guidance summary {
 	cursor: pointer;
 	padding: 0.6rem 0;
 	font-weight: 600;

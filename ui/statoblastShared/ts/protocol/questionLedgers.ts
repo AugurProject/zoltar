@@ -1,5 +1,5 @@
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio, statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../contractArtifact.js'
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { errorChain } from '@zoltar/core-shared/errors/errorChain'
@@ -16,7 +16,7 @@ import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadQuestionLedgerDetails } from './questionLedgerSnapshot.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
-const securityPoolPortfolioAbi = statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.abi
+const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
 async function loadQuestionLedgerDeployments(client: ReadClient, startIndex: bigint, count: bigint, blockNumber?: bigint) {
 	if (count === 0n) return [] as readonly QuestionLedgerDeploymentTuple[]
 	return requireQuestionLedgerDeploymentTupleArray(
@@ -82,15 +82,15 @@ async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegi
 	})
 }
 
-async function loadPortfolioRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor): Promise<readonly Address[]> {
+async function loadSecurityPoolRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor): Promise<readonly Address[]> {
 	const factory = getInfraContractAddresses().securityPoolFactory
 	return await readIncrementalRegistry({
 		index: createRegistryIndex<Address>(),
-		key: `${factory.toLowerCase()}:portfolios`,
+		key: `${factory.toLowerCase()}:securityPools`,
 		anchor,
-		loadCount: async () => await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'portfolioCount', args: [], blockNumber: anchor.blockNumber }),
+		loadCount: async () => await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'securityPoolCount', args: [], blockNumber: anchor.blockNumber }),
 		loadRange: async (start, count) =>
-			requireArrayValue(await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'portfoliosRange', args: [start, count], blockNumber: anchor.blockNumber }), 'registered portfolios').map(portfolio => requireAddressValue(portfolio, 'registered portfolio')),
+			requireArrayValue(await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'securityPoolsRange', args: [start, count], blockNumber: anchor.blockNumber }), 'registered security pools').map(securityPool => requireAddressValue(securityPool, 'registered security pool')),
 		isCanonical: isCanonicalAnchor(client),
 	})
 }
@@ -139,7 +139,7 @@ export async function loadSelectedQuestionLedger(client: ReadClient, questionLed
 	return details
 }
 
-export type RegisteredPortfolio = { portfolio: Address; questionCount: number }
+export type RegisteredSecurityPool = { securityPool: Address; questionCount: number }
 
 type ListingRead = { status: 'success'; result: unknown } | { status: 'failure' }
 // Listing reads go out in registry-sized pages, at most this many requests at once, as registry pages do; a growing
@@ -147,18 +147,18 @@ type ListingRead = { status: 'success'; result: unknown } | { status: 'failure' 
 const LISTING_PAGE_SIZE = 100
 const LISTING_READ_CONCURRENCY = 4
 
-function portfolioListingCalls(portfolio: Address, universeId: bigint) {
+function securityPoolListingCalls(securityPool: Address, universeId: bigint) {
 	return [
-		{ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'capitalLedger', args: [universeId] },
-		{ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'questionCount', args: [] },
+		{ address: securityPool, abi: securityPoolAbi, functionName: 'capitalLedger', args: [universeId] },
+		{ address: securityPool, abi: securityPoolAbi, functionName: 'questionCount', args: [] },
 	]
 }
 
-/** A row for an address that answers as a portfolio with a ledger in this universe, or `undefined` for anything else. */
-function portfolioListing(portfolio: Address, ledger: ListingRead | undefined, questions: ListingRead | undefined): RegisteredPortfolio | undefined {
+/** A row for an address that answers as a security pool with a ledger in this universe, or `undefined` for anything else. */
+function securityPoolListing(securityPool: Address, ledger: ListingRead | undefined, questions: ListingRead | undefined): RegisteredSecurityPool | undefined {
 	if (ledger?.status !== 'success' || questions?.status !== 'success') return undefined
 	if (typeof ledger.result !== 'string' || sameAddress(ledger.result, zeroAddress) || typeof questions.result !== 'bigint') return undefined
-	return { portfolio, questionCount: Number(questions.result) }
+	return { securityPool, questionCount: Number(questions.result) }
 }
 
 /** The error and its causes, plus a node error that a wallet wraps as JSON-RPC `data` (MetaMask's "Internal JSON-RPC error."). */
@@ -187,25 +187,25 @@ function isExecutionFailure(error: unknown) {
 }
 
 /**
- * Portfolios that open in this universe, most recently registered first. The factory registers a portfolio when its
- * setup configures its price feed, so a portfolio still in setup can only be opened by its address. The factory
- * accepts registration only from portfolios it deployed. Listings also verify the capital ledger for this universe;
- * a portfolio keeps one ledger per universe it can open in.
+ * Security pools that open in this universe, most recently registered first. The factory registers a security pool when its
+ * setup configures its price feed, so a security pool still in setup can only be opened by its address. The factory
+ * accepts registration only from security pools it deployed. Listings also verify the capital ledger for this universe;
+ * a security pool keeps one ledger per universe it can open in.
  */
-export async function loadRegisteredPortfolios(client: ReadClient, universeId: bigint): Promise<RegisteredPortfolio[]> {
+export async function loadRegisteredSecurityPools(client: ReadClient, universeId: bigint): Promise<RegisteredSecurityPool[]> {
 	const anchor = await loadDeploymentRegistryAnchor(client)
-	const portfolios = await loadPortfolioRegistry(client, anchor)
-	const listings = new Map<Address, RegisteredPortfolio>()
+	const securityPools = await loadSecurityPoolRegistry(client, anchor)
+	const listings = new Map<Address, RegisteredSecurityPool>()
 	// Every request ends with this call. A call starved of gas takes almost all that is left with it, so when this one
 	// succeeds, no call before it was starved and each failed address failed on its own.
-	const gasWitness = { address: getInfraContractAddresses().securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'portfolioCount', args: [] }
+	const gasWitness = { address: getInfraContractAddresses().securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'securityPoolCount', args: [] }
 	let reading = 0
 	const queued: (() => void)[] = []
 	const read = async (addresses: readonly Address[]): Promise<readonly ListingRead[] | undefined> => {
 		while (reading >= LISTING_READ_CONCURRENCY) await new Promise<void>(resolve => queued.push(resolve))
 		reading += 1
 		try {
-			return await readOptionalMulticall(client, [...addresses.flatMap(portfolio => portfolioListingCalls(portfolio, universeId)), gasWitness], anchor.blockNumber)
+			return await readOptionalMulticall(client, [...addresses.flatMap(securityPool => securityPoolListingCalls(securityPool, universeId)), gasWitness], anchor.blockNumber)
 		} catch (error) {
 			// Only a failure the node reports for the calls is put down to a registered contract; anything else fails the list.
 			if (!isExecutionFailure(error)) throw error
@@ -220,9 +220,9 @@ export async function loadRegisteredPortfolios(client: ReadClient, universeId: b
 	const settle = async (addresses: readonly Address[]): Promise<void> => {
 		const reads = await read(addresses)
 		const answered = addresses.map((_, index) => reads?.[2 * index]?.status === 'success' && reads[2 * index + 1]?.status === 'success')
-		for (const [index, portfolio] of addresses.entries()) {
-			const listing = answered[index] ? portfolioListing(portfolio, reads?.[2 * index], reads?.[2 * index + 1]) : undefined
-			if (listing !== undefined) listings.set(portfolio, listing)
+		for (const [index, securityPool] of addresses.entries()) {
+			const listing = answered[index] ? securityPoolListing(securityPool, reads?.[2 * index], reads?.[2 * index + 1]) : undefined
+			if (listing !== undefined) listings.set(securityPool, listing)
 		}
 		if (reads?.[2 * addresses.length]?.status === 'success') return
 		// Otherwise a call that failed before a later success still had gas, so its address failed on its own and is
@@ -234,7 +234,7 @@ export async function loadRegisteredPortfolios(client: ReadClient, universeId: b
 		const middle = Math.ceil(addresses.length / 2)
 		await Promise.all([settle(addresses.slice(0, middle)), settle(addresses.slice(middle))])
 	}
-	await Promise.all(Array.from({ length: Math.ceil(portfolios.length / LISTING_PAGE_SIZE) }, (_, page) => settle(portfolios.slice(page * LISTING_PAGE_SIZE, (page + 1) * LISTING_PAGE_SIZE))))
-	await requireDeploymentRegistryAnchor(client, anchor, 'Portfolios changed during discovery')
-	return portfolios.flatMap(portfolio => listings.get(portfolio) ?? []).reverse()
+	await Promise.all(Array.from({ length: Math.ceil(securityPools.length / LISTING_PAGE_SIZE) }, (_, page) => settle(securityPools.slice(page * LISTING_PAGE_SIZE, (page + 1) * LISTING_PAGE_SIZE))))
+	await requireDeploymentRegistryAnchor(client, anchor, 'Security pools changed during discovery')
+	return securityPools.flatMap(securityPool => listings.get(securityPool) ?? []).reverse()
 }

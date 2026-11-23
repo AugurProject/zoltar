@@ -3,10 +3,10 @@ import { encodeAbiParameters, parseAbiParameters, encodeFunctionData, isHex, typ
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_QuestionForker_QuestionForker as forkerArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
@@ -21,25 +21,25 @@ import { getInfraContractAddresses } from '../../testSupport/simulator/utils/con
 import { addRepToMigrationBalance, splitMigrationRep, deployChild, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { createCarryProof, hashCarryLeaf, SparseNullifierTree } from '../carryProofHelpers'
-import { portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { securityPoolEconomics, unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Statoblast: portfolio namespaces and own-fork claims', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+describe('Statoblast: security pool namespaces and own-fork claims', () => {
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
-	const portfolio = (address = fixture.portfolio) => ({ abi: portfolioArtifact.abi, address })
+	const securityPool = (address = fixture.securityPool) => ({ abi: securityPoolArtifact.abi, address })
 	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const factory = () => ({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory })
 	const activate = async (outcome: number) => {
 		const owner = fixture.owner()
-		const controller = await owner.readContract({ ...portfolio(), functionName: 'forkController' })
+		const controller = await owner.readContract({ ...securityPool(), functionName: 'forkController' })
 		const branch = { abi: forkArtifact.abi, address: controller }
 		const child = getChildUniverseId(fixture.base.genesisUniverse, outcome)
 		const forkTime = (await getUniverseData(owner, fixture.base.genesisUniverse)).forkTime
 		if ((await fixture.base.mockWindow.getTime()) < forkTime + 63n * DAY) await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, BigInt(outcome)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
-		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [pool(), child] }))
-		const childPool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [pool(), child] }))
+		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
 		return { child, childPool }
 	}
 
@@ -52,14 +52,14 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 			MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n,
 			365n * DAY,
 			fixture.questionAdmissionPolicy,
-			portfolioEconomics.purchaseFeeBps,
-			portfolioEconomics.annualFeeBps,
-			portfolioEconomics.minimumPurchaseFeeAttoEth,
-			portfolioEconomics.minimumCommitmentAttoEth,
-			portfolioEconomics.minimumOutcomeRate,
-			portfolioEconomics.rewardVestingSeconds,
+			securityPoolEconomics.purchaseFeeBps,
+			securityPoolEconomics.annualFeeBps,
+			securityPoolEconomics.minimumPurchaseFeeAttoEth,
+			securityPoolEconomics.minimumCommitmentAttoEth,
+			securityPoolEconomics.minimumOutcomeRate,
+			securityPoolEconomics.rewardVestingSeconds,
 		])
-		await expect(fixture.owner().simulateContract({ ...factory(), functionName: 'deployPortfolio', args: [`0x${portfolioArtifact.evm.bytecode.object}`, configuration] })).rejects.toThrow('Initial report priority fee exceeds OpenOracle limits')
+		await expect(fixture.owner().simulateContract({ ...factory(), functionName: 'deploySecurityPool', args: [`0x${securityPoolArtifact.evm.bytecode.object}`, configuration] })).rejects.toThrow('Initial report priority fee exceeds OpenOracle limits')
 	})
 
 	test('rejects missing universes and invalid origin parameters', async () => {
@@ -72,42 +72,42 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 				priorityFee,
 				365n * DAY,
 				fixture.questionAdmissionPolicy,
-				portfolioEconomics.purchaseFeeBps,
-				portfolioEconomics.annualFeeBps,
-				portfolioEconomics.minimumPurchaseFeeAttoEth,
-				portfolioEconomics.minimumCommitmentAttoEth,
-				portfolioEconomics.minimumOutcomeRate,
-				portfolioEconomics.rewardVestingSeconds,
+				securityPoolEconomics.purchaseFeeBps,
+				securityPoolEconomics.annualFeeBps,
+				securityPoolEconomics.minimumPurchaseFeeAttoEth,
+				securityPoolEconomics.minimumCommitmentAttoEth,
+				securityPoolEconomics.minimumOutcomeRate,
+				securityPoolEconomics.rewardVestingSeconds,
 			])
-			return await fixture.owner().simulateContract({ ...factory(), functionName: 'deployPortfolio', args: [`0x${portfolioArtifact.evm.bytecode.object}`, configuration] })
+			return await fixture.owner().simulateContract({ ...factory(), functionName: 'deploySecurityPool', args: [`0x${securityPoolArtifact.evm.bytecode.object}`, configuration] })
 		}
 		for (const securityMultiplierBps of [0n, 10_000n, 10_001n, 10_002n, 10_499n]) await expect(simulateOrigin({ securityMultiplierBps })).rejects.toThrow('Multiplier must be at least 10500 BPS')
 		await expect(simulateOrigin({ universeId: 999999n })).rejects.toThrow('Universe REP token missing')
 		await expect(simulateOrigin({ priorityFee: 0n })).rejects.toThrow('Initial priority fee zero')
 
 		for (const securityMultiplierBps of [10_500n, 15_000n]) {
-			const created = await fixture.deployPortfolio(undefined, undefined, { securityMultiplierBps })
+			const created = await fixture.deploySecurityPool(undefined, undefined, { securityMultiplierBps })
 			await fixture.register(fixture.base.questionId, created)
-			const native = await fixture.owner().readContract({ ...portfolio(created), functionName: 'getPool', args: [fixture.base.questionId, fixture.base.genesisUniverse] })
+			const native = await fixture.owner().readContract({ ...securityPool(created), functionName: 'getPool', args: [fixture.base.questionId, fixture.base.genesisUniverse] })
 			expect(await fixture.owner().readContract({ abi: poolArtifact.abi, address: native, functionName: 'statoblastSecurityMultiplierBps' })).toBe(securityMultiplierBps)
 		}
 	})
 
-	test('independent portfolios cannot share collateral or overwrite the canonical token namespace', async () => {
+	test('independent security pools cannot share collateral or overwrite the canonical token namespace', async () => {
 		const owner = fixture.owner()
 		await fixture.prepare()
 		await fixture.mint(3n * unit)
-		const second = await fixture.deployPortfolio()
+		const second = await fixture.deploySecurityPool()
 		await fixture.register(fixture.base.questionId, second)
 		await fixture.deposit(2_000n * unit, owner, second)
 		await fixture.refreshPrice(fixture.base.questionId, unit, second)
 		await fixture.authorize(100n * unit, owner, second)
 		await fixture.mint(7n * unit, fixture.base.questionId, { namespace: second })
-		const secondPool = await owner.readContract({ ...portfolio(second), functionName: 'getPool', args: [fixture.base.questionId, fixture.base.genesisUniverse] })
+		const secondPool = await owner.readContract({ ...securityPool(second), functionName: 'getPool', args: [fixture.base.questionId, fixture.base.genesisUniverse] })
 		const origins = []
 		const tokens = []
 		for (const [namespace, native, cash] of [
-			[fixture.portfolio, pool(), 3n * unit],
+			[fixture.securityPool, pool(), 3n * unit],
 			[second, secondPool, 7n * unit],
 		] as const) {
 			const origin = await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [native] })
@@ -115,7 +115,7 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 			origins.push(origin)
 			tokens.push(token)
 			expect(await owner.readContract({ ...factory(), functionName: 'getQuestionLedger', args: [origin, fixture.base.genesisUniverse] })).toBe(native)
-			expect(await owner.readContract({ ...factory(), functionName: 'getSecurityPoolPortfolio', args: [native] })).toBe(namespace)
+			expect(await owner.readContract({ ...factory(), functionName: 'securityPoolOf', args: [native] })).toBe(namespace)
 			expect(await owner.readContract({ abi: poolArtifact.abi, address: native, functionName: 'settlementCollateralAttoEth' })).toBe(cash)
 			expect(await owner.readContract({ abi: shareArtifact.abi, address: token, functionName: 'canonicalQuestionLedgerByUniverse', args: [fixture.base.genesisUniverse] })).toBe(native)
 			await expect(owner.writeContract({ abi: shareArtifact.abi, address: token, functionName: 'authorize', args: [native === pool() ? secondPool : pool()] })).rejects.toThrow('ShareToken caller is not authorized')
@@ -127,19 +127,19 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 		expect(await owner.readContract({ ...factory(), functionName: 'questionLedgerDeploymentCount' })).toBe(count)
 	})
 
-	test('sibling branches and a new descendant portfolio retain separate canonical ledgers', async () => {
+	test('sibling branches and a new descendant security pool retain separate canonical ledgers', async () => {
 		const owner = fixture.owner()
 		const question = { ...fixture.base.questionData, title: 'Namespace fork', endTime: (await fixture.base.mockWindow.getTime()) + DAY }
 		await createQuestion(owner, question, fixture.base.outcomes)
 		await fixture.base.mockWindow.setTime(question.endTime + 1n)
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(owner, fixture.base.genesisUniverse, getQuestionId(question, fixture.base.outcomes))
-		await expect(fixture.deployPortfolio()).rejects.toThrow('Origin universe forked')
+		await expect(fixture.deploySecurityPool()).rejects.toThrow('Origin universe forked')
 		const yes = await activate(1)
 		const no = await activate(2)
-		const independent = await fixture.deployPortfolio(undefined, portfolioEconomics, { universeId: yes.child })
+		const independent = await fixture.deploySecurityPool(undefined, securityPoolEconomics, { universeId: yes.child })
 		await fixture.register(fixture.base.questionId, independent)
-		const independentPool = await owner.readContract({ ...portfolio(independent), functionName: 'getPool', args: [fixture.base.questionId, yes.child] })
+		const independentPool = await owner.readContract({ ...securityPool(independent), functionName: 'getPool', args: [fixture.base.questionId, yes.child] })
 		const inheritedOrigin = await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [pool()] })
 		const inheritedToken = fixture.poolFor(fixture.base.questionId).shareToken
 		for (const { child, childPool } of [yes, no]) {
@@ -172,12 +172,12 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 			await fixture.base.mockWindow.setTime(forkTime + 70n * DAY)
 		}
 		const priorityFee = 20n * 10n ** 9n
-		const independent = await fixture.deployPortfolio(undefined, undefined, { universeId: universe, reportPriorityFeeAttoEthPerGas: priorityFee })
+		const independent = await fixture.deploySecurityPool(undefined, undefined, { universeId: universe, reportPriorityFeeAttoEthPerGas: priorityFee })
 		await fixture.register(fixture.base.questionId, independent)
-		const native = await owner.readContract({ ...portfolio(independent), functionName: 'getPool', args: [fixture.base.questionId, universe] })
-		const expectedOrigin = await owner.readContract({ ...factory(), functionName: 'getPortfolioOriginId', args: [independent, universe, fixture.base.questionId, fixture.base.statoblastSecurityMultiplierBps, priorityFee] })
+		const native = await owner.readContract({ ...securityPool(independent), functionName: 'getPool', args: [fixture.base.questionId, universe] })
+		const expectedOrigin = await owner.readContract({ ...factory(), functionName: 'getQuestionOriginId', args: [independent, universe, fixture.base.questionId, fixture.base.statoblastSecurityMultiplierBps, priorityFee] })
 		expect(await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [native] })).toBe(expectedOrigin)
-		expect(await owner.readContract({ ...portfolio(independent), functionName: 'initialReportPriorityFeeAttoEthPerGas' })).toBe(priorityFee)
+		expect(await owner.readContract({ ...securityPool(independent), functionName: 'initialReportPriorityFeeAttoEthPerGas' })).toBe(priorityFee)
 		const token = await owner.readContract({ abi: poolArtifact.abi, address: native, functionName: 'shareToken' })
 		expect(await owner.readContract({ abi: shareArtifact.abi, address: token, functionName: 'canonicalQuestionLedgerByUniverse', args: [universe] })).toBe(native)
 	})
@@ -239,12 +239,12 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 		}
 		const { child, childPool } = await activate(1)
 		const childGame = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
-		const reporters = await owner.readContract({ ...portfolio(), functionName: 'reporterLedger', args: [child] })
+		const reporters = await owner.readContract({ ...securityPool(), functionName: 'reporterLedger', args: [child] })
 		const escrow = () => owner.readContract({ abi: reporterArtifact.abi, address: reporters, functionName: 'balanceOfGame', args: [childGame] })
 		const originalEscrow = await escrow()
 		const end = await owner.readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'getEscalationGameEndDate' })
 		await fixture.base.mockWindow.setTime(end + 1n)
-		const capital = await owner.readContract({ ...portfolio(), functionName: 'capitalLedger', args: [child] })
+		const capital = await owner.readContract({ ...securityPool(), functionName: 'capitalLedger', args: [child] })
 		const balances = new Map<Address, bigint>()
 		for (const sender of [owner, other]) balances.set(sender.account.address, await getERC20Balance(owner, getRepTokenAddress(child), sender.account.address))
 		const nodes = await Promise.all([1n, 2n].map(id => owner.readContract({ abi: gameArtifact.abi, address: source, functionName: 'nodes', args: [id] })))

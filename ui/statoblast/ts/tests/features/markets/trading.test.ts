@@ -796,7 +796,7 @@ const linearFeeMintCheckpoint = {
 	linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
 }
 
-test('portfolio-native mint previews use the linear funded fee stream', () => {
+test('security-pool-native mint previews use the linear funded fee stream', () => {
 	expect(estimateMintCheckpoint(linearFeeMintCheckpoint)).toEqual({ estimatedRetentionFeeAttoEth: 45n, settlementCollateralAfterFeesAttoEth: 255n })
 })
 

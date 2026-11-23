@@ -6,10 +6,10 @@ import { decodeItemsPage, decodeValue, isAccountTransaction, isAddressIdentity, 
 import { mergeUniqueRecords } from './canonical-pagination.ts'
 import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
 import { refreshPresentation } from './refresh-presentation.ts'
-import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioItemKey, portfolioPage } from './portfolio-helpers.ts'
+import { SECURITY_POOL_KIND_LABELS, securityPoolItems, securityPoolItemKey, securityPoolPage } from './security-pool-helpers.ts'
 
 interface AddressProfileRouteDeps {
-	renderAddressProfile: (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options?: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' | undefined }) => void
+	renderAddressProfile: (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options?: { live?: boolean; securityPoolFocusKind?: 'forks' | 'lp' | 'reports' | undefined }) => void
 	lookup: {
 		(selector: '#address-back'): HTMLAnchorElement
 		(selector: string): HTMLElement
@@ -37,31 +37,31 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 	let currentAddressProfile: RichListRecord | undefined
 	let renderedProfileKey: string | undefined
 	let renderedProfileSignature: string | undefined
-	let currentAddressPortfolioDepths: { readonly chainId: string; readonly address: string; readonly forks: number; readonly lp: number; readonly reports: number } | undefined
+	let currentAddressSecurityPoolDepths: { readonly chainId: string; readonly address: string; readonly forks: number; readonly lp: number; readonly reports: number } | undefined
 	const decodeOperationsResponse = decodeOperationsResponseValue
-	const loadAddressPortfolioSnapshot = async (address: string, targets: Readonly<Record<'forks' | 'lp' | 'reports', number>>): Promise<OperationsResponse> => {
+	const loadAddressSecurityPoolSnapshot = async (address: string, targets: Readonly<Record<'forks' | 'lp' | 'reports', number>>): Promise<OperationsResponse> => {
 		const initialQuery = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
-		const first = decodeOperationsResponse(await api(`/api/v1/state/address-portfolio?${initialQuery.toString()}`))
+		const first = decodeOperationsResponse(await api(`/api/v1/state/address-security-pool?${initialQuery.toString()}`))
 		const snapshotIdentity = `${first.chainId}:${String(first.asOf['blockNumber'] ?? '')}:${String(first.asOf['blockHash'] ?? '')}`
 		const collections = {
-			forks: portfolioItems(first.data, 'forks'),
-			lp: portfolioItems(first.data, 'lp'),
-			reports: portfolioItems(first.data, 'reports'),
+			forks: securityPoolItems(first.data, 'forks'),
+			lp: securityPoolItems(first.data, 'lp'),
+			reports: securityPoolItems(first.data, 'reports'),
 		}
 		const pages = {
-			forks: portfolioPage(first.data, 'forks'),
-			lp: portfolioPage(first.data, 'lp'),
-			reports: portfolioPage(first.data, 'reports'),
+			forks: securityPoolPage(first.data, 'forks'),
+			lp: securityPoolPage(first.data, 'lp'),
+			reports: securityPoolPage(first.data, 'reports'),
 		}
 		for (const kind of ['lp', 'forks', 'reports'] as const) {
 			while (collections[kind].length < targets[kind] && pages[kind]['hasMore'] === true && typeof pages[kind]['nextCursor'] === 'string') {
 				const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
-				query.set(PORTFOLIO_KIND_LABELS[kind].cursorParameter, pages[kind]['nextCursor'])
-				const response = decodeOperationsResponse(await api(`/api/v1/state/address-portfolio?${query.toString()}`))
+				query.set(SECURITY_POOL_KIND_LABELS[kind].cursorParameter, pages[kind]['nextCursor'])
+				const response = decodeOperationsResponse(await api(`/api/v1/state/address-security-pool?${query.toString()}`))
 				const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
-				if (responseIdentity !== snapshotIdentity) throw new Error('Portfolio history changed while older evidence was loading; retry from the latest available block')
-				collections[kind] = mergeUniqueRecords(collections[kind], portfolioItems(response.data, kind), item => portfolioItemKey(kind, item))
-				pages[kind] = portfolioPage(response.data, kind)
+				if (responseIdentity !== snapshotIdentity) throw new Error('Security pool history changed while older evidence was loading; retry from the latest available block')
+				collections[kind] = mergeUniqueRecords(collections[kind], securityPoolItems(response.data, kind), item => securityPoolItemKey(kind, item))
+				pages[kind] = securityPoolPage(response.data, kind)
 			}
 		}
 		return {
@@ -71,12 +71,12 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 				lp_positions: collections.lp,
 				fork_participation: collections.forks,
 				report_participation: collections.reports,
-				portfolioPagination: pages,
+				securityPoolPagination: pages,
 			},
 		}
 	}
 
-	const performLoadAddressProfile = async ({ live = false, contextVersion, portfolioTarget }: LoadOptions = {}): Promise<boolean> => {
+	const performLoadAddressProfile = async ({ live = false, contextVersion, securityPoolTarget }: LoadOptions = {}): Promise<boolean> => {
 		if (contextVersion !== deps.getViewContextVersion()) return false
 		const canonicalGeneration = canonicalState.dataGeneration
 		const requestVersion = ++version
@@ -104,23 +104,23 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 		if (presentation.loadingState) content.querySelector<HTMLElement>('.address-refresh-error')?.remove()
 		if (!hadProfile) content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
 		try {
-			const retainedPortfolioDepths = currentAddressPortfolioDepths?.chainId === requiredChainId() && currentAddressPortfolioDepths.address === address ? currentAddressPortfolioDepths : { chainId: requiredChainId(), address, forks: 0, lp: 0, reports: 0 }
-			const portfolioTargets = {
-				forks: portfolioTarget?.kind === 'forks' ? portfolioTarget.count : retainedPortfolioDepths.forks,
-				lp: portfolioTarget?.kind === 'lp' ? portfolioTarget.count : retainedPortfolioDepths.lp,
-				reports: portfolioTarget?.kind === 'reports' ? portfolioTarget.count : retainedPortfolioDepths.reports,
+			const retainedSecurityPoolDepths = currentAddressSecurityPoolDepths?.chainId === requiredChainId() && currentAddressSecurityPoolDepths.address === address ? currentAddressSecurityPoolDepths : { chainId: requiredChainId(), address, forks: 0, lp: 0, reports: 0 }
+			const securityPoolTargets = {
+				forks: securityPoolTarget?.kind === 'forks' ? securityPoolTarget.count : retainedSecurityPoolDepths.forks,
+				lp: securityPoolTarget?.kind === 'lp' ? securityPoolTarget.count : retainedSecurityPoolDepths.lp,
+				reports: securityPoolTarget?.kind === 'reports' ? securityPoolTarget.count : retainedSecurityPoolDepths.reports,
 			}
-			const [portfolio, identity, transactions, interactions] = await Promise.all([
-				loadAddressPortfolioSnapshot(address, portfolioTargets),
+			const [securityPool, identity, transactions, interactions] = await Promise.all([
+				loadAddressSecurityPoolSnapshot(address, securityPoolTargets),
 				api(`/api/v1/address-identity?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}`).then(value => decodeValue(value, isAddressIdentity, 'Address identity')),
 				api(`/api/v1/address-transactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`).then(value => decodeItemsPage(value, isAccountTransaction, 'Address transactions')),
 				api(`/api/v1/address-interactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`).then(value => decodeItemsPage(value, isAccountTransaction, 'Address interactions')),
 			])
 			if (!isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, version) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) return false
 			const network = deps.getNetworks().find(candidate => String(candidate.chain_id) === selectedChainId())
-			const profileItem = isRichListRecord(portfolio.data) ? portfolio.data : undefined
+			const profileItem = isRichListRecord(securityPool.data) ? securityPool.data : undefined
 			const item = profileItem
-				? { ...profileItem, ...portfolio.data, label: profileItem.label ?? identity.label, kind: profileItem.kind ?? identity.kind }
+				? { ...profileItem, ...securityPool.data, label: profileItem.label ?? identity.label, kind: profileItem.kind ?? identity.kind }
 				: {
 						chain_id: selectedChainId(),
 						address,
@@ -138,23 +138,23 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 						weth_balances: [],
 						native_balance_detail: null,
 						pool_associations: [],
-						...portfolio.data,
+						...securityPool.data,
 					}
 			const signature = JSON.stringify([item, transactions.items, interactions.items])
-			if (live && hadProfile && portfolioTarget === undefined && signature === renderedProfileSignature) {
+			if (live && hadProfile && securityPoolTarget === undefined && signature === renderedProfileSignature) {
 				// An unchanged profile keeps its nodes so focus and open disclosures survive the refresh.
 				content.querySelector<HTMLElement>('.address-refresh-error')?.remove()
 				content.setAttribute('aria-busy', 'false')
-			} else renderAddressProfile(item, transactions.items, interactions.items, { live: live && hadProfile, portfolioFocusKind: portfolioTarget?.kind })
+			} else renderAddressProfile(item, transactions.items, interactions.items, { live: live && hadProfile, securityPoolFocusKind: securityPoolTarget?.kind })
 			renderedProfileKey = profileKey
 			renderedProfileSignature = signature
 			currentAddressProfile = item
-			currentAddressPortfolioDepths = {
+			currentAddressSecurityPoolDepths = {
 				chainId: requiredChainId(),
 				address,
-				forks: operationRecords(portfolio.data['fork_participation']).length,
-				lp: operationRecords(portfolio.data['lp_positions']).length,
-				reports: operationRecords(portfolio.data['report_participation']).length,
+				forks: operationRecords(securityPool.data['fork_participation']).length,
+				lp: operationRecords(securityPool.data['lp_positions']).length,
+				reports: operationRecords(securityPool.data['report_participation']).length,
 			}
 			return true
 		} catch (error) {
@@ -196,7 +196,7 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 		},
 		clear() {
 			currentAddressProfile = undefined
-			currentAddressPortfolioDepths = undefined
+			currentAddressSecurityPoolDepths = undefined
 			renderedProfileKey = undefined
 			renderedProfileSignature = undefined
 		},

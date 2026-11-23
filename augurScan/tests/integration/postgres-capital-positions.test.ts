@@ -8,7 +8,7 @@ import { ScannerDatabase } from '../../src/database.ts'
 import { getAddress, type Hex } from '../../src/ethereum.ts'
 import { auctionCollateral } from '../../src/repositories/auction-collateral.ts'
 import { capitalLedgerRows, capitalOwnerEventRows, capitalPositionHistoryRows, capitalPositionRows, liquidationRows } from '../../src/repositories/capital.ts'
-import { richListRows } from '../../src/repositories/portfolio.ts'
+import { richListRows } from '../../src/repositories/security-pool.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import type { StoredLog } from '../../src/types.ts'
 
@@ -20,7 +20,7 @@ const address = (digit: string) => getAddress(`0x${digit.repeat(40)}`)
 const ledger = address('1')
 const otherLedger = address('2')
 const feed = address('3')
-const portfolio = address('4')
+const securityPool = address('4')
 const alice = address('a')
 const bob = address('b')
 const carol = address('c')
@@ -42,7 +42,7 @@ const event = (blockNumber: number, logIndex: number, emitter: StoredLog['addres
 const ownerState = (owner: string, fields: Record<string, unknown>) => ({
 	ledger: lower(ledger),
 	owner: lower(owner),
-	portfolio: lower(portfolio),
+	securityPool: lower(securityPool),
 	universeId: '0',
 	priceValid: true,
 	frozen: false,
@@ -121,14 +121,14 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp, source_method, read_status, read_result, read_failure_reason, canonical)
 				VALUES (${chainId}, ${entityType}, ${identity}, ${blockNumber}, ${blockHash(blockNumber)}, ${new Date(Date.UTC(2026, 0, blockNumber))}, ${`augurscan.${entityType}-state.v1`}, ${status}, ${readResult === null ? null : JSON.stringify(readResult)}::text::jsonb, ${readResult === null ? 'execution reverted' : null}, true)`
 		const identity = (owner: string) => `${lower(ledger)}:${lower(owner)}`
-		await snapshot('capital-ledger', lower(ledger), 2, { portfolio: lower(portfolio), universeId: '0', priceFeed: lower(feed), lastPositionId: '3', commitmentAttoEth: '150', pledgedAttoRep: '1470', collateral: { address: lower(address('9')), symbol: 'USDC', decimals: 6 } })
+		await snapshot('capital-ledger', lower(ledger), 2, { securityPool: lower(securityPool), universeId: '0', priceFeed: lower(feed), lastPositionId: '3', commitmentAttoEth: '150', pledgedAttoRep: '1470', collateral: { address: lower(address('9')), symbol: 'USDC', decimals: 6 } })
 		await snapshot('capital-owner', identity(alice), 1, ownerState(alice, { positionId: '1', principalAttoRep: '500', commitmentAttoEth: '100', pledgedAttoRep: '500', healthFactorBps: '20000', belowLiquidationPrice: false, takeoverPreconditionsMet: false }))
 		await snapshot('capital-owner', identity(alice), 3, ownerState(alice, { positionId: '1', principalAttoRep: '475', commitmentAttoEth: '50', pledgedAttoRep: '475', healthFactorBps: '9500', belowLiquidationPrice: true, takeoverPreconditionsMet: true }))
 		await snapshot('capital-owner', identity(bob), 3, ownerState(bob, { positionId: '2', principalAttoRep: '925', commitmentAttoEth: '40', pledgedAttoRep: '925', healthFactorBps: '11000', belowLiquidationPrice: false, takeoverPreconditionsMet: false }))
 		await snapshot('capital-owner', identity(carol), 2, ownerState(carol, { positionId: '0', principalAttoRep: '70', commitmentAttoEth: '0', pledgedAttoRep: '0' }))
 		await snapshot('capital-owner', identity(dave), 3, null, 'failed')
 		// A fork imported two positions into the other ledger without any event; its read reports the last id.
-		await snapshot('capital-ledger', lower(otherLedger), 3, { portfolio: lower(portfolio), universeId: '9', lastPositionId: '2' })
+		await snapshot('capital-ledger', lower(otherLedger), 3, { securityPool: lower(securityPool), universeId: '9', lastPositionId: '2' })
 		const positionRead = async (ledgerAddress: string, id: string, owner: string) => await snapshot('capital-position', `${lower(ledgerAddress)}:${id}`, 3, { ledger: lower(ledgerAddress), positionId: id, owner: lower(owner) })
 		// The take-over's source and the receiver that the split created, and the first imported position.
 		await positionRead(ledger, '1', alice)
@@ -182,7 +182,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			['CommitmentCured', lower(ledger), '0', lower(alice), null],
 			['CommitmentTakenOver', lower(ledger), '0', lower(alice), lower(bob)],
 		])
-		expect(feedRows[3]).toMatchObject({ portfolio: lower(portfolio), collateral: { symbol: 'USDC', decimals: 6 }, event_data: { commitment: '40', awardAttoRep: '25' } })
+		expect(feedRows[3]).toMatchObject({ securityPool: lower(securityPool), collateral: { symbol: 'USDC', decimals: 6 }, event_data: { commitment: '40', awardAttoRep: '25' } })
 		// Bob received the take-over and sponsored the report operation; the cure of Alice's position is not his.
 		expect((await liquidationRows(connection, { chainId, snapshotBlock: '3', owner: lower(bob), page })).map((row: Record<string, unknown>) => row['event_name'])).toEqual(['ReportOperationAttempted', 'CommitmentTakenOver'])
 		expect((await liquidationRows(connection, { chainId, snapshotBlock: '3', ledger: lower(otherLedger), page })).map((row: Record<string, unknown>) => row['event_name'])).toEqual(['CommitmentCured'])
@@ -204,7 +204,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 		const overview = await capitalRiskOverview(connection, chainId, '3')
 		expect(overview.capitalPositionTotal).toBe(4)
 		expect(overview.capitalPositions[0]).toMatchObject({ owner_address: lower(alice), protocol_state: 'takeover-preconditions-met' })
-		expect(overview.capitalLedgers[0]).toMatchObject({ ledger_address: lower(ledger), portfolio: lower(portfolio), universe_id: '0' })
+		expect(overview.capitalLedgers[0]).toMatchObject({ ledger_address: lower(ledger), securityPool: lower(securityPool), universe_id: '0' })
 		expect(overview.recentLiquidations).toHaveLength(4)
 
 		// The rich list and the address profile read the same latest position per ledger.
@@ -241,7 +241,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 		expect(rich[0]?.['capital_positions']).toEqual([
 			{
 				ledgerAddress: lower(ledger),
-				portfolio: lower(portfolio),
+				securityPool: lower(securityPool),
 				universeId: '0',
 				readStatus: 'success',
 				principalAttoRep: '475',

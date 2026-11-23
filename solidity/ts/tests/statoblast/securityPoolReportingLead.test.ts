@@ -4,10 +4,10 @@ import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_Es
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('Statoblast: reporting lead bounds', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	test('#1328 an intervening leader top-up cannot turn a protected reply into trailing stake', async () => {
 		const owner = fixture.owner()
 		const pool = fixture.poolFor(fixture.base.questionId).questionLedger

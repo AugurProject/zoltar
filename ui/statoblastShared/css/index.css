@@ -4149,7 +4149,7 @@ span.rep-price-status.stale,
 	margin-top: var(--space-2);
 }
 
-.portfolio-flow {
+.security-pool-flow {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-5);
@@ -4160,44 +4160,44 @@ span.rep-price-status.stale,
 	margin-top: var(--space-2);
 }
 
-.portfolio-flow .field {
+.security-pool-flow .field {
 	align-content: start;
 	width: 100%;
 	max-width: var(--form-max);
 	min-width: 0;
 }
 
-.portfolio-creation-form {
+.security-pool-creation-form {
 	grid-template-columns: minmax(0, 1fr);
 }
 
-.portfolio-creation-form .field-row {
+.security-pool-creation-form .field-row {
 	align-items: start;
 }
 
-.portfolio-transaction-export {
+.security-pool-transaction-export {
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 	font-family: var(--font-family-mono);
 	font-size: var(--font-caption);
 }
 
-.portfolio-flow code {
+.security-pool-flow code {
 	white-space: normal;
 	overflow-wrap: anywhere;
 }
 
-.portfolio-questions-table {
+.security-pool-questions-table {
 	min-width: 0;
 	max-width: 100%;
 	overflow-x: auto;
 }
 
-.portfolio-questions-table table {
+.security-pool-questions-table table {
 	width: 100%;
 }
 
-.registered-portfolio-row {
+.registered-security-pool-row {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -4205,35 +4205,35 @@ span.rep-price-status.stale,
 	min-width: 0;
 }
 
-.registered-portfolio-action {
+.registered-security-pool-action {
 	margin-inline-start: auto;
 }
 
-.registered-portfolio-action-labels {
+.registered-security-pool-action-labels {
 	display: inline-grid;
 }
 
-.registered-portfolio-action-labels > span {
+.registered-security-pool-action-labels > span {
 	grid-area: 1 / 1;
 }
 
-.registered-portfolio-action-labels > [aria-hidden="true"] {
+.registered-security-pool-action-labels > [aria-hidden="true"] {
 	visibility: hidden;
 }
 
-.portfolio-questions-table td,
-.portfolio-questions-table td button,
-.portfolio-questions-table td a {
+.security-pool-questions-table td,
+.security-pool-questions-table td button,
+.security-pool-questions-table td a {
 	white-space: normal;
 	overflow-wrap: anywhere;
 }
 
 /* Question titles wrap between words, breaking a single overlong token only when it would overflow. */
-.portfolio-questions-table td:first-child button {
+.security-pool-questions-table td:first-child button {
 	overflow-wrap: break-word;
 }
 
-.portfolio-questions-table .portfolio-questions-address {
+.security-pool-questions-table .security-pool-questions-address {
 	font-family: var(--font-family-mono);
 	white-space: nowrap;
 }
@@ -4241,22 +4241,22 @@ span.rep-price-status.stale,
 /* The address measures the room it has (AddressText) and shows the longest form that fits. Desktop width reserves the
  * full address (42 monospace characters), so a long question title wraps instead of shortening it. Below that the
  * address is capped at its standard short form, so it does not take column width from the title. */
-.portfolio-questions-table .portfolio-questions-address {
+.security-pool-questions-table .security-pool-questions-address {
 	display: inline-block;
 	min-width: 42ch;
 }
 
 @media (max-width: 64rem) {
-	.portfolio-questions-table .portfolio-questions-address {
+	.security-pool-questions-table .security-pool-questions-address {
 		min-width: 0;
 		max-width: 16ch;
 	}
 }
 
-/* Phones stack each question: the title takes the full width and the portfolio and outcome follow as labelled lines,
+/* Phones stack each question: the title takes the full width and the security pool and outcome follow as labelled lines,
  * instead of three columns squeezing the title to a word per line. */
 @media (max-width: 40rem) {
-	.portfolio-questions-table thead {
+	.security-pool-questions-table thead {
 		position: absolute;
 		width: 1px;
 		height: 1px;
@@ -4265,38 +4265,38 @@ span.rep-price-status.stale,
 		white-space: nowrap;
 	}
 
-	.portfolio-questions-table table,
-	.portfolio-questions-table tbody,
-	.portfolio-questions-table tr,
-	.portfolio-questions-table td {
+	.security-pool-questions-table table,
+	.security-pool-questions-table tbody,
+	.security-pool-questions-table tr,
+	.security-pool-questions-table td {
 		display: block;
 	}
 
-	.portfolio-questions-table tr {
+	.security-pool-questions-table tr {
 		display: grid;
 		gap: var(--space-2);
 		padding-block: var(--space-3);
 		border-top: 1px solid var(--divider-subtle);
 	}
 
-	.portfolio-questions-table td[data-label] {
+	.security-pool-questions-table td[data-label] {
 		display: flex;
 		justify-content: space-between;
 		gap: var(--space-3);
 	}
 
 	/* The address takes the space left beside its label and sits at the row's end, like the outcome below it. */
-	.portfolio-questions-table td[data-label] > .portfolio-questions-address {
+	.security-pool-questions-table td[data-label] > .security-pool-questions-address {
 		min-width: 0;
 	}
 
-	.portfolio-questions-table .portfolio-questions-address .address-value-text {
+	.security-pool-questions-table .security-pool-questions-address .address-value-text {
 		justify-items: end;
 	}
 
 	/* The label is visual only: the cell's column header already names it for assistive technology, so the
 	 * generated text carries empty alternative text where the browser supports it. */
-	.portfolio-questions-table td[data-label]::before {
+	.security-pool-questions-table td[data-label]::before {
 		content: attr(data-label);
 		content: attr(data-label) / "";
 		flex-shrink: 0;

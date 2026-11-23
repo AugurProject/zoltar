@@ -98,7 +98,7 @@ export const auctionDetailData = async (sql: SQL, chainId: number, address: stri
 	return { bids, lotAttoEth: typeof lotAttoEth === 'string' && /^\d+$/.test(lotAttoEth) ? lotAttoEth : undefined, finalization: finalizations[0] }
 }
 
-// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered, ReporterForkFrozen,
+// Security pool fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered, ReporterForkFrozen,
 // and ReporterChildCreated as sourceUniverseId) or one of its child universes (BranchStarted, BranchActivated). The event list shows every event naming the universe; the
 // summary counts a child's start and activation only for its parent's fork, through the child's universe record.
 export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: string; readonly chainId: number; readonly identity: string; readonly page: PageBoundary }) => {

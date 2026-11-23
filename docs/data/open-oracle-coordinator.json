@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 5,
-	"scope": "shared-portfolio-price-adapter-public-ABI-and-event-index",
+	"scope": "shared-securityPool-price-adapter-public-ABI-and-event-index",
 	"source": "solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol",
 	"observablePredicates": {
 		"cache": ["fresh-price", "stale-price"],
@@ -10,7 +10,7 @@
 	"outcomes": [
 		{
 			"trigger": "requestPrice",
-			"preconditions": ["sponsor funding and allowance cover the exact reviewed budget", "portfolio reporting window open"],
+			"preconditions": ["sponsor funding and allowance cover the exact reviewed budget", "security pool reporting window open"],
 			"outcomes": ["isolated candidate escrow", "exact public bounty forwarded", "excess ETH refunded"]
 		},
 		{

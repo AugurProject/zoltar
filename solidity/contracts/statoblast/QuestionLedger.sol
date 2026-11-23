@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPoolPortfolioNative } from './interfaces/ISecurityPoolPortfolioNative.sol';
+import { ISecurityPoolNative } from './interfaces/ISecurityPoolNative.sol';
 import { IERC20 } from '../IERC20.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
@@ -31,12 +31,12 @@ import { DelegateCallForwarder } from './DelegateCallForwarder.sol';
 import { IQuestionLedgerDeploymentWorkerConfiguration } from './interfaces/IQuestionLedgerDeploymentWorkerConfiguration.sol';
 import { QuestionLedgerLinearFees } from './QuestionLedgerLinearFees.sol';
 import { QuestionLedgerAccountingDelegate } from './QuestionLedgerAccountingDelegate.sol';
-import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
+import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
 
 // Question ledger for one question and one universe, settled in its configured collateral token.
 contract QuestionLedger is QuestionLedgerStorage {
 	using SafeERC20Ops for IERC20;
-	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime);
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementSecurityPoolTime);
 
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;
@@ -100,9 +100,9 @@ contract QuestionLedger is QuestionLedgerStorage {
 			systemState = SystemState.Operational;
 		} else {
 			systemState = SystemState.ForkMigration;
-			address portfolio = securityPoolFactory.getSecurityPoolPortfolio(parent);
-			require(portfolio != address(0), 'Portfolio missing');
-			(hasInheritedForkOutcome, ) = ISecurityPoolPortfolioNative(portfolio).inheritedFixedOutcome(_universeId, _questionId);
+			address securityPool = securityPoolFactory.securityPoolOf(parent);
+			require(securityPool != address(0), 'Security pool missing');
+			(hasInheritedForkOutcome, ) = ISecurityPoolNative(securityPool).inheritedFixedOutcome(_universeId, _questionId);
 		}
 		shareToken = _shareToken;
 	}
@@ -122,16 +122,16 @@ contract QuestionLedger is QuestionLedgerStorage {
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
 		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.burnEscalationWinnerHaircut, (amountAttoRep)));
 	}
-	/// @notice Binds the canonical portfolio's central capital ledger once.
-	function setPortfolioCustody(address custody) external {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.setPortfolioCustody, (custody)));
+	/// @notice Binds the canonical security pool's central capital ledger once.
+	function setSecurityPoolCustody(address custody) external {
+		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.setSecurityPoolCustody, (custody)));
 	}
 	/// @notice Credit irrevocable REP surplus already transferred by the active game.
 	function creditEscalationSurplus(uint256 amountAttoRep) external {
 		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.creditEscalationSurplus, (amountAttoRep)));
 	}
 
-	/// @dev The fixed eventEmitter target also owns portfolio accounting and fee mutations.
+	/// @dev The fixed eventEmitter target also owns security pool accounting and fee mutations.
 	/// Delegatecall preserves the original caller; authorization lives in each named target method.
 	function _delegateAccounting(bytes memory callData) private {
 		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), callData);
@@ -142,12 +142,12 @@ contract QuestionLedger is QuestionLedgerStorage {
 		_delegateAccounting(abi.encodeCall(QuestionLedgerEventEmitter.setStartingParams, ()));
 	}
 
-	/// @notice Checkpoints the portfolio settlement book; callable by anyone.
+	/// @notice Checkpoints the security pool settlement book; callable by anyone.
 	function updateSettlementCollateral() public {
 		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.accrueSettlementCollateral, ()));
 	}
 
-	/// @notice Returns the native fee-epoch cutoff; bound portfolio fee accrual follows the central stream.
+	/// @notice Returns the native fee-epoch cutoff; bound security pool fee accrual follows the central stream.
 	function getFeeEpochEndTime() public view returns (uint256) {
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		uint256 end = feeEpochEndTime;
@@ -156,8 +156,8 @@ contract QuestionLedger is QuestionLedgerStorage {
 		return forkTime != 0 && forkTime < end ? forkTime : end;
 	}
 
-	/// @notice Refreshes the portfolio's linear fee stream.
-	function refreshPortfolioFees() public {
+	/// @notice Refreshes the security pool's linear fee stream.
+	function refreshSecurityPoolFees() public {
 		_delegateAccounting(abi.encodeCall(QuestionLedgerLinearFees.refreshLinearFeeStream, ()));
 	}
 
@@ -169,50 +169,50 @@ contract QuestionLedger is QuestionLedgerStorage {
 		_delegateAccounting(eventCall);
 	}
 
-	/// @notice Native question ledgers hold no underwriting REP; the portfolio owns its shared capital.
+	/// @notice Native question ledgers hold no underwriting REP; the security pool owns its shared capital.
 	function getTotalPoolHeldAttoRep() public pure returns (uint256) {
 		return 0;
 	}
 
-	/// @notice Returns zero once the question ends or a game exists; otherwise question cash plus available shared portfolio capacity.
+	/// @notice Returns zero once the question ends or a game exists; otherwise question cash plus available shared security pool capacity.
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
 		if (address(escalationGame) != address(0) || block.timestamp >= questionData.getQuestionEndDate(questionId))
 			return 0;
-		if (portfolioCustody != address(0)) {
+		if (securityPoolCustody != address(0)) {
 			// Existing consumers subtract this question's cash from the reported
 			// ceiling. Shared capacity excludes pending retirement commitments.
 			return
 				settlementCollateralAttoEth +
-				IPortfolioSettlement(address(portfolioAccounting)).availableMintCapacity(universeId);
+				ISecurityPoolSettlement(address(securityPoolAccounting)).availableMintCapacity(universeId);
 		}
-		revert('Portfolio settlement missing');
+		revert('Security pool settlement missing');
 	}
 
 	/// @notice Converts shares to settlement collateral at the current rate, rounding down.
 	function attoSharesToAttoEth(uint256 amountAttoShares) public view returns (uint256) {
 		return
-			IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionSettlement(address(this), amountAttoShares);
+			ISecurityPoolSettlement(address(securityPoolAccounting)).quoteQuestionSettlement(address(this), amountAttoShares);
 	}
 
-	/// @notice Quotes the child REP paid alongside the configured collateral token when redeeming portfolio claims.
+	/// @notice Quotes the child REP paid alongside the configured collateral token when redeeming security pool claims.
 	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256) {
 		return
-			IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionRecoveryRep(address(this), amountAttoShares);
+			ISecurityPoolSettlement(address(securityPoolAccounting)).quoteQuestionRecoveryRep(address(this), amountAttoShares);
 	}
 
-	/// @notice Quotes shares for raw collateral units from the portfolio's central settlement book.
+	/// @notice Quotes shares for raw collateral units from the security pool's central settlement book.
 	function attoEthToAttoShares(uint256 amountAttoEth) public view returns (uint256) {
-		return IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionMint(address(this), amountAttoEth);
+		return ISecurityPoolSettlement(address(securityPoolAccounting)).quoteQuestionMint(address(this), amountAttoEth);
 	}
 
 	// Complete Sets
-	/// @notice Mints complete sets through the authorized portfolio purchase path for `cash` raw collateral units while no escalation game exists.
+	/// @notice Mints complete sets through the authorized security pool purchase path for `cash` raw collateral units while no escalation game exists.
 	function createCompleteSet(uint256 cash) external isOperational {
 		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerSettlementDelegate.createCompleteSet, (cash)));
 		uint256 completeSetsToMintAttoShares = abi.decode(result, (uint256));
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMintAttoShares);
-		refreshPortfolioFees();
+		refreshSecurityPoolFees();
 	}
 
 	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in the configured token.
@@ -222,7 +222,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 		updateSettlementCollateral();
 		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
 		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
-		refreshPortfolioFees();
+		refreshSecurityPoolFees();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 	}
@@ -233,7 +233,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 		updateSettlementCollateral();
 		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemShares, (shareToken, IQuestionForker(questionForker), universeId, msg.sender)));
 		(uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) = abi.decode(result, (uint256, uint256));
-		refreshPortfolioFees();
+		refreshSecurityPoolFees();
 		emit SharesRedeemed(msg.sender, winningSharesBurnedAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 	}
@@ -300,10 +300,10 @@ contract QuestionLedger is QuestionLedgerStorage {
 		}
 	}
 
-	/// @notice Forker-only: freezes portfolio accounting and leaves the question ledger forked.
+	/// @notice Forker-only: freezes security pool accounting and leaves the question ledger forked.
 	function activateForkMode() external onlyForker {
 		if (hasInheritedForkOutcome) revert('Forked');
-		portfolioAccounting.freezeForFork();
+		securityPoolAccounting.freezeForFork();
 		// The forker may repeat this call; only the transition itself is a state change.
 		if (systemState == SystemState.PoolForked) return;
 		systemState = SystemState.PoolForked;
@@ -332,14 +332,14 @@ contract QuestionLedger is QuestionLedgerStorage {
 	function setAwaitingForkContinuation(bool shouldAwait) external onlyForker {
 		awaitingForkContinuation = shouldAwait;
 		emit AwaitingForkContinuationSet(awaitingForkContinuation);
-		refreshPortfolioFees();
+		refreshSecurityPoolFees();
 	}
 
 	/// @notice Forker-only: sets the pool system state.
 	function setSystemState(SystemState newState) external onlyForker {
 		systemState = newState;
 		emit SystemStateSet(systemState);
-		refreshPortfolioFees();
+		refreshSecurityPoolFees();
 	}
 
 	/// @notice Forker-only: sets the pool's share supply.

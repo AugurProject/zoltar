@@ -3,16 +3,16 @@ import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-o
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact, statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact } from '../../types/contractArtifact'
 import { encodeFunctionData, parseAbi } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../../types/contractArtifact'
+import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '../../types/contractArtifact'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { ReputationToken_ReputationToken as tokenArtifact } from '../../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { loadOpenOracleEventState, openOracleSettle, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { prepareSecurityPoolCollateralRepairAuction } from './securityPoolCollateralRepairAuctionFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-const requestAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
+const requestAbi = parseAbi(['function requestSecurityPoolPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
 function operationBatch(intent: {
 	positionId: bigint
 	bidId: bigint
@@ -36,7 +36,7 @@ function operationBatch(intent: {
 }
 
 describe('Statoblast: report sponsor takeover priority', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const capital = () => ({ abi: capitalArtifact.abi, address: fixture.capitalLedger })
 	const prepare = async () => {
 		await fixture.prepare(400n * unit, 100n * unit)
@@ -46,7 +46,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		const sponsor = fixture.other()
 		await fixture.deposit(3_000n * unit, sponsor)
 		const owner = await sponsor.readContract({ ...capital(), functionName: 'ownerAccount', args: [fixture.owner().account.address] })
-		const address = await sponsor.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+		const address = await sponsor.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		const feed = { abi: feedArtifact.abi, address }
 		const weth = await sponsor.readContract({ ...feed, functionName: 'weth' })
 		const rep = await sponsor.readContract({ ...feed, functionName: 'reputationToken' })
@@ -76,7 +76,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 	test('a competing settler executes the funded sponsor takeover before they can take it', async () => {
 		const { sponsor, feed, intent } = await prepare()
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(fixture.owner(), report)
@@ -100,7 +100,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 			// Expiry and price must be valid at submission, then become invalid before acceptance.
 			if (failure === 'price') intent.minimumPrice = 0n
 			const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
-			await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
+			await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
 			const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 			const before = await sponsor.readContract({ ...capital(), functionName: 'ownerAccount', args: [sponsor.account.address] })
 			await fixture.base.mockWindow.advanceTime(481n)
@@ -118,7 +118,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 	})
 
 	test.each([false, true])('an auction winner materialization rolls back with its failed takeover: %s', async failure => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		await context.bid(context.owner, 2n, (35n * unit) / 10n)
@@ -155,7 +155,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 			maximumPrice: 5n * unit,
 			deadline: timestamp + 1000n,
 		}
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: context.feed, functionName: 'requestPortfolioPriceWithOperations', args: [5n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: context.feed, functionName: 'requestSecurityPoolPriceWithOperations', args: [5n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
 		const id = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'pendingReportId' })
 		await context.mock.advanceTime(481n)
 		await openOracleSettle(context.other, id)
@@ -165,7 +165,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 	test('a starved takeover callback remains recoverable with sponsor priority', async () => {
 		const { sponsor, feed, intent } = await prepare()
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		const epoch = await sponsor.readContract({ ...feed, functionName: 'acceptedEpoch' })
 		const preimage = (await loadOpenOracleEventState(sponsor, report)).latest

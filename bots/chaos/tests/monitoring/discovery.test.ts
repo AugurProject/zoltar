@@ -1,4 +1,4 @@
-import { discoverPortfolioCapital } from '../../src/monitoring/discovery-portfolios.ts'
+import { discoverSecurityPoolCapital } from '../../src/monitoring/discovery-security-pools.ts'
 import { discoverPurchaseQuote } from '../../src/monitoring/discovery-purchase.ts'
 import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import type { DiscoveryIssue } from '../../src/operations/types.ts'
@@ -42,12 +42,12 @@ test('keyless discovery scans protocol topology without querying account invento
 	expect(snapshot.wallet.tokens).toEqual([])
 })
 
-test('discovers a fully prepared portfolio with no admitted questions', async () => {
+test('discovers a fully prepared security pool with no admitted questions', async () => {
 	const fake = refundBackfillClient(0n)
 	const identity = topologyIdentity()
 	const { chainId: _chainId, ...deployments } = identity
-	const capital = await discoverPortfolioCapital({ client: fake.client, deployments, wallet: address(1), anchorBlockNumber: 10n }, [], 10n)
-	expect(capital.map(item => item.portfolio)).toEqual([address(90)])
+	const capital = await discoverSecurityPoolCapital({ client: fake.client, deployments, wallet: address(1), anchorBlockNumber: 10n }, [], 10n)
+	expect(capital.map(item => item.securityPool)).toEqual([address(90)])
 })
 
 test('derives the universe initial escalation deposit from the Zoltar universe supply that genesis burns reduce', async () => {
@@ -94,7 +94,7 @@ for (const shared of [false, true])
 			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
 			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, ['1'], 10n)
 			expect(preparation['1']).toEqual({
-				portfolio: shared ? address(90) : zeroAddress,
+				securityPool: shared ? address(90) : zeroAddress,
 				branchReady: !shared || ready,
 				sourcePool: address(50),
 				sourceGame: zeroAddress,
@@ -392,7 +392,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 5n
 				case 'getChildUniverseId':
 					return 88n
-				case 'getSecurityPoolPortfolio':
+				case 'securityPoolOf':
 					return graph.childPreparation?.shared ? address(90) : zeroAddress
 				case 'getQuestionLedgerOriginId':
 					return hash(90)
@@ -443,7 +443,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					if (graph.outcomeLabelPage !== undefined) return graph.outcomeLabelPage(questionId, start, count)
 					return [...(graph.outcomeLabelsByQuestion?.[questionId.toString()] ?? ['Yes', 'No'])].slice(Number(start), Number(start + count))
 				}
-				case 'portfolioCount':
+				case 'securityPoolCount':
 					return 0n
 				case 'questionLedgerDeploymentCount':
 					return BigInt(graph.poolDeployments?.length ?? 0)
@@ -454,7 +454,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return [...(graph.poolDeployments ?? [])].slice(Number(start), Number(start + count))
 				}
 				case 'escalationGame':
-				case 'portfolioCustody':
+				case 'securityPoolCustody':
 					return zeroAddress
 				case 'balanceOf':
 				case 'allowance':
@@ -525,15 +525,15 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 			// Geth evaluates BASEFEE as zero for eth_call without a nonzero fee.
 			const callBaseFee = (parameters.gasPrice ?? 0n) === 0n ? 0n : baseFeePerGas
 			switch (parameters.functionName) {
-				case 'portfolioCount':
+				case 'securityPoolCount':
 					return 1n
-				case 'portfoliosRange':
+				case 'securityPoolsRange':
 					return [address(90)]
 				case 'setupStage':
 					return 4n
 				case 'getRepToken':
 					return address(10)
-				case 'getSecurityPoolPortfolio':
+				case 'securityPoolOf':
 					return address(90)
 				case 'getPool':
 					return pool
@@ -550,7 +550,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return address(94)
 				case 'forkController':
 					return address(95)
-				case 'portfolio':
+				case 'securityPool':
 					return parameters.address === address(92) ? address(91) : address(90)
 				case 'forkAuthority':
 					return address(95)
@@ -615,7 +615,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'nextBatch':
 				case 'minimumOutcomeExchangeRate':
 				case 'settlementCollateralAttoEth':
-				case 'lastSettlementPortfolioTime':
+				case 'lastSettlementSecurityPoolTime':
 					return 0n
 				case 'repToken':
 				case 'reputationToken':
@@ -627,7 +627,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'questionId':
 					return 101n
 				case 'escalationGame':
-				case 'portfolioCustody':
+				case 'securityPoolCustody':
 					return address(0)
 				case 'systemState':
 					return 0n

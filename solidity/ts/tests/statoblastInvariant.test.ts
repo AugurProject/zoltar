@@ -5,25 +5,25 @@ import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import {
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 } from '../types/contractArtifact'
 import { collateralBalance } from './statoblast/burnEvidence'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Fee-stream, liquidation, retirement-tree, fork, and auction invariants have their
 // own model/consumer suites. This flat cash/share model exercises their common
 // question boundary without reproducing the implementation's settlement book.
-describe('Portfolio cross-question conservation model', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })
+describe('Security pool cross-question conservation model', () => {
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })
 	const seeds = [0x51a2e5n, 0x1164n, 0xc0ffeen]
 	for (const initialSeed of seeds) {
 		test(`mint, partial return, and final exit preserve cash and isolate donations (seed ${initialSeed})`, async () => {
 			await fixture.prepare(1_000n * unit, 200n * unit)
 			const owner = fixture.owner()
 			const trader = fixture.other()
-			const settlement = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+			const settlement = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
 			const questions = [fixture.base.questionId, fixture.secondQuestionId].map(id => ({ id, ...fixture.poolFor(id), cash: 0n }))
 			const forcedSurplus = 17n * unit + 3n
 			await fixture.base.mockWindow.setBalance(settlement, (await owner.getBalance({ address: settlement })) + forcedSurplus)
@@ -47,9 +47,9 @@ describe('Portfolio cross-question conservation model', () => {
 					cash += question.cash
 				}
 				expect(await owner.getBalance({ address: settlement })).toBe(forcedSurplus)
-				expect(await collateralBalance(owner, fixture.portfolio, settlement)).toBe(cash)
+				expect(await collateralBalance(owner, fixture.securityPool, settlement)).toBe(cash)
 				expect(await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'demandAttoEth' })).toBe(cash)
-				expect(await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })).toBe(200n * unit - cash)
+				expect(await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })).toBe(200n * unit - cash)
 				expect(await getERC20Balance(owner, getRepTokenAddress(fixture.base.genesisUniverse), fixture.capitalLedger)).toBe(1_000n * unit)
 			}
 			for (let step = 0; step < 16; step++) {
@@ -57,11 +57,11 @@ describe('Portfolio cross-question conservation model', () => {
 				if (question === undefined) throw new Error('Model question missing')
 				if (question.cash !== 0n && random(3n) === 0n) {
 					const amount = random(question.cash) + 1n
-					const before = await collateralBalance(trader, fixture.portfolio, trader.account.address)
+					const before = await collateralBalance(trader, fixture.securityPool, trader.account.address)
 					const hash = await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: question.questionLedger, functionName: 'redeemCompleteSet', args: [amount] }))
 					const receipt = await trader.waitForTransactionReceipt({ hash })
 					expect(receipt.status).toBe('success')
-					expect(await collateralBalance(trader, fixture.portfolio, trader.account.address)).toBe(before + amount)
+					expect(await collateralBalance(trader, fixture.securityPool, trader.account.address)).toBe(before + amount)
 					question.cash -= amount
 				} else {
 					const amount = step === 0 ? 1n : random(3n * unit) + 1n

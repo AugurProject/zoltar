@@ -5,13 +5,13 @@ import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, OUTCOMES, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 type Variant = 'own-fork' | 'third-party-fork-in-non-decision' | 'third-party-fork-while-contested'
 
-// Scenario 1: the universe forks on the portfolio question itself.
+// Scenario 1: the universe forks on the security pool question itself.
 describe('auditE2E: fork on the escalated question conserves reporter REP and settlement cash', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	const run = async (variant: Variant) => {
@@ -192,8 +192,8 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 		let cashOut = 0n
 		for (const { outcome, child, pool } of children) {
 			for (const held of OUTCOMES) expect(await e2e.shareBalance(trader.account.address, child, held)).toBe(10n * unit)
-			const quoteCash = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionSettlement', args: [pool, 10n * unit] })
-			const quoteRep = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionRecoveryRep', args: [pool, 10n * unit] })
+			const quoteCash = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionSettlement', args: [pool, 10n * unit] })
+			const quoteRep = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionRecoveryRep', args: [pool, 10n * unit] })
 			const custodyRep = await e2e.rep(child, engine)
 			const got = await e2e.redeemShares(trader, pool)
 			expect(got.cash).toBe(quoteCash)

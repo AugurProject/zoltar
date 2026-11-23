@@ -1,12 +1,12 @@
 import { recoveryRepPurchase } from '../copy/marketBlockers.js'
-import { portfolioMintFee, portfolioMintWithinBudget, type PortfolioMintFees } from '@zoltar/trading-shared/trading/portfolioMint'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
+import { securityPoolMintFee, securityPoolMintWithinBudget, type SecurityPoolMintFees } from '@zoltar/trading-shared/trading/securityPoolMint'
+import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { loadCentralSecurityPoolQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolState.js'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import type { LiveMarket } from './liveMarket.js'
 
-export async function loadMintFees(client: PublicClient, central: Awaited<ReturnType<typeof loadCentralPortfolioQuestion>>, blockNumber: bigint) {
-	const target = { abi: portfolioArtifact.abi, address: central.portfolioAddress, blockNumber }
+export async function loadMintFees(client: PublicClient, central: Awaited<ReturnType<typeof loadCentralSecurityPoolQuestion>>, blockNumber: bigint) {
+	const target = { abi: securityPoolArtifact.abi, address: central.securityPoolAddress, blockNumber }
 	const [securityMultiplierBps, purchaseFeeBps, minimumPurchaseFeeAttoEth, annualFeeBps] = await Promise.all([
 		client.readContract({ ...target, functionName: 'statoblastSecurityMultiplierBps' }),
 		client.readContract({ ...target, functionName: 'purchaseFeeBps' }),
@@ -16,13 +16,13 @@ export async function loadMintFees(client: PublicClient, central: Awaited<Return
 	return { securityMultiplierBps, purchaseFeeBps, minimumPurchaseFeeAttoEth, annualFeeBps, feePrincipalAttoEth: central.feePrincipalAttoEth }
 }
 
-function mintWithMargin(budget: bigint, state: PortfolioMintFees) {
-	const maximum = portfolioMintWithinBudget(budget, state)
+function mintWithMargin(budget: bigint, state: SecurityPoolMintFees) {
+	const maximum = securityPoolMintWithinBudget(budget, state)
 	if (maximum === 0n) return 0n
 	// Keep one percent of the fee available for accrual before mining. The router
 	// refunds everything it does not spend; the user's total ETH ceiling is unchanged.
-	const margin = (portfolioMintFee(maximum, state) + 99n) / 100n
-	return portfolioMintWithinBudget(budget > margin ? budget - margin : 0n, state)
+	const margin = (securityPoolMintFee(maximum, state) + 99n) / 100n
+	return securityPoolMintWithinBudget(budget > margin ? budget - margin : 0n, state)
 }
 
 export function recoveryMintBlocker(market: Pick<LiveMarket, 'settlementRecoveryAttoRep'>) {
@@ -35,13 +35,13 @@ export function estimateBudgetMint(market: Pick<LiveMarket, 'mintFees' | 'settle
 }
 
 export async function loadBudgetMint(client: PublicClient, market: LiveMarket, budget: bigint, blockNumber: bigint) {
-	const capital = await client.readContract({ abi: poolArtifact.abi, address: market.pool, functionName: 'portfolioCustody', blockNumber })
-	const central = await loadCentralPortfolioQuestion(client, market.pool, capital, blockNumber)
+	const capital = await client.readContract({ abi: poolArtifact.abi, address: market.pool, functionName: 'securityPoolCustody', blockNumber })
+	const central = await loadCentralSecurityPoolQuestion(client, market.pool, capital, blockNumber)
 	if (central.settlementRecoveryAttoRep > 0n) throw new Error(recoveryRepPurchase)
 	const fees = await loadMintFees(client, central, blockNumber)
 	const cash = mintWithMargin(budget, { ...fees, cashAttoEth: central.settlementCollateralAttoEth, outcomeSupplyAttoShares: central.shareTokenSupplyAttoShares })
 	if (cash === 0n) throw new Error('ETH budget is too small to cover the portfolio purchase fee')
-	const recovery = await client.readContract({ abi: portfolioArtifact.abi, address: central.portfolioAddress, functionName: 'quoteMintRecoveryRep', args: [market.universeId, market.questionId, cash], blockNumber })
+	const recovery = await client.readContract({ abi: securityPoolArtifact.abi, address: central.securityPoolAddress, functionName: 'quoteMintRecoveryRep', args: [market.universeId, market.questionId, cash], blockNumber })
 	if (recovery > 0n) throw new Error(recoveryRepPurchase)
 	return cash
 }

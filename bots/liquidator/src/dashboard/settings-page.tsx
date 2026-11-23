@@ -61,7 +61,7 @@ function MarketPanel() {
 
 function StrategyPanel() {
 	return (
-		<SettingsGroup formId='strategy-form' summary='Funded takeovers, capital limits, and recovery' title='Portfolio policy' titleId='strategy-title'>
+		<SettingsGroup formId='strategy-form' summary='Funded takeovers, capital limits, and recovery' title='Security pool policy' titleId='strategy-title'>
 			<form id='strategy-form'>
 				<fieldset id='strategy-fields' disabled>
 					<fieldset class='settings-subgroup'>
@@ -78,9 +78,9 @@ function StrategyPanel() {
 					<fieldset class='settings-subgroup'>
 						<legend>Capital limits</legend>
 						<div class='field-grid'>
-							<DecimalField label='Principal per portfolio (REP)' name='maximumPrincipalRep' />
+							<DecimalField label='Principal per security pool (REP)' name='maximumPrincipalRep' />
 							<DecimalField label='Total managed principal (REP)' name='maximumTotalPrincipalRep' />
-							<DecimalField label='Commitment per portfolio (ETH)' name='maximumCommitmentEth' />
+							<DecimalField label='Commitment per security pool (ETH)' name='maximumCommitmentEth' />
 							<DecimalField label='Own funding per takeover (REP)' name='maximumOwnFundingRep' />
 							<IntegerField label='Target health (bps)' name='targetHealthFactorBps' />
 						</div>
@@ -126,7 +126,7 @@ function LiquidatorSettingsPage() {
 			</SettingsSection>
 			<SettingsSection id='settings-go-live' step={4} title='Go live'>
 				<SignerPanel summary='No active signer' title='Execution signer' />
-				<SubmissionPanel note='Portfolio takeovers and earnings claims use this delivery policy. Private relays are checked against the selected chain before they are saved.' />
+				<SubmissionPanel note='Security pool takeovers and earnings claims use this delivery policy. Private relays are checked against the selected chain before they are saved.' />
 				<ExecutionModePanel note='Enabling pauses the bot and reserves the signer for this process; it signs only after you resume through the readiness check. Dry run keeps scanning and reporting candidates without sending transactions.' />
 			</SettingsSection>
 		</SettingsPage>

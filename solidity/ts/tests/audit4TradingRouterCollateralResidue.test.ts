@@ -12,11 +12,11 @@ import {
 	trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as factoryArtifact,
 	trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter as routerArtifact,
 	trading_TwoWayConstantProductPair_TwoWayConstantProductPair as pairArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
 } from '../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const erc20Abi = [
 	{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
@@ -46,12 +46,12 @@ const zoltarForkAbi = [
 	},
 ] as const satisfies Abi
 
-// Audit pass 4: the router quotes the purchase fee itself, wraps `cash + fee`, and approves the portfolio
+// Audit pass 4: the router quotes the purchase fee itself, wraps `cash + fee`, and approves the security pool
 // services for that amount. The services contract re-quotes inside the purchase. If the two quotes ever
 // differed, wrapped collateral and an allowance would strand in the router, which has no sweep. The existing
 // suite only asserts the router's native ETH balance, so this pins the wrapped-collateral side across fee accrual.
 describe('audit4: router keeps no wrapped collateral or services allowance', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 
 	test('entries, liquidity additions, and exits across irregular fee accrual leave the router empty', async () => {
 		await fixture.prepare()
@@ -60,8 +60,8 @@ describe('audit4: router keeps no wrapped collateral or services allowance', () 
 		const native = fixture.poolFor(fixture.base.questionId)
 		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
 		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
-		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
-		const services = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
+		const collateral = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
+		const services = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' })
 		const deadline = fixture.base.questionData.endTime - 1n
 		const universeId = fixture.base.genesisUniverse
 		const ids = [universeId << 8n, (universeId << 8n) | 1n, (universeId << 8n) | 2n] as const
@@ -108,14 +108,14 @@ describe('audit4: router keeps no wrapped collateral or services allowance', () 
 // Audit pass 4: the pair cannot call ShareToken.migrate, so LP claims on a forked universe survive only if
 // withdrawn source shares stay transferable out of the pair and migratable by the LP afterwards.
 describe('audit4: LP claims survive a universe fork', () => {
-	const portfolio = useSecurityPoolPortfolioFixture({ purchaseFeeBps: 0n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })
-	const fixture = portfolio.base
+	const securityPool = useSecurityPoolFixture({ purchaseFeeBps: 0n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })
+	const fixture = securityPool.base
 
 	test('an LP withdraws source shares after the fork and materializes them in a child universe', async () => {
-		await portfolio.prepare()
+		await securityPool.prepare()
 		const client = fixture.client
 		const account = client.account.address
-		const native = portfolio.poolFor(fixture.questionId)
+		const native = securityPool.poolFor(fixture.questionId)
 		const factory = await deployContract(client, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
 		const router = await deployContract(client, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
 		const deadline = fixture.questionData.endTime - 1n
@@ -147,7 +147,7 @@ describe('audit4: LP claims survive a universe fork', () => {
 		const activationDeadline = await client.readContract({ abi: zoltarForkAbi, address: getZoltarAddress(), functionName: 'getForkRecapitalizationDeadline', args: [universeId] })
 		await fixture.mockWindow.setTime(activationDeadline + 1n)
 		// Prepare branch custody separately, as the production fork workflow does.
-		const forks = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'forkController' })
+		const forks = await client.readContract({ abi: securityPoolArtifact.abi, address: securityPool.securityPool, functionName: 'forkController' })
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'prepareBranch', args: [universeId, 1n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'migrate', args: [yesId, [1n]] }))
 		const childUniverse = await client.readContract({ abi: zoltarForkAbi, address: getZoltarAddress(), functionName: 'getChildUniverseId', args: [universeId, 1n] })

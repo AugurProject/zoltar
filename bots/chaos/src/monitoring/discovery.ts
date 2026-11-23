@@ -1,6 +1,6 @@
 import { discoverAuctions } from './discovery-auctions.ts'
-import type { PortfolioCapitalSnapshot } from '../operations/portfolio-types.ts'
-import { discoverPortfolioCapital } from './discovery-portfolios.ts'
+import type { SecurityPoolCapitalSnapshot } from '../operations/security-pool-types.ts'
+import { discoverSecurityPoolCapital } from './discovery-security-pools.ts'
 import type { DiscoveryRun } from './discovery-context.ts'
 import { hasCode } from '@zoltar/core-shared/evm/code'
 import { canonicalDiscoveryIssues, formatDiscoveryWarnings } from './discovery-coverage.ts'
@@ -124,7 +124,7 @@ async function discoverPairs(context: EcosystemDiscoveryContext, pools: readonly
 	return pairs
 }
 
-async function discoverTokenInventory(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], pools: readonly PoolSnapshot[], capital: readonly PortfolioCapitalSnapshot[], blockNumber: bigint) {
+async function discoverTokenInventory(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], pools: readonly PoolSnapshot[], capital: readonly SecurityPoolCapitalSnapshot[], blockNumber: bigint) {
 	const { client, deployments, wallet } = context
 	if (wallet === undefined) return []
 	const addresses = new Map<string, Address>()
@@ -216,7 +216,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: abis.openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
 	const { pools } = await discoverPools({ ...run, anchorTimestamp: block.timestamp, anchorBaseFeePerGas: block.baseFeePerGas, universes, questions })
-	const portfolioCapital = await discoverPortfolioCapital(context, pools, blockNumber, questions)
+	const securityPoolCapital = await discoverSecurityPoolCapital(context, pools, blockNumber, questions)
 	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []
 	const universeUniswap = context.deployments.uniswapV3Factory !== undefined || context.discoverGenesisDeployment ? await discoverUniverseUniswap(context, universes, blockNumber, chainId) : undefined
 	const genesis = universeUniswap?.pools.find(pool => pool.universeId === '0')
@@ -227,7 +227,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	const indexedReports = context.wallet === undefined ? [] : trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })
 	context = { ...context, indexedReports }
 	const [tokens, shares, lpTokens, auctions, reports] = await drainConcurrent([
-		discoverTokenInventory(context, universes, pools, portfolioCapital, blockNumber),
+		discoverTokenInventory(context, universes, pools, securityPoolCapital, blockNumber),
 		discoverShareInventory(context, pools, pairs, universes, questions, blockNumber, issues),
 		discoverLpInventory(context, pairs, blockNumber),
 		discoverAuctions(context, pools, blockNumber),
@@ -241,7 +241,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		escalationDeposits: [...(context.indexedEscalationDeposits ?? [])],
 		pairs,
 		pools,
-		portfolioCapital,
+		securityPoolCapital,
 		questions,
 		reports,
 		schemaVersion: 1,

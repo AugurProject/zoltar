@@ -5,10 +5,10 @@ import type { StateRead } from './snapshots.ts'
 
 const abi = parseAbi([
 	'function collateralToken() view returns (address)',
-	'function portfolio() view returns (address)',
+	'function securityPool() view returns (address)',
 	'function questionLedger() view returns (address)',
 	'function securityPoolFactory() view returns (address)',
-	'function getSecurityPoolPortfolio(address) view returns (address)',
+	'function securityPoolOf(address) view returns (address)',
 	'function symbol() view returns (string)',
 	'function decimals() view returns (uint8)',
 ])
@@ -20,7 +20,7 @@ export type CollateralIdentityCache = Pick<Map<string, Address>, 'get' | 'set'>
 export const withCollateralIdentityCache =
 	(read: StateRead, cache?: CollateralIdentityCache): StateRead =>
 	async (address, abi, functionName, args) => {
-		const immutableIdentity = ['securityPoolFactory', 'getSecurityPoolPortfolio', 'collateralToken', 'portfolio', 'questionLedger'].includes(functionName)
+		const immutableIdentity = ['securityPoolFactory', 'securityPoolOf', 'collateralToken', 'securityPool', 'questionLedger'].includes(functionName)
 		const key = `${address.toLowerCase()}:${functionName}:${args?.join(':').toLowerCase() ?? ''}`
 		const cached = immutableIdentity ? cache?.get(key) : undefined
 		if (cached !== undefined) return cached
@@ -46,17 +46,17 @@ export async function readContractCollateral(address: Address, kind: string, rea
 		return getAddress(value)
 	}
 	const poolKinds = ['questionLedger', 'priceCoordinator', 'ammPair']
-	const portfolioKinds = ['securityPoolReporterLedger', 'securityPoolSettlementBook', 'securityPoolPortfolioServices', 'securityPoolPortfolioPurchase', 'securityPoolCapitalLedger', 'securityPoolPortfolioForkCoordinator', 'securityPoolPortfolioAuction']
-	const tokenKinds = ['securityPoolPortfolio', 'sharedPoolPriceFeed', 'securityPoolPortfolioSettlement', 'securityPoolUniformPriceAuction']
-	if (![...poolKinds, ...portfolioKinds, ...tokenKinds].includes(kind)) return undefined
+	const securityPoolKinds = ['securityPoolReporterLedger', 'securityPoolSettlementBook', 'securityPoolServices', 'securityPoolPurchase', 'securityPoolCapitalLedger', 'securityPoolForkCoordinator', 'securityPoolAuction']
+	const tokenKinds = ['securityPool', 'sharedPoolPriceFeed', 'securityPoolSettlement', 'securityPoolUniformPriceAuction']
+	if (![...poolKinds, ...securityPoolKinds, ...tokenKinds].includes(kind)) return undefined
 	try {
 		let source = address
 		if (kind === 'priceCoordinator' || kind === 'ammPair') source = await readAddress(source, 'questionLedger')
 		if (poolKinds.includes(kind)) {
 			const factory = await readAddress(source, 'securityPoolFactory')
-			source = await readAddress(factory, 'getSecurityPoolPortfolio', [source])
-		} else if (portfolioKinds.includes(kind)) {
-			source = await readAddress(source, 'portfolio')
+			source = await readAddress(factory, 'securityPoolOf', [source])
+		} else if (securityPoolKinds.includes(kind)) {
+			source = await readAddress(source, 'securityPool')
 		}
 		return { unit: await readCollateralMetadata(await readAddress(source, 'collateralToken'), read) }
 	} catch (error) {

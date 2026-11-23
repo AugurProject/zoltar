@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test'
 import { getAddress, RpcError, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { loadAllQuestionLedgers, loadRegisteredPortfolios, loadQuestionLedgerListing, loadSelectedQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadAllQuestionLedgers, loadRegisteredSecurityPools, loadQuestionLedgerListing, loadSelectedQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import { loadQuestionLedgerMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { createMockLoaderClient, createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { centralPortfolioRead, owner, portfolio, capital, token } from '../features/portfolios/capitalFixture.js'
+import { centralSecurityPoolRead, owner, securityPool, capital, token } from '../features/security-pools/capitalFixture.js'
 
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
 const deployment = { questionLedger: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, openOraclePriceCoordinator: token, statoblastSecurityMultiplierBps: 20000n }
-function fixture({ forked = false, reporting = false, missingPortfolio = false, reorg = false, brokenSecond = false } = {}) {
+function fixture({ forked = false, reporting = false, missingSecurityPool = false, reorg = false, brokenSecond = false } = {}) {
 	const reads: string[] = []
 	let headReads = 0
 	const client = createMockLoaderClient({
@@ -41,10 +41,10 @@ function fixture({ forked = false, reporting = false, missingPortfolio = false, 
 					return token
 				case 'initialReportPriorityFeeAttoEthPerGas':
 					return 1n
-				case 'portfolioCustody':
-					return missingPortfolio ? zeroAddress : capital
-				case 'getSecurityPoolPortfolio':
-					return portfolio
+				case 'securityPoolCustody':
+					return missingSecurityPool ? zeroAddress : capital
+				case 'securityPoolOf':
+					return securityPool
 				case 'escalationGame':
 					return reporting ? token : zeroAddress
 				case 'forkContinuation':
@@ -70,33 +70,33 @@ function fixture({ forked = false, reporting = false, missingPortfolio = false, 
 			}
 		},
 		multicall: async request => {
-			if (brokenSecond && request.contracts.some(call => call.address === second && call.functionName === 'refreshPortfolioFees')) throw new Error('execution reverted: collateral unavailable')
+			if (brokenSecond && request.contracts.some(call => call.address === second && call.functionName === 'refreshSecurityPoolFees')) throw new Error('execution reverted: collateral unavailable')
 			if (request.contracts[0]?.functionName !== 'questions') expect(request.blockNumber).toBe(99n)
 			return request.contracts.map(call => {
 				reads.push(call.functionName)
 				if (call.functionName === 'questions') return ['Question', 'Description', 1n, 2000n, 2n, 0n, 2000n, '']
 				if (call.functionName === 'questionCreatedTimestamp') return 1n
-				if (call.functionName === 'portfolioCustody') return capital
+				if (call.functionName === 'securityPoolCustody') return capital
 				if (call.functionName === 'escalationGame') return reporting ? token : zeroAddress
-				return centralPortfolioRead(call.functionName, 'active')
+				return centralSecurityPoolRead(call.functionName, 'active')
 			})
 		},
 	})
 	return { client, reads }
 }
-test.each([false, true])('discovers native portfolio question snapshots (reporting: %s)', async reporting => {
+test.each([false, true])('discovers native security pool question snapshots (reporting: %s)', async reporting => {
 	const { client, reads } = fixture({ reporting })
 	const pools = await loadAllQuestionLedgers(client)
 	expect(pools).toHaveLength(1)
-	expect(pools[0]).toMatchObject({ portfolioAddress: portfolio, questionLedgerAddress: owner, settlementCollateralAttoEth: 60n, totalPoolHeldAttoRep: 300n, mintingCapacityAttoEth: reporting ? 0n : 80n })
+	expect(pools[0]).toMatchObject({ securityPoolAddress: securityPool, questionLedgerAddress: owner, settlementCollateralAttoEth: 60n, totalPoolHeldAttoRep: 300n, mintingCapacityAttoEth: reporting ? 0n : 80n })
 	expect(reads).not.toContain('getVaults')
 	expect(reads).not.toContain('securityVaults')
 })
-test('marks a question without portfolio custody unavailable and still rejects direct loading', async () => {
-	const listing = await loadQuestionLedgerListing(fixture({ missingPortfolio: true }).client)
+test('marks a question without security pool custody unavailable and still rejects direct loading', async () => {
+	const listing = await loadQuestionLedgerListing(fixture({ missingSecurityPool: true }).client)
 	expect(listing.pools).toEqual([])
-	expect(listing.unavailable[0]).toMatchObject({ address: owner, reason: expect.stringContaining('Question has no portfolio.') })
-	await expect(loadSelectedQuestionLedger(fixture({ missingPortfolio: true }).client, owner)).rejects.toThrow('Question has no portfolio')
+	expect(listing.unavailable[0]).toMatchObject({ address: owner, reason: expect.stringContaining('Question has no security pool.') })
+	await expect(loadSelectedQuestionLedger(fixture({ missingSecurityPool: true }).client, owner)).rejects.toThrow('Question has no security pool')
 })
 test('rejects a replaced discovery anchor after loading question snapshots', async () => {
 	await expect(loadAllQuestionLedgers(fixture({ reorg: true }).client)).rejects.toThrow('deployments changed')
@@ -124,35 +124,35 @@ const walletWrapped = (data: unknown) => {
 	return new RpcError(walletError.message, { cause: walletError, code: walletError.code, shortMessage: walletError.message })
 }
 /**
- * A registry where the first portfolio also has a ledger in fork child 42. Any caller can register itself: the stranger
+ * A registry where the first security pool also has a ledger in fork child 42. Any caller can register itself: the stranger
  * answers nothing, and the partial one has a ledger but no question count. `batch` decides how a read of more than one
  * address treats the stranger: it fails alone, or it exhausts the shared gas so every later call fails, or the whole
  * request runs out of gas. Read on its own, the stranger's request runs out of gas and every other address answers for
  * itself. `unavailable` fails every request at the provider; `flaky` fails a lone read of `second` with `providerError`.
- * `more` adds working portfolios, `junk` adds addresses whose calls fail on their own, and `burning` adds contracts that
+ * `more` adds working security pools, `junk` adds addresses whose calls fail on their own, and `burning` adds contracts that
  * burn all their gas, starving every later call; all come after the others. Each request ends with the factory's
- * `portfolioCount`, which answers unless the calls before it were starved. Requests take a moment, so overlapping
+ * `securityPoolCount`, which answers unless the calls before it were starved. Requests take a moment, so overlapping
  * ones are counted in `mostInFlight`. `empty` answers every request with empty data, as when Multicall3 is missing.
  */
 function registryClient(
 	batch: 'isolated' | 'starving' | 'reverting' | 'unavailable' | 'flaky' | 'empty',
 	{ more = [], junk = [], burning = [], throughWallet = false, providerError = () => new RpcError('HTTP 502 while calling eth_call', { code: 502 }) }: { more?: readonly Address[]; junk?: readonly Address[]; burning?: readonly Address[]; throughWallet?: boolean; providerError?: () => Error } = {},
 ) {
-	const registry = [portfolio, stranger, second, partial, unopened, ...more, ...junk, ...burning]
+	const registry = [securityPool, stranger, second, partial, unopened, ...more, ...junk, ...burning]
 	const junkAddresses = new Set(junk)
 	const burningAddresses = new Set(burning)
 	let inFlight = 0
 	let mostInFlight = 0
-	const ledgers = new Map([[`${portfolio}:0`, capital], [`${second}:0`, token], [`${partial}:0`, token], [`${portfolio}:42`, token], ...more.map(address => [`${address}:0`, token] as const)])
-	const questionCounts = new Map([[portfolio, 2n], [second, 0n], [unopened, 0n], ...more.map(address => [address, 1n] as const)])
+	const ledgers = new Map([[`${securityPool}:0`, capital], [`${second}:0`, token], [`${partial}:0`, token], [`${securityPool}:42`, token], ...more.map(address => [`${address}:0`, token] as const)])
+	const questionCounts = new Map([[securityPool, 2n], [second, 0n], [unopened, 0n], ...more.map(address => [address, 1n] as const)])
 	const blocks: (bigint | undefined)[] = []
 	const batches: number[] = []
 	const client = createMockLoaderClient({
 		getBlock: async () => block,
 		readContract: async request => {
 			blocks.push(request.blockNumber)
-			if (request.functionName === 'portfolioCount') return BigInt(registry.length)
-			if (request.functionName === 'portfoliosRange') return registry.slice(Number(request.args?.[0]), Number(request.args?.[0]) + Number(request.args?.[1]))
+			if (request.functionName === 'securityPoolCount') return BigInt(registry.length)
+			if (request.functionName === 'securityPoolsRange') return registry.slice(Number(request.args?.[0]), Number(request.args?.[0]) + Number(request.args?.[1]))
 			throw new Error(`Unexpected ${request.functionName}`)
 		},
 		multicall: async request => {
@@ -166,7 +166,7 @@ function registryClient(
 			if (batch === 'unavailable') throw new RpcError('HTTP 503 while calling eth_call', { code: 503 })
 			if (batch === 'empty') throw Object.assign(new Error('The contract function "aggregate3" returned no data ("0x").'), { name: 'ContractFunctionZeroDataError' })
 			const addresses = request.contracts.map(contract => getAddress(String(contract.address)))
-			const shared = new Set(request.contracts.filter(contract => contract.functionName !== 'portfolioCount').map(contract => contract.address)).size > 1
+			const shared = new Set(request.contracts.filter(contract => contract.functionName !== 'securityPoolCount').map(contract => contract.address)).size > 1
 			if (batch === 'flaky' && !shared && addresses.includes(second)) throw providerError()
 			const exhausted = () => (throughWallet ? walletWrapped({ code: -32_000, message: 'out of gas' }) : outOfGas(shared))
 			if (addresses.includes(stranger) && (!shared || batch === 'reverting' || batch === 'flaky')) throw exhausted()
@@ -178,7 +178,7 @@ function registryClient(
 				const address = addresses[index]
 				if (address === undefined) throw new Error('Missing call address')
 				if (address === stranger || junkAddresses.has(address) || (starvedFrom >= 0 && index >= starvedFrom) || (address === partial && contract.functionName === 'questionCount')) return { status: 'failure', error: new Error('execution reverted') }
-				if (contract.functionName === 'portfolioCount') return { status: 'success', result: BigInt(registry.length) }
+				if (contract.functionName === 'securityPoolCount') return { status: 'success', result: BigInt(registry.length) }
 				if (contract.functionName === 'questionCount') return { status: 'success', result: questionCounts.get(address) }
 				return { status: 'success', result: ledgers.get(`${address}:${String(contract.args?.[0])}`) ?? zeroAddress }
 			})
@@ -187,13 +187,13 @@ function registryClient(
 	return { client, blocks, batches, mostInFlight: () => mostInFlight }
 }
 
-test('registered portfolios list those with a ledger in the universe, newest registration first', async () => {
+test('registered security pools list those with a ledger in the universe, newest registration first', async () => {
 	const { client, blocks, batches } = registryClient('isolated')
-	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
-		{ portfolio: second, questionCount: 0 },
-		{ portfolio, questionCount: 2 },
+	expect(await loadRegisteredSecurityPools(client, 0n)).toEqual([
+		{ securityPool: second, questionCount: 0 },
+		{ securityPool, questionCount: 2 },
 	])
-	expect(await loadRegisteredPortfolios(client, 42n)).toEqual([{ portfolio, questionCount: 2 }])
+	expect(await loadRegisteredSecurityPools(client, 42n)).toEqual([{ securityPool, questionCount: 2 }])
 	// Both failures came before a later success, so each load is one batched read with nothing read again.
 	expect(batches).toEqual([11, 11])
 	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
@@ -202,30 +202,30 @@ test('registered portfolios list those with a ledger in the universe, newest reg
 test.each([
 	['starves', 'starving', [11, 9, 5, 5, 3, 3]],
 	['reverts', 'reverting', [11, 7, 5, 5, 3, 3, 3]],
-] as const)('a registered contract that %s the batched read cannot hide the other portfolios', async (_effect, batch, requests) => {
+] as const)('a registered contract that %s the batched read cannot hide the other security pools', async (_effect, batch, requests) => {
 	const { client, blocks, batches } = registryClient(batch)
-	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
-		{ portfolio: second, questionCount: 0 },
-		{ portfolio, questionCount: 2 },
+	expect(await loadRegisteredSecurityPools(client, 0n)).toEqual([
+		{ securityPool: second, questionCount: 0 },
+		{ securityPool, questionCount: 2 },
 	])
-	// Unanswered sets are read again or split in half, so the stranger costs a few requests rather than one per portfolio.
+	// Unanswered sets are read again or split in half, so the stranger costs a few requests rather than one per security pool.
 	expect([...batches].sort((left, right) => right - left)).toEqual([...requests])
 	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
 })
 
-test('one failing contract among many registered portfolios costs a few requests, not one per portfolio', async () => {
+test('one failing contract among many registered security pools costs a few requests, not one per security pool', async () => {
 	const more = Array.from({ length: 35 }, (_, index) => getAddress(`0x${(0xd00 + index).toString(16).padStart(40, '0')}`))
 	const { client, batches } = registryClient('reverting', { more })
-	const listed = await loadRegisteredPortfolios(client, 0n)
-	expect(listed.map(entry => entry.portfolio)).toEqual([...more].reverse().concat([second, portfolio]))
+	const listed = await loadRegisteredSecurityPools(client, 0n)
+	expect(listed.map(entry => entry.securityPool)).toEqual([...more].reverse().concat([second, securityPool]))
 	expect(batches.length).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(40)) + 1)
 })
 
 test('a large registry is read in pages of 100 addresses, at most four requests at a time', async () => {
 	const more = Array.from({ length: 150 }, (_, index) => getAddress(`0x${(0x1000 + index).toString(16).padStart(40, '0')}`))
 	const { client, batches, mostInFlight } = registryClient('isolated', { more })
-	const listed = await loadRegisteredPortfolios(client, 0n)
-	expect(listed.map(entry => entry.portfolio)).toEqual([...more].reverse().concat([second, portfolio]))
+	const listed = await loadRegisteredSecurityPools(client, 0n)
+	expect(listed.map(entry => entry.securityPool)).toEqual([...more].reverse().concat([second, securityPool]))
 	// Each page is two calls per address plus the factory's final call.
 	expect([...batches].sort((left, right) => right - left)).toEqual([2 * 100 + 1, 2 * 55 + 1])
 	expect(mostInFlight()).toBeLessThanOrEqual(4)
@@ -235,9 +235,9 @@ test('addresses that fail on their own at the end of the registry cost no furthe
 	// Registering costs one call from a fresh address, so the newest registrations can all be junk.
 	const junk = Array.from({ length: 32 }, (_, index) => getAddress(`0x${(0xe00 + index).toString(16).padStart(40, '0')}`))
 	const { client, batches } = registryClient('isolated', { junk })
-	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
-		{ portfolio: second, questionCount: 0 },
-		{ portfolio, questionCount: 2 },
+	expect(await loadRegisteredSecurityPools(client, 0n)).toEqual([
+		{ securityPool: second, questionCount: 0 },
+		{ securityPool, questionCount: 2 },
 	])
 	expect(batches).toEqual([2 * (5 + junk.length) + 1])
 })
@@ -245,9 +245,9 @@ test('addresses that fail on their own at the end of the registry cost no furthe
 test('contracts that burn all their gas are read again at most four at a time', async () => {
 	const burning = Array.from({ length: 8 }, (_, index) => getAddress(`0x${(0xf00 + index).toString(16).padStart(40, '0')}`))
 	const { client, batches, mostInFlight } = registryClient('isolated', { burning })
-	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
-		{ portfolio: second, questionCount: 0 },
-		{ portfolio, questionCount: 2 },
+	expect(await loadRegisteredSecurityPools(client, 0n)).toEqual([
+		{ securityPool: second, questionCount: 0 },
+		{ securityPool, questionCount: 2 },
 	])
 	// Each such contract must be read on its own, which halving reaches in about two requests per contract.
 	expect(batches.length).toBeLessThanOrEqual(2 * burning.length + 1)
@@ -256,26 +256,26 @@ test('contracts that burn all their gas are read again at most four at a time', 
 
 test('empty data from the batched read fails the list, since a registered contract cannot cause it', async () => {
 	const { client, batches } = registryClient('empty')
-	await expect(loadRegisteredPortfolios(client, 0n)).rejects.toThrow('returned no data')
+	await expect(loadRegisteredSecurityPools(client, 0n)).rejects.toThrow('returned no data')
 	expect(batches).toHaveLength(1)
 })
 
-test('a contract that reverts the batched read through a wallet cannot hide the other portfolios', async () => {
+test('a contract that reverts the batched read through a wallet cannot hide the other security pools', async () => {
 	const { client } = registryClient('reverting', { throughWallet: true })
-	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
-		{ portfolio: second, questionCount: 0 },
-		{ portfolio, questionCount: 2 },
+	expect(await loadRegisteredSecurityPools(client, 0n)).toEqual([
+		{ securityPool: second, questionCount: 0 },
+		{ securityPool, questionCount: 2 },
 	])
 })
 
 test('a provider failure a wallet wraps still fails the list', async () => {
 	// MetaMask wraps a failed upstream request too, with the response body rather than a node error as `data`.
 	const providerError = () => walletWrapped(`Non-200 status code: '503'`)
-	await expect(loadRegisteredPortfolios(registryClient('flaky', { throughWallet: true, providerError }).client, 0n)).rejects.toThrow('Internal JSON-RPC error.')
+	await expect(loadRegisteredSecurityPools(registryClient('flaky', { throughWallet: true, providerError }).client, 0n)).rejects.toThrow('Internal JSON-RPC error.')
 })
 
-test('a provider that answers no portfolio read reports an error rather than an empty list', async () => {
-	await expect(loadRegisteredPortfolios(registryClient('unavailable').client, 0n)).rejects.toThrow('HTTP 503')
+test('a provider that answers no security pool read reports an error rather than an empty list', async () => {
+	await expect(loadRegisteredSecurityPools(registryClient('unavailable').client, 0n)).rejects.toThrow('HTTP 503')
 })
 
 // A timeout and a node that lost the block are not execution failures, though neither carries an HTTP status.
@@ -283,13 +283,13 @@ test.each([
 	['an HTTP error', new RpcError('HTTP 502 while calling eth_call', { code: 502 })],
 	['a timeout', new RpcError('The operation timed out.', { code: 23 })],
 	['a missing block', new RpcError('header not found', { code: -32_000 })],
-] as const)('%s while reading an address again fails the list instead of dropping that portfolio', async (_failure, error) => {
-	await expect(loadRegisteredPortfolios(registryClient('flaky', { providerError: () => error }).client, 0n)).rejects.toThrow(error.message)
+] as const)('%s while reading an address again fails the list instead of dropping that security pool', async (_failure, error) => {
+	await expect(loadRegisteredSecurityPools(registryClient('flaky', { providerError: () => error }).client, 0n)).rejects.toThrow(error.message)
 })
 
-test('a reorganization during the portfolio reads is reported as such', async () => {
+test('a reorganization during the security pool reads is reported as such', async () => {
 	const { client } = registryClient('isolated')
-	// The block is replaced once the portfolio reads begin, after the registry itself was read on the canonical chain.
+	// The block is replaced once the security pool reads begin, after the registry itself was read on the canonical chain.
 	let replaced = false
 	const reorganized = {
 		...client,
@@ -299,10 +299,10 @@ test('a reorganization during the portfolio reads is reported as such', async ()
 			return await client.multicall(request)
 		}),
 	}
-	await expect(loadRegisteredPortfolios(reorganized, 0n)).rejects.toThrow('Portfolios changed during discovery')
+	await expect(loadRegisteredSecurityPools(reorganized, 0n)).rejects.toThrow('Security pools changed during discovery')
 })
 
-test('#1469: a broken portfolio question cannot hide a healthy question', async () => {
+test('#1469: a broken security pool question cannot hide a healthy question', async () => {
 	const pools = await loadAllQuestionLedgers(fixture({ brokenSecond: true }).client)
 	expect(pools).toHaveLength(1)
 	expect(pools[0]?.questionLedgerAddress).toBe(owner)

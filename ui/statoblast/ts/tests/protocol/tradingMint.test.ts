@@ -2,7 +2,7 @@ import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnviro
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createBlockWithTimestamp, createReadContractStub, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { createCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalPoolPortfolio } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
@@ -10,13 +10,13 @@ type MockSentTransaction = Parameters<Parameters<typeof createMockWriteClient>[0
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
 
-/** A portfolio-backed pool with ample collateral, approvals, and mint capacity, no escalation game, and the given question end. */
+/** A security-pool-backed pool with ample collateral, approvals, and mint capacity, no escalation game, and the given question end. */
 function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint, recovery = { required: 0n, balance: 10n ** 21n, allowance: 10n ** 21n }) {
 	return {
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-				if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+				if (request.functionName === 'services' || request.functionName === 'settlement') return securityPool
 				if (request.functionName === 'recoveryTokens') return pool
 				if (request.address === pool && request.functionName === 'balanceOf') return recovery.balance
 				if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
@@ -24,8 +24,8 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
-				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
-				if (request.functionName === 'isPortfolio') return true
+				if (request.functionName === 'securityPoolOf') return securityPool
+				if (request.functionName === 'isSecurityPool') return true
 				if (request.functionName === 'getPool') return pool
 				if (request.functionName === 'purchaseQuote') return [0n, 0n]
 				if (request.functionName === 'quoteMintRecoveryRep') return recovery.required
@@ -48,11 +48,11 @@ void describe('complete-set mint submission', () => {
 		await expect(createCompleteSetInQuestionLedger(client, pool, 10n ** 18n)).rejects.toThrow('question ended')
 		expect(send).not.toHaveBeenCalled()
 	})
-	test.each([3540n, 10n ** 9n])('submits the selected mint amount through its portfolio at %s', async currentTimestamp => {
+	test.each([3540n, 10n ** 9n])('submits the selected mint amount through its security pool at %s', async currentTimestamp => {
 		const send = mock((request: MockSentTransaction) => {
 			expect(request.value).toBe(0n)
 			if (request.data === undefined) throw new Error('Expected mint calldata')
-			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data }).functionName).toBe('createCompleteSet')
+			expect(decodeFunctionData({ abi: securityPoolMintAbi, data: request.data }).functionName).toBe('createCompleteSet')
 		})
 		const client = mintClient(send, currentTimestamp, currentTimestamp + 1n)
 		await createCompleteSetInQuestionLedger(client, pool, 10n ** 18n)
@@ -60,8 +60,8 @@ void describe('complete-set mint submission', () => {
 	})
 })
 
-const portfolio = getAddress('0x00000000000000000000000000000000000000b1')
-const portfolioMintAbi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintEth,address recipient,uint256 minimumShares,uint256 maximumFee)'])
+const securityPool = getAddress('0x00000000000000000000000000000000000000b1')
+const securityPoolMintAbi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintEth,address recipient,uint256 minimumShares,uint256 maximumFee)'])
 
 test('winning-share redemption reviews ETH and REP recovery for the winning balance at one block', async () => {
 	const unit = 10n ** 18n
@@ -76,14 +76,14 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-				if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+				if (request.functionName === 'services' || request.functionName === 'settlement') return securityPool
 				if (request.functionName === 'recoveryTokens') return pool
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'universeId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
-				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
-				if (request.functionName === 'isPortfolio') return true
-				if (request.functionName === 'shareToken' || request.functionName === 'questionForker') return portfolio
+				if (request.functionName === 'securityPoolOf') return securityPool
+				if (request.functionName === 'isSecurityPool') return true
+				if (request.functionName === 'shareToken' || request.functionName === 'questionForker') return securityPool
 				pinned.push(request.blockNumber)
 				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
 				if (request.functionName === 'getQuestionOutcome') return 2n
@@ -110,10 +110,10 @@ test('token approval authorizes only the requested spender and amount', async ()
 	const send = mock((request: MockSentTransaction) => {
 		expect(request.to).toBe(pool)
 		if (request.data === undefined) throw new Error('Missing approval calldata')
-		expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: request.data })).toEqual({ functionName: 'approve', args: [portfolio, 123n] })
+		expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: request.data })).toEqual({ functionName: 'approve', args: [securityPool, 123n] })
 	})
-	const result = await approveErc20(asWriteClient(createMockWriteClient(send)), pool, portfolio, 123n, 'approvePortfolioRep')
-	expect(result.action).toBe('approvePortfolioRep')
+	const result = await approveErc20(asWriteClient(createMockWriteClient(send)), pool, securityPool, 123n, 'approveSecurityPoolRep')
+	expect(result.action).toBe('approveSecurityPoolRep')
 	expect(send).toHaveBeenCalledTimes(1)
 })
 
@@ -123,20 +123,20 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 		let walletBalance = 1_000n
 		let timestamp = 1n
 		let game = zeroAddress
-		let canonicalPortfolio = true
+		let canonicalSecurityPool = true
 		let plans: readonly TransactionPlanStep[] = []
 		const send = mock((request: MockSentTransaction) => {
-			expect(request.to).toBe(portfolio)
+			expect(request.to).toBe(securityPool)
 			expect(request.value).toBe(0n)
-			if (request.data === undefined) throw new Error('Expected portfolio purchase calldata')
-			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [1n, 7n, 100n, pool, 90n, 4n] })
+			if (request.data === undefined) throw new Error('Expected security pool purchase calldata')
+			expect(decodeFunctionData({ abi: securityPoolMintAbi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [1n, 7n, 100n, pool, 90n, 4n] })
 		})
 		const reads: string[] = []
 		const client = {
 			...asWriteClient(
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-					if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+					if (request.functionName === 'services' || request.functionName === 'settlement') return securityPool
 					if (request.functionName === 'recoveryTokens') return pool
 					if (request.functionName === 'balanceOf') return walletBalance
 					if (request.functionName === 'allowance') return 10n ** 21n
@@ -148,10 +148,10 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 						case 'securityPoolFactory':
 						case 'getPool':
 							return pool
-						case 'getSecurityPoolPortfolio':
-							return portfolio
-						case 'isPortfolio':
-							return canonicalPortfolio
+						case 'securityPoolOf':
+							return securityPool
+						case 'isSecurityPool':
+							return canonicalSecurityPool
 						case 'questionId':
 							return 7n
 						case 'universeId':
@@ -202,9 +202,9 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			timestamp = 1n
 			game = pool
 			await expect(validate()).rejects.toThrow('escalation starts')
-			// A portfolio the factory did not deploy is rejected before its collateral token or spender is read.
+			// A security pool the factory did not deploy is rejected before its collateral token or spender is read.
 			game = zeroAddress
-			canonicalPortfolio = false
+			canonicalSecurityPool = false
 			await expect(validate()).rejects.toThrow('not deployed by the canonical factory')
 			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('not deployed by the canonical factory')
 			expect(send).toHaveBeenCalledTimes(1)
@@ -247,24 +247,24 @@ test('a funded recovery purchase binds REP and rechecks funding before submissio
 	expect(send).toHaveBeenCalledTimes(1)
 })
 
-test('a pool portfolio is trusted only when the factory that registered the pool deployed it, at the requested block', async () => {
+test('a pool security pool is trusted only when the factory that registered the pool deployed it, at the requested block', async () => {
 	for (const scenario of [
-		{ recorded: portfolio, deployed: true, failure: undefined },
-		{ recorded: portfolio, deployed: false, failure: 'not deployed by the canonical factory' },
-		{ recorded: zeroAddress, deployed: true, failure: 'Question has no portfolio' },
+		{ recorded: securityPool, deployed: true, failure: undefined },
+		{ recorded: securityPool, deployed: false, failure: 'not deployed by the canonical factory' },
+		{ recorded: zeroAddress, deployed: true, failure: 'Question has no security pool' },
 	]) {
 		const reads: unknown[] = []
 		const client = createMockReadClient(async request => {
 			reads.push([request.address, request.functionName, request.args, request.blockNumber])
-			if (request.functionName === 'getSecurityPoolPortfolio') return scenario.recorded
-			if (request.functionName === 'isPortfolio') return scenario.deployed
+			if (request.functionName === 'securityPoolOf') return scenario.recorded
+			if (request.functionName === 'isSecurityPool') return scenario.deployed
 			throw new Error(`Unexpected read ${request.functionName}`)
 		})
-		const result = requireCanonicalPoolPortfolio(client, pool, pool, 7n)
-		if (scenario.failure === undefined) expect(await result).toBe(portfolio)
+		const result = requireCanonicalSecurityPoolOf(client, pool, pool, 7n)
+		if (scenario.failure === undefined) expect(await result).toBe(securityPool)
 		else await expect(result).rejects.toThrow(scenario.failure)
-		// Only the factory is consulted; nothing is read from the portfolio itself.
-		expect(reads).toEqual([[pool, 'getSecurityPoolPortfolio', [pool], 7n], ...(scenario.recorded === zeroAddress ? [] : [[pool, 'isPortfolio', [portfolio], 7n]])])
+		// Only the factory is consulted; nothing is read from the security pool itself.
+		expect(reads).toEqual([[pool, 'securityPoolOf', [pool], 7n], ...(scenario.recorded === zeroAddress ? [] : [[pool, 'isSecurityPool', [securityPool], 7n]])])
 	}
 })
 
@@ -306,7 +306,7 @@ test('USDC share migration reviews the amount at six decimal precision', async (
 	const client = {
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
-				const responses: Record<string, unknown> = { universeId: 1n, shareToken: pool, securityPoolFactory: pool, getSecurityPoolPortfolio: portfolio, isPortfolio: true, collateralToken: getActiveNetworkProfile().usdcAddress, services: portfolio }
+				const responses: Record<string, unknown> = { universeId: 1n, shareToken: pool, securityPoolFactory: pool, securityPoolOf: securityPool, isSecurityPool: true, collateralToken: getActiveNetworkProfile().usdcAddress, services: securityPool }
 				if (!(request.functionName in responses)) throw new Error(`Unexpected read ${request.functionName}`)
 				return responses[request.functionName]
 			}),

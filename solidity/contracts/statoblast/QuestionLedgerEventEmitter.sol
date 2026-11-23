@@ -4,15 +4,15 @@ pragma solidity 0.8.35;
 import { AccountingReason, IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { QuestionLedgerAccountingDelegate } from './QuestionLedgerAccountingDelegate.sol';
 
-/// @notice Fixed delegate for native fee accounting, portfolio credits and verbose checkpoint encoding.
+/// @notice Fixed delegate for native fee accounting, security pool credits and verbose checkpoint encoding.
 contract QuestionLedgerEventEmitter is QuestionLedgerAccountingDelegate {
-	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime);
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementSecurityPoolTime);
 
 	function setStartingParams() external {
 		IQuestionLedger pool = IQuestionLedger(payable(address(this)));
 		require(msg.sender == address(pool.securityPoolFactory()), 'Only factory');
-		// Bootstrap placeholder until portfolio binding checkpoints the central portfolio clock.
-		lastSettlementPortfolioTime = block.timestamp;
+		// Bootstrap placeholder until security pool binding checkpoints the central security pool clock.
+		lastSettlementSecurityPoolTime = block.timestamp;
 		feeEpochEndTime = pool.questionData().getQuestionEndDate(pool.questionId());
 		_emitCheckpoint(AccountingReason.PoolInitialization);
 	}
@@ -28,6 +28,6 @@ contract QuestionLedgerEventEmitter is QuestionLedgerAccountingDelegate {
 	function _emitCheckpoint(AccountingReason reason) private {
 		// Every capacity/collateral checkpoint also reconciles the shared report security budget.
 		IQuestionLedger(payable(address(this))).openOraclePriceCoordinator().syncExposure();
-		emit QuestionAccountingCheckpoint(reason, settlementCollateralAttoEth, shareTokenSupplyAttoShares, lastSettlementPortfolioTime);
+		emit QuestionAccountingCheckpoint(reason, settlementCollateralAttoEth, shareTokenSupplyAttoShares, lastSettlementSecurityPoolTime);
 	}
 }

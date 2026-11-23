@@ -10,7 +10,7 @@ const selector = (signature: string) => keccak256(stringToHex(signature)).slice(
 /** One portfolio's checkpointed state, including Multicall3 reads pinned by transaction tests. */
 export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp: bigint): Hex | undefined {
 	const signature = data.slice(0, 10)
-	if (signature === selector('refreshPortfolioFees()')) return '0x'
+	if (signature === selector('refreshSecurityPoolFees()')) return '0x'
 	if (signature === selector('redeemShares()')) return '0x'
 	if (signature === selector('aggregate3((address,bool,bytes)[])')) {
 		const decoded = decodeFunctionData({ abi: aggregateAbi, data })
@@ -34,7 +34,7 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 	const rate = ((accounting?.linearFee?.rateAttoEthPerSecond ?? 0n) * 1_000_000_000n) / (accounting?.linearFee?.rateScale ?? 1n)
 	const requestedEnd = accounting?.linearFee?.endTime ?? market.endTime
 	const end = requestedEnd < 2n ** 48n ? requestedEnd : 2n ** 48n - 1n
-	if (['questionData()', 'portfolioCustody()', 'portfolio()', 'settlement()', 'ledger()'].some(name => signature === selector(name))) return encodeAbiParameters([address], [market.pool])
+	if (['questionData()', 'securityPoolCustody()', 'portfolio()', 'settlement()', 'ledger()'].some(name => signature === selector(name))) return encodeAbiParameters([address], [market.pool])
 	const integers: ReadonlyArray<readonly [string, bigint]> = [
 		['getCurrentBlockTimestamp()', timestamp],
 		['getQuestionEndDate(uint256)', market.endTime],

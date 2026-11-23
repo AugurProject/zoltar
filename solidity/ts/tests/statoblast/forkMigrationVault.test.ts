@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
@@ -15,14 +15,14 @@ import { approveToken, getChildUniverseId } from '../../testSupport/simulator/ut
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
-	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
+	const securityPool = () => ({ abi: securityPoolArtifact.abi, address: fixture.securityPool })
 	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
-	const controller = async () => ({ abi: forkArtifact.abi, address: await fixture.owner().readContract({ ...portfolio(), functionName: 'forkController' }) })
+	const controller = async () => ({ abi: forkArtifact.abi, address: await fixture.owner().readContract({ ...securityPool(), functionName: 'forkController' }) })
 	const trigger = async (own: boolean) => {
 		const owner = fixture.owner()
 		await fixture.prepare()
@@ -54,7 +54,7 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 		expect((await owner.getBlock()).timestamp).toBe(choice - 1n)
 		expect([...(await owner.readContract({ ...branch, functionName: 'choices', args: [fixture.base.genesisUniverse, owner.account.address] }))]).toEqual([1n, true])
 		const child = getChildUniverseId(fixture.base.genesisUniverse, 1)
-		const capital = await owner.readContract({ ...portfolio(), functionName: 'capitalLedger', args: [child] })
+		const capital = await owner.readContract({ ...securityPool(), functionName: 'capitalLedger', args: [child] })
 		const before = await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [owner.account.address] })
 		for (const offset of [0n, 1n]) {
 			await fixture.base.mockWindow.setTime(choice + offset)
@@ -90,18 +90,18 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		await fixture.base.mockWindow.advanceTime(365n * DAY)
-		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'preparePortfolioQuestion', args: [pool(), child] }))
-		const childPool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'prepareSecurityPoolQuestion', args: [pool(), child] }))
+		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
 		for (let outcome = 0; outcome < 3; outcome++) {
 			expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'systemState' })).toBe(2n)
 			await expect(owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'depositWalletRepToEscalationGame', args: [1, unit] })).rejects.toThrow(own ? 'Forked' : 'Pool inactive')
-			await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [pool(), child] }))
+			await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [pool(), child] }))
 		}
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'systemState' })).toBe(0n)
 		const childGame = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'forkCarrySnapshotOutcomesInitialized' })).toBe(3n)
 		const before = await owner.readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'getForkCarrySnapshot' })
-		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [pool(), child] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [pool(), child] }))
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'getForkCarrySnapshot' })).toEqual(before)
 	})
 
@@ -121,16 +121,16 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 		await fixture.base.mockWindow.setTime(firstForkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [fixture.base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [pool(), child] }))
-		const childPool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })
-		expect([...(await owner.readContract({ ...portfolio(), functionName: 'inheritedFixedOutcome', args: [child, fixture.base.questionId] }))]).toEqual([true, 1n])
-		await expect(owner.writeContract({ ...portfolio(), functionName: 'createCompleteSet', args: [child, fixture.base.questionId, unit, owner.account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow()
+		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [pool(), child] }))
+		const childPool = await owner.readContract({ ...securityPool(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		expect([...(await owner.readContract({ ...securityPool(), functionName: 'inheritedFixedOutcome', args: [child, fixture.base.questionId] }))]).toEqual([true, 1n])
+		await expect(owner.writeContract({ ...securityPool(), functionName: 'createCompleteSet', args: [child, fixture.base.questionId, unit, owner.account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow()
 		await fixture.base.mockWindow.setTime(firstForkTime + 70n * DAY)
 		await expect(owner.writeContract({ ...forker(), functionName: 'forkZoltarWithOwnEscalationGame', args: [childPool] })).rejects.toThrow()
 		await approveToken(owner, getRepTokenAddress(child), getZoltarAddress())
 		await forkUniverse(owner, child, fixture.base.questionId)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'prepareBranch', args: [child, 2n] }))
 		const grandchild = getChildUniverseId(child, 2)
-		expect([...(await owner.readContract({ ...portfolio(), functionName: 'inheritedFixedOutcome', args: [grandchild, fixture.base.questionId] }))]).toEqual([true, 1n])
+		expect([...(await owner.readContract({ ...securityPool(), functionName: 'inheritedFixedOutcome', args: [grandchild, fixture.base.questionId] }))]).toEqual([true, 1n])
 	})
 })

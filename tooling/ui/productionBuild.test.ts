@@ -10,9 +10,9 @@ import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deploy
 import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import { shareTokenAbi } from '../../ui/trading/ts/protocol/authorization.js'
 import { tradingContracts } from '../../ui/trading/ts/generated/contractArtifact.js'
-import * as portfolioCopy from '../../ui/statoblastShared/ts/copy/portfolio.js'
+import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
 import * as collateralCopy from '../../ui/statoblastShared/ts/copy/collateral.js'
-import * as capitalCopy from '../../ui/statoblastShared/ts/copy/portfolioCapital.js'
+import * as capitalCopy from '../../ui/statoblastShared/ts/copy/securityPoolCapital.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium, writeViewportScreenshot } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
@@ -24,7 +24,7 @@ const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId
 const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
 const CHROMIUM_COMMAND_TIMEOUT_MILLISECONDS = 30_000
 const PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS = 120_000
-const PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS = 600_000
+const SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS = 600_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
 let server: Bun.Server<undefined> | undefined
@@ -451,7 +451,7 @@ const productionBrowserScenarios = [
 	{
 		appId: 'statoblast',
 		hash: '#/pools?simulate=1&genesis=yes&simScenario=security-pool',
-		expected: 'Portfolio questions',
+		expected: 'Security pool questions',
 		workflow: false,
 		name: 'statoblast seeded pool at narrow width',
 		viewport: { height: 844, width: 390 },
@@ -459,7 +459,7 @@ const productionBrowserScenarios = [
 	{
 		appId: 'statoblast',
 		hash: '#/pools?simulate=1&genesis=no&simScenario=security-pool',
-		expected: 'Portfolio questions',
+		expected: 'Security pool questions',
 		workflow: false,
 		name: 'statoblast No genesis seeded pool',
 		viewport: { height: 900, width: 1440 },
@@ -474,7 +474,7 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/portfolios?simulate=1&genesis=yes&simScenario=portfolio-auction',
+		hash: '#/securityPools?simulate=1&genesis=yes&simScenario=portfolio-auction',
 		expected: 'Fork choices and recovery',
 		workflow: true,
 		name: 'statoblast fork and auction',
@@ -505,18 +505,18 @@ for (const scenario of productionBrowserScenarios) {
 }
 
 test(
-	'production bundle boots the authenticated Statoblast portfolio and seeded question balances in Chromium',
+	'production bundle boots the authenticated Statoblast security pool and seeded question balances in Chromium',
 	async () => {
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		await loadProductionDocumentInChromium(
-			`${baseUrl}/statoblast/#/portfolios?simulate=1&genesis=yes&simScenario=securitypoolx2`,
+			`${baseUrl}/statoblast/#/securityPools?simulate=1&genesis=yes&simScenario=securitypoolx2`,
 			{ height: 900, width: 1440 },
 			async driver => {
 				// Worker bootstrap can finish before main-thread discovery authenticates the ledger.
 				const body = await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 				expect(body).toContain('Browser simulation')
-				expect(body).not.toContain('Could not load the portfolio snapshot')
+				expect(body).not.toContain('Could not load the security pool snapshot')
 				expect(body).toContain(capitalCopy.prepareProgress(4))
 				await driver.waitForButtonEnabled(capitalCopy.claim)
 				const seededPools = await createWorkflowActions(driver).loadSeededPools()
@@ -533,11 +533,11 @@ test(
 			const backing = section(${JSON.stringify(capitalCopy.poolTitle)});
 			const positions = section(${JSON.stringify(capitalCopy.positions)});
 			const amounts = (scope, label) => [...scope.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
-			const questions = [...section(${JSON.stringify(portfolioCopy.mint)}).querySelectorAll('select option')].filter(option => option.value !== '').map(option => String(BigInt(option.value)));
-			const manager = input(${JSON.stringify(portfolioCopy.manager)});
+			const questions = [...section(${JSON.stringify(securityPoolCopy.mint)}).querySelectorAll('select option')].filter(option => option.value !== '').map(option => String(BigInt(option.value)));
+			const manager = input(${JSON.stringify(securityPoolCopy.manager)});
 			return {
 				managerLoaded: /^0x[0-9a-f]{40}$/i.test(manager) && manager.toLowerCase() !== ${JSON.stringify(zeroAddress)},
-				owner: input(${JSON.stringify(portfolioCopy.owner)})?.toLowerCase(),
+				owner: input(${JSON.stringify(securityPoolCopy.owner)})?.toLowerCase(),
 				withdrawableRep: amounts(capital, ${JSON.stringify(capitalCopy.withdrawableRep)}),
 				principalRep: amounts(capital, ${JSON.stringify(capitalCopy.principalRep)}),
 				commitment: amounts(capital, ${JSON.stringify(capitalCopy.commitment)}),
@@ -566,10 +566,10 @@ test(
 					questions: questionIds.toSorted(),
 				})
 			},
-			PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
+			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
 		)
 	},
-	PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS,
+	SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS,
 )
 
 for (const appId of ['zoltar', 'statoblast', 'trading'] as const) {
@@ -644,18 +644,18 @@ function productionInteractionTest(scenario: ProductionWorkflowScenario, route: 
 	})
 }
 
-async function portfolioMetric(driver: ProductionBrowserDriver, label: string) {
+async function securityPoolMetric(driver: ProductionBrowserDriver, label: string) {
 	return driver.evaluate(`(() => { const field = [...document.querySelectorAll('.metric-label')].find(node => node.textContent === ${JSON.stringify(label)}); return field?.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, '') })()`)
 }
 
-productionInteractionTest('capital-recovery', '#/portfolios?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
+productionInteractionTest('capital-recovery', '#/securityPools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
-	const before = await portfolioMetric(driver, capitalCopy.principalRep)
+	const before = await securityPoolMetric(driver, capitalCopy.principalRep)
 	expect(before).toBe('5000REP')
 	await driver.setInputByLabel(capitalCopy.repAmount, '1')
 	await driver.waitForButtonEnabled('Approve 1\u00a0REP')
 	await driver.clickButton('Approve 1\u00a0REP')
-	await createWorkflowActions(driver).completeTransactionReview(undefined, portfolioCopy.confirmed)
+	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
 	await driver.waitForButtonEnabled(capitalCopy.deposit)
 	await driver.clickButton(capitalCopy.deposit)
 	const failureInjected = await driver.evaluate(
@@ -664,31 +664,31 @@ productionInteractionTest('capital-recovery', '#/portfolios?simulate=1&genesis=y
 	expect(failureInjected).toBe(true)
 	await createWorkflowActions(driver).completeTransactionReview(undefined, 'Injected production workflow failure')
 	await driver.waitForBodyText('Injected production workflow failure')
-	expect(await portfolioMetric(driver, capitalCopy.principalRep)).toBe(before)
+	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe(before)
 	await driver.clickButton('Close')
 	await driver.waitForButtonEnabled(capitalCopy.deposit)
 	await driver.clickButton(capitalCopy.deposit)
-	await createWorkflowActions(driver).completeTransactionReview(undefined, portfolioCopy.confirmed)
-	await driver.waitForBodyText(portfolioCopy.confirmed)
-	expect(await portfolioMetric(driver, capitalCopy.principalRep)).toBe('5001REP')
+	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
+	await driver.waitForBodyText(securityPoolCopy.confirmed)
+	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5001REP')
 })
 
-productionInteractionTest('portfolio-purchase', '#/portfolios?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
+productionInteractionTest('security-pool-purchase', '#/securityPools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 	const selected = await driver.evaluate(
-		`(() => { const label = [...document.querySelectorAll('label')].find(node => node.textContent === ${JSON.stringify(portfolioCopy.registeredQuestions)}); const select = label?.control; if (!(select instanceof HTMLSelectElement)) return false; const option = [...select.options].find(option => option.value !== ''); if (!option) return false; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
+		`(() => { const label = [...document.querySelectorAll('label')].find(node => node.textContent === ${JSON.stringify(securityPoolCopy.registeredQuestions)}); const select = label?.control; if (!(select instanceof HTMLSelectElement)) return false; const option = [...select.options].find(option => option.value !== ''); if (!option) return false; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
 	)
 	expect(selected).toBe(true)
-	await driver.setInputByLabel(collateralCopy.amount(portfolioCopy.mintAmount, collateralCopy.weth), '0.01')
-	await driver.setInputByLabel(collateralCopy.amount(portfolioCopy.maximumPurchaseFee, collateralCopy.weth), '0.1')
-	await driver.setInputByLabel(portfolioCopy.minimumShares, '0')
-	await driver.waitForButtonEnabled(portfolioCopy.mint)
-	await driver.clickButton(portfolioCopy.mint)
-	await createWorkflowActions(driver).completeTransactionReview(undefined, portfolioCopy.confirmed)
-	await driver.waitForBodyText(portfolioCopy.confirmed)
-	expect(await portfolioMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
-	expect(await portfolioMetric(driver, capitalCopy.demand)).toContain('WETH')
-	expect(await portfolioMetric(driver, capitalCopy.demand)).not.toBe('0WETH')
+	await driver.setInputByLabel(collateralCopy.amount(securityPoolCopy.mintAmount, collateralCopy.weth), '0.01')
+	await driver.setInputByLabel(collateralCopy.amount(securityPoolCopy.maximumPurchaseFee, collateralCopy.weth), '0.1')
+	await driver.setInputByLabel(securityPoolCopy.minimumShares, '0')
+	await driver.waitForButtonEnabled(securityPoolCopy.mint)
+	await driver.clickButton(securityPoolCopy.mint)
+	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
+	await driver.waitForBodyText(securityPoolCopy.confirmed)
+	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+	expect(await securityPoolMetric(driver, capitalCopy.demand)).toContain('WETH')
+	expect(await securityPoolMetric(driver, capitalCopy.demand)).not.toBe('0WETH')
 })
 
 productionInteractionTest('deployment', '#/deploy?simulate=1&genesis=yes&simScenario=baseline', { height: 900, width: 1440 }, async driver => {

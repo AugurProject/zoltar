@@ -1,11 +1,11 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
-		name: 'PortfolioRecoveryRightsConsumed',
+		name: 'SecurityPoolRecoveryRightsConsumed',
 		parameters: 'uint248 indexed universeId,address indexed holder,uint256 amountAttoShares,uint256 cumulativeAttoShares',
 		sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	},
 	{
-		name: 'PortfolioRecoveryRightsTransferred',
+		name: 'SecurityPoolRecoveryRightsTransferred',
 		parameters: 'uint248 indexed universeId,address indexed from,address indexed to,uint256[3] amountsAttoShares',
 		sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	},
@@ -61,7 +61,7 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	},
 	{
 		name: 'SharedPriceFeedRegistered',
-		parameters: 'address indexed portfolio,uint248 indexed universeId,address indexed priceFeed',
+		parameters: 'address indexed security pool,uint248 indexed universeId,address indexed priceFeed',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{

@@ -5,7 +5,7 @@ This directory holds three independent operator services and the code they share
 | Directory | Service | Dashboard |
 | --- | --- | --- |
 | [`chaos/`](./chaos/README.md) | Randomized transaction operator for Zoltar, Statoblast, OpenOracle, and Trading | `http://127.0.0.1:4193` |
-| [`liquidator/`](./liquidator/README.md) | Statoblast portfolio liquidation and REP backing management | `http://127.0.0.1:4183` |
+| [`liquidator/`](./liquidator/README.md) | Statoblast security pool liquidation and REP backing management | `http://127.0.0.1:4183` |
 | [`open-oracle-arbitrager/`](./open-oracle-arbitrager/README.md) | OpenOracle dispute arbitrage and third-party settlement | `http://127.0.0.1:4173` |
 | `shared/` | Ethereum, connectivity, quorum, block synchronization, signer gate, dashboard, and transaction-submission primitives | — |
 

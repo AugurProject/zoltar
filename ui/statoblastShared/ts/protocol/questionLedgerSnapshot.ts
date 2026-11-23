@@ -14,17 +14,17 @@ import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import type { QuestionLedgerDeploymentTuple } from './helpers.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { loadCentralPortfolioQuestion } from './securityPoolPortfolioState.js'
+import { loadCentralSecurityPoolQuestion } from './securityPoolState.js'
 
-/** Question views read settlement and underwriting from their shared portfolio at one block. */
+/** Question views read settlement and underwriting from their shared security pool at one block. */
 export async function loadQuestionLedgerDetails(client: ReadClient, deployment: QuestionLedgerDeploymentTuple, snapshotBlockNumber?: bigint): Promise<ListedQuestionLedger> {
 	const { questionLedger: questionLedgerAddress, universeId, openOraclePriceCoordinator: managerAddress } = deployment
 	const blockNumber = snapshotBlockNumber ?? (await client.getBlock()).number
 	if (blockNumber === undefined) throw new Error('Question snapshot requires a mined block.')
 	const infrastructure = getInfraContractAddresses()
-	const [capital, portfolioAddress, escalationGameAddress, state, outcome, forkTime, price, settledAt, validUntil, marketDetails] = await Promise.all([
-		client.readContract({ abi: poolArtifact.abi, address: questionLedgerAddress, functionName: 'portfolioCustody', blockNumber }),
-		client.readContract({ abi: factoryArtifact.abi, address: infrastructure.securityPoolFactory, functionName: 'getSecurityPoolPortfolio', args: [questionLedgerAddress], blockNumber }),
+	const [capital, securityPoolAddress, escalationGameAddress, state, outcome, forkTime, price, settledAt, validUntil, marketDetails] = await Promise.all([
+		client.readContract({ abi: poolArtifact.abi, address: questionLedgerAddress, functionName: 'securityPoolCustody', blockNumber }),
+		client.readContract({ abi: factoryArtifact.abi, address: infrastructure.securityPoolFactory, functionName: 'securityPoolOf', args: [questionLedgerAddress], blockNumber }),
 		client.readContract({ abi: poolArtifact.abi, address: questionLedgerAddress, functionName: 'escalationGame', blockNumber }),
 		client.readContract({ abi: poolArtifact.abi, address: questionLedgerAddress, functionName: 'systemState', blockNumber }),
 		client.readContract({ abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, address: infrastructure.questionForker, functionName: 'getQuestionOutcome', args: [questionLedgerAddress], blockNumber }),
@@ -34,11 +34,11 @@ export async function loadQuestionLedgerDetails(client: ReadClient, deployment: 
 		client.readContract({ abi: coordinatorArtifact.abi, address: managerAddress, functionName: 'priceValidUntil', blockNumber }),
 		loadMarketDetails(client, deployment.questionId),
 	])
-	if (capital === zeroAddress || portfolioAddress === zeroAddress) throw new Error('Question has no portfolio.')
-	const central = await loadCentralPortfolioQuestion(client, questionLedgerAddress, capital, blockNumber)
+	if (capital === zeroAddress || securityPoolAddress === zeroAddress) throw new Error('Question has no security pool.')
+	const central = await loadCentralSecurityPoolQuestion(client, questionLedgerAddress, capital, blockNumber)
 	const hasForkContinuationEscalationGame = escalationGameAddress !== zeroAddress && (await client.readContract({ abi: gameArtifact.abi, address: escalationGameAddress, functionName: 'forkContinuation', blockNumber }))
 	return {
-		portfolioAddress,
+		securityPoolAddress,
 		settlementCollateralAttoEth: central.settlementCollateralAttoEth,
 		settlementRecoveryAttoRep: central.settlementRecoveryAttoRep,
 		mintingCapacityAttoEth: escalationGameAddress === zeroAddress ? central.mintingCapacityAttoEth : 0n,

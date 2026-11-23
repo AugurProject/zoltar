@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { EscalationGameRepCustody } from '../EscalationGameRepCustody.sol';
 import { SecurityPoolReporterLedger } from '../SecurityPoolReporterLedger.sol';
-import { ISecurityPoolPortfolioNative } from '../interfaces/ISecurityPoolPortfolioNative.sol';
+import { ISecurityPoolNative } from '../interfaces/ISecurityPoolNative.sol';
 import { IQuestionLedger } from '../interfaces/IQuestionLedger.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
@@ -48,7 +48,7 @@ contract EscalationGameFactory {
 	}
 
 	function deployEscalationGame(uint256 startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external returns (EscalationGame) {
-		require(EscalationGameRepCustody.portfolio(msg.sender) != address(0), 'Reporter portfolio required');
+		require(EscalationGameRepCustody.securityPool(msg.sender) != address(0), 'Reporter security pool required');
 		require(_nonDecisionThresholdAttoRep > 1, 'Escalation threshold too low');
 		if (startBondAttoRep >= _nonDecisionThresholdAttoRep) startBondAttoRep = _nonDecisionThresholdAttoRep - 1;
 		EscalationGame gameImplementation = _deployOrReuseEscalationGame(IQuestionLedger(payable(msg.sender)));
@@ -60,10 +60,10 @@ contract EscalationGameFactory {
 		IQuestionLedger child = IQuestionLedger(payable(msg.sender));
 		bool winnerHaircutPaidByFork;
 		uint256 forkCarryInitialBackingAttoRep;
-		address portfolio = EscalationGameRepCustody.portfolio(address(child));
-		require(portfolio != address(0), 'Reporter portfolio required');
+		address securityPool = EscalationGameRepCustody.securityPool(address(child));
+		require(securityPool != address(0), 'Reporter security pool required');
 		{
-			(SecurityPoolReporterLedger.Question memory state, ) = SecurityPoolReporterLedger(ISecurityPoolPortfolioNative(portfolio).reporterLedger(child.universeId())).question(child.universeId(), child.questionId());
+			(SecurityPoolReporterLedger.Question memory state, ) = SecurityPoolReporterLedger(ISecurityPoolNative(securityPool).reporterLedger(child.universeId())).question(child.universeId(), child.questionId());
 			winnerHaircutPaidByFork = state.winnerHaircutPaidByFork;
 			forkCarryInitialBackingAttoRep = state.balanceAttoRep;
 		}

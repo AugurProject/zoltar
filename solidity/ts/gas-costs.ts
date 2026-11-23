@@ -1,12 +1,12 @@
 import { wrapWeth } from './testSupport/simulator/utils/contracts/statoblast'
 import { bigintToSafeNumber, encodeDeployData, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, portfolioAddressFromDeploymentLogs } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildSecurityPoolDeploymentRequest, buildSecurityPoolPrepareNextRequest, securityPoolAddressFromDeploymentLogs } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as policyArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
@@ -55,52 +55,52 @@ try {
 	await ensureZoltarDeployed(owner)
 	await ensureInfraDeployed(owner)
 	const infra = getInfraContractAddresses()
-	const policyReceipt = await measure('1. Portfolio deployment', 'Open question admission policy', owner, () => owner.sendTransaction({ data: encodeDeployData({ abi: policyArtifact.abi, bytecode: `0x${policyArtifact.evm.bytecode.object}` }) }))
+	const policyReceipt = await measure('1. Security pool deployment', 'Open question admission policy', owner, () => owner.sendTransaction({ data: encodeDeployData({ abi: policyArtifact.abi, bytecode: `0x${policyArtifact.evm.bytecode.object}` }) }))
 	const policy = policyReceipt.contractAddress
 	if (policy === undefined) throw new Error('Missing admission policy')
-	const deployment = buildPortfolioDeploymentRequest({
+	const deployment = buildSecurityPoolDeploymentRequest({
 		owner: owner.account.address,
 		factory: infra.securityPoolFactory,
 		origin: { collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', minimumReportCollateral: 10n ** 16n, universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10n * 10n ** 9n },
 		maximumQuestionHorizonSeconds: 20n * 365n * DAY,
 		questionAdmissionPolicy: policy,
 		economics: { purchaseFeeBps: 100n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: unit / 1_000n, minimumCommitmentAttoEth: unit, minimumOutcomeRate: 1_000n, rewardVestingSeconds: DAY },
-		creationCode: `0x${portfolioArtifact.evm.bytecode.object}`,
+		creationCode: `0x${securityPoolArtifact.evm.bytecode.object}`,
 	})
-	const deployed = await measure('1. Portfolio deployment', 'Deploy shared portfolio', owner, () => owner.sendTransaction({ ...deployment, gas: 16_777_216n }))
-	const portfolioAddress = portfolioAddressFromDeploymentLogs(deployed.logs, infra.securityPoolFactory)
-	const portfolio = { abi: portfolioArtifact.abi, address: portfolioAddress }
-	for (let step = 1; step <= 4; step++) await measure('1. Portfolio deployment', `Prepare portfolio stage ${step}`, trader, () => trader.sendTransaction({ ...buildPortfolioPrepareNextRequest({ caller: trader.account.address, portfolio: portfolioAddress }), gas: 16_777_216n }))
-	const question = makeQuestion('Shared portfolio gas benchmark', (await anvil.getTime()) + 365n * DAY)
+	const deployed = await measure('1. Security pool deployment', 'Deploy shared security pool', owner, () => owner.sendTransaction({ ...deployment, gas: 16_777_216n }))
+	const securityPoolAddress = securityPoolAddressFromDeploymentLogs(deployed.logs, infra.securityPoolFactory)
+	const securityPool = { abi: securityPoolArtifact.abi, address: securityPoolAddress }
+	for (let step = 1; step <= 4; step++) await measure('1. Security pool deployment', `Prepare security pool stage ${step}`, trader, () => trader.sendTransaction({ ...buildSecurityPoolPrepareNextRequest({ caller: trader.account.address, securityPool: securityPoolAddress }), gas: 16_777_216n }))
+	const question = makeQuestion('Shared security pool gas benchmark', (await anvil.getTime()) + 365n * DAY)
 	const outcomes = ['Yes', 'No']
 	await createQuestion(owner, question, outcomes)
 	const questionId = getQuestionId(question, outcomes)
-	await measure('1. Portfolio deployment', 'Register question', trader, () => trader.writeContract({ ...portfolio, functionName: 'addQuestion', args: [questionId] }))
-	const poolAddress = await owner.readContract({ ...portfolio, functionName: 'getPool', args: [questionId, 0n] })
+	await measure('1. Security pool deployment', 'Register question', trader, () => trader.writeContract({ ...securityPool, functionName: 'addQuestion', args: [questionId] }))
+	const poolAddress = await owner.readContract({ ...securityPool, functionName: 'getPool', args: [questionId, 0n] })
 	const pool = { abi: poolArtifact.abi, address: poolAddress }
-	const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...portfolio, functionName: 'capitalLedger', args: [0n] }) }
+	const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...securityPool, functionName: 'capitalLedger', args: [0n] }) }
 	await approveToken(owner, getRepTokenAddress(0n), capital.address)
 	await measure('2. Shared underwriting and trading', 'Deposit shared REP principal', owner, () => owner.writeContract({ ...capital, functionName: 'depositFor', args: [owner.account.address, 1_000n * unit] }))
 	const coordinator = await owner.readContract({ ...pool, functionName: 'openOraclePriceCoordinator' })
 	await manipulatePriceOracle(owner, anvil, coordinator, unit, 100n * unit)
 	await measure('2. Shared underwriting and trading', 'Set owner commitment', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [200n * unit] }))
-	const quote = await trader.readContract({ ...portfolio, functionName: 'purchaseQuote', args: [0n, questionId, 100n * unit] })
-	const collateral = await trader.readContract({ ...portfolio, functionName: 'collateralToken' })
-	const services = await trader.readContract({ ...portfolio, functionName: 'services' })
+	const quote = await trader.readContract({ ...securityPool, functionName: 'purchaseQuote', args: [0n, questionId, 100n * unit] })
+	const collateral = await trader.readContract({ ...securityPool, functionName: 'collateralToken' })
+	const services = await trader.readContract({ ...securityPool, functionName: 'services' })
 	await wrapWeth(trader, 101n * unit + quote[0])
 	await approveToken(trader, collateral, services)
-	await measure('2. Shared underwriting and trading', 'Purchase complete sets', trader, () => trader.writeContract({ ...portfolio, functionName: 'createCompleteSet', args: [0n, questionId, 100n * unit, trader.account.address, 0n, 100n * unit + (quote[0] * 10_100n + 9_999n) / 10_000n - 100n * unit], value: 0n }))
+	await measure('2. Shared underwriting and trading', 'Purchase complete sets', trader, () => trader.writeContract({ ...securityPool, functionName: 'createCompleteSet', args: [0n, questionId, 100n * unit, trader.account.address, 0n, 100n * unit + (quote[0] * 10_100n + 9_999n) / 10_000n - 100n * unit], value: 0n }))
 	const shares = await trader.readContract({ ...pool, functionName: 'shareTokenSupplyAttoShares' })
 	await measure('2. Shared underwriting and trading', 'Return half of complete sets', trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [shares / 2n] }))
 	await measure('2. Shared underwriting and trading', 'Checkpoint question accounting', trader, () => trader.writeContract({ ...pool, functionName: 'updateSettlementCollateral' }))
 	// An unrelated native fork leaves this question open. All underwriting moves
 	// once at branch level; lazy question creation does not process owner lists.
-	const forkQuestion = makeQuestion('Shared portfolio benchmark fork', (await anvil.getTime()) + DAY)
+	const forkQuestion = makeQuestion('Shared security pool benchmark fork', (await anvil.getTime()) + DAY)
 	await createQuestion(owner, forkQuestion, outcomes)
 	await anvil.setTime(forkQuestion.endTime + 1n)
 	await approveToken(owner, getRepTokenAddress(0n), getZoltarAddress())
 	await measure('3. Shared fork', 'Trigger native fork', owner, () => forkUniverse(owner, 0n, getQuestionId(forkQuestion, outcomes)))
-	const branch = { abi: forkArtifact.abi, address: await owner.readContract({ ...portfolio, functionName: 'forkController' }) }
+	const branch = { abi: forkArtifact.abi, address: await owner.readContract({ ...securityPool, functionName: 'forkController' }) }
 	await measure('3. Shared fork', 'Deploy native child REP', owner, () => deployChild(owner, 0n, 1n))
 	await measure('3. Shared fork', 'Prepare branch capital and freeze source', owner, () => owner.writeContract({ ...branch, functionName: 'prepareBranch', args: [0n, 1n] }))
 	await measure('3. Shared fork', 'Choose prepared owner branch', owner, () => owner.writeContract({ ...branch, functionName: 'choose', args: [0n, 1n] }))
@@ -111,9 +111,9 @@ try {
 	await anvil.setTime(forkTime + 63n * DAY)
 	await measure('3. Shared fork', 'Activate shared branch', owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 	const forker = { abi: forkerArtifact.abi, address: infra.questionForker }
-	await measure('3. Shared fork', 'Materialize question without reporter history', owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [poolAddress, child] }))
-	console.log('Measured one-question portfolio lifecycle; infrastructure, approvals and oracle funding are setup costs excluded from these rows.')
-	console.log('For auction and large-history transaction bounds, run the portfolio auction and bounded fork gas test suites.')
+	await measure('3. Shared fork', 'Materialize question without reporter history', owner, () => owner.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [poolAddress, child] }))
+	console.log('Measured one-question security pool lifecycle; infrastructure, approvals and oracle funding are setup costs excluded from these rows.')
+	console.log('For auction and large-history transaction bounds, run the security pool auction and bounded fork gas test suites.')
 	const labelWidth = results.reduce((max, result) => (result.label.length > max ? result.label.length : max), 0)
 	const gasCostInEth = (gas: bigint) => (bigintToSafeNumber(gas, 'Gas usage') * totalGasPriceNanoEth) / 1_000_000_000
 	const gasCostInUsd = (gas: bigint) => gasCostInEth(gas) * ethPriceUsd

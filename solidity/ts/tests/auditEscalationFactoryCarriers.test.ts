@@ -5,13 +5,13 @@ import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Audit hardening: the factory stores the game's creation code in two code carriers. A carrier
 // that began with a chunk byte could fail to deploy when that byte is 0xEF (EIP-3541), and was
 // executable. Each carrier now starts with STOP and the game is rebuilt from the bytes after it.
 describe('audit: escalation game creation-code carriers start with STOP', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 
 	test('both carriers begin with a STOP byte and a game still deploys from them', async () => {
 		const owner = fixture.owner()

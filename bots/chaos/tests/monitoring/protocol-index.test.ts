@@ -1,4 +1,4 @@
-import { auctionFixture } from '../support/portfolio-fixtures.ts'
+import { auctionFixture } from '../support/security-pool-fixtures.ts'
 import { canonicalPoolReportRoutes } from '../../src/monitoring/discovery-price-feed.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
@@ -738,7 +738,7 @@ describe('durable protocol index', () => {
 	})
 })
 
-test('native portfolio auction replay tracks bid IDs and refund generations across settlement and withdrawal', async () => {
+test('native security pool auction replay tracks bid IDs and refund generations across settlement and withdrawal', async () => {
 	const submittedTopic = keccak256(toHex('BidSubmitted(uint256,address,address,uint256,uint256,uint256)'))
 	const settledTopic = keccak256(toHex('BidSettled(uint256,address,uint256,uint256)'))
 	const withdrawnTopic = keccak256(toHex('RefundWithdrawn(address,address,uint256)'))

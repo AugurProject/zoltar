@@ -5,10 +5,10 @@ import '../interfaces/IQuestionLedger.sol';
 import '../BinaryOutcomes.sol';
 
 interface IShareToken {
-	function balanceOfPortfolioRecoveryRights(uint248 sourceUniverse, address holder) external view returns (uint256[3] memory amountsAttoShares);
-	function isPortfolioRecoveryEligible(uint248 sourceUniverse) external view returns (bool);
-	function transferPortfolioRecoveryRights(uint248 sourceUniverse, address recipient, uint256[3] calldata amountsAttoShares) external;
-	function consumePortfolioRecoveryCompleteSets(uint248 sourceUniverse, address holder, uint256 amountAttoShares) external returns (uint256 cumulativeClaimedAttoShares);
+	function balanceOfSecurityPoolRecoveryRights(uint248 sourceUniverse, address holder) external view returns (uint256[3] memory amountsAttoShares);
+	function isSecurityPoolRecoveryEligible(uint248 sourceUniverse) external view returns (bool);
+	function transferSecurityPoolRecoveryRights(uint248 sourceUniverse, address recipient, uint256[3] calldata amountsAttoShares) external;
+	function consumeSecurityPoolRecoveryCompleteSets(uint248 sourceUniverse, address holder, uint256 amountAttoShares) external returns (uint256 cumulativeClaimedAttoShares);
 	function recoveredCompleteSetShares(uint248 sourceUniverse, address holder) external view returns (uint256);
 	/// @notice Resulting authorization for `account`.
 	/// @param actor Constructor deployer for the initial owner authorization; already-authorized caller thereafter.

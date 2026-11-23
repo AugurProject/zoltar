@@ -12,13 +12,13 @@ import {
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator,
+	statoblast_SecurityPool_SecurityPool,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex,
 	statoblast_QuestionLedger_QuestionLedger,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger,
-	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction,
+	statoblast_SecurityPoolAuction_SecurityPoolAuction,
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction,
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault,
 	statoblast_tokens_ERC1155_ERC1155,
@@ -43,15 +43,15 @@ describe('generated bot contract ABIs', () => {
 			[abis.zoltarAbi, Zoltar_Zoltar.abi],
 			[abis.zoltarQuestionDataAbi, ZoltarQuestionData_ZoltarQuestionData.abi],
 			[abis.securityPoolFactoryAbi, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi],
-			[abis.securityPoolPortfolioAbi, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.abi],
-			[abis.securityPoolPortfolioForkCoordinatorAbi, statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator.abi],
+			[abis.securityPoolAbi, statoblast_SecurityPool_SecurityPool.abi],
+			[abis.securityPoolForkCoordinatorAbi, statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator.abi],
 			[abis.securityPoolCommitmentIndexAbi, statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex.abi],
 			[abis.questionLedgerAbi, statoblast_QuestionLedger_QuestionLedger.abi],
 			[abis.openOraclePriceCoordinatorAbi, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi],
 			[abis.sharedPoolPriceFeedAbi, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi],
 			[abis.questionForkerAbi, statoblast_QuestionForker_QuestionForker.abi],
 			[abis.securityPoolCapitalLedgerAbi, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger.abi],
-			[abis.securityPoolPortfolioAuctionAbi, statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction.abi],
+			[abis.securityPoolAuctionAbi, statoblast_SecurityPoolAuction_SecurityPoolAuction.abi],
 			[abis.securityPoolUniformPriceAuctionAbi, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction.abi],
 			[abis.securityPoolAuctionVaultAbi, statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault.abi],
 			[abis.openOracleAbi, statoblast_openOracle_OpenOracle_OpenOracle.abi],
@@ -90,8 +90,8 @@ describe('generated bot contract ABIs', () => {
 			'zoltarAbi',
 			'zoltarQuestionDataAbi',
 			'securityPoolFactoryAbi',
-			'securityPoolPortfolioAbi',
-			'securityPoolPortfolioForkCoordinatorAbi',
+			'securityPoolAbi',
+			'securityPoolForkCoordinatorAbi',
 			'securityPoolCommitmentIndexAbi',
 			'questionLedgerAbi',
 			'openOraclePriceCoordinatorAbi',
@@ -110,9 +110,9 @@ describe('generated bot contract ABIs', () => {
 			'genesisUniswapV3PoolStateAbi',
 			'escalationGameAbi',
 			'deployQuestionLedgerEvent',
-			'portfolioRuntimeIdentities',
+			'securityPoolRuntimeIdentities',
 			'securityPoolCapitalLedgerAbi',
-			'securityPoolPortfolioAuctionAbi',
+			'securityPoolAuctionAbi',
 			'securityPoolUniformPriceAuctionAbi',
 			'securityPoolAuctionVaultAbi',
 		])
@@ -124,12 +124,12 @@ import { readFile } from 'node:fs/promises'
 import { verifyRuntimeIdentity } from '../src/monitoring/runtime-identity.ts'
 import { isHex } from '../src/ethereum.ts'
 
-test('portfolio runtime identities authenticate the complete compiled custody tree', async () => {
+test('security pool runtime identities authenticate the complete compiled custody tree', async () => {
 	const raw: unknown = JSON.parse(await readFile(new URL('../../../solidity/artifacts/Contracts.json', import.meta.url), 'utf8'))
 	if (typeof raw !== 'object' || raw === null) throw new Error('Artifact document missing')
 	const contracts: unknown = Reflect.get(raw, 'contracts')
 	if (typeof contracts !== 'object' || contracts === null) throw new Error('Artifact contracts missing')
-	for (const [name, identity] of Object.entries(abis.portfolioRuntimeIdentities)) {
+	for (const [name, identity] of Object.entries(abis.securityPoolRuntimeIdentities)) {
 		const source: unknown = Reflect.get(contracts, `contracts/statoblast/${name}.sol`)
 		if (typeof source !== 'object' || source === null) throw new Error(`Missing source ${name}`)
 		const artifact: unknown = Reflect.get(source, name)

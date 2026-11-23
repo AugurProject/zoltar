@@ -59,49 +59,49 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		contractName: 'Zoltar',
 	},
 	securityPoolCapitalLedgerDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		artifactPath: 'contracts/statoblast/SecurityPoolModuleDeployers.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolCapitalLedgerDeployer',
 	},
 	securityPoolCommitmentIndexDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		artifactPath: 'contracts/statoblast/SecurityPoolModuleDeployers.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolCommitmentIndexDeployer',
 	},
 	securityPoolCapitalFeeStreamsDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		artifactPath: 'contracts/statoblast/SecurityPoolModuleDeployers.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolCapitalFeeStreamsDeployer',
 	},
 	securityPoolSettlementBookDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		artifactPath: 'contracts/statoblast/SecurityPoolModuleDeployers.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolSettlementBookDeployer',
 	},
-	securityPoolPortfolioSettlementDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+	securityPoolSettlementDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolModuleDeployers.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolPortfolioSettlementDeployer',
+		contractName: 'SecurityPoolSettlementDeployer',
 	},
-	securityPoolPortfolioServicesDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+	securityPoolServicesDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolModuleDeployers.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolPortfolioServicesDeployer',
+		contractName: 'SecurityPoolServicesDeployer',
 	},
 	securityPoolReporterLedgerDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		artifactPath: 'contracts/statoblast/SecurityPoolModuleDeployers.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolReporterLedgerDeployer',
 	},
-	securityPoolPortfolioForkCoordinatorDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol',
+	securityPoolForkCoordinatorDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolForkCoordinator.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolPortfolioForkCoordinatorDeployer',
+		contractName: 'SecurityPoolForkCoordinatorDeployer',
 	},
-	securityPoolPortfolioAuctionDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioAuction.sol',
+	securityPoolAuctionDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolAuction.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolPortfolioAuctionDeployer',
+		contractName: 'SecurityPoolAuctionDeployer',
 	},
 	questionLedgerEventEmitter: {
 		artifactPath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol',

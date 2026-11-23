@@ -78,7 +78,7 @@ export const accountingCheckpoint = (hash: BlockHash): StoredLog => ({
 			reason: 0,
 			settlementCollateralAttoEth: 85_000_000_000_000_000_000n.toString(),
 			shareTokenSupplyAttoShares: 85_000_000_000_000_000_000n.toString(),
-			lastSettlementPortfolioTime: '1767225600',
+			lastSettlementSecurityPoolTime: '1767225600',
 		},
 	},
 })

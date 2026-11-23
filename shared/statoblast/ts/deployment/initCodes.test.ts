@@ -17,7 +17,7 @@ const artifacts = {
 	priceCoordinatorDeploymentWorker: artifact(7),
 	sharedPoolPriceFeedDeploymentWorker: artifact(8),
 	securityPoolFactory: artifact(9, 'address,address,address,address,address,address,address,address,address,bytes32,address[9]'),
-	securityPoolPortfolio: artifact(26),
+	securityPool: artifact(26),
 	questionForker: artifact(10, 'address,address'),
 	questionForkerDelegate: artifact(11, 'address'),
 	questionLedgerOperationsDelegate: artifact(12),
@@ -27,11 +27,11 @@ const artifacts = {
 	securityPoolCommitmentIndexDeployer: artifact(18),
 	securityPoolCapitalFeeStreamsDeployer: artifact(19),
 	securityPoolSettlementBookDeployer: artifact(20),
-	securityPoolPortfolioSettlementDeployer: artifact(21),
-	securityPoolPortfolioServicesDeployer: artifact(23),
+	securityPoolSettlementDeployer: artifact(21),
+	securityPoolServicesDeployer: artifact(23),
 	securityPoolReporterLedgerDeployer: artifact(22),
-	securityPoolPortfolioForkCoordinatorDeployer: artifact(24),
-	securityPoolPortfolioAuctionDeployer: artifact(25),
+	securityPoolForkCoordinatorDeployer: artifact(24),
+	securityPoolAuctionDeployer: artifact(25),
 }
 const builders = createStatoblastInitCodes(artifacts, { proxyDeployerAddress: proxy, zeroSalt })
 const constructorArgs = (code: Hex) => `0x${code.slice(10)}` as const
@@ -53,19 +53,19 @@ describe('shared capital infrastructure init codes', () => {
 			addresses.securityPoolCommitmentIndexDeployer,
 			addresses.securityPoolCapitalFeeStreamsDeployer,
 			addresses.securityPoolSettlementBookDeployer,
-			addresses.securityPoolPortfolioSettlementDeployer,
-			addresses.securityPoolPortfolioServicesDeployer,
+			addresses.securityPoolSettlementDeployer,
+			addresses.securityPoolServicesDeployer,
 			addresses.securityPoolReporterLedgerDeployer,
-			addresses.securityPoolPortfolioForkCoordinatorDeployer,
-			addresses.securityPoolPortfolioAuctionDeployer,
+			addresses.securityPoolForkCoordinatorDeployer,
+			addresses.securityPoolAuctionDeployer,
 		]
-		expect(constructorArgs(builders.getSecurityPoolPortfolioForkCoordinatorDeployerByteCode())).toBe('0x')
-		expect(constructorArgs(builders.getSecurityPoolPortfolioAuctionDeployerByteCode())).toBe('0x')
+		expect(constructorArgs(builders.getSecurityPoolForkCoordinatorDeployerByteCode())).toBe('0x')
+		expect(constructorArgs(builders.getSecurityPoolAuctionDeployerByteCode())).toBe('0x')
 		expect(new Set(modules).size).toBe(9)
-		expect(addresses.securityPoolPortfolioAuctionDeployer).toBe(getCreate2Address({ bytecode: builders.getSecurityPoolPortfolioAuctionDeployerByteCode(), from: proxy, salt: zeroSalt }))
+		expect(addresses.securityPoolAuctionDeployer).toBe(getCreate2Address({ bytecode: builders.getSecurityPoolAuctionDeployerByteCode(), from: proxy, salt: zeroSalt }))
 	})
 
-	test('the factory pins the portfolio creation code hash and the module deployers in portfolio constructor order', () => {
+	test('the factory pins the security pool creation code hash and the module deployers in security pool constructor order', () => {
 		const addresses = builders.createInfraContractAddresses(weth, { getZoltarAddress: () => zoltar, getZoltarQuestionDataAddress: () => questionData })()
 		const factoryCode = builders.getSecurityPoolFactoryByteCode(addresses)
 		const deployers = [
@@ -73,11 +73,11 @@ describe('shared capital infrastructure init codes', () => {
 			addresses.securityPoolCommitmentIndexDeployer,
 			addresses.securityPoolCapitalFeeStreamsDeployer,
 			addresses.securityPoolSettlementBookDeployer,
-			addresses.securityPoolPortfolioSettlementDeployer,
+			addresses.securityPoolSettlementDeployer,
 			addresses.securityPoolReporterLedgerDeployer,
-			addresses.securityPoolPortfolioForkCoordinatorDeployer,
-			addresses.securityPoolPortfolioServicesDeployer,
-			addresses.securityPoolPortfolioAuctionDeployer,
+			addresses.securityPoolForkCoordinatorDeployer,
+			addresses.securityPoolServicesDeployer,
+			addresses.securityPoolAuctionDeployer,
 		] as const
 		expect(constructorArgs(factoryCode)).toBe(
 			encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address,address,address,bytes32,address[9]'), [
@@ -90,7 +90,7 @@ describe('shared capital infrastructure init codes', () => {
 				addresses.openOraclePriceCoordinatorFactory,
 				addresses.questionLedgerOperationsDelegate,
 				addresses.questionLedgerEventEmitter,
-				keccak256(builders.getSecurityPoolPortfolioCreationCode()),
+				keccak256(builders.getSecurityPoolCreationCode()),
 				deployers,
 			]),
 		)

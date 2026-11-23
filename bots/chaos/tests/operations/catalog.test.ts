@@ -1,4 +1,4 @@
-import { auctionFixture, readyChildFixture } from '../support/portfolio-fixtures.ts'
+import { auctionFixture, readyChildFixture } from '../support/security-pool-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
 import { openOraclePriceCoordinatorAbi, erc1155Abi, genesisReputationTokenAbi, escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
@@ -783,7 +783,7 @@ describe('chaos operation catalog', () => {
 		universe.forkQuestionId = '77'
 		pool.systemState = 1
 		shares.migrationProgressByRoute['0:0'] = '0'
-		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.portfolio)
+		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.securityPool)
 		const first = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')
 		expect(first?.metadata).toMatchObject({ fromId: '0', targetOutcome: '0' })
 		expect(first?.deadlineTimestamp).toBeUndefined()
@@ -809,7 +809,7 @@ describe('chaos operation catalog', () => {
 		shares.migrationProgressByRoute['0:0'] = '0'
 		const find = () => eligibleOperationPlans(snapshot, permissiveOptions).find(plan => plan.definitionId === 'trading.shares.migrate')
 		expect(find()).toBeUndefined()
-		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.portfolio)
+		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.securityPool)
 		expect(find()).toBeDefined()
 		expect(find()?.deadlineTimestamp).toBeUndefined()
 		pool.childPoolPreparations['0'].historyReady = false
@@ -1036,7 +1036,7 @@ describe('chaos operation catalog', () => {
 		universe.forkQuestionId = '77'
 		pool.systemState = 0
 		shares.migrationProgressByRoute['0:0'] = '0'
-		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.portfolio)
+		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.securityPool)
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')).toBeDefined()
 
 		universe.forkTime = '0'
@@ -1150,7 +1150,7 @@ describe('chaos operation catalog', () => {
 		pool.systemState = 1
 		universe.forkTime = '1999999000'
 		universe.forkQuestionId = pool.questionId
-		pool.childPoolPreparations['0'] = { ...readyChildFixture(pool.address, pool.portfolio), childPool: address(0), historyReady: false }
+		pool.childPoolPreparations['0'] = { ...readyChildFixture(pool.address, pool.securityPool), childPool: address(0), historyReady: false }
 		const plan = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.fork.create-child')
 		expect(plan?.priority).toBe('urgent')
 		expect(plan?.deadlineTimestamp).toBeUndefined()

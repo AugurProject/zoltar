@@ -3,7 +3,7 @@ import { encodeFunctionData, parseAbi, type Hex } from '@zoltar/core-shared/evm/
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact,
 } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
@@ -11,16 +11,16 @@ import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { loadOpenOracleEventState, wrapWeth } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
-const batchAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
+const batchAbi = parseAbi(['function requestSecurityPoolPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
 
 // Audit regression: OpenOracle.settle only reverts with InvalidGasLimit when little gas is LEFT after
 // the callback. A callback that failed early on a gas-dependent `require` handed its unused gas back, so
 // a settler could forward far less than callbackGasLimit and still settle the report unaccepted. The
 // report escrow now consumes everything it is given when entered with less than the promised gas.
 describe('audit: an under-gassed settlement cannot void a shared-feed report', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const capital = () => ({ abi: capitalArtifact.abi, address: fixture.capitalLedger })
 	const prepare = async () => {
 		await fixture.prepare(400n * unit, 100n * unit)
@@ -28,7 +28,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 		await fixture.base.mockWindow.advanceTime(3601n)
 		const sponsor = fixture.other()
 		await fixture.deposit(3000n * unit, sponsor)
-		const address = await sponsor.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+		const address = await sponsor.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		const feed = { abi: feedArtifact.abi, address }
 		await wrapWeth(sponsor, 10n * unit)
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'weth' }), address)
@@ -64,7 +64,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [unit, sponsor.account.address] }) }]
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
 
@@ -82,7 +82,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 		const operations = [{ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) }]
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
-		await expect(sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 6_000_001, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty })).rejects.toThrow(
+		await expect(sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 6_000_001, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty })).rejects.toThrow(
 			'Callback gas exceeds limit',
 		)
 	})
@@ -97,7 +97,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		const request = (data: Hex) =>
-			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestPortfolioPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [{ gasLimit: 500_000n, data }] }], value: bounty })
+			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [{ gasLimit: 500_000n, data }] }], value: bounty })
 		await expect(request(`${claimEarnings}${'00'.repeat(96_000)}`)).rejects.toThrow('Operation data too large')
 		await expect(request(`${claimEarnings}${'00'.repeat(509)}`)).rejects.toThrow('Operation data too large')
 
@@ -115,7 +115,7 @@ describe('audit: an under-gassed settlement cannot void a shared-feed report', (
 		const { sponsor, feed } = await prepare()
 		const attacker = fixture.owner()
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...feed, functionName: 'requestPortfolioPrice', args: [unit, 10n * unit, bounty], value: bounty }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...feed, functionName: 'requestSecurityPoolPrice', args: [unit, 10n * unit, bounty], value: bounty }))
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
 		const { gas } = await settleWithLeastGas(attacker, report, 100_000n, 4_200_000n, 10_000n)

@@ -5,7 +5,7 @@ import { demoAddress, demoHash } from './chain-fixtures.ts'
 import type { DemoApi, DemoEnvironment } from './environment.ts'
 import { demoOperations } from './operations.ts'
 
-export async function demoAddressPortfolioRoute(env: DemoEnvironment, path: string): Promise<unknown> {
+export async function demoAddressSecurityPoolRoute(env: DemoEnvironment, path: string): Promise<unknown> {
 	const { context, counters } = env
 	const { claimState } = env.settings
 	const { demoRichList, claimPosition } = env.fixtures
@@ -14,14 +14,14 @@ export async function demoAddressPortfolioRoute(env: DemoEnvironment, path: stri
 	const address = request.searchParams.get('address')?.toLowerCase()
 	const item = demoRichList.find(candidate => candidate.chain_id === chainId && candidate.address.toLowerCase() === address)
 	const operations = demoOperations(env, chainId)
-	const more = context.pageUrl.searchParams.get('portfolioMore') === '1'
+	const more = context.pageUrl.searchParams.get('securityPoolMore') === '1'
 	const lpCursor = request.searchParams.get('lpCursor')
 	const forkCursor = request.searchParams.get('forkCursor')
 	const reportCursor = request.searchParams.get('reportCursor')
 	const continuationRequested = lpCursor !== null || forkCursor !== null || reportCursor !== null
-	if (continuationRequested && context.pageUrl.searchParams.get('portfolioAppendDelay') === '1') await new Promise(resolve => setTimeout(resolve, 2_500))
-	if (continuationRequested && context.pageUrl.searchParams.get('portfolioAppendError') === '1' && !counters.portfolioAppendErrorConsumed) {
-		counters.portfolioAppendErrorConsumed = true
+	if (continuationRequested && context.pageUrl.searchParams.get('securityPoolAppendDelay') === '1') await new Promise(resolve => setTimeout(resolve, 2_500))
+	if (continuationRequested && context.pageUrl.searchParams.get('securityPoolAppendError') === '1' && !counters.securityPoolAppendErrorConsumed) {
+		counters.securityPoolAppendErrorConsumed = true
 		throw new Error('Additional account evidence could not be loaded')
 	}
 	const lpPositions = [
@@ -85,7 +85,7 @@ export async function demoAddressPortfolioRoute(env: DemoEnvironment, path: stri
 			trading_pnl: demoTradingPnl(demoAddress('fa')),
 			fork_participation: forkParticipation,
 			report_participation: reportParticipation,
-			portfolioPagination: {
+			securityPoolPagination: {
 				lp: {
 					total: more ? 2 : 1,
 					limit: 100,

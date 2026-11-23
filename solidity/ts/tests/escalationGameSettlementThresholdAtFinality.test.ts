@@ -4,14 +4,14 @@ import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/u
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
 // Winning claims scale by the fork threshold recorded when the game last changed. REP burned
 // after that, while the game is final but before anyone claims, cannot lower any payout.
 describe('escalation game: the settlement fork threshold is fixed before finality', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	const burnUntilBelow = async (universe: bigint, holders: readonly WriteClient[], nonDecision: bigint, keepFor?: WriteClient) => {

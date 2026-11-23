@@ -3,13 +3,13 @@ import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequ
 import { getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { loadCentralPortfolioQuestion } from '../../../../ui/statoblastShared/ts/protocol/securityPoolPortfolioState.js'
+import { loadCentralSecurityPoolQuestion } from '../../../../ui/statoblastShared/ts/protocol/securityPoolState.js'
 import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Abi, type Address, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
-import { useSecurityPoolPortfolioFixture } from '../statoblast/securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from '../statoblast/securityPoolFixture'
 import { statoblast_EscalationGame_EscalationGame as gameArtifact } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { deployContract } from '../../testSupport/deployContract'
@@ -27,9 +27,9 @@ const attoEthToAttoSharesAbi = [{ type: 'function', name: 'attoEthToAttoShares',
 const attoSharesToAttoEthAbi = [{ type: 'function', name: 'attoSharesToAttoEth', stateMutability: 'view', inputs: [{ name: 'amountAttoShares', type: 'uint256' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
 
 describe('trading against authoritative Zoltar contracts', () => {
-	const portfolio = useSecurityPoolPortfolioFixture({ purchaseFeeBps: 0n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })
-	const fixture = portfolio.base
-	const native = () => portfolio.poolFor(fixture.questionId)
+	const securityPool = useSecurityPoolFixture({ purchaseFeeBps: 0n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })
+	const fixture = securityPool.base
+	const native = () => securityPool.poolFor(fixture.questionId)
 	let account: Address
 	let factory: Address
 	let router: Address
@@ -46,7 +46,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	async function loadPoolAccounting() {
 		const address = native().questionLedger
-		const accounting = await loadCentralPortfolioQuestion(fixture.client, address, portfolio.capitalLedger, await fixture.client.getBlockNumber())
+		const accounting = await loadCentralSecurityPoolQuestion(fixture.client, address, securityPool.capitalLedger, await fixture.client.getBlockNumber())
 		return { shareTokenSupplyAttoShares: accounting.shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth: accounting.mintingCapacityAttoEth, accounting }
 	}
 
@@ -59,7 +59,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	beforeEach(async () => {
 		account = addressString(TEST_ADDRESSES[0])
-		await portfolio.prepare()
+		await securityPool.prepare()
 		factory = await deploy(factoryArtifact, [getInfraContractAddresses().securityPoolFactory, 30n])
 		router = await deploy(routerArtifact, [factory])
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [native().questionLedger] }))
@@ -159,7 +159,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'safeBatchTransferFrom', args: [account, router, [ids[0], ids[1]], [exitAmount, entry.result.totalLongShares], exitData(acceptedMinimumEth)] }))
 		for (const outcome of [0n, 1n, 2n] as const) expect(await shareBalance(router, outcome)).toBe(0n)
 
-		await portfolio.mint(unit, fixture.questionId, { sender: fixture.client })
+		await securityPool.mint(unit, fixture.questionId, { sender: fixture.client })
 		const redeemAmount = await fixture.client.readContract({ abi: attoEthToAttoSharesAbi, address: native().questionLedger, functionName: 'attoEthToAttoShares', args: [unit] })
 		const redeemEth = await fixture.client.readContract({ abi: attoSharesToAttoEthAbi, address: native().questionLedger, functionName: 'attoSharesToAttoEth', args: [redeemAmount] })
 		const recipient = addressString(TEST_ADDRESSES[1])

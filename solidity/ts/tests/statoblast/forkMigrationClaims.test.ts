@@ -3,8 +3,8 @@ import {
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_QuestionForker_QuestionForker as forkerArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	Zoltar_Zoltar as zoltarArtifact,
 } from '../../types/contractArtifact'
@@ -13,10 +13,10 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
-import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Portfolio own-fork reporter claims', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+describe('Security pool own-fork reporter claims', () => {
+	const fixture = useSecurityPoolFixture()
 	test.each([1, 2])('branch %s pays authenticated wallet claims after the migration deadline without a capital position', async outcome => {
 		const owner = fixture.owner()
 		const relayer = fixture.other()
@@ -31,16 +31,16 @@ describe('Portfolio own-fork reporter claims', () => {
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'forkZoltarWithOwnEscalationGame', args: [pool] }))
 		await expect(owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [outcome, [0n]] })).rejects.toThrow()
-		const controller = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'forkController' })
+		const controller = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'forkController' })
 		await fixture.base.mockWindow.advanceTime(63n * 86_400n)
 		const child = getChildUniverseId(universe, outcome)
 		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, BigInt(outcome)] }))
 		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
-		await writeContractAndWait(relayer, () => relayer.writeContract({ ...forker, functionName: 'preparePortfolioQuestion', args: [pool, child] }))
-		for (let side = 0; side < 3; side++) await writeContractAndWait(relayer, () => relayer.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [pool, child] }))
-		const childPool = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getPool', args: [fixture.base.questionId, child] })
+		await writeContractAndWait(relayer, () => relayer.writeContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [pool, child] }))
+		for (let side = 0; side < 3; side++) await writeContractAndWait(relayer, () => relayer.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [pool, child] }))
+		const childPool = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getPool', args: [fixture.base.questionId, child] })
 		const game = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
-		const reporters = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'reporterLedger', args: [child] })
+		const reporters = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'reporterLedger', args: [child] })
 		const backing = await owner.readContract({ abi: reporterArtifact.abi, address: reporters, functionName: 'balanceOfGame', args: [game] })
 		expect(backing).toBeGreaterThan(threshold)
 		expect(backing).toBeLessThan(2n * threshold)

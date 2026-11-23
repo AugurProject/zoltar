@@ -62,18 +62,18 @@ function getQuestionLedgerDeploymentWorkerAddress(securityPoolFactory: Address) 
 }
 
 export function createQuestionLedgerAddressHelper(config: QuestionLedgerAddressConfig) {
-	const getQuestionLedgerAddresses = (parent: Address, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, originUniverseId = 0n, initialReportPriorityFeeAttoEthPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, portfolio = zeroAddress) => {
+	const getQuestionLedgerAddresses = (parent: Address, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, originUniverseId = 0n, initialReportPriorityFeeAttoEthPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, securityPool = zeroAddress) => {
 		const infraContracts = config.getInfraContracts()
 		const originId =
-			portfolio === zeroAddress
+			securityPool === zeroAddress
 				? getQuestionLedgerOriginId(originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
 				: keccak256(
 						encodeAbiParameters(
 							[{ type: 'bytes32' }, { type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
-							[keccak256(toHex('Statoblast portfolio origin')), portfolio, originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas],
+							[keccak256(toHex('Statoblast security pool origin')), securityPool, originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas],
 						),
 					)
-		const questionLedgerSalt = portfolio !== zeroAddress && parent === zeroAddress ? originId : getQuestionLedgerSalt(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
+		const questionLedgerSalt = securityPool !== zeroAddress && parent === zeroAddress ? originId : getQuestionLedgerSalt(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
 		const questionLedgerSaltWithMsgSender = getCallerScopedSalt(infraContracts.securityPoolFactory, questionLedgerSalt)
 
 		const repToken = config.getRepTokenAddress(universeId)

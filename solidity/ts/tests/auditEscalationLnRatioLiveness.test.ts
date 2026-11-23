@@ -8,7 +8,7 @@ import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/que
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 import { getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/questionLedger'
 import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_QuestionLedger_QuestionLedger, Zoltar_Zoltar } from '../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -20,8 +20,8 @@ import { getTotalPoolHeldAttoRep } from '../testSupport/simulator/utils/contract
 const ESCALATION_TIME_LENGTH = 4_233_600n
 
 describe('Audit PoC: escalation logarithm precision liveness', () => {
-	const portfolio = useSecurityPoolPortfolioFixture()
-	const fixture = portfolio.base
+	const securityPool = useSecurityPoolFixture()
+	const fixture = securityPool.base
 
 	const reportBond = 11n * 10n ** 17n
 	const depositToEscalationGame = async (client: typeof fixture.client, pool: `0x${string}`, outcome: QuestionOutcome, amount: bigint) => {
@@ -31,7 +31,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 	test('wallet-funded reports resolve and unlock after burning supply to a zero-log threshold ratio', async () => {
 		const { client, genesisUniverse, mockWindow, questionData } = fixture
-		const questionLedgerAddresses = portfolio.poolFor(fixture.questionId)
+		const questionLedgerAddresses = securityPool.poolFor(fixture.questionId)
 		const pool = questionLedgerAddresses.questionLedger
 		const token = getRepTokenAddress(genesisUniverse)
 		const zoltar = getZoltarAddress()
@@ -83,10 +83,10 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
 		const { client, genesisUniverse, mockWindow, questionData } = fixture
-		const questionLedgerAddresses = portfolio.poolFor(fixture.questionId)
+		const questionLedgerAddresses = securityPool.poolFor(fixture.questionId)
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
-		await portfolio.prepare(1_000n * unit, underwritingLimitAttoEth)
-		await portfolio.mint(unit, fixture.questionId, { sender: client })
+		await securityPool.prepare(1_000n * unit, underwritingLimitAttoEth)
+		await securityPool.mint(unit, fixture.questionId, { sender: client })
 		assert.ok((await getSettlementCollateralAttoEth(client, questionLedgerAddresses.questionLedger)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 
 		const nonDecisionThresholdAttoRep = reportBond * 2n
@@ -101,7 +101,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		})
 
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await portfolio.refreshPrice()
+		await securityPool.refreshPrice()
 		await depositToEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, reportBond + 2n)
 		await depositToEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.No, reportBond + 1n)
 
@@ -133,8 +133,8 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		await withdrawFromEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, [0n])
 		await withdrawFromEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.No, [0n])
 		await redeemShares(client, questionLedgerAddresses.questionLedger)
-		await portfolio.refreshPrice()
-		await portfolio.authorize(0n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'withdrawPrincipal', args: [1_000n * unit, client.account.address] }))
+		await securityPool.refreshPrice()
+		await securityPool.authorize(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'withdrawPrincipal', args: [1_000n * unit, client.account.address] }))
 	})
 })

@@ -1,8 +1,8 @@
 import { tokenFunded, loadTradingCollateralAsset } from './collateral.js'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { loadBudgetMint, loadMintFees } from './minting.js'
-import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
-import { requireCanonicalPoolPortfolio } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { loadCentralSecurityPoolQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolState.js'
+import { requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
@@ -49,12 +49,12 @@ async function loadLiveQuestionLedgerSettings(client: PublicClient, pool: Addres
 		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'awaitingForkContinuation' }),
 		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'questionForker' }),
 		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
-		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'portfolioCustody' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'securityPoolCustody' }),
 	])
-	const central = await loadCentralPortfolioQuestion(client, pool, capital, blockNumber)
+	const central = await loadCentralSecurityPoolQuestion(client, pool, capital, blockNumber)
 	// A pool's own custody link is not proof: the market is offered only when the factory deployed the portfolio it reports.
-	if ((await requireCanonicalPoolPortfolio(client, securityPoolFactory, pool, blockNumber)) !== getAddress(central.portfolioAddress)) throw new Error('Market custody belongs to another portfolio.')
-	const token = await client.readContract({ address: central.portfolioAddress, abi: portfolioArtifact.abi, functionName: 'collateralToken', blockNumber })
+	if ((await requireCanonicalSecurityPoolOf(client, securityPoolFactory, pool, blockNumber)) !== getAddress(central.securityPoolAddress)) throw new Error('Market custody belongs to another portfolio.')
+	const token = await client.readContract({ address: central.securityPoolAddress, abi: securityPoolArtifact.abi, functionName: 'collateralToken', blockNumber })
 	const collateral = await loadTradingCollateralAsset(client, token, blockNumber)
 	const mintFees = await loadMintFees(client, central, blockNumber)
 	const feeAccounting = central

@@ -102,7 +102,7 @@ export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
 export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (worth 0 REP)`
-export const clearLosingDepositsDetail = 'Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from portfolio capital.'
+export const clearLosingDepositsDetail = 'Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.'
 export const clearLosingDepositsReviewDescription = 'Returns no REP. Ordinary losing deposits retire automatically at finality.'
 export const results = 'Results'
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
-import { ISecurityPoolPortfolioNative } from '../interfaces/ISecurityPoolPortfolioNative.sol';
+import { ISecurityPoolNative } from '../interfaces/ISecurityPoolNative.sol';
 import { IQuestionLedger, ISecurityPoolFactory, SystemState } from '../interfaces/IQuestionLedger.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
@@ -27,61 +27,61 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	IQuestionForker immutable questionForker;
 	QuestionLedgerDeployer immutable questionLedgerDeployer;
 	QuestionLedgerDeployment[] private questionLedgerDeployments;
-	// Every caller that configured a portfolio namespace, in registration order.
-	address[] private portfolios;
+	// Every caller that configured a security pool namespace, in registration order.
+	address[] private securityPools;
 	struct QuestionLedgerRegistration {
 		IQuestionLedger pool;
 		bool claimed;
 	}
 	struct QuestionLedgerMetadata {
 		bytes32 originId;
-		address portfolio;
+		address securityPool;
 		bool hasInheritedForkOutcome;
 	}
 	// Pool ID from getQuestionLedgerId(originId, universeId) -> reservation and eventual pool.
 	mapping(bytes32 => QuestionLedgerRegistration) private questionLedgerRegistrations;
 	mapping(IQuestionLedger => QuestionLedgerMetadata) private questionLedgerMetadata;
 	mapping(address => mapping(uint248 => address)) public sharedPriceFeeds;
-	mapping(address => OpenOraclePriceCoordinator) private portfolioConfigurations;
+	mapping(address => OpenOraclePriceCoordinator) private securityPoolConfigurations;
 	mapping(bytes32 => OpenOraclePriceCoordinator) private childQuestionLedgerCoordinators;
-	/// @notice Hash of the only portfolio creation code this factory deploys.
-	bytes32 public immutable portfolioCreationCodeHash;
-	// Module deployers every portfolio uses for its origin and for each fork child.
+	/// @notice Hash of the only security pool creation code this factory deploys.
+	bytes32 public immutable securityPoolCreationCodeHash;
+	// Module deployers every security pool uses for its origin and for each fork child.
 	address private immutable capitalLedgerDeployer;
 	address private immutable commitmentIndexDeployer;
 	address private immutable capitalFeeStreamsDeployer;
 	address private immutable settlementBookDeployer;
-	address private immutable portfolioSettlementDeployer;
+	address private immutable securityPoolSettlementDeployer;
 	address private immutable reporterLedgerDeployer;
 	address private immutable forkCoordinatorDeployer;
-	address private immutable portfolioServicesDeployer;
-	address private immutable portfolioAuctionDeployer;
-	uint256 private constant PORTFOLIO_CONFIGURATION_BYTES = 13 * 32;
-	/// @notice Portfolios this factory deployed from the canonical creation code.
+	address private immutable securityPoolServicesDeployer;
+	address private immutable securityPoolAuctionDeployer;
+	uint256 private constant SECURITY_POOL_CONFIGURATION_BYTES = 13 * 32;
+	/// @notice Security pools this factory deployed from the canonical creation code.
 	/// Only they can open a pool namespace, so every registered pool belongs to one.
-	mapping(address => bool) public isPortfolio;
-	mapping(address => uint256) private portfolioCreationCount;
+	mapping(address => bool) public isSecurityPool;
+	mapping(address => uint256) private securityPoolCreationCount;
 
 	event DeployQuestionLedger(IQuestionLedger indexed questionLedger, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, IQuestionLedger indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas);
 	event QuestionLedgerRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, IQuestionLedger questionLedger);
-	event PortfolioRegistered(address indexed portfolio, uint248 indexed originUniverseId);
-	event SharedPriceFeedRegistered(address indexed portfolio, uint248 indexed universeId, address indexed priceFeed);
-	event PortfolioDeployed(address indexed portfolio, address indexed creator);
+	event SecurityPoolRegistered(address indexed securityPool, uint248 indexed originUniverseId);
+	event SharedPriceFeedRegistered(address indexed securityPool, uint248 indexed universeId, address indexed priceFeed);
+	event SecurityPoolDeployed(address indexed securityPool, address indexed creator);
 
-	constructor(IQuestionForker _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, address operationsDelegate, QuestionLedgerEventEmitter eventEmitter, bytes32 _portfolioCreationCodeHash, address[9] memory portfolioModuleDeployers) {
-		require(_portfolioCreationCodeHash != bytes32(0), 'Portfolio creation code hash missing');
+	constructor(IQuestionForker _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, address operationsDelegate, QuestionLedgerEventEmitter eventEmitter, bytes32 _securityPoolCreationCodeHash, address[9] memory securityPoolModuleDeployers) {
+		require(_securityPoolCreationCodeHash != bytes32(0), 'Security pool creation code hash missing');
 		// The deployers are deterministic addresses that may be deployed after this
-		// factory. Every portfolio constructor requires each of them to hold code.
-		portfolioCreationCodeHash = _portfolioCreationCodeHash;
-		capitalLedgerDeployer = portfolioModuleDeployers[0];
-		commitmentIndexDeployer = portfolioModuleDeployers[1];
-		capitalFeeStreamsDeployer = portfolioModuleDeployers[2];
-		settlementBookDeployer = portfolioModuleDeployers[3];
-		portfolioSettlementDeployer = portfolioModuleDeployers[4];
-		reporterLedgerDeployer = portfolioModuleDeployers[5];
-		forkCoordinatorDeployer = portfolioModuleDeployers[6];
-		portfolioServicesDeployer = portfolioModuleDeployers[7];
-		portfolioAuctionDeployer = portfolioModuleDeployers[8];
+		// factory. Every security pool constructor requires each of them to hold code.
+		securityPoolCreationCodeHash = _securityPoolCreationCodeHash;
+		capitalLedgerDeployer = securityPoolModuleDeployers[0];
+		commitmentIndexDeployer = securityPoolModuleDeployers[1];
+		capitalFeeStreamsDeployer = securityPoolModuleDeployers[2];
+		settlementBookDeployer = securityPoolModuleDeployers[3];
+		securityPoolSettlementDeployer = securityPoolModuleDeployers[4];
+		reporterLedgerDeployer = securityPoolModuleDeployers[5];
+		forkCoordinatorDeployer = securityPoolModuleDeployers[6];
+		securityPoolServicesDeployer = securityPoolModuleDeployers[7];
+		securityPoolAuctionDeployer = securityPoolModuleDeployers[8];
 		questionForker = _questionForker;
 		shareTokenFactory = _shareTokenFactory;
 		openOraclePriceCoordinatorFactory = _openOraclePriceCoordinatorFactory;
@@ -99,16 +99,16 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		return questionLedgerDeployments.length;
 	}
 
-	function portfolioCount() external view returns (uint256) {
-		return portfolios.length;
+	function securityPoolCount() external view returns (uint256) {
+		return securityPools.length;
 	}
 
-	function portfoliosRange(uint256 startIndex, uint256 count) external view returns (address[] memory page) {
-		require(startIndex <= portfolios.length, 'Portfolio range start out of bounds');
-		require(count <= portfolios.length - startIndex, 'Portfolio range count too large');
+	function securityPoolsRange(uint256 startIndex, uint256 count) external view returns (address[] memory page) {
+		require(startIndex <= securityPools.length, 'Security pool range start out of bounds');
+		require(count <= securityPools.length - startIndex, 'Security pool range count too large');
 		page = new address[](count);
 		for (uint256 index = 0; index < count; index++) {
-			page[index] = portfolios[startIndex + index];
+			page[index] = securityPools[startIndex + index];
 		}
 	}
 
@@ -124,13 +124,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		return questionLedgerMetadata[questionLedger].hasInheritedForkOutcome;
 	}
 
-	function getPortfolioOriginId(address portfolio, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) public pure returns (bytes32) {
+	function getQuestionOriginId(address securityPool, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) public pure returns (bytes32) {
 		return
-			keccak256(abi.encode(keccak256('Statoblast portfolio origin'), portfolio, originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
+			keccak256(abi.encode(keccak256('Statoblast security pool origin'), securityPool, originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
 	}
 
-	function getSecurityPoolPortfolio(IQuestionLedger questionLedger) external view returns (address) {
-		return questionLedgerMetadata[questionLedger].portfolio;
+	function securityPoolOf(IQuestionLedger questionLedger) external view returns (address) {
+		return questionLedgerMetadata[questionLedger].securityPool;
 	}
 
 	function getQuestionLedgerId(bytes32 originId, uint248 universeId) public pure returns (bytes32) {
@@ -150,59 +150,59 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(msg.sender == address(questionForker), 'Only question forker');
 		bytes32 originId = questionLedgerMetadata[parent].originId;
 		require(address(questionLedgerRegistrations[getQuestionLedgerId(originId, parent.universeId())].pool) == address(parent), 'Parent pool is not canonical');
-		address portfolio = questionLedgerMetadata[parent].portfolio;
-		require(portfolio != address(0), 'Portfolio missing');
-		require(sharedPriceFeeds[portfolio][universeId] != address(0), 'Prepare shared child price feed');
-		(bool hasInheritedForkOutcome, ) = ISecurityPoolPortfolioNative(portfolio).inheritedFixedOutcome(universeId, questionId);
+		address securityPool = questionLedgerMetadata[parent].securityPool;
+		require(securityPool != address(0), 'Security pool missing');
+		require(sharedPriceFeeds[securityPool][universeId] != address(0), 'Prepare shared child price feed');
+		(bool hasInheritedForkOutcome, ) = ISecurityPoolNative(securityPool).inheritedFixedOutcome(universeId, questionId);
 		require(address(parent.shareToken()) == address(shareToken), 'Child share token mismatch');
 		uint256 initialReportPriorityFeeAttoEthPerGas = parent.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
 		_reserveQuestionLedger(originId, universeId);
 		OpenOraclePriceCoordinator openOraclePriceCoordinator = _prepareChildQuestionLedgerCoordinator(parent, universeId);
-		_configureSharedPriceFeed(openOraclePriceCoordinator, portfolio, universeId);
+		_configureSharedPriceFeed(openOraclePriceCoordinator, securityPool, universeId);
 		questionLedger = deployQuestionLedger(shareToken, parent, openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps);
-		_registerQuestionLedger(originId, universeId, questionLedger, hasInheritedForkOutcome, portfolio);
-		_initializeQuestionLedger(questionLedger, openOraclePriceCoordinator, portfolio);
+		_registerQuestionLedger(originId, universeId, questionLedger, hasInheritedForkOutcome, securityPool);
+		_initializeQuestionLedger(questionLedger, openOraclePriceCoordinator, securityPool);
 		_recordQuestionLedgerDeployment(QuestionLedgerDeployment(questionLedger, openOraclePriceCoordinator, shareToken, parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
 	}
 
-	/// @notice Deploys a portfolio from the canonical creation code with this factory and
+	/// @notice Deploys a security pool from the canonical creation code with this factory and
 	/// its pinned module deployers. `configuration` is the ABI encoding of the origin
 	/// configuration, question horizon, admission policy and economics, in that order.
-	/// @dev A portfolio's modules hold provider REP and trader collateral, and each fork
+	/// @dev A security pool's modules hold provider REP and trader collateral, and each fork
 	/// child gets fresh ones from the same deployers. Fixing the code and the deployers
-	/// here is what lets pools, the forker and exchanges trust a registered portfolio.
+	/// here is what lets pools, the forker and exchanges trust a registered security pool.
 	function maximumReportPriorityFeeAttoEthPerGas() external view override returns (uint256) {
 		return openOraclePriceCoordinatorFactory.maximumReportPriorityFeeAttoEthPerGas();
 	}
 
-	function deployPortfolio(bytes calldata creationCode, bytes calldata configuration) external returns (address portfolio) {
-		require(keccak256(creationCode) == portfolioCreationCodeHash, 'Portfolio creation code is not canonical');
-		require(configuration.length == PORTFOLIO_CONFIGURATION_BYTES, 'Portfolio configuration length invalid');
-		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(address(this), capitalLedgerDeployer, commitmentIndexDeployer, capitalFeeStreamsDeployer, settlementBookDeployer, portfolioSettlementDeployer, reporterLedgerDeployer, forkCoordinatorDeployer, portfolioServicesDeployer, portfolioAuctionDeployer), configuration);
+	function deploySecurityPool(bytes calldata creationCode, bytes calldata configuration) external returns (address securityPool) {
+		require(keccak256(creationCode) == securityPoolCreationCodeHash, 'Security pool creation code is not canonical');
+		require(configuration.length == SECURITY_POOL_CONFIGURATION_BYTES, 'Security pool configuration length invalid');
+		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(address(this), capitalLedgerDeployer, commitmentIndexDeployer, capitalFeeStreamsDeployer, settlementBookDeployer, securityPoolSettlementDeployer, reporterLedgerDeployer, forkCoordinatorDeployer, securityPoolServicesDeployer, securityPoolAuctionDeployer), configuration);
 		// The address depends on the creator, so no other deployment can take it.
-		bytes32 salt = keccak256(abi.encode(msg.sender, portfolioCreationCount[msg.sender]++));
+		bytes32 salt = keccak256(abi.encode(msg.sender, securityPoolCreationCount[msg.sender]++));
 		assembly ('memory-safe') {
-			portfolio := create2(0, add(initCode, 0x20), mload(initCode), salt)
-			if iszero(portfolio) {
+			securityPool := create2(0, add(initCode, 0x20), mload(initCode), salt)
+			if iszero(securityPool) {
 				let size := returndatasize()
 				let data := mload(0x40)
 				returndatacopy(data, 0, size)
 				revert(data, size)
 			}
 		}
-		isPortfolio[portfolio] = true;
-		emit PortfolioDeployed(portfolio, msg.sender);
+		isSecurityPool[securityPool] = true;
+		emit SecurityPoolDeployed(securityPool, msg.sender);
 	}
 
 	/// @notice Deploy in the caller's own namespace; another caller can never add a ledger to it.
-	function deployPortfolioQuestionLedger(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (IQuestionLedger questionLedger) {
+	function deploySecurityPoolQuestionLedger(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (IQuestionLedger questionLedger) {
 		return
 			_deployOriginQuestionLedger(msg.sender, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
 	}
 
-	function _deployOriginQuestionLedger(address portfolio, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) private returns (IQuestionLedger questionLedger) {
-		// The caller's portfolio namespace prevents another creator from reserving its question identity.
-		require(address(portfolioConfigurations[portfolio]) != address(0), 'Portfolio configuration missing');
+	function _deployOriginQuestionLedger(address securityPool, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) private returns (IQuestionLedger questionLedger) {
+		// The caller's security pool namespace prevents another creator from reserving its question identity.
+		require(address(securityPoolConfigurations[securityPool]) != address(0), 'Security pool configuration missing');
 		require(statoblastSecurityMultiplierBps >= SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS, 'Multiplier must be at least 10500 BPS');
 
 		// Validate that the question exists
@@ -219,19 +219,19 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Universe REP token missing');
 		require(zoltar.getNonDecisionThresholdAttoRep(universeId) > _getInitialEscalationDepositAttoRep(universeId), 'Escalation threshold too low');
-		bytes32 originId = getPortfolioOriginId(portfolio, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
+		bytes32 originId = getQuestionOriginId(securityPool, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
 		_reserveQuestionLedger(originId, universeId);
 		bytes32 questionLedgerSalt = originId;
 		OpenOraclePriceCoordinator openOraclePriceCoordinator = openOraclePriceCoordinatorFactory.deployOpenOraclePriceCoordinator(openOracle, reputationToken, initialReportPriorityFeeAttoEthPerGas, questionLedgerSalt);
 
-		_configureSharedPriceFeed(openOraclePriceCoordinator, portfolio, universeId);
+		_configureSharedPriceFeed(openOraclePriceCoordinator, securityPool, universeId);
 
 		// Each origin lineage has its own share token, which is reused by all migrated children.
 		IShareToken shareToken = shareTokenFactory.deployShareToken(originId, questionId);
 		questionLedger = deployQuestionLedger(shareToken, IQuestionLedger(payable(address(0))), openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps);
 
-		_registerQuestionLedger(originId, universeId, questionLedger, false, portfolio);
-		_initializeQuestionLedger(questionLedger, openOraclePriceCoordinator, portfolio);
+		_registerQuestionLedger(originId, universeId, questionLedger, false, securityPool);
+		_initializeQuestionLedger(questionLedger, openOraclePriceCoordinator, securityPool);
 		shareToken.authorize(questionLedger);
 		_recordQuestionLedgerDeployment(QuestionLedgerDeployment(questionLedger, openOraclePriceCoordinator, shareToken, IQuestionLedger(payable(address(0))), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
 	}
@@ -242,11 +242,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		questionLedgerRegistrations[poolId].claimed = true;
 	}
 
-	function _registerQuestionLedger(bytes32 originId, uint248 universeId, IQuestionLedger questionLedger, bool hasInheritedForkOutcome, address portfolio) private {
+	function _registerQuestionLedger(bytes32 originId, uint248 universeId, IQuestionLedger questionLedger, bool hasInheritedForkOutcome, address securityPool) private {
 		bytes32 poolId = getQuestionLedgerId(originId, universeId);
 		require(address(questionLedgerRegistrations[poolId].pool) == address(0x0), 'Pool already registered');
 		questionLedgerRegistrations[poolId].pool = questionLedger;
-		questionLedgerMetadata[questionLedger] = QuestionLedgerMetadata(originId, portfolio, hasInheritedForkOutcome);
+		questionLedgerMetadata[questionLedger] = QuestionLedgerMetadata(originId, securityPool, hasInheritedForkOutcome);
 		emit QuestionLedgerRegistered(originId, poolId, universeId, questionLedger);
 	}
 
@@ -261,54 +261,54 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		openOraclePriceCoordinatorFactory.configureQuestionLedger(openOraclePriceCoordinator, questionLedger);
 	}
 
-	/// @notice Initialize a portfolio's oracle configuration without a standalone question pool.
-	/// @dev Only a portfolio this factory deployed can open a namespace. The first call registers it for enumeration.
-	function initializePortfolioPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address) {
-		require(isPortfolio[msg.sender], 'Portfolio is not canonical');
+	/// @notice Initialize a security pool's oracle configuration without a standalone question pool.
+	/// @dev Only a security pool this factory deployed can open a namespace. The first call registers it for enumeration.
+	function initializeSecurityPoolPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address) {
+		require(isSecurityPool[msg.sender], 'Security pool is not canonical');
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Universe REP token missing');
 		require(zoltar.getForkTime(universeId) == 0, 'Origin universe forked');
-		OpenOraclePriceCoordinator coordinator = portfolioConfigurations[msg.sender];
+		OpenOraclePriceCoordinator coordinator = securityPoolConfigurations[msg.sender];
 		if (address(coordinator) == address(0)) {
-			coordinator = openOraclePriceCoordinatorFactory.deployOpenOraclePriceCoordinator(openOracle, zoltar.getRepToken(universeId), priorityFee, keccak256(abi.encode('Portfolio configuration', msg.sender)));
-			portfolioConfigurations[msg.sender] = coordinator;
-			portfolios.push(msg.sender);
-			emit PortfolioRegistered(msg.sender, universeId);
+			coordinator = openOraclePriceCoordinatorFactory.deployOpenOraclePriceCoordinator(openOracle, zoltar.getRepToken(universeId), priorityFee, keccak256(abi.encode('Security pool configuration', msg.sender)));
+			securityPoolConfigurations[msg.sender] = coordinator;
+			securityPools.push(msg.sender);
+			emit SecurityPoolRegistered(msg.sender, universeId);
 		} else {
-			require(coordinator.initialReportPriorityFeeAttoEthPerGas() == priorityFee && address(coordinator.reputationToken()) == address(zoltar.getRepToken(universeId)), 'Portfolio configuration mismatch');
+			require(coordinator.initialReportPriorityFeeAttoEthPerGas() == priorityFee && address(coordinator.reputationToken()) == address(zoltar.getRepToken(universeId)), 'Security pool configuration mismatch');
 		}
 		return address(_getOrCreateSharedPriceFeed(coordinator, msg.sender, universeId));
 	}
 
 	/// @notice Initialize a known branch from the caller's immutable origin configuration.
-	function initializePortfolioPriceFeedForUniverse(uint248 universeId) external returns (address) {
-		OpenOraclePriceCoordinator coordinator = portfolioConfigurations[msg.sender];
-		require(address(coordinator) != address(0), 'Portfolio configuration missing');
-		ISecurityPoolPortfolioNative(msg.sender).portfolioTime(universeId);
+	function initializeSecurityPoolPriceFeedForUniverse(uint248 universeId) external returns (address) {
+		OpenOraclePriceCoordinator coordinator = securityPoolConfigurations[msg.sender];
+		require(address(coordinator) != address(0), 'Security pool configuration missing');
+		ISecurityPoolNative(msg.sender).securityPoolTime(universeId);
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Branch REP is missing');
 		return address(_getOrCreateSharedPriceFeed(coordinator, msg.sender, universeId));
 	}
 
 	/// @notice Prepare child REP and its shared feed independently of the more expensive ledger migration.
 	/// @dev Anyone may prepare; the canonical forked parent fixes all namespace and oracle configuration.
-	function preparePortfolioChildPriceFeed(IQuestionLedger parent, uint256 outcomeIndex) external returns (address) {
+	function prepareSecurityPoolChildPriceFeed(IQuestionLedger parent, uint256 outcomeIndex) external returns (address) {
 		uint248 parentUniverseId = parent.universeId();
 		require(address(questionLedgerRegistrations[getQuestionLedgerId(questionLedgerMetadata[parent].originId, parentUniverseId)].pool) == address(parent), 'Parent pool is not canonical');
-		address portfolio = questionLedgerMetadata[parent].portfolio;
-		require(portfolio != address(0), 'Parent has no portfolio');
+		address securityPool = questionLedgerMetadata[parent].securityPool;
+		require(securityPool != address(0), 'Parent has no security pool');
 		require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
 		uint248 universeId = zoltar.getChildUniverseId(parentUniverseId, outcomeIndex);
 		if (address(zoltar.getRepToken(universeId)) == address(0)) zoltar.deployChild(parentUniverseId, outcomeIndex);
-		return address(_getOrCreateSharedPriceFeed(parent.openOraclePriceCoordinator(), portfolio, universeId));
+		return address(_getOrCreateSharedPriceFeed(parent.openOraclePriceCoordinator(), securityPool, universeId));
 	}
 
-	/// @notice Prepare one known portfolio branch without materializing its ancestor questions.
-	function preparePortfolioPriceFeed(IQuestionLedger source, uint248 universeId) external returns (address) {
-		address portfolio = questionLedgerMetadata[source].portfolio;
-		require(portfolio != address(0), 'Source has no portfolio');
+	/// @notice Prepare one known security pool branch without materializing its ancestor questions.
+	function prepareSecurityPoolPriceFeed(IQuestionLedger source, uint248 universeId) external returns (address) {
+		address securityPool = questionLedgerMetadata[source].securityPool;
+		require(securityPool != address(0), 'Source has no security pool');
 		require(address(questionLedgerRegistrations[getQuestionLedgerId(questionLedgerMetadata[source].originId, source.universeId())].pool) == address(source), 'Source pool is not canonical');
-		ISecurityPoolPortfolioNative(portfolio).portfolioTime(universeId);
+		ISecurityPoolNative(securityPool).securityPoolTime(universeId);
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Branch REP is missing');
-		return address(_getOrCreateSharedPriceFeed(source.openOraclePriceCoordinator(), portfolio, universeId));
+		return address(_getOrCreateSharedPriceFeed(source.openOraclePriceCoordinator(), securityPool, universeId));
 	}
 
 	/// @notice Prepare the canonical child coordinator without exposing a partial child ledger.
@@ -318,9 +318,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
 		uint248 universeId = zoltar.getChildUniverseId(parentUniverseId, outcomeIndex);
 		if (address(zoltar.getRepToken(universeId)) == address(0)) zoltar.deployChild(parentUniverseId, outcomeIndex);
-		address portfolio = questionLedgerMetadata[parent].portfolio;
-		require(portfolio != address(0), 'Portfolio missing');
-		require(sharedPriceFeeds[portfolio][universeId] != address(0), 'Prepare shared child price feed');
+		address securityPool = questionLedgerMetadata[parent].securityPool;
+		require(securityPool != address(0), 'Security pool missing');
+		require(sharedPriceFeeds[securityPool][universeId] != address(0), 'Prepare shared child price feed');
 		return _prepareChildQuestionLedgerCoordinator(parent, universeId);
 	}
 
@@ -341,21 +341,21 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		childQuestionLedgerCoordinators[poolId] = coordinator;
 	}
 
-	function _getOrCreateSharedPriceFeed(OpenOraclePriceCoordinator coordinator, address portfolio, uint248 universeId) private returns (SharedPoolPriceFeed feed) {
-		feed = SharedPoolPriceFeed(payable(sharedPriceFeeds[portfolio][universeId]));
+	function _getOrCreateSharedPriceFeed(OpenOraclePriceCoordinator coordinator, address securityPool, uint248 universeId) private returns (SharedPoolPriceFeed feed) {
+		feed = SharedPoolPriceFeed(payable(sharedPriceFeeds[securityPool][universeId]));
 		if (address(feed) == address(0)) {
-			feed = openOraclePriceCoordinatorFactory.deploySharedPoolPriceFeed(coordinator, portfolio, universeId, zoltar.getRepToken(universeId), keccak256(abi.encode(portfolio, universeId)));
-			sharedPriceFeeds[portfolio][universeId] = address(feed);
-			emit SharedPriceFeedRegistered(portfolio, universeId, address(feed));
+			feed = openOraclePriceCoordinatorFactory.deploySharedPoolPriceFeed(coordinator, securityPool, universeId, zoltar.getRepToken(universeId), keccak256(abi.encode(securityPool, universeId)));
+			sharedPriceFeeds[securityPool][universeId] = address(feed);
+			emit SharedPriceFeedRegistered(securityPool, universeId, address(feed));
 		}
 	}
 
-	function _configureSharedPriceFeed(OpenOraclePriceCoordinator coordinator, address portfolio, uint248 universeId) private {
-		openOraclePriceCoordinatorFactory.configureSharedPriceFeed(coordinator, _getOrCreateSharedPriceFeed(coordinator, portfolio, universeId));
+	function _configureSharedPriceFeed(OpenOraclePriceCoordinator coordinator, address securityPool, uint248 universeId) private {
+		openOraclePriceCoordinatorFactory.configureSharedPriceFeed(coordinator, _getOrCreateSharedPriceFeed(coordinator, securityPool, universeId));
 	}
 
-	function _initializeQuestionLedger(IQuestionLedger questionLedger, OpenOraclePriceCoordinator coordinator, address portfolio) private {
-		SharedPoolPriceFeed(payable(sharedPriceFeeds[portfolio][questionLedger.universeId()])).registerCoordinator(address(coordinator));
+	function _initializeQuestionLedger(IQuestionLedger questionLedger, OpenOraclePriceCoordinator coordinator, address securityPool) private {
+		SharedPoolPriceFeed(payable(sharedPriceFeeds[securityPool][questionLedger.universeId()])).registerCoordinator(address(coordinator));
 		questionLedger.setStartingParams();
 	}
 

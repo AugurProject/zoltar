@@ -17,16 +17,16 @@ import { ensureDefined, strictEqualTypeSafe } from '../../testSupport/simulator/
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import {
 	statoblast_tokens_ShareToken_ShareToken,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 } from '../../types/contractArtifact'
 import { collateralBalance } from './burnEvidence'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Statoblast: shared portfolio multi-branch migration', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+describe('Statoblast: shared security pool multi-branch migration', () => {
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	let client: ReturnType<typeof fixture.owner>
 	let mockWindow: typeof fixture.base.mockWindow
 	let questionLedgerAddresses: ReturnType<typeof fixture.poolFor>
@@ -39,8 +39,8 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 		genesisUniverse = fixture.base.genesisUniverse
 		questionLedgerAddresses = fixture.poolFor(questionId)
 	})
-	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const controller = async () => ({ abi: forkArtifact.abi, address: await client.readContract({ ...portfolio(), functionName: 'forkController' }) })
+	const securityPool = () => ({ abi: securityPoolArtifact.abi, address: fixture.securityPool })
+	const controller = async () => ({ abi: forkArtifact.abi, address: await client.readContract({ ...securityPool(), functionName: 'forkController' }) })
 	const finishChoiceWindow = async () => {
 		await mockWindow.setTime((await getUniverseData(client, genesisUniverse)).forkTime + 63n * DAY)
 	}
@@ -49,7 +49,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 		const child = getChildUniverseId(genesisUniverse, outcome)
 		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'startBranch', args: [genesisUniverse, outcome] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'finalizeBranch', args: [child] }))
-		if (materialize) await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializePortfolioQuestion', args: [source, child] }))
+		if (materialize) await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializeSecurityPoolQuestion', args: [source, child] }))
 		return child
 	}
 	test('migrates INVALID, YES, and NO entitlements into many outcomes of an unrelated scalar fork', async () => {
@@ -218,8 +218,8 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 			await writeContractAndWait(sender, () => sender.writeContract({ ...target, functionName: 'choose', args: [genesisUniverse, outcome] }))
 		}
 		await finishChoiceWindow()
-		const settlement = await client.readContract({ ...portfolio(), functionName: 'settlement' })
-		const cashBefore = await collateralBalance(client, fixture.portfolio, settlement)
+		const settlement = await client.readContract({ ...securityPool(), functionName: 'settlement' })
+		const cashBefore = await collateralBalance(client, fixture.securityPool, settlement)
 		let paid = 0n
 		for (const outcome of [1n, 2n]) {
 			for (let i = 0; i < questions.length; i++) {
@@ -227,26 +227,26 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 				const amount = ensureDefined(amounts[i], 'Missing amount')
 				const parent = fixture.poolFor(question)
 				const child = await activateBranch(outcome, true, parent.questionLedger)
-				const childPool = await client.readContract({ ...portfolio(), functionName: 'getPool', args: [question, child] })
+				const childPool = await client.readContract({ ...securityPool(), functionName: 'getPool', args: [question, child] })
 				for (const source of [0, 1, 2]) await migrateShares(fixture.other(), parent.shareToken, genesisUniverse, source, [outcome])
 				expect(await balanceOfShares(client, parent.shareToken, child, fixture.other().account.address)).toEqual([amount, amount, amount])
-				const cash = await client.readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [childPool, amount] })
+				const cash = await client.readContract({ ...securityPool(), functionName: 'quoteQuestionSettlement', args: [childPool, amount] })
 				expect(cash).toBeGreaterThanOrEqual(amount / 2n - 1n)
 				expect(cash).toBeLessThanOrEqual((amount + 1n) / 2n)
-				const recovery = await client.readContract({ ...portfolio(), functionName: 'quoteQuestionRecoveryRep', args: [childPool, amount] })
+				const recovery = await client.readContract({ ...securityPool(), functionName: 'quoteQuestionRecoveryRep', args: [childPool, amount] })
 				expect(recovery).toBeGreaterThan(0n)
 				const balanceBefore = await getERC20Balance(client, getRepTokenAddress(child), fixture.other().account.address)
 				await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [amount] }))
 				expect(await getERC20Balance(client, getRepTokenAddress(child), fixture.other().account.address)).toBe(balanceBefore + recovery)
 				paid += cash
-				expect(await collateralBalance(client, fixture.portfolio, settlement)).toBe(cashBefore - paid)
+				expect(await collateralBalance(client, fixture.securityPool, settlement)).toBe(cashBefore - paid)
 				expect(await client.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
 			}
 		}
 		expect(cashBefore - paid).toBeLessThanOrEqual(4n)
 	})
 
-	test('an empty portfolio activates a zero-collateral child without an auction', async () => {
+	test('an empty security pool activates a zero-collateral child without an auction', async () => {
 		await mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, questionId)
@@ -255,9 +255,9 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 		const target = await controller()
 		expect((await client.readContract({ ...target, functionName: 'branches', args: [child] })).ready).toBe(true)
 		expect(BigInt(await client.readContract({ ...target, functionName: 'auctions', args: [child] }))).toBe(0n)
-		const childPool = await client.readContract({ ...portfolio(), functionName: 'getPool', args: [questionId, child] })
+		const childPool = await client.readContract({ ...securityPool(), functionName: 'getPool', args: [questionId, child] })
 		expect(await getSystemState(client, childPool)).toBe(SystemState.Operational)
-		expect(await client.readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [childPool, 0n] })).toBe(0n)
+		expect(await client.readContract({ ...securityPool(), functionName: 'quoteQuestionSettlement', args: [childPool, 0n] })).toBe(0n)
 		expect(await client.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
 	})
 })

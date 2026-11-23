@@ -103,10 +103,10 @@ export async function createLiquidatorRuntime(loaded: LoadedSettings, collaborat
 	const state = initialRuntimeState(settings.paused, runtime.wallet?.account.address, settings.network.chainId)
 	setExecutionShutdownCheck(state, collaborators.shutdown.isRequested)
 	const durable = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
-	state.portfolioFunding = durable.portfolioFunding
-	state.completedPortfolioInstructions = durable.completedPortfolioInstructions
+	state.securityPoolFunding = durable.securityPoolFunding
+	state.completedSecurityPoolInstructions = durable.completedSecurityPoolInstructions
 	state.lastExpiredTakeoverBlock = durable.lastExpiredTakeoverBlock
-	state.portfolioScopes = durable.portfolioScopes
+	state.securityPoolScopes = durable.securityPoolScopes
 	state.activities = durable.activities
 	state.lastScannedBlock = durable.lastScannedBlock === undefined ? undefined : BigInt(durable.lastScannedBlock)
 	state.pendingTransactions = durable.pendingTransactions

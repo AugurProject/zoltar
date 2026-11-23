@@ -4,10 +4,10 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Reporter claims: immutable portfolio own-fork source', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+describe('Reporter claims: immutable security pool own-fork source', () => {
+	const fixture = useSecurityPoolFixture()
 	test('own-fork history freezes immediately because reporter withdrawals use child proofs', async () => {
 		const owner = fixture.owner()
 		const pool = fixture.poolFor(fixture.base.questionId).questionLedger

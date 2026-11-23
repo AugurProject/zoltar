@@ -7,7 +7,7 @@ import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createE2E, NO, YES } from './auditE2EHarness'
 import { RECEIVE_WITH_AUTHORIZATION_TYPES, signTypedDataV4, tokenDomain } from '../testSupport/simulator/utils/typedDataSignatures'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const guardedPoolAbi = parseAbi(['function depositWalletRepToEscalationGameWithLead(uint8 outcome, uint256 maximumDepositAttoRep)'])
 const authorizationSignature = 'function depositRepOnOutcomeWithAuthorizationAndLead(address owner, uint8 outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)'
@@ -15,7 +15,7 @@ const guardedAuthorizationAbi = parseAbi([authorizationSignature, 'function depo
 const guardedGameAbi = parseAbi(['function depositRepOnOutcomeWithLead(uint8 outcome, uint256 maximumDepositAttoRep)'])
 
 describe('escalation deposit lead bounds', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 	for (const throughPool of [true, false]) {
 		for (const frontRun of [true, false]) {

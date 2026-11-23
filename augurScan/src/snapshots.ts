@@ -89,8 +89,8 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 	// ERC20 metadata is optional. A failed metadata read must not erase an otherwise valid accounting snapshot.
 	try {
 		const factory = getAddress(String(await read(address, poolAbi, 'securityPoolFactory')))
-		const portfolio = getAddress(String(await read(factory, snapshotAbi('securityPoolFactory'), 'getSecurityPoolPortfolio', [address])))
-		const token = getAddress(String(await read(portfolio, snapshotAbi('securityPoolPortfolio'), 'collateralToken')))
+		const securityPool = getAddress(String(await read(factory, snapshotAbi('securityPoolFactory'), 'securityPoolOf', [address])))
+		const token = getAddress(String(await read(securityPool, snapshotAbi('securityPool'), 'collateralToken')))
 		try {
 			const metadata = await readCollateralMetadata(token, read)
 			const { decimals } = metadata

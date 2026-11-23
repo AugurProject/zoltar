@@ -27,7 +27,7 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 /// Index paths, not the number of owners or questions, bound work.
 contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	using SafeERC20Ops for IERC20;
-	address public immutable portfolio;
+	address public immutable securityPool;
 	Zoltar public immutable zoltar;
 	SecurityPoolCapitalLifecycleDelegate public immutable lifecycleDelegate;
 	SecurityPoolCapitalAuctionDelegate public immutable auctionDelegate;
@@ -65,7 +65,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	constructor(address authority, Zoltar protocol, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalLifecycleDelegate lifecycle, SecurityPoolCapitalAuctionDelegate auction) {
 		require(authority != address(0), 'Capital authority missing');
 		require(minimumCommitment > 0, 'Capital economic minimum missing');
-		portfolio = authority;
+		securityPool = authority;
 		zoltar = protocol;
 		securityMultiplierBps = multiplier;
 		minimumCommitmentAttoEth = minimumCommitment;
@@ -86,17 +86,17 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 
 	modifier onlyAccounting() {
 		_requireInitialized();
-		require(msg.sender == portfolio || msg.sender == services, 'Only capital accounting');
+		require(msg.sender == securityPool || msg.sender == services, 'Only capital accounting');
 		_;
 	}
 	modifier onlyDemandAccounting() {
 		_requireInitialized();
-		require(msg.sender == portfolio || msg.sender == services || msg.sender == forkAuthority, 'Only demand accounting');
+		require(msg.sender == securityPool || msg.sender == services || msg.sender == forkAuthority, 'Only demand accounting');
 		_;
 	}
 	modifier onlyForkAuthority() {
 		_requireInitialized();
-		require(msg.sender == portfolio || msg.sender == forkAuthority, 'Only fork authority');
+		require(msg.sender == securityPool || msg.sender == forkAuthority, 'Only fork authority');
 		_;
 	}
 	modifier nonReentrant() {
@@ -108,7 +108,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	function initialize(SecurityPoolCommitmentIndex index, ICapitalFeeStreams streams, address coordinator, address serviceAuthority) external {
-		require(msg.sender == portfolio, 'Only portfolio');
+		require(msg.sender == securityPool, 'Only security pool');
 		(uint248 universe, address token) = SecurityPoolBoundClones.universeBindings();
 		require(address(commitmentIndex) == address(0), 'Capital already initialized');
 		require(index.capitalLedger() == address(this), 'Wrong commitment authority');
@@ -162,7 +162,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		return _requiredRep(commitment, health, conservativePrice);
 	}
 	/// @notice A funded growth proof keeps its collateral floor until a newer
-	/// canonical report covers the enlarged portfolio. No owner scan is needed.
+	/// canonical report covers the enlarged security pool. No owner scan is needed.
 	function ownerConservativePrice(address owner) public view returns (uint256) {
 		return
 			owners[owner].fundingPrice.epoch == acceptedPriceEpoch
@@ -311,13 +311,13 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// @dev The callback checkpoints the ledger's cached old price before reading
 	/// the feed's new epoch and bounds; all acceptance changes are atomic.
 	function acceptPrice(uint256 price, uint48 validUntil) external {
-		require(msg.sender == portfolio, 'Only portfolio');
+		require(msg.sender == securityPool, 'Only security pool');
 		_requireInitialized();
 		require(reportOwner == address(0), 'Report operation active');
 		require(zoltar.getForkTime(universeId()) == 0, 'Fork price already frozen');
 		require(price > 0 && validUntil > block.timestamp, 'Invalid capital price');
 		_checkpointAccounting();
-		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(portfolio).priceFeed(universeId()));
+		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(securityPool).priceFeed(universeId()));
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.acceptPrice, (feed, price, validUntil)));
 	}
 
@@ -334,7 +334,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		uint48 effective = effectiveTime();
 		uint48 through = uint48(Math.min(effective, priceValidUntil));
 		// The canonical book pauses cash-funded fees at stale-price boundaries.
-		ICapitalLedgerAccounting(portfolio).checkpointCapitalFees(universeId(), through);
+		ICapitalLedgerAccounting(securityPool).checkpointCapitalFees(universeId(), through);
 		// Prepaid rewards keep their original vesting dates after a fork. Their
 		// old commitments and eligibility are immutable, and parent earnings stay
 		// separately claimable even after the owner has selected a child.
@@ -382,7 +382,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 
 	/// @dev An already time-earned amount; only the canonical checkpoint may call.
 	function creditTimedFees(uint256 cash) external onlyAccounting {
-		Collateral.pull(ICollateralConfig(portfolio).collateralToken(), msg.sender, address(this), cash);
+		Collateral.pull(ICollateralConfig(securityPool).collateralToken(), msg.sender, address(this), cash);
 		_creditEarnings(cash, 0);
 	}
 
@@ -390,7 +390,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		require(!importing, 'Capital imports are not complete');
 		_checkpoint();
 		if (repAmount != 0) repToken().safeTransferFrom(msg.sender, address(this), repAmount);
-		Collateral.pull(ICollateralConfig(portfolio).collateralToken(), msg.sender, address(this), cash);
+		Collateral.pull(ICollateralConfig(securityPool).collateralToken(), msg.sender, address(this), cash);
 		feeStreams.addStream(cash, repAmount);
 	}
 
@@ -432,7 +432,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// The canonical feed filters selectors and isolates calls. The selected
 	/// public entrypoint retains its validation and reentrancy guard.
 	function executeReportOperation(address sponsor, bytes calldata data) external {
-		require(msg.sender == ICapitalLedgerAccounting(portfolio).priceFeed(universeId()), 'Only canonical shared feed');
+		require(msg.sender == ICapitalLedgerAccounting(securityPool).priceFeed(universeId()), 'Only canonical shared feed');
 		require(!entered && reportOwner == address(0) && sponsor != address(0), 'Capital operation active');
 		reportOwner = sponsor;
 		(bool success, bytes memory result) = address(this).call(data);

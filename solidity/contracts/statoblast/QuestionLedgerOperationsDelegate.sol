@@ -20,7 +20,7 @@ interface IQuestionLedgerRepDepositContext {
 	function questionData() external view returns (address);
 	function repToken() external view returns (address);
 	function universeId() external view returns (uint248);
-	function refreshPortfolioFees() external;
+	function refreshSecurityPoolFees() external;
 	function zoltar() external view returns (address);
 }
 
@@ -56,7 +56,7 @@ contract QuestionLedgerOperationsDelegate is QuestionLedgerSettlementDelegate {
 			escalationGame = pool.escalationGameFactory().deployEscalationGame(pool.initialEscalationGameDepositAttoRep(), zoltar.getNonDecisionThresholdAttoRep(universeId));
 			emit EscalationGameSet(escalationGame);
 		}
-		require(!escalationGame.forkContinuation() || (portfolioCustody != address(0) && escalationGame.forkResumedAt() != 0), 'Fork game');
+		require(!escalationGame.forkContinuation() || (securityPoolCustody != address(0) && escalationGame.forkResumedAt() != 0), 'Fork game');
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = requireLead
 			? escalationGame.previewLeadingDepositOnOutcome(outcome, maximumDepositAttoRep)
 			: escalationGame.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
@@ -75,7 +75,7 @@ contract QuestionLedgerOperationsDelegate is QuestionLedgerSettlementDelegate {
 		if (escalationGame.forkResumedAt() == 0) return;
 		awaitingForkContinuation = false;
 		emit AwaitingForkContinuationSet(false);
-		IQuestionLedgerRepDepositContext(address(this)).refreshPortfolioFees();
+		IQuestionLedgerRepDepositContext(address(this)).refreshSecurityPoolFees();
 	}
 
 	/// @notice Pool delegatecall target: burns `redeemer`'s winning shares and returns the settlement collateral owed.
@@ -84,12 +84,12 @@ contract QuestionLedgerOperationsDelegate is QuestionLedgerSettlementDelegate {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		(winningSharesBurnedAttoShares, ) = shareToken.burnTokenIdAndGetRemainingSupply(tokenId, redeemer);
-		return (winningSharesBurnedAttoShares, _redeemPortfolioSettlement(redeemer, winningSharesBurnedAttoShares));
+		return (winningSharesBurnedAttoShares, _redeemSecurityPoolSettlement(redeemer, winningSharesBurnedAttoShares));
 	}
 
 	/// @notice Pool delegatecall target: burns `redeemer`'s complete sets and returns the settlement collateral owed.
 	function redeemCompleteSet(IShareToken shareToken, uint248 universeId, address redeemer, uint256 amountAttoShares) external returns (uint256 settlementCollateralRedeemedAttoEth) {
 		shareToken.burnCompleteSets(universeId, redeemer, amountAttoShares);
-		return _redeemPortfolioSettlement(redeemer, amountAttoShares);
+		return _redeemSecurityPoolSettlement(redeemer, amountAttoShares);
 	}
 }

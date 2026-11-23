@@ -111,5 +111,5 @@ test('escrows, commitment indexes and fee streams never join the scanned address
 	const registered = [contract(feed, 'sharedPoolPriceFeed'), contract(escrow, 'securityPoolCommitmentIndex'), contract(sponsor, 'securityPoolCapitalFeeStreams'), ...escrows]
 	expect(indexerLogSources(registered).map(source => source.address)).toEqual([feed])
 	for (const kind of ['sharedPoolReportEscrow', 'securityPoolCommitmentIndex', 'securityPoolCapitalFeeStreams']) expect(isProtocolActivitySource(contract(escrow, kind))).toBe(false)
-	for (const kind of ['securityPoolSettlementBook', 'securityPoolReporterLedger', 'securityPoolPortfolioServices', 'securityPoolPortfolioSettlement', 'securityPoolCapitalLedger']) expect(isProtocolActivitySource(contract(escrow, kind))).toBe(true)
+	for (const kind of ['securityPoolSettlementBook', 'securityPoolReporterLedger', 'securityPoolServices', 'securityPoolSettlement', 'securityPoolCapitalLedger']) expect(isProtocolActivitySource(contract(escrow, kind))).toBe(true)
 })

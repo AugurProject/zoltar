@@ -46,7 +46,7 @@ describe('transaction presentations', () => {
 		expect(deferred.detail).toContain('33 nanoETH per gas limit')
 	})
 
-	test.each(['Portfolio reporting window closed', 'Report timestamp not newer'])('does not recommend another request for %s', reason => {
+	test.each(['Security pool reporting window closed', 'Report timestamp not newer'])('does not recommend another request for %s', reason => {
 		const presentation = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason } })
 		expect(presentation.detail).not.toContain('Request a new price')
 	})

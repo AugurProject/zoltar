@@ -428,11 +428,11 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Standalone only. Start portfolio-managed requests from the portfolio price panel.')).not.toBeNull()
+		expect(documentQueries.getByText('Standalone only. Start security-pool-managed requests from the security pool price panel.')).not.toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Base token address' })).not.toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Quote token address' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Standalone operator workflow')).toBe(false)
-		expect(document.body.textContent?.match(/portfolio-managed/gi) ?? []).toHaveLength(1)
+		expect(document.body.textContent?.match(/security-pool-managed/gi) ?? []).toHaveLength(1)
 	})
 
 	test('reviews lifecycle delays in human-readable and exact protocol units', async () => {

@@ -86,7 +86,7 @@ describe('oracle request funding bounds', () => {
 		}
 	})
 
-	test('renews a fresh shared portfolio price without allowing duplicate pending reports', () => {
+	test('renews a fresh shared security pool price without allowing duplicate pending reports', () => {
 		const { pool, snapshot } = requestPriceSnapshot()
 		pool.oraclePriceValid = true
 		expect(requestPricePlan(snapshot)).toBeDefined()

@@ -9,12 +9,12 @@ const labels = new Map([[target.toLowerCase(), 'Question Ledger']])
 const kinds = new Map([[target.toLowerCase(), 'questionLedger']])
 const wrapped = (execution: `0x${string}`, mode = zeroHash) => encodeFunctionData({ abi: wrapperAbi, functionName: 'redeemDelegations', args: [['0x'], [mode], [execution]] })
 
-test('decodes a shared portfolio capital deposit inside a delegation', () => {
+test('decodes a shared security pool capital deposit inside a delegation', () => {
 	const depositAbi = parseAbi(['function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)'])
 	const deposit = encodeFunctionData({ abi: depositAbi, functionName: 'depositAndSetHealthTarget', args: [110n * 10n ** 18n, 12000n] })
-	const decoded = decodeAction(undefined, wrapped(concatHex([target, toHex(0n, { size: 32 }), deposit])), new Map([[target.toLowerCase(), 'Portfolio capital']]), new Map(), new Map([[target.toLowerCase(), 'securityPoolCapitalLedger']]))
+	const decoded = decodeAction(undefined, wrapped(concatHex([target, toHex(0n, { size: 32 }), deposit])), new Map([[target.toLowerCase(), 'Security pool capital']]), new Map(), new Map([[target.toLowerCase(), 'securityPoolCapitalLedger']]))
 	expect(decoded.status).toBe('decoded')
-	expect(decoded.summary).toContain('Portfolio capital')
+	expect(decoded.summary).toContain('Security pool capital')
 	expect(decoded.summary).toContain('depositAndSetHealthTarget')
 	expect(decoded.summary).toContain('targetHealthFactorBps=12000')
 	expect(decoded.summary).not.toContain('Unknown call')

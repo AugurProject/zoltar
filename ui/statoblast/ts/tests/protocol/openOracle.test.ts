@@ -680,7 +680,7 @@ test('#1456: unsafe settlement disables dispute availability with a reason', () 
 
 const feedEscrowAddress = getAddress('0x00000000000000000000000000000000000000e5')
 const sharedFeedAddress = getAddress('0x00000000000000000000000000000000000000f5')
-const feedPortfolioAddress = getAddress('0x00000000000000000000000000000000000000a5')
+const feedSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a5')
 const childRepAddress = getAddress('0x00000000000000000000000000000000000000b5')
 
 type TokenFixture = { decimals?: bigint; symbol?: string; universeId?: bigint }
@@ -720,7 +720,7 @@ function createOpenOracleMulticall({ tokens, universeTokens = {}, escrow }: { to
 		if (first === 'feed') return escrow === undefined ? [failure()] : [success(sharedFeedAddress)]
 		if (first === 'reportCandidates') {
 			if (escrow === undefined) throw new Error('Unexpected feed read')
-			return [success([escrow.candidate, initialReporter, alternateQuestionLedgerAddress, 0n]), success(getInfraContractAddresses().securityPoolFactory), success(feedPortfolioAddress), success(0n), success(getOpenOracleAddress())]
+			return [success([escrow.candidate, initialReporter, alternateQuestionLedgerAddress, 0n]), success(getInfraContractAddresses().securityPoolFactory), success(feedSecurityPoolAddress), success(0n), success(getOpenOracleAddress())]
 		}
 		if (first === 'sharedPriceFeeds') return [success(escrow?.registered === true ? sharedFeedAddress : zeroAddress)]
 		throw new Error(`Unexpected multicall ${first}`)

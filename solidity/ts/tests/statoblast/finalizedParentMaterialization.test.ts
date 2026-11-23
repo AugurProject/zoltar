@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	Zoltar_Zoltar as zoltarArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
 	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
@@ -15,11 +15,11 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('Statoblast: reject materializing a question that finalized before an unrelated fork', () => {
-	const fixture = useSecurityPoolPortfolioFixture({})
-	const p = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
+	const fixture = useSecurityPoolFixture({})
+	const p = () => ({ abi: securityPoolArtifact.abi, address: fixture.securityPool })
 	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const sourcePool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const shares = () => ({ abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken })
@@ -82,7 +82,7 @@ describe('Statoblast: reject materializing a question that finalized before an u
 		await writeContractAndWait(owner, () => owner.writeContract({ ...c, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...c, functionName: 'finalizeBranch', args: [child] }))
 
-		for (const functionName of ['preparePortfolioQuestion', 'materializePortfolioQuestion'] as const) {
+		for (const functionName of ['prepareSecurityPoolQuestion', 'materializeSecurityPoolQuestion'] as const) {
 			await expect(writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName, args: [sourcePool(), child] }))).rejects.toThrow('Question finalized in source universe')
 			await expect(owner.readContract({ ...p(), functionName: 'getPool', args: [base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		}

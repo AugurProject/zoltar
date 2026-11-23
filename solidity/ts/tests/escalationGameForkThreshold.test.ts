@@ -4,7 +4,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -18,7 +18,7 @@ import { approveToken, getERC20Balance, overrideGenesisTheoreticalSupply as over
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	statoblast_QuestionLedger_QuestionLedger,
@@ -31,7 +31,7 @@ import {
 const DAY = 86400n
 
 describe('Escalation Game Fork Threshold Test', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let questionEndDate: bigint
@@ -56,7 +56,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	})
 	const depositToEscalationGame = (sender: WriteClient, pool: Address, outcome: QuestionOutcome, amount: bigint) => writeContractAndWait(sender, () => sender.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 	const reporterBalance = async () => {
-		const ledger = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'reporterLedger', args: [GENESIS_UNIVERSE] })
+		const ledger = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'reporterLedger', args: [GENESIS_UNIVERSE] })
 		return client.readContract({ abi: reporterArtifact.abi, address: ledger, functionName: 'balanceOfGame', args: [questionLedgerAddresses.escalationGame] })
 	}
 	const capitalBalance = (owner = client.account.address) => client.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'ownerCollateral', args: [owner] })

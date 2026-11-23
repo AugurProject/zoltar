@@ -452,7 +452,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 						`${operationCounted(forkSummary['migrator_count'], 'migrator')} · ${operationCounted(forkSummary['child_count'], 'child universe')}`,
 						undefined,
 					),
-					operationRow('Portfolio fork', `${operationCounted(forkSummary['portfolio_fork_events'], 'portfolio fork event')} · ${operationCounted(forkSummary['branch_chooser_count'], 'owner')} chose a branch`, undefined, undefined),
+					operationRow('Security pool fork', `${operationCounted(forkSummary['portfolio_fork_events'], 'security pool fork event')} · ${operationCounted(forkSummary['branch_chooser_count'], 'owner')} chose a branch`, undefined, undefined),
 					// The reporter ledger freezes once per forked universe: live game escrow migrates, finalized games keep parent REP.
 					...(Number(forkSummary['reporter_fork_frozen_count'] ?? 0) > 0
 						? [operationRow('Reporter escrow', `${exactUnit(String(forkSummary['reporter_migration_atto_rep'] ?? '0'), 18, 'REP')} live escrow migrates · ${exactUnit(String(forkSummary['reporter_protected_parent_atto_rep'] ?? '0'), 18, 'REP')} of finalized games stays with the parent`, undefined, undefined)]

@@ -145,14 +145,14 @@
 			"constructorArguments": ""
 		},
 		{
-			"id": "securityPoolPortfolioSettlementDeployer",
-			"label": "SecurityPoolPortfolioSettlementDeployer",
+			"id": "securityPoolSettlementDeployer",
+			"label": "SecurityPoolSettlementDeployer",
 			"address": "0xBf89A1827B79EE371da6AB0A2Ebca4190A6Bb7Cf",
 			"constructorArguments": ""
 		},
 		{
-			"id": "securityPoolPortfolioServicesDeployer",
-			"label": "SecurityPoolPortfolioServicesDeployer",
+			"id": "securityPoolServicesDeployer",
+			"label": "SecurityPoolServicesDeployer",
 			"address": "0x5cb86934B6b23757aCDB03283db76FC4E7823885",
 			"constructorArguments": ""
 		},
@@ -163,14 +163,14 @@
 			"constructorArguments": ""
 		},
 		{
-			"id": "securityPoolPortfolioForkCoordinatorDeployer",
-			"label": "SecurityPoolPortfolioForkCoordinatorDeployer",
+			"id": "securityPoolForkCoordinatorDeployer",
+			"label": "SecurityPoolForkCoordinatorDeployer",
 			"address": "0x17d8c2B2F97BdC8e00b7f2b4A920d4b95b19d10c",
 			"constructorArguments": ""
 		},
 		{
-			"id": "securityPoolPortfolioAuctionDeployer",
-			"label": "SecurityPoolPortfolioAuctionDeployer",
+			"id": "securityPoolAuctionDeployer",
+			"label": "SecurityPoolAuctionDeployer",
 			"address": "0x03e424792Ce479332F992A9bD6CB7516A841dFbE",
 			"constructorArguments": ""
 		}

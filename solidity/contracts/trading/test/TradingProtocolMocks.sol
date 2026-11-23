@@ -150,17 +150,17 @@ contract TradingMockCoreFactory {
 	bytes32 public constant ORIGIN_ID = keccak256('trading-test-origin');
 	mapping(address => bytes32) public originByPool;
 	mapping(bytes32 => mapping(uint248 => address)) public poolByOriginAndUniverse;
-	mapping(address => address) public portfolios;
-	function setPortfolio(address pool, address portfolio) external {
-		portfolios[pool] = portfolio;
+	mapping(address => address) public securityPools;
+	function setSecurityPool(address pool, address securityPool) external {
+		securityPools[pool] = securityPool;
 	}
-	function getSecurityPoolPortfolio(IQuestionLedger pool) external view returns (address) {
-		return portfolios[address(pool)];
+	function securityPoolOf(IQuestionLedger pool) external view returns (address) {
+		return securityPools[address(pool)];
 	}
 
 	function setPool(address pool, uint248 universeId) external {
 		originByPool[pool] = ORIGIN_ID;
-		portfolios[pool] = pool;
+		securityPools[pool] = pool;
 		poolByOriginAndUniverse[ORIGIN_ID][universeId] = pool;
 	}
 
@@ -217,14 +217,14 @@ contract TradingMockQuestionLedger {
 	uint256 public settlementCollateralAttoEth;
 	TradingMockRecoveryToken public immutable repToken = new TradingMockRecoveryToken();
 	TradingMockSettlementSender public immutable settlement = new TradingMockSettlementSender();
-	address public portfolioCustody;
+	address public securityPoolCustody;
 	uint256 public recoveryPerCompleteSet;
 	bool public recoveryOnly;
 
 	function configureRecovery(uint256 repPerCompleteSet, bool onlyRep, bool centralCash) external {
 		recoveryPerCompleteSet = repPerCompleteSet;
 		recoveryOnly = onlyRep;
-		portfolioCustody = centralCash ? address(this) : address(0);
+		securityPoolCustody = centralCash ? address(this) : address(0);
 	}
 
 	constructor(TradingMockShareToken token, TradingMockCoreFactory coreFactory, TradingMockZoltar mockZoltar, TradingMockQuestionData mockQuestionData, TradingMockForker mockForker, uint248 mockUniverseId, uint256 mockQuestionId, uint256 initialSharesPerEth) {
@@ -263,14 +263,14 @@ contract TradingMockQuestionLedger {
 		return (amountAttoShares / sharesPerEth) * recoveryPerCompleteSet;
 	}
 
-	function refreshPortfolioFees() external {}
+	function refreshSecurityPoolFees() external {}
 
 	function purchaseQuote(uint248, uint256, uint256) external pure returns (uint256, uint256) {
 		return (0, 0);
 	}
 
 	function createCompleteSet(uint248 universe, uint256 question, uint256 cash, address recipient, uint256 minimumShares, uint256) external returns (uint256 amount) {
-		require(universe == universeId && question == questionId, 'Invalid mock portfolio purchase');
+		require(universe == universeId && question == questionId, 'Invalid mock security pool purchase');
 		collateralToken.transferFrom(msg.sender, address(this), cash);
 		amount = attoEthToAttoShares(cash);
 		require(amount > 0 && amount >= minimumShares, 'Mint is zero');

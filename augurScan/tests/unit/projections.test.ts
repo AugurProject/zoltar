@@ -40,12 +40,12 @@ const questionCreatedLog = log('QuestionCreated', {
 
 describe('state projections', () => {
 	test('projects each question accounting checkpoint as pool state and as an accounting snapshot', () => {
-		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' }))
-		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' } })
-		const snapshot: Projection = { type: 'poolSnapshot', poolAddress: pool.toLowerCase(), reason: 2, settlementCollateralAttoEth: atomic(100n), shareTokenSupplyAttoShares: atomic(200n), lastSettlementPortfolioTime: atomic(300n) }
+		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementSecurityPoolTime: '300' }))
+		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementSecurityPoolTime: '300' } })
+		const snapshot: Projection = { type: 'poolSnapshot', poolAddress: pool.toLowerCase(), reason: 2, settlementCollateralAttoEth: atomic(100n), shareTokenSupplyAttoShares: atomic(200n), lastSettlementSecurityPoolTime: atomic(300n) }
 		expect(projections).toContainEqual(snapshot)
 		// A uint8 enum decodes to a number; a replayed JSON record may carry it as a string.
-		expect(projectionsFrom(log('QuestionAccountingCheckpoint', { reason: '2', settlementCollateralAttoEth: atomic(100n), shareTokenSupplyAttoShares: atomic(200n), lastSettlementPortfolioTime: '300' }))).toContainEqual(snapshot)
+		expect(projectionsFrom(log('QuestionAccountingCheckpoint', { reason: '2', settlementCollateralAttoEth: atomic(100n), shareTokenSupplyAttoShares: atomic(200n), lastSettlementSecurityPoolTime: '300' }))).toContainEqual(snapshot)
 	})
 
 	test('ignores accounting and approval events that no current contract emits', () => {
@@ -221,7 +221,7 @@ describe('state projections', () => {
 		const transfer: StoredLog = { ...log('Transfer', {}, vault, 'ammPair'), topics, data, decoded }
 		const projection = projectionsFrom(transfer).at(-1)
 		if (projection?.type !== 'domainEvent') throw new Error('LP transfer did not project a domain event')
-		// The trading, catalog, portfolio, and detail LP queries read these exact keys from amm_trade_events.event_data.
+		// The trading, catalog, security pool, and detail LP queries read these exact keys from amm_trade_events.event_data.
 		expect(projection).toMatchObject({ domain: 'trading', entityIdentity: vault.toLowerCase(), semanticEventKind: 'Transfer' })
 		expect(Object.keys(projection.data).sort()).toEqual(['from', 'to', 'value'])
 		expect(projection.data['value']).toBe('50')
@@ -346,13 +346,13 @@ describe('state projections', () => {
 	test('classifies the remaining events of indexed contracts and ignores the unemitted ERC-1155 URI', () => {
 		const cases = [
 			['ReportOperationAttempted', { reportId: '7', sponsor: vault, operationIndex: '0', success: true }, 'oracle', 'price-feed', pool.toLowerCase()],
-			['PortfolioDeployed', { portfolio: vault, creator: pool }, 'risk', 'portfolio', vault.toLowerCase()],
-			['PortfolioRegistered', { portfolio: vault, originUniverseId: '0' }, 'risk', 'portfolio', vault.toLowerCase()],
-			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
-			['BidVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'portfolio-auction', pool.toLowerCase()],
-			['AuctionClosed', { filledLots: '1', raisedAttoEth: atomic(1n), soldAttoRep: atomic(2n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
-			['PortfolioRecoveryRightsTransferred', { universeId: '1', from: vault, to: vault, amountsAttoShares: ['1', '2', '3'] }, 'system', 'share-token', pool.toLowerCase()],
-			['PortfolioRecoveryRightsConsumed', { universeId: '1', holder: vault, amountAttoShares: atomic(1n), cumulativeAttoShares: atomic(1n) }, 'system', 'share-token', pool.toLowerCase()],
+			['SecurityPoolDeployed', { securityPool: vault, creator: pool }, 'risk', 'security-pool', vault.toLowerCase()],
+			['SecurityPoolRegistered', { securityPool: vault, originUniverseId: '0' }, 'risk', 'security-pool', vault.toLowerCase()],
+			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'security-pool-auction', pool.toLowerCase()],
+			['BidVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'security-pool-auction', pool.toLowerCase()],
+			['AuctionClosed', { filledLots: '1', raisedAttoEth: atomic(1n), soldAttoRep: atomic(2n) }, 'risk', 'security-pool-auction', pool.toLowerCase()],
+			['SecurityPoolRecoveryRightsTransferred', { universeId: '1', from: vault, to: vault, amountsAttoShares: ['1', '2', '3'] }, 'system', 'share-token', pool.toLowerCase()],
+			['SecurityPoolRecoveryRightsConsumed', { universeId: '1', holder: vault, amountAttoShares: atomic(1n), cumulativeAttoShares: atomic(1n) }, 'system', 'share-token', pool.toLowerCase()],
 		] as const
 		for (const [name, data, domain, entityType, entityIdentity] of cases) expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain, entityType, entityIdentity, semanticEventKind: name })
 		expect(projectionsFrom({ ...log('URI', { value: 'ipfs://share', id: '1' }), contractKind: 'shareToken' })).toEqual([])
@@ -364,7 +364,7 @@ describe('state projections', () => {
 		expect(projectionsFrom(log('AuctionCohortInstalled', { adapter: vault, positionId: '3', lots: '1', repPerLot: '2', commitmentPerLot: '3' })).at(-1)).toMatchObject({ entityType: 'capital-position', entityIdentity: `${pool.toLowerCase()}:3` })
 	})
 
-	test('classifies the events of contracts registered through portfolio discovery', () => {
+	test('classifies the events of contracts registered through security pool discovery', () => {
 		const emitter = pool.toLowerCase()
 		const game = vault.toLowerCase()
 		const cases = [
@@ -372,20 +372,20 @@ describe('state projections', () => {
 			['SettlementMinted', { bookId: '1', questionId: '42', cashAttoEth: atomic(5n), outcomeShares: '5' }, 'risk', 'settlement-book', `${emitter}:1`],
 			['SettlementRedeemed', { bookId: '1', questionId: '42', outcomeShares: '5', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
 			['FinalityScheduled', { bookId: '1', questionId: '42', finalAfter: '100' }, 'risk', 'settlement-book', `${emitter}:1`],
-			['FinalClaimsFrozen', { bookId: '1', frozenBookId: '1', portfolioTimestamp: '100', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
+			['FinalClaimsFrozen', { bookId: '1', frozenBookId: '1', securityPoolTimestamp: '100', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
 			['FeeStreamReplaced', { bookId: '1', questionId: '42', rateAttoEthPerSecond: atomic(3n), end: '200' }, 'risk', 'settlement-book', `${emitter}:1`],
-			['AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '150', cashAttoEth: atomic(9n) }, 'risk', 'settlement-book', `${emitter}:1`],
-			['PremiumFunded', { universeId: '3', questionId: '42', amountAttoEth: atomic(1n), units: '1' }, 'risk', 'portfolio-services', `${emitter}:3`],
-			['PremiumRecovered', { universeId: '3', questionId: '42', recipient: vault, amountAttoEth: atomic(1n) }, 'risk', 'portfolio-services', `${emitter}:3`],
-			['UnusedServiceCashBurned', { universeId: '3', amountAttoEth: atomic(1n) }, 'risk', 'portfolio-services', `${emitter}:3`],
-			['RecoveryRepPaid', { universeId: '3', questionId: '42', recipient: vault, amountAttoRep: atomic(2n) }, 'risk', 'portfolio-settlement', `${emitter}:3`],
+			['AggregateFeesAccrued', { bookId: '1', securityPoolTimestamp: '150', cashAttoEth: atomic(9n) }, 'risk', 'settlement-book', `${emitter}:1`],
+			['PremiumFunded', { universeId: '3', questionId: '42', amountAttoEth: atomic(1n), units: '1' }, 'risk', 'security-pool-services', `${emitter}:3`],
+			['PremiumRecovered', { universeId: '3', questionId: '42', recipient: vault, amountAttoEth: atomic(1n) }, 'risk', 'security-pool-services', `${emitter}:3`],
+			['UnusedServiceCashBurned', { universeId: '3', amountAttoEth: atomic(1n) }, 'risk', 'security-pool-services', `${emitter}:3`],
+			['RecoveryRepPaid', { universeId: '3', questionId: '42', recipient: vault, amountAttoRep: atomic(2n) }, 'risk', 'security-pool-settlement', `${emitter}:3`],
 			['ReporterBalanceChanged', { universeId: '3', questionId: '42', balanceAttoRep: atomic(7n) }, 'risk', 'reporter-ledger', `${emitter}:3`],
 			// The reporter ledger names the game, so both events belong to that game rather than to the ledger.
 			['GameRegistered', { universeId: '3', questionId: '42', game: vault }, 'escalation', 'escalation', game],
 			['ReporterFinalityScheduled', { game: vault, finalAfter: '100' }, 'escalation', 'escalation', game],
-			['ReporterForkFrozen', { universeId: '3', migrationAttoRep: atomic(4n), protectedParentAttoRep: atomic(1n) }, 'fork', 'portfolio-branch', `${emitter}:3`],
+			['ReporterForkFrozen', { universeId: '3', migrationAttoRep: atomic(4n), protectedParentAttoRep: atomic(1n) }, 'fork', 'security-pool-branch', `${emitter}:3`],
 			// The child's reporter escrow is created under the source universe that forked.
-			['ReporterChildCreated', { sourceUniverseId: '3', childUniverseId: '4', escrowAttoRep: atomic(4n) }, 'fork', 'portfolio-branch', `${emitter}:3`],
+			['ReporterChildCreated', { sourceUniverseId: '3', childUniverseId: '4', escrowAttoRep: atomic(4n) }, 'fork', 'security-pool-branch', `${emitter}:3`],
 			// The escrow completes a report for the feed that created it, so the entity is that feed.
 			['ReportCompleted', { reportId: '7', priceFeed: vault, outcome: 1 }, 'oracle', 'price-feed', game],
 		] as const
@@ -397,11 +397,11 @@ describe('state projections', () => {
 		const cashAttoEth = atomic(5n)
 		const amountAttoRep = atomic(2n)
 		const bookRepair = { ...log('SettlementBookRepaired', { bookId: '7', cashAttoEth }), contractKind: 'securityPoolSettlementBook' as const }
-		const custodyRepair = { ...log('SettlementRepaired', { universeId: '3', sponsor: vault, cashAttoEth }), contractKind: 'securityPoolPortfolioSettlement' as const }
-		const funded = { ...log('RecoveryRepFunded', { universeId: '3', questionId: '42', payer: vault, amountAttoRep }), contractKind: 'securityPoolPortfolioSettlement' as const }
+		const custodyRepair = { ...log('SettlementRepaired', { universeId: '3', sponsor: vault, cashAttoEth }), contractKind: 'securityPoolSettlement' as const }
+		const funded = { ...log('RecoveryRepFunded', { universeId: '3', questionId: '42', payer: vault, amountAttoRep }), contractKind: 'securityPoolSettlement' as const }
 		expect(projectionsFrom(bookRepair).at(-1)).toMatchObject({ domain: 'risk', entityType: 'settlement-book', entityIdentity: `${emitter}:7`, data: { bookId: '7', cashAttoEth } })
-		expect(projectionsFrom(custodyRepair).at(-1)).toMatchObject({ domain: 'risk', entityType: 'portfolio-settlement', entityIdentity: `${emitter}:3`, data: { universeId: '3', sponsor: vault, cashAttoEth } })
-		expect(projectionsFrom(funded).at(-1)).toMatchObject({ domain: 'risk', entityType: 'portfolio-settlement', entityIdentity: `${emitter}:3`, data: { questionId: '42', payer: vault, amountAttoRep } })
+		expect(projectionsFrom(custodyRepair).at(-1)).toMatchObject({ domain: 'risk', entityType: 'security-pool-settlement', entityIdentity: `${emitter}:3`, data: { universeId: '3', sponsor: vault, cashAttoEth } })
+		expect(projectionsFrom(funded).at(-1)).toMatchObject({ domain: 'risk', entityType: 'security-pool-settlement', entityIdentity: `${emitter}:3`, data: { questionId: '42', payer: vault, amountAttoRep } })
 	})
 
 	test('records standalone health changes in owner activity (#1418)', () => {
@@ -444,7 +444,7 @@ describe('state projections', () => {
 		})
 		expect(projectionsFrom(log('BranchActivated', { universeId: '7' })).at(-1)).toMatchObject({
 			domain: 'fork',
-			entityType: 'portfolio-branch',
+			entityType: 'security-pool-branch',
 			entityIdentity: `${pool.toLowerCase()}:7`,
 		})
 		expect(projectionsFrom(log('MigrationRepSplit', { universeId: '2', childUniverseId: '7' })).at(-1)).toMatchObject({
@@ -488,17 +488,17 @@ describe('previously raw-only lifecycle evidence', () => {
 })
 
 test('question accounting rejects values outside the current three-reason enum', () => {
-	for (const reason of [-1, 3, 5, 255]) expect(() => projectionsFrom(log('QuestionAccountingCheckpoint', { reason, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' }))).toThrow('accounting reason')
+	for (const reason of [-1, 3, 5, 255]) expect(() => projectionsFrom(log('QuestionAccountingCheckpoint', { reason, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementSecurityPoolTime: '300' }))).toThrow('accounting reason')
 })
 
-test('question accounting preserves the portfolio clock as an exact integer beyond wall-clock range', () => {
+test('question accounting preserves the security pool clock as an exact integer beyond wall-clock range', () => {
 	const clock = (1n << 48n) - 1n
-	expect(projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: clock.toString() }))).toContainEqual({
+	expect(projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementSecurityPoolTime: clock.toString() }))).toContainEqual({
 		type: 'poolSnapshot',
 		poolAddress: pool.toLowerCase(),
 		reason: 2,
 		settlementCollateralAttoEth: atomic(100n),
 		shareTokenSupplyAttoShares: atomic(200n),
-		lastSettlementPortfolioTime: atomic(clock),
+		lastSettlementSecurityPoolTime: atomic(clock),
 	})
 })

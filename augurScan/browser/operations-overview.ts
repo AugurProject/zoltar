@@ -136,7 +136,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		return operationRow('Pool accounting', `${riskPresentation.scannerAssessment} · ${String(item['scanner_reason'] ?? '')}`, String(item['pool_address'] ?? ''), item['block_number'], operationsHref(`/operations/risk/pool/${encodeURIComponent(String(item['pool_address'] ?? ''))}`))
 	})
 	const nativeSymbol = nativeSymbolFor(requiredChainId())
-	// Underwriting capital is held per owner in one ledger per portfolio universe, so its risk is listed beside the pools.
+	// Underwriting capital is held per owner in one ledger per security pool universe, so its risk is listed beside the pools.
 	const capitalPositionRows = capitalPositions.map(item => {
 		const riskPresentation = operationsRiskPresentation(item['protocol_state'], item['scanner_severity'])
 		const state = isPlainRecord(item['read_result']) ? item['read_result'] : {}
@@ -231,7 +231,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const forkRows = forks.map(item =>
 		operationRow(
 			`Universe ${String(item['universe_identity'] ?? '—')} fork`,
-			`${operationsForkChildCount(operationNumber(item['child_count']), item['child_count'])} · ${operationCounted(item['migrator_count'], 'migrator')} · ${exactUnit(String(item['migrated_atto_rep'] ?? '0'), 18, 'REP')} minted across child universes · ${operationCounted(item['portfolio_fork_events'], 'portfolio fork event')}`,
+			`${operationsForkChildCount(operationNumber(item['child_count']), item['child_count'])} · ${operationCounted(item['migrator_count'], 'migrator')} · ${exactUnit(String(item['migrated_atto_rep'] ?? '0'), 18, 'REP')} minted across child universes · ${operationCounted(item['portfolio_fork_events'], 'security pool fork event')}`,
 			undefined,
 			item['block_number'],
 			operationsHref(`/operations/fork/${encodeURIComponent(String(item['universe_identity'] ?? ''))}`),

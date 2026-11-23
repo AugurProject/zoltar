@@ -4,13 +4,13 @@ import { writeContractAndWait, type WriteClient } from '../testSupport/simulator
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createE2E, NO, YES } from './auditE2EHarness'
-import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // A report that would tie the leader is trimmed by one attoREP. The start bond applies to
 // the amount offered, so a start-bond report on a second outcome is accepted rather than
 // rejected after the trim.
 describe('escalation game: a start-bond report that would tie the leader', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const deposit = (sender: WriteClient, outcome: number, amount: bigint) => writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))

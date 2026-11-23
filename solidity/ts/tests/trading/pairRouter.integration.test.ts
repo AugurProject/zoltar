@@ -99,11 +99,11 @@ describe('factory, pair, and router integration', () => {
 	})
 
 	for (const onlyRep of [false, true]) {
-		test(`forwards a portfolio ${onlyRep ? 'REP-only' : 'ETH and REP'} recovery basket without sweeping prior REP`, async () => {
+		test(`forwards a security pool ${onlyRep ? 'REP-only' : 'ETH and REP'} recovery basket without sweeping prior REP`, async () => {
 			await initialize()
 			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'createCompleteSet', value: 10n }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'configureRecovery', args: [7n, onlyRep, true] }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPortfolio', args: [pool, pool] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setSecurityPool', args: [pool, pool] }))
 			const rep = await client.readContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'repToken' })
 			const repAbi = parseAbi(['function mint(address owner,uint256 amount)', 'function balanceOf(address owner) view returns (uint256)'])
 			await writeContractAndWait(client, () => client.writeContract({ abi: repAbi, address: rep, functionName: 'mint', args: [router, 11n] }))
@@ -138,7 +138,7 @@ describe('factory, pair, and router integration', () => {
 		await initialize()
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'createCompleteSet', value: 10n }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'configureRecovery', args: [7n, false, true] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPortfolio', args: [pool, pool] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setSecurityPool', args: [pool, pool] }))
 		const rep = await client.readContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'repToken' })
 		const repAbi = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
 		const recipient = `0x${TEST_ADDRESSES[1].toString(16).padStart(40, '0')}` as const

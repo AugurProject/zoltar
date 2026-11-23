@@ -4,12 +4,12 @@ import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_Es
 import { createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // #1453: the first report deployed its Escalation Game in the same transaction, close to the
 // per-transaction gas cap at full depth. Anyone can now deploy the game first without starting it.
 describe('escalation game preparation', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const YES = 1
 	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const factory = async () => ({ abi: gameFactoryArtifact.abi, address: await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'escalationGameFactory' }) })
@@ -51,7 +51,7 @@ describe('escalation game preparation', () => {
 	test('a reused game address can never be started twice, on either start path', async () => {
 		const owner = fixture.owner()
 		const target = await factory()
-		// Exercise the real portfolio-bound pool caller, rather than an unbound standalone harness.
+		// Exercise the real security-pool-bound pool caller, rather than an unbound standalone harness.
 		await fixture.base.mockWindow.impersonateAccount(pool())
 		await fixture.base.mockWindow.setBalance(pool(), unit)
 		const poolClient = createWriteClient(fixture.base.mockWindow, BigInt(pool()))

@@ -441,7 +441,7 @@ test('an address profile never stays visible under another address', async () =>
 			},
 			api: async path => {
 				if (failing) throw new Error('Scanner offline')
-				if (path.startsWith('/api/v1/state/address-portfolio')) return { chainId: '1', asOf, data: {} }
+				if (path.startsWith('/api/v1/state/address-security-pool')) return { chainId: '1', asOf, data: {} }
 				if (path.startsWith('/api/v1/address-identity')) return { chainId: 1, address: addressA }
 				return { items: [], total: 0 }
 			},

@@ -114,7 +114,7 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 }
 
 export type ListedQuestionLedger = {
-	portfolioAddress: Address
+	securityPoolAddress: Address
 	settlementRecoveryAttoRep?: bigint
 	mintingCapacityAttoEth?: bigint
 	settlementCollateralAttoEth: bigint

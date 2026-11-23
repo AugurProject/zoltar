@@ -10,7 +10,7 @@ import { createWriteClient, writeContractAndWait } from '../../testSupport/simul
 import { getQuestionLedgersEscalationGame, getSettlementCollateralAttoEth } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { approveToken, getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { ReputationToken_ReputationToken, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_QuestionLedger_QuestionLedger } from '../../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 const assertRejectsWithoutStateChange = async <Snapshot>(readSnapshot: () => Promise<Snapshot>, execute: () => Promise<unknown>, expected: RegExp) => {
 	const before = await readSnapshot()
@@ -19,8 +19,8 @@ const assertRejectsWithoutStateChange = async <Snapshot>(readSnapshot: () => Pro
 }
 
 describe('Statoblast: privileged authorization matrix', () => {
-	const portfolio = useSecurityPoolPortfolioFixture()
-	const fixture = portfolio.base
+	const securityPool = useSecurityPoolFixture()
+	const fixture = securityPool.base
 
 	const repDeposit = 1_000n * unit
 	let client: typeof fixture.client
@@ -30,7 +30,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	beforeEach(() => {
 		client = fixture.client
 		mockWindow = fixture.mockWindow
-		questionLedger = portfolio.poolFor(fixture.questionId).questionLedger
+		questionLedger = securityPool.poolFor(fixture.questionId).questionLedger
 	})
 
 	test('REP supply selectors reject attackers without changing balances or supply', async () => {
@@ -126,21 +126,21 @@ describe('Statoblast: privileged authorization matrix', () => {
 	const readPoolSnapshot = async () => ({
 		collateral: await getSettlementCollateralAttoEth(client, questionLedger),
 		eth: await getETHBalance(client, questionLedger),
-		capitalRep: await getERC20Balance(client, await getRepToken(client, questionLedger), portfolio.capitalLedger),
-		capital: await client.readContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'totals' }),
-		owner: await client.readContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'storedOwnerAccount', args: [client.account.address] }),
+		capitalRep: await getERC20Balance(client, await getRepToken(client, questionLedger), securityPool.capitalLedger),
+		capital: await client.readContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'totals' }),
+		owner: await client.readContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'storedOwnerAccount', args: [client.account.address] }),
 	})
 
-	test('factory initialization and portfolio custody binding reject attackers without changing capital', async () => {
-		await portfolio.prepare()
-		const attacker = portfolio.other()
+	test('factory initialization and security pool custody binding reject attackers without changing capital', async () => {
+		await securityPool.prepare()
+		const attacker = securityPool.other()
 		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, functionName: 'setStartingParams' }), /Only factory/)
-		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, functionName: 'setPortfolioCustody', args: [attacker.account.address] }), /Only portfolio/)
+		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, functionName: 'setSecurityPoolCustody', args: [attacker.account.address] }), /Only securityPool/)
 	})
 
 	test('escalation accounting rejects direct callers without changing capital', async () => {
-		await portfolio.prepare()
-		const attacker = portfolio.other()
+		await securityPool.prepare()
+		const attacker = securityPool.other()
 		for (const functionName of ['creditEscalationSurplus', 'burnEscalationWinnerHaircut'] as const) {
 			await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, functionName, args: [1n] }), /Only escalation game/)
 		}

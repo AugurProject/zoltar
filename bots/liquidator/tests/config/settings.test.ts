@@ -81,10 +81,10 @@ describe('liquidator settings', () => {
 	})
 
 	test('rejects unknown and misspelled keys instead of silently applying their defaults', () => {
-		expect(() => parseSettings({ ...settings, selectedPortfolio: [] })).toThrow('operator settings contains unsupported field selectedPortfolio')
+		expect(() => parseSettings({ ...settings, selectedSecurityPool: [] })).toThrow('operator settings contains unsupported field selectedSecurityPool')
 		expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlock: 64 } })).toThrow('runtime contains unsupported field logLookbackBlock')
 		expect(() => parseSettings({ ...settings, strategy: { ...settings.strategy, walletReserveEth: '1' } })).toThrow('strategy contains unsupported field walletReserveEth')
-		expect(() => parseSettings({ ...settings, portfolioPolicy: { allowFundedTakeover: true } })).toThrow('portfolioPolicy contains unsupported field allowFundedTakeover')
+		expect(() => parseSettings({ ...settings, securityPoolPolicy: { allowFundedTakeover: true } })).toThrow('securityPoolPolicy contains unsupported field allowFundedTakeover')
 	})
 
 	test('ignores removed standalone-pool settings and drops them on the next save', () => {
@@ -104,7 +104,7 @@ describe('liquidator settings', () => {
 	test('loads the shipped example configuration', () => {
 		const parsed = parseSettings(example)
 		expect(parsed.networkConfigured).toBe(false)
-		expect(parsed.portfolioPolicy.maximumPositionsPerScan).toBe(example.portfolioPolicy.maximumPositionsPerScan)
+		expect(parsed.securityPoolPolicy.maximumPositionsPerScan).toBe(example.securityPoolPolicy.maximumPositionsPerScan)
 	})
 
 	test('keeps settings and durable recovery state isolated while switching chain profiles', async () => {

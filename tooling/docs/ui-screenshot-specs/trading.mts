@@ -54,14 +54,14 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		usedBy: ['tutorials/trading-first-trade.html'],
 	},
 	{
-		id: 'portfolio',
+		id: 'securityPool',
 		app: 'trading',
 		scenario: 'deployed',
 		route: '#/create-market',
-		steps: [...initializeAtSeventyPercent, { click: 'Create market and add liquidity' }, { waitForText: 'TRADING OPEN' }, { click: 'Portfolio' }, { waitForText: 'LP' }],
-		expectText: ['Portfolio', 'Invalid', 'LP'],
+		steps: [...initializeAtSeventyPercent, { click: 'Create market and add liquidity' }, { waitForText: 'TRADING OPEN' }, { click: 'SecurityPool' }, { waitForText: 'LP' }],
+		expectText: ['SecurityPool', 'Invalid', 'LP'],
 		viewport: pageViewport,
-		crop: { selector: '.portfolio-positions', padding: 0 },
+		crop: { selector: '.security-pool-positions', padding: 0 },
 		usedBy: ['tutorials/trading-first-market.html'],
 	},
 	{

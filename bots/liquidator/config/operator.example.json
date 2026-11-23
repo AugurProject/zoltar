@@ -48,8 +48,8 @@
 	},
 	"paused": true,
 	"privateKey": null,
-	"selectedPortfolios": [],
-	"portfolioPolicy": {
+	"selectedSecurityPools": [],
+	"securityPoolPolicy": {
 		"allowFundedTakeovers": false,
 		"takeoverIncomeHorizonSeconds": 0,
 		"maximumPositionsPerScan": 32,

@@ -10,7 +10,7 @@ type TradingLegFilter = {
 }
 
 // One row per trading action in an Augur AMM market. CompleteSetsFunded adds purchase fees and identifies the funded
-// recipient when the pool minted shares through Portfolio Services. The pair's
+// recipient when the pool minted shares through Security Pool Services. The pair's
 // Swap or liquidity event in the same transaction, sent by the same minter or redeemer, identifies a router enter,
 // exit, or ETH-funded liquidity action. A minter or redeemer whose share balance is unchanged by the transaction is a
 // pass-through such as the router, so the action belongs to the single account it forwarded shares to or received
@@ -52,8 +52,8 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			LEFT JOIN LATERAL (
 				SELECT funded.arguments
 				FROM logs funded
-				JOIN contracts portfolio ON portfolio.chain_id = funded.chain_id AND portfolio.address = funded.emitter_address
-					AND portfolio.canonical AND portfolio.kind = 'securityPoolPortfolio'
+				JOIN contracts security_pool ON security_pool.chain_id = funded.chain_id AND security_pool.address = funded.emitter_address
+					AND security_pool.canonical AND security_pool.kind = 'securityPool'
 				WHERE funded.chain_id = log.chain_id AND funded.block_hash = log.block_hash AND funded.tx_hash = log.tx_hash
 					AND funded.canonical AND funded.event_name = 'CompleteSetsFunded' AND funded.log_index > log.log_index
 					AND funded.arguments->>'questionId' = pool.question_id::text AND funded.arguments->>'universeId' = market.universe_id::text

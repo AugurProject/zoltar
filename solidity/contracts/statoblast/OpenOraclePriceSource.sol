@@ -13,7 +13,7 @@ import { OpenOracleReportDelegate } from './OpenOracleReportDelegate.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import './OpenOraclePriceCoordinatorTypes.sol';
 
-/// @notice Report lifecycle and price-source routing, using the portfolio universe shared feed.
+/// @notice Report lifecycle and price-source routing, using the security pool universe shared feed.
 abstract contract OpenOraclePriceSource {
 	ReputationToken public immutable reputationToken;
 	IQuestionLedger public questionLedger;
@@ -153,7 +153,7 @@ abstract contract OpenOraclePriceSource {
 		return sharedPriceFeed.isPriceValid();
 	}
 
-	/// @notice Canonical expiry for the portfolio universe shared price.
+	/// @notice Canonical expiry for the security pool universe shared price.
 	function priceValidUntil() public view returns (uint256) {
 		return sharedPriceFeed.priceValidUntil();
 	}

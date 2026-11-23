@@ -30,10 +30,10 @@ enum QuestionOutcome {
 }
 
 interface IQuestionLedger {
-	function portfolioCustody() external view returns (address);
-	function setPortfolioCustody(address custody) external;
-	function refreshPortfolioFees() external;
-	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime);
+	function securityPoolCustody() external view returns (address);
+	function setSecurityPoolCustody(address custody) external;
+	function refreshSecurityPoolFees() external;
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementSecurityPoolTime);
 
 	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	event CompleteSetRedeemed(address indexed redeemer, uint256 completeSetsBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
@@ -45,7 +45,7 @@ interface IQuestionLedger {
 	function zoltar() external view returns (Zoltar);
 	function settlementCollateralAttoEth() external view returns (uint256);
 	function statoblastSecurityMultiplierBps() external view returns (uint256);
-	function lastSettlementPortfolioTime() external view returns (uint256);
+	function lastSettlementSecurityPoolTime() external view returns (uint256);
 	function awaitingForkContinuation() external view returns (bool);
 	function parent() external view returns (IQuestionLedger);
 	function systemState() external view returns (SystemState);
@@ -92,7 +92,7 @@ interface IQuestionLedger {
 interface ISecurityPoolFactory {
 	function maximumReportPriorityFeeAttoEthPerGas() external view returns (uint256);
 	function zoltar() external view returns (Zoltar);
-	function preparePortfolioPriceFeed(IQuestionLedger source, uint248 universeId) external returns (address);
+	function prepareSecurityPoolPriceFeed(IQuestionLedger source, uint248 universeId) external returns (address);
 
 	struct QuestionLedgerDeployment {
 		IQuestionLedger questionLedger;
@@ -106,15 +106,15 @@ interface ISecurityPoolFactory {
 	}
 
 	function deployChildQuestionLedger(IQuestionLedger parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps) external returns (IQuestionLedger questionLedger);
-	function deployPortfolioQuestionLedger(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (IQuestionLedger questionLedger);
-	function getPortfolioOriginId(address portfolio, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
-	function getSecurityPoolPortfolio(IQuestionLedger questionLedger) external view returns (address portfolio);
+	function deploySecurityPoolQuestionLedger(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (IQuestionLedger questionLedger);
+	function getQuestionOriginId(address securityPool, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
+	function securityPoolOf(IQuestionLedger questionLedger) external view returns (address securityPool);
 	function prepareChildQuestionLedgerCoordinator(IQuestionLedger parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator);
 	function getChildQuestionLedgerCoordinator(IQuestionLedger parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator);
-	function preparePortfolioChildPriceFeed(IQuestionLedger parent, uint256 outcomeIndex) external returns (address);
-	function initializePortfolioPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address);
-	function initializePortfolioPriceFeedForUniverse(uint248 universeId) external returns (address);
-	function sharedPriceFeeds(address portfolio, uint248 universeId) external view returns (address);
+	function prepareSecurityPoolChildPriceFeed(IQuestionLedger parent, uint256 outcomeIndex) external returns (address);
+	function initializeSecurityPoolPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address);
+	function initializeSecurityPoolPriceFeedForUniverse(uint248 universeId) external returns (address);
+	function sharedPriceFeeds(address securityPool, uint248 universeId) external view returns (address);
 	function getQuestionLedgerId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);
 	function getQuestionLedger(bytes32 originId, uint248 universeId) external view returns (IQuestionLedger questionLedger);
 	function getQuestionLedgerOriginId(IQuestionLedger questionLedger) external view returns (bytes32 originId);

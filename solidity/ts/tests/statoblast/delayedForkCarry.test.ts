@@ -5,8 +5,8 @@ import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_QuestionLedger_QuestionLedger,
 	statoblast_QuestionForker_QuestionForker,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	Zoltar_Zoltar,
 } from '../../types/contractArtifact'
@@ -23,30 +23,30 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
-import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './securityPoolFixture'
 
 const ATTO_REP_PER_REP = 10n ** 18n
 
 describe('Statoblast: delayed repeated-fork carry', () => {
-	const portfolio = useSecurityPoolPortfolioFixture()
-	const fixture = portfolio.base
-	const native = () => portfolio.poolFor(fixture.questionId)
+	const securityPool = useSecurityPoolFixture()
+	const fixture = securityPool.base
+	const native = () => securityPool.poolFor(fixture.questionId)
 	const depositToEscalationGame = async (sender: WriteClient, pool: Address, outcome: QuestionOutcome, amount: bigint) => {
 		await approveToken(sender, await getRepToken(sender, pool), pool)
 		return writeContractAndWait(sender, () => sender.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 	}
 	const activateChild = async (source: Address, universe: bigint) => {
 		const { client, mockWindow } = fixture
-		const controller = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'forkController' })
+		const controller = await client.readContract({ abi: securityPoolArtifact.abi, address: securityPool.securityPool, functionName: 'forkController' })
 		const forkTime = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] })
 		await mockWindow.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(client, () => client.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, 1n] }))
 		const child = getChildUniverseId(universe, QuestionOutcome.Yes)
 		await writeContractAndWait(client, () => client.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
 		const target = { abi: statoblast_QuestionForker_QuestionForker.abi, address: getInfraContractAddresses().questionForker }
-		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'preparePortfolioQuestion', args: [source, child] }))
-		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializePortfolioQuestion', args: [source, child] }))
-		return portfolio.poolFor(fixture.questionId, child, source)
+		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'prepareSecurityPoolQuestion', args: [source, child] }))
+		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializeSecurityPoolQuestion', args: [source, child] }))
+		return securityPool.poolFor(fixture.questionId, child, source)
 	}
 
 	async function resumePool(pool: Address) {
@@ -146,7 +146,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const nextPool = await activateChild(pool.questionLedger, universe)
 			const nextGame = await getQuestionLedgersEscalationGame(client, nextPool.questionLedger)
 			const nextRep = await getRepToken(client, nextPool.questionLedger)
-			const reporter = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'reporterLedger', args: [nextUniverse] })
+			const reporter = await client.readContract({ abi: securityPoolArtifact.abi, address: securityPool.securityPool, functionName: 'reporterLedger', args: [nextUniverse] })
 			const migratedBacking = await client.readContract({ abi: reporterArtifact.abi, address: reporter, functionName: 'balanceOfGame', args: [nextGame] })
 			const inheritedNo = await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)
 			assert.deepStrictEqual(inheritedNo.snapshotCarryRoot, beforeForkRoots[QuestionOutcome.No], 'the original proof commitment must reach the next continuation')

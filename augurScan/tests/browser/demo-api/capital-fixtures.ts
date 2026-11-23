@@ -1,7 +1,7 @@
-// Capital positions of the demo portfolio's genesis-universe ledger: one owner open to take-over, one in the
+// Capital positions of the demo security pool's genesis-universe ledger: one owner open to take-over, one in the
 // scanner's warning band, one without commitment, and the take-over, cure and report operation between them.
 export const demoCapitalLedger = `0x${'5'.repeat(40)}`
-export const demoCapitalPortfolio = `0x${'6'.repeat(40)}`
+export const demoCapitalSecurityPool = `0x${'6'.repeat(40)}`
 const usdc = { address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', symbol: 'USDC', decimals: 6 }
 // The first mainnet rich-list address owns the position at risk, so its profile and rich-list card show it.
 export const demoCapitalOwner = '0x00000000000000000000000002468acf13579bde'
@@ -13,7 +13,7 @@ const usdcUnits = (whole: bigint) => (whole * 10n ** 6n).toString()
 const price = (repPerUsdc: bigint) => (repPerUsdc * 10n ** 30n).toString()
 
 const ledgerFields = {
-	portfolio: demoCapitalPortfolio,
+	securityPool: demoCapitalSecurityPool,
 	universeId: '0',
 	securityMultiplierBps: '15000',
 	acceptedPrice: price(200n),
@@ -85,7 +85,7 @@ export const demoCapitalPositions = (blockNumber: string) =>
 	positionStates.map((state, index) => ({
 		ledger_address: demoCapitalLedger,
 		owner_address: state.owner,
-		portfolio: demoCapitalPortfolio,
+		securityPool: demoCapitalSecurityPool,
 		universe_id: '0',
 		block_number: blockNumber,
 		read_status: 'success',
@@ -97,7 +97,7 @@ export const demoCapitalPositions = (blockNumber: string) =>
 export const demoCapitalLedgers = (blockNumber: string) => [
 	{
 		ledger_address: demoCapitalLedger,
-		portfolio: demoCapitalPortfolio,
+		securityPool: demoCapitalSecurityPool,
 		universe_id: '0',
 		owner_count: positionStates.length,
 		block_number: blockNumber,
@@ -115,7 +115,7 @@ export const demoLiquidations = (blockNumber: string) => {
 		tx_hash: `0x${'f'.repeat(63)}${logIndex}`,
 		log_index: logIndex,
 		ledger_address: demoCapitalLedger,
-		portfolio: demoCapitalPortfolio,
+		securityPool: demoCapitalSecurityPool,
 		universe_id: '0',
 		collateral: usdc,
 		...owners,
@@ -138,7 +138,7 @@ export const demoOwnedCapitalPositions = (owner: string, blockNumber: string) =>
 			}
 			return {
 				ledgerAddress: demoCapitalLedger,
-				portfolio: demoCapitalPortfolio,
+				securityPool: demoCapitalSecurityPool,
 				universeId: '0',
 				readStatus: 'success',
 				principalAttoRep: text('principalAttoRep'),
@@ -195,7 +195,7 @@ export const demoCapitalDetail = (ledger: string, owner: string, blockNumber: st
 export const demoFeeEconomics = (blockNumber: string) => [
 	{
 		ledger_address: demoCapitalLedger,
-		portfolio: demoCapitalPortfolio,
+		securityPool: demoCapitalSecurityPool,
 		universe_id: '0',
 		collateral: usdc,
 		block_number: blockNumber,

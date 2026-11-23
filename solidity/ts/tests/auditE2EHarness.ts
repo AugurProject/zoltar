@@ -2,13 +2,13 @@ import { expect } from 'bun:test'
 import { zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_QuestionForker_QuestionForker as forkerArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
-	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
+	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	Zoltar_Zoltar as zoltarArtifact,
@@ -21,10 +21,10 @@ import { getInfraContractAddresses } from '../testSupport/simulator/utils/contra
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { hashCarryLeaf, hashParent, SparseNullifierTree } from './carryProofHelpers'
-import type { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import type { useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Shared end-to-end harness for the auditE2E* integration tests. It drives the real
-// portfolio fixture through native forks and rebuilds carry proofs from on-chain nodes.
+// security pool fixture through native forks and rebuilds carry proofs from on-chain nodes.
 
 export const INVALID = 0
 export const YES = 1
@@ -106,7 +106,7 @@ export const median = (values: readonly [bigint, bigint, bigint]) => {
 	return high < larger ? high : larger
 }
 
-type Fixture = ReturnType<typeof useSecurityPoolPortfolioFixture>
+type Fixture = ReturnType<typeof useSecurityPoolFixture>
 
 export function createE2E(fixture: Fixture) {
 	const owner = () => fixture.owner()
@@ -116,15 +116,15 @@ export function createE2E(fixture: Fixture) {
 		if (address === undefined) throw new Error(`No test account ${index}`)
 		return createWriteClient(mock(), address)
 	}
-	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
+	const securityPool = () => ({ abi: securityPoolArtifact.abi, address: fixture.securityPool })
 	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const zoltar = () => ({ abi: zoltarArtifact.abi, address: getZoltarAddress() })
-	const coordinator = async () => ({ abi: coordinatorArtifact.abi, address: await owner().readContract({ ...portfolio(), functionName: 'forkController' }) })
-	const reporterLedger = (universe: bigint) => owner().readContract({ ...portfolio(), functionName: 'reporterLedger', args: [universe] })
-	const capital = (universe: bigint) => owner().readContract({ ...portfolio(), functionName: 'capitalLedger', args: [universe] })
-	const settlement = () => owner().readContract({ ...portfolio(), functionName: 'settlement' })
-	const services = () => owner().readContract({ ...portfolio(), functionName: 'services' })
-	const collateral = () => owner().readContract({ ...portfolio(), functionName: 'collateralToken' })
+	const coordinator = async () => ({ abi: coordinatorArtifact.abi, address: await owner().readContract({ ...securityPool(), functionName: 'forkController' }) })
+	const reporterLedger = (universe: bigint) => owner().readContract({ ...securityPool(), functionName: 'reporterLedger', args: [universe] })
+	const capital = (universe: bigint) => owner().readContract({ ...securityPool(), functionName: 'capitalLedger', args: [universe] })
+	const settlement = () => owner().readContract({ ...securityPool(), functionName: 'settlement' })
+	const services = () => owner().readContract({ ...securityPool(), functionName: 'services' })
+	const collateral = () => owner().readContract({ ...securityPool(), functionName: 'collateralToken' })
 	const book = async () => ({ abi: bookArtifact.abi, address: await owner().readContract({ abi: settlementArtifact.abi, address: await settlement(), functionName: 'ledger' }) })
 	const bookId = async (universe: bigint) => owner().readContract({ abi: settlementArtifact.abi, address: await settlement(), functionName: 'bookIds', args: [universe] })
 	const bookQuestion = async (universe: bigint, questionId: bigint) => owner().readContract({ ...(await book()), functionName: 'question', args: [await bookId(universe), questionId] })
@@ -135,7 +135,7 @@ export function createE2E(fixture: Fixture) {
 	const burned = () => rep(fixture.base.genesisUniverse, addressString(BURN_ADDRESS))
 	const forkTime = async (universe: bigint) => (await getUniverseData(owner(), universe)).forkTime
 	const gameOf = (pool: Address) => owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
-	const poolOf = (questionId: bigint, universe: bigint) => owner().readContract({ ...portfolio(), functionName: 'getPool', args: [questionId, universe] })
+	const poolOf = (questionId: bigint, universe: bigint) => owner().readContract({ ...securityPool(), functionName: 'getPool', args: [questionId, universe] })
 	const game = (address: Address) => ({ abi: gameArtifact.abi, address })
 	const ledgerQuestion = async (universe: bigint, questionId: bigint) => owner().readContract({ abi: reporterArtifact.abi, address: await reporterLedger(universe), functionName: 'question', args: [universe, questionId] })
 	const ledgerBook = async (universe: bigint) => {
@@ -197,11 +197,11 @@ export function createE2E(fixture: Fixture) {
 		return finalizeBranch(parent, outcome, sender)
 	}
 	const activationTime = async (universe: bigint) => {
-		const [, wallAnchor] = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'clocks', args: [universe] })
+		const [, wallAnchor] = await owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'clocks', args: [universe] })
 		return BigInt(wallAnchor)
 	}
 	const materialize = async (source: Address, child: bigint, sender = owner()) => {
-		for (let step = 0; step < 3; step++) await writeContractAndWait(sender, () => sender.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [source, child], gas: BRANCH_GAS }))
+		for (let step = 0; step < 3; step++) await writeContractAndWait(sender, () => sender.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [source, child], gas: BRANCH_GAS }))
 		const questionId = await owner().readContract({ abi: poolArtifact.abi, address: source, functionName: 'questionId' })
 		const pool = await poolOf(questionId, child)
 		return { pool, game: await gameOf(pool), universe: child }
@@ -335,7 +335,7 @@ export function createE2E(fixture: Fixture) {
 		owner,
 		mock,
 		account,
-		portfolio,
+		securityPool,
 		forker,
 		zoltar,
 		coordinator,

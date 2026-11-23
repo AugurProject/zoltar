@@ -5,9 +5,9 @@ import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum
 import {
 	test_ConstantsCouplingHarness_ConstantsCouplingHarness as harnessArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
-	statoblast_SecurityPoolPortfolioPurchase_SecurityPoolPortfolioPurchase as purchaseArtifact,
+	statoblast_SecurityPoolPurchase_SecurityPoolPurchase as purchaseArtifact,
 	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
-	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer as bookDeployerArtifact,
+	statoblast_SecurityPoolModuleDeployers_SecurityPoolSettlementBookDeployer as bookDeployerArtifact,
 } from '../types/contractArtifact'
 import { deployContract } from '../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'

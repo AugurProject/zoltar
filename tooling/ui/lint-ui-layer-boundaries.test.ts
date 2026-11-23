@@ -42,7 +42,7 @@ test('keeps runnable applications as dependency leaves behind shared-library API
 	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-shared/protocol/trading.js'")).toEqual([])
-	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LiveSecurityPool.tsx', "import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'")).toEqual([])
 })
 
 test('keeps the OpenOracle console behind shared APIs', () => {

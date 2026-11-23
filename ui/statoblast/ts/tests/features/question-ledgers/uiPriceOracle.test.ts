@@ -49,7 +49,7 @@ describe('resolveRepPrice', () => {
 		expect(resolve('open-oracle-fallback', { now: validUntil + 1n })).toMatchObject({ price: 10n, reason: 'oracle-expired' })
 	})
 
-	test('uses the shared portfolio deadline beyond five minutes and never guesses an unknown expiry', () => {
+	test('uses the shared security pool deadline beyond five minutes and never guesses an unknown expiry', () => {
 		expect(resolve('open-oracle-fallback', { now: settlementTimestamp + 480n })).toMatchObject({ price: 20n, source: 'open-oracle' })
 		expect(resolve('open-oracle-fallback', { poolOracle: { price: 20n, settlementTimestamp } })).toMatchObject({ price: 10n, reason: 'oracle-unverified' })
 	})

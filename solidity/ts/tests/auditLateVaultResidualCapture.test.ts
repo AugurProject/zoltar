@@ -8,10 +8,10 @@ import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../testSuppo
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 describe('Wallet reporting without standalone vault backing', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 	const token = () => getRepTokenAddress(fixture.base.genesisUniverse)
 	const game = () => fixture.owner().readContract({ ...pool(), functionName: 'escalationGame' })

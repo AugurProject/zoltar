@@ -20,7 +20,7 @@ On Ethereum mainnet startup discovery reads Augur’s genesis universe, its fork
 
 `REPv2_Yes_1` is the mainnet genesis REP that both bots price and bind their market evidence to; REPv2 is its Augur parent token. See [centralized exchange sources](../README.md#centralized-exchange-sources) before configuring an exchange `REP` ticker.
 
-These tokens are discovered for monitoring only. Neither Augur discovery nor `tokenAddresses` authorizes execution. The latter adds monitoring tokens; the selected network's genesis REP is used for the top-level REP portfolio summary.
+These tokens are discovered for monitoring only. Neither Augur discovery nor `tokenAddresses` authorizes execution. The latter adds monitoring tokens; the selected network's genesis REP is used for the top-level REP security pool summary.
 
 Both the arbitrager and liquidator use `approvedUniverses` from the canonical Zoltar universe tree. In **Settings → Approved universes**, select the root or the truthful child outcome and save the selection. The arbitrager and liquidator example configurations both start with no approvals. Approvals are saved per network profile; root universe `0` also requires approval. Only one child path per fork can be approved, including when selecting deeper descendants.
 

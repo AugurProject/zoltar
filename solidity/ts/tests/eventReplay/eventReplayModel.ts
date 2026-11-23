@@ -16,7 +16,7 @@ export type QuestionAccountingReplay = {
 	reason: bigint
 	settlementCollateralAttoEth: bigint
 	shareTokenSupplyAttoShares: bigint
-	lastSettlementPortfolioTime: bigint
+	lastSettlementSecurityPoolTime: bigint
 }
 
 export type PoolStateReplay = {
@@ -723,7 +723,7 @@ export function reduceQuestionLedgerEvent(state: ReplayState, log: ReplayLog) {
 			reason: requireBigInt(log.args, 'reason'),
 			settlementCollateralAttoEth: requireBigInt(log.args, 'settlementCollateralAttoEth'),
 			shareTokenSupplyAttoShares: requireBigInt(log.args, 'shareTokenSupplyAttoShares'),
-			lastSettlementPortfolioTime: requireBigInt(log.args, 'lastSettlementPortfolioTime'),
+			lastSettlementSecurityPoolTime: requireBigInt(log.args, 'lastSettlementSecurityPoolTime'),
 		})
 		return
 	}
@@ -1150,7 +1150,7 @@ export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRe
 	if (poolRelationships === undefined || poolRelationships.shareTokens.has(emitter)) reduceShareTokenEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.pools.has(emitter)) reduceQuestionLedgerEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.escalationGames.has(emitter)) reduceEscalationEvent(state, log)
-	// Portfolio auctions are not announced by pool deployments, so relationship-scoped replays skip them.
+	// Security pool auctions are not announced by pool deployments, so relationship-scoped replays skip them.
 	if (poolRelationships === undefined) reduceAuctionEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.coordinators.has(emitter)) reduceCoordinatorEvent(state, log)
 }

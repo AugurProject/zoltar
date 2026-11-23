@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-/// @notice The portfolio auction controller authenticates one immutable bid
+/// @notice The security pool auction controller authenticates one immutable bid
 /// owner and its exact winning lots. Fee amounts are accounting only: their
 /// assets stay in capital custody.
 interface ISecurityPoolAuctionCapital {

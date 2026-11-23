@@ -346,24 +346,24 @@ describe('Solidity bytecode coverage helpers', () => {
 	test('security pool factory constructor, range, and child authorization guards expose exact reasons', async () => {
 		const factoryArtifact = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory
 		// Any nonzero hash constructs: the deployers may be deployed after the factory, so only the hash is checked here.
-		const portfolioCreationCodeHash = `0x${'11'.repeat(32)}` as const
-		const portfolioModuleDeployers = [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress] as const
+		const securityPoolCreationCodeHash = `0x${'11'.repeat(32)}` as const
+		const securityPoolModuleDeployers = [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress] as const
 		await assert.rejects(
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, `0x${'00'.repeat(32)}`, portfolioModuleDeployers],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, `0x${'00'.repeat(32)}`, securityPoolModuleDeployers],
 				}),
 			}),
-			/Portfolio creation code hash missing/,
+			/SecurityPool creation code hash missing/,
 		)
 		await assert.rejects(
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, securityPoolCreationCodeHash, securityPoolModuleDeployers],
 				}),
 			}),
 			/Operations delegate zero/,
@@ -373,7 +373,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, client.account.address, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, client.account.address, zeroAddress, securityPoolCreationCodeHash, securityPoolModuleDeployers],
 				}),
 			}),
 			/Operations delegate has no code/,
@@ -391,7 +391,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, zeroAddress, portfolioCreationCodeHash, portfolioModuleDeployers],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, zeroAddress, securityPoolCreationCodeHash, securityPoolModuleDeployers],
 				}),
 			}),
 			/Accounting delegate has no code/,
@@ -409,7 +409,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, eventEmitter, portfolioCreationCodeHash, portfolioModuleDeployers],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, eventEmitter, securityPoolCreationCodeHash, securityPoolModuleDeployers],
 			}),
 		)
 		await assert.rejects(
@@ -430,9 +430,9 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 			/Pool range count too large/,
 		)
-		assert.strictEqual(await client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'portfolioCount' }), 0n)
-		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'portfoliosRange', args: [1n, 0n] }), /Portfolio range start out of bounds/)
-		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'portfoliosRange', args: [0n, 1n] }), /Portfolio range count too large/)
+		assert.strictEqual(await client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'securityPoolCount' }), 0n)
+		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'securityPoolsRange', args: [1n, 0n] }), /SecurityPool range start out of bounds/)
+		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'securityPoolsRange', args: [0n, 1n] }), /SecurityPool range count too large/)
 		await assert.rejects(
 			client.writeContract({
 				abi: factoryArtifact.abi,
@@ -1647,7 +1647,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				method === 'deployStartedGame'
 					? encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP] })
 					: encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n] })
-			await assert.rejects(transact(unboundPool, data), /Reporter portfolio required/)
+			await assert.rejects(transact(unboundPool, data), /Reporter securityPool required/)
 		}
 
 		const coordinatorWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.abi, bytecode: `0x${statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.evm.bytecode.object}` }))

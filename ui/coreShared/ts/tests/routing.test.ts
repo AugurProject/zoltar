@@ -68,13 +68,13 @@ describe('routing', () => {
 			defaultRoute: 'markets',
 			routes: [
 				{ aliases: ['#/developer'], hash: '#/markets', name: 'markets' },
-				{ hash: '#/portfolio', name: 'portfolio' },
+				{ hash: '#/securityPool', name: 'securityPool' },
 			] as const,
 		})
 		expect(parseRouteHash('#/markets?simulate=1')).toEqual({ routeHash: '#/markets', search: '?simulate=1' })
 		expect(routing.resolve('markets?simulate=1')).toBe('markets')
 		expect(routing.resolve('#/developer?simulate=1')).toBe('markets')
-		expect(routing.getHash('portfolio')).toBe('#/portfolio')
+		expect(routing.getHash('securityPool')).toBe('#/securityPool')
 	})
 
 	test('the mounted route resolves the same normalized hash as the typed router', () => {

@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import { latestAuctionCollateral } from './auction-collateral.ts'
 
 // Migration mints emit TransferSingle. Counting Migrate as another credit would
-// double count the child balance; the source remains held but becomes locked. Spending portfolio recovery rights
+// double count the child balance; the source remains held but becomes locked. Spending security pool recovery rights
 // beyond the credits received also locks the source balance, which the recovery events reveal.
 export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: string, filter: { address?: string; market?: string }) => {
 	const rows = await sql`
@@ -47,14 +47,14 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 			FROM logs log
 			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
 			CROSS JOIN LATERAL jsonb_array_elements(log.arguments->'amountsAttoShares') WITH ORDINALITY amounts(value, n)
-			WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.event_name = 'PortfolioRecoveryRightsTransferred'
+			WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.event_name = 'SecurityPoolRecoveryRightsTransferred'
 			UNION ALL
 			SELECT log.emitter_address, (log.arguments->>'universeId')::numeric, log.block_number, log.log_index,
 				outcome, lower(log.arguments->>'holder'), NULL, (log.arguments->>'amountAttoShares')::numeric
 			FROM logs log
 			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
 			CROSS JOIN generate_series(0, 2) outcome
-			WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.event_name = 'PortfolioRecoveryRightsConsumed'
+			WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.event_name = 'SecurityPoolRecoveryRightsConsumed'
 		), recovery_ledger AS (
 			SELECT token, universe_id, outcome, spender AS holder, block_number, log_index, amount AS spent, 0::numeric AS received FROM recovery_moves
 			UNION ALL SELECT token, universe_id, outcome, recipient, block_number, log_index, 0, amount FROM recovery_moves WHERE recipient IS NOT NULL
@@ -93,7 +93,7 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 	return {
 		items: rows.slice(0, 250),
 		truncated: rows.length > 250,
-		basis: 'Canonical indexed ERC-1155 transfers; incomplete deployment history can yield partial balances. Migrated source shares, and source shares whose portfolio recovery rights were spent, are locked; complete-set inventory is not a redemption quote.',
+		basis: 'Canonical indexed ERC-1155 transfers; incomplete deployment history can yield partial balances. Migrated source shares, and source shares whose security pool recovery rights were spent, are locked; complete-set inventory is not a redemption quote.',
 	}
 }
 

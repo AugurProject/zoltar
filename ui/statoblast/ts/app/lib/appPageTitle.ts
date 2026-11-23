@@ -12,14 +12,14 @@ export type AppPageTitleInput = {
 }
 
 export function getAppPageTitle({ activeQuestionLedgersView, route }: AppPageTitleInput) {
-	if (route === 'portfolios') return statoblastAppCopy.portfolios
+	if (route === 'securityPools') return statoblastAppCopy.securityPools
 	if (route === 'deploy') return appCopy.deployContracts
 	if (route === 'pools') {
 		if (activeQuestionLedgersView === 'operate') return 'Question'
 		if (activeQuestionLedgersView === 'migrate') return appCopy.migrateRep
 		if (activeQuestionLedgersView === 'universes') return zoltarCopy.universesTitle
 		// Matches the browse view's visible heading, so the tab title and page announcement name what the user sees.
-		return 'Portfolio questions'
+		return 'Security pool questions'
 	}
 	if (route === 'open-oracle') return openOracleCopy.priceReports
 	return appCopy.pageNotFoundTitle

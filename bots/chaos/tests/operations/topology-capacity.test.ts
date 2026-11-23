@@ -1,4 +1,4 @@
-import { capitalFixture } from '../support/portfolio-fixtures.ts'
+import { capitalFixture } from '../support/security-pool-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { evaluateOperationCatalog } from '../../src/operations/catalog.ts'
 import { topologyMutationCapacityBlocker } from '../../src/operations/topology-capacity.ts'
@@ -41,7 +41,7 @@ function zoltarDefinition(definitionId: string) {
 describe('immutable topology planning capacity', () => {
 	test('allows one question at resident limit minus one and blocks the repeated creation at the exact limit', () => {
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		const options = { ...capacityOptions, immutableTopologyCapacity: { ...immutableTopologyCapacity, maxQuestions: 2, maximumAggregateItems: 10 } }
 		expect(snapshot.questions).toHaveLength(1)
 		expect(operation(snapshot, 'zoltar.question.create-binary', options).plan).toBeDefined()
@@ -61,7 +61,7 @@ describe('immutable topology planning capacity', () => {
 			['zoltar.question.create-scalar', 1],
 		] as const) {
 			const snapshot = snapshotFixture()
-			snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+			snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 			const maximumAggregateItems = 3 + addedItems
 			const options: PlanningOptions = {
 				...capacityOptions,
@@ -108,7 +108,7 @@ describe('immutable topology planning capacity', () => {
 		}
 		const plannedBytes = Buffer.byteLength(JSON.stringify(plannedQuestion), 'utf8')
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		snapshot.questions = Array.from({ length: 8 }, (_, index) => ({
 			createdAt: '1',
 			endTime: '2',
@@ -140,7 +140,7 @@ describe('immutable topology planning capacity', () => {
 
 	test('allows one child at the universe resident limit minus one when the resulting aggregate reaches its exact limit', () => {
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		const universe = snapshot.universes[0]
 		if (universe === undefined) throw new Error('Universe fixture is missing')
 		universe.forkTime = '1'
@@ -155,7 +155,7 @@ describe('immutable topology planning capacity', () => {
 
 	test('guards the child universe implicitly deployed by migration split while preserving an existing exact-limit route', () => {
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		const universe = snapshot.universes[0]
 		const question = snapshot.questions[0]
 		if (universe === undefined || question === undefined) throw new Error('Migration split fixture is incomplete')
@@ -204,17 +204,17 @@ describe('immutable topology planning capacity', () => {
 
 	test('allows one pool at the resident limit minus one when every resulting aggregate reaches its exact limit', () => {
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		const question = snapshot.questions[0]
 		const pool = snapshot.pools[0]
 		if (question === undefined || pool === undefined) throw new Error('Pool deployment fixture is incomplete')
 		snapshot.questions.push({ ...question, endTime: '2000001000', id: '78' }, { ...question, endTime: '2000001000', id: '79' })
-		const plan = operation(snapshot, 'statoblast.portfolio.add-question').plan
+		const plan = operation(snapshot, 'statoblast.security-pool.add-question').plan
 		if (plan === undefined) throw new Error('Pool deployment should fit at limit minus one')
 		expect(plan.metadata['questionId']).not.toBe('77')
 
 		snapshot.pools.push({ ...pool, address: address(88), questionId: String(plan.metadata['questionId']) })
-		const repeated = operation(snapshot, 'statoblast.portfolio.add-question')
+		const repeated = operation(snapshot, 'statoblast.security-pool.add-question')
 		expect(repeated.plan).toBeUndefined()
 		expect(repeated.eligibility.blockers.join(' ')).toContain('pool discovery resident limit')
 	})
@@ -232,7 +232,7 @@ describe('immutable topology planning capacity', () => {
 
 	test('fails topology creation closed when planning capacity is absent or any configured aggregate product is unsafe', () => {
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		const withoutCapacity = { maximumBlockIntervalSeconds: 15, seed: 1 }
 		expect(operation(snapshot, 'zoltar.question.create-binary', withoutCapacity).eligibility.blockers).toContain('Immutable topology discovery capacity is unavailable or invalid')
 
@@ -247,7 +247,7 @@ describe('immutable topology planning capacity', () => {
 					[dimension]: 3,
 				},
 			}
-			expect(operation(snapshot, 'statoblast.portfolio.add-question', invalidAggregate).eligibility.blockers, dimension).toContain('Immutable topology discovery capacity is unavailable or invalid')
+			expect(operation(snapshot, 'statoblast.security-pool.add-question', invalidAggregate).eligibility.blockers, dimension).toContain('Immutable topology discovery capacity is unavailable or invalid')
 		}
 	})
 })

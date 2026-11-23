@@ -8,16 +8,16 @@ import { join } from 'node:path'
 import { initialRuntimeState, loadDurableState, saveDurableState } from '#state/operator-state'
 import { resolveFinalizedReceipt } from '#execution/receipt-transition'
 import { validateReceiptExpectation } from '#execution/receipt-validation'
-import { portfolioReceiptIntent } from './portfolio-receipt-fixture.ts'
+import { securityPoolReceiptIntent } from './security-pool-receipt-fixture.ts'
 import { explainTakeoverReceiptExpiry } from '#execution/takeover-receipt-expiry'
-import { portfolioClient } from '../support/portfolio-client.ts'
+import { securityPoolClient } from '../support/security-pool-client.ts'
 
 test('takeover expiry requires consistent final receipt-block evidence (#1372)', async () => {
-	const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
+	const { intent, receipt } = await securityPoolReceiptIntent('takeOverWithBounds')
 	receipt.status = 'reverted'
 	receipt.blockNumber = 123n
-	const newEpoch = portfolioClient({ acceptedPriceEpoch: 3n })
-	const unchanged = portfolioClient({ acceptedPriceEpoch: 2n })
+	const newEpoch = securityPoolClient({ acceptedPriceEpoch: 3n })
+	const unchanged = securityPoolClient({ acceptedPriceEpoch: 2n })
 	receipt.blockHash = newEpoch.observation.snapshot.blockHash
 	const updatedReaders = [{ client: newEpoch.client, endpoint: 'https://read.example' }]
 	expect(await explainTakeoverReceiptExpiry(intent, receipt, updatedReaders, 1)).toBe('Accepted price epoch changed')
@@ -28,12 +28,12 @@ test('takeover expiry requires consistent final receipt-block evidence (#1372)',
 })
 
 test('#1472 a takeover reverted by a stale price or an inactive universe at inclusion is an expected expiry', async () => {
-	const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
+	const { intent, receipt } = await securityPoolReceiptIntent('takeOverWithBounds')
 	receipt.status = 'reverted'
 	receipt.blockNumber = 123n
-	const fresh = portfolioClient({ acceptedPriceEpoch: 2n })
+	const fresh = securityPoolClient({ acceptedPriceEpoch: 2n })
 	receipt.blockHash = fresh.observation.snapshot.blockHash
-	const explain = async (overrides: Record<string, unknown>) => explainTakeoverReceiptExpiry(intent, receipt, [{ client: portfolioClient({ acceptedPriceEpoch: 2n, ...overrides }).client, endpoint: 'https://read.example' }], 1)
+	const explain = async (overrides: Record<string, unknown>) => explainTakeoverReceiptExpiry(intent, receipt, [{ client: securityPoolClient({ acceptedPriceEpoch: 2n, ...overrides }).client, endpoint: 'https://read.example' }], 1)
 	const timestamp = fresh.observation.snapshot.timestamp
 	expect(await explain({})).toBeUndefined()
 	expect(await explain({ priceValidUntil: timestamp + 1n })).toBeUndefined()
@@ -48,7 +48,7 @@ test('a finalized takeover whose terms expired is recorded as failed and retires
 	const directory = await mkdtemp(join(tmpdir(), 'expired-takeover-'))
 	try {
 		const path = join(directory, 'state.json')
-		const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
+		const { intent, receipt } = await securityPoolReceiptIntent('takeOverWithBounds')
 		receipt.status = 'reverted'
 		const state = initialRuntimeState(false, intent.sender, 1)
 		state.pendingTransactions.push(intent)
@@ -57,12 +57,12 @@ test('a finalized takeover whose terms expired is recorded as failed and retires
 		const persisted = await loadDurableState(path, 1)
 		expect(persisted.pendingTransactions).toHaveLength(0)
 		expect(persisted.activities[0]).toMatchObject({ hash: intent.hash, status: 'failed', details: 'Accepted price epoch changed' })
-		expect(persisted.portfolioFunding).toEqual({})
+		expect(persisted.securityPoolFunding).toEqual({})
 		expect(persisted.lastExpiredTakeoverBlock).toBe(receipt.blockNumber)
 		const restarted = initialRuntimeState(false, intent.sender, 1)
 		restarted.lastExpiredTakeoverBlock = persisted.lastExpiredTakeoverBlock
 		restarted.pendingTransactions.push(intent)
-		await expect(resolveFinalizedReceipt(path, restarted, intent, { ...receipt, blockNumber: receipt.blockNumber + 1n }, async () => 'Portfolio demand changed')).rejects.toThrow('reverted')
+		await expect(resolveFinalizedReceipt(path, restarted, intent, { ...receipt, blockNumber: receipt.blockNumber + 1n }, async () => 'Security pool demand changed')).rejects.toThrow('reverted')
 		expect((await loadDurableState(path, 1)).lastExpiredTakeoverBlock).toBe(receipt.blockNumber)
 	} finally {
 		await rm(directory, { recursive: true, force: true })
@@ -70,15 +70,15 @@ test('a finalized takeover whose terms expired is recorded as failed and retires
 })
 
 for (const status of ['success', 'reverted'] as const) {
-	test(`durably resolves portfolio ${status} after restart and deduplicates retries`, async () => {
+	test(`durably resolves security pool ${status} after restart and deduplicates retries`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'receipt-transition-'))
 		try {
 			const path = join(directory, 'state.json')
-			const { intent, receipt } = await portfolioReceiptIntent()
+			const { intent, receipt } = await securityPoolReceiptIntent()
 			receipt.status = status
-			intent.portfolioInstruction = { id: 'one-shot-bid', fingerprint: 'immutable-bid-terms' }
+			intent.securityPoolInstruction = { id: 'one-shot-bid', fingerprint: 'immutable-bid-terms' }
 			const fundingKey = `${intent.sender.toLowerCase()}:${intent.sender.toLowerCase()}`
-			intent.portfolioFunding = { key: fundingKey, operation: 'fund', amount: 12n, target: 3n }
+			intent.securityPoolFunding = { key: fundingKey, operation: 'fund', amount: 12n, target: 3n }
 			const state = initialRuntimeState(false, intent.sender, 1)
 			state.pendingTransactions.push(intent)
 			await saveDurableState(path, state)
@@ -89,8 +89,8 @@ for (const status of ['success', 'reverted'] as const) {
 			await resolveFinalizedReceipt(path, state, intent, receipt)
 			const loaded = await loadDurableState(path, 1)
 			expect(loaded.pendingTransactions).toHaveLength(0)
-			expect(loaded.completedPortfolioInstructions).toEqual({ 'one-shot-bid': 'immutable-bid-terms' })
-			expect(loaded.portfolioFunding).toEqual(status === 'success' ? { [fundingKey]: { amount: 12n, target: 3n } } : {})
+			expect(loaded.completedSecurityPoolInstructions).toEqual({ 'one-shot-bid': 'immutable-bid-terms' })
+			expect(loaded.securityPoolFunding).toEqual(status === 'success' ? { [fundingKey]: { amount: 12n, target: 3n } } : {})
 			expect(loaded.activities).toHaveLength(1)
 			expect(loaded.activities[0]?.status).toBe(status === 'success' ? 'confirmed' : 'failed')
 		} finally {
@@ -101,7 +101,7 @@ for (const status of ['success', 'reverted'] as const) {
 	test(`retains ${status} tracking on write failure and retries without duplication`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'receipt-write-'))
 		try {
-			const { intent, receipt } = await portfolioReceiptIntent()
+			const { intent, receipt } = await securityPoolReceiptIntent()
 			receipt.status = status
 			const state = initialRuntimeState(false, intent.sender, 1)
 			state.pendingTransactions.push(intent)
@@ -124,7 +124,7 @@ for (const status of ['success', 'reverted'] as const) {
 }
 
 test('rejects receipt hash, sender, or target mismatches before consuming an intent', async () => {
-	const { intent, receipt } = await portfolioReceiptIntent()
+	const { intent, receipt } = await securityPoolReceiptIntent()
 	expect(validateReceiptExpectation(receipt, intent.receiptExpectation, intent).type).toBe('terminal-success')
 	for (const changed of [
 		{ ...receipt, transactionHash: `0x${'22'.repeat(32)}` as const },
@@ -141,7 +141,7 @@ for (const results of [[true, true], [false, true], [false, false], []]) {
 		const directory = await mkdtemp(join(tmpdir(), 'report-receipt-'))
 		try {
 			const path = join(directory, 'state.json')
-			const { intent, receipt } = await portfolioReceiptIntent()
+			const { intent, receipt } = await securityPoolReceiptIntent()
 			const feed = getAddress('0x0000000000000000000000000000000000000040')
 			intent.reportOperations = { feed, reportId: 7n }
 			intent.label = 'Settle sponsored takeover report'
@@ -180,7 +180,7 @@ test('a settlement above the report base-fee ceiling is recorded as deferred', a
 	const directory = await mkdtemp(join(tmpdir(), 'report-deferred-'))
 	try {
 		const path = join(directory, 'state.json')
-		const { intent, receipt } = await portfolioReceiptIntent()
+		const { intent, receipt } = await securityPoolReceiptIntent()
 		const feed = getAddress('0x0000000000000000000000000000000000000040')
 		intent.reportOperations = { feed, reportId: 7n }
 		intent.label = 'Settle sponsored takeover report'
@@ -220,14 +220,14 @@ async function resolveConsumedTakeover(logs: (receipt: TransactionReceipt, ledge
 	const directory = await mkdtemp(join(tmpdir(), 'takeover-consume-'))
 	try {
 		const path = join(directory, 'state.json')
-		const { intent, receipt } = await portfolioReceiptIntent('takeOverWithBounds')
+		const { intent, receipt } = await securityPoolReceiptIntent('takeOverWithBounds')
 		const ledger = receipt.to
 		if (ledger === null || ledger === undefined) throw new Error('Missing ledger')
 		const fundingKey = `${ledger.toLowerCase()}:${intent.sender.toLowerCase()}`
-		intent.portfolioFunding = { key: fundingKey, operation: 'consume', amount: 0n }
+		intent.securityPoolFunding = { key: fundingKey, operation: 'consume', amount: 0n }
 		receipt.logs = logs(receipt, ledger)
 		const state = initialRuntimeState(false, intent.sender, 1)
-		state.portfolioFunding = { [fundingKey]: { amount: 500n, target: 1n } }
+		state.securityPoolFunding = { [fundingKey]: { amount: 500n, target: 1n } }
 		state.pendingTransactions.push(intent)
 		await saveDurableState(path, state)
 		await resolveFinalizedReceipt(path, state, intent, receipt)
@@ -240,14 +240,14 @@ async function resolveConsumedTakeover(logs: (receipt: TransactionReceipt, ledge
 test('#1473 a successful takeover that the in-call cure healed keeps its funding journal and is not booked as completed', async () => {
 	for (const logs of [() => [], (receipt: TransactionReceipt, ledger: Address) => [takenOverLog(receipt, ledger, 2n)], (receipt: TransactionReceipt) => [takenOverLog(receipt, getAddress('0x0000000000000000000000000000000000000041'), 1n)]]) {
 		const { saved, fundingKey } = await resolveConsumedTakeover(logs)
-		expect(saved.portfolioFunding).toEqual({ [fundingKey]: { amount: 500n, target: 1n } })
+		expect(saved.securityPoolFunding).toEqual({ [fundingKey]: { amount: 500n, target: 1n } })
 		expect(saved.pendingTransactions).toHaveLength(0)
-		expect(saved.activities[0]).toMatchObject({ status: 'info', message: 'Take over portfolio position 1: takeover cured target; no position acquired' })
+		expect(saved.activities[0]).toMatchObject({ status: 'info', message: 'Take over security pool position 1: takeover cured target; no position acquired' })
 	}
 })
 
 test('#1473 a successful takeover that acquired the target consumes its funding journal', async () => {
 	const { saved } = await resolveConsumedTakeover((receipt, ledger) => [takenOverLog(receipt, ledger, 1n)])
-	expect(saved.portfolioFunding).toEqual({})
-	expect(saved.activities[0]).toMatchObject({ status: 'confirmed', message: 'Take over portfolio position 1: completed' })
+	expect(saved.securityPoolFunding).toEqual({})
+	expect(saved.activities[0]).toMatchObject({ status: 'confirmed', message: 'Take over security pool position 1: completed' })
 })

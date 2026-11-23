@@ -1,5 +1,5 @@
 import { wrapWeth as wrapUiWeth } from '@zoltar/ui-statoblast-shared/protocol/wethFunding.js'
-import { deployTestPortfolio } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployTestPortfolio.js'
+import { deployTestSecurityPool } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployTestSecurityPool.js'
 /// <reference types="bun-types" />
 
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
@@ -190,7 +190,7 @@ describe('OpenOracle helpers', () => {
 		}
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployTestPortfolio(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
+		await deployTestSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		await setBaselineSnapshot()
 	})
 

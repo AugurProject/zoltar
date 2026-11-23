@@ -6,7 +6,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { deployCapitalTestComponents } from './statoblast/securityPoolCapitalTestComponents'
-import { auctionVaultCreationCode, decodeAuctionVaultBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { auctionVaultCreationCode, decodeAuctionVaultBindings } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,

@@ -3,9 +3,9 @@ pragma solidity 0.8.35;
 
 import { QuestionLedgerStorage } from './QuestionLedgerStorage.sol';
 import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
-import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
+import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
 
-interface ISecurityPoolPortfolioPurchaseAuthority {
+interface ISecurityPoolPurchaseAuthority {
 	function services() external view returns (address);
 }
 
@@ -15,27 +15,27 @@ abstract contract QuestionLedgerSettlementDelegate is QuestionLedgerStorage {
 	function createCompleteSet(uint256 cash) external returns (uint256 completeSetsToMintAttoShares) {
 		IQuestionLedger pool = IQuestionLedger(payable(address(this)));
 		require(!awaitingForkContinuation, 'Fork await');
-		if (portfolioCustody != address(0)) {
-			address portfolio = pool.securityPoolFactory().getSecurityPoolPortfolio(pool);
-			require(msg.sender == ISecurityPoolPortfolioPurchaseAuthority(portfolio).services(), 'Use portfolio purchase');
+		if (securityPoolCustody != address(0)) {
+			address securityPool = pool.securityPoolFactory().securityPoolOf(pool);
+			require(msg.sender == ISecurityPoolPurchaseAuthority(securityPool).services(), 'Use security pool purchase');
 		}
 		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (cash == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
 		require(block.timestamp < pool.questionData().getQuestionEndDate(pool.questionId()), 'Question ended');
-		if (portfolioCustody != address(0)) {
+		if (securityPoolCustody != address(0)) {
 			(
 				completeSetsToMintAttoShares,
 				shareTokenSupplyAttoShares,
 				settlementCollateralAttoEth
-			) = IPortfolioSettlement(address(portfolioAccounting)).mintQuestionSettlement(cash);
+			) = ISecurityPoolSettlement(address(securityPoolAccounting)).mintQuestionSettlement(cash);
 			emit CompleteSetCreated(msg.sender, cash, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 			return completeSetsToMintAttoShares;
 		}
-		revert('Portfolio settlement missing');
+		revert('Security pool settlement missing');
 	}
 
-	function _redeemPortfolioSettlement(address recipient, uint256 burnedShares) internal returns (uint256 paidCashAttoEth) {
+	function _redeemSecurityPoolSettlement(address recipient, uint256 burnedShares) internal returns (uint256 paidCashAttoEth) {
 		if (burnedShares == 0) return 0;
-		(paidCashAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth) = IPortfolioSettlement(address(portfolioAccounting)).redeemQuestionSettlement(recipient, burnedShares);
+		(paidCashAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth) = ISecurityPoolSettlement(address(securityPoolAccounting)).redeemQuestionSettlement(recipient, burnedShares);
 	}
 }
