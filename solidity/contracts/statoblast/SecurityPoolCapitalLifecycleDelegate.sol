@@ -17,7 +17,6 @@ interface ICapitalSettlementRepairRoot {
 }
 
 interface ICapitalLifecycleHost {
-	function minimumCommitmentAttoEth() external view returns (uint256);
 	function portfolio() external view returns (address);
 	function universeId() external view returns (uint248);
 	function securityMultiplierBps() external view returns (uint256);
@@ -219,7 +218,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			require(existing.rep + plan.receivedPrincipalAttoRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
 			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
 		}
-		receiverId = _transferTakeoverPosition(id, commitment, debit, receiver, existing, plan, receiverOwner);
+		receiverId = _transferTakeoverPosition(id, commitment, debit, receiver, existing, plan, receiverOwner, minimumCommitmentAttoEth);
 		if (
 			plan.remainingCommitmentAttoEth == 0 ||
 			ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth) >=
@@ -232,19 +231,19 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		emit CommitmentTakenOver(id, receiverId, commitment, award);
 	}
 
-	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 debit, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan, address receiverOwner) private returns (uint96 receiverId) {
+	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 debit, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan, address receiverOwner, uint256 minimumCommitmentAttoEth) private returns (uint96 receiverId) {
 		receiverId = receiver.positionId;
 		uint256 receiverPrincipalAttoRep;
 		uint256 receiverCommitmentAttoEth;
 		if (receiverId == 0) {
-			receiverId = commitmentIndex.split(id, receiverOwner, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment), ICapitalLifecycleHost(address(this)).minimumCommitmentAttoEth());
+			receiverId = commitmentIndex.split(id, receiverOwner, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment), minimumCommitmentAttoEth);
 			receiver.positionId = receiverId;
 			receiverPrincipalAttoRep = plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = commitment;
 		} else {
 			receiverPrincipalAttoRep = existing.rep + plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = existing.commitment + commitment;
-			commitmentIndex.transferTo(id, receiverId, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth), ICapitalLifecycleHost(address(this)).minimumCommitmentAttoEth());
+			commitmentIndex.transferTo(id, receiverId, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth), minimumCommitmentAttoEth);
 		}
 		// Balanced transfer preserved a closed cohort's commitment. This replacement only
 		// adjusts collateral and therefore cannot refill that cohort.

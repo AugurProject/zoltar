@@ -49,3 +49,26 @@ test('#1570 a partial takeover may not leave the source between the liquidation 
 	expect(portfolioTakeoverTransfer(source, source.maximumPartialCommitment)).toBe(source.maximumPartialCommitment)
 	expect(portfolioTakeoverTransfer(source, source.maximumPartialCommitment + 1n)).toBeUndefined()
 })
+
+test('partial repair safety uses backing after its proportional bonus', () => {
+	const band = { ...snapshot, timestamp: 1900n, conservativePrice: 4421052631578947369n, liquidationPrice: 4n * unit, totalCommitmentAttoEth: 200n * unit, demandAttoEth: 200n * unit }
+	const source = portfolioTakeoverSource(band, { rep: 400n * unit, commitment: 100n * unit, batch: 0n, remainingCommitment: 0n, liquidationStarted: 1000n })
+	expect(source.maximumTakeoverAward).toBe(100n * unit)
+	expect(portfolioTakeoverTransfer(source, 10n * unit)).toBe(10n * unit)
+	expect(portfolioTakeoverTransfer(source, 20n * unit)).toBeUndefined()
+	expect(portfolioTakeoverTransfer(source, 100n * unit)).toBe(source.maximumTakeoverCommitment)
+})
+
+test('a proportional fill that fully repairs the source after rounding remains valid', () => {
+	const state = { ...snapshot, timestamp: 4600n, conservativePrice: unit, liquidationPrice: unit, securityMultiplierBps: 10_500n, totalCommitmentAttoEth: 101n * unit, demandAttoEth: 101n * unit }
+	const source = portfolioTakeoverSource(state, { ...position, rep: 105n * unit - 1n, commitment: 100n * unit, liquidationStarted: 1000n })
+	expect(portfolioTakeoverTransfer(source, 50n * unit)).toBe(50n * unit)
+})
+
+test('rounded proportional fills check exact backing even below the partial search bound', () => {
+	const state = { ...snapshot, conservativePrice: (101n * unit) / 100n, liquidationPrice: unit, securityMultiplierBps: 10_500n, totalCommitmentAttoEth: 100n, demandAttoEth: 100n, economics: { minimumCommitmentAttoEth: 1n } }
+	const source = portfolioTakeoverSource(state, { ...position, rep: 104n, commitment: 100n, liquidationElapsed: 3600n })
+	expect(source.maximumPartialCommitment).toBeGreaterThan(60n)
+	expect(portfolioTakeoverTransfer(source, 60n)).toBeUndefined()
+	expect(portfolioTakeoverTransfer(source, source.maximumPartialCommitment)).toBe(source.maximumPartialCommitment)
+})

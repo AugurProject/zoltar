@@ -278,6 +278,7 @@ describe('direct takeover against a holding-fee portfolio', () => {
 		const { plan, reason } = portfolioTakeoverPlan(first, target, settings, first.managedPrincipalAttoRep ?? 0n, true)
 		if (plan === undefined) throw new Error(`Keeper could not quote the distressed position: ${reason}`)
 		expect(plan.minimumAward).toBe(0n)
+		expect(plan.requestedCommitment).toBeGreaterThan(plan.commitment)
 		expect(plan.ownFunding).toBe(0n)
 		const refresh: typeof refreshPortfolioExecution = async () => {
 			const observation = await observe()
@@ -298,7 +299,7 @@ describe('direct takeover against a holding-fee portfolio', () => {
 		expect(state.paused).toBe(false)
 		expect(after.snapshot.demandAttoEth).toBeLessThan(first.snapshot.demandAttoEth)
 		expect(after.snapshot.ownerCommitmentAttoEth).toBeGreaterThan(0n)
-		expect(after.snapshot.ownerCommitmentAttoEth).toBeLessThanOrEqual(plan.commitment)
+		expect(after.snapshot.ownerCommitmentAttoEth).toBeLessThanOrEqual(plan.requestedCommitment ?? plan.commitment)
 		expect((after.positions.find(position => position.owner === source.account.address)?.rep ?? 0n) + after.snapshot.ownerPrincipalAttoRep).toBe(target.rep + first.snapshot.ownerPrincipalAttoRep)
 	})
 })

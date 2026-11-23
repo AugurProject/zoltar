@@ -1,8 +1,8 @@
 /**
  * The ledger applies this unpaid cure before quoting a takeover. No REP leaves the target during cure. It measures
  * health at the conservative repair price; `healthy` means the cure alone settles the takeover with no transfer.
- * A partial transfer must leave the source still below the liquidation price, so it stays open to repair:
- * `maximumPartialCommitment` accounts for the proportional bonus; only the full repair may exceed it (#1570).
+ * A fill must restore conservative backing or leave the source below the liquidation price, open to repair:
+ * `maximumPartialCommitment` is a search bound; each fill checks its exact post-bonus backing (#1570).
  */
 export function portfolioTakeoverSource(
 	snapshot: { timestamp?: bigint; conservativePrice: bigint; liquidationPrice: bigint; securityMultiplierBps: bigint; totalCommitmentAttoEth: bigint; demandAttoEth: bigint; economics: { minimumCommitmentAttoEth: bigint } },
@@ -51,7 +51,21 @@ export function portfolioTakeoverSource(
 		else high = middle - 1n
 	}
 	const maximumPartialCommitment = low
-	return { removed, maximumPartialCommitment, minimumCommitment: minimum, maximumTakeoverCommitment, maximumTakeoverAward, commitment, rep: position.rep, batch: retirementFulfilled ? 0n : position.batch, remainingCommitment: retirementFulfilled ? 0n : position.remainingCommitment, healthy }
+	return {
+		removed,
+		liquidationPrice: snapshot.liquidationPrice,
+		conservativePrice: snapshot.conservativePrice,
+		securityMultiplierBps: snapshot.securityMultiplierBps,
+		maximumPartialCommitment,
+		minimumCommitment: minimum,
+		maximumTakeoverCommitment,
+		maximumTakeoverAward,
+		commitment,
+		rep: position.rep,
+		batch: retirementFulfilled ? 0n : position.batch,
+		remainingCommitment: retirementFulfilled ? 0n : position.remainingCommitment,
+		healthy,
+	}
 }
 
 /** Clamp a requested fill to a legal source remainder and allocate only its share of the current bonus. */
@@ -63,7 +77,9 @@ export function portfolioTakeoverFill(source: { commitment: bigint; maximumTakeo
 }
 
 /** Reject partial fills that would strand the source between liquidation and conservative prices. */
-export function portfolioTakeoverTransfer(source: { commitment: bigint; maximumTakeoverCommitment: bigint; maximumTakeoverAward: bigint; maximumPartialCommitment: bigint; minimumCommitment: bigint }, requested: bigint) {
+export function portfolioTakeoverTransfer(source: { commitment: bigint; maximumTakeoverCommitment: bigint; maximumTakeoverAward: bigint; maximumPartialCommitment: bigint; minimumCommitment: bigint; rep: bigint; conservativePrice: bigint; liquidationPrice: bigint; securityMultiplierBps: bigint }, requested: bigint) {
 	const fill = portfolioTakeoverFill(source, requested, source.minimumCommitment)
-	return fill.commitment === source.maximumTakeoverCommitment || fill.commitment <= source.maximumPartialCommitment ? fill.commitment : undefined
+	const backing = (((source.rep - fill.award) * 10_000n) / source.securityMultiplierBps) * 10n ** 18n
+	const remaining = source.commitment - fill.commitment
+	return fill.commitment === source.maximumTakeoverCommitment || remaining <= backing / source.conservativePrice || (source.liquidationPrice > 0n && remaining > backing / source.liquidationPrice) ? fill.commitment : undefined
 }

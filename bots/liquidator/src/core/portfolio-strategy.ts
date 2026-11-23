@@ -1,6 +1,6 @@
 import type { OperatorSettings } from '#config/settings'
 import type { PortfolioObservation, PortfolioPosition } from '#monitoring/portfolio-monitor'
-import { portfolioTakeoverFill, portfolioTakeoverTransfer } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { portfolioTakeoverFill, portfolioTakeoverTransfer, portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { portfolioCureOutcome } from './portfolio-cure-state.ts'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -12,6 +12,7 @@ export const SIGNED_TRANSACTION_SLOT_SECONDS = 12n
 export type PortfolioTakeover = {
 	positionId: bigint
 	commitment: bigint
+	requestedCommitment?: bigint
 	minimumAward: bigint
 	ownFunding: bigint
 	approvalRep: bigint
@@ -123,6 +124,18 @@ function paidTakeoverPlan(observation: PortfolioObservation, position: Portfolio
 	const possibleCommitment = source.commitment < maximumOwnerCommitment - snapshot.ownerCommitmentAttoEth ? source.commitment : maximumOwnerCommitment - snapshot.ownerCommitmentAttoEth
 	const fullFunding = requiredFor(possibleCommitment) > snapshot.ownerPrincipalAttoRep ? requiredFor(possibleCommitment) - snapshot.ownerPrincipalAttoRep : 0n
 	const approvalRep = [fullFunding, policy.maximumOwnFundingAttoRep, maximumOwnerPrincipal - snapshot.ownerPrincipalAttoRep, observation.walletRep - settings.strategy.walletAttoRepReserve].reduce((a, b) => (a < b ? a : b))
+	// Reserve a full-repair request through the signed validity horizon only
+	// when current vault capital and policy caps cover its growing bonus/debt.
+	const horizon = DEFAULT_TRANSACTION_VALIDITY_BLOCKS * SIGNED_TRANSACTION_SLOT_SECONDS
+	const elapsed = position.liquidationElapsed ?? (snapshot.timestamp > position.liquidationStarted ? snapshot.timestamp - position.liquidationStarted : 0n)
+	const future = portfolioTakeoverSource({ ...snapshot, timestamp: snapshot.timestamp + horizon }, { ...position, liquidationElapsed: elapsed + horizon })
+	const futureCovered =
+		ownFunding === 0n &&
+		commitment === source.maximumTakeoverCommitment &&
+		future.maximumTakeoverCommitment > commitment &&
+		requiredFor(future.maximumTakeoverCommitment) <= snapshot.ownerPrincipalAttoRep + future.maximumTakeoverAward &&
+		snapshot.ownerPrincipalAttoRep + future.maximumTakeoverAward <= maximumOwnerPrincipal &&
+		snapshot.ownerCommitmentAttoEth + future.maximumTakeoverCommitment <= maximumOwnerCommitment
 	// Repair income arrives in the future. Budget approval, deposit and repair
 	// from the wallet without treating that income as spendable gas funding.
 	const gasBudget = settings.strategy.maximumGasCostAttoEth * 3n
@@ -139,6 +152,7 @@ function paidTakeoverPlan(observation: PortfolioObservation, position: Portfolio
 		plan: {
 			positionId: position.id,
 			commitment,
+			...(futureCovered ? { requestedCommitment: future.maximumTakeoverCommitment } : {}),
 			minimumAward: award,
 			ownFunding,
 			approvalRep,

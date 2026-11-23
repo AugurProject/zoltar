@@ -141,6 +141,25 @@ describe('capital repairs never leave a position between the liquidation and con
 		expect(await healthy()).toBeGreaterThanOrEqual(195n * E)
 	})
 
+	test('a spare-limited conservative cure preserves an accrued auction bonus through the price band', async () => {
+		await priceError(200_000n)
+		await price(E)
+		const principal = (10715n * E) / 100n
+		const sourceId = await commit(mallory, principal, 100n * E)
+		await commit(bob, 400n * E, 100n * E)
+		await demand(186n * E)
+		await price((12n * E) / 10n)
+		await deposit(carol, 1_000n * E)
+		await getAnvilWindowEthereum().advanceTime(900n)
+		await take(carol, sourceId, 100n * E)
+		const source = await position(sourceId)
+		const receiver = await position((await account(carol)).positionId)
+		expect(source.maxHealthyPrice).toBeGreaterThanOrEqual(await read('conservativePrice'))
+		expect(receiver.rep).toBeGreaterThan(1_000n * E)
+		expect(source.rep + receiver.rep).toBe(principal + 1_000n * E)
+		expect(await healthy()).toBeGreaterThanOrEqual(186n * E)
+	})
+
 	test('#1563 a takeover never hands the receiver a retirement target below the minimum', async () => {
 		await priceError(0n)
 		await price(E)

@@ -416,7 +416,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(commitment != 0, 'Takeover commitment below minimum');
 		award = Math.mulDiv(offered, commitment, fullCommitment);
 		uint256 remainingBacking = Math.mulDiv(source.rep - award, 10_000, multiplier);
-		require(commitment == fullCommitment || source.commitment - commitment > Math.mulDiv(remainingBacking, 1e18, price), 'Takeover would strand source between prices');
+		require(commitment == fullCommitment || source.commitment - commitment <= Math.mulDiv(remainingBacking, 1e18, repairPrice) || source.commitment - commitment > Math.mulDiv(remainingBacking, 1e18, price), 'Takeover would strand source between prices');
 		debit = commitment == source.commitment ? source.rep : award;
 		liquidationAwards[id] = LiquidationAward(started, paid + award);
 	}

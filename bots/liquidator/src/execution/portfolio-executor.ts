@@ -86,17 +86,17 @@ export async function executePortfolioTakeover(
 				? buildPortfolioCapitalTakeOverWithBoundsRequest({
 						...base,
 						positionId: plan.positionId,
-						commitment: plan.commitment,
+						commitment: plan.requestedCommitment ?? plan.commitment,
 						minimumAward: plan.minimumAward,
 						maximumOwnRep: plan.maximumOwnRep,
 						bounds,
 					})
-				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.commitment, plan.minimumAward, plan.maximumOwnRep, bounds] }) }
+				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.requestedCommitment ?? plan.commitment, plan.minimumAward, plan.maximumOwnRep, bounds] }) }
 		label = typeof positionId === 'bigint' ? `Take over portfolio position ${positionId}` : `Take over auction bid ${positionId.bidId} vault ${positionId.vault}`
 		if (plan.unpaidCure) label = typeof positionId === 'bigint' ? `Cure portfolio position ${positionId} without an award` : `Cure auction bid ${positionId.bidId} vault ${positionId.vault} without an award`
 	}
 	const preSubmit = async () => {
-		const latest = await refresh(action === 'takeover' ? plan.commitment : undefined)
+		const latest = await refresh(action === 'takeover' && plan.requestedCommitment === undefined ? plan.commitment : undefined)
 		assertPortfolioPlanStillAllowed(plan, latest.plan, action)
 		if (latest.observation.acceptedPriceEpoch !== expectedAcceptedPriceEpoch) throw new PortfolioOpportunityExpired('Portfolio accepted price epoch changed before signing')
 	}
@@ -125,7 +125,8 @@ export async function executePortfolioTakeover(
 /** @internal Revalidate funding, exposure and cohort consent after each prerequisite. */
 export function assertPortfolioPlanStillAllowed(original: PortfolioTakeover, current: PortfolioTakeover, action: 'approval' | 'principal' | 'takeover') {
 	if (original.expectedTotalCommitment !== current.expectedTotalCommitment || original.expectedDemand !== current.expectedDemand) throw new PortfolioOpportunityExpired('Portfolio cure capacity changed before submission')
-	if (original.commitment !== current.commitment || original.expectedSourceBatch !== current.expectedSourceBatch || original.maximumOwnerPrincipal > current.maximumOwnerPrincipal || original.maximumOwnerCommitment > current.maximumOwnerCommitment)
+	const commitmentCovered = original.requestedCommitment !== undefined && current.commitment >= original.commitment && current.commitment <= original.requestedCommitment
+	if ((!commitmentCovered && original.commitment !== current.commitment) || original.expectedSourceBatch !== current.expectedSourceBatch || original.maximumOwnerPrincipal > current.maximumOwnerPrincipal || original.maximumOwnerCommitment > current.maximumOwnerCommitment)
 		throw new PortfolioOpportunityExpired('Portfolio exposure or cohort changed before submission')
 	if (original.unpaidCure !== current.unpaidCure) throw new PortfolioOpportunityExpired('Portfolio takeover terms changed before submission')
 	if ((action === 'approval' || action === 'principal') && original.ownFunding !== current.ownFunding) throw new PortfolioOpportunityExpired('Portfolio funding requirement changed before submission')

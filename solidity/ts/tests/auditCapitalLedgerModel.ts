@@ -487,7 +487,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minAward: bigint, 
 	requireModel(k !== 0n, 'Takeover commitment below minimum')
 	const award = (offered * k) / fullK
 	const remainingBacking = ((source.rep - award) * BPS) / MULTIPLIER
-	requireModel(k === fullK || source.k - k > (remainingBacking * WAD) / m.liq, 'Takeover would strand source between prices')
+	requireModel(k === fullK || source.k - k <= (remainingBacking * WAD) / m.cons || source.k - k > (remainingBacking * WAD) / m.liq, 'Takeover would strand source between prices')
 	const debit = k === source.k ? source.rep : award
 	requireModel(award >= minAward, 'Takeover award below minimum')
 	settle(m, o)
