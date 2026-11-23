@@ -1,4 +1,7 @@
 import { expect, test } from 'bun:test'
+import { render } from 'preact'
+import { useLayoutEffect } from 'preact/hooks'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -35,6 +38,22 @@ test('personal capital shows exact principal and keeps distinct approval, deposi
 	expect(text).not.toContain('Execution reserve')
 	expect(labels.some(label => label.includes('Fund execution'))).toBe(false)
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
+})
+
+test('draft initialization preserves a deposit entered as the panel becomes interactive', async () => {
+	function InitialDeposit({ ready }: { ready: boolean }) {
+		const snapshot = ready ? capitalSnapshot() : undefined
+		const model = usePortfolioAggregate({ snapshot, loading: !ready, error: undefined, refresh: async () => undefined }, { ownerReason: undefined, runPortfolioAction: async () => undefined }, owner)
+		useLayoutEffect(() => {
+			if (ready) model.setDepositAmount('1')
+		}, [ready])
+		return <output>{model.depositAmount}</output>
+	}
+
+	const view = await renderIntoDocument(<InitialDeposit ready={false} />)
+	lifecycle.trackRendered(view)
+	render(<InitialDeposit ready />, view.container)
+	await waitFor(() => expect(view.container.textContent).toBe('1'))
 })
 
 test('retirement readiness exposes the reserved capacity and observed times without promising completion', async () => {

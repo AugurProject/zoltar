@@ -160,10 +160,13 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				</MetricField>
 			</MetricGrid>
 			<UserMessage detail={copy.fundingReturnHint} />
+			{model.canRedirectFunding ? <PortfolioInput label={copy.withdrawalRecipient} hint={copy.withdrawalRecipientHint} error={model.recipientError} value={model.recipientInput} onChange={model.setRecipient} disabled={disabled} /> : undefined}
 			<div className='actions'>
 				<PortfolioButton model={parameters.actions} action={model.actionId('settle')} label={copy.settle} pendingLabel={copy.settling} reason={model.settleReason} onClick={model.settle} />
 				<PortfolioButton model={parameters.actions} action={model.actionId('recover')} label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
 				<PortfolioButton model={parameters.actions} action={model.actionId('withdraw')} label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
+				<PortfolioButton model={parameters.actions} action={model.actionId('withdrawCollateral')} label={copy.withdrawToken(model.collateral.symbol)} pendingLabel={copy.withdrawingToken(model.collateral.symbol)} reason={model.withdrawCollateralReason} onClick={() => model.withdrawToken('collateral')} />
+				<PortfolioButton model={parameters.actions} action={model.actionId('withdrawRep')} label={copy.withdrawToken(common.rep)} pendingLabel={copy.withdrawingToken(common.rep)} reason={model.withdrawRepReason} onClick={() => model.withdrawToken('rep')} />
 				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: disabled || model.refreshReason !== undefined, reason: (disabled ? copy.busy : undefined) ?? model.refreshReason }} onClick={model.refresh} />
 			</div>
 		</WorkflowSubsection>

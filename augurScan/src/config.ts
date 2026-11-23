@@ -98,7 +98,7 @@ const parseManifest = async (filename: string): Promise<readonly ManifestContrac
 
 export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 	const definitions = parseNetworkFiles(await Bun.file(path.join(configRoot, 'networks.json')).json())
-	const enabled = new Set((process.env['NETWORKS'] ?? definitions.map(({ id }) => id).join(',')).split(',').map((value: string) => value.trim()))
+	const enabled = new Set((process.env['NETWORKS'] || definitions.map(({ id }) => id).join(',')).split(',').map((value: string) => value.trim()))
 	const configuredIds = new Set(definitions.map(({ id }) => id))
 	const unknownIds = [...enabled].filter(id => !configuredIds.has(id))
 	if (unknownIds.length > 0) throw new Error(`NETWORKS contains unknown network${unknownIds.length === 1 ? '' : 's'}: ${unknownIds.join(', ')}`)
@@ -106,7 +106,7 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 		definitions
 			.filter(({ id }) => enabled.has(id))
 			.map(async definition => {
-				const rpcUrls = (process.env[definition.rpcUrlEnv] ?? definition.defaultRpcUrl)
+				const rpcUrls = (process.env[definition.rpcUrlEnv] || definition.defaultRpcUrl)
 					.split(',')
 					.map((value: string) => value.trim())
 					.filter(Boolean)
