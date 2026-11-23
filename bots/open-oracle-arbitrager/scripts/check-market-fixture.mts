@@ -60,6 +60,8 @@ function verifyRecordedEconomics() {
 	assert.equal(fixture.buyRep.callData.slice(feeWordStart, feeWordStart + 64), encodedPoolFee)
 
 	const commonGame = {
+		flags: 0n,
+		escalationHalt: minimumWeth,
 		currentAmount1: minimumWeth,
 		feePercentage: fixture.feePercentage,
 		protocolFee: fixture.protocolFee,

@@ -113,20 +113,21 @@ contract OpenOracleArbitrageExecutorTarget {
 	) external payable {
 		uint256 contribution1;
 		uint256 contribution2;
+		bool chargeFees = (params.flags & (1 << 5)) == 0 || params.currentAmount1 >= params.escalationHalt;
 		bool swapToken2 = uint256(newAmount2) * params.currentAmount1 > uint256(params.currentAmount2) * newAmount1;
 		if (swapToken2) {
 			contribution1 = newAmount1 > params.currentAmount1 ? newAmount1 - params.currentAmount1 : 0;
 			contribution2 =
 				uint256(newAmount2) +
 				params.currentAmount2 +
-				(uint256(params.currentAmount2) * params.feePercentage) / 1e7 +
-				(uint256(params.currentAmount2) * params.protocolFee) / 1e7;
+				(chargeFees ? (uint256(params.currentAmount2) * params.feePercentage) / 1e7 : 0) +
+				(chargeFees ? (uint256(params.currentAmount2) * params.protocolFee) / 1e7 : 0);
 		} else {
 			contribution1 =
 				uint256(newAmount1) +
 				params.currentAmount1 +
-				(uint256(params.currentAmount1) * params.feePercentage) / 1e7 +
-				(uint256(params.currentAmount1) * params.protocolFee) / 1e7;
+				(chargeFees ? (uint256(params.currentAmount1) * params.feePercentage) / 1e7 : 0) +
+				(chargeFees ? (uint256(params.currentAmount1) * params.protocolFee) / 1e7 : 0);
 			contribution2 = newAmount2 > params.currentAmount2 ? newAmount2 - params.currentAmount2 : 0;
 		}
 		_fund(params.token1, disputer, contribution1, tryInternalBalance1);

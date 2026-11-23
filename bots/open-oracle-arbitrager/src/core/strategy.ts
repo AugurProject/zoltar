@@ -25,6 +25,17 @@ export function calculateFee(amount: bigint, rate: bigint) {
 	return (amount * rate) / OPEN_ORACLE_PERCENTAGE_PRECISION
 }
 
+/** OpenOracle uses the pre-dispute amount to decide whether both fees apply. */
+const FLAG_FEES_ONLY_AT_HALT = 1n << 5n
+
+export function chargesFees(game: Pick<OpenOracleGame, 'flags' | 'currentAmount1' | 'escalationHalt'>) {
+	return (game.flags & FLAG_FEES_ONLY_AT_HALT) === 0n || game.currentAmount1 >= game.escalationHalt
+}
+
+export function gameFee(game: Pick<OpenOracleGame, 'flags' | 'currentAmount1' | 'escalationHalt'>, amount: bigint, rate: bigint) {
+	return chargesFees(game) ? calculateFee(amount, rate) : 0n
+}
+
 export function calculateNextAmount1(game: Pick<OpenOracleGame, 'currentAmount1' | 'escalationHalt' | 'multiplier'>) {
 	if (game.escalationHalt > game.currentAmount1) {
 		const multiplied = (game.currentAmount1 * game.multiplier) / 100n
@@ -41,16 +52,16 @@ export function isSelfReport(account: Address | undefined, currentReporter: Addr
 	return account !== undefined && account.toLowerCase() === currentReporter.toLowerCase()
 }
 
-function calculateContribution(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee'>, tokenToSwap: Address, token1: Address, newAmount1: bigint, newAmount2: bigint) {
+function calculateContribution(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'flags' | 'escalationHalt'>, tokenToSwap: Address, token1: Address, newAmount1: bigint, newAmount2: bigint) {
 	if (tokenToSwap.toLowerCase() === token1.toLowerCase()) {
 		return {
-			token1: newAmount1 + game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee),
+			token1: newAmount1 + game.currentAmount1 + gameFee(game, game.currentAmount1, game.feePercentage) + gameFee(game, game.currentAmount1, game.protocolFee),
 			token2: newAmount2 > game.currentAmount2 ? newAmount2 - game.currentAmount2 : 0n,
 		}
 	}
 	return {
 		token1: newAmount1 > game.currentAmount1 ? newAmount1 - game.currentAmount1 : 0n,
-		token2: newAmount2 + game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee),
+		token2: newAmount2 + game.currentAmount2 + gameFee(game, game.currentAmount2, game.feePercentage) + gameFee(game, game.currentAmount2, game.protocolFee),
 	}
 }
 
@@ -70,13 +81,13 @@ export function spotTwapDeviationWithinLimit(spotTick: bigint, twapTick: bigint,
 	return deviation <= maximumDeviation
 }
 
-export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint, buyHedgeWethLimitAttoEth: bigint) {
+export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'flags' | 'escalationHalt' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint, buyHedgeWethLimitAttoEth: bigint) {
 	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)
 	if (tokenToSwap.toLowerCase() === game.token1.toLowerCase()) {
 		return { token1: contribution.token1, token2: contribution.token2 + game.currentAmount2 }
 	}
-	const hedgeToken2 = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
+	const hedgeToken2 = game.currentAmount2 + gameFee(game, game.currentAmount2, game.feePercentage) + gameFee(game, game.currentAmount2, game.protocolFee)
 	if (contribution.token2 < hedgeToken2) throw new Error('Buy hedge exceeds the token contribution')
 	return {
 		token1: contribution.token1 + buyHedgeWethLimitAttoEth,
@@ -107,8 +118,8 @@ export function executableDexPriceRepPerEth(quote: ArbitrageQuote) {
 	return referenceAttoWeth <= 0n ? 0n : (quote.hedgeAmountAttoRep * 10n ** 18n) / referenceAttoWeth
 }
 
-export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1'>, quotedToken1Out: bigint, gasCostAttoWeth: bigint, valuation: CollateralValuation): ArbitrageQuote {
-	const token1Spend = game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee)
+export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'flags' | 'escalationHalt' | 'token1'>, quotedToken1Out: bigint, gasCostAttoWeth: bigint, valuation: CollateralValuation): ArbitrageQuote {
+	const token1Spend = game.currentAmount1 + gameFee(game, game.currentAmount1, game.feePercentage) + gameFee(game, game.currentAmount1, game.protocolFee)
 	const profitBeforeGasAttoWeth = attoWethValue(valuation, quotedToken1Out - token1Spend, 'down')
 	return {
 		direction: 'sell-rep',
@@ -122,8 +133,8 @@ export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'c
 	}
 }
 
-export function evaluateBuyRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token2'>, quotedToken1In: bigint, gasCostAttoWeth: bigint, valuation: CollateralValuation): ArbitrageQuote {
-	const repNeededAttoRep = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
+export function evaluateBuyRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'flags' | 'escalationHalt' | 'token2'>, quotedToken1In: bigint, gasCostAttoWeth: bigint, valuation: CollateralValuation): ArbitrageQuote {
+	const repNeededAttoRep = game.currentAmount2 + gameFee(game, game.currentAmount2, game.feePercentage) + gameFee(game, game.currentAmount2, game.protocolFee)
 	const profitBeforeGasAttoWeth = attoWethValue(valuation, game.currentAmount1 - quotedToken1In, 'down')
 	return {
 		direction: 'buy-rep',

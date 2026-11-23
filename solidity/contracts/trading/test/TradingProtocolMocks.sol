@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { ITwoWayConstantProductPair } from '../interfaces/ITwoWayConstantProductPair.sol';
+
 import { ERC20 } from '../../ERC20.sol';
 import { BinaryOutcomes } from '../../statoblast/BinaryOutcomes.sol';
 import { IERC1155Receiver } from '../../statoblast/interfaces/IERC1155Receiver.sol';
@@ -370,4 +372,29 @@ contract TradingMockSafe is IERC1155Receiver {
 	}
 
 	receive() external payable {}
+}
+
+contract TradingReserveReader is IERC1155Receiver {
+	ITwoWayConstantProductPair public pair;
+	uint256 public observedYes;
+	uint256 public observedNo;
+	uint256 public callbacks;
+	function configure(ITwoWayConstantProductPair value) external {
+		pair = value;
+	}
+	function supportsInterface(bytes4 id) external pure returns (bool) {
+		return id == type(IERC1155Receiver).interfaceId;
+	}
+	function _observe() private {
+		(observedYes, observedNo) = pair.getReserves();
+		callbacks++;
+	}
+	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external returns (bytes4) {
+		_observe();
+		return IERC1155Receiver.onERC1155Received.selector;
+	}
+	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external returns (bytes4) {
+		_observe();
+		return IERC1155Receiver.onERC1155BatchReceived.selector;
+	}
 }
