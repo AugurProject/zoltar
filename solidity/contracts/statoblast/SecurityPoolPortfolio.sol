@@ -244,6 +244,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function oracleRepExposure(uint248 universeId) external view returns (uint256 rep) {
 		(, rep) = IPortfolioForkCoordinator(forkController).auctionExposure(universeId);
+		(uint256 pledged, , ) = capitalLedger[universeId].totals();
+		rep += pledged;
 	}
 	function availableMintCapacity(uint248 universeId) external view returns (uint256) {
 		return quoteHelper.availableMintCapacity(universeId);

@@ -17,7 +17,7 @@ const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentFor
 describe('manual takeover against native portfolio contracts', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	for (const scenario of ['success', 'changed-price', 'rejected-bounds'] as const)
-		test(`manual takeover preserves ownership through ${scenario}`, async () => {
+		test(`manual takeover applies pledged awards atomically through ${scenario}`, async () => {
 			await fixture.prepare()
 			await fixture.mint(200n * unit)
 			const owner = fixture.owner()
@@ -103,10 +103,10 @@ describe('manual takeover against native portfolio contracts', () => {
 			)
 			const acquired = await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })
 			expect(acquired.ownerCommitmentAttoEth).toBeGreaterThan(0n)
-			expect(acquired.ownerCommitmentAttoEth).toBeLessThan(200n * unit)
+			expect(acquired.ownerCommitmentAttoEth).toBe(200n * unit)
 			const retained = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })
-			expect(retained.ownerPrincipalAttoRep).toBe(original.ownerPrincipalAttoRep)
+			expect(retained.ownerPrincipalAttoRep).toBe(0n)
 			expect(retained.ownerCommitmentAttoEth + acquired.ownerCommitmentAttoEth).toBe(original.ownerCommitmentAttoEth)
-			expect(acquired.ownerPrincipalAttoRep).toBe(snapshot.ownerPrincipalAttoRep)
+			expect(acquired.ownerPrincipalAttoRep).toBe(snapshot.ownerPrincipalAttoRep + original.ownerPrincipalAttoRep)
 		}, 300_000)
 })

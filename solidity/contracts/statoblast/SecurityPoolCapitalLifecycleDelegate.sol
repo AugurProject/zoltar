@@ -78,6 +78,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(liquidationPrice != 0, 'Liquidation price rounds to zero');
 		if (!importing && block.timestamp >= priceValidUntil) commitmentIndex.restartLiquidationClock();
 		priceValidUntil = validUntil;
+		commitmentIndex.recordPriceValidity(validUntil);
 		// Child reports can fund the fork auction before capital activation.
 		// Imported positions have no operating health history until imports seal.
 		if (!importing) commitmentIndex.observeHealthy(liquidationPrice);
@@ -157,6 +158,100 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(_capitalOwner(), repAmount);
 		_sendEth(_capitalOwner(), ethAmount);
 		emit EarningsClaimed(_capitalOwner(), ethAmount, repAmount);
+	}
+
+	function cure(uint96 id, uint256 target, bool ownerExit, uint256 minimumCommitmentAttoEth, uint256 securityMultiplierBps) public onlyDelegateCall returns (uint256 removed) {
+		require(id != 0 && id != auctionCohort.positionId, 'Materialize an individual auction vault');
+		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit);
+		removed = result.removed;
+		if (removed != 0) {
+			owners[result.owner].account.freeAttoRep += result.freedRep;
+			totalFreeAttoRep += result.freedRep;
+			emit CommitmentCured(id, removed);
+		}
+	}
+
+	function takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds, bool enforceBounds, uint256 minimumCommitmentAttoEth) external onlyDelegateCall returns (uint96 receiverId) {
+		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
+		address receiverOwner = _capitalOwner();
+		uint256 securityMultiplierBps = host.securityMultiplierBps();
+		require(commitmentIndex.liquidationStarted(id) != 0, 'Adverse observation missing');
+		SecurityPoolCommitmentIndex.Account memory beforeCure = commitmentIndex.accountOf(id);
+		require(beforeCure.owner != receiverOwner && beforeCure.maxHealthyPrice < liquidationPrice, 'Position does not need takeover');
+		require(commitment > 0 && commitment <= beforeCure.commitment, 'Invalid takeover commitment');
+		uint256 cured = cure(id, 0, false, minimumCommitmentAttoEth, securityMultiplierBps);
+		// A keeper must be able to leave a successful cure in place. No assets
+		// transfer and no award is paid when nominal excess alone restores health.
+		if (cured != 0 && commitmentIndex.liquidationStarted(id) == 0) {
+			return 0;
+		}
+		(
+			SecurityPoolCommitmentIndex.Account memory source,
+			uint256 repaired,
+			uint256 award,
+			uint256 debit
+		) = commitmentIndex.takeoverQuote(id, receiverOwner, commitment, minimumCommitmentAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
+		commitment = repaired;
+		require(award >= minimumAward, 'Takeover award below minimum');
+		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.portfolio()).priceFeed(host.universeId()));
+		require(source.rep <= feed.acceptedRepExposureLimitAttoRep(), 'Accepted report REP exposure exceeded');
+		_settleOwner(receiverOwner);
+		Owner storage receiver = owners[receiverOwner].account;
+		if (enforceBounds) {
+			require(acceptedPriceEpoch == bounds.expectedAcceptedPriceEpoch || (bounds.expectedAcceptedPriceEpoch == 0 && msg.sender == address(this) && reportOwner != address(0)), 'Takeover price epoch changed');
+			require(_target(receiver) == bounds.expectedTargetHealthFactorBps, 'Takeover owner target changed');
+			require(source.batch == bounds.expectedSourceBatch, 'Takeover source cohort changed');
+		}
+		receiverId = receiver.positionId;
+		SecurityPoolCommitmentIndex.Account memory existing;
+		if (receiverId != 0) {
+			existing = commitmentIndex.accountOf(receiverId);
+			require(existing.batch == source.batch || existing.batch == 0, 'Receiver retirement differs');
+		}
+		// Any previously idle receiver principal joins its one live position.
+		uint256 receiverFreePrincipalAttoRep = receiver.freeAttoRep;
+		require(receiverFreePrincipalAttoRep <= maximumOwnRep, 'Receiver consent exceeded');
+		uint256 requiredReceiverPrincipalAttoRep = _requiredRep(host, existing.commitment + commitment, _target(receiver));
+		require(existing.rep + receiverFreePrincipalAttoRep + award >= requiredReceiverPrincipalAttoRep, 'Receiver collateral insufficient');
+		require(existing.commitment + commitment >= minimumCommitmentAttoEth, 'Receiver commitment below minimum');
+		TakeoverPlan memory plan = TakeoverPlan(source.commitment - commitment, source.rep - debit, receiverFreePrincipalAttoRep + award);
+		if (enforceBounds) {
+			require(existing.rep + plan.receivedPrincipalAttoRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
+			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
+		}
+		commitmentIndex.recordLiquidationAward(id, award);
+		receiverId = _transferTakeoverPosition(id, commitment, debit, receiver, existing, plan, receiverOwner);
+		if (
+			plan.remainingCommitmentAttoEth == 0 ||
+			ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth) >=
+				liquidationPrice
+		) commitmentIndex.clearLiquidation(id);
+		receiver.freeAttoRep -= receiverFreePrincipalAttoRep;
+		totalFreeAttoRep -= receiverFreePrincipalAttoRep;
+		owners[source.owner].account.freeAttoRep += debit - award;
+		totalFreeAttoRep += debit - award;
+		emit CommitmentTakenOver(id, receiverId, commitment, award);
+	}
+
+	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 debit, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan, address receiverOwner) private returns (uint96 receiverId) {
+		receiverId = receiver.positionId;
+		uint256 receiverPrincipalAttoRep;
+		uint256 receiverCommitmentAttoEth;
+		if (receiverId == 0) {
+			receiverId = commitmentIndex.split(id, receiverOwner, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment));
+			receiver.positionId = receiverId;
+			receiverPrincipalAttoRep = plan.receivedPrincipalAttoRep;
+			receiverCommitmentAttoEth = commitment;
+		} else {
+			receiverPrincipalAttoRep = existing.rep + plan.receivedPrincipalAttoRep;
+			receiverCommitmentAttoEth = existing.commitment + commitment;
+			commitmentIndex.transferTo(id, receiverId, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth));
+		}
+		// Balanced transfer preserved a closed cohort's commitment. This replacement only
+		// adjusts collateral and therefore cannot refill that cohort.
+		uint256 maxPrice = ICapitalLifecycleHost(address(this)).maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth);
+		commitmentIndex.replace(receiverId, receiverPrincipalAttoRep, receiverCommitmentAttoEth, maxPrice);
+		if (maxPrice >= liquidationPrice) commitmentIndex.clearLiquidation(receiverId);
 	}
 
 	function exportChoice(address owner) external onlyDelegateCall returns (ChoicePosition memory choice, uint256 target) {

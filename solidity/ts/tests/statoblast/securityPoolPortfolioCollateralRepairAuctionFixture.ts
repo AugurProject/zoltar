@@ -43,9 +43,11 @@ export async function preparePortfolioCollateralRepairAuction(fixture: ReturnTyp
 	await approveToken(owner, weth, feed)
 	await approveToken(owner, token, feed)
 	const deadline = forkTime + 63n * DAY
-	const report = async (price = unit, budget = 10n * unit) => {
+	const report = async (price = unit, budget?: bigint) => {
+		const minimum = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [price] })
+		const funding = budget ?? (minimum > 10n * unit ? minimum : 10n * unit)
 		const bounty = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'getRequestPriceCostAttoEth' })
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: feedArtifact.abi, address: feed, functionName: 'requestPortfolioPrice', args: [price, budget, bounty], value: bounty }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: feedArtifact.abi, address: feed, functionName: 'requestPortfolioPrice', args: [price, funding, bounty], value: bounty }))
 		const id = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'pendingReportId' })
 		await mock.advanceTime(481n)
 		await openOracleSettle(owner, id)

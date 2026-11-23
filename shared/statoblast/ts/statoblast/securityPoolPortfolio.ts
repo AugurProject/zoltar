@@ -1,5 +1,5 @@
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '../initialReport/oracleInitialReport.js'
-export { portfolioTakeoverSource } from './securityPoolPortfolioTakeover.js'
+export { portfolioTakeoverSource, portfolioTakeoverFill } from './securityPoolPortfolioTakeover.js'
 import { type Address, type Hex, encodeAbiParameters, encodeFunctionData, isAddress, isHex, getAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
 export type PortfolioOriginConfig = {

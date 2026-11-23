@@ -9,6 +9,7 @@ interface ICapitalFeeStreams {
 
 interface ICapitalPriceExposure {
 	function validateExposure() external view;
+	function acceptedRepExposureLimitAttoRep() external view returns (uint256);
 	function targetPriceErrorForDispute() external view returns (uint256);
 	function acceptedEpoch() external view returns (uint256);
 	function reportAuthorization(uint256 reportId, uint256 newExposure) external view returns (uint256 conservativeReportPrice, uint256 epoch);

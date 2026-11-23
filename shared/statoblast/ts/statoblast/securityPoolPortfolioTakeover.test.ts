@@ -12,3 +12,11 @@ test('#1254 a minimum-size cure cannot remove the commitment that still has REP 
 test('a position supporting zero commitment may still be removed entirely', () => {
 	expect(portfolioTakeoverSource(snapshot, { ...position, rep: 0n })).toMatchObject({ removed: unit, commitment: 0n, healthy: true })
 })
+
+test('half-hour quotes account for the source REP bonus before sizing the commitment transfer', () => {
+	const state = { ...snapshot, timestamp: 2800n, conservativePrice: unit, liquidationPrice: unit, securityMultiplierBps: 20_000n, totalCommitmentAttoEth: 100n * unit }
+	const target = { ...position, rep: 150n * unit, commitment: 100n * unit, liquidationStarted: 1000n, liquidationAwarded: 0n }
+	expect(portfolioTakeoverSource(state, target)).toMatchObject({ maximumTakeoverAward: 75n * unit, maximumTakeoverCommitment: (625n * unit) / 10n })
+	const remainder = { ...target, rep: (1125n * unit) / 10n, commitment: (6875n * unit) / 100n, liquidationAwarded: (375n * unit) / 10n }
+	expect(portfolioTakeoverSource(state, remainder)).toMatchObject({ maximumTakeoverAward: (375n * unit) / 10n, maximumTakeoverCommitment: (3125n * unit) / 100n })
+})

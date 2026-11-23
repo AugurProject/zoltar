@@ -209,6 +209,9 @@ contract PortfolioForkHarness {
 		return address(this);
 	}
 	function validateExposure() external pure {}
+	function acceptedRepExposureLimitAttoRep() external pure returns (uint256) {
+		return type(uint256).max;
+	}
 	function acceptedEpoch() external pure returns (uint256) {
 		return 1;
 	}

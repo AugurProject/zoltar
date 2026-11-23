@@ -27,6 +27,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	uint48 private distressRestart;
 	uint256 private observedPrice;
 	mapping(uint64 => uint48) private observationTimes;
+	mapping(uint64 => uint256) private observationPaused;
+	uint256 private auctionPausedSeconds;
+	uint48 private auctionPriceValidUntil;
 	struct Account {
 		address owner;
 		uint96 batch;
@@ -243,10 +246,16 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		distressRestart = CheckedCast.toUint48(block.timestamp);
 	}
 
+	function recordPriceValidity(uint48 validUntil) external onlyCapitalLedger {
+		if (auctionPriceValidUntil != 0 && block.timestamp > auctionPriceValidUntil)
+			auctionPausedSeconds += block.timestamp - auctionPriceValidUntil;
+		auctionPriceValidUntil = validUntil;
+	}
 	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
 		observationTimes[epoch] = CheckedCast.toUint48(block.timestamp);
+		observationPaused[epoch] = auctionPausedSeconds;
 		observedPrice = price;
 		_observeHealthy(roots[0], price, epoch);
 		if (currentBatch != 0) _observeHealthy(roots[currentBatch], price, epoch);
@@ -265,7 +274,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Distress begins at the first adverse oracle observation after the
 	/// position's latest recovery. No keeper transaction starts or resets a clock.
 	/// One tree path combines lazy healthy observations and detached retirement.
-	function liquidationStarted(uint96 id) public view returns (uint48) {
+	function _distressObservation(uint96 id) private view returns (uint64) {
 		uint256 cursor = positions[id].node;
 		Node storage leaf = nodes[cursor];
 		if (cursor == 0 || leaf.commitment == 0 || leaf.price >= observedPrice) return 0;
@@ -277,7 +286,21 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			cursor = node.parent;
 		}
 		if (epoch == healthObservationEpoch) return 0;
-		return CheckedCast.toUint48(Math.max(observationTimes[epoch + 1], distressRestart));
+		return epoch + 1;
+	}
+	function liquidationStarted(uint96 id) public view returns (uint48) {
+		uint64 observation = _distressObservation(id);
+		return observation == 0 ? 0 : CheckedCast.toUint48(Math.max(observationTimes[observation], distressRestart));
+	}
+	/// @notice Only time covered by fresh prices advances auction compensation.
+	function liquidationElapsed(uint96 id) public view returns (uint256) {
+		uint64 observation = _distressObservation(id);
+		if (observation == 0) return 0;
+		uint256 through =
+			auctionPriceValidUntil == 0 ? block.timestamp : Math.min(block.timestamp, auctionPriceValidUntil);
+		uint256 start = observationTimes[observation];
+		uint256 paused = auctionPausedSeconds - observationPaused[observation];
+		return through > start + paused ? through - start - paused : 0;
 	}
 
 	/// @dev The controller calls only after an actual healthy mutation at a fresh
@@ -352,20 +375,53 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			(currentBatch == 0 ? 0 : _eligible(roots[currentBatch], acceptedPrice)) +
 			_eligible(roots[nextBatch], acceptedPrice);
 	}
-	/// @notice Repair transfers only unsupported commitment. Principal and past
-	/// income stay with the source; the receiver supplies its own backing and
-	/// earns future fees. Elapsed time and repeated repairs preserve source ownership.
-	/// Keep the source's economic minimum: replacing its final commitment needs
-	/// additional healthy capacity and the ordinary retirement queue.
-	function takeoverQuote(uint96 id, address receiver, uint256 requested, uint256 minimumCommitment, uint256 price, uint256 repairPrice, uint256 multiplier) external view onlyCapitalLedger returns (Account memory source, uint256 commitment) {
+	struct LiquidationAward {
+		uint48 started;
+		uint256 rep;
+	}
+	mapping(uint96 => LiquidationAward) private liquidationAwards;
+	uint256 public constant LIQUIDATION_AUCTION_DURATION = 1 hours;
+
+	function liquidationAwarded(uint96 id) public view returns (uint256) {
+		return
+			liquidationAwards[id].started == observationTimes[_distressObservation(id)] ? liquidationAwards[id].rep : 0;
+	}
+
+	function recordLiquidationAward(uint96 id, uint256 rep) external onlyCapitalLedger {
+		uint48 started = observationTimes[_distressObservation(id)];
+		require(started != 0, 'Adverse observation missing');
+		uint256 awarded = liquidationAwarded(id);
+		liquidationAwards[id] = LiquidationAward(started, awarded + rep);
+	}
+
+	/// @notice The bonus vests over one hour into the receiver's pledged principal.
+	/// Quote the obligation using the source's backing AFTER the bonus. Cumulative
+	/// awards prevent splitting a fill from repeatedly collecting the vested fraction.
+	function takeoverQuote(uint96 id, address receiver, uint256 requested, uint256 minimumCommitment, uint256 price, uint256 repairPrice, uint256 multiplier)
+		external
+		view
+		onlyCapitalLedger
+		returns (Account memory source, uint256 commitment, uint256 award, uint256 debit)
+	{
 		source = accountOf(id);
 		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
 		require(liquidationStarted(id) != 0, 'Adverse observation missing');
 		require(requested > 0, 'Invalid takeover commitment');
-		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep, 10_000, multiplier), 1e18, repairPrice);
-		uint256 retained = Math.max(supported, minimumCommitment);
-		require(source.commitment > retained, 'Position requires additional backing');
-		commitment = Math.min(requested, source.commitment - retained);
+		uint256 paid = liquidationAwarded(id);
+		uint256 vested = Math.mulDiv(source.rep + paid, Math.min(liquidationElapsed(id), LIQUIDATION_AUCTION_DURATION), LIQUIDATION_AUCTION_DURATION);
+		uint256 offered = vested > paid ? vested - paid : 0;
+		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep - offered, 10_000, multiplier), 1e18, repairPrice);
+		uint256 fullCommitment = source.commitment - Math.min(source.commitment, supported);
+		if (source.commitment - fullCommitment < minimumCommitment) fullCommitment = source.commitment;
+		require(fullCommitment != 0, 'Position does not need takeover');
+		commitment = Math.min(requested, fullCommitment);
+		if (source.commitment - commitment != 0 && source.commitment - commitment < minimumCommitment)
+			commitment = source.commitment - Math.min(source.commitment, minimumCommitment);
+		require(commitment != 0, 'Takeover commitment below minimum');
+		award = Math.mulDiv(offered, commitment, fullCommitment);
+		// A closed index leaf cannot retain REP. Unawarded principal remains the
+		// source owner's separately accounted free principal, never the receiver's.
+		debit = commitment == source.commitment ? source.rep : award;
 	}
 	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) public pure returns (uint256) {
 		require(health >= 10_000 && price > 0, 'Invalid health or price');

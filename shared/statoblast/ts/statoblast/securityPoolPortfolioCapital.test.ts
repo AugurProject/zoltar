@@ -72,6 +72,8 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		ownerCollateral: [260n, 20n, 17n],
 		accountOf: { owner, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n, remainingCommitment: 0n },
 		liquidationStarted: 0n,
+		liquidationAwarded: 0n,
+		liquidationElapsed: 0n,
 		previewRetirement: [5n, 9n, 50n, 10n, 0n, 13n, 0n],
 		...overrides,
 	}
@@ -217,6 +219,6 @@ test('live collateral never becomes withdrawable merely because principal exists
 	await expect(loadPortfolioCapitalSnapshot({ client: fixture({ accountOf: { owner: portfolio, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n } }).client, portfolio, owner })).rejects.toThrow('another owner')
 })
 
-test('#1495: takeover builders reject a REP award the ledger cannot pay', () => {
-	expect(() => buildPortfolioCapitalTakeOverRequest({ owner, capitalLedger, positionId: 1n, commitment: 1n, minimumAward: 1n, maximumOwnRep: 0n })).toThrow('future income only')
+test('takeover builders encode the receiver minimum REP award', () => {
+	expect(decodeFunctionData({ abi, data: buildPortfolioCapitalTakeOverRequest({ owner, capitalLedger, positionId: 1n, commitment: 1n, minimumAward: 1n, maximumOwnRep: 0n }).data }).args).toEqual([1n, 1n, 1n, 0n])
 })

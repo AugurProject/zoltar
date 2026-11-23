@@ -2,7 +2,7 @@ import { requiredPortfolioCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useId, useRef } from 'preact/hooks'
-import { buildPortfolioCapitalCureRequest, buildPortfolioCapitalTakeOverWithBoundsRequest, portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioCapitalCureRequest, buildPortfolioCapitalTakeOverWithBoundsRequest, portfolioTakeoverSource, portfolioTakeoverFill } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -20,6 +20,7 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 type TakeoverSnapshot = Pick<
 	NonNullable<ReturnType<typeof usePortfolio>['snapshot']>,
+	| 'timestamp'
 	| 'chainId'
 	| 'blockNumber'
 	| 'blockHash'
@@ -43,12 +44,14 @@ type TakeoverSnapshot = Pick<
 
 async function loadTarget(snapshot: TakeoverSnapshot, id: bigint) {
 	const client = createConnectedReadClient()
-	const [position, started, epoch] = await Promise.all([
+	const [position, started, epoch, awarded, elapsed] = await Promise.all([
 		client.readContract({ address: snapshot.commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [id], blockNumber: snapshot.blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationStarted', args: [id], blockNumber: snapshot.blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch', blockNumber: snapshot.blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationAwarded', args: [id], blockNumber: snapshot.blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationElapsed', args: [id], blockNumber: snapshot.blockNumber }),
 	])
-	return { position, started, epoch }
+	return { position, started, epoch, awarded, elapsed }
 }
 
 export function PortfolioTakeover({ model, actions }: { model: { snapshot: TakeoverSnapshot | undefined }; actions: Pick<PortfolioActions, 'ownerReason' | 'scope' | 'busy' | 'runPortfolioAction'> }) {
@@ -88,7 +91,7 @@ export function PortfolioTakeover({ model, actions }: { model: { snapshot: Takeo
 	}, [key])
 	const loaded = target.value?.key === key ? target.value : undefined
 	const preview = loaded?.value
-	const source = snapshot !== undefined && preview !== undefined && snapshot.liquidationPrice > 0n ? portfolioTakeoverSource(snapshot, preview.position) : undefined
+	const source = snapshot !== undefined && preview !== undefined && snapshot.liquidationPrice > 0n ? portfolioTakeoverSource(snapshot, { ...preview.position, liquidationStarted: preview.started, liquidationAwarded: preview.awarded, liquidationElapsed: preview.elapsed }) : undefined
 	const commitment = portfolioAmountOrUndefined(commitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	const maximumOwnRep = portfolioAmountOrUndefined(ownInput.value)
 	const maximumOwnerPrincipal = portfolioAmountOrUndefined(principalInput.value)
@@ -99,7 +102,7 @@ export function PortfolioTakeover({ model, actions }: { model: { snapshot: Takeo
 	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
 	if (reason === undefined && snapshot !== undefined && !snapshot.priceValid) reason = copy.priceRequired
 	const distressed = preview !== undefined && snapshot !== undefined && preview.position.owner !== snapshot.owner && preview.position.commitment !== 0n && preview.position.maxHealthyPrice < snapshot.liquidationPrice && preview.started !== 0n
-	// Repairs retain source principal. A preliminary cure that restores health stands without a transfer.
+	// Auction awards remain pledged in the receiver vault. A preliminary cure that restores health stands without a transfer.
 	const curable = distressed && source?.healthy === true && source.removed !== 0n
 	let cureReason = reason
 	if (reason === undefined && (!distressed || (source?.healthy === true && !curable))) reason = cureReason = copy.notEligible
@@ -108,9 +111,9 @@ export function PortfolioTakeover({ model, actions }: { model: { snapshot: Takeo
 	if (cureReason === undefined && !curable) cureReason = copy.takeOverInstead
 	if (reason === undefined && (commitment === undefined || commitment === 0n || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
 	if (reason === undefined && snapshot !== undefined && source !== undefined && commitment !== undefined && maximumOwnRep !== undefined && maximumOwnerPrincipal !== undefined && maximumOwnerCommitment !== undefined) {
-		const transferred = commitment < source.maximumTakeoverCommitment ? commitment : source.maximumTakeoverCommitment
+		const { commitment: transferred, award } = portfolioTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth)
 		const receiver = snapshot.positions.find(position => position.id === snapshot.ownerAccount.positionId)
-		const principal = (receiver?.rep ?? 0n) + snapshot.ownerAccount.freeAttoRep
+		const principal = (receiver?.rep ?? 0n) + snapshot.ownerAccount.freeAttoRep + award
 		const totalCommitment = (receiver?.commitment ?? 0n) + transferred
 		if (snapshot.ownerAccount.positionId !== 0n && receiver === undefined) reason = copy.receiverMissing
 		else if (receiver !== undefined && receiver.batch !== 0n && receiver.batch !== source.batch) reason = copy.receiverCohort
@@ -143,7 +146,7 @@ export function PortfolioTakeover({ model, actions }: { model: { snapshot: Takeo
 				capitalLedger: snapshot.capitalLedger,
 				positionId: id,
 				commitment,
-				minimumAward: 0n,
+				minimumAward: portfolioTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth).award,
 				maximumOwnRep,
 				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: preview.epoch, expectedSourceBatch: source.batch },
 			}),
@@ -174,6 +177,9 @@ export function PortfolioTakeover({ model, actions }: { model: { snapshot: Takeo
 				</MetricField>
 				<MetricField label={copy.repairLimit}>
 					<CurrencyValue value={source?.maximumTakeoverCommitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
+				</MetricField>
+				<MetricField label={copy.bonus}>
+					<CurrencyValue value={source?.maximumTakeoverAward} suffix={common.rep} />
 				</MetricField>
 				<MetricField label={copy.started}>
 					<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />

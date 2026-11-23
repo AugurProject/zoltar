@@ -36,6 +36,8 @@ const portfolioMonitorAbi = [
 	parseAbiItem('function lastPositionId() view returns (uint96)'),
 	parseAbiItem('function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)'),
 	parseAbiItem('function liquidationStarted(uint96 id) view returns (uint48)'),
+	parseAbiItem('function liquidationAwarded(uint96 id) view returns (uint256)'),
+	parseAbiItem('function liquidationElapsed(uint96 id) view returns (uint256)'),
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
 
@@ -51,6 +53,8 @@ export type PortfolioPosition = {
 	maxHealthyPrice: bigint
 	remainingCommitment: bigint
 	liquidationStarted: bigint
+	liquidationAwarded?: bigint
+	liquidationElapsed?: bigint
 	retirementStatus: string
 	stalledRetirement: boolean
 }
@@ -114,9 +118,11 @@ async function isCanonicalAuctionVaultImplementation(client: ReadClient, impleme
 
 async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapitalSnapshot, id: bigint): Promise<PortfolioPosition> {
 	const blockNumber = snapshot.blockNumber
-	const [rawAccount, started] = await Promise.all([
+	const [rawAccount, started, awarded, elapsed] = await Promise.all([
 		client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'accountOf', args: [id], blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'liquidationStarted', args: [id], blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'liquidationAwarded', args: [id], blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'liquidationElapsed', args: [id], blockNumber }),
 	])
 	const account = record(rawAccount, 'Portfolio position')
 	const owner = address(account['owner'])
@@ -153,6 +159,8 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 		maxHealthyPrice: uint(account['maxHealthyPrice']),
 		remainingCommitment: uint(account['remainingCommitment']),
 		liquidationStarted: uint(started),
+		liquidationAwarded: uint(awarded),
+		liquidationElapsed: uint(elapsed),
 	}
 }
 

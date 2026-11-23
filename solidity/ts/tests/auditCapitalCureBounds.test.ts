@@ -70,13 +70,15 @@ describe('audit: the unpaid cure never leaves a commitment below the minimum', (
 	// Three minimums backed for only 0.6 of one, with spare of two and a half: the uncovered 2.4
 	// would leave 0.6. The cut shrinks to two minimums, so exactly the minimum is left, and that
 	// remainder, still under water, is what the keeper takes over.
-	test('a minimum residual requires additional capacity and cannot be seized', async () => {
+	test('a minimum residual can be replaced while unawarded principal remains with its owner', async () => {
 		const commitment = 3n * MINIMUM
 		const { id, required } = await underwater(commitment, 100n * E + MINIMUM / 2n, 5n * E)
 		await fixture.deposit(keeper, 1_000n * E)
-		await expect(takeOver(id, commitment)).rejects.toThrow('Position requires additional backing')
-		expect(await fixture.position(id)).toMatchObject({ rep: required, commitment })
-		expect((await fixture.owner(keeper)).positionId).toBe(0n)
+		await takeOver(id, commitment)
+		expect(await fixture.position(id)).toMatchObject({ rep: 0n, commitment: 0n })
+		const receiver = await fixture.position((await fixture.owner(keeper)).positionId)
+		expect(receiver.commitment).toBe(MINIMUM)
+		expect(receiver.rep - 1_000n * E + (await fixture.owner(bob)).freeAttoRep).toBe(required)
 	})
 
 	// The minimum-rest rule protects a takeover, whose rest stays live. An owner's full exit

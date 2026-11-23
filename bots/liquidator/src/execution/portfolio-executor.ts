@@ -53,12 +53,12 @@ export async function executePortfolioTakeover(
 ) {
 	if (!settings.portfolioPolicy.allowFundedTakeovers || !settings.runtime.execute) throw new Error('Funded portfolio automation is disabled')
 	if (state.pendingTransactions.length !== 0) throw new Error('Pending recovery blocks portfolio exposure changes')
-	const refresh = async () => {
+	const refresh = async (requestedCommitment?: bigint) => {
 		const current = await execution.refresh(wallet, settings, state.portfolioScopes, pool, target, positionId)
 		const position = current.observation.positions.find(position => samePortfolioTarget(portfolioTarget(position), positionId))
 		if (position === undefined) throw new PortfolioOpportunityExpired('Portfolio target position is missing')
 		const marketAllowed = await priceAllowed(current.observation)
-		const result = portfolioTakeoverPlan(current.observation, position, settings, current.totalPrincipal, marketAllowed)
+		const result = portfolioTakeoverPlan(current.observation, position, settings, current.totalPrincipal, marketAllowed, requestedCommitment)
 		if (result.plan === undefined) throw new PortfolioOpportunityExpired(result.reason)
 		return { ...current, plan: result.plan }
 	}
@@ -72,7 +72,7 @@ export async function executePortfolioTakeover(
 	let action: 'approval' | 'principal' | 'takeover'
 	if (plan.ownFunding > 0n && current.allowance < plan.ownFunding) {
 		action = 'approval'
-		request = { to: observation.snapshot.repToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [base.capitalLedger, plan.ownFunding] }), value: 0n }
+		request = { to: observation.snapshot.repToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [base.capitalLedger, plan.approvalRep] }), value: 0n }
 		label = 'Approve bounded portfolio REP funding'
 	} else if (plan.ownFunding > 0n) {
 		action = 'principal'
@@ -96,7 +96,7 @@ export async function executePortfolioTakeover(
 		if (plan.unpaidCure) label = typeof positionId === 'bigint' ? `Cure portfolio position ${positionId} without an award` : `Cure auction bid ${positionId.bidId} vault ${positionId.vault} without an award`
 	}
 	const preSubmit = async () => {
-		const latest = await refresh()
+		const latest = await refresh(action === 'takeover' ? plan.commitment : undefined)
 		assertPortfolioPlanStillAllowed(plan, latest.plan, action)
 		if (latest.observation.acceptedPriceEpoch !== expectedAcceptedPriceEpoch) throw new PortfolioOpportunityExpired('Portfolio accepted price epoch changed before signing')
 	}

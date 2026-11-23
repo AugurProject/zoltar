@@ -1,7 +1,7 @@
 /** The ledger applies this unpaid cure before quoting a takeover. No REP leaves the target during cure. */
 export function portfolioTakeoverSource(
-	snapshot: { conservativePrice: bigint; liquidationPrice: bigint; securityMultiplierBps: bigint; totalCommitmentAttoEth: bigint; demandAttoEth: bigint; economics: { minimumCommitmentAttoEth: bigint } },
-	position: { rep: bigint; commitment: bigint; batch: bigint; remainingCommitment: bigint },
+	snapshot: { timestamp?: bigint; conservativePrice: bigint; liquidationPrice: bigint; securityMultiplierBps: bigint; totalCommitmentAttoEth: bigint; demandAttoEth: bigint; economics: { minimumCommitmentAttoEth: bigint } },
+	position: { rep: bigint; commitment: bigint; batch: bigint; remainingCommitment: bigint; liquidationStarted?: bigint; liquidationAwarded?: bigint; liquidationElapsed?: bigint },
 ) {
 	if (snapshot.liquidationPrice <= 0n || snapshot.securityMultiplierBps <= 0n) throw new Error('Takeover requires a valid collateral price and multiplier')
 	const minimum = snapshot.economics.minimumCommitmentAttoEth
@@ -24,8 +24,21 @@ export function portfolioTakeoverSource(
 	if (position.rep !== 0n && removed === position.commitment) removed = 0n
 	const commitment = position.commitment - removed
 	const retirementFulfilled = removed !== 0n && position.remainingCommitment !== 0n && commitment <= position.remainingCommitment
-	const repairSupported = (((position.rep * 10_000n) / snapshot.securityMultiplierBps) * 10n ** 18n) / snapshot.conservativePrice
-	const retained = repairSupported > minimum ? repairSupported : minimum
-	const maximumTakeoverCommitment = commitment > retained ? commitment - retained : 0n
-	return { removed, maximumTakeoverCommitment, commitment, rep: position.rep, batch: retirementFulfilled ? 0n : position.batch, remainingCommitment: retirementFulfilled ? 0n : position.remainingCommitment, healthy: commitment <= supported }
+	const started = position.liquidationStarted ?? 0n
+	const elapsed = position.liquidationElapsed ?? (started === 0n || snapshot.timestamp === undefined || snapshot.timestamp <= started ? 0n : snapshot.timestamp - started)
+	const paid = position.liquidationAwarded ?? 0n
+	const vested = ((position.rep + paid) * (elapsed < 3600n ? elapsed : 3600n)) / 3600n
+	const maximumTakeoverAward = vested > paid ? vested - paid : 0n
+	const repairSupported = ((((position.rep - maximumTakeoverAward) * 10_000n) / snapshot.securityMultiplierBps) * 10n ** 18n) / snapshot.conservativePrice
+	let maximumTakeoverCommitment = commitment > repairSupported ? commitment - repairSupported : 0n
+	if (maximumTakeoverCommitment !== 0n && commitment - maximumTakeoverCommitment < minimum) maximumTakeoverCommitment = commitment
+	return { removed, maximumTakeoverCommitment, maximumTakeoverAward, commitment, rep: position.rep, batch: retirementFulfilled ? 0n : position.batch, remainingCommitment: retirementFulfilled ? 0n : position.remainingCommitment, healthy: commitment <= supported }
+}
+
+/** Clamp a requested fill to a legal source remainder and allocate only its share of the current bonus. */
+export function portfolioTakeoverFill(source: { commitment: bigint; maximumTakeoverCommitment: bigint; maximumTakeoverAward: bigint }, requested: bigint, minimum: bigint) {
+	let commitment = requested < source.maximumTakeoverCommitment ? requested : source.maximumTakeoverCommitment
+	if (source.commitment - commitment !== 0n && source.commitment - commitment < minimum) commitment = source.commitment > minimum ? source.commitment - minimum : 0n
+	const award = source.maximumTakeoverCommitment === 0n ? 0n : (source.maximumTakeoverAward * commitment) / source.maximumTakeoverCommitment
+	return { commitment, award }
 }

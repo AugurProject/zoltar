@@ -21,6 +21,8 @@ function installTakeoverReader(snapshot: PortfolioAccountSnapshot) {
 	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
 	reader.setRead('liquidationStarted', 1n, capital)
 	reader.setRead('acceptedPriceEpoch', 4n, capital)
+	reader.setRead('liquidationAwarded', 0n, capital)
+	reader.setRead('liquidationElapsed', 0n, capital)
 	reader.install()
 	return reader
 }
@@ -85,6 +87,8 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
 	reader.setRead('liquidationStarted', 1n, capital)
 	reader.setRead('acceptedPriceEpoch', 4n, capital)
+	reader.setRead('liquidationAwarded', 0n, capital)
+	reader.setRead('liquidationElapsed', 0n, capital)
 	reader.install()
 	const requests: PortfolioTransaction[] = []
 	const actions = {
@@ -133,6 +137,8 @@ test('a position the unused commitment cannot restore keeps the takeover and dis
 	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
 	reader.setRead('liquidationStarted', 1n, capital)
 	reader.setRead('acceptedPriceEpoch', 4n, capital)
+	reader.setRead('liquidationAwarded', 0n, capital)
+	reader.setRead('liquidationElapsed', 0n, capital)
 	reader.install()
 	const actions = { ownerReason: undefined, scope: [], busy: undefined, runPortfolioAction: async () => undefined }
 	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
