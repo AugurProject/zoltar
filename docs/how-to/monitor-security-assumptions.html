@@ -21,11 +21,11 @@
 					<ol>
 						<li>List the assumptions the action depends on. The <a href="../reference/security-model.html">security model</a> lists which assumptions protect which mechanism.</li>
 						<li>Find the rows for those assumptions in the <a href="#assumption-monitoring">table below</a>.</li>
-						<li>Take each row's reads for the same <a href="../reference/glossary.html#lineage">lineage</a>, pool, and block as the action. Express the values in one <a href="#terms">numeraire</a> and cover the <a href="#terms">action horizon</a>.</li>
+						<li>Take each row's reads for the same <a href="../reference/glossary.html#lineage">lineage</a>, question ledger, and block as the action. Express the values in one <a href="#terms">numeraire</a> and cover the <a href="#terms">action horizon</a>.</li>
 						<li>If a read is weak or unavailable, apply the row's response before proceeding.</li>
 						<li>Repeat the reads on the row's cadence until the action's last deadline has passed.</li>
 					</ol>
-					<p>Most on-chain reads are also indexed by augurScan under <code>/operations/…</code> (see the <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/README.md">augurScan README</a>). The liquidator and OpenOracle arbitrager bots in <code>bots/</code> show live pool, vault, and report state in their dashboards.</p>
+					<p>Most on-chain reads are also indexed by augurScan under <code>/operations/…</code> (see the <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/README.md">augurScan README</a>). The liquidator and OpenOracle arbitrager bots in <code>bots/</code> show live security pool, vault, and report state in their dashboards.</p>
 				</section>
 				<section id="terms">
 					<h2>Terms used in the table</h2>
@@ -85,11 +85,11 @@
 								<td>
 									<ul>
 										<li><a href="../reference/glossary.html#theoretical-rep-supply">Theoretical REP supply</a>: Zoltar <code>getUniverseTheoreticalSupplyAttoRep(universeId)</code></li>
-										<li>Pool <a href="../reference/glossary.html#open-interest">open interest</a>: pool <code>settlementCollateralAttoEth()</code></li>
+										<li>Question <a href="../reference/glossary.html#open-interest">open interest</a>: question ledger <code>settlementCollateralAttoEth()</code></li>
 										<li>REP deposited as underwriting capital: security pool <code>capitalLedger(universeId)</code>, then the <code>rep</code> value from that ledger's <code>totals()</code></li>
 										<li>Cached REP price: coordinator <code>lastPrice</code>, the accepted report's REP base units × 10<sup>18</sup> ÷ its collateral base units. It counts REP per unit of security pool collateral, so invert it before valuing REP in collateral</li>
 										<li>REP depth and price impact: arbitrager Uniswap venue quotes</li>
-										<li>Pool and vault risk: augurScan <code>/operations/risk</code></li>
+										<li>Security pool and vault risk: augurScan <code>/operations/risk</code></li>
 										<li>REP discounted cash flow: off-chain valuation (no on-chain read)</li>
 									</ul>
 								</td>
@@ -189,10 +189,10 @@
 								<td>
 									<ul>
 										<li><a href="../reference/glossary.html#question">Question</a> creation, end date, and labels: <code>ZoltarQuestionData</code> <code>questionCreatedTimestamp</code>, <code>getQuestionEndDate</code>, and <code>getOutcomeLabels</code></li>
-										<li>Evidence plan and pool relevance: off-chain review</li>
+										<li>Evidence plan and security pool relevance: off-chain review</li>
 									</ul>
 								</td>
-								<td>Before pool selection</td>
+								<td>Before security pool selection</td>
 								<td>Reject or warn on the selection; do not represent an admitted question as relevant or resolvable</td>
 							</tr>
 							<tr>

@@ -46,7 +46,7 @@
 				<p id="report-headroom">The request form shows current underwriting exposure, the exposure its selected report stake can cover, and the remaining growth headroom. Commitments can grow while a report waits to settle. Settlement therefore rechecks funding against current exposure: accepting an underfunded price could weaken the correction incentive just as more capital depends on it. An underfunded report is rejected and its attached operation batch is skipped. Headroom is shared and can change before inclusion; it is not a capacity reservation. REP-inventory coverage remains a separate required bound.</p>
 				<p id="capacity-race">Accepted report capacity is shared across security pool owners; sponsoring a larger report does not reserve its added capacity. Another owner can consume it before a separate commitment-growth transaction. Attach growth to <code>requestSecurityPoolPriceWithOperations</code> to attempt it atomically after acceptance, with an operation gas allowance, deadline and price bounds. Each operation still rechecks safety constraints and can fail independently; inspect <code>ReportOperationAttempted</code> before treating growth as complete.</p>
 				<h3 id="security-pool-preparation-reports">Security pool branch preparation</h3>
-				<p><code>SecurityPoolFactory.prepareSecurityPoolPriceFeed(source, universeId)</code> prepares the canonical child feed without deploying a child question. <code>source</code> must be a canonical question pool already admitted to this security pool, with its security pool binding recorded by the factory. Security pool configuration is supplied directly at deployment; preparing its initial shared feed does not require a seed question. <code>SecurityPool.isPriceReportingOpen(universeId)</code> permits requests and acceptance after <code>startBranch</code>, until the fixed native recapitalization deadline at week nine. From that deadline until activation, the accepted observation is frozen. Reporting reopens on activation if the child universe has not forked; a forked universe rejects new prices. Late branch preparation does not extend the window.</p>
+				<p><code>SecurityPoolFactory.prepareSecurityPoolPriceFeed(source, universeId)</code> prepares the canonical child feed without deploying a child question. <code>source</code> must be a canonical question ledger already admitted to this security pool, with its security pool binding recorded by the factory. Security pool configuration is supplied directly at deployment; preparing its initial shared feed does not require a seed question. <code>SecurityPool.isPriceReportingOpen(universeId)</code> permits requests and acceptance after <code>startBranch</code>, until the fixed native recapitalization deadline at week nine. From that deadline until activation, the accepted observation is frozen. Reporting reopens on activation if the child universe has not forked; a forked universe rejects new prices. Late branch preparation does not extend the window.</p>
 				<p>A strictly newer accepted preparation report caches the price and funded exposure; it does not activate trading, start holding fees or start imported positions’ liquidation history. Activation uses the cached price only while it remains fresh. A stale or absent price does not block branch activation. Callbacks during a closed window reject the candidate price while preserving <a href="#callback-rejection-and-recovery">report funding recovery</a>.</p>
 				<h3 id="shared-report-coverage">Shared report coverage and capital prices</h3>
 				<p>During auction preparation, <code>minimumToken2ReportAttoRep()</code> requires one hundredth of fresh sale inventory, rounded up. <code>minimumToken1ReportAttoEthForPrice(price)</code> also raises the collateral minimum enough to fund that REP amount at the proposed price. The feed and coordinator reject a signed collateral budget below the required amount. Acceptance checks both sides: <code>acceptedRepExposureLimitAttoRep</code> is final REP funding times 100. An arbitrarily cheap proposed REP price therefore cannot remove the REP inventory challenge requirement.</p>
@@ -129,13 +129,13 @@
 						</tr>
 						<tr>
 							<td><code>initialReportPriorityFeeAttoEthPerGas</code></td>
-							<td>Origin-pool parameter; the UI defaults to <code>10 nanoETH</code></td>
-							<td>Immutable lineage configuration inherited by child pools</td>
+							<td>Origin question ledger parameter; the UI defaults to <code>10 nanoETH</code></td>
+							<td>Immutable lineage configuration inherited by child question ledgers</td>
 						</tr>
 						<tr>
 							<td><code>aggregateExposureAttoEth</code></td>
 							<td>Current aggregate security pool exposure</td>
-							<td>Configured question ledger</td>
+							<td>Configured security pool (<code>oracleExposure(universeId)</code>)</td>
 						</tr>
 						<tr>
 							<td><code>OPEN_INTEREST_DIVIDER</code></td>
@@ -220,7 +220,7 @@
 								</div>
 							</details>
 							<details class="tool-control-group" data-group-tone="system">
-								<summary>Pool security</summary>
+								<summary>Security pool exposure</summary>
 								<div class="example-grid">
 									<label>
 										Aggregate security pool exposure
@@ -304,7 +304,7 @@
 				<p>A callback that successfully enters the price source can still produce a rejected price. The price source emits <code>PriceReportRejected</code> and leaves the price cache unchanged when the first applicable condition below holds. A shared rejection records <code>reportOutcome(reportId) = 2</code> and clears the latest-candidate getters only if they still name that report:</p>
 
 				<ul>
-					<li>for a shared feed, the security pool reporting window is closed: <code>SecurityPool reporting window closed</code>;</li>
+					<li>for a shared feed, the security pool reporting window is closed: <code>Security pool reporting window closed</code>;</li>
 					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum: <code>Counter saturated</code>;</li>
 					<li><code>numReports</code> is zero, or the settled collateral amount is below the configured floor plus <code>⌈live aggregate exposure / 100⌉</code>: <code>Report uneconomic</code>;</li>
 					<li>final REP funding is below the live REP inventory minimum: <code>Report REP inventory budget insufficient</code>;</li>

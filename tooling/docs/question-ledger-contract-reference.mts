@@ -9,7 +9,7 @@ export const questionLedgerContractReference: ContractReference = {
 	readSurface:
 		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `getCurrentMintingCapacityAttoEth` is zero once the question ends or reporting starts; otherwise it includes current question collateral and available shared capacity. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. `getFeeEpochEndTime` is the native fee cutoff, bounded by the universe fork time. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `openOraclePriceCoordinator`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
 	securityBoundary:
-		'Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 REP and selected collateral behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
+		'Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 REP and selected collateral behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated question ledger calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 	readDeclarations: [
 		{
 			name: 'attoSharesToAttoEth',
@@ -262,7 +262,7 @@ export const questionLedgerContractReference: ContractReference = {
 		},
 		{
 			call: '`activateForkMode()`',
-			caller: 'The canonical forker',
+			caller: 'QuestionForker only',
 			declarations: [
 				{
 					name: 'activateForkMode',
@@ -274,7 +274,7 @@ export const questionLedgerContractReference: ContractReference = {
 		},
 		{
 			call: '`initializeForkedEscalationGame(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome)`',
-			caller: 'The canonical forker',
+			caller: 'QuestionForker only',
 			declarations: [
 				{
 					name: 'initializeForkedEscalationGame',
@@ -318,7 +318,7 @@ export const questionLedgerContractReference: ContractReference = {
 			],
 			effect: 'Stores whether complete-set minting must wait for continuation initialization, then refreshes bound security pool fee accounting.',
 			preconditions: 'No lifecycle or value-change guard.',
-			signals: '`AwaitingForkContinuationSet`, including for a repeated value; bound pools then emit central checkpoints and stream replacement when applicable',
+			signals: '`AwaitingForkContinuationSet`, including for a repeated value; bound question ledgers then emit central checkpoints and stream replacement when applicable',
 		},
 		{
 			call: '`setSystemState(newState)`',
@@ -328,13 +328,13 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'setSystemState',
 				},
 			],
-			effect: 'Replaces the pool lifecycle state directly, then refreshes bound security pool fee accounting.',
+			effect: 'Replaces the question ledger lifecycle state directly, then refreshes bound security pool fee accounting.',
 			preconditions: 'No transition or value-change guard.',
-			signals: '`SystemStateSet`, including for a repeated state; bound pools then emit central checkpoints and stream replacement when applicable',
+			signals: '`SystemStateSet`, including for a repeated state; bound question ledgers then emit central checkpoints and stream replacement when applicable',
 		},
 		{
 			call: '`setShareTokenSupplyAttoShares(newShareTokenSupplyAttoShares)`',
-			caller: 'The canonical forker',
+			caller: 'QuestionForker only',
 			declarations: [
 				{
 					name: 'setShareTokenSupplyAttoShares',
@@ -352,8 +352,8 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'authorizeChildQuestionLedger',
 				},
 			],
-			effect: 'Asks the lineage share token to establish `pool` as the canonical authorized pool for its universe; reauthorizing the same pool is a no-op.',
-			preconditions: 'This parent pool is already authorized; candidate reports this share token; candidate universe has no different canonical pool. No pool-lifecycle guard.',
+			effect: 'Asks the lineage share token to establish `pool` as the canonical authorized question ledger for its universe; reauthorizing the same question ledger is a no-op.',
+			preconditions: 'This parent question ledger is already authorized; candidate reports this share token; candidate universe has no different canonical question ledger. No question ledger lifecycle guard.',
 			signals: '`AuthorizationUpdated` only on first authorization; no event when already authorized',
 		},
 	],

@@ -630,7 +630,7 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 			const action = execute().catch(error => error)
 			for (let attempt = 0; attempt < 100 && transactionSteps.value?.steps.at(-1)?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 1))
 			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('review')
-			if (change === 'settlement stale unchanged') expect(transactionSteps.value?.steps.at(-1)?.description).toBe('Settlement will clear this report, but the pool will reject its price.')
+			if (change === 'settlement stale unchanged') expect(transactionSteps.value?.steps.at(-1)?.description).toBe('Settlement will clear this report, but the security pool will reject its price.')
 			changed = true
 			if (change === 'settlement preimage') preimage.game.currentAmount1 = 101n
 			if (change === 'settled report') preimage.game.settlementTimestamp = 1000n

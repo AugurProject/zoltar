@@ -155,7 +155,7 @@ describe('AppHeaderShell', () => {
 	test('keeps primary sections in the top bar, section views in one segmented row, and the guide in settings', async () => {
 		installTestRouting()
 		const domEnvironment = installDomEnvironment('http://localhost/#/security-pools')
-		const secondaryNavigation = { ariaLabel: 'Question ledgers views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse pools', value: 'browse' }], value: 'browse' }
+		const secondaryNavigation = { ariaLabel: 'Question ledgers views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse questions', value: 'browse' }], value: 'browse' }
 		const withGuide = await renderIntoDocument(
 			<AppHeaderShell
 				overview={<div>Overview</div>}

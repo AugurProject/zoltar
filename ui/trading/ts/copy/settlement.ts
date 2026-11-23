@@ -4,7 +4,7 @@ import { recheckedBeforeWallet } from './workflows.js'
 export const operationLabel = 'Settlement operation'
 export const completeSetAction = 'Redeem sets'
 export const forkMigrationAction = 'Migrate'
-export const completeSetRedemptionGuidance = 'Burn equal amounts of your Yes, No, and Invalid shares for their share of the pool’s collateral.'
+export const completeSetRedemptionGuidance = 'Burn equal amounts of your Yes, No, and Invalid shares for their share of the question’s collateral.'
 export { max } from '@zoltar/ui-core-shared/copy/common.js'
 /** The field takes ETH; the hint below it converts that to complete sets. */
 export const formatCollateralToRedeem = (symbol: string) => `${symbol} to redeem`

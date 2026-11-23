@@ -125,7 +125,7 @@ export const diagramGraphSpecs = {
 	),
 	'fig-statoblast-share-lifecycle': diagram(
 		{
-			ariaDescription: 'Collateral mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.',
+			ariaDescription: 'Collateral mints Invalid, Yes, and No shares. Operational question ledgers redeem full sets, and finalized winning shares redeem through outcome settlement.',
 			ariaLabel: 'Complete set lifecycle',
 			height: 360,
 			width: 860,

@@ -37,7 +37,7 @@ export const marketsCopy = {
 	listControls: 'Market list controls',
 	searchLabel: 'Search markets',
 	searchPoolsLabel: 'Search questions',
-	searchPlaceholder: 'Search or paste a pool address',
+	searchPlaceholder: 'Search or paste a question ledger address',
 	filterLabel: 'Status filter',
 	filterAll: 'All',
 	filterOpen: 'Open',

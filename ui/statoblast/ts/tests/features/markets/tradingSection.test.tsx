@@ -437,7 +437,7 @@ void describe('TradingSection', () => {
 		await act(() => render(<TradingSection {...props} poolState={evaluateQuestionLedgerState({ lifecycleState: 'ended', universeHasForked: false })} />, rendered.container))
 		const state = getTransactionButtonState(within(document.body).getByRole('dialog'), 'Mint complete sets')
 		expect(state.disabled).toBe(true)
-		expect(state.reason).toBe('This action is unavailable in the current pool state.')
+		expect(state.reason).toBe('This action is unavailable in the current question state.')
 	})
 
 	void test('labels the max complete sets metric as redeemable complete sets', async () => {
@@ -937,7 +937,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected pool to resolve before redeeming shares.')
+		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected question to resolve before redeeming shares.')
 	})
 
 	test('keeps finalized parent winning-share redemption available after an unrelated fork', async () => {
@@ -1026,7 +1026,7 @@ void describe('TradingSection', () => {
 		const mintState = getTransactionButtonState(document.body, 'Mint complete sets')
 		expect(mintState.disabled).toBe(true)
 		// The stage, not the zero capacity the stale flag causes, explains why minting is closed.
-		expect(mintState.reason).toBe('This action is unavailable in the current pool state.')
+		expect(mintState.reason).toBe('This action is unavailable in the current question state.')
 	})
 
 	void test('shows how many shares of the selected outcome a migration moves and each outcome balance', async () => {
@@ -1097,7 +1097,7 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingDetails: createTradingDetails({ maxRedeemableCompleteSetsAttoShares: 0n, shareBalances: createShareBalances({ invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }) }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.querySelector('.trading-holdings-empty')?.textContent).toBe('You hold no shares in this pool.')
+		expect(document.querySelector('.trading-holdings-empty')?.textContent).toBe('You hold no shares for this question.')
 		expect(document.querySelector('.trading-holdings-hero')).toBeNull()
 		expect(document.querySelector('.ranked-bar-list')).toBeNull()
 	})

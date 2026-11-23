@@ -863,10 +863,10 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('No'), 'A current pool oracle price is required before reporting.')
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('No'), 'A current security pool oracle price is required before reporting.')
 		expect(within(getReportOutcomeSection()).getByRole('status').textContent).toContain(reason)
 		expect(document.body.textContent?.match(new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).toHaveLength(1)
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Manage pool price' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Manage security pool price' }))
 		expect(openOracleCalls).toBe(1)
 	})
 
@@ -1490,7 +1490,7 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = document.body.querySelector('.escalation-phase')
 		if (!(lifecycleBanner instanceof HTMLElement)) throw new Error('Expected phase stepper')
 		const lifecycleBannerQueries = within(lifecycleBanner)
-		expect(document.body.textContent?.includes('Escalation ended without a decision and the universe fork has already been triggered for this pool. Continue in Fork choices and recovery.')).toBe(true)
+		expect(document.body.textContent?.includes('Escalation ended without a decision and the universe fork has already been triggered for this question. Continue in Fork choices and recovery.')).toBe(true)
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork choices and recovery')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
 	})
@@ -2123,7 +2123,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open fork choices and recovery' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this pool, so continue in Fork choices and recovery.')).toBe(true)
+		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this question, so continue in Fork choices and recovery.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {

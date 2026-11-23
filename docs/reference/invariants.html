@@ -111,22 +111,22 @@
 				<p>The <a href="#invariant-index">index</a> lists the core universe properties and security pool accounting boundaries. Identifiers name the property being reviewed; they are not contract entrypoints.</p>
 				<h3>Terms used in the catalog</h3>
 				<dl>
-					<dt><strong>Pool question</strong></dt>
-					<dd>The <a href="./glossary.html#question">question</a> whose <a href="./glossary.html#outcome">outcome</a> determines the <a href="./glossary.html#question-ledger">QuestionLedger</a>'s winning <a href="./glossary.html#outcome-share">outcome shares</a> and <a href="./glossary.html#escalation-game">Escalation Game</a> payouts.</dd>
+					<dt><strong>Ledger question</strong></dt>
+					<dd>The <a href="./glossary.html#question">question</a> whose <a href="./glossary.html#outcome">outcome</a> determines the <a href="./glossary.html#question-ledger">question ledger</a>'s winning <a href="./glossary.html#outcome-share">outcome shares</a> and <a href="./glossary.html#escalation-game">Escalation Game</a> payouts.</dd>
 					<dt><strong>Fork question</strong></dt>
-					<dd>The ended question recorded by the <a href="./glossary.html#universe">universe</a> fork. It may differ from the pool question.</dd>
+					<dd>The ended question recorded by the <a href="./glossary.html#universe">universe</a> fork. It may differ from the ledger question.</dd>
 					<dt><strong>Child branch</strong></dt>
-					<dd>A well-formed answer encoding for the fork question, used to derive one <a href="./glossary.html#child-universe">child universe</a> from its parent. QuestionLedger's binary pool-question paths specifically use Invalid, Yes, and No.</dd>
+					<dd>A well-formed answer encoding for the fork question, used to derive one <a href="./glossary.html#child-universe">child universe</a> from its parent. Question ledgers' binary question paths specifically use Invalid, Yes, and No.</dd>
 					<dt><strong>Continuation game</strong></dt>
-					<dd>A child Escalation Game initialized from an unresolved parent game's fork snapshot. Its child pool is in <a href="./glossary.html#fork-continuation">fork continuation</a> until the game is fully resumed; the game itself remains the continuation game afterward.</dd>
+					<dd>A child Escalation Game initialized from an unresolved parent game's fork snapshot. Its child question ledger is in <a href="./glossary.html#fork-continuation">fork continuation</a> until the game is fully resumed; the game itself remains the continuation game afterward.</dd>
 					<dt><strong>Carry</strong></dt>
 					<dd>The unresolved parent escalation deposits exported into a fork snapshot and paid out by continuation games against <a href="./merkle-mountain-range.html">Merkle Mountain Range proofs</a>.</dd>
 					<dt><strong>Nullifier</strong></dt>
 					<dd>A continuation game's record that one carried deposit identity has been consumed, so its proof cannot be replayed.</dd>
 					<dt><strong>Fixed payout outcome</strong></dt>
-					<dd>The pool-question outcome a continuation game must use after its deadline, regardless of its copied balance leader.</dd>
+					<dd>The ledger question's outcome a continuation game must use after its deadline, regardless of its copied balance leader.</dd>
 					<dt><strong>Direct fork</strong></dt>
-					<dd>A caller invokes Zoltar's universe-fork entrypoint directly rather than through a pool's own <a href="./glossary.html#non-decision-threshold">non-decision</a> path.</dd>
+					<dd>A caller invokes Zoltar's universe-fork entrypoint directly rather than through a question ledger's own <a href="./glossary.html#non-decision-threshold">non-decision</a> path.</dd>
 					<dt><strong>Recursive fork</strong></dt>
 					<dd>A fork of a child universe created by an earlier fork.</dd>
 					<dt><strong>Tracked balance</strong></dt>
@@ -364,7 +364,7 @@
 						<summary><code>UNI-02</code><span class="invariant-title">Valid fork questions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property"><code>forkUniverse</code> accepts only a question that exists in ZoltarQuestionData and whose end time has been reached (<code>block.timestamp &gt;= endTime</code>). A pool may separately require the fork question to equal its pool question. Zoltar intentionally imposes no question-creation age, universe registration, or pool-relevance condition.</div>
+							<div class="invariant-property"><code>forkUniverse</code> accepts only a question that exists in ZoltarQuestionData and whose end time has been reached (<code>block.timestamp &gt;= endTime</code>). A question ledger may separately require the fork question to equal its ledger question. Zoltar intentionally imposes no question-creation age, universe registration, or security-pool-relevance condition.</div>
 							<p class="invariant-example"><strong>Example:</strong> At exactly a known question's end time, a caller may fork a universe even when that question came from another universe or was created with an already-past end time; an unknown or still-open question is rejected. Requiring a universe-relevant or sufficiently aged question is not a Zoltar invariant.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -611,7 +611,7 @@
 						<summary><code>AUTHORITY</code><span class="invariant-title">Security pool identity and question admission</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">The canonical factory deploys every security pool from its pinned creation code and module deployers, and only a security pool it deployed can open a pool namespace. Every registered question ledger therefore belongs to a factory-deployed security pool, and the factory namespace binds each ledger to it. The immutable admission policy controls registration. A fixed one-question security pool uses the same capital, settlement and reporting contracts as an open security pool.</div>
+							<div class="invariant-property">The canonical factory deploys every security pool from its pinned creation code and module deployers, and only a security pool it deployed can open a security pool namespace. Every registered question ledger therefore belongs to a factory-deployed security pool, and the factory namespace binds each ledger to it. The immutable admission policy controls registration. A fixed one-question security pool uses the same capital, settlement and reporting contracts as an open security pool.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

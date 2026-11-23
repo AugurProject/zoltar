@@ -209,7 +209,7 @@
 			"summary": "A market lifecycle from creation through local resolution or fork migration to redemption.",
 			"section": "explanation",
 			"topic": "Protocol",
-			"keywords": ["Statoblast", "markets", "question ledgers", "overview"]
+			"keywords": ["Statoblast", "markets", "security pools", "question ledgers", "overview"]
 		},
 		{
 			"path": "explanation/zoltar.html",

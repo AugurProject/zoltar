@@ -751,7 +751,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: false,
 				isOnActiveAppChain: true,
 			}),
-		).toBe('Select a pool before redeeming shares.')
+		).toBe('Select a question before redeeming shares.')
 
 		expect(
 			getTradingRedeemSharesGuardMessage({
@@ -783,7 +783,7 @@ void describe('trading helpers', () => {
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'yes', shareBalances: { ...shareBalances, yesAttoShares: 0n } })).toBe('You hold no winning Yes shares to redeem.')
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'invalid', shareBalances: undefined })).toBe('Loading wallet share balances…')
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'no', shareBalances })).toBeUndefined()
-		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'none', shareBalances })).toBe('Wait for the selected pool to resolve before redeeming shares.')
+		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'none', shareBalances })).toBe('Wait for the selected question to resolve before redeeming shares.')
 	})
 })
 

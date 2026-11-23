@@ -29,7 +29,7 @@ describe('header REP / ETH price', () => {
 		const header = getHeaderRepPerEthPrice({ currentTimestamp: freshNow, hasSelectedPool: false, repPerEthFailure: 'rpc-error', repPerEthSource: 'v4', repPerEthSourceUrl: 'https://example.com', repPrice: resolve('open-oracle', { pool: false }) })
 		expect(header.repPerEthPrice).toBeUndefined()
 		expect(header.repPerEthFailure).toBeUndefined()
-		expect(await renderText(header.repPerEthUnavailableLabel)).toBe('Open a pool to see its oracle price')
+		expect(await renderText(header.repPerEthUnavailableLabel)).toBe('Open a security pool to see its oracle price')
 		expect(await renderText(header.repPerEthSourceLabel)).toContain('OpenOracle')
 	})
 

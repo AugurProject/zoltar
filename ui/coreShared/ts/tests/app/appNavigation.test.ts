@@ -29,7 +29,7 @@ describe('app navigation', () => {
 	})
 
 	test('resolves secondary views only for the route that owns them', () => {
-		const questionLedgerViews = createSecondaryNavigation({ ariaLabel: 'Question ledgers views', onChange: () => undefined, options: [{ label: 'Browse pools', value: 'browse' }], value: 'browse' })
+		const questionLedgerViews = createSecondaryNavigation({ ariaLabel: 'Question ledgers views', onChange: () => undefined, options: [{ label: 'Browse questions', value: 'browse' }], value: 'browse' })
 		const secondaryByRoute = { 'security-pools': questionLedgerViews }
 		expect(resolveSecondaryNavigation({ route: 'security-pools', secondaryByRoute })).toBe(questionLedgerViews)
 		expect(resolveSecondaryNavigation({ route: 'deploy', secondaryByRoute })).toBeUndefined()
@@ -43,7 +43,7 @@ describe('app navigation', () => {
 			ariaLabel: 'Question ledgers views',
 			onChange: value => changes.push(value),
 			options: [
-				{ label: 'Browse pools', value: 'browse' },
+				{ label: 'Browse questions', value: 'browse' },
 				{ label: 'Create pool', value: 'create' },
 			],
 			value: 'browse',

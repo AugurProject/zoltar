@@ -30,7 +30,7 @@ export const questionForkerContractReference: ContractReference = {
 				},
 			],
 			preconditions: 'Canonical bound source; its universe has forked; the security pool recognizes a ready target branch and the source reporter identity. Factory and share-token bindings are verified.',
-			signals: 'Canonical pool deployment and authorization events when the target is new.',
+			signals: 'Canonical question ledger deployment and authorization events when the target is new.',
 		},
 		{
 			call: '`materializeSecurityPoolQuestion(source, targetUniverse)`',

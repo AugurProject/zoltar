@@ -929,7 +929,7 @@ describe('OpenOracleSection route create view', () => {
 			)
 			cleanupRenderedComponent = rendered.cleanup
 			expect(within(document.body).getByText(settled ? 'Settled after price expired' : 'Price expired')).not.toBeNull()
-			expect(document.body.textContent).toContain(settled ? 'Request a new price.' : 'Settlement will clear this report, but the pool will reject its price.')
+			expect(document.body.textContent).toContain(settled ? 'Request a new price.' : 'Settlement will clear this report, but the security pool will reject its price.')
 			if (!settled) expectTransactionButtonEnabled(document.body, 'Settle report')
 		})
 	}

@@ -143,7 +143,7 @@ test('a position the unused commitment cannot restore keeps the takeover and dis
 		field.value = '2'
 		field.dispatchEvent(new Event('input', { bubbles: true }))
 	})
-	await waitFor(() => expect(view.container.textContent).toContain('Unused pool commitment cannot restore this position. Take it over.'))
+	await waitFor(() => expect(view.container.textContent).toContain('Unused security pool commitment cannot restore this position. Take it over.'))
 	expect(view.container.querySelectorAll('button')[1]?.disabled).toBe(true)
 })
 

@@ -159,15 +159,15 @@ test('an empty favorite pool list shows address lookup and no scan or pagination
 
 test('a pool card states a status that rules out creating its market and stops promoting creation', async () => {
 	const dom = installDomEnvironment('http://localhost/#/create-market')
-	const open = liveMarketFixture({ pool: fixtureAddress('01'), title: 'Open pool', pair: undefined, endTime: FIXTURE_NOW + FIXTURE_DAY })
+	const open = liveMarketFixture({ pool: fixtureAddress('01'), title: 'Open question', pair: undefined, endTime: FIXTURE_NOW + FIXTURE_DAY })
 	const ended = liveMarketFixture({ pool: fixtureAddress('02'), title: 'Ended pool', pair: undefined, endTime: FIXTURE_NOW - FIXTURE_DAY })
 	const rendered = await renderIntoDocument(<LiveMarketBrowser lookupRoute='create-market' markets={[open, ended]} registry={undefined} discoveryState='ready' discoveryError={undefined} workflowLocked={false} nowSeconds={FIXTURE_NOW} retry={() => undefined} />)
 	try {
 		const card = (title: string) => Array.from(rendered.container.querySelectorAll('.market-record')).find(candidate => candidate.textContent?.includes(title) === true)
 		// Every listed pool lacks a market, so only the ended pool carries a status, in the warning tone.
-		expect(card('Open pool')?.textContent).not.toContain('Market not created')
+		expect(card('Open question')?.textContent).not.toContain('Market not created')
 		expect(card('Ended pool')?.textContent).toContain('Question ended')
-		expect(card('Open pool')?.querySelector('.button-link.primary')?.textContent).toBe('Create market')
+		expect(card('Open question')?.querySelector('.button-link.primary')?.textContent).toBe('Create market')
 		expect(card('Ended pool')?.querySelector('.button-link.primary')).toBeNull()
 	} finally {
 		await rendered.cleanup()

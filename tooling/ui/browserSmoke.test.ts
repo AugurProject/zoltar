@@ -43,8 +43,8 @@ test('browser smoke readiness requires the selected application identity', () =>
 })
 
 test('browser smoke readiness can wait for route-specific loaded content', () => {
-	expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', 'Open pool', viewport)).toBe(false)
-	expect(isBrowserSmokeReady({ ...mountedState, body: `${mountedState.body}\nOpen pool` }, 'Augur Statoblast', 'Open pool', viewport)).toBe(true)
+	expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', 'Open question', viewport)).toBe(false)
+	expect(isBrowserSmokeReady({ ...mountedState, body: `${mountedState.body}\nOpen question` }, 'Augur Statoblast', 'Open question', viewport)).toBe(true)
 })
 
 test('an explicit route-ready marker overrides stale bootstrap copy outside the route', () => {

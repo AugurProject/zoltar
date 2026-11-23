@@ -34,7 +34,7 @@
 					<tbody>
 						<tr>
 							<td>Trusted protocol components</td>
-							<td>Zoltar, <a href="./glossary.html#question-ledger">QuestionLedgers</a>, share tokens, <a href="./glossary.html#price-coordinator">price coordinators</a>, <a href="./glossary.html#question-forker">forkers</a>, and their configured delegates.</td>
+							<td>Zoltar, <a href="./glossary.html#question-ledger">question ledgers</a>, share tokens, <a href="./glossary.html#price-coordinator">price coordinators</a>, <a href="./glossary.html#question-forker">question forkers</a>, and their configured delegates.</td>
 						</tr>
 						<tr>
 							<td>External dependencies</td>
@@ -146,7 +146,7 @@
 							<p class="equation-note">At <code>20_000 BPS</code>, this bound requires retaining at least half the parent backing value; at <code>30_000 BPS</code>, at least one third. At the minimum admission ratio, that retained value equals the secured collateral before realization costs. This is a valuation assumption, not an onchain parent/child price check or a guarantee of full repair; auction participation and conversion costs are covered by <a href="#assumption-a12">A12</a>.</p>
 						</div>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Insufficient retained backing value can leave a truthful child's collateral shortfall unrepaired.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#forks-migration">pool migration</a>. Rationale: <a href="https://github.com/AugurProject/oracle-research/blob/main/Arctic%20Tern%20Oracle.md">REP backing and open interest</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#forks-migration">security pool fork migration</a>. Rationale: <a href="https://github.com/AugurProject/oracle-research/blob/main/Arctic%20Tern%20Oracle.md">REP backing and open interest</a>.</p>
 					</li>
 					<li id="assumption-a08" value="8">
 						<h3><span class="assumption-id">A08</span> REP market capitalization approximates economic value</h3>
@@ -168,7 +168,7 @@
 							<p class="equation-note">When several branches remain plausibly truthful, document the value split instead of assuming one winner.</p>
 						</div>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Coordination on a false branch, or durable fragmentation across branches, defeats the value-concentration security argument.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#non-guarantees">branch non-guarantees</a> and <a href="../explanation/statoblast.html#forks-migration">pool fork migration</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#non-guarantees">branch non-guarantees</a> and <a href="../explanation/statoblast.html#forks-migration">security pool fork migration</a>.</p>
 					</li>
 					<li id="assumption-a10" value="10">
 						<h3><span class="assumption-id">A10</span> Participants can access timely outcome evidence</h3>
@@ -180,7 +180,7 @@
 						<h3><span class="assumption-id">A11</span> Migration is operationally practical</h3>
 						<p>Users, exchanges, interfaces, custodians, and other integrations are willing and able to migrate assets and state into the child universe or universes they support during the applicable windows.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Supported branches can remain illiquid or undercollateralized because economic claims and backing do not move there.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP splitting</a>, <a href="../explanation/statoblast.html#forks-migration">pool migration</a>, and <a href="./operator-guardrails.html#share-migration">share migration guardrails</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP splitting</a>, <a href="../explanation/statoblast.html#forks-migration">security pool fork migration</a>, and <a href="./operator-guardrails.html#share-migration">share migration guardrails</a>.</p>
 					</li>
 					<li id="assumption-a12" value="12">
 						<h3><span class="assumption-id">A12</span> Collateral Repair Auctions can convert supported child REP efficiently</h3>
@@ -196,7 +196,7 @@
 					</li>
 					<li id="assumption-a14" value="14">
 						<h3><span class="assumption-id">A14</span> REP economic value exceeds the open interest it secures</h3>
-						<p>For a stated pool, lineage, or system scope at one timestamp, <a href="./glossary.html#open-interest">open interest</a> and REP discounted cash flow are valued in the same numeraire, and REP discounted cash flow remains strictly greater. For a pool-level evaluation, open interest means the pool’s protocol-accounted settlement collateral unless the analysis explicitly names a broader exposure measure. The REP supply and price basis must also be stated; market capitalization is the observable proxy in <a href="#assumption-a08">A08</a>. This external relationship is separate from each pool’s onchain multiplier-adjusted REP backing check.</p>
+						<p>For a stated question ledger, lineage, or system scope at one timestamp, <a href="./glossary.html#open-interest">open interest</a> and REP discounted cash flow are valued in the same numeraire, and REP discounted cash flow remains strictly greater. For a question-ledger-level evaluation, open interest means the question ledger’s protocol-accounted settlement collateral unless the analysis explicitly names a broader exposure measure. The REP supply and price basis must also be stated; market capitalization is the observable proxy in <a href="#assumption-a08">A08</a>. This external relationship is separate from each question ledger’s onchain multiplier-adjusted REP backing check.</p>
 						<div class="equation assumption-equation" id="eq-rep-economic-backing" role="region" aria-label="Open interest backing assumption" tabindex="0">
 							<math display="block" aria-label="open interest is less than REP discounted cash flow when both are valued in the same numeraire" data-source="commonNumeraire(openInterest) < commonNumeraire(repDiscountedCashFlow)">
 								<mrow>
@@ -208,12 +208,12 @@
 							<p class="equation-note">Record scope, timestamp, common numeraire, price source, REP supply basis, and open-interest definition when evaluating this strict inequality.</p>
 						</div>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> REP holders may rationally accept or cause losses larger than the durable REP value placed at risk.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#fees-capacity-liquidations">question ledgers</a>, <a href="../explanation/liquidations.html#rule">liquidation backing</a>, and <a href="./open-oracle.html#security-guarantee">oracle exposure analysis</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#fees-capacity-liquidations">security pool underwriting</a>, <a href="../explanation/liquidations.html#rule">liquidation backing</a>, and <a href="./open-oracle.html#security-guarantee">oracle exposure analysis</a>.</p>
 					</li>
 					<li id="assumption-a15" value="15">
 						<h3><span class="assumption-id">A15</span> Question selection remains aligned with user intent</h3>
-						<p>Interfaces and users verify the immutable question ID and metadata when selecting a market or pool, and the question has evidence and wording from which participants can reach an outcome or intentionally choose <code>Invalid</code>.</p>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> Unverified selection can route users and capital to an unintended market or pool, while ambiguous wording or unavailable evidence can split local outcome coordination.</p>
+						<p>Interfaces and users verify the immutable question ID and metadata when selecting a market or security pool, and the question has evidence and wording from which participants can reach an outcome or intentionally choose <code>Invalid</code>.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> Unverified selection can route users and capital to an unintended market or security pool, while ambiguous wording or unavailable evidence can split local outcome coordination.</p>
 						<p class="assumption-links">Mechanics: <a href="./invariants.html#uni-02"><code>UNI-02</code></a> and <a href="../explanation/zoltar.html#questions">question identity</a>.</p>
 					</li>
 				</ol>
@@ -234,7 +234,7 @@
 					<li id="assumption-a17" value="17">
 						<h3><span class="assumption-id">A17</span> OpenOracle has an available, adequately capitalized corrector</h3>
 						<p>At least one OpenOracle participant continuously monitors pending REP/collateral reports, can identify candidate errors using the reference market in <a href="#assumption-a19">A19</a>, can fund the scenario-dependent collateral and REP replacement position plus transaction costs, and can obtain inclusion before settlement. The participant's net incentive to perform the correction is the separate boundary in <a href="#assumption-a18">A18</a>.</p>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> An incorrect report can settle and authorize price-sensitive pool actions when no capable participant detects, funds, and includes a correction.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> An incorrect report can settle and authorize price-sensitive security pool actions when no capable participant detects, funds, and includes a correction.</p>
 						<p class="assumption-links">Mechanics: <a href="./open-oracle.html">REP/collateral oracle</a>, <a href="./open-oracle.html#security-guarantee">correction incentives</a>, and <a href="./open-oracle.html#intentional-economic-tradeoffs">attack model</a>.</p>
 					</li>
 					<li id="assumption-a18" value="18">
@@ -247,7 +247,7 @@
 					</li>
 					<li id="assumption-a19" value="19">
 						<h3><span class="assumption-id">A19</span> A robust reference market makes harmful REP/collateral errors correctable</h3>
-						<p>Independent participants can observe a manipulation-resistant reference REP/collateral price. Every price error large enough to unlock a security-relevant pool action also leaves a correction opportunity that remains profitable after actual gas, prevailing priority fees, OpenOracle fees, price impact, and required capital lockup.</p>
+						<p>Independent participants can observe a manipulation-resistant reference REP/collateral price. Every price error large enough to unlock a security-relevant security pool action also leaves a correction opportunity that remains profitable after actual gas, prevailing priority fees, OpenOracle fees, price impact, and required capital lockup.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A harmful deviation below the profitable correction threshold, or a manipulated/illiquid reference market, can settle without an economically rational challenge.</p>
 						<p class="assumption-links">Mechanics: <a href="./open-oracle.html#security-guarantee">report sizing</a>, <a href="./open-oracle.html#intentional-economic-tradeoffs">external-payoff model</a>, and <a href="./open-oracle.html#settlement-validation-scope">settlement limits</a>.</p>
 					</li>
@@ -267,18 +267,18 @@
 					<li id="assumption-a21" value="21">
 						<h3><span class="assumption-id">A21</span> REP and selected collateral obey the required accounting model</h3>
 						<p>REP and the selected ERC-20 collateral move exactly the requested base units, return supported ERC-20 values, accept a change from one nonzero allowance to another, and do not rebase, charge transfer fees, invoke unexpected callbacks, blacklist protocol contracts, pause required transfers, or permit unauthorized minting. REP uses 18 decimals; collateral amounts use raw token units. Security pools reject this Zoltar deployment’s canonical REP tokens as collateral so oracle reports and custody accounting keep the two assets distinct. For WETH collateral, WETH remains redeemable 1:1 for ETH; the genesis theoretical supply is accurate, and the hard-coded <code>Constants.BURN_ADDRESS</code> burn sink remains inaccessible. These are external assumptions on both networks, with one exception: on Sepolia the reviewed <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> enforces genesis REP issuance and transfer behavior, provided <a href="#assumption-a23">A23</a> verifies its deployed bytecode and wiring and <a href="#assumption-a26">A26</a> preserves Ethereum execution. Sepolia WETH is Uniswap's published contract, which the deployer verifies only by runtime-code hash. Canonical child REP is the reviewed <code>ReputationToken</code> contract and adds no external-token assumption.</p>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> Origin-pool, genesis-fork, or oracle accounting can overstate balances, backing, burned supply, or collateral value.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> Origin question ledger, genesis-fork, or oracle accounting can overstate balances, backing, burned supply, or collateral value.</p>
 						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">bounded lifecycle work</a> and <a href="./open-oracle.html#openoracle-role">oracle token pair</a>.</p>
 					</li>
 					<li id="assumption-a22" value="22">
 						<h3><span class="assumption-id">A22</span> Participant-controlled recipients can accept required asset deliveries</h3>
 						<p>Recipients must be able to receive the asset transferred by their chosen path. Security pool fees, collateral redemptions, auction proceeds, and auction refunds use the selected ERC-20 collateral. Native-ETH router exits and OpenOracle ETH withdrawals or settler rewards require a recipient that accepts ETH. Contract recipients also return the required ERC-1155 receiver selector when complete-set creation, share migration, or an outcome-share transfer delivers tokens to them. Failed transfers or rejected callbacks can prevent delivery.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A failed collateral-token transfer, rejected native-ETH delivery, or rejected ERC-1155 callback can make the recipient’s payout, mint, migration, transfer, or claim unavailable even while protocol-wide accounting remains safe.</p>
-						<p class="assumption-links">Mechanics: <a href="./trading/router.html#entrypoints">router ETH callbacks</a>, <a href="./trading/router.html#approval-free">router ERC-1155 callbacks</a>, <a href="./contracts/sharetoken.html">share-token receipt</a>, <a href="../explanation/collateral-repair-auctions.html#security-pool-auctions">auction refunds</a>, <a href="./open-oracle.html#refund-callback">oracle request refunds</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">question ledger guardrails</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./trading/router.html#entrypoints">router ETH callbacks</a>, <a href="./trading/router.html#approval-free">router ERC-1155 callbacks</a>, <a href="./contracts/sharetoken.html">share-token receipt</a>, <a href="../explanation/collateral-repair-auctions.html#security-pool-auctions">auction refunds</a>, <a href="./open-oracle.html#refund-callback">oracle request refunds</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">security pool guardrails</a>.</p>
 					</li>
 					<li id="assumption-a23" value="23">
 						<h3><span class="assumption-id">A23</span> Users select verified canonical deployments</h3>
-						<p>The reviewed release is built reproducibly with its pinned compiler and toolchain configuration. The deterministic manifest freshness check rejects address drift, while the deployment plan verifies pinned runtime-code hashes for planned contracts and bootstrap descendants. The canonical factory deploys every security pool from pinned creation code and module deployers, and only those security pools can open a pool namespace, so <code>isSecurityPool</code> on that factory authenticates a security pool and its modules. Users and integrations must still verify post-deployment wiring, factory and forker provenance, pool lineage, question ID, and the manifest against the intended network. Constructor admission alone is not a safety proof.</p>
+						<p>The reviewed release is built reproducibly with its pinned compiler and toolchain configuration. The deterministic manifest freshness check rejects address drift, while the deployment plan verifies pinned runtime-code hashes for planned contracts and bootstrap descendants. The canonical factory deploys every security pool from pinned creation code and module deployers, and only those security pools can open a security pool namespace, so <code>isSecurityPool</code> on that factory authenticates a security pool and its modules. Users and integrations must still verify post-deployment wiring, factory and forker provenance, question ledger lineage, question ID, and the manifest against the intended network. Constructor admission alone is not a safety proof.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Toolchain drift, unavailable or mismatched reviewed hashes, permissionless lookalike instances, wrong dependencies, or unintended lineage and question wiring can bypass the reviewed protocol even when the selected bytecode functions as configured.</p>
 						<p class="assumption-links">Mechanics: <a href="../how-to/launch-a-release.html#immutable-protocol-release-posture">release posture</a>, <a href="../reference/deployment-status.html">deployment status</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/compile.ts">compiler configuration</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md">OpenOracle build provenance</a>, and <a href="./invariants.html#authority">authority invariants</a>.</p>
 					</li>
@@ -293,7 +293,7 @@
 						<p>The selected parameter relationships keep the <a href="./glossary.html#fork-threshold">fork threshold</a> and <a href="./glossary.html#fork-haircut">fork haircut</a> economically meaningful, the <a href="./glossary.html#start-bond">start bond</a> affordable, the security pool backing multiplier (<a href="./invariants.html#capital-health">capital health</a>) large enough for its coverage role, the oracle target error profitable to correct after fees and gas, dispute and settlement windows usable, and callback and transition gas executable. The security pool backing multiplier is independent of the fixed <code>OraclePriceMath</code> factors used to bound the report priority fee.</p>
 						<p>Fork liveness also requires enough REP to have migrated into the active lineage. Thresholds use theoretical supply, so <a href="../explanation/zoltar.html#migration-turnout">incomplete migration can make the fork backstop unreachable</a>, even for holders of all circulating child REP.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or internally inconsistent immutable parameters can defeat the economic or liveness argument even when the canonical contracts function exactly as configured.</p>
-						<p class="assumption-links">Mechanics: <a href="./contracts/securitypoolfactory.html#interactions">Statoblast pool parameters</a>, <a href="../explanation/zoltar.html#accounting">fork economics</a>, <a href="../explanation/liquidations.html#rule">liquidation economics</a>, <a href="./open-oracle.html#parameters">oracle parameters</a>, and <a href="./open-oracle.html#intentional-economic-tradeoffs">oracle attack model</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./contracts/securitypoolfactory.html#interactions">Statoblast security pool parameters</a>, <a href="../explanation/zoltar.html#accounting">fork economics</a>, <a href="../explanation/liquidations.html#rule">liquidation economics</a>, <a href="./open-oracle.html#parameters">oracle parameters</a>, and <a href="./open-oracle.html#intentional-economic-tradeoffs">oracle attack model</a>.</p>
 					</li>
 					<li id="assumption-a26" value="26">
 						<h3><span class="assumption-id">A26</span> Ethereum preserves the execution environment the protocol relies on</h3>
@@ -312,7 +312,7 @@
 						<h3><span class="assumption-id">A28</span> Participants retain control of account authority</h3>
 						<p>Participants protect the private keys, signing devices, session permissions, and delegated ERC-20 or ERC-1155 approvals that authorize their accounts. Account recovery and custody arrangements do not give an unintended party effective control during a security-sensitive window.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A stolen key, compromised signer, or overbroad approval can authorize valid but unwanted transfers, deposits, bids, migrations, or configuration changes without violating a contract guard.</p>
-						<p class="assumption-links">Mechanics: <a href="./contracts.html">transaction authority</a>, <a href="./operator-guardrails.html#security-pool-guardrails">question ledger guardrails</a>, and <a href="../how-to/monitor-security-assumptions.html#assumption-monitoring">account-authority monitoring</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./contracts.html">transaction authority</a>, <a href="./operator-guardrails.html#security-pool-guardrails">security pool guardrails</a>, and <a href="../how-to/monitor-security-assumptions.html#assumption-monitoring">account-authority monitoring</a>.</p>
 					</li>
 				</ol>
 			</section>
