@@ -16,11 +16,14 @@ const checkTasks = ['typecheck', 'lint', 'test', 'check'] satisfies readonly Pro
 
 export function affectedCheckPlan(filePaths: readonly string[]): ProjectTaskPlanEntry[] {
 	const affected = affectedCheckSelection(filePaths)
+	// The repository's composite check already runs the standalone documentation check.
+	const repositoryCheckIncludesDocs = affected.some(project => project.id === 'repository' && project.tasks.check !== undefined)
 	const coveredByCheck = new Map(affected.flatMap(project => (project.tasks.check?.covers === undefined ? [] : [[project.id, new Set(project.tasks.check.covers)] as const])))
 	return checkTasks.flatMap(taskName => {
 		const projectIds = affected
 			.filter(project => project.tasks[taskName] !== undefined)
 			.filter(project => taskName === 'check' || coveredByCheck.get(project.id)?.has(taskName) !== true)
+			.filter(project => taskName !== 'check' || project.id !== 'docs' || !repositoryCheckIncludesDocs)
 			.filter(project => taskName !== 'check' || project.type === 'documentation' || (project.tasks.check?.covers?.length ?? 0) > 0)
 			.map(project => project.id)
 		return createProjectTaskPlan(taskName, projectIds)

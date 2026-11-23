@@ -3,12 +3,12 @@ import { acquireExecutionSignerLock as acquireSharedExecutionSignerLock, acquire
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parsePositionCollateral, type PositionCollateral } from '#state/position-collateral'
 import { formatDecimalAmount, hash32, parseDecimalAmount, parseSignedDecimalAmount, record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { parseExecutionRecord, type ExecutionRecord } from '#state/execution-record'
+import { parseExecutionIntentFields, parseExecutionRecord, type ExecutionIntent, type ExecutionRecord } from '#state/execution-record'
 
 /** The position journal writer's filesystem; tests substitute one to observe the durable write order. */
 export type PositionJournalFilesystem = RevisionedFileFilesystem
 
-export type { ExclusiveProcessLock }
+export type { ExecutionIntent, ExclusiveProcessLock }
 
 export type ManualReconciliation = {
 	evidence: string
@@ -20,8 +20,6 @@ export type ManualReconciliation = {
 	recordedAt: string
 	recordedBy: Address
 }
-
-export type ExecutionIntent = Omit<ExecutionRecord, 'actualGasCostEth' | 'blockNumber' | 'executedAt' | 'trackedNetProfitEth' | 'transactionHash'>
 
 export type DurableTransactionIntent = {
 	data: Hex
@@ -214,16 +212,8 @@ function parseExecutionIntent(value: unknown): ExecutionIntent | undefined {
 	const exactKeys = ['direction', 'estimatedNetProfitWeth', 'estimatedProfitBeforeGasEth', 'pool', 'poolFee', 'reportId', 'requiredToken', 'requiredWeth', 'token', 'tokenSymbol']
 	const keys = Object.keys(record).filter(key => key !== 'collateralSymbol')
 	if (keys.length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error('Position journal execution intent fields are invalid')
-	const parsed = parseExecutionRecord({
-		...record,
-		actualGasCostEth: '0',
-		blockNumber: '0',
-		executedAt: '1970-01-01T00:00:00.000Z',
-		trackedNetProfitEth: '0',
-		transactionHash: `0x${'0'.repeat(64)}`,
-	})
-	if (parsed === undefined) throw new Error('Position journal execution intent is invalid')
-	const { actualGasCostEth: _actualGasCostEth, blockNumber: _blockNumber, executedAt: _executedAt, trackedNetProfitEth: _trackedNetProfitEth, transactionHash: _transactionHash, ...intent } = parsed
+	const intent = parseExecutionIntentFields({ ...record })
+	if (intent === undefined) throw new Error('Position journal execution intent is invalid')
 	return intent
 }
 
