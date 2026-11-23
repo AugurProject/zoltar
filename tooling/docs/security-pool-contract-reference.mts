@@ -307,7 +307,7 @@ export const securityPoolContractReference: ContractReference = {
 					name: 'resumeForkedEscalationGame',
 				},
 			],
-			effect: 'Resumes a prepared continuation at its fixed portfolio time anchor.',
+			effect: 'Resumes a prepared continuation from the shared child branch activation timestamp.',
 			preconditions: 'Complete authenticated carry snapshot and funded central reporter custody.',
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},

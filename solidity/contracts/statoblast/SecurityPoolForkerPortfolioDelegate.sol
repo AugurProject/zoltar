@@ -8,6 +8,7 @@ import { Zoltar } from '../Zoltar.sol';
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolPortfolioNative } from './interfaces/ISecurityPoolPortfolioNative.sol';
 import { EscalationGame } from './EscalationGame.sol';
+import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
@@ -54,13 +55,12 @@ contract SecurityPoolForkerPortfolioDelegate {
 		if (game.getFinalQuestionResolution() == BinaryOutcomes.BinaryOutcome.None) return;
 		uint248 universe = child.universeId();
 		uint48 finalAfter = portfolio.portfolioTimeForNative(universe, CheckedCast.toUint48(game.getEscalationGameEndDate()));
-		uint48 minimum = portfolio.portfolioTimeForNative(universe, 0) + Constants.FORK_RESPONSE_DELAY;
 		(SecurityPoolReporterLedger.Question memory reporter, ) = SecurityPoolReporterLedger(portfolio.reporterLedger(universe)).question(universe, child.questionId());
-		require(reporter.finalAfter != 0 && (reporter.finalAfter > minimum ? reporter.finalAfter : minimum) == finalAfter, 'Reporter continuation finality mismatch');
+		require(reporter.finalAfter != 0 && reporter.finalAfter == finalAfter, 'Reporter continuation finality mismatch');
 		SecurityPoolPortfolioSettlement settlement = SecurityPoolPortfolioSettlement(portfolio.settlement());
 		(SecurityPoolSettlementBook.Question memory claim, ) = settlement.ledger().question(settlement.bookIds(universe), child.questionId());
 		if (claim.outcomeSupplyAttoShares != 0)
-			require(claim.finalAfter != 0 && (claim.finalAfter > minimum ? claim.finalAfter : minimum) == finalAfter, 'Settlement continuation finality mismatch');
+			require(claim.finalAfter != 0 && claim.finalAfter == finalAfter, 'Settlement continuation finality mismatch');
 	}
 
 	function _hasProtectedQuestionCash(ISecurityPoolPortfolioNative portfolio, uint248 universe, uint256 questionId) private view returns (bool) {
@@ -167,9 +167,12 @@ contract SecurityPoolForkerPortfolioDelegate {
 		ISecurityPoolPortfolioNative portfolio = ISecurityPoolPortfolioNative(pool.securityPoolFactory().getSecurityPoolPortfolio(pool));
 		(bool isFixed, uint256 fixedValue) = portfolio.inheritedFixedOutcome(pool.universeId(), pool.questionId());
 		require(!isFixed || fixedValue < uint256(BinaryOutcomes.BinaryOutcome.None), 'Unsupported inherited reporter outcome');
-		uint48 anchor = portfolio.portfolioTimeForNative(pool.universeId(), 0);
+		if (!isFixed) return BinaryOutcomes.BinaryOutcome.None;
+		uint48 finalAfter = EscalationGameRepCustody.fixedQuestionFinalAfter(address(portfolio), pool.universeId(), pool.questionId());
+		if (finalAfter == 0)
+			finalAfter = portfolio.portfolioTimeForNative(pool.universeId(), 0) + Constants.FORK_RESPONSE_DELAY;
 		return
-			isFixed && portfolio.portfolioTime(pool.universeId()) > anchor + Constants.FORK_RESPONSE_DELAY
+			portfolio.portfolioTime(pool.universeId()) > finalAfter
 				? BinaryOutcomes.BinaryOutcome(fixedValue)
 				: BinaryOutcomes.BinaryOutcome.None;
 	}

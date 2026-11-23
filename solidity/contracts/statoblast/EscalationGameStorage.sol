@@ -71,14 +71,10 @@ abstract contract EscalationGameStorage {
 		}
 	}
 
-	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
-		// The game is open while the curve is at or below the median. A provisional
-		// leader closes it, except during the fixed response period a resumed
-		// continuation starts with. Equality remains open, matching finality.
-		if (provisionalResolution == BinaryOutcomes.BinaryOutcome.None) return true;
-		if (!forkContinuation || forkResumedAt == 0 || fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None)
-			return false;
-		return block.timestamp <= forkResumedAt + ACTIVATION_DELAY;
+	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal pure returns (bool) {
+		// Ordinary and resumed games close when the curve passes the median.
+		// Equality remains open, matching finality; resuming adds no grace period.
+		return provisionalResolution == BinaryOutcomes.BinaryOutcome.None;
 	}
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
