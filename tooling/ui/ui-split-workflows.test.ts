@@ -5,7 +5,7 @@ import { access, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { taskProjects } from '../repo/projects.ts'
 import { projectQuery } from '../repo/query-projects.mts'
-import { PRODUCTION_WORKFLOW_SCENARIOS } from './productionWorkflowScenarios.ts'
+import { PRODUCTION_WORKFLOW_SCENARIOS, selectProductionWorkflowScenarios } from './productionWorkflowScenarios.ts'
 import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
@@ -72,15 +72,23 @@ describe('split UI workflow definitions (pending updates when present)', () => {
 		expect(requireRecord(jobs['browser-workflow'], 'browser workflow')['needs']).toEqual(['changes', 'prepare'])
 	})
 
-	test('the browser matrix covers every scenario once and each job selects its own test', async () => {
+	test('the browser matrix covers every scenario once across four jobs', async () => {
 		const workflow = await readWorkflow(browserWorkflowPath)
 		const jobs = workflowJobs(workflow)
 		const job = requireRecord(jobs['browser-workflow'], 'browser matrix job')
 		const strategy = requireRecord(job['strategy'], 'browser matrix strategy')
 		expect(strategy['fail-fast']).toBe(false)
-		expect(requireRecord(strategy['matrix'], 'browser matrix')['scenario']).toEqual(PRODUCTION_WORKFLOW_SCENARIOS)
+		const groups = requireRecord(strategy['matrix'], 'browser matrix')['include']
+		if (!Array.isArray(groups)) throw new Error('Browser matrix must define scenario groups')
+		expect(groups).toHaveLength(4)
+		const scenarios = groups.flatMap(group => {
+			const selection = requireRecord(group, 'browser scenario group')['scenarios']
+			if (typeof selection !== 'string' || selection.length === 0) throw new Error('Browser scenario group must select at least one scenario')
+			return selectProductionWorkflowScenarios(selection)
+		})
+		expect(scenarios.sort()).toEqual([...PRODUCTION_WORKFLOW_SCENARIOS].sort())
 		const run = workflowSteps(job).find(step => step['run'] === 'bun run test:browser:workflow')
-		expect(requireRecord(run?.['env'], 'browser scenario selection')).toMatchObject({ ZOLTAR_BROWSER_WORKFLOW_SCENARIO: '${{ matrix.scenario }}', ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' })
+		expect(requireRecord(run?.['env'], 'browser scenario selection')).toMatchObject({ ZOLTAR_BROWSER_WORKFLOW_SCENARIO: '${{ matrix.scenarios }}', ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' })
 		expect(job['continue-on-error']).toBeUndefined()
 		expect(job['needs']).toBe('prepare')
 		expect(job['if']).toBe("always() && !cancelled() && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))")
@@ -366,8 +374,8 @@ ${command}`,
 		const solidity = requireRecord(domainJobs['solidity-tests'], 'Solidity tests')
 		expect(solidity['needs']).toBe('timing-history-input')
 		expect(solidity['if']).toBe("inputs.solidity && needs.timing-history-input.result == 'success'")
-		expect(requireRecord(requireRecord(solidity['strategy'], 'strategy')['matrix'], 'matrix')['shard']).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
-		expect(workflowSteps(solidity).find(step => step['name'] === 'Run balanced Solidity shard')?.['run']).toContain('--shard="${{ matrix.shard }}/8"')
+		expect(requireRecord(requireRecord(solidity['strategy'], 'strategy')['matrix'], 'matrix')['shard']).toEqual([1, 2, 3, 4])
+		expect(workflowSteps(solidity).find(step => step['name'] === 'Run balanced Solidity shard')?.['run']).toContain('--parallel=2 --domain=solidity --shard="${{ matrix.shard }}/4"')
 		const history = requireRecord(domainJobs['timing-history'], 'timing history')
 		expect(history['if']).toContain("needs.solidity-tests.result == 'success' || needs.application-tests.result == 'success'")
 		expect(requireRecord(requireRecord(history['strategy'], 'strategy')['matrix'], 'matrix')['domain']).toBe("${{ fromJSON(needs.application-tests.result != 'success' && '[\"solidity\"]' || (needs.solidity-tests.result == 'success' && '[\"application\", \"solidity\"]' || '[\"application\"]')) }}")
