@@ -13,6 +13,7 @@ import {
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as artifact,
 	test_statoblast_SecurityPoolReporterLedgerHarness_SecurityPoolReporterLedgerHarness as harness,
 	test_statoblast_SecurityPoolReporterLedgerHarness_SecurityPoolReporterAuthorityHarness as authorityArtifact,
+	Zoltar_Zoltar as zoltarArtifact,
 } from '../../types/contractArtifact'
 
 const unit = 10n ** 18n
@@ -193,9 +194,13 @@ describe('Statoblast: central reporter custody', () => {
 		const other = await createGame(questionId + 1n)
 		await deposit(trigger, threshold - 1n)
 		await deposit(other, threshold)
-		await expect(rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId] }))).rejects.toThrow('Triggering question lacks fork admission REP')
+		expect(await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'forkAdmissionShortfallAttoRep', args: [0n, questionId] })).toBe(1n)
+		// The shortfall comes only from the payer's approved REP, never from another question's escrow.
+		await expect(rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId, owner.account.address] }))).rejects.toThrow()
+		await expect(rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId + 2n, owner.account.address] }))).rejects.toThrow('Triggering question lacks fork admission REP')
 		await deposit(trigger, 1n)
-		const forkHash = await rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId] }))
+		expect(await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'forkAdmissionShortfallAttoRep', args: [0n, questionId] })).toBe(0n)
+		const forkHash = await rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId, owner.account.address] }))
 		const haircut = threshold / 5n
 		expect(await balance(trigger)).toBe(threshold - haircut)
 		// The admission haircut changes the question's balance, so it reports the new balance like deposits and withdrawals.
@@ -218,6 +223,21 @@ describe('Statoblast: central reporter custody', () => {
 		expect((await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'question', args: [child, questionId] }))[1]).toBe(true)
 		expect((await book(child))[0]).toBe(threshold)
 		expect((await book(child))[1]).toBe(threshold - haircut)
+	})
+
+	test('pulls exactly the admission shortfall from the payer into the triggering question escrow', async () => {
+		const threshold = await getZoltarForkThreshold(owner, 0n)
+		const trigger = await createGame(questionId)
+		await deposit(trigger, threshold - 7n)
+		await approveToken(owner, getRepTokenAddress(0n), ledger)
+		const payerBefore = await getERC20Balance(owner, getRepTokenAddress(0n), owner.account.address)
+		await rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [0n, questionId, owner.account.address] }))
+		expect(payerBefore - (await getERC20Balance(owner, getRepTokenAddress(0n), owner.account.address))).toBe(7n)
+		const haircut = threshold / 5n
+		expect(await balance(trigger)).toBe(threshold - haircut)
+		expect((await book())[0]).toBe(threshold - haircut)
+		expect(await owner.readContract({ abi: zoltarArtifact.abi, address: getZoltarAddress(), functionName: 'getMigrationRepBalanceAttoRep', args: [ledger, 0n] })).toBe(threshold - haircut)
+		expect(await getERC20Balance(owner, getRepTokenAddress(0n), ledger)).toBe(0n)
 	})
 
 	test('binds a protected untouched claim after its finalizing universe has itself forked', async () => {

@@ -16,13 +16,13 @@
 					<p class="lede">Routes shared-portfolio question forks and lazy child question preparation. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">SecurityPoolForker source contract</a></p>
 				</header>
 				<h2 id="read-surface">Read surface</h2>
-				<p><code>zoltar</code> identifies the protocol root. <code>getQuestionOutcome</code> returns the fixed or finalized question outcome, or None while unresolved; the shared portfolio clock protects pre-fork final claims.</p>
+				<p><code>zoltar</code> identifies the protocol root. <code>getQuestionOutcome</code> returns the fixed or finalized question outcome, or None while unresolved; the shared portfolio clock protects pre-fork final claims. <code>getOwnForkAdmissionShortfall</code> returns the reporter ledger and the REP an own-question fork pulls from its caller.</p>
 				<h2 id="child-game-trust-boundary">Child-game trust boundary</h2>
 				<p>The immutable delegate is validated against Zoltar at deployment. Portfolio paths authenticate the source question through its factory namespace and central books before changing capital or installing claims. Caller-supplied module addresses are never used as delegate targets.</p>
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns. Owner capital and reporter custody migrate through the shared portfolio coordinator. Child question ledgers and their fixed-size reporter snapshots are prepared lazily. No owner migrates a vault for each question.</p>
-				<!-- Validated read ABI fingerprint: 7475fe46e1c2bea5d49502837b2be814dee961b5123cc54df72d8e172bd00691 -->
-				<!-- Validated complete compiled ABI fingerprint: 023c77f6a56ea5ebdfaede6f10b790b6dbcdd155353bae4f8dd3b3fa73799297 -->
+				<!-- Validated read ABI fingerprint: 3a1b586409e939493d4306287a2365a9b4f49b5af0b1fab53bcbf57a35cb1dcd -->
+				<!-- Validated complete compiled ABI fingerprint: c4aa4ca07c5336dc5e300ea38c84e83174f81de5d75180b29fc6c4fe77c3186b -->
 				<table>
 					<thead>
 						<tr>
@@ -58,8 +58,8 @@
 						<tr>
 							<td><code>forkZoltarWithOwnEscalationGame(securityPool)</code></td>
 							<td>Anyone</td>
-							<td>Canonical reporter question has non-decision and sufficient admission REP; universe is not already forked.</td>
-							<td>Uses this question’s reporter custody to pay native fork admission and freezes its portfolio.</td>
+							<td>Canonical reporter question has non-decision; the caller has approved the reporter ledger for any shortfall <code>getOwnForkAdmissionShortfall</code> reports; universe is not already forked.</td>
+							<td>Uses this question’s reporter custody to pay native fork admission and freezes its portfolio. A game fixes its non-decision threshold when it opens, but the genesis fork threshold follows the live external supply until the first fork, so the escrow can fall short. The caller then pays the shortfall from REP approved to the reporter ledger. That REP joins the question’s escrow with no separate claim.</td>
 							<td>Shared fork, question deployment and reporting continuation events as applicable.</td>
 						</tr>
 						<tr>

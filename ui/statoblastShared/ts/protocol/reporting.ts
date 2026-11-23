@@ -6,7 +6,7 @@ import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '../contractArtifact.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState } from '../types/contracts.js'
@@ -468,6 +468,29 @@ async function getEscalationGamePreparation(client: WriteClient, securityPoolAdd
 		isRequired,
 		execute: async () => await writeContractAndWait(client, () => callParams),
 	}
+}
+
+// The external genesis REP keeps minting between this approval and the fork transaction.
+const OWN_FORK_ADMISSION_GROWTH_BUFFER_ATTO_REP = 10n ** 18n
+
+/**
+ * Approves the REP that an own-question fork pulls from its caller when the genesis fork threshold
+ * grew past the question's escrow after the Escalation Game started. Returns the approval hash, or
+ * `undefined` when no payment is needed or the reporter ledger is already approved for it.
+ */
+export async function approveOwnForkAdmissionShortfall(client: WriteClient, securityPoolAddress: Address, review: { reviewTitle: string; reviewDescription: string }) {
+	const [reporterLedger, shortfallAttoRep] = await client.readContract({ address: getInfraContractAddresses().securityPoolForker, abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, functionName: 'getOwnForkAdmissionShortfall', args: [securityPoolAddress] })
+	if (shortfallAttoRep === 0n) return undefined
+	const repTokenAddress = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', args: [] })
+	const allowanceAttoRep = await client.readContract({ address: repTokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, reporterLedger] })
+	if (allowanceAttoRep >= shortfallAttoRep + OWN_FORK_ADMISSION_GROWTH_BUFFER_ATTO_REP) return undefined
+	return await writeContractAndWait(client, () => ({
+		address: repTokenAddress,
+		abi: ABIS.mainnet.erc20,
+		functionName: 'approve',
+		args: [reporterLedger, shortfallAttoRep + OWN_FORK_ADMISSION_GROWTH_BUFFER_ATTO_REP],
+		...review,
+	}))
 }
 
 export async function approveReportingRep(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint) {

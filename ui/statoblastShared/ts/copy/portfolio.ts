@@ -71,6 +71,10 @@ export const triggerUniverseFork = 'Trigger universe fork'
 
 export const triggerUniverseForkDescription = 'This unresolved question forks its universe. Portfolio owners choose a recovery branch. Reporter balances are copied into every child branch.'
 
+export const approveForkAdmissionShortfall = 'Approve fork admission REP'
+
+export const approveForkAdmissionShortfallDescription = 'REP supply grew after this Escalation Game started, so its escrow is below the fork threshold. Your wallet pays the difference; it joins the question escrow without a separate claim.'
+
 export const universeForkTriggered = 'Universe fork triggered'
 
 export const loadingQuestion = 'Loading question…'

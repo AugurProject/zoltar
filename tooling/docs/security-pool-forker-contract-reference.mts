@@ -1,13 +1,17 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const securityPoolForkerContractReference: ContractReference = {
-	compiledAbiFingerprint: '023c77f6a56ea5ebdfaede6f10b790b6dbcdd155353bae4f8dd3b3fa73799297',
+	compiledAbiFingerprint: 'c4aa4ca07c5336dc5e300ea38c84e83174f81de5d75180b29fc6c4fe77c3186b',
 	name: 'SecurityPoolForker',
 	purpose: 'Routes shared-portfolio question forks and lazy child question preparation.',
-	readAbiFingerprint: '7475fe46e1c2bea5d49502837b2be814dee961b5123cc54df72d8e172bd00691',
-	readSurface: '`zoltar` identifies the protocol root. `getQuestionOutcome` returns the fixed or finalized question outcome, or None while unresolved; the shared portfolio clock protects pre-fork final claims.',
+	readAbiFingerprint: '3a1b586409e939493d4306287a2365a9b4f49b5af0b1fab53bcbf57a35cb1dcd',
+	readSurface:
+		'`zoltar` identifies the protocol root. `getQuestionOutcome` returns the fixed or finalized question outcome, or None while unresolved; the shared portfolio clock protects pre-fork final claims. `getOwnForkAdmissionShortfall` returns the reporter ledger and the REP an own-question fork pulls from its caller.',
 	readDeclarations: [
 		{
 			name: 'getQuestionOutcome',
+		},
+		{
+			name: 'getOwnForkAdmissionShortfall',
 		},
 	],
 	readStorageDeclarations: [
@@ -60,13 +64,14 @@ export const securityPoolForkerContractReference: ContractReference = {
 		{
 			call: '`forkZoltarWithOwnEscalationGame(securityPool)`',
 			caller: 'Anyone',
-			effect: 'Uses this question\u2019s reporter custody to pay native fork admission and freezes its portfolio.',
+			effect:
+				'Uses this question\u2019s reporter custody to pay native fork admission and freezes its portfolio. A game fixes its non-decision threshold when it opens, but the genesis fork threshold follows the live external supply until the first fork, so the escrow can fall short. The caller then pays the shortfall from REP approved to the reporter ledger. That REP joins the question\u2019s escrow with no separate claim.',
 			declarations: [
 				{
 					name: 'forkZoltarWithOwnEscalationGame',
 				},
 			],
-			preconditions: 'Canonical reporter question has non-decision and sufficient admission REP; universe is not already forked.',
+			preconditions: 'Canonical reporter question has non-decision; the caller has approved the reporter ledger for any shortfall `getOwnForkAdmissionShortfall` reports; universe is not already forked.',
 			signals: 'Shared fork, question deployment and reporting continuation events as applicable.',
 		},
 		{

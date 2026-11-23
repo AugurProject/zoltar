@@ -22,6 +22,7 @@ import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/re
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
 import { loadSecurityPoolListing, loadSelectedSecurityPool, type UnavailableSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { approveOwnForkAdmissionShortfall } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { AccountState, WriteOperationsParameters } from '@zoltar/ui-statoblast-shared/types/app.js'
@@ -106,6 +107,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				}),
 				async (account, context) => {
 					const client = createWalletWriteClient(account, { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted })
+					await approveOwnForkAdmissionShortfall(client, getAddress(question.securityPoolAddress), { reviewTitle: copy.approveForkAdmissionShortfall, reviewDescription: copy.approveForkAdmissionShortfallDescription })
 					const hash = await writeContractAndWait(client, () => ({
 						address: getInfraContractAddresses().securityPoolForker,
 						abi: forkerArtifact.abi,

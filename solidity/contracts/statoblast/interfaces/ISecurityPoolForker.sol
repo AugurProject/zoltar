@@ -9,5 +9,6 @@ interface ISecurityPoolForker {
 	function materializePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) external returns (ISecurityPool);
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;
+	function getOwnForkAdmissionShortfall(ISecurityPool securityPool) external view returns (address reporterLedger, uint256 shortfallAttoRep);
 	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome);
 }
