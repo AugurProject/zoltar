@@ -200,11 +200,11 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 			},
 		]
 	}
-	if (name === 'DeploySecurityPool')
+	if (name === 'DeployQuestionLedger')
 		return [
 			{
 				type: 'pool',
-				poolAddress: address(args['securityPool'], 'securityPool'),
+				poolAddress: address(args['questionLedger'], 'questionLedger'),
 				parentAddress: address(args['parent'], 'parent'),
 				universeId: integerString(args['universeId'], 'universeId'),
 				questionId: integerString(args['questionId'], 'questionId'),
@@ -231,7 +231,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 			{
 				type: 'ammMarket',
 				pairAddress: address(args['pair'], 'pair'),
-				poolAddress: address(args['securityPool'], 'securityPool'),
+				poolAddress: address(args['questionLedger'], 'questionLedger'),
 				shareTokenAddress: address(args['shareToken'], 'shareToken'),
 				universeId: integerString(args['universeId'], 'universeId'),
 				feeBps: integerString(args['feeBps'], 'feeBps'),

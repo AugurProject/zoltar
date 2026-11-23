@@ -5,9 +5,9 @@ type SecurityPoolFactoryAddressInputs = {
 	escalationGameFactory: Address
 	openOracle: Address
 	openOraclePriceCoordinatorFactory: Address
-	securityPoolForker: Address
-	securityPoolOperationsDelegate: Address
-	securityPoolEventEmitter: Address
+	questionForker: Address
+	questionLedgerOperationsDelegate: Address
+	questionLedgerEventEmitter: Address
 	securityPoolCapitalLedgerDeployer: Address
 	securityPoolCommitmentIndexDeployer: Address
 	securityPoolCapitalFeeStreamsDeployer: Address
@@ -26,8 +26,8 @@ type InfraContractAddressConfig = {
 	escalationGameDepositDelegateBytecode: Hex
 	getEscalationGameFactoryByteCode: (depositDelegate: Address) => Hex
 	getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex
-	getSecurityPoolForkerByteCode: (zoltarAddress: Address) => Hex
-	getSecurityPoolForkerPortfolioDelegateByteCode: (zoltarAddress: Address) => Hex
+	getQuestionForkerByteCode: (zoltarAddress: Address) => Hex
+	getQuestionForkerDelegateByteCode: (zoltarAddress: Address) => Hex
 	getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex
 	multicall3Bytecode: Hex
 	openOracleBytecode: Hex
@@ -35,8 +35,8 @@ type InfraContractAddressConfig = {
 	priceCoordinatorDeploymentWorkerBytecode: Hex
 	sharedPoolPriceFeedDeploymentWorkerBytecode: Hex
 	proxyDeployerAddress: Address
-	securityPoolOperationsDelegateBytecode: Hex
-	securityPoolEventEmitterBytecode: Hex
+	questionLedgerOperationsDelegateBytecode: Hex
+	questionLedgerEventEmitterBytecode: Hex
 	securityPoolCapitalLedgerDeployerBytecode: Hex
 	securityPoolCommitmentIndexDeployerBytecode: Hex
 	securityPoolCapitalFeeStreamsDeployerBytecode: Hex
@@ -61,10 +61,10 @@ type InfraContractAddresses = {
 	priceCoordinatorDeploymentWorker: Address
 	sharedPoolPriceFeedDeploymentWorker: Address
 	securityPoolFactory: Address
-	securityPoolForker: Address
-	securityPoolForkerPortfolioDelegate: Address
-	securityPoolOperationsDelegate: Address
-	securityPoolEventEmitter: Address
+	questionForker: Address
+	questionForkerDelegate: Address
+	questionLedgerOperationsDelegate: Address
+	questionLedgerEventEmitter: Address
 	securityPoolCapitalLedgerDeployer: Address
 	securityPoolCommitmentIndexDeployer: Address
 	securityPoolCapitalFeeStreamsDeployer: Address
@@ -99,13 +99,13 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			priceCoordinatorDeploymentWorker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.priceCoordinatorDeploymentWorkerBytecode),
 			sharedPoolPriceFeedDeploymentWorker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.sharedPoolPriceFeedDeploymentWorkerBytecode),
 			openOraclePriceCoordinatorFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOraclePriceCoordinatorFactoryBytecode()),
-			securityPoolForkerPortfolioDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getSecurityPoolForkerPortfolioDelegateByteCode(config.getZoltarAddress())),
-			securityPoolForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getSecurityPoolForkerByteCode(config.getZoltarAddress())),
+			questionForkerDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getQuestionForkerDelegateByteCode(config.getZoltarAddress())),
+			questionForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getQuestionForkerByteCode(config.getZoltarAddress())),
 			escalationGameDepositDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameDepositDelegateBytecode),
 		}
 		const escalationGameFactory = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getEscalationGameFactoryByteCode(addresses.escalationGameDepositDelegate))
-		const securityPoolEventEmitter = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolEventEmitterBytecode)
-		const securityPoolOperationsDelegate = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolOperationsDelegateBytecode)
+		const questionLedgerEventEmitter = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.questionLedgerEventEmitterBytecode)
+		const questionLedgerOperationsDelegate = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.questionLedgerOperationsDelegateBytecode)
 		const escalationGameProofVerifier = getCreateAddress({
 			from: escalationGameFactory,
 			nonce: 1n,
@@ -115,8 +115,8 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			...addresses,
 			escalationGameFactory,
 			escalationGameProofVerifier,
-			securityPoolOperationsDelegate,
-			securityPoolEventEmitter,
+			questionLedgerOperationsDelegate,
+			questionLedgerEventEmitter,
 			securityPoolFactory: getProxyDeployerCreate2Address(
 				config.proxyDeployerAddress,
 				config.zeroSalt,
@@ -124,9 +124,9 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 					escalationGameFactory,
 					openOracle: addresses.openOracle,
 					openOraclePriceCoordinatorFactory: addresses.openOraclePriceCoordinatorFactory,
-					securityPoolForker: addresses.securityPoolForker,
-					securityPoolOperationsDelegate,
-					securityPoolEventEmitter,
+					questionForker: addresses.questionForker,
+					questionLedgerOperationsDelegate,
+					questionLedgerEventEmitter,
 					securityPoolCapitalLedgerDeployer: addresses.securityPoolCapitalLedgerDeployer,
 					securityPoolCommitmentIndexDeployer: addresses.securityPoolCommitmentIndexDeployer,
 					securityPoolCapitalFeeStreamsDeployer: addresses.securityPoolCapitalFeeStreamsDeployer,

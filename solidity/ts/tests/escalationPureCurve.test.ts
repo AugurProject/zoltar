@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseAbiItem, toFunctionSelector, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ESCALATION_TIME_LENGTH } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import * as contractArtifacts from '../types/contractArtifact'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate as depositDelegateArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate as depositDelegateArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -16,7 +16,7 @@ describe('escalation game: pure attrition curve', () => {
 	const INVALID = 0
 	const YES = 1
 	const NO = 2
-	const pool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const gameFor = (address: Address) => fixture.owner().readContract({ abi: poolArtifact.abi, address, functionName: 'escalationGame' })
 	const readGame = <const Name extends 'getFinalQuestionResolution' | 'getQuestionResolution' | 'totalCostAttoRep' | 'getEscalationGameEndDate' | 'activationTime' | 'startBondAttoRep' | 'nonDecisionThresholdAttoRep' | 'getBindingCapitalAttoRep' | 'getOutcomeBalancesAttoRep'>(game: Address, functionName: Name) =>
 		fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName })

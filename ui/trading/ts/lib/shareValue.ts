@@ -5,10 +5,10 @@ import type { LiveMarket } from '../protocol/liveMarket.js'
 import * as payoutCopy from '../copy/payout.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 
-/** The SecurityPool fields that define how many attoShares one attoETH of settlement collateral currently represents. */
+/** The QuestionLedger fields that define how many attoShares one attoETH of settlement collateral currently represents. */
 export type ShareValueRate = Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep' | 'collateral'>
 
-/** Settlement-collateral value of a share amount at the pool's current rate; mirrors SecurityPool.attoSharesToAttoEth. */
+/** Settlement-collateral value of a share amount at the pool's current rate; mirrors QuestionLedger.attoSharesToAttoEth. */
 export function attoSharesToCollateralAttoEth(amountAttoShares: bigint, rate: ShareValueRate) {
 	if (amountAttoShares < 0n) throw new Error('Share amounts cannot be negative')
 	if (rate.shareTokenSupplyAttoShares === 0n) return amountAttoShares

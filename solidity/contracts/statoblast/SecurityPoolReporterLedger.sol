@@ -7,7 +7,7 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
-import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger, ISecurityPoolFactory } from './interfaces/IQuestionLedger.sol';
 import { ISecurityPoolReporterLedger } from './interfaces/ISecurityPoolReporterLedger.sol';
 import { Constants } from '../Constants.sol';
 
@@ -19,7 +19,7 @@ interface IReporterPortfolioClock {
 }
 
 interface IReporterGameIdentity {
-	function securityPool() external view returns (ISecurityPool);
+	function questionLedger() external view returns (IQuestionLedger);
 	function repToken() external view returns (address);
 }
 
@@ -99,7 +99,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	}
 
 	function registerGame(uint256 questionId, address game) external onlyPortfolio {
-		ISecurityPool pool = IReporterGameIdentity(game).securityPool();
+		IQuestionLedger pool = IReporterGameIdentity(game).questionLedger();
 		uint248 universeId = pool.universeId();
 		require(pool.questionId() == questionId && address(pool.escalationGame()) == game, 'Reporter game is not canonical');
 		require(address(pool.zoltar()) == address(zoltar), 'Reporter game uses another protocol');
@@ -127,7 +127,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	function balanceOfGame(address game) external view returns (uint256) {
 		Game memory identity = games[game];
 		if (!identity.registered) {
-			ISecurityPool pool = IReporterGameIdentity(game).securityPool();
+			IQuestionLedger pool = IReporterGameIdentity(game).questionLedger();
 			if (
 				IReporterPortfolioClock(portfolio).factory().getSecurityPoolPortfolio(pool) != portfolio ||
 				address(pool.escalationGame()) != game

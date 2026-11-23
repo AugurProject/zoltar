@@ -6,7 +6,7 @@ import { ITwoWayConstantProductPair } from '../interfaces/ITwoWayConstantProduct
 import { ERC20 } from '../../ERC20.sol';
 import { BinaryOutcomes } from '../../statoblast/BinaryOutcomes.sol';
 import { IERC1155Receiver } from '../../statoblast/interfaces/IERC1155Receiver.sol';
-import { ISecurityPool, SystemState } from '../../statoblast/interfaces/ISecurityPool.sol';
+import { IQuestionLedger, SystemState } from '../../statoblast/interfaces/IQuestionLedger.sol';
 
 contract TradingMockWeth is ERC20 {
 	constructor() ERC20('Wrapped Ether', 'WETH') {}
@@ -50,7 +50,7 @@ contract TradingMockQuestionData {
 contract TradingMockForker {
 	mapping(address => BinaryOutcomes.BinaryOutcome) public outcome;
 
-	function getQuestionOutcome(ISecurityPool pool) external view returns (BinaryOutcomes.BinaryOutcome) {
+	function getQuestionOutcome(IQuestionLedger pool) external view returns (BinaryOutcomes.BinaryOutcome) {
 		return outcome[address(pool)];
 	}
 
@@ -62,14 +62,14 @@ contract TradingMockForker {
 contract TradingMockShareToken {
 	mapping(uint256 => mapping(address => uint256)) private balances;
 	mapping(address => mapping(address => bool)) private approvals;
-	mapping(uint248 => address) public canonicalPoolByUniverse;
+	mapping(uint248 => address) public canonicalQuestionLedgerByUniverse;
 
 	event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value);
 	event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values);
 	event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
 
 	function setCanonicalPool(uint248 universeId, address pool) external {
-		canonicalPoolByUniverse[universeId] = pool;
+		canonicalQuestionLedgerByUniverse[universeId] = pool;
 	}
 
 	function getTokenId(uint248 universeId, BinaryOutcomes.BinaryOutcome outcome) public pure returns (uint256) {
@@ -154,7 +154,7 @@ contract TradingMockCoreFactory {
 	function setPortfolio(address pool, address portfolio) external {
 		portfolios[pool] = portfolio;
 	}
-	function getSecurityPoolPortfolio(ISecurityPool pool) external view returns (address) {
+	function getSecurityPoolPortfolio(IQuestionLedger pool) external view returns (address) {
 		return portfolios[address(pool)];
 	}
 
@@ -164,12 +164,12 @@ contract TradingMockCoreFactory {
 		poolByOriginAndUniverse[ORIGIN_ID][universeId] = pool;
 	}
 
-	function getSecurityPoolOriginId(ISecurityPool pool) external view returns (bytes32) {
+	function getQuestionLedgerOriginId(IQuestionLedger pool) external view returns (bytes32) {
 		return originByPool[address(pool)];
 	}
 
-	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool) {
-		return ISecurityPool(payable(poolByOriginAndUniverse[originId][universeId]));
+	function getQuestionLedger(bytes32 originId, uint248 universeId) external view returns (IQuestionLedger) {
+		return IQuestionLedger(payable(poolByOriginAndUniverse[originId][universeId]));
 	}
 }
 
@@ -192,14 +192,14 @@ contract TradingMockSettlementSender {
 	}
 }
 
-contract TradingMockSecurityPool {
+contract TradingMockQuestionLedger {
 	uint248 public immutable universeId;
 	uint256 public immutable questionId;
 	TradingMockShareToken public immutable shareToken;
 	TradingMockCoreFactory public immutable securityPoolFactory;
 	TradingMockZoltar public immutable zoltar;
 	TradingMockQuestionData public immutable questionData;
-	TradingMockForker public immutable securityPoolForker;
+	TradingMockForker public immutable questionForker;
 	SystemState public systemState = SystemState.Operational;
 	bool public awaitingForkContinuation;
 	TradingMockWeth public collateralToken = new TradingMockWeth();
@@ -232,7 +232,7 @@ contract TradingMockSecurityPool {
 		securityPoolFactory = coreFactory;
 		zoltar = mockZoltar;
 		questionData = mockQuestionData;
-		securityPoolForker = mockForker;
+		questionForker = mockForker;
 		universeId = mockUniverseId;
 		questionId = mockQuestionId;
 		sharesPerEth = initialSharesPerEth;
@@ -351,8 +351,8 @@ contract TradingMockSafe is IERC1155Receiver {
 		return returned;
 	}
 
-	function createCompleteSet(ISecurityPool pool) external payable {
-		TradingMockSecurityPool(payable(address(pool))).createCompleteSet{value: msg.value}();
+	function createCompleteSet(IQuestionLedger pool) external payable {
+		TradingMockQuestionLedger(payable(address(pool))).createCompleteSet{value: msg.value}();
 	}
 
 	function transferBatch(address token, address from, address to, uint256[] calldata ids, uint256[] calldata values, bytes calldata data) external {

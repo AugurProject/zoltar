@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, NONE, OUTCOMES, YES, type CarryLeaf } from './auditE2EHarness'
@@ -20,7 +20,7 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		const reporters = [r2, r3, r4, r5]
 		await fixture.prepare()

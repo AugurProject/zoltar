@@ -78,7 +78,7 @@ describe('factory, pair, and router integration', () => {
 		forker = await deploy(mocks.TradingMockForker)
 		token = await deploy(mocks.TradingMockShareToken)
 		coreFactory = await deploy(mocks.TradingMockCoreFactory)
-		pool = await deploy(mocks.TradingMockSecurityPool, [token, coreFactory, zoltar, questionData, forker, universe, question, rate])
+		pool = await deploy(mocks.TradingMockQuestionLedger, [token, coreFactory, zoltar, questionData, forker, universe, question, rate])
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockForker.abi, address: forker, functionName: 'setQuestionOutcome', args: [pool, 3] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setCanonicalPool', args: [universe, pool] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPool', args: [pool, universe] }))
@@ -101,10 +101,10 @@ describe('factory, pair, and router integration', () => {
 	for (const onlyRep of [false, true]) {
 		test(`forwards a portfolio ${onlyRep ? 'REP-only' : 'ETH and REP'} recovery basket without sweeping prior REP`, async () => {
 			await initialize()
-			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 10n }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [7n, onlyRep, true] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'createCompleteSet', value: 10n }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'configureRecovery', args: [7n, onlyRep, true] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPortfolio', args: [pool, pool] }))
-			const rep = await client.readContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'repToken' })
+			const rep = await client.readContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'repToken' })
 			const repAbi = parseAbi(['function mint(address owner,uint256 amount)', 'function balanceOf(address owner) view returns (uint256)'])
 			await writeContractAndWait(client, () => client.writeContract({ abi: repAbi, address: rep, functionName: 'mint', args: [router, 11n] }))
 			const recipient = `0x${TEST_ADDRESSES[1].toString(16).padStart(40, '0')}` as const
@@ -121,12 +121,12 @@ describe('factory, pair, and router integration', () => {
 			if (onlyRep) await expect(redeem(1n, 0n)).rejects.toThrow('Minimum ETH output')
 			const holderBalances = () => Promise.all(([0n, 1n, 2n] as const).map(outcome => tokenBalance(account, outcome)))
 			const beforeShares = await holderBalances()
-			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [6n, onlyRep, true] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'configureRecovery', args: [6n, onlyRep, true] }))
 			await expect(redeem(minEth, 7n)).rejects.toThrow('Minimum REP output')
 			expect(await holderBalances()).toEqual(beforeShares)
 			expect(await client.getBalance({ address: recipient })).toBe(beforeEth)
 			expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(0n)
-			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [7n, onlyRep, true] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'configureRecovery', args: [7n, onlyRep, true] }))
 			await writeContractAndWait(client, () => redeem(minEth, 7n))
 			expect(await client.getBalance({ address: recipient })).toBe(beforeEth + (onlyRep ? 0n : 1n))
 			expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(7n)
@@ -136,10 +136,10 @@ describe('factory, pair, and router integration', () => {
 
 	test('#1445: a sell built by receiveBasedExitArguments enforces the quoted recovery REP minimum', async () => {
 		await initialize()
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 10n }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [7n, false, true] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'createCompleteSet', value: 10n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'configureRecovery', args: [7n, false, true] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPortfolio', args: [pool, pool] }))
-		const rep = await client.readContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'repToken' })
+		const rep = await client.readContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'repToken' })
 		const repAbi = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
 		const recipient = `0x${TEST_ADDRESSES[1].toString(16).padStart(40, '0')}` as const
 		const [swapInput] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'quoteExactOutput', args: [true, rate] })
@@ -148,11 +148,11 @@ describe('factory, pair, and router integration', () => {
 		const exit = () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, router, transfer.ids, transfer.amounts, transfer.data] })
 		const beforeShares = await shareBalances(account)
 		// The pool's recovery REP per complete set drops between the quote and the signed submission.
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [6n, false, true] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'configureRecovery', args: [6n, false, true] }))
 		await expect(exit()).rejects.toThrow('Minimum REP output')
 		expect(await shareBalances(account)).toEqual(beforeShares)
 		expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(0n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [7n, false, true] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'configureRecovery', args: [7n, false, true] }))
 		await writeContractAndWait(client, exit)
 		expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(7n)
 	})
@@ -229,8 +229,8 @@ describe('factory, pair, and router integration', () => {
 	})
 
 	test('rejects noncanonical pools and pairs from another trading factory', async () => {
-		const noncanonicalPool = await deploy(mocks.TradingMockSecurityPool, [token, coreFactory, zoltar, questionData, forker, universe, question, rate])
-		await expect(client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [noncanonicalPool] })).rejects.toThrow('Noncanonical security pool')
+		const noncanonicalPool = await deploy(mocks.TradingMockQuestionLedger, [token, coreFactory, zoltar, questionData, forker, universe, question, rate])
+		await expect(client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [noncanonicalPool] })).rejects.toThrow('Noncanonical question ledger')
 
 		const foreignFactory = await deploy(factoryArtifact, [coreFactory, 30n])
 		await writeContractAndWait(client, () => client.writeContract({ abi: factoryArtifact.abi, address: foreignFactory, functionName: 'createPair', args: [pool] }))
@@ -242,7 +242,7 @@ describe('factory, pair, and router integration', () => {
 
 	test('keeps parent and child-universe pairs isolated when they share one ShareToken', async () => {
 		const childUniverse = universe + 1n
-		const childPool = await deploy(mocks.TradingMockSecurityPool, [token, coreFactory, zoltar, questionData, forker, childUniverse, question, rate])
+		const childPool = await deploy(mocks.TradingMockQuestionLedger, [token, coreFactory, zoltar, questionData, forker, childUniverse, question, rate])
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockForker.abi, address: forker, functionName: 'setQuestionOutcome', args: [childPool, 3] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setCanonicalPool', args: [childUniverse, childPool] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPool', args: [childPool, childUniverse] }))
@@ -319,12 +319,12 @@ describe('factory, pair, and router integration', () => {
 
 	test('closes swaps and additions while awaiting continuation or inactive, but always permits removal', async () => {
 		await initialize()
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setAwaitingForkContinuation', args: [true] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'setAwaitingForkContinuation', args: [true] }))
 		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Fork continuation pending')
 		await expect(client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, 1n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 1n })).rejects.toThrow('Fork continuation pending')
 
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setAwaitingForkContinuation', args: [false] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setSystemState', args: [1] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'setAwaitingForkContinuation', args: [false] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'setSystemState', args: [1] }))
 		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Pool inactive')
 		await expect(client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, 1n, unboundedShares, unboundedShares, 1n, account, 10n ** 12n], value: 1n })).rejects.toThrow('Pool inactive')
 
@@ -354,7 +354,7 @@ describe('factory, pair, and router integration', () => {
 	})
 
 	// The mock pool mints complete sets at a fixed share rate, so no holding fees accrue between the public read and the
-	// transaction. On a SecurityPool, fees accrued since its last update lower the share rate the router mints at, so the
+	// transaction. On a QuestionLedger, fees accrued since its last update lower the share rate the router mints at, so the
 	// walletless estimate can overstate complete sets, deposits, and LP by those fees; the wallet simulation stays the quote of record.
 	test('the walletless liquidity estimate matches router and pair results while no holding fees accrue', async () => {
 		const deadline = 10n ** 12n
@@ -365,8 +365,8 @@ describe('factory, pair, and router integration', () => {
 				noReserve,
 				mintFees: { securityMultiplierBps: 12_000n, purchaseFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n, annualFeeBps: 0n, feePrincipalAttoEth: 0n },
 				lpTotalSupply: await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'totalSupply' }),
-				settlementCollateralAttoEth: await client.readContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'settlementCollateralAttoEth' }),
-				shareTokenSupplyAttoShares: await client.readContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
+				settlementCollateralAttoEth: await client.readContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'settlementCollateralAttoEth' }),
+				shareTokenSupplyAttoShares: await client.readContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
 			}
 		}
 		const expectDepositMatches = (estimate: LiquidityPreview | undefined, result: Readonly<{ completeSetShares: bigint; yesUsed: bigint; noUsed: bigint; yesReturned: bigint; noReturned: bigint; invalidInsurance: bigint; liquidity: bigint }>) => {
@@ -382,8 +382,8 @@ describe('factory, pair, and router integration', () => {
 			})
 		}
 
-		// Existing complete sets give the pool a share rate; an empty SecurityPool mints 1:1, which this fixed-rate mock does not model.
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 7n }))
+		// Existing complete sets give the pool a share rate; an empty QuestionLedger mints 1:1, which this fixed-rate mock does not model.
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'createCompleteSet', value: 7n }))
 		const initialAmount = 10_007n
 		const initialYesBps = 3_300n
 		const initialQuote = await client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, initialAmount, initialYesBps, unboundedShares, unboundedShares, 0n, 0n, 0n, account, deadline], value: initialAmount })
@@ -417,7 +417,7 @@ describe('factory, pair, and router integration', () => {
 		expect(initialReserves[0]).toBe((10_000n * rate * 3_000n) / 7_000n)
 		expect(await tokenBalance(pair, 0n)).toBe(0n)
 		const invalidBefore = await tokenBalance(account, 0n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setSharesPerEth', args: [2n * rate] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'setSharesPerEth', args: [2n * rate] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1_000n, 1, 1n, account, 10n ** 12n], value: 1_000n }))
 		expect((await tokenBalance(account, 0n)) - invalidBefore).toBe(2_000n * rate)
 		expect(await tokenBalance(pair, 0n)).toBe(0n)
@@ -603,7 +603,7 @@ describe('factory, pair, and router integration', () => {
 	test('#1495: status and transaction guards agree when an ended question is also inactive', async () => {
 		await initialize()
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionData.abi, address: questionData, functionName: 'setEndTime', args: [question, 1n] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setSystemState', args: [1] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'setSystemState', args: [1] }))
 		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(1n)
 		await expect(client.simulateContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Question ended')
 	})
@@ -664,7 +664,7 @@ describe('factory, pair, and router integration', () => {
 		expect(await client.readContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'DOMAIN_SEPARATOR' })).not.toBe(`0x${'00'.repeat(32)}`)
 		await expect(client.writeContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'permit', args: [account, currentRouter, 7n, 0n, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`] })).rejects.toThrow('ERC2612 permit expired')
 
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 20_000n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'createCompleteSet', value: 20_000n }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [currentPair, true] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'initialize', args: [10_000n * rate, 10_000n * rate, 1n, account, NO_DEADLINE] }))
 		const liquidity = await client.readContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'balanceOf', args: [account] })
@@ -739,7 +739,7 @@ describe('factory, pair, and router integration', () => {
 			version = 2,
 			operation = 1,
 			shareToken = token,
-			securityPool = pool,
+			questionLedger = pool,
 			configuredPair = currentPair,
 			universeId = universe,
 			questionId = question,
@@ -757,7 +757,7 @@ describe('factory, pair, and router integration', () => {
 			version: number
 			operation: number
 			shareToken: Address
-			securityPool: Address
+			questionLedger: Address
 			configuredPair: Address
 			universeId: bigint
 			questionId: bigint
@@ -771,7 +771,7 @@ describe('factory, pair, and router integration', () => {
 			payoutRecipient: Address
 			refundRecipient: Address
 			requestDeadline: bigint
-		}> = {}) => encodeReceiveRequest([version, operation, shareToken, securityPool, configuredPair, universeId, questionId, invalidTokenId, yesTokenId, noTokenId, longOutcome, completeSetShares, maxLongSharesIn, minEthOut, payoutRecipient, refundRecipient, requestDeadline, 0n])
+		}> = {}) => encodeReceiveRequest([version, operation, shareToken, questionLedger, configuredPair, universeId, questionId, invalidTokenId, yesTokenId, noTokenId, longOutcome, completeSetShares, maxLongSharesIn, minEthOut, payoutRecipient, refundRecipient, requestDeadline, 0n])
 		const requestData = encodeReceiveBasedRedeemRequest({ shareToken: token, pool, pair: currentPair, universeId: universe, questionId: question }, redeemAmount, 1n, recipient, deadline)
 		const sharesBeforeRedeem = await shareBalances(account)
 		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'isApprovedForAll', args: [account, currentRouter] })).toBe(false)
@@ -805,7 +805,7 @@ describe('factory, pair, and router integration', () => {
 			{ name: 'version', data: redeemRequest({ version: 1 }) },
 			{ name: 'operation', data: redeemRequest({ operation: 2 }) },
 			{ name: 'share token', data: redeemRequest({ shareToken: account }) },
-			{ name: 'security pool', data: redeemRequest({ securityPool: account }) },
+			{ name: 'question ledger', data: redeemRequest({ questionLedger: account }) },
 			{ name: 'pair', data: redeemRequest({ configuredPair: account }) },
 			{ name: 'universe', data: redeemRequest({ universeId: universe + 1n }) },
 			{ name: 'question', data: redeemRequest({ questionId: question + 1n }) },

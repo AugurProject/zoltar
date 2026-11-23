@@ -403,14 +403,14 @@ export const coreContractReferences: ContractReference[] = [
 		purpose: 'Deploys every portfolio from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
 		readAbiFingerprint: 'b614b97269b3eceef7cab1d8c26a5a7a083c25835a2069184404608c8d8062a3',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `isPortfolio` is true only for a portfolio this factory deployed, and `portfolioCreationCodeHash` is the hash of the only creation code it deploys. `portfolioCount` and strict `portfoliosRange` enumerate, in registration order, the factory-deployed portfolios that have configured their namespace; a deployed portfolio is listed when its final setup step calls `initializePortfolioPriceFeed`. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` returns the factory-deployed portfolio a ledger belongs to; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolCoordinator` returns the prepared child coordinator, or zero before preparation. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured coordinator-factory ceiling used to reject over-cap portfolio creation before setup. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `questionLedgerDeploymentCount` and strict `questionLedgerDeploymentsRange` enumerate canonical question ledgers. `isPortfolio` is true only for a portfolio this factory deployed, and `portfolioCreationCodeHash` is the hash of the only creation code it deploys. `portfolioCount` and strict `portfoliosRange` enumerate, in registration order, the factory-deployed portfolios that have configured their namespace; a deployed portfolio is listed when its final setup step calls `initializePortfolioPriceFeed`. `getQuestionLedgerId`, `getQuestionLedger`, `getQuestionLedgerOriginId` and `getQuestionLedgerHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` returns the factory-deployed portfolio a ledger belongs to; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildQuestionLedgerCoordinator` returns the prepared child coordinator, or zero before preparation. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured coordinator-factory ceiling used to reject over-cap portfolio creation before setup. `zoltar` identifies the protocol root.',
 		readDeclarations: [
 			{ name: 'maximumReportPriorityFeeAttoEthPerGas' },
 			{
-				name: 'securityPoolDeploymentCount',
+				name: 'questionLedgerDeploymentCount',
 			},
 			{
-				name: 'securityPoolDeploymentsRange',
+				name: 'questionLedgerDeploymentsRange',
 			},
 			{
 				name: 'portfolioCount',
@@ -419,16 +419,16 @@ export const coreContractReferences: ContractReference[] = [
 				name: 'portfoliosRange',
 			},
 			{
-				name: 'getPoolId',
+				name: 'getQuestionLedgerId',
 			},
 			{
-				name: 'getSecurityPool',
+				name: 'getQuestionLedger',
 			},
 			{
-				name: 'getSecurityPoolOriginId',
+				name: 'getQuestionLedgerOriginId',
 			},
 			{
-				name: 'getSecurityPoolHasInheritedForkOutcome',
+				name: 'getQuestionLedgerHasInheritedForkOutcome',
 			},
 			{
 				name: 'getPortfolioOriginId',
@@ -437,7 +437,7 @@ export const coreContractReferences: ContractReference[] = [
 				name: 'getSecurityPoolPortfolio',
 			},
 			{
-				name: 'getChildPoolCoordinator',
+				name: 'getChildQuestionLedgerCoordinator',
 			},
 		],
 		readStorageDeclarations: [
@@ -509,18 +509,18 @@ export const coreContractReferences: ContractReference[] = [
 				signals: 'Returns the canonical feed address. A newly deployed feed emits `SharedPriceFeedRegistered`.',
 			},
 			{
-				call: '`deployPortfolioSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
+				call: '`deployPortfolioQuestionLedger(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
 				caller: 'A portfolio with a configured namespace, within its own caller-address namespace',
 				effect:
 					'Creates a separate origin ledger and share token in the caller namespace, attaching its coordinator to the namespace/universe shared REP/ETH feed. Portfolio admission calls this from the portfolio contract, after its immutable admission policy allows the question; it then enforces the question horizon, with failure reverting deployment.',
 				declarations: [
 					{
-						name: 'deployPortfolioSecurityPool',
+						name: 'deployPortfolioQuestionLedger',
 					},
 				],
 				preconditions:
 					'The caller has configured its namespace (`Portfolio configuration missing`), which only a factory-deployed portfolio can do. The ordinary origin deployment checks apply; no lineage for this question/configuration has been claimed in the caller namespace. The namespace is derived from msg.sender and cannot be supplied on behalf of another pool.',
-				signals: '`SharedPriceFeedSet`, feed `CoordinatorRegistered`, `SecurityPoolRegistered`, and `DeploySecurityPool`',
+				signals: '`SharedPriceFeedSet`, feed `CoordinatorRegistered`, `QuestionLedgerRegistered`, and `DeployQuestionLedger`',
 			},
 			{
 				call: '`preparePortfolioChildPriceFeed(parent, outcomeIndex)`',
@@ -535,28 +535,28 @@ export const coreContractReferences: ContractReference[] = [
 				signals: 'Returns the canonical child feed address. A newly deployed feed emits `SharedPriceFeedRegistered`. Child REP deployment may emit Zoltar events.',
 			},
 			{
-				call: '`prepareChildPoolCoordinator(parent, outcomeIndex)`',
+				call: '`prepareChildQuestionLedgerCoordinator(parent, outcomeIndex)`',
 				caller: 'Anyone',
 				effect: 'Predeploys the canonical child coordinator separately from the question ledger. Repeated calls return the same coordinator.',
 				declarations: [
 					{
-						name: 'prepareChildPoolCoordinator',
+						name: 'prepareChildQuestionLedgerCoordinator',
 					},
 				],
 				preconditions: 'The parent is a canonical ledger in PoolForked state. A portfolio must first prepare its child feed. Missing child REP is deployed through Zoltar. The authenticated factory chain exclusively controls subsequent coordinator binding.',
-				signals: 'Returns the coordinator address; no `DeploySecurityPool` until the child ledger is deployed.',
+				signals: 'Returns the coordinator address; no `DeployQuestionLedger` until the child ledger is deployed.',
 			},
 			{
-				call: '`deployChildSecurityPool(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps)`',
-				caller: '`SecurityPoolForker` only (`Only security pool forker`)',
+				call: '`deployChildQuestionLedger(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps)`',
+				caller: '`QuestionForker` only (`Only security pool forker`)',
 				effect: 'Creates and registers a canonical child question ledger with the parent share token and a coordinator attached to its portfolio branch feed.',
 				declarations: [
 					{
-						name: 'deployChildSecurityPool',
+						name: 'deployChildQuestionLedger',
 					},
 				],
 				preconditions: 'Parent is the canonical pool for its lineage; supplied share token equals the parent share token; no pool has already been claimed for the parent origin in the target universe; a portfolio child feed has already been prepared; deployment arguments satisfy downstream constructors and wiring.',
-				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
+				signals: '`QuestionLedgerRegistered`, then `DeployQuestionLedger`',
 			},
 		],
 	},

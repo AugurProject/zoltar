@@ -27,7 +27,7 @@ const topologyValues = {
 }
 export const topologyIdentifiers = [
 	{ type: 'universe REP token', value: topologyValues.repToken },
-	{ type: 'security pool address', value: topologyValues.poolAddress },
+	{ type: 'question ledger address', value: topologyValues.poolAddress },
 	{ type: 'report token 1', value: topologyValues.reportToken1 },
 	{ type: 'report token 2', value: topologyValues.reportToken2 },
 	{ type: 'collateral repair auction address', value: topologyValues.auctionAddress },
@@ -145,7 +145,7 @@ export const workflowRenderingState = state({
 			eligibility: { blockers: ['Covered by open-oracle.weth.wrap'], eligible: false },
 		},
 		{ definition: { classification: 'role-restricted', description: 'Factory only.', ecosystem: 'statoblast', id: 'surface.pool.initialize', label: 'Pool.initialize', risk: 'high' }, eligibility: { blockers: ['factory only'], eligible: false } },
-		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'statoblast', id: 'surface.security-pool-forker.claim-auction-proceeds', independentlyExecutable: false, label: 'SecurityPoolForker.claimAuctionProceeds', risk: 'low' }, eligibility: { blockers: ['Covered by settleAuctionBids'], eligible: false } },
+		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'statoblast', id: 'surface.question-forker.claim-auction-proceeds', independentlyExecutable: false, label: 'QuestionForker.claimAuctionProceeds', risk: 'low' }, eligibility: { blockers: ['Covered by settleAuctionBids'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'trading', id: 'trading.position.enter', label: 'Router enter', risk: 'low' }, eligibility: { blockers: ['No safe route exists'], eligible: false } },
 	],
 	inventoryAvailable: true,

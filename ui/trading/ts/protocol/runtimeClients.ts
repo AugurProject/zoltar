@@ -1,18 +1,18 @@
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { getAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { InjectedEthereum } from './injected.js'
 import type { LiveMarket } from './liveMarket.js'
 
-const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
+const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 const erc20BalanceAbi = ReputationToken_ReputationToken.abi
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 
-// A simulated chain only holds the Statoblast security pool and the trading factory and router once
+// A simulated chain only holds the Statoblast question ledger and the trading factory and router once
 // its scenario bootstrap finishes. Reads that must observe the deployed protocol wait here instead of
 // before mount, so the application shell renders immediately and reports its own loading state.
 export async function waitForActiveEnvironmentReady() {
@@ -37,7 +37,7 @@ export function createTradingWalletClient(provider: InjectedEthereum, account: A
 export async function loadWalletHeaderBalances(client: PublicClient, market: Pick<LiveMarket, 'pool'> | { zoltar: Address; universeId: bigint }, account: Address) {
 	const [ethAttoEth, repToken] = await Promise.all([
 		client.getBalance({ address: account }),
-		'pool' in market ? client.readContract({ abi: securityPoolAbi, address: market.pool, functionName: 'repToken' }) : client.readContract({ abi: Zoltar_Zoltar.abi, address: market.zoltar, functionName: 'getRepToken', args: [market.universeId] }),
+		'pool' in market ? client.readContract({ abi: questionLedgerAbi, address: market.pool, functionName: 'repToken' }) : client.readContract({ abi: Zoltar_Zoltar.abi, address: market.zoltar, functionName: 'getRepToken', args: [market.universeId] }),
 	])
 	const repAttoRep = await client.readContract({ abi: erc20BalanceAbi, address: getAddress(repToken), functionName: 'balanceOf', args: [account] })
 	return { ethAttoEth, repAttoRep, repToken: getAddress(repToken) }

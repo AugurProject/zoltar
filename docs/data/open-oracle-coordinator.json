@@ -46,8 +46,8 @@
 		"reportDelegate": "view",
 		"reputationToken": "view",
 		"requestPrice": "payable",
-		"securityPool": "view",
-		"setSecurityPool": "nonpayable",
+		"questionLedger": "view",
+		"setQuestionLedger": "nonpayable",
 		"setSharedPriceFeed": "nonpayable",
 		"settlementTime": "view",
 		"sharedPriceFeed": "view",
@@ -81,8 +81,8 @@
 		"reportDelegate": "reportDelegate()",
 		"reputationToken": "reputationToken()",
 		"requestPrice": "requestPrice(uint256,uint256,uint256)",
-		"securityPool": "securityPool()",
-		"setSecurityPool": "setSecurityPool(address)",
+		"questionLedger": "questionLedger()",
+		"setQuestionLedger": "setQuestionLedger(address)",
 		"setSharedPriceFeed": "setSharedPriceFeed(address)",
 		"settlementTime": "settlementTime()",
 		"sharedPriceFeed": "sharedPriceFeed()",
@@ -91,9 +91,9 @@
 		"weth": "weth()",
 		"collateralToken": "collateralToken()"
 	},
-	"events": ["SecurityPoolSet", "SharedPriceFeedSet"],
+	"events": ["QuestionLedgerSet", "SharedPriceFeedSet"],
 	"eventDeclarations": {
-		"SecurityPoolSet": "SecurityPoolSet(address indexed securityPool)",
+		"QuestionLedgerSet": "QuestionLedgerSet(address indexed questionLedger)",
 		"SharedPriceFeedSet": "SharedPriceFeedSet(address indexed priceFeed)"
 	},
 	"enumValues": {}

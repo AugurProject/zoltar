@@ -55,8 +55,8 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 	},
 	{
-		name: 'SecurityPoolRegistered',
-		parameters: 'bytes32 indexed originId,bytes32 indexed poolId,uint248 indexed universeId,ISecurityPool securityPool',
+		name: 'QuestionLedgerRegistered',
+		parameters: 'bytes32 indexed originId,bytes32 indexed poolId,uint248 indexed universeId,IQuestionLedger questionLedger',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -65,8 +65,8 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
-		name: 'DeploySecurityPool',
-		parameters: 'ISecurityPool indexed securityPool,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas',
+		name: 'DeployQuestionLedger',
+		parameters: 'IQuestionLedger indexed questionLedger,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,IQuestionLedger indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -102,12 +102,12 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	{
 		name: 'AwaitingForkContinuationSet',
 		parameters: 'bool awaitingForkContinuation',
-		sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
+		sourcePath: 'solidity/contracts/statoblast/QuestionLedger.sol',
 	},
 	{
 		name: 'SystemStateSet',
 		parameters: 'SystemState systemState',
-		sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
+		sourcePath: 'solidity/contracts/statoblast/QuestionLedger.sol',
 	},
 	{
 		name: 'VaultEscrowUpdated',

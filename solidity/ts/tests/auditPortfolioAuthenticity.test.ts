@@ -57,7 +57,7 @@ describe('audit: only portfolios the factory deployed are canonical', () => {
 		deployContract(fixture.owner(), encodeDeployData({ abi: portfolioArtifact.abi, bytecode: creationCode(), args: [infrastructure().securityPoolFactory, deployers, origin(), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, portfolioEconomics] }))
 	const isPortfolio = (address: Address) => fixture.owner().readContract({ ...factory(), functionName: 'isPortfolio', args: [address] })
 	const portfolioCount = () => fixture.owner().readContract({ ...factory(), functionName: 'portfolioCount' })
-	const poolCount = () => fixture.owner().readContract({ ...factory(), functionName: 'securityPoolDeploymentCount' })
+	const poolCount = () => fixture.owner().readContract({ ...factory(), functionName: 'questionLedgerDeploymentCount' })
 	const setupStage = async (address: Address) => Number(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address, functionName: 'setupStage' }))
 	const prepareNext = (address: Address) => writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: portfolioArtifact.abi, address, functionName: 'prepareNext', gas: 16_777_216n }))
 
@@ -67,7 +67,7 @@ describe('audit: only portfolios the factory deployed are canonical', () => {
 		const poolsBefore = await poolCount()
 		const stranger = fixture.other()
 		await expect(stranger.writeContract({ ...factory(), functionName: 'initializePortfolioPriceFeed', args: [base.genesisUniverse, 10_000_000_000n] })).rejects.toThrow('Portfolio is not canonical')
-		await expect(stranger.writeContract({ ...factory(), functionName: 'deployPortfolioSecurityPool', args: [base.genesisUniverse, base.questionId, base.statoblastSecurityMultiplierBps, 10_000_000_000n] })).rejects.toThrow('Portfolio configuration missing')
+		await expect(stranger.writeContract({ ...factory(), functionName: 'deployPortfolioQuestionLedger', args: [base.genesisUniverse, base.questionId, base.statoblastSecurityMultiplierBps, 10_000_000_000n] })).rejects.toThrow('Portfolio configuration missing')
 
 		// Genuine portfolio code with the genuine deployers is still not canonical when the factory did not create it.
 		const outsider = await deployOutsideFactory()
@@ -81,7 +81,7 @@ describe('audit: only portfolios the factory deployed are canonical', () => {
 		await base.mockWindow.setBalance(outsider, unit)
 		const asOutsider = createWriteClient(base.mockWindow, BigInt(outsider))
 		await expect(asOutsider.writeContract({ ...factory(), functionName: 'initializePortfolioPriceFeed', args: [base.genesisUniverse, 10_000_000_000n] })).rejects.toThrow('Portfolio is not canonical')
-		await expect(asOutsider.writeContract({ ...factory(), functionName: 'deployPortfolioSecurityPool', args: [base.genesisUniverse, fixture.secondQuestionId, base.statoblastSecurityMultiplierBps, 10_000_000_000n] })).rejects.toThrow('Portfolio configuration missing')
+		await expect(asOutsider.writeContract({ ...factory(), functionName: 'deployPortfolioQuestionLedger', args: [base.genesisUniverse, fixture.secondQuestionId, base.statoblastSecurityMultiplierBps, 10_000_000_000n] })).rejects.toThrow('Portfolio configuration missing')
 
 		// The constructor accepts any deployer that holds code, so a creator-chosen deployer still constructs. It stays outside the factory's record.
 		const withChosenDeployer = await deployOutsideFactory({ ...canonicalDeployers(), capital: weth })
@@ -123,10 +123,10 @@ describe('audit: only portfolios the factory deployed are canonical', () => {
 		expect(await portfolioCount()).toBe(before + 1n)
 		expect(getAddress(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'factory' }))).toBe(getAddress(infrastructure().securityPoolFactory))
 		await fixture.register(base.questionId, created)
-		const pool = fixture.poolFor(base.questionId, base.genesisUniverse, zeroAddress, created).securityPool
+		const pool = fixture.poolFor(base.questionId, base.genesisUniverse, zeroAddress, created).questionLedger
 		expect(getAddress(await fixture.owner().readContract({ ...factory(), functionName: 'getSecurityPoolPortfolio', args: [pool] }))).toBe(getAddress(created))
 		// Every pool the factory registers therefore belongs to a canonical portfolio.
-		expect(await isPortfolio(await fixture.owner().readContract({ ...factory(), functionName: 'getSecurityPoolPortfolio', args: [fixture.poolFor(base.questionId).securityPool] }))).toBe(true)
+		expect(await isPortfolio(await fixture.owner().readContract({ ...factory(), functionName: 'getSecurityPoolPortfolio', args: [fixture.poolFor(base.questionId).questionLedger] }))).toBe(true)
 	})
 
 	test('a factory-deployed portfolio is built by the pinned module deployers', async () => {

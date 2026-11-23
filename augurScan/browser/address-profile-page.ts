@@ -109,11 +109,11 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		rep: item.rep_balances,
 	})
 	const involvement = element('section', 'address-profile-panel')
-	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Security pools and capital positions'))
+	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Question ledgers and capital positions'))
 	const involvementGrid = element('div', 'rich-position-grid')
 	for (const pool of item.pool_associations ?? []) {
 		const card = element('div', 'rich-position')
-		card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Security pool'), protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }))
+		card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Question ledger'), protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }))
 		involvementGrid.append(card)
 	}
 	// One capital position per universe ledger: the owner's principal, commitment and health at the latest tagged read.

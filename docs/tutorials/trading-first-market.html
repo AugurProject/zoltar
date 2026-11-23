@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Create and seed the trading pool for an existing SecurityPool and end with LP tokens and Invalid shares in your wallet." />
+		<meta name="description" content="Create and seed the trading pool for an existing QuestionLedger and end with LP tokens and Invalid shares in your wallet." />
 		<title>Your first Trading market · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -13,28 +13,28 @@
 			<header>
 				<p class="kicker">Tutorial</p>
 				<h1>Your first Trading market</h1>
-				<p>You will open trading for a <a href="../reference/glossary.html#security-pool">SecurityPool</a> by creating its <a href="../reference/glossary.html#trading-pool">trading pool</a> and seeding it at a 70% <a href="../explanation/trading/pricing.html">conditional Yes price</a> (the Yes price if the market does not resolve Invalid) with 0.01 ETH. You finish with LP tokens (the trading pool's liquidity-provider tokens) and separately held <a href="../reference/glossary.html#invalid">Invalid</a> shares in your wallet, and the market listed as open.</p>
+				<p>You will open trading for a <a href="../reference/glossary.html#security-pool">QuestionLedger</a> by creating its <a href="../reference/glossary.html#trading-pool">trading pool</a> and seeding it at a 70% <a href="../explanation/trading/pricing.html">conditional Yes price</a> (the Yes price if the market does not resolve Invalid) with 0.01 ETH. You finish with LP tokens (the trading pool's liquidity-provider tokens) and separately held <a href="../reference/glossary.html#invalid">Invalid</a> shares in your wallet, and the market listed as open.</p>
 			</header>
 			<section id="before-you-start">
 				<h2>Before you start</h2>
-				<p>Trading is an exchange for <a href="../explanation/statoblast.html">Statoblast</a> outcome shares: a trading pool swaps the Yes and No shares of exactly one SecurityPool, and a SecurityPool without one has no market yet. In the UI, creating the trading pool is called creating a <em>market</em>.</p>
-				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1&amp;genesis=yes&amp;simScenario=deployed#/create-market</code>. That simulator scenario has one SecurityPool, at <code data-simulation-security-pool="address">0x148607EC840cabf95c3E293Bfbd03A3895C0602c</code>, and no trading pool; the screenshots below come from it. For a live network, follow <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>, and if the UI opens the deployment screen, complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund the wallet with the deposit plus gas.</p>
+				<p>Trading is an exchange for <a href="../explanation/statoblast.html">Statoblast</a> outcome shares: a trading pool swaps the Yes and No shares of exactly one QuestionLedger, and a QuestionLedger without one has no market yet. In the UI, creating the trading pool is called creating a <em>market</em>.</p>
+				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1&amp;genesis=yes&amp;simScenario=deployed#/create-market</code>. That simulator scenario has one QuestionLedger, at <code data-simulation-security-pool="address">0x148607EC840cabf95c3E293Bfbd03A3895C0602c</code>, and no trading pool; the screenshots below come from it. For a live network, follow <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>, and if the UI opens the deployment screen, complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund the wallet with the deposit plus gas.</p>
 			</section>
 			<section id="find-pool">
-				<h2>Open a SecurityPool without a market</h2>
+				<h2>Open a QuestionLedger without a market</h2>
 				<ol>
-					<li>Select the <strong>Create</strong> tab and paste the SecurityPool address into <strong>Search security pools</strong>. In the simulator, use the address above; on a live network, copy it from Statoblast.</li>
-					<li>Select <strong>Open security pool</strong>. The form opens with the badge <strong>MARKET NOT CREATED</strong> and <strong>Create market</strong> selected, and the SecurityPool is saved as a favorite.</li>
+					<li>Select the <strong>Create</strong> tab and paste the QuestionLedger address into <strong>Search question ledgers</strong>. In the simulator, use the address above; on a live network, copy it from Statoblast.</li>
+					<li>Select <strong>Open question ledger</strong>. The form opens with the badge <strong>MARKET NOT CREATED</strong> and <strong>Create market</strong> selected, and the QuestionLedger is saved as a favorite.</li>
 				</ol>
-				<p>The next section continues from this form. To check the SecurityPool first, select <strong>Create</strong> again: the list shows your favorite SecurityPools in the selected <a href="../reference/glossary.html#universe">universe</a> that have no trading market yet, and <strong>Create market</strong> returns you to the form.</p>
+				<p>The next section continues from this form. To check the QuestionLedger first, select <strong>Create</strong> again: the list shows your favorite QuestionLedgers in the selected <a href="../reference/glossary.html#universe">universe</a> that have no trading market yet, and <strong>Create market</strong> returns you to the form.</p>
 				<figure class="screenshot" id="fig-trading-create-market" aria-labelledby="fig-trading-create-market-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/create-market.png"><img width="410" height="298" src="../assets/screenshots/trading/create-market.png" alt="A security pool card on the Create market page for Will this resolve?, closing in 364 days, with Create market and Details buttons." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/create-market.png"><img width="410" height="298" src="../assets/screenshots/trading/create-market.png" alt="A question ledger card on the Create market page for Will this resolve?, closing in 364 days, with Create market and Details buttons." loading="lazy" /></a>
 					<figcaption id="fig-trading-create-market-caption"><span class="figure-label">Pools without a market.</span> <strong>Create market</strong> reopens the form; <strong>Details</strong> opens the details page.</figcaption>
 				</figure>
-				<p>The details page tells you whether the SecurityPool can take a market. An enabled <strong>Create market</strong> button means it can, and selecting it returns you to the form. When it cannot, the button is disabled and names the reason, such as <em>Question ended. This market can no longer be created.</em> <strong>Minting capacity</strong> shows the collateral already minted against the SecurityPool's ceiling (used / ceiling); your deposit must fit in the difference.</p>
+				<p>The details page tells you whether the QuestionLedger can take a market. An enabled <strong>Create market</strong> button means it can, and selecting it returns you to the form. When it cannot, the button is disabled and names the reason, such as <em>Question ended. This market can no longer be created.</em> <strong>Minting capacity</strong> shows the collateral already minted against the QuestionLedger's ceiling (used / ceiling); your deposit must fit in the difference.</p>
 				<figure class="screenshot" id="fig-trading-pool-details" aria-labelledby="fig-trading-pool-details-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/security-pool-details.png"><img width="785" height="611" src="../assets/screenshots/trading/security-pool-details.png" alt="The security pool details page showing question end, security pool state Operational, universe not forked, minting capacity 1 of 10 ETH, and a Create market button." loading="lazy" /></a>
-					<figcaption id="fig-trading-pool-details-caption"><span class="figure-label">An eligible SecurityPool.</span> The SecurityPool is operational, its universe has not forked, and it has capacity for new collateral.</figcaption>
+					<a class="screenshot-link" href="../assets/screenshots/trading/security-pool-details.png"><img width="785" height="611" src="../assets/screenshots/trading/security-pool-details.png" alt="The question ledger details page showing question end, question ledger state Operational, universe not forked, minting capacity 1 of 10 ETH, and a Create market button." loading="lazy" /></a>
+					<figcaption id="fig-trading-pool-details-caption"><span class="figure-label">An eligible QuestionLedger.</span> The QuestionLedger is operational, its universe has not forked, and it has capacity for new collateral.</figcaption>
 				</figure>
 			</section>
 			<section id="initialize">

@@ -15,8 +15,8 @@ import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex,
-	statoblast_SecurityPool_SecurityPool,
-	statoblast_SecurityPoolForker_SecurityPoolForker,
+	statoblast_QuestionLedger_QuestionLedger,
+	statoblast_QuestionForker_QuestionForker,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger,
 	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction,
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction,
@@ -46,10 +46,10 @@ describe('generated bot contract ABIs', () => {
 			[abis.securityPoolPortfolioAbi, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.abi],
 			[abis.securityPoolPortfolioForkCoordinatorAbi, statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator.abi],
 			[abis.securityPoolCommitmentIndexAbi, statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex.abi],
-			[abis.securityPoolAbi, statoblast_SecurityPool_SecurityPool.abi],
+			[abis.questionLedgerAbi, statoblast_QuestionLedger_QuestionLedger.abi],
 			[abis.openOraclePriceCoordinatorAbi, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi],
 			[abis.sharedPoolPriceFeedAbi, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi],
-			[abis.securityPoolForkerAbi, statoblast_SecurityPoolForker_SecurityPoolForker.abi],
+			[abis.questionForkerAbi, statoblast_QuestionForker_QuestionForker.abi],
 			[abis.securityPoolCapitalLedgerAbi, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger.abi],
 			[abis.securityPoolPortfolioAuctionAbi, statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction.abi],
 			[abis.securityPoolUniformPriceAuctionAbi, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction.abi],
@@ -80,7 +80,7 @@ describe('generated bot contract ABIs', () => {
 	})
 
 	test('the named events are the compiled artifact events', () => {
-		expect(generated(abis.deploySecurityPoolEvent)).toEqual(event(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 'DeploySecurityPool'))
+		expect(generated(abis.deployQuestionLedgerEvent)).toEqual(event(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 'DeployQuestionLedger'))
 	})
 
 	test('every generated export is covered by an artifact assertion', () => {
@@ -93,10 +93,10 @@ describe('generated bot contract ABIs', () => {
 			'securityPoolPortfolioAbi',
 			'securityPoolPortfolioForkCoordinatorAbi',
 			'securityPoolCommitmentIndexAbi',
-			'securityPoolAbi',
+			'questionLedgerAbi',
 			'openOraclePriceCoordinatorAbi',
 			'sharedPoolPriceFeedAbi',
-			'securityPoolForkerAbi',
+			'questionForkerAbi',
 			'openOracleAbi',
 			'weth9Abi',
 			'multicall3Abi',
@@ -109,7 +109,7 @@ describe('generated bot contract ABIs', () => {
 			'genesisUniswapV3FactoryAbi',
 			'genesisUniswapV3PoolStateAbi',
 			'escalationGameAbi',
-			'deploySecurityPoolEvent',
+			'deployQuestionLedgerEvent',
 			'portfolioRuntimeIdentities',
 			'securityPoolCapitalLedgerAbi',
 			'securityPoolPortfolioAuctionAbi',

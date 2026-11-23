@@ -9,7 +9,7 @@ import {
 } from '../../types/contractArtifact'
 import { formatStorageSlot, getAddressMappingStorageSlot, getUintMappingStorageSlot } from '../../testSupport/storage'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { getShareTokenSupplyAttoShares, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getShareTokenSupplyAttoShares, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: bound complete-set delivery', () => {
@@ -34,14 +34,14 @@ describe('Statoblast: bound complete-set delivery', () => {
 		await base.mockWindow.addStateOverrides({ [pool.shareToken]: { stateDiff } })
 		await base.mockWindow.setBalance(helper, (await owner().getBalance({ address: helper })) + 7n)
 		await expect(other().writeContract({ abi: servicesArtifact.abi, address: helper, functionName: 'purchase', args: [other().account.address, base.genesisUniverse, base.questionId, unit, other().account.address, 0n, unit, 0n] })).rejects.toThrow('Only service portfolio')
-		const supply = await getShareTokenSupplyAttoShares(owner(), pool.securityPool)
+		const supply = await getShareTokenSupplyAttoShares(owner(), pool.questionLedger)
 		const buyerBalances = await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, buyer)
 		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, helper)).toEqual([unit, unit, unit])
 		await expect(fixture.mint(20n * unit, base.questionId, { minimumShares: 21n * unit })).rejects.toThrow('Minimum shares not met')
-		expect(await getShareTokenSupplyAttoShares(owner(), pool.securityPool)).toBe(supply)
+		expect(await getShareTokenSupplyAttoShares(owner(), pool.questionLedger)).toBe(supply)
 		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, buyer)).toEqual(buyerBalances)
 		await fixture.mint(20n * unit, base.questionId, { minimumShares: 20n * unit })
-		const delivered = (await getShareTokenSupplyAttoShares(owner(), pool.securityPool)) - unit
+		const delivered = (await getShareTokenSupplyAttoShares(owner(), pool.questionLedger)) - unit
 		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, other().account.address)).toEqual([delivered, delivered, delivered])
 		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, helper)).toEqual([unit, unit, unit])
 		const premiumLedger = await owner().readContract({ abi: servicesArtifact.abi, address: helper, functionName: 'premiumLedger' })
@@ -60,17 +60,17 @@ describe('Statoblast: forced ETH cannot price or fund portfolio claims', () => {
 		const pool = fixture.poolFor(base.questionId)
 		const settlement = await owner().readContract({ ...portfolio, functionName: 'settlement' })
 		const services = await owner().readContract({ ...portfolio, functionName: 'services' })
-		for (const address of [pool.securityPool, settlement, services]) {
+		for (const address of [pool.questionLedger, settlement, services]) {
 			await base.mockWindow.setBalance(address, (await owner().getBalance({ address })) + surplus)
 		}
-		expect(await getShareTokenSupplyAttoShares(owner(), pool.securityPool)).toBe(0n)
+		expect(await getShareTokenSupplyAttoShares(owner(), pool.questionLedger)).toBe(0n)
 		await fixture.mint(10n * unit, base.questionId, { minimumShares: 10n * unit })
-		expect(await getShareTokenSupplyAttoShares(owner(), pool.securityPool)).toBe(10n * unit)
+		expect(await getShareTokenSupplyAttoShares(owner(), pool.questionLedger)).toBe(10n * unit)
 		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, other().account.address)).toEqual([10n * unit, 10n * unit, 10n * unit])
-		expect(await owner().readContract({ ...portfolio, functionName: 'quoteQuestionSettlement', args: [pool.securityPool, 10n * unit] })).toBe(10n * unit)
-		await redeemCompleteSet(other(), pool.securityPool, 10n * unit)
-		expect(await getShareTokenSupplyAttoShares(owner(), pool.securityPool)).toBe(0n)
+		expect(await owner().readContract({ ...portfolio, functionName: 'quoteQuestionSettlement', args: [pool.questionLedger, 10n * unit] })).toBe(10n * unit)
+		await redeemCompleteSet(other(), pool.questionLedger, 10n * unit)
+		expect(await getShareTokenSupplyAttoShares(owner(), pool.questionLedger)).toBe(0n)
 		expect(await balanceOfShares(owner(), pool.shareToken, base.genesisUniverse, other().account.address)).toEqual([0n, 0n, 0n])
-		for (const address of [pool.securityPool, settlement, services]) expect(await owner().getBalance({ address })).toBe(surplus)
+		for (const address of [pool.questionLedger, settlement, services]) expect(await owner().getBalance({ address })).toBe(surplus)
 	})
 })

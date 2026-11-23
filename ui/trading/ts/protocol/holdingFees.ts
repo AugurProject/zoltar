@@ -2,7 +2,7 @@ import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/proto
 import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
 import type { WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import type { LiveMarket } from './liveMarket.js'
 import * as copy from '../copy/availability.js'
@@ -19,7 +19,7 @@ export type FeeAccounting = Readonly<{
 
 /** Pin the checkpoint and share supply to the simulation block, including after the user's other transactions. */
 export async function loadTransactionFeeMarket(client: WalletClient, market: LiveMarket, blockNumber: bigint, timestamp: bigint): Promise<LiveMarket> {
-	const abi = statoblast_SecurityPool_SecurityPool.abi
+	const abi = statoblast_QuestionLedger_QuestionLedger.abi
 	const capital = await client.readContract({ abi, address: market.pool, functionName: 'portfolioCustody', blockNumber })
 	const central = await loadCentralPortfolioQuestion(client, market.pool, capital, blockNumber)
 	const feeEndTime = central.feeEndTimestamp

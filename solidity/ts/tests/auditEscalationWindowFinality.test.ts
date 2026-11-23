@@ -3,8 +3,8 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
@@ -26,9 +26,9 @@ describe("audit: a carried game's resumed curve keeps game, settlement book and 
 	const fixture = useSecurityPoolPortfolioFixture()
 	const YES = 1
 	const NO = 2
-	const sourcePool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const sourcePool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const gameFor = (pool: Address) => fixture.owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
 	const readGame = <const Name extends 'getFinalQuestionResolution' | 'totalCostAttoRep' | 'getEscalationGameEndDate' | 'forkResumedAt'>(game: Address, functionName: Name) => fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName })
 	const depositRaw = (sender: WriteClient, pool: Address, outcome: number, amount: bigint) => writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))

@@ -5,10 +5,10 @@ function tradingDocsHref(documentPath: string) {
 	return new URL(documentPath, protocolGuideHref).href
 }
 
-/** Where a trader learns how to get a security pool address to open a market. */
+/** Where a trader learns how to get a question ledger address to open a market. */
 export const findMarketGuideHref = tradingDocsHref('tutorials/trading-first-trade.html#choose')
-/** Where a market creator learns how to get a security pool address from Statoblast. */
-export const findSecurityPoolGuideHref = tradingDocsHref('tutorials/trading-first-market.html#find-pool')
+/** Where a market creator learns how to get a question ledger address from Statoblast. */
+export const findQuestionLedgerGuideHref = tradingDocsHref('tutorials/trading-first-market.html#find-pool')
 /** Trading's documentation: creating markets, liquidity, resolution, and forks. */
 export const createMarketGuideHref = tradingDocsHref('tutorials/trading-first-market.html')
 export const handleResolutionGuideHref = tradingDocsHref('how-to/trading-handle-resolution.html')

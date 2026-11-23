@@ -12,12 +12,12 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 	buildNavigationHref: (route, routeHash, search) => {
 		const current = parsePoolsRouteHash(getCurrentRouteHash())
 		const params = new URLSearchParams(getRouteHashSearch())
-		const rememberedAddress = current === undefined ? (params.get('securityPool') ?? '') : ''
-		const address = current?.view === 'operate' ? current.securityPoolAddress : rememberedAddress
+		const rememberedAddress = current === undefined ? (params.get('questionLedger') ?? '') : ''
+		const address = current?.view === 'operate' ? current.questionLedgerAddress : rememberedAddress
 
 		const nextSearch = updateSearchParams(search, next => next.delete('poolsView'))
 		if (route === 'pools') {
-			if (isHexAddressInput(address)) return buildRouteHref(buildPoolsRouteHash({ securityPoolAddress: address, view: 'operate' }), nextSearch)
+			if (isHexAddressInput(address)) return buildRouteHref(buildPoolsRouteHash({ questionLedgerAddress: address, view: 'operate' }), nextSearch)
 			const rememberedView = resolveEnumValue(params.get('poolsView') ?? '', 'browse', ['browse', 'create', 'universes', 'migrate'])
 			const view = current !== undefined && current.view !== 'operate' ? current.view : rememberedView
 			return buildRouteHref(buildPoolsRouteHash({ view }), nextSearch)
@@ -26,7 +26,7 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 			routeHash,
 			updateSearchParams(nextSearch, next => {
 				if (isHexAddressInput(address)) {
-					next.set('securityPool', address)
+					next.set('questionLedger', address)
 				} else if (current !== undefined && current.view !== 'operate') {
 					next.set('poolsView', current.view)
 				} else {
@@ -38,7 +38,7 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 	},
 	routes: [
 		{ hash: '#/deploy', name: 'deploy', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
-		// Pools lands on Browse pools. The legacy security pools hash resolves to Pools; the URL state rewrites its query onto the pool path.
+		// Pools lands on Browse pools. The legacy question ledgers hash resolves to Pools; the URL state rewrites its query onto the pool path.
 		{ aliases: ['#/security-pools'], hash: POOLS_ROUTE_HASH, name: 'pools', queryParameters: new Set(['questionId', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
 		{ match: routeHash => (parsePoolsRouteHash(routeHash) === undefined ? undefined : 'pools') },
 		{ hash: '#/portfolios', name: 'portfolios', queryParameters: new Set(['portfolio', 'owner', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
@@ -53,6 +53,6 @@ export function installStatoblastRouting() {
 }
 
 /** A question pool page that keeps the shared context (simulation, genesis, network, universe) of the current page. */
-export function buildQuestionPoolHref(securityPoolAddress: string) {
-	return buildRouteHref(buildPoolsRouteHash({ securityPoolAddress, view: 'operate' }), getTopLevelRouteSearch('pools'))
+export function buildQuestionPoolHref(questionLedgerAddress: string) {
+	return buildRouteHref(buildPoolsRouteHash({ questionLedgerAddress, view: 'operate' }), getTopLevelRouteSearch('pools'))
 }

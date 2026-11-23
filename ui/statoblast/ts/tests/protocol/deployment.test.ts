@@ -28,7 +28,7 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
-		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameDepositDelegate', 'openOracle', 'securityPoolEventEmitter', 'securityPoolOperationsDelegate'])
+		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameDepositDelegate', 'openOracle', 'questionLedgerEventEmitter', 'questionLedgerOperationsDelegate'])
 	})
 
 	test('deploys independent fork and auction modules with verified runtime code', async () => {
@@ -52,7 +52,7 @@ describe('statoblast deployment steps', () => {
 				'securityPoolReporterLedgerDeployer',
 				'securityPoolPortfolioForkCoordinatorDeployer',
 				'securityPoolPortfolioAuctionDeployer',
-				'securityPoolForkerPortfolioDelegate',
+				'questionForkerDelegate',
 			]) {
 				expect(steps.find(step => step.id === id)?.expectedRuntimeCodeHash).toMatch(/^0x[0-9a-f]{64}$/)
 			}
@@ -76,8 +76,8 @@ describe('statoblast deployment steps', () => {
 			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 			if (oracleStep === undefined) throw new Error(`Missing deployment status oracle step for ${profile.id}`)
 			const statoblastStepIds = [
-				'securityPoolForker',
-				'securityPoolForkerPortfolioDelegate',
+				'questionForker',
+				'questionForkerDelegate',
 				'escalationGameDepositDelegate',
 				'escalationGameFactory',
 				'securityPoolFactory',

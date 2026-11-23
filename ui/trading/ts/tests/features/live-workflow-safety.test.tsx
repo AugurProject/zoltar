@@ -33,7 +33,7 @@ const childShareToken = `0x${'46'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
 const replacementTransactionHash = `0x${'89'.repeat(32)}` as Hash
 const secondMarketTransactionHash = `0x${'8a'.repeat(32)}` as Hash
-const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical SecurityPools', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready']
+const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical QuestionLedgers', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready']
 
 async function flush() {
 	await act(async () => {
@@ -368,8 +368,8 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		rejectDiscovery = true
 		await rerouteForRefresh('portfolio')
-		await waitForDom(() => Array.from(document.querySelectorAll('[role="alert"]')).some(candidate => candidate.textContent?.includes('Security pool discovery failed') === true), 'discovery failure notice')
-		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Security pool discovery failed') === true)).toHaveLength(1)
+		await waitForDom(() => Array.from(document.querySelectorAll('[role="alert"]')).some(candidate => candidate.textContent?.includes('Question ledger discovery failed') === true), 'discovery failure notice')
+		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Question ledger discovery failed') === true)).toHaveLength(1)
 		expect(hasButton('Refresh')).toBeFalse()
 		expect(document.body.textContent).not.toContain('Retry balances')
 		rejectDiscovery = false

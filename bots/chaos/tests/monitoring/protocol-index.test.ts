@@ -32,7 +32,7 @@ test('deduplicates shared question report aliases while rejecting inconsistent r
 	expect(() => trustedOpenOracleReportPredicate({ ...trust, coordinatorReports: canonicalPoolReportRoutes([first, second]) })).toThrow('assigned to multiple coordinators')
 })
 
-const indexDeployments = { openOracle: address(6), securityPoolForker: address(5), zoltar: address(2) } as const
+const indexDeployments = { openOracle: address(6), questionForker: address(5), zoltar: address(2) } as const
 const indexTrust = {
 	coordinatorReports: [],
 	maximumSettlementStepGasLimit: OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT,
@@ -614,7 +614,7 @@ describe('durable protocol index', () => {
 	test('binds persisted progress to the protocol deployments', async () => {
 		const initial = await updateProtocolIndex(indexContext(eventIndexClient([])))
 		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, zoltar: address(99) }))).rejects.toThrow('Zoltar deployment changed')
-		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, securityPoolForker: address(99) }))).rejects.toThrow('SecurityPoolForker deployment changed')
+		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, questionForker: address(99) }))).rejects.toThrow('QuestionForker deployment changed')
 	})
 
 	test('retains more than ten thousand distinct durable migration routes', async () => {

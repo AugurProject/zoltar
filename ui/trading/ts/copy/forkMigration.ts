@@ -1,11 +1,11 @@
-/** Whether the child universe already has the security pool a migration batch lands in. */
+/** Whether the child universe already has the question ledger a migration batch lands in. */
 export const childPoolMissing = 'No pool yet'
 export const childPoolReady = 'Pool ready'
 /** A child universe that already holds this share's whole balance; migrating there again would move nothing. */
 export const migrated = 'Migrated'
 export const alreadyMigratedTargetReason = 'This share is already migrated to this child universe.'
 export const migratedSharesTitle = 'Migrated shares'
-export const migratedSharesDetail = 'Migrated shares live in each child universe’s security pool. Open one to trade, redeem, or check them there.'
+export const migratedSharesDetail = 'Migrated shares live in each child universe’s question ledger. Open one to trade, redeem, or check them there.'
 
 export function childUniverseName(label: string) {
 	return `${label} universe`

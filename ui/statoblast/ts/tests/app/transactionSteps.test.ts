@@ -1,5 +1,5 @@
 import type { ChainBackend, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createBlockWithTimestamp, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, test } from 'bun:test'
@@ -183,8 +183,8 @@ async function sendPreparedTransaction(prepared: Omit<Parameters<NonNullable<Ret
 }
 
 test('titles transaction status from the prepared transaction labels instead of the contract function name', async () => {
-	const reviewTitle = 'Create question and security pool'
-	const reviewDescription = 'Creates the binary question and deploys its security pool in one transaction.'
+	const reviewTitle = 'Create question and question ledger'
+	const reviewDescription = 'Creates the binary question and deploys its question ledger in one transaction.'
 	const step = await sendPreparedTransaction({ functionName: 'aggregate3', contractAddress: account, args: [[]], reviewTitle, reviewDescription })
 	expect(step?.title).toBe(reviewTitle)
 	expect(step?.description).toBe(reviewDescription)
@@ -891,7 +891,7 @@ test('minting complete sets sends the transaction directly and tracks its receip
 		}),
 		waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
 	})
-	expect(await createCompleteSetInSecurityPool(reviewed, account, 10n ** 18n)).toEqual({ action: 'createCompleteSet', hash, securityPoolAddress: account, universeId: 0n })
+	expect(await createCompleteSetInQuestionLedger(reviewed, account, 10n ** 18n)).toEqual({ action: 'createCompleteSet', hash, questionLedgerAddress: account, universeId: 0n })
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ value: 0n }))
 	expect(transactionSteps.value?.showReviewDialog).toBe(false)

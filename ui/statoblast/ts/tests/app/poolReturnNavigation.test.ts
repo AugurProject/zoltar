@@ -18,7 +18,7 @@ test('preserves the selected pool through Advanced navigation and refresh', () =
 	const pool = '0x1111111111111111111111111111111111111111'
 	window.history.replaceState({}, '', `#/pools/${pool}?universe=7`)
 	const advanced = getRouteHref('open-oracle')
-	expect(advanced).toBe(`#/open-oracle?universe=7&securityPool=${pool}`)
+	expect(advanced).toBe(`#/open-oracle?universe=7&questionLedger=${pool}`)
 	window.history.replaceState({}, '', advanced)
 	installStatoblastRouting()
 	expect(getRouteHref('pools')).toBe(`#/pools/${pool}?universe=7`)
@@ -40,20 +40,20 @@ test('does not remember incomplete pool addresses or invent a pool tab', () => {
 	expect(getRouteHref('open-oracle')).toBe('#/open-oracle?universe=7')
 	const pool = '0x2222222222222222222222222222222222222222'
 	window.history.replaceState({}, '', `#/pools/${pool}`)
-	expect(getRouteHref('open-oracle')).toBe(`#/open-oracle?securityPool=${pool}`)
-	window.history.replaceState({}, '', `#/open-oracle?securityPool=${pool}&openOracleReportId=42`)
+	expect(getRouteHref('open-oracle')).toBe(`#/open-oracle?questionLedger=${pool}`)
+	window.history.replaceState({}, '', `#/open-oracle?questionLedger=${pool}&openOracleReportId=42`)
 	expect(getRouteHref('pools')).toBe(`#/pools/${pool}?openOracleReportId=42`)
 })
 
 test('keeps Advanced report, browser controls, vault context and universe across primary routes', () => {
 	const pool = '0x1111111111111111111111111111111111111111'
 	const vault = '0x2222222222222222222222222222222222222222'
-	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report&poolSearch=hello&poolFilter=ended&poolSort=endTime`)
+	window.history.replaceState({}, '', `#/open-oracle?universe=7&questionLedger=${pool}&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report&poolSearch=hello&poolFilter=ended&poolSort=endTime`)
 	const pools = getRouteHref('pools')
 	const params = new URLSearchParams(pools.split('?')[1])
 	expect(params.has('openOracleView')).toBe(false)
 	for (const [key, value] of new URLSearchParams(window.location.hash.split('?')[1])) {
-		if (key === 'securityPool' || key === 'selectedPoolView' || key === 'openOracleView') continue
+		if (key === 'questionLedger' || key === 'selectedPoolView' || key === 'openOracleView') continue
 		expect(params.get(key)).toBe(value)
 	}
 	window.history.replaceState({}, '', pools)

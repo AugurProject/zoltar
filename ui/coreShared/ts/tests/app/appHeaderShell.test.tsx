@@ -155,7 +155,7 @@ describe('AppHeaderShell', () => {
 	test('keeps primary sections in the top bar, section views in one segmented row, and the guide in settings', async () => {
 		installTestRouting()
 		const domEnvironment = installDomEnvironment('http://localhost/#/security-pools')
-		const secondaryNavigation = { ariaLabel: 'Security pools views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse pools', value: 'browse' }], value: 'browse' }
+		const secondaryNavigation = { ariaLabel: 'Question ledgers views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse pools', value: 'browse' }], value: 'browse' }
 		const withGuide = await renderIntoDocument(
 			<AppHeaderShell
 				overview={<div>Overview</div>}
@@ -165,7 +165,7 @@ describe('AppHeaderShell', () => {
 					onRouteChange: () => undefined,
 					route: 'security-pools',
 					tabs: [
-						{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
+						{ hash: '#/security-pools', label: 'Question ledgers', route: 'security-pools' },
 						{ hash: '#/open-oracle', label: 'OpenOracle', route: 'open-oracle' },
 					],
 				}}
@@ -175,7 +175,7 @@ describe('AppHeaderShell', () => {
 		try {
 			const queries = within(withGuide.container)
 			expect(queries.getByRole('navigation', { name: 'Application sections' }).closest('.header-toolbar-navigation')).not.toBeNull()
-			const views = queries.getByRole('navigation', { name: 'Security pools views' })
+			const views = queries.getByRole('navigation', { name: 'Question ledgers views' })
 			expect(views.closest('.app-chrome')).toBeNull()
 			expect(views.querySelector('.view-tabs.segmented')).not.toBeNull()
 			expect(queries.queryByRole('link', { name: 'Protocol guide' })).toBeNull()

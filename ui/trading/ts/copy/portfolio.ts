@@ -6,7 +6,7 @@ export const maximumInsuredNoExit = 'Maximum insured No exit'
 export const disconnectedTitle = 'Connect a wallet to see your positions'
 export const portfolioBalancesUnavailable = 'Portfolio balances could not be loaded.'
 export const noPositions = 'No positions'
-export const noPortfolioBalances = 'No Yes, No, Invalid, or LP balance was found in registered security pools in this universe.'
+export const noPortfolioBalances = 'No Yes, No, Invalid, or LP balance was found in registered question ledgers in this universe.'
 
 export function noPositionsInUniverse(universe: string) {
 	return `No positions in ${universe}`
@@ -16,7 +16,7 @@ export const insuredExits = 'Insured exits'
 export const balancesUnavailable = 'Balances unavailable'
 
 export function poolBalancesUnavailable(message: string) {
-	return `This security pool’s balances could not be loaded: ${message}`
+	return `This question ledger’s balances could not be loaded: ${message}`
 }
 
 export const positionDetails = 'Position details'
@@ -40,7 +40,7 @@ export const completeSetsPendingBasis = 'Complete sets only; other shares pay at
 export const pendingResolutionExcluded = 'Excludes shares that pay at resolution'
 export { unavailable as valueUnavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const migrationValueReason = 'Migrate shares to value this position.'
-export const poolInactiveValueReason = 'Security pool inactive.'
+export const poolInactiveValueReason = 'Question ledger inactive.'
 export const marketValueReason = 'Market data unavailable.'
 export const balanceValueReason = 'Balances unavailable.'
 
@@ -60,7 +60,7 @@ export function actionFor(action: string, marketTitle: string) {
 
 export const noFavoriteMarkets = 'No favorite markets in this universe'
 /** Holdings are discovered from the configured deployment in the selected universe. */
-export const favoriteGuidance = 'Connect a wallet to discover holdings across registered security pools in this universe. Saved markets are also refreshed.'
+export const favoriteGuidance = 'Connect a wallet to discover holdings across registered question ledgers in this universe. Saved markets are also refreshed.'
 export const browseMarkets = 'Browse markets'
 
 export const refreshPortfolio = 'Refresh portfolio'

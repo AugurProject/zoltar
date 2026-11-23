@@ -1,7 +1,7 @@
 import { getAddress, zeroHash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '../contractArtifact.js'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../contractArtifact.js'
 import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { requirePortfolioQuestionAdmission, requirePortfolioQuestionEligibility, requirePortfolioQuestionHorizon } from './securityPoolPortfolioAdmission.js'
 import type { PortfolioAccountSnapshot } from './securityPoolPortfolio.js'

@@ -9,7 +9,7 @@ interface ITestForkInitializer {
 import { WETH9 } from '../../statoblast/WETH9.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { Zoltar } from '../../Zoltar.sol';
-import { ISecurityPool } from '../../statoblast/interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from '../../statoblast/interfaces/IQuestionLedger.sol';
 import { SecurityPoolCapitalLedger } from '../../statoblast/SecurityPoolCapitalLedger.sol';
 import { ICapitalFeeStreams } from '../../statoblast/interfaces/ICapitalAccounting.sol';
 import { SecurityPoolPortfolioSettlement } from '../../statoblast/SecurityPoolPortfolioSettlement.sol';
@@ -141,7 +141,7 @@ contract PortfolioForkHarness {
 	}
 	mapping(uint248 => Clock) public clocks;
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
-	mapping(uint248 => mapping(uint256 => ISecurityPool)) private pools;
+	mapping(uint248 => mapping(uint256 => IQuestionLedger)) private pools;
 
 	constructor(PortfolioForkZoltarMock protocol, SecurityPoolCapitalLedgerDeployer capitals, SecurityPoolCommitmentIndexDeployer indices, SecurityPoolCapitalFeeStreamsDeployer streams, address auctions) {
 		collateralToken = new WETH9();
@@ -258,11 +258,11 @@ contract PortfolioForkHarness {
 		if (fees != 0) _creditFees(u, fees);
 		capitalLedger[u].synchronizeDemand(demand);
 	}
-	function registerQuestion(uint248 u, uint256 q, ISecurityPool pool) external {
+	function registerQuestion(uint248 u, uint256 q, IQuestionLedger pool) external {
 		pools[u][q] = pool;
 		settlement.registerQuestion(address(pool), u, q);
 	}
-	function getPool(uint256 q, uint248 u) external view returns (ISecurityPool) {
+	function getPool(uint256 q, uint248 u) external view returns (IQuestionLedger) {
 		return pools[u][q];
 	}
 	function mintQuestion(uint256 q) external payable {

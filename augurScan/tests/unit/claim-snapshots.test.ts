@@ -48,9 +48,9 @@ const state = { finalQuestionResolution: '1', endTimestamp: '100', bindingCapita
 const fixtureKinds = new Map([
 	[root, 'escalationGame'],
 	[child, 'escalationGame'],
-	[rootPool, 'securityPool'],
-	[childPool, 'securityPool'],
-	[forker, 'securityPoolForker'],
+	[rootPool, 'questionLedger'],
+	[childPool, 'questionLedger'],
+	[forker, 'questionForker'],
 	[zoltar, 'zoltar'],
 ])
 const leaves = [0n, 1n, 2n].map(index => ({ depositor: owner, amountAttoRep: 50n, parentDepositIndex: index, cumulativeAmountAttoRep: (index + 1n) * 50n, sourceNodeId: index + 1n }))
@@ -73,7 +73,7 @@ const fixtureRead =
 		encodeFunctionData({ abi, functionName: name, args })
 		const outcome = Number(args[0] ?? 0)
 		switch (name) {
-			case 'securityPool':
+			case 'questionLedger':
 				return target === root ? rootPool : childPool
 			case 'forkContinuation':
 				return target === child
@@ -81,7 +81,7 @@ const fixtureRead =
 				return options.cycle ? childPool : rootPool
 			case 'escalationGame':
 				return options.cycle ? child : root
-			case 'securityPoolForker':
+			case 'questionForker':
 				return forker
 			case 'getQuestionOutcome':
 				return options.pending ? 3n : 1n
@@ -202,7 +202,7 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 	const read: StateRead = async (target, _abi, name) => {
 		const id = Number(BigInt(target))
 		switch (name) {
-			case 'securityPool':
+			case 'questionLedger':
 				return pool(id - 1000)
 			case 'forkContinuation':
 				return id !== 1000
@@ -210,7 +210,7 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 				return pool(id - 2001)
 			case 'escalationGame':
 				return game(id - 2000)
-			case 'securityPoolForker':
+			case 'questionForker':
 				return forker
 			case 'getQuestionOutcome':
 				return 1n

@@ -20,7 +20,7 @@ describe('portfolio operator production integration', () => {
 		const scope = { address: fixture.portfolio, universeId: fixture.base.genesisUniverse, nextPositionId: 1n, sweepEnd: 0n }
 		settings.selectedPortfolios = [scope]
 		settings.approvedUniverses = [scope.universeId]
-		expect(await client.readContract({ address: settings.deployment.securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'getSecurityPoolPortfolio', args: [fixture.poolFor(fixture.base.questionId).securityPool] })).toBe(fixture.portfolio)
+		expect(await client.readContract({ address: settings.deployment.securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'getSecurityPoolPortfolio', args: [fixture.poolFor(fixture.base.questionId).questionLedger] })).toBe(fixture.portfolio)
 		const initial = await loadPortfolioObservation(client, settings, fixture.owner().account.address, scope, await client.getBlockNumber())
 		expect(initial.snapshot.capitalLedger).toBe(fixture.capitalLedger)
 		expect(initial.positions).toHaveLength(0)

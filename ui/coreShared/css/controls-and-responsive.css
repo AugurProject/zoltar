@@ -646,13 +646,13 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	.address-copy-button,
 	.identifier-value.copyable,
 	.metric-label-refresh,
-	.security-pool-link,
+	.question-ledger-link,
 	button.wallet-asset-action,
 	.universe-link {
 		min-height: var(--touch-target-min);
 	}
 
-	.security-pool-link,
+	.question-ledger-link,
 	.universe-link {
 		align-items: center;
 	}

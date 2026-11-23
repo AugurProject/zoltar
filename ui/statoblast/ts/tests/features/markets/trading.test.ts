@@ -648,10 +648,10 @@ void describe('trading helpers', () => {
 			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
 		]
 
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('This selection includes a child universe without a security pool. Migrate into each such child universe separately.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('This selection includes a child universe without a question ledger. Migrate into each such child universe separately.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '1' })).toBeUndefined()
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: undefined, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Loading child universe security pools…')
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe security pools unavailable. Refresh pool to retry.' }, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Child universe security pools unavailable. Refresh pool to retry.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: undefined, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Loading child universe question ledgers…')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe question ledgers unavailable. Refresh pool to retry.' }, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Child universe question ledgers unavailable. Refresh pool to retry.')
 
 		const migratedYes = { ...noMigratedShares, yesAttoShares: shareBalances.yesAttoShares }
 		const migratedTargets: ShareMigrationTarget[] = [
@@ -677,7 +677,7 @@ void describe('trading helpers', () => {
 		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool), target(2n, undefined)])).toBe('1')
 		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)])).toBe('2')
 		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)], 'no')).toBe('0, 1')
-		expect(defaultTargets({ unavailableReason: 'Child universe security pools unavailable.' })).toBe('0, 1, 2')
+		expect(defaultTargets({ unavailableReason: 'Child universe question ledgers unavailable.' })).toBe('0, 1, 2')
 		for (const shareMigrationTargets of [
 			[target(0n, pool), target(1n, undefined), target(2n, undefined)],
 			[target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)],
@@ -728,12 +728,12 @@ void describe('trading helpers', () => {
 
 		for (const shareMigrationTargets of [everyChildMigrated, noChildPools]) expect(getDefaultShareMigrationTargetOutcomeIndexes({ ...guardInput, shareMigrationTargets })).toBe('')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: everyChildMigrated })).toBe('Your Yes shares are already migrated into every child universe.')
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: noChildPools })).toBe('No child universe has a security pool yet. Select one child universe; migrating into it creates its pool.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: noChildPools })).toBe('No child universe has a question ledger yet. Select one child universe; migrating into it creates its pool.')
 		// The default for another outcome, or a cleared selection with reachable pooled children, still asks for a target.
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, selectedShareOutcome: 'no', shareMigrationTargets: everyChildMigrated })).toBe('Select at least one target child universe.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: withCanonicalPools(binaryForkUniverse) })).toBe('Select at least one target child universe.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, loadingTradingDetails: true, shareMigrationTargets: everyChildMigrated })).toBe('Select at least one target child universe.')
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe security pools unavailable.' } })).toBe('Select at least one target child universe.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe question ledgers unavailable.' } })).toBe('Select at least one target child universe.')
 	})
 
 	void test('checks local and network prerequisites before resolved-share redemption', () => {

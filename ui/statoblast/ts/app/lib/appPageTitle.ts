@@ -3,21 +3,21 @@ import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
-import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import type { QuestionLedgersView } from '@zoltar/ui-statoblast-shared/features/types.js'
 import { formatAppDocumentTitle as formatDocumentTitle } from '@zoltar/ui-core-shared/app/lib/appTitle.js'
 
 export type AppPageTitleInput = {
-	activeSecurityPoolsView: SecurityPoolsView
+	activeQuestionLedgersView: QuestionLedgersView
 	route: StatoblastRoute
 }
 
-export function getAppPageTitle({ activeSecurityPoolsView, route }: AppPageTitleInput) {
+export function getAppPageTitle({ activeQuestionLedgersView, route }: AppPageTitleInput) {
 	if (route === 'portfolios') return statoblastAppCopy.portfolios
 	if (route === 'deploy') return appCopy.deployContracts
 	if (route === 'pools') {
-		if (activeSecurityPoolsView === 'operate') return 'Question'
-		if (activeSecurityPoolsView === 'migrate') return appCopy.migrateRep
-		if (activeSecurityPoolsView === 'universes') return zoltarCopy.universesTitle
+		if (activeQuestionLedgersView === 'operate') return 'Question'
+		if (activeQuestionLedgersView === 'migrate') return appCopy.migrateRep
+		if (activeQuestionLedgersView === 'universes') return zoltarCopy.universesTitle
 		// Matches the browse view's visible heading, so the tab title and page announcement name what the user sees.
 		return 'Portfolio questions'
 	}

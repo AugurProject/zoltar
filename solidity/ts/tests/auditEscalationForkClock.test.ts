@@ -17,9 +17,9 @@ describe('Audit regression: escalation fork clock', () => {
 
 	test.each([{ inheritedElapsed: 0n }, { inheritedElapsed: DAY }])('resuming after the universe fork preserves inherited elapsed time $inheritedElapsed', async ({ inheritedElapsed }) => {
 		const { client, mockWindow, reportBond, nonDecisionThresholdAttoRep } = fixture
-		const { escalationGameAddress, testSecurityPoolAddress } = await fixture.deployEscalationGameWithProofPool()
+		const { escalationGameAddress, testQuestionLedgerAddress } = await fixture.deployEscalationGameWithProofPool()
 		await fixture.startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, inheritedElapsed)
-		await fixture.initializeSnapshotViaTestSecurityPool(testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await fixture.initializeSnapshotViaTestQuestionLedger(testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		const expectedCost = inheritedElapsed === 0n ? 0n : await readIterativeAttritionCost(client, escalationGameAddress, inheritedElapsed)
 		const readCost = () => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'totalCostAttoRep' })
 

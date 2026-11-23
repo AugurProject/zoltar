@@ -4,14 +4,14 @@ import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capit
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { getSecurityPoolsEscalationGame, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { getQuestionLedgersEscalationGame, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/questionLedger'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { balanceOfShares } from '../testSupport/simulator/utils/contracts/statoblast'
-import { getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
-import { statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
+import { getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/questionLedger'
+import { statoblast_QuestionLedger_QuestionLedger, Zoltar_Zoltar } from '../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
 describe('Audit regression: escalation start configuration liveness', () => {
@@ -21,7 +21,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 
 	test('an existing funded pool remains resolvable when the tracked threshold falls to the configured start bond', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, statoblastSecurityMultiplierBps } = fixture
-		const securityPoolAddresses = portfolio.poolFor(fixture.questionId)
+		const questionLedgerAddresses = portfolio.poolFor(fixture.questionId)
 		const openInterestAmount = 1n * 10n ** 18n
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
 		const readNonDecisionThreshold = async () =>
@@ -35,8 +35,8 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.strictEqual(statoblastSecurityMultiplierBps, 20_000n, 'the fixture must use the normal origin-pool security multiplier')
 		assert.strictEqual(
 			await client.readContract({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				address: securityPoolAddresses.securityPool,
+				abi: statoblast_QuestionLedger_QuestionLedger.abi,
+				address: questionLedgerAddresses.questionLedger,
 				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
 			}),
@@ -50,8 +50,8 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		await portfolio.mint(openInterestAmount, fixture.questionId, { sender: client })
 
 		const vaultRepBeforeResolution = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), portfolio.capitalLedger)
-		const shareSupplyBeforeResolution = await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool)
-		const holderSharesBeforeResolution = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, client.account.address)
+		const shareSupplyBeforeResolution = await getShareTokenSupplyAttoShares(client, questionLedgerAddresses.questionLedger)
+		const holderSharesBeforeResolution = await balanceOfShares(client, questionLedgerAddresses.shareToken, genesisUniverse, client.account.address)
 		assert.ok(vaultRepBeforeResolution > reportBond, 'the vault REP redemption must represent a funded claim')
 		assert.ok(shareSupplyBeforeResolution > 0n, 'the pool must have open-interest liabilities before escalation starts')
 		assert.ok(
@@ -81,16 +81,16 @@ describe('Audit regression: escalation start configuration liveness', () => {
 
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await portfolio.refreshPrice()
-		assert.strictEqual(await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool), zeroAddress, 'the first-deposit path must begin without a game')
+		assert.strictEqual(await getQuestionLedgersEscalationGame(client, questionLedgerAddresses.questionLedger), zeroAddress, 'the first-deposit path must begin without a game')
 
-		await approveToken(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
-		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'depositWalletRepToEscalationGame', args: [1, reportBond] }))
-		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		await approveToken(client, getRepTokenAddress(genesisUniverse), questionLedgerAddresses.questionLedger)
+		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddresses.questionLedger, functionName: 'depositWalletRepToEscalationGame', args: [1, reportBond] }))
+		const escalationGame = await getQuestionLedgersEscalationGame(client, questionLedgerAddresses.questionLedger)
 		assert.notStrictEqual(escalationGame, zeroAddress, 'the pool must deploy a live escalation game')
 		assert.strictEqual(
 			await client.readContract({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				address: securityPoolAddresses.securityPool,
+				abi: statoblast_QuestionLedger_QuestionLedger.abi,
+				address: questionLedgerAddresses.questionLedger,
 				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
 			}),
@@ -124,13 +124,13 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			args: [],
 		})
 		await mockWindow.setTime(escalationEndTime + 1n)
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
-		await redeemShares(client, securityPoolAddresses.securityPool)
+		await withdrawFromEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, [0n])
+		await redeemShares(client, questionLedgerAddresses.questionLedger)
 		await portfolio.refreshPrice()
 		await portfolio.authorize(0n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'withdrawPrincipal', args: [vaultRepBeforeResolution, client.account.address] }))
 
-		assert.strictEqual(await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool), 0n, 'resolved open interest must be fully redeemable')
+		assert.strictEqual(await getShareTokenSupplyAttoShares(client, questionLedgerAddresses.questionLedger), 0n, 'resolved open interest must be fully redeemable')
 		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), portfolio.capitalLedger), 0n, 'the funded owner principal must be fully redeemable')
 	})
 })

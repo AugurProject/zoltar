@@ -40,7 +40,7 @@ contract ShareTokenRecoveryTestPool {
 	function hasLiveForkRecoveryRight(uint64, uint256, uint48) external pure returns (bool) {
 		return true;
 	}
-	function securityPoolForker() external view returns (address) {
+	function questionForker() external view returns (address) {
 		return address(this);
 	}
 	function systemState() external pure returns (uint8) {

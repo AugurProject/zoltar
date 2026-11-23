@@ -45,8 +45,8 @@ test('claim discovery follows empty consumed-node pages to the oldest live leaf'
 					if (typeof nodeId !== 'bigint') throw new Error('Missing node id')
 					return [nodeId - 1n, parent, 1, 10n, nodeId - 1n, nodeId * 10n, nodeId - 1n]
 				}
-				case 'securityPool':
-				case 'securityPoolForker':
+				case 'questionLedger':
+				case 'questionForker':
 					return parent
 				case 'isEscalationDepositClaimedDirectly':
 					return false

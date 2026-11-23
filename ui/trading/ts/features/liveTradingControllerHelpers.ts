@@ -42,7 +42,7 @@ export function walletSummaryAvailability(configurationAvailable: boolean, confi
 	if (discoveryState === 'loading') return { status: 'loading' as const, error: undefined, errorLabel: undefined }
 	if (discoveryState === 'error') return { status: 'error' as const, error: liveCopy.describeDiscoveryFailure(discoveryLead, discoveryError), errorLabel: discoveryLead }
 	if (discoveryState === 'not-found' || selectedPoolAvailable) return undefined
-	return { status: 'error' as const, error: 'No security pool is available in the selected universe.', errorLabel: 'No security pool in this universe' }
+	return { status: 'error' as const, error: 'No question ledger is available in the selected universe.', errorLabel: 'No question ledger in this universe' }
 }
 
 export function broadcastUncertainMessage(label: string, hash: Hash) {
@@ -60,13 +60,13 @@ export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positio
 	return !positionLocked && !liquidityLocked
 }
 
-export function securityPoolAddressFromRoute(route: string) {
+export function questionLedgerAddressFromRoute(route: string) {
 	const match = /^(?:security-pool|market|liquidity|create-market)\/(0x[0-9a-fA-F]{40})$/.exec(route)
 	return match?.[1] === undefined ? undefined : getAddress(match[1])
 }
 
 export function marketDiscoveryScope(route: string, selectedUniverseId?: string) {
-	return securityPoolAddressFromRoute(route)?.toLowerCase() ?? `${tradingListKindFor(route) ?? route}:${selectedUniverseId ?? ''}`
+	return questionLedgerAddressFromRoute(route)?.toLowerCase() ?? `${tradingListKindFor(route) ?? route}:${selectedUniverseId ?? ''}`
 }
 
 export function livePairInitialized(market: Pick<LiveMarket, 'pair' | 'lpTotalSupply' | 'yesReserve' | 'noReserve' | 'tradingStatus'>) {

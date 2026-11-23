@@ -5,7 +5,7 @@ import { CheckedCast } from '../CheckedCast.sol';
 
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
@@ -20,7 +20,7 @@ library EscalationGameRepCustody {
 	using SafeERC20Ops for IERC20;
 
 	function portfolio(address poolAddress) internal view returns (address authority) {
-		ISecurityPool pool = ISecurityPool(payable(poolAddress));
+		IQuestionLedger pool = IQuestionLedger(payable(poolAddress));
 		// Narrow standalone test contexts do not implement portfolio binding.
 		try pool.portfolioCustody() returns (address custody) {
 			if (custody == address(0)) return address(0);
@@ -34,7 +34,7 @@ library EscalationGameRepCustody {
 	function ledger(address poolAddress) internal view returns (ISecurityPoolReporterLedger custody) {
 		address authority = portfolio(poolAddress);
 		if (authority == address(0)) return ISecurityPoolReporterLedger(address(0));
-		address ledgerAddress = ISecurityPoolReporterPortfolio(authority).reporterLedger(ISecurityPool(payable(poolAddress)).universeId());
+		address ledgerAddress = ISecurityPoolReporterPortfolio(authority).reporterLedger(IQuestionLedger(payable(poolAddress)).universeId());
 		require(ledgerAddress.code.length != 0, 'Portfolio reporter ledger is missing');
 		return ISecurityPoolReporterLedger(ledgerAddress);
 	}
@@ -91,7 +91,7 @@ library EscalationGameRepCustody {
 		uint48 finalAfterPortfolioTime =
 			finalAfter == 0
 				? 0
-				: ISecurityPoolReporterPortfolio(authority).portfolioTimeForNative(ISecurityPool(payable(poolAddress)).universeId(), finalAfter);
+				: ISecurityPoolReporterPortfolio(authority).portfolioTimeForNative(IQuestionLedger(payable(poolAddress)).universeId(), finalAfter);
 		ledger(poolAddress).scheduleFinality(address(this), finalAfterPortfolioTime);
 		ISecurityPoolReporterPortfolio(authority).onQuestionFinalityChanged(finalAfter);
 	}

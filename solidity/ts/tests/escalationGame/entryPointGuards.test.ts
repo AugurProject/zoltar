@@ -5,7 +5,7 @@ import { writeContractAndWait, type WriteClient } from '../../testSupport/simula
 import { DAY, MAX_UINT256 } from '../../testSupport/simulator/utils/constants'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution, readHasReachedNonDecision, readNonDecisionState, readCanTriggerOwnFork, readEscalationGameEndDate, readFinalQuestionResolution, readNonDecisionTimestamp } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
 import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL, zeroHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
@@ -14,15 +14,15 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	const {
 		reportBond,
 		nonDecisionThresholdAttoRep,
-		deployEscalationGameTestSecurityPool,
+		deployEscalationGameTestQuestionLedger,
 		deployEscalationGameWithProofPool,
 		deployFalseReturningToken,
 		startEscalationFromFork,
 		resumeEscalationFromFork,
-		initializeSnapshotViaTestSecurityPool,
-		depositOnOutcomeViaProofTestSecurityPool,
-		claimDepositForWinningViaTestSecurityPool,
-		depositOnOutcomeViaTestSecurityPool,
+		initializeSnapshotViaTestQuestionLedger,
+		depositOnOutcomeViaProofTestQuestionLedger,
+		claimDepositForWinningViaTestQuestionLedger,
+		depositOnOutcomeViaTestQuestionLedger,
 	} = fixture
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
@@ -33,7 +33,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	})
 
 	test('escrow and settlement entry points cover authorization, argument, lifecycle, and residual-state guards', async () => {
-		const deployment = await deployEscalationGameTestSecurityPool()
+		const deployment = await deployEscalationGameTestQuestionLedger()
 		await assert.rejects(
 			client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -47,7 +47,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 			client.writeContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: deployment.escalationGameAddress,
-				functionName: 'sweepResidualRepToSecurityPool',
+				functionName: 'sweepResidualRepToQuestionLedger',
 				args: [],
 			}),
 			/Question not final/,
@@ -56,28 +56,28 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		const emptyFinal = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(emptyFinal.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
 		await assert.rejects(resumeEscalationFromFork(emptyFinal.escalationGameAddress), /Fork snapshot incomplete/)
-		await initializeSnapshotViaTestSecurityPool(emptyFinal.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(emptyFinal.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await resumeEscalationFromFork(emptyFinal.escalationGameAddress)
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
 			client.writeContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: emptyFinal.escalationGameAddress,
-				functionName: 'sweepResidualRepToSecurityPool',
+				functionName: 'sweepResidualRepToQuestionLedger',
 				args: [],
 			}),
 			/No sweepable REP/,
 		)
 
-		const unresolved = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(unresolved.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const unresolved = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(unresolved.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const activationTime = await getActivationTime(client, unresolved.escalationGameAddress)
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		await assert.rejects(
 			client.writeContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: unresolved.escalationGameAddress,
-				functionName: 'sweepResidualRepToSecurityPool',
+				functionName: 'sweepResidualRepToQuestionLedger',
 				args: [],
 			}),
 			/No sweepable REP/,
@@ -85,7 +85,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	})
 
 	test('empty started game becomes final only after its exact end timestamp', async () => {
-		const { escalationGameAddress: escalationGame } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress: escalationGame } = await deployEscalationGameTestQuestionLedger()
 		const escalationEndDate = await readEscalationGameEndDate(client, escalationGame)
 
 		await mockWindow.setTime(escalationEndDate - 1n)
@@ -100,9 +100,9 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	})
 
 	test('non-decision keeps question resolution at None even after the nominal timeout window', async () => {
-		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, nonDecisionThresholdAttoRep)
 		assert.strictEqual(await readHasReachedNonDecision(client, escalationGame), true, 'two threshold-reaching outcomes should trigger non-decision')
 		assert.strictEqual(await readNonDecisionState(client, escalationGame), NON_DECISION_STATE_LOCAL, 'a local threshold-crossing deposit should record local non-decision')
 		assert.strictEqual(await readCanTriggerOwnFork(client, escalationGame), true, 'a local non-decision should authorize the own-fork path')
@@ -116,38 +116,38 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	})
 
 	test('depositOnOutcome reverts when outcome is None', async () => {
-		const { testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.None, reportBond))
+		const { testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await assert.rejects(depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.None, reportBond))
 	})
 
 	test('depositOnOutcome reverts when outcome is out of enum range', async () => {
-		const { testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		// Values > 3 are outside enum (0=Invalid,1=Yes,2=No,3=None)
-		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, 4 as QuestionOutcome, reportBond))
-		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, 255 as QuestionOutcome, reportBond))
+		await assert.rejects(depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, 4 as QuestionOutcome, reportBond))
+		await assert.rejects(depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, 255 as QuestionOutcome, reportBond))
 	})
 
 	test('depositOnOutcome accepts a start-bond deposit that the tie adjustment leaves one attoREP below the bond', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const balances = await getBalances(client, escalationGameAddress)
 		assert.strictEqual(balances.invalid, reportBond, 'original leading balance should stay untouched')
 		assert.strictEqual(balances.yes, reportBond - 1n, 'the start bond applies to the offered amount, before the tie adjustment')
 		// The pool previews the offered amount first, so an offer below the start bond never reaches the recorder.
-		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, reportBond - 1n), /Invalid deposit preview/, 'an offered amount below the start bond must still revert')
+		await assert.rejects(depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, reportBond - 1n), /Invalid deposit preview/, 'an offered amount below the start bond must still revert')
 		// The recorder admits a sub-bond amount only as a trimmed tie: one attoREP under the bond, ending one attoREP under the leader.
 		await assert.rejects(
-			writeContractAndWait(client, async () => await client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: testSecurityPoolAddress, functionName: 'recordDeposit', args: [client.account.address, QuestionOutcome.No, reportBond - 2n, reportBond - 2n] })),
+			writeContractAndWait(client, async () => await client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: testQuestionLedgerAddress, functionName: 'recordDeposit', args: [client.account.address, QuestionOutcome.No, reportBond - 2n, reportBond - 2n] })),
 			/Below start bond/,
 			'a recorded amount below the start bond that is not a trimmed tie must revert',
 		)
 	})
 
 	test('getEscalationGameDeposits paginates deposits without adding synthetic entries', async () => {
-		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
+		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
 
 		for (const [outcome, expected] of [
 			[QuestionOutcome.Yes, 2n],
@@ -190,8 +190,8 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		{ name: 'None', outcome: QuestionOutcome.None, depositFirst: true },
 		{ name: 'out of enum range', outcome: 4, depositFirst: false },
 	])('claimDepositForWinning reverts when outcome is $name', async ({ outcome, depositFirst }) => {
-		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		if (depositFirst) await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		if (depositFirst) await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await assert.rejects(
 			writeContractAndWait(
 				client,
@@ -208,14 +208,14 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 
 	test('claimDepositForWinning rejects false-returning REP transfers', async () => {
 		const falseReturningRepToken = await deployFalseReturningToken()
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool(falseReturningRepToken)
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameWithProofPool(falseReturningRepToken)
 		// Preserve remaining activation time so this empty continuation is still open.
 		await startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, -DAY)
-		await initializeSnapshotViaTestSecurityPool(testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await resumeEscalationFromFork(escalationGameAddress)
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
 		await mockWindow.advanceTime(4n * DAY)
 
-		await assert.rejects(claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 0n, QuestionOutcome.Yes), /SafeERC20Ops token returned false from ERC20 call/)
+		await assert.rejects(claimDepositForWinningViaTestQuestionLedger(testQuestionLedgerAddress, 0n, QuestionOutcome.Yes), /SafeERC20Ops token returned false from ERC20 call/)
 	})
 })

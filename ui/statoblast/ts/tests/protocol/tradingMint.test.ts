@@ -2,7 +2,7 @@ import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnviro
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createBlockWithTimestamp, createReadContractStub, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { createCompleteSetInSecurityPool, redeemSharesInSecurityPool, migrateSharesFromUniverse, requireCanonicalPoolPortfolio } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalPoolPortfolio } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
@@ -45,7 +45,7 @@ void describe('complete-set mint submission', () => {
 	test.each([100n, 101n])('rejects minting at or after the question end without an escalation game (%s)', async currentTimestamp => {
 		const send = mock(() => undefined)
 		const client = mintClient(send, currentTimestamp, 100n)
-		await expect(createCompleteSetInSecurityPool(client, pool, 10n ** 18n)).rejects.toThrow('question ended')
+		await expect(createCompleteSetInQuestionLedger(client, pool, 10n ** 18n)).rejects.toThrow('question ended')
 		expect(send).not.toHaveBeenCalled()
 	})
 	test.each([3540n, 10n ** 9n])('submits the selected mint amount through its portfolio at %s', async currentTimestamp => {
@@ -55,7 +55,7 @@ void describe('complete-set mint submission', () => {
 			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data }).functionName).toBe('createCompleteSet')
 		})
 		const client = mintClient(send, currentTimestamp, currentTimestamp + 1n)
-		await createCompleteSetInSecurityPool(client, pool, 10n ** 18n)
+		await createCompleteSetInQuestionLedger(client, pool, 10n ** 18n)
 		expect(send).toHaveBeenCalledTimes(1)
 	})
 })
@@ -83,7 +83,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
 				if (request.functionName === 'isPortfolio') return true
-				if (request.functionName === 'shareToken' || request.functionName === 'securityPoolForker') return portfolio
+				if (request.functionName === 'shareToken' || request.functionName === 'questionForker') return portfolio
 				pinned.push(request.blockNumber)
 				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
 				if (request.functionName === 'getQuestionOutcome') return 2n
@@ -99,7 +99,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 			review = value
 		},
 	}
-	await redeemSharesInSecurityPool(client, pool)
+	await redeemSharesInQuestionLedger(client, pool)
 	expect(pinned).toEqual([99n, 99n, 99n, 99n])
 	expect(review?.reviewDescription).toMatch(/1\sWETH/)
 	expect(review?.reviewDescription).toMatch(/2\sREP/)
@@ -183,7 +183,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			},
 		}
 		if (mode !== 'insufficient backing') {
-			await createCompleteSetInSecurityPool(client, pool, 100n)
+			await createCompleteSetInQuestionLedger(client, pool, 100n)
 			expect(send).toHaveBeenCalledTimes(1)
 			expect(reads).not.toContain('getCurrentMintingCapacityAttoEth')
 			const validate = plans[0]?.validateBeforeSubmit
@@ -206,10 +206,10 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			game = zeroAddress
 			canonicalPortfolio = false
 			await expect(validate()).rejects.toThrow('not deployed by the canonical factory')
-			await expect(createCompleteSetInSecurityPool(client, pool, 100n)).rejects.toThrow('not deployed by the canonical factory')
+			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('not deployed by the canonical factory')
 			expect(send).toHaveBeenCalledTimes(1)
 		} else {
-			await expect(createCompleteSetInSecurityPool(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
+			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
 			expect(send).not.toHaveBeenCalled()
 		}
 	})
@@ -230,7 +230,7 @@ test('a funded recovery purchase binds REP and rechecks funding before submissio
 		},
 		estimateGas: async () => 100_000n,
 	}
-	await createCompleteSetInSecurityPool(client, pool, 100n)
+	await createCompleteSetInQuestionLedger(client, pool, 100n)
 	const validate = steps[0]?.validateBeforeSubmit
 	if (validate === undefined) throw new Error('Missing funded purchase validation')
 	await validate()
@@ -287,7 +287,7 @@ test('mint validation requires the fresh actual fee while preserving its signed 
 			validate = steps[0]?.validateBeforeSubmit
 		},
 	}
-	await createCompleteSetInSecurityPool(client, pool, 100n)
+	await createCompleteSetInQuestionLedger(client, pool, 100n)
 	if (validate === undefined) throw new Error('Missing mint validation')
 	await expect(validate()).resolves.toBeUndefined()
 	fee = 11n

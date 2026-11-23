@@ -1,0 +1,10 @@
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as questionLedgerCopy from '../../../copy/questionLedger.js'
+
+// Gas prices read in nanoETH (1 nanoETH = 10^9 attoETH), matching wallets and the documentation.
+const NANO_ETH_DECIMALS = 9
+
+/** The initial report priority fee is a per-gas price, so it reads in nanoETH per gas wherever a pool shows it. */
+export function formatInitialReportPriorityFee(attoEthPerGas: bigint) {
+	return formatCurrencyBalanceWithUnit(attoEthPerGas, questionLedgerCopy.initialReportPriorityFeeUnit, NANO_ETH_DECIMALS)
+}

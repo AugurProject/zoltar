@@ -33,7 +33,7 @@ export async function preparePortfolioCollateralRepairAuction(fixture: ReturnTyp
 	const engine = await owner.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'engine' })
 	const capital = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'capitalLedger', args: [child] })
 	const index = await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'commitmentIndex' })
-	await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [fixture.poolFor(fixture.base.questionId).securityPool, child] }))
+	await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [fixture.poolFor(fixture.base.questionId).questionLedger, child] }))
 	const feed = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [child] })
 	await addRepToMigrationBalance(owner, source, 200n * unit)
 	await splitMigrationRep(owner, source, 200n * unit, [1])

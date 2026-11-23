@@ -1,4 +1,4 @@
-import { erc20Abi, securityPoolAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, questionLedgerAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { PoolSnapshot } from '../operations/types.ts'
 import type { EcosystemDiscoveryContext } from './discovery-context.ts'
 import { contractSimulationReverted } from './discovery-client.ts'
@@ -18,7 +18,7 @@ export async function discoverPurchaseQuote(context: EcosystemDiscoveryContext, 
 		if (collateral.toLowerCase() !== context.deployments.weth.toLowerCase()) return undefined
 		const args = [BigInt(pool.universeId), BigInt(pool.questionId), mint] as const
 		const [fee, premium] = await client.readContract({ abi: securityPoolPortfolioAbi, address: pool.portfolio, functionName: 'purchaseQuote', args, blockNumber })
-		const shares = await client.readContract({ abi: securityPoolAbi, address: pool.address, functionName: 'attoEthToAttoShares', args: [mint], blockNumber })
+		const shares = await client.readContract({ abi: questionLedgerAbi, address: pool.address, functionName: 'attoEthToAttoShares', args: [mint], blockNumber })
 		if (shares === 0n) return undefined
 		const spender = await client.readContract({ abi: securityPoolPortfolioAbi, address: pool.portfolio, functionName: 'services', blockNumber })
 		const approved = await client.readContract({ abi: erc20Abi, address: collateral, functionName: 'allowance', args: [wallet, spender], blockNumber })

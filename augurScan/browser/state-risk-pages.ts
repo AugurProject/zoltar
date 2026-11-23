@@ -45,7 +45,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const latestRepEthPrice = repEthPrices.at(-1)
 	const latestUniswapPrice = uniswapChart.latestObservation
 	const fragment = document.createDocumentFragment()
-	fragment.append(stateHeader('Security pool', poolItem.question_title ?? 'Unknown question', `${poolItem.pool_address} · universe ${shortUniverseId(poolItem.universe_id)}`, 'Latest available'))
+	fragment.append(stateHeader('Question ledger', poolItem.question_title ?? 'Unknown question', `${poolItem.pool_address} · universe ${shortUniverseId(poolItem.universe_id)}`, 'Latest available'))
 	const canonicalPool = element('a', 'back-link', 'Open pool page →')
 	canonicalPool.href = operationsHref(`/pool/${poolItem.pool_address}`)
 	fragment.append(canonicalPool)

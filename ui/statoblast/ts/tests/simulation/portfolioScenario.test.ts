@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { parseAbi, zeroAddress, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllSecurityPools } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 
 const abi = parseAbi([
 	'function portfolioCustody() view returns (address)',
@@ -18,10 +18,10 @@ test(
 		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1, 'statoblast')
 		try {
 			const client = backend.createReadClient()
-			const pools = await loadAllSecurityPools(client)
+			const pools = await loadAllQuestionLedgers(client)
 			let portfolioQuestions = 0
 			for (const pool of pools) {
-				const capitalValue = await client.readContract({ address: pool.securityPoolAddress, abi, functionName: 'portfolioCustody' })
+				const capitalValue = await client.readContract({ address: pool.questionLedgerAddress, abi, functionName: 'portfolioCustody' })
 				if (typeof capitalValue !== 'string') throw new Error('Missing capital address')
 				const capital = getAddress(capitalValue)
 				if (capital === zeroAddress) continue

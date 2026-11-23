@@ -45,18 +45,18 @@ async function immutableTopologyForAnchor(context: EcosystemDiscoveryContext, bl
 
 async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, blockNumber: bigint) {
 	const { client, deployments } = context
-	const requiredRoots = ['zoltar', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'openOracle', 'weth'] as const
+	const requiredRoots = ['zoltar', 'questionData', 'securityPoolFactory', 'questionForker', 'openOracle', 'weth'] as const
 	await requireDeployedContracts(
 		client,
 		requiredRoots.map(name => ({ name, address: deployments[name] })),
 		blockNumber,
 	)
 	const [forkerZoltar, tradingFactoryCode, tradingRouterCode] = await drainConcurrent([
-		client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
+		client.readContract({ abi: abis.questionForkerAbi, address: deployments.questionForker, blockNumber, functionName: 'zoltar' }),
 		client.getCode({ address: deployments.tradingFactory, blockNumber }),
 		client.getCode({ address: deployments.tradingRouter, blockNumber }),
 	])
-	requireGraphEdge(getAddress(forkerZoltar), deployments.zoltar, 'SecurityPoolForker Zoltar edge')
+	requireGraphEdge(getAddress(forkerZoltar), deployments.zoltar, 'QuestionForker Zoltar edge')
 	const [factory, router] = [hasCode(tradingFactoryCode), hasCode(tradingRouterCode)]
 	if (router && !factory) throw new Error('Configured trading router exists without its factory')
 	if (!factory) return { factory, router }
@@ -87,7 +87,7 @@ async function discoverPairs(context: EcosystemDiscoveryContext, pools: readonly
 			client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'totalSupply' }),
 			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
 			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'factory' }) : Promise.resolve(deployments.tradingFactory),
-			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'securityPool' }) : Promise.resolve(pool.address),
+			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'questionLedger' }) : Promise.resolve(pool.address),
 			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'shareToken' }) : Promise.resolve(pool.shareToken),
 			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'universeId' }) : Promise.resolve(BigInt(pool.universeId)),
 			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'questionId' }) : Promise.resolve(BigInt(pool.questionId)),

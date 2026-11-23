@@ -9,7 +9,7 @@ import { createWriteClient, writeContractAndWait } from '../../testSupport/simul
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getScalarOutcomeIndex } from '@zoltar/zoltar-shared/questions/scalarOutcome'
-import { getSystemState } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getSystemState } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { balanceOfShares, migrateShares, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -19,8 +19,8 @@ import {
 	statoblast_tokens_ShareToken_ShareToken,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 } from '../../types/contractArtifact'
 import { collateralBalance } from './burnEvidence'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
@@ -29,7 +29,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	let client: ReturnType<typeof fixture.owner>
 	let mockWindow: typeof fixture.base.mockWindow
-	let securityPoolAddresses: ReturnType<typeof fixture.poolFor>
+	let questionLedgerAddresses: ReturnType<typeof fixture.poolFor>
 	let questionId: bigint
 	let genesisUniverse: bigint
 	beforeEach(() => {
@@ -37,19 +37,19 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 		mockWindow = fixture.base.mockWindow
 		questionId = fixture.base.questionId
 		genesisUniverse = fixture.base.genesisUniverse
-		securityPoolAddresses = fixture.poolFor(questionId)
+		questionLedgerAddresses = fixture.poolFor(questionId)
 	})
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
 	const controller = async () => ({ abi: forkArtifact.abi, address: await client.readContract({ ...portfolio(), functionName: 'forkController' }) })
 	const finishChoiceWindow = async () => {
 		await mockWindow.setTime((await getUniverseData(client, genesisUniverse)).forkTime + 63n * DAY)
 	}
-	const activateBranch = async (outcome: bigint, materialize = true, source = securityPoolAddresses.securityPool) => {
+	const activateBranch = async (outcome: bigint, materialize = true, source = questionLedgerAddresses.questionLedger) => {
 		const target = await controller()
 		const child = getChildUniverseId(genesisUniverse, outcome)
 		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'startBranch', args: [genesisUniverse, outcome] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'finalizeBranch', args: [child] }))
-		if (materialize) await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [source, child] }))
+		if (materialize) await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializePortfolioQuestion', args: [source, child] }))
 		return child
 	}
 	test('migrates INVALID, YES, and NO entitlements into many outcomes of an unrelated scalar fork', async () => {
@@ -66,7 +66,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 			answerUnit: 'km',
 		}
 		const scalarQuestionId = getQuestionId(scalarForkQuestion, [])
-		assert.notEqual(scalarQuestionId, questionId, 'the universe fork question must be unrelated to the SecurityPool binary question')
+		assert.notEqual(scalarQuestionId, questionId, 'the universe fork question must be unrelated to the QuestionLedger binary question')
 
 		await createQuestion(client, scalarForkQuestion, [])
 		await fixture.prepare()
@@ -82,13 +82,13 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 			await activateBranch(outcome)
 		}
 		const holderAddress = addressString(TEST_ADDRESSES[2])
-		const parentBalancesBeforeMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+		const parentBalancesBeforeMigration = await balanceOfShares(client, questionLedgerAddresses.shareToken, genesisUniverse, holderAddress)
 		const sourceOutcomes = [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No] as const
 		const parentTokenIds = await Promise.all(
 			sourceOutcomes.map(
 				async outcome =>
 					await client.readContract({
-						address: securityPoolAddresses.shareToken,
+						address: questionLedgerAddresses.shareToken,
 						abi: statoblast_tokens_ShareToken_ShareToken.abi,
 						functionName: 'getTokenId',
 						args: [genesisUniverse, outcome],
@@ -96,22 +96,22 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 			),
 		)
 		for (const sourceOutcome of sourceOutcomes) {
-			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, sourceOutcome, bulkScalarOutcomes)
+			await migrateShares(openInterestHolder, questionLedgerAddresses.shareToken, genesisUniverse, sourceOutcome, bulkScalarOutcomes)
 		}
 
-		const parentBalancesAfterBulkMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+		const parentBalancesAfterBulkMigration = await balanceOfShares(client, questionLedgerAddresses.shareToken, genesisUniverse, holderAddress)
 		assert.deepStrictEqual(parentBalancesAfterBulkMigration, parentBalancesBeforeMigration, 'all parent shares should remain as persistent child-claim entitlements')
 
 		for (const scalarOutcome of bulkScalarOutcomes) {
 			const childUniverse = getChildUniverseId(genesisUniverse, scalarOutcome)
-			const childBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, childUniverse, holderAddress)
+			const childBalances = await balanceOfShares(client, questionLedgerAddresses.shareToken, childUniverse, holderAddress)
 			assert.deepStrictEqual(childBalances, parentBalancesBeforeMigration, 'each scalar child should receive the holder’s complete INVALID/YES/NO position')
 			for (let sourceIndex = 0; sourceIndex < sourceOutcomes.length; sourceIndex++) {
 				const parentTokenId = ensureDefined(parentTokenIds[sourceIndex], 'parent source token id is undefined')
 				const parentBalance = ensureDefined(parentBalancesBeforeMigration[sourceIndex], 'parent source balance is undefined')
 				strictEqualTypeSafe(
 					await client.readContract({
-						address: securityPoolAddresses.shareToken,
+						address: questionLedgerAddresses.shareToken,
 						abi: statoblast_tokens_ShareToken_ShareToken.abi,
 						functionName: 'getMigratedShareAmountAttoShares',
 						args: [parentTokenId, childUniverse, holderAddress],
@@ -123,18 +123,18 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 		}
 
 		for (const sourceOutcome of sourceOutcomes) {
-			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, sourceOutcome, [middleScalarOutcome])
+			await migrateShares(openInterestHolder, questionLedgerAddresses.shareToken, genesisUniverse, sourceOutcome, [middleScalarOutcome])
 		}
 		const middleScalarUniverse = getChildUniverseId(genesisUniverse, middleScalarOutcome)
-		const middleScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, middleScalarUniverse, holderAddress)
+		const middleScalarBalances = await balanceOfShares(client, questionLedgerAddresses.shareToken, middleScalarUniverse, holderAddress)
 		assert.deepStrictEqual(middleScalarBalances, parentBalancesBeforeMigration, 'a later scalar child selection should independently receive all three source entitlements')
-		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome]), /ShareToken has no new shares to migrate/)
+		await assert.rejects(migrateShares(openInterestHolder, questionLedgerAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome]), /ShareToken has no new shares to migrate/)
 
 		const parentYesTokenId = ensureDefined(parentTokenIds[1], 'parent yes token id is undefined')
 		const parentYesBalance = ensureDefined(parentBalancesBeforeMigration[1], 'parent yes balance is undefined')
 		await assert.rejects(
 			openInterestHolder.writeContract({
-				address: securityPoolAddresses.shareToken,
+				address: questionLedgerAddresses.shareToken,
 				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'safeTransferFrom',
 				args: [holderAddress, addressString(TEST_ADDRESSES[3]), parentYesTokenId, parentYesBalance],
@@ -142,14 +142,14 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 			/ShareToken migrated source balance is locked/,
 		)
 		// #1561: both production burn entrypoints reject the forked source pool.
-		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: securityPoolAddresses.securityPool, functionName: 'redeemShares' }), /Pool inactive/)
-		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: securityPoolAddresses.securityPool, functionName: 'redeemCompleteSet', args: [1n] }), /Forked/)
-		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: securityPoolAddresses.shareToken, functionName: 'burnCompleteSets', args: [genesisUniverse, holderAddress, 1n] }), /not authorized/)
-		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: securityPoolAddresses.shareToken, functionName: 'burnTokenIdAndGetRemainingSupply', args: [parentYesTokenId, holderAddress] }), /not authorized/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemShares' }), /Pool inactive/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemCompleteSet', args: [1n] }), /Forked/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: questionLedgerAddresses.shareToken, functionName: 'burnCompleteSets', args: [genesisUniverse, holderAddress, 1n] }), /not authorized/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: questionLedgerAddresses.shareToken, functionName: 'burnTokenIdAndGetRemainingSupply', args: [parentYesTokenId, holderAddress] }), /not authorized/)
 		// Recovery consumes independent rights, not locked branch entitlements.
 		const recoveryController = await controller()
 		await writeContractAndWait(openInterestHolder, () => openInterestHolder.writeContract({ ...recoveryController, functionName: 'recoverUnchosenCash', args: [genesisUniverse, questionId, 1n] }))
-		assert.deepStrictEqual(await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress), parentBalancesBeforeMigration)
+		assert.deepStrictEqual(await balanceOfShares(client, questionLedgerAddresses.shareToken, genesisUniverse, holderAddress), parentBalancesBeforeMigration)
 	})
 
 	test('rejects malformed and missing-child bulk targets while lazily creating one migration child', async () => {
@@ -179,23 +179,23 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 		const validScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 5n)
 		const highScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 7n)
 		const sortedScalarOutcomes = sortBigIntsAscending([lowScalarOutcome, highScalarOutcome])
-		const parentBalancesBeforeFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+		const parentBalancesBeforeFailedMigrations = await balanceOfShares(client, questionLedgerAddresses.shareToken, genesisUniverse, holderAddress)
 		const parentYesBalance = ensureDefined(parentBalancesBeforeFailedMigrations[1], 'parent yes balance is undefined')
 
-		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /ShareToken target outcome is malformed for the fork question/)
-		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /ShareToken target outcomes must be provided in strictly increasing order/)
-		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [...sortedScalarOutcomes].reverse()), /ShareToken target outcomes must be provided in strictly increasing order/)
-		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes), /ShareToken bulk migration requires canonical child pools/)
-		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'rejected bulk migration should roll back automatic source-pool fork initiation')
+		await assert.rejects(migrateShares(openInterestHolder, questionLedgerAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /ShareToken target outcome is malformed for the fork question/)
+		await assert.rejects(migrateShares(openInterestHolder, questionLedgerAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /ShareToken target outcomes must be provided in strictly increasing order/)
+		await assert.rejects(migrateShares(openInterestHolder, questionLedgerAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [...sortedScalarOutcomes].reverse()), /ShareToken target outcomes must be provided in strictly increasing order/)
+		await assert.rejects(migrateShares(openInterestHolder, questionLedgerAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes), /ShareToken bulk migration requires canonical child pools/)
+		strictEqualTypeSafe(await getSystemState(client, questionLedgerAddresses.questionLedger), SystemState.Operational, 'rejected bulk migration should roll back automatic source-pool fork initiation')
 
-		const parentBalancesAfterFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+		const parentBalancesAfterFailedMigrations = await balanceOfShares(client, questionLedgerAddresses.shareToken, genesisUniverse, holderAddress)
 		strictEqualTypeSafe(parentBalancesAfterFailedMigrations[1], parentYesBalance, 'failed migrations should preserve the parent yes share balance')
 
 		await finishChoiceWindow()
 		await activateBranch(validScalarOutcome, false)
-		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome])
+		await migrateShares(openInterestHolder, questionLedgerAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome])
 		const lazilyCreatedUniverse = getChildUniverseId(genesisUniverse, validScalarOutcome)
-		const lazilyCreatedBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, lazilyCreatedUniverse, holderAddress)
+		const lazilyCreatedBalances = await balanceOfShares(client, questionLedgerAddresses.shareToken, lazilyCreatedUniverse, holderAddress)
 		strictEqualTypeSafe(lazilyCreatedBalances[1], parentYesBalance, 'a single missing target should create its canonical child and materialize the source balance')
 	})
 
@@ -226,7 +226,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 				const question = ensureDefined(questions[i], 'Missing question')
 				const amount = ensureDefined(amounts[i], 'Missing amount')
 				const parent = fixture.poolFor(question)
-				const child = await activateBranch(outcome, true, parent.securityPool)
+				const child = await activateBranch(outcome, true, parent.questionLedger)
 				const childPool = await client.readContract({ ...portfolio(), functionName: 'getPool', args: [question, child] })
 				for (const source of [0, 1, 2]) await migrateShares(fixture.other(), parent.shareToken, genesisUniverse, source, [outcome])
 				expect(await balanceOfShares(client, parent.shareToken, child, fixture.other().account.address)).toEqual([amount, amount, amount])

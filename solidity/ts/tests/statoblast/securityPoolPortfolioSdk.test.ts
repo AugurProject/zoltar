@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test'
 import { buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetCommitmentRequest, buildPortfolioCapitalWithdrawPrincipalRequest, buildPortfolioMintRequest, loadPortfolioCapitalSnapshot, loadPortfolioMintQuote } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
@@ -71,7 +71,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 0n })))
 		const pool = fixture.poolFor(fixture.base.questionId)
 		const balances = await balanceOfShares(client, pool.shareToken, fixture.base.genesisUniverse, owner)
-		await redeemCompleteSet(client, pool.securityPool, balances[0])
+		await redeemCompleteSet(client, pool.questionLedger, balances[0])
 		const completed = await loadPortfolioCapitalSnapshot({ client, owner, portfolio: fixture.portfolio })
 		expect(completed.withdrawableAttoRep).toBe(1_000n * unit)
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalWithdrawPrincipalRequest({ ...base, amountAttoRep: completed.withdrawableAttoRep })))

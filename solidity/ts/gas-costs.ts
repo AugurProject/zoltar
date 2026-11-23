@@ -5,9 +5,9 @@ import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as policyArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
 import { createWriteClient, type WriteClient } from './testSupport/simulator/utils/clients'
@@ -110,7 +110,7 @@ try {
 	const child = getChildUniverseId(0n, 1)
 	await anvil.setTime(forkTime + 63n * DAY)
 	await measure('3. Shared fork', 'Activate shared branch', owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
-	const forker = { abi: forkerArtifact.abi, address: infra.securityPoolForker }
+	const forker = { abi: forkerArtifact.abi, address: infra.questionForker }
 	await measure('3. Shared fork', 'Materialize question without reporter history', owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [poolAddress, child] }))
 	console.log('Measured one-question portfolio lifecycle; infrastructure, approvals and oracle funding are setup costs excluded from these rows.')
 	console.log('For auction and large-history transaction bounds, run the portfolio auction and bounded fork gas test suites.')

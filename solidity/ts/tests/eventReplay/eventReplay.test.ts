@@ -2,7 +2,7 @@ import { getZoltarAddress, getRepTokenAddress, forkUniverse } from '../../testSu
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { withdrawFromEscalationGame } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { withdrawFromEscalationGame } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -16,8 +16,8 @@ import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
-	statoblast_SecurityPool_SecurityPool,
-	statoblast_SecurityPoolForker_SecurityPoolForker,
+	statoblast_QuestionLedger_QuestionLedger,
+	statoblast_QuestionForker_QuestionForker,
 	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 } from '../../types/contractArtifact'
@@ -202,7 +202,7 @@ describe('event-only replay', () => {
 				args: { account: pool, actor: factory, authorized: true },
 			}),
 			createReplayLog({ emitter: pool, logIndex: 1 }),
-			createReplayLog({ emitter: coordinator, logIndex: 2, eventName: 'SecurityPoolSet', args: { securityPool: pool } }),
+			createReplayLog({ emitter: coordinator, logIndex: 2, eventName: 'QuestionLedgerSet', args: { questionLedger: pool } }),
 			createReplayLog({
 				emitter: shareToken,
 				eventName: 'TransferBatch',
@@ -223,10 +223,10 @@ describe('event-only replay', () => {
 			}),
 			createReplayLog({
 				emitter: factory,
-				eventName: 'DeploySecurityPool',
+				eventName: 'DeployQuestionLedger',
 				logIndex: 8,
 				args: {
-					securityPool: pool,
+					questionLedger: pool,
 					openOraclePriceCoordinator: coordinator,
 					shareToken,
 					parent: zeroAddress,
@@ -254,7 +254,7 @@ describe('event-only replay', () => {
 		if (replayed.escalationLifecycles.get(game)?.activationTime !== 10n) throw new Error('initial game lifecycle was not retained')
 		if (replayed.escalationLifecycles.has(unrecognizedGame)) throw new Error('unrecognized escalation-game emitter was accepted')
 		if (replayed.pools.get(pool)?.settlementCollateralAttoEth !== 1n) throw new Error('pool initialization checkpoint was not retained')
-		if (replayed.coordinators.get(coordinator)?.securityPool !== pool) throw new Error('coordinator setup checkpoint was not retained')
+		if (replayed.coordinators.get(coordinator)?.questionLedger !== pool) throw new Error('coordinator setup checkpoint was not retained')
 		if (replayed.shareTokenBalances.get(shareToken)?.get(1n)?.get(holder) !== 7n) throw new Error('token 1 holder balance mismatch')
 		if (replayed.shareTokenBalances.get(shareToken)?.get(2n)?.get(receiver) !== 3n) throw new Error('token 2 receiver balance mismatch')
 		if (replayed.shareTokenSupplies.get(shareToken)?.get(1n) !== 9n) throw new Error('token 1 supply mismatch')
@@ -319,7 +319,7 @@ describe('event-only replay', () => {
 					universeTheoreticalSupplyAttoRep: 90n,
 				},
 			}),
-			createReplayLog({ emitter: coordinator, eventName: 'SecurityPoolSet', logIndex: 3, args: { securityPool: pool } }),
+			createReplayLog({ emitter: coordinator, eventName: 'QuestionLedgerSet', logIndex: 3, args: { questionLedger: pool } }),
 			createReplayLog({
 				emitter: coordinator,
 				eventName: 'PriceRequested',
@@ -683,10 +683,10 @@ describe('event-only replay', () => {
 		const logs = [
 			createReplayLog({
 				emitter: factory,
-				eventName: 'DeploySecurityPool',
+				eventName: 'DeployQuestionLedger',
 				logIndex: 0,
 				args: {
-					securityPool: pool,
+					questionLedger: pool,
 					openOraclePriceCoordinator: zeroAddress,
 					shareToken: zeroAddress,
 					parent,
@@ -860,10 +860,10 @@ describe('event-only replay', () => {
 			}),
 			createReplayLog({
 				emitter: poolFactory,
-				eventName: 'DeploySecurityPool',
+				eventName: 'DeployQuestionLedger',
 				logIndex: 4,
 				args: {
-					securityPool: pool,
+					questionLedger: pool,
 					openOraclePriceCoordinator: coordinator,
 					shareToken: repToken,
 					parent: zeroAddress,
@@ -966,19 +966,19 @@ describe('event-only replay', () => {
 
 	let client: typeof fixture.client
 	let mockWindow: typeof fixture.mockWindow
-	let securityPoolAddresses: ReturnType<typeof portfolioFixture.poolFor>
+	let questionLedgerAddresses: ReturnType<typeof portfolioFixture.poolFor>
 
 	beforeEach(() => {
 		client = fixture.client
 		mockWindow = fixture.mockWindow
-		securityPoolAddresses = portfolioFixture.poolFor(fixture.questionId)
+		questionLedgerAddresses = portfolioFixture.poolFor(fixture.questionId)
 	})
 
 	const depositWallet = async (outcome: number, amount: bigint) => {
 		const now = await mockWindow.getTime()
 		if (now <= fixture.questionData.endTime) await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await approveToken(client, getRepTokenAddress(fixture.genesisUniverse), securityPoolAddresses.securityPool)
-		return writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
+		await approveToken(client, getRepTokenAddress(fixture.genesisUniverse), questionLedgerAddresses.questionLedger)
+		return writeContractAndWait(client, () => client.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddresses.questionLedger, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 	}
 	const activateChild = async (title: string) => {
 		const question = { ...fixture.questionData, title, endTime: (await mockWindow.getTime()) - 1n, startTime: 0n }
@@ -991,9 +991,9 @@ describe('event-only replay', () => {
 		const childUniverseId = getChildUniverseId(fixture.genesisUniverse, 1n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [fixture.genesisUniverse, 1n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [childUniverseId] }))
-		const target = { abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker }
-		const childDeploymentHash = await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'preparePortfolioQuestion', args: [securityPoolAddresses.securityPool, childUniverseId] }))
-		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializePortfolioQuestion', args: [securityPoolAddresses.securityPool, childUniverseId] }))
+		const target = { abi: statoblast_QuestionForker_QuestionForker.abi, address: getInfraContractAddresses().questionForker }
+		const childDeploymentHash = await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'preparePortfolioQuestion', args: [questionLedgerAddresses.questionLedger, childUniverseId] }))
+		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializePortfolioQuestion', args: [questionLedgerAddresses.questionLedger, childUniverseId] }))
 		return { childUniverseId, childDeploymentHash }
 	}
 
@@ -1054,16 +1054,16 @@ describe('event-only replay', () => {
 		const replayLogs = (
 			await Promise.all([
 				getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, blockNumber, blockNumber),
-				getContractReplayLogs(addresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, blockNumber, blockNumber),
 				getContractReplayLogs(addresses.shareToken, statoblast_tokens_ShareToken_ShareToken.abi, blockNumber, blockNumber),
 				getContractReplayLogs(addresses.openOraclePriceCoordinator, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, blockNumber, blockNumber),
 			])
 		)
 			.flat()
 			.filter(log => log.transactionHash === deploymentHash)
-		const deploymentLog = replayLogs.find(log => log.eventName === 'DeploySecurityPool')
+		const deploymentLog = replayLogs.find(log => log.eventName === 'DeployQuestionLedger')
 		const authorizationLog = replayLogs.find(log => log.eventName === 'AuthorizationUpdated')
-		const coordinatorCheckpointLog = replayLogs.find(log => log.eventName === 'SecurityPoolSet')
+		const coordinatorCheckpointLog = replayLogs.find(log => log.eventName === 'QuestionLedgerSet')
 		if (deploymentLog === undefined || authorizationLog === undefined || coordinatorCheckpointLog === undefined) {
 			throw new Error('origin deployment receipt is missing replay relationships or setup events')
 		}
@@ -1072,16 +1072,16 @@ describe('event-only replay', () => {
 		}
 
 		const replayed = replayZoltarEvents(replayLogs, new Set(), new Set([factory]))
-		if (replayed.poolDeployments.get(addresses.securityPool)?.shareToken !== addresses.shareToken) throw new Error('origin deployment relationship mismatch')
+		if (replayed.poolDeployments.get(addresses.questionLedger)?.shareToken !== addresses.shareToken) throw new Error('origin deployment relationship mismatch')
 		const storedOriginPriorityFee = await client.readContract({
 			address: addresses.openOraclePriceCoordinator,
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'initialReportPriorityFeeAttoEthPerGas',
 			args: [],
 		})
-		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.securityPool)?.initialReportPriorityFeeAttoEthPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
-		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.securityPool) !== true) throw new Error('origin pool authorization was not replayed')
-		if (replayed.coordinators.get(addresses.openOraclePriceCoordinator)?.securityPool !== addresses.securityPool) {
+		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.questionLedger)?.initialReportPriorityFeeAttoEthPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
+		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.questionLedger) !== true) throw new Error('origin pool authorization was not replayed')
+		if (replayed.coordinators.get(addresses.openOraclePriceCoordinator)?.questionLedger !== addresses.questionLedger) {
 			throw new Error('origin coordinator setup checkpoint was not replayed')
 		}
 	})
@@ -1093,18 +1093,18 @@ describe('event-only replay', () => {
 			const pool = portfolioFixture.poolFor(question)
 			for (const amount of [3n * unit, 5n * unit, 2n * unit]) {
 				await portfolioFixture.mint(amount, question)
-				await writeContractAndWait(holder, () => holder.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'redeemCompleteSet', args: [amount / 2n] }))
+				await writeContractAndWait(holder, () => holder.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'redeemCompleteSet', args: [amount / 2n] }))
 			}
 			await mockWindow.advanceTime(10n)
-			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'updateSettlementCollateral' }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'updateSettlementCollateral' }))
 			const latest = await client.getBlockNumber()
-			const logs = (await Promise.all([getContractReplayLogs(pool.securityPool, statoblast_SecurityPool_SecurityPool.abi, 0n, latest), getContractReplayLogs(pool.shareToken, statoblast_tokens_ShareToken_ShareToken.abi, 0n, latest)])).flat()
+			const logs = (await Promise.all([getContractReplayLogs(pool.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, 0n, latest), getContractReplayLogs(pool.shareToken, statoblast_tokens_ShareToken_ShareToken.abi, 0n, latest)])).flat()
 			const replayed = replayZoltarEvents(logs)
-			const state = replayed.pools.get(pool.securityPool)
+			const state = replayed.pools.get(pool.questionLedger)
 			if (state === undefined) throw new Error('Question accounting event missing')
-			expect(state.settlementCollateralAttoEth).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'settlementCollateralAttoEth' }))
-			expect(state.shareTokenSupplyAttoShares).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'shareTokenSupplyAttoShares' }))
-			expect(state.lastSettlementPortfolioTime).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'lastSettlementPortfolioTime' }))
+			expect(state.settlementCollateralAttoEth).toBe(await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'settlementCollateralAttoEth' }))
+			expect(state.shareTokenSupplyAttoShares).toBe(await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'shareTokenSupplyAttoShares' }))
+			expect(state.lastSettlementPortfolioTime).toBe(await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'lastSettlementPortfolioTime' }))
 			for (const outcome of [0n, 1n, 2n]) {
 				const id = fixture.genesisUniverse * 256n + outcome
 				expect(replayed.shareTokenBalances.get(pool.shareToken)?.get(id)?.get(holder.account.address)).toBe(await holder.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: pool.shareToken, functionName: 'balanceOf', args: [holder.account.address, id] }))
@@ -1119,11 +1119,11 @@ describe('event-only replay', () => {
 		const factory = getInfraContractAddresses().securityPoolFactory
 		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
 		const deploymentLogs = factoryLogs.filter(log => {
-			const deployedPool = log.args['securityPool']
-			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && deployedPool.toLowerCase() === securityPoolAddresses.securityPool.toLowerCase()
+			const deployedPool = log.args['questionLedger']
+			return log.eventName === 'DeployQuestionLedger' && typeof deployedPool === 'string' && deployedPool.toLowerCase() === questionLedgerAddresses.questionLedger.toLowerCase()
 		})
 		const receiptLogs = (
-			await Promise.all([getContractReplayLogs(securityPoolAddresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(securityPoolAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)])
+			await Promise.all([getContractReplayLogs(questionLedgerAddresses.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(questionLedgerAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)])
 		)
 			.flat()
 			.filter(log => log.transactionHash === depositHash)
@@ -1133,18 +1133,18 @@ describe('event-only replay', () => {
 		if (gameStarted.logIndex >= gameSet.logIndex) throw new Error('game lifecycle event did not precede pool relationship event')
 
 		const replayed = replayZoltarEvents([...deploymentLogs, ...receiptLogs], new Set(), new Set([factory]))
-		if (replayed.poolStates.get(securityPoolAddresses.securityPool)?.escalationGame !== securityPoolAddresses.escalationGame) {
+		if (replayed.poolStates.get(questionLedgerAddresses.questionLedger)?.escalationGame !== questionLedgerAddresses.escalationGame) {
 			throw new Error('pool escalation-game relationship was not replayed')
 		}
-		if (replayed.escalationLifecycles.get(securityPoolAddresses.escalationGame)?.activationTime === undefined) {
+		if (replayed.escalationLifecycles.get(questionLedgerAddresses.escalationGame)?.activationTime === undefined) {
 			throw new Error('initial escalation-game lifecycle was not replayed')
 		}
 	})
 
 	test('actual ordinary settlement replays global losing retirement without synthetic per-deposit cleanup', async () => {
 		const fromBlock = (await client.getBlockNumber()) + 1n
-		const pool = securityPoolAddresses.securityPool
-		const game = securityPoolAddresses.escalationGame
+		const pool = questionLedgerAddresses.questionLedger
+		const game = questionLedgerAddresses.escalationGame
 		const abi = statoblast_EscalationGame_EscalationGame.abi
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
 		for (const [outcome, principal] of [
@@ -1188,21 +1188,21 @@ describe('event-only replay', () => {
 		const { childUniverseId, childDeploymentHash } = await activateChild('event replay child continuation')
 		const receipt = await client.getTransactionReceipt({ hash: childDeploymentHash })
 		const initializedAtBlock = await client.getBlockNumber()
-		const child = portfolioFixture.poolFor(fixture.questionId, childUniverseId, securityPoolAddresses.securityPool)
+		const child = portfolioFixture.poolFor(fixture.questionId, childUniverseId, questionLedgerAddresses.questionLedger)
 		const factory = getInfraContractAddresses().securityPoolFactory
-		const forker = getInfraContractAddresses().securityPoolForker
+		const forker = getInfraContractAddresses().questionForker
 		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, initializedAtBlock)
-		const canonicalPools = new Set([securityPoolAddresses.securityPool.toLowerCase(), child.securityPool.toLowerCase()])
+		const canonicalPools = new Set([questionLedgerAddresses.questionLedger.toLowerCase(), child.questionLedger.toLowerCase()])
 		const deploymentLogs = factoryLogs.filter(log => {
-			const deployedPool = log.args['securityPool']
-			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && canonicalPools.has(deployedPool.toLowerCase())
+			const deployedPool = log.args['questionLedger']
+			return log.eventName === 'DeployQuestionLedger' && typeof deployedPool === 'string' && canonicalPools.has(deployedPool.toLowerCase())
 		})
 		const [sourcePoolLogs, sourceGameLogs, forkerLogs] = await Promise.all([
-			getContractReplayLogs(securityPoolAddresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, initializedAtBlock),
-			getContractReplayLogs(securityPoolAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, fromBlock, initializedAtBlock),
-			getContractReplayLogs(forker, statoblast_SecurityPoolForker_SecurityPoolForker.abi, fromBlock, initializedAtBlock),
+			getContractReplayLogs(questionLedgerAddresses.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, fromBlock, initializedAtBlock),
+			getContractReplayLogs(questionLedgerAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, fromBlock, initializedAtBlock),
+			getContractReplayLogs(forker, statoblast_QuestionForker_QuestionForker.abi, fromBlock, initializedAtBlock),
 		])
-		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, statoblast_SecurityPool_SecurityPool.abi, receipt.blockNumber, initializedAtBlock), getContractReplayLogs(child.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, initializedAtBlock)])).flat()
+		const receiptLogs = (await Promise.all([getContractReplayLogs(child.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, receipt.blockNumber, initializedAtBlock), getContractReplayLogs(child.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, initializedAtBlock)])).flat()
 		const continued = receiptLogs.find(log => log.eventName === 'GameContinuedFromFork')
 		const carryCheckpoint = receiptLogs.find(log => log.eventName === 'ForkCarryCheckpoint')
 		const gameSet = receiptLogs.find(log => log.eventName === 'EscalationGameSet')
@@ -1214,17 +1214,17 @@ describe('event-only replay', () => {
 		expect(receiptLogs.find(log => log.eventName === 'SystemStateSet')?.args['systemState']).toBe(0n)
 
 		const replayed = replayZoltarEvents([...deploymentLogs, ...sourcePoolLogs, ...sourceGameLogs, ...forkerLogs, ...receiptLogs], new Set(), new Set([factory]))
-		const deployment = replayed.poolDeployments.get(child.securityPool)
+		const deployment = replayed.poolDeployments.get(child.questionLedger)
 		if (deployment === undefined) throw new Error('child pool deployment replay missing')
 		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
-			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
+			client.readContract({ address: child.questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
 				address: child.openOraclePriceCoordinator,
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'initialReportPriorityFeeAttoEthPerGas',
 				args: [],
 			}),
-			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
+			client.readContract({ address: child.questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'systemState', args: [] }),
 			client.readContract({ address: child.escalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getForkCarryRoots', args: [] }),
 			client.readContract({ address: child.escalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getForkCarrySnapshot', args: [] }),
 		])
@@ -1240,14 +1240,14 @@ describe('event-only replay', () => {
 			),
 		)
 		strictEqualTypeSafe(deployment.factory, factory, 'child factory replay mismatch')
-		strictEqualTypeSafe(deployment.parent, securityPoolAddresses.securityPool, 'child parent replay mismatch')
+		strictEqualTypeSafe(deployment.parent, questionLedgerAddresses.questionLedger, 'child parent replay mismatch')
 		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
 		strictEqualTypeSafe(deployment.questionId, fixture.questionId, 'child question replay mismatch')
 		strictEqualTypeSafe(deployment.coordinator, child.openOraclePriceCoordinator, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
 		strictEqualTypeSafe(deployment.initialReportPriorityFeeAttoEthPerGas, storedPriorityFee, 'child priority fee replay mismatch')
-		strictEqualTypeSafe(replayed.poolStates.get(child.securityPool)?.systemState, storedSystemState, 'child constructor system state replay mismatch')
+		strictEqualTypeSafe(replayed.poolStates.get(child.questionLedger)?.systemState, storedSystemState, 'child constructor system state replay mismatch')
 		if (replayed.escalationLifecycles.get(child.escalationGame)?.forkContinuation !== true) {
 			throw new Error('child continuation lifecycle was not replayed')
 		}

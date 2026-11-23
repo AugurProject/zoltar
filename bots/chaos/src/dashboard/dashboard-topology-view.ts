@@ -62,7 +62,7 @@ export function createDashboardTopologyView({ elements }: { elements: DashboardE
 			topologyRow(`Universe ${String(source['id'] ?? '—')}`, [source['parentUniverseId'] === undefined ? 'genesis' : `parent ${String(source['parentUniverseId'])}`, `${String(source['knownChildOutcomeCount'] ?? 0)} child routes`, topologyIdentifierFact('REP', stringValue(source['repToken']), 'universe REP token')]),
 		)
 		renderTopologyGroup(elements.topologyPools, value.pools, source =>
-			topologyRow(topologyIdentifier(stringValue(source['address']), 'Pool unavailable', 'security pool address'), [
+			topologyRow(topologyIdentifier(stringValue(source['address']), 'Pool unavailable', 'question ledger address'), [
 				`universe ${String(source['universeId'] ?? '—')}`,
 				['Operational', 'Pool forked', 'Fork migration'][Number(source['systemState'] ?? NaN)] ?? `Unknown pool state (${String(source['systemState'] ?? 'unavailable')})`,
 				`Portfolio ${String(source['portfolio'] ?? 'unavailable')}${source['awaitingForkContinuation'] === true ? ' · fork continuation pending' : ''}`,

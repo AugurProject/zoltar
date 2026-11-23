@@ -7,7 +7,7 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
@@ -25,7 +25,7 @@ describe('Statoblast: native fork claim basket recovery', () => {
 		await fixture.deposit(1_000n * unit, other())
 		await fixture.authorize(200n * unit, other())
 		await fixture.mint()
-		const parentPool = fixture.poolFor(base.questionId).securityPool
+		const parentPool = fixture.poolFor(base.questionId).questionLedger
 		const shares = await owner().readContract({ abi: poolArtifact.abi, address: parentPool, functionName: 'shareToken' })
 		const balances = await other().readContract({ abi: sharesArtifact.abi, address: shares, functionName: 'balanceOfShares', args: [base.genesisUniverse, other().account.address] })
 		await approveToken(owner(), getRepTokenAddress(base.genesisUniverse), getZoltarAddress())

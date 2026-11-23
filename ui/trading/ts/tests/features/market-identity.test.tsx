@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { SecurityPoolIdentityFields } from '../../features/LiveMarketIdentity.js'
+import { QuestionLedgerIdentityFields } from '../../features/LiveMarketIdentity.js'
 
 let cleanup: (() => Promise<void>) | undefined
 installDomTestLifecycle({
@@ -12,7 +12,7 @@ installDomTestLifecycle({
 })
 test('renders large question identifiers as lossless hexadecimal strings', async () => {
 	const questionId = (1n << 255n) + 26n
-	cleanup = (await renderIntoDocument(<SecurityPoolIdentityFields market={{ pool: zeroAddress, shareToken: zeroAddress, universeId: 1n, originUniverseId: 1n, questionId }} />)).cleanup
+	cleanup = (await renderIntoDocument(<QuestionLedgerIdentityFields market={{ pool: zeroAddress, shareToken: zeroAddress, universeId: 1n, originUniverseId: 1n, questionId }} />)).cleanup
 	expect(document.body.textContent).toContain(`0x${questionId.toString(16)}`)
 	expect(document.body.textContent).not.toContain(questionId.toString())
 })
@@ -20,7 +20,7 @@ test('renders large question identifiers as lossless hexadecimal strings', async
 test('makes every displayed pool and share token address independently copyable and linked to Etherscan', async () => {
 	const pool: Address = `0x${'12'.repeat(20)}`
 	const shareToken: Address = `0x${'34'.repeat(20)}`
-	const rendered = await renderIntoDocument(<SecurityPoolIdentityFields market={{ pool, shareToken, universeId: 1n, originUniverseId: 1n, questionId: 1n }} />)
+	const rendered = await renderIntoDocument(<QuestionLedgerIdentityFields market={{ pool, shareToken, universeId: 1n, originUniverseId: 1n, questionId: 1n }} />)
 	cleanup = rendered.cleanup
 	for (const address of [pool, shareToken]) {
 		expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${address}"]`)).not.toBeNull()
@@ -33,7 +33,7 @@ test('#1462 shows the collateral token address so a counterfeit-collateral marke
 	const pool: Address = `0x${'12'.repeat(20)}`
 	const shareToken: Address = `0x${'34'.repeat(20)}`
 	const collateralToken: Address = `0x${'56'.repeat(20)}`
-	const rendered = await renderIntoDocument(<SecurityPoolIdentityFields market={{ pool, shareToken, universeId: 1n, originUniverseId: 1n, questionId: 1n, collateral: { token: collateralToken, symbol: 'USDC (0x565656…565656)', decimals: 6, native: false } }} />)
+	const rendered = await renderIntoDocument(<QuestionLedgerIdentityFields market={{ pool, shareToken, universeId: 1n, originUniverseId: 1n, questionId: 1n, collateral: { token: collateralToken, symbol: 'USDC (0x565656…565656)', decimals: 6, native: false } }} />)
 	cleanup = rendered.cleanup
 	expect(rendered.container.textContent).toContain('Collateral token address')
 	expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${collateralToken}"]`)).not.toBeNull()
@@ -41,7 +41,7 @@ test('#1462 shows the collateral token address so a counterfeit-collateral marke
 })
 
 test('marks the collateral token address unavailable when the collateral did not load', async () => {
-	const rendered = await renderIntoDocument(<SecurityPoolIdentityFields market={{ pool: zeroAddress, shareToken: zeroAddress, universeId: 1n, originUniverseId: 1n, questionId: 1n }} />)
+	const rendered = await renderIntoDocument(<QuestionLedgerIdentityFields market={{ pool: zeroAddress, shareToken: zeroAddress, universeId: 1n, originUniverseId: 1n, questionId: 1n }} />)
 	cleanup = rendered.cleanup
 	expect(rendered.container.textContent).toContain('Collateral token address')
 	expect(rendered.container.textContent).toContain('Unavailable')

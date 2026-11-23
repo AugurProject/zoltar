@@ -1,4 +1,4 @@
-export const securityPoolTerm = 'Security pool'
+export const securityPoolTerm = 'Question ledger'
 export const securityPoolDefinition = 'The question ledger for one question in one universe. Its portfolio supplies shared backing in the configured collateral token.'
 export const securityMultiplierDefinition = 'The REP backing required per unit of collateral commitment, expressed as a percentage. A 250% multiplier requires 2.5 units of REP value per unit committed.'
 export const openInterestFeeTerm = 'Open interest fee'

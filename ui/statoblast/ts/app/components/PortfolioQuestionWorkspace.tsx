@@ -20,10 +20,10 @@ import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reportin
 import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
-import { loadSecurityPoolListing, loadSelectedSecurityPool, type UnavailableSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadQuestionLedgerListing, loadSelectedQuestionLedger, type UnavailableQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
-import { statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import { statoblast_QuestionForker_QuestionForker as forkerArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import type { ListedQuestionLedger } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { AccountState, WriteOperationsParameters } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -41,7 +41,7 @@ type Props = {
 
 /** Question-specific shares and reporting; backing, liquidation and auctions live in the portfolio workspace. */
 export function PortfolioQuestionWorkspace({ accountState, parameters, deploymentStatuses, enabled, environmentKey, universeId, currentTimestamp, selectedAddress, onSelect }: Props) {
-	const [snapshot, setSnapshot] = useState<{ environmentKey: number; questions: ListedSecurityPool[]; unavailable: UnavailableSecurityPool[] }>({ environmentKey, questions: [], unavailable: [] })
+	const [snapshot, setSnapshot] = useState<{ environmentKey: number; questions: ListedQuestionLedger[]; unavailable: UnavailableQuestionLedger[] }>({ environmentKey, questions: [], unavailable: [] })
 	const questions = snapshot.environmentKey === environmentKey ? snapshot.questions : []
 	const unavailable = snapshot.environmentKey === environmentKey ? snapshot.unavailable.filter(question => question.universeId === universeId) : []
 	const [loading, setLoading] = useState(false)
@@ -52,9 +52,9 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 	}, enabled)
 	const forkError = useSignal<string | undefined>(undefined)
 	const forkPending = useSignal(false)
-	const selected = questions.find(question => question.securityPoolAddress.toLowerCase() === selectedAddress.toLowerCase())
-	const reporting = useReportingOperations({ ...parameters, selectedSecurityPoolAddress: selectedAddress })
-	const trading = useTradingOperations({ ...parameters, deploymentStatuses, enabled: enabled && selected !== undefined, selectedSecurityPoolAddress: selectedAddress })
+	const selected = questions.find(question => question.questionLedgerAddress.toLowerCase() === selectedAddress.toLowerCase())
+	const reporting = useReportingOperations({ ...parameters, selectedQuestionLedgerAddress: selectedAddress })
+	const trading = useTradingOperations({ ...parameters, deploymentStatuses, enabled: enabled && selected !== undefined, selectedQuestionLedgerAddress: selectedAddress })
 	useEffect(() => {
 		let current = true
 		setLoadError(undefined)
@@ -66,9 +66,9 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 		setLoading(true)
 		void (async () => {
 			const client = createConnectedReadClient()
-			if (selectedAddress === '') return await loadSecurityPoolListing(client)
+			if (selectedAddress === '') return await loadQuestionLedgerListing(client)
 			if (!isAddress(selectedAddress)) throw new Error('Enter a valid question address.')
-			return { pools: [await loadSelectedSecurityPool(client, getAddress(selectedAddress))], unavailable: [] }
+			return { pools: [await loadSelectedQuestionLedger(client, getAddress(selectedAddress))], unavailable: [] }
 		})()
 			.then(value => {
 				if (current) setSnapshot({ environmentKey, questions: value.pools, unavailable: value.unavailable })
@@ -88,9 +88,9 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 	}, [enabled, environmentKey, refresh, selectedAddress])
 	useEffect(() => {
 		if (selected === undefined) return
-		reporting.setReportingForm(form => ({ ...form, securityPoolAddress: selected.securityPoolAddress }))
+		reporting.setReportingForm(form => ({ ...form, questionLedgerAddress: selected.questionLedgerAddress }))
 		void reporting.loadReporting()
-	}, [selected?.securityPoolAddress, environmentKey, refresh])
+	}, [selected?.questionLedgerAddress, environmentKey, refresh])
 	const triggerFork = async () => {
 		if (forkPending.value || selected === undefined || !isAddress(selectedAddress)) return
 		const question = selected
@@ -107,10 +107,10 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				async (account, context) => {
 					const client = createWalletWriteClient(account, { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted })
 					const hash = await writeContractAndWait(client, () => ({
-						address: getInfraContractAddresses().securityPoolForker,
+						address: getInfraContractAddresses().questionForker,
 						abi: forkerArtifact.abi,
 						functionName: 'forkZoltarWithOwnEscalationGame',
-						args: [getAddress(question.securityPoolAddress)],
+						args: [getAddress(question.questionLedgerAddress)],
 						reviewTitle: copy.triggerUniverseFork,
 						reviewDescription: copy.triggerUniverseForkDescription,
 					}))
@@ -153,9 +153,9 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 								{questions
 									.filter(question => question.universeId === universeId)
 									.map(question => (
-										<tr key={question.securityPoolAddress} role='row'>
+										<tr key={question.questionLedgerAddress} role='row'>
 											<td role='cell'>
-												<button type='button' onClick={() => onSelect(question.universeId, question.securityPoolAddress)}>
+												<button type='button' onClick={() => onSelect(question.universeId, question.questionLedgerAddress)}>
 													{getQuestionTitle(question.marketDetails)}
 												</button>
 											</td>
@@ -200,7 +200,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				repPerEthPrice={selected.lastOraclePrice}
 				repPerEthSource={selected.lastOraclePrice === undefined ? undefined : 'open-oracle'}
 				repPerEthSourceUrl={undefined}
-				showSecurityPoolAddressInput={false}
+				showQuestionLedgerAddressInput={false}
 			/>
 			<ReportingSection
 				accountState={accountState}
@@ -222,7 +222,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				}}
 				onTriggerZoltarFork={() => void triggerFork()}
 				triggerZoltarForkPending={forkPending.value}
-				showSecurityPoolAddressInput={false}
+				showQuestionLedgerAddressInput={false}
 			/>
 			<InheritedReporterClaims parameters={parameters} accountState={accountState} details={reporting.reportingDetails} onRefresh={reporting.loadReporting} />
 		</div>

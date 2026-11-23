@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../types/contractArtifact'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { SparseNullifierTree } from './carryProofHelpers'
@@ -20,7 +20,7 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 		const trader = fixture.other()
 		const U0 = base.genesisUniverse
 		const q = base.questionId
-		const source = fixture.poolFor(q).securityPool
+		const source = fixture.poolFor(q).questionLedger
 		const reporters = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5)] as const
 		const [r2, r3, r4, r5] = reporters
 		const thirdParty = e2e.account(6)
@@ -124,7 +124,7 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 			if (first === undefined) continue
 			await expect(owner.simulateContract({ abi: poolArtifact.abi, address: source, functionName: 'withdrawFromEscalationGame', args: [outcome, [0n]] })).rejects.toThrow()
 		}
-		await expect(owner.simulateContract({ ...e2e.game(game0), functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow()
+		await expect(owner.simulateContract({ ...e2e.game(game0), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow()
 
 		// The only capital owner follows the Yes branch.
 		await e2e.choose(owner, U0, YES)
@@ -172,14 +172,14 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 			expect(burnedByClaims).toBe(variant === 'own-fork' ? 0n : burn)
 			const residual = await e2e.gameBalance(game)
 			expect(residual).toBe(liveBefore - haircut - paid - burnedByClaims)
-			if (residual === 0n) await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('No sweepable REP')
+			if (residual === 0n) await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('No sweepable REP')
 			else await e2e.sweep(thirdParty, game)
 			expect(await e2e.gameBalance(game)).toBe(0n)
 			expect(await e2e.rep(child, ledger)).toBe(0n)
 			expect(await e2e.rep(child, pool)).toBe(0n)
 			expect(supplyChild - (await e2e.supply(child))).toBe(burnedByClaims + residual)
 			expect(await owner.readContract({ ...g, functionName: 'totalDisputeStakedAttoRep' })).toBe(0n)
-			await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow()
+			await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow()
 			table.push({ child: ['Invalid', 'Yes', 'No'][outcome], winning, paid, burnedByClaims, residualBurned: residual, backing: liveBefore - haircut })
 		}
 		// Reporter wallets: only child REP moved; genesis REP was spent exactly once.

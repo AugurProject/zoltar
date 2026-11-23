@@ -3,7 +3,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar as zoltarArtifact } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { advanceSimulationTime } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { mintSimulationGenesisRep, requireQaAccount, reportBootstrapProgress, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact, statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '../contractArtifact.js'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../contractArtifact.js'
 import { getInfraContractAddresses } from '../protocol/deploymentHelpers.js'
 import { sendPortfolioTransaction } from '../protocol/securityPoolPortfolio.js'
 
@@ -30,5 +30,5 @@ export async function forkSeededPortfolio(parameters: BootstrapScenarioApplyPara
 	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'startBranch', args: [0n, 1n] }), 'Start Yes branch')
 	const child = await reader.readContract({ abi: zoltarArtifact.abi, address: zoltar, functionName: 'getChildUniverseId', args: [0n, 1n] })
 	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'finalizeBranch', args: [child] }), 'Activate Yes branch')
-	await send(infrastructure.securityPoolForker, encodeFunctionData({ abi: forkerArtifact.abi, functionName: 'preparePortfolioQuestion', args: [parentPool, child] }), 'Prepare child question')
+	await send(infrastructure.questionForker, encodeFunctionData({ abi: forkerArtifact.abi, functionName: 'preparePortfolioQuestion', args: [parentPool, child] }), 'Prepare child question')
 }

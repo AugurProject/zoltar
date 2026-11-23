@@ -7,7 +7,7 @@ import { installTestRouting } from './testUtils/testRouting.js'
 
 const DEPLOY_ROUTE = '#/deploy'
 const OPEN_ORACLE_ROUTE = '#/open-oracle'
-const SECURITY_POOLS_ROUTE = '#/security-pools'
+const QUESTION_LEDGERS_ROUTE = '#/security-pools'
 const ZOLTAR_ROUTE = '#/zoltar'
 
 describe('routing', () => {
@@ -103,9 +103,9 @@ describe('routing', () => {
 
 	test('resolves known and non-query route hash helpers', () => {
 		expect(getCurrentRouteHash()).toBe(ZOLTAR_ROUTE)
-		window.location.hash = SECURITY_POOLS_ROUTE
+		window.location.hash = QUESTION_LEDGERS_ROUTE
 		expect(getCurrentRoute()).toBe('security-pools')
-		expect(getCurrentRouteHash()).toBe(SECURITY_POOLS_ROUTE)
+		expect(getCurrentRouteHash()).toBe(QUESTION_LEDGERS_ROUTE)
 		expect(getRouteHashSearch()).toBe('')
 	})
 
@@ -113,7 +113,7 @@ describe('routing', () => {
 		expect(DEPLOY_ROUTE).toBe('#/deploy')
 		expect(OPEN_ORACLE_ROUTE).toBe('#/open-oracle')
 		expect(getRouteHash('deploy')).toBe(DEPLOY_ROUTE)
-		expect(getRouteHash('security-pools')).toBe(SECURITY_POOLS_ROUTE)
+		expect(getRouteHash('security-pools')).toBe(QUESTION_LEDGERS_ROUTE)
 		expect(getRouteHash('open-oracle')).toBe(OPEN_ORACLE_ROUTE)
 		expect(getRouteHash('zoltar')).toBe(ZOLTAR_ROUTE)
 	})

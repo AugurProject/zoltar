@@ -116,7 +116,7 @@ export function ReportingSection({
 	reportingForm,
 	reportActionGuardMessage,
 	showHeader = true,
-	showSecurityPoolAddressInput = true,
+	showQuestionLedgerAddressInput = true,
 	mode = 'full-reporting',
 	triggerZoltarForkAvailability,
 	triggerZoltarForkPending = false,
@@ -209,7 +209,7 @@ export function ReportingSection({
 	const availableReportingRep = effectiveReportingDetails?.viewerWalletRepBalanceAttoRep
 	const reportTriggersFork = reportingContributionTriggersFork(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	// A confirmation covers one exact fork-triggering report; any change to the pool, side, or amount asks again.
-	const forkConfirmation = useKeyedConfirmation(reportTriggersFork ? `${effectiveReportingDetails?.securityPoolAddress ?? ''}:${selectedOutcome ?? ''}:${selectedAmount?.toString() ?? ''}` : undefined)
+	const forkConfirmation = useKeyedConfirmation(reportTriggersFork ? `${effectiveReportingDetails?.questionLedgerAddress ?? ''}:${selectedOutcome ?? ''}:${selectedAmount?.toString() ?? ''}` : undefined)
 	const reportDisplayAmount = formatCurrencyBalance(actualReportDepositAmount ?? selectedAmount ?? 0n)
 	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : commonCopy.launchAction((reportTriggersFork ? reportingCopy.reportAndTriggerForkLabel : reportingCopy.reportAmountLabel)(selectedOutcomeLabel, reportDisplayAmount))
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
@@ -293,7 +293,7 @@ export function ReportingSection({
 		if (escalationPhase !== 'Timed Out') return
 		if (loadingReportingDetails) return
 		if (isPoolQuestionFinalized(activeReportingDetails) || activeReportingDetails.hasReachedNonDecision) return
-		const refreshBoundaryKey = `${activeReportingDetails.securityPoolAddress}:${activeReportingDetails.escalationEndTime.toString()}`
+		const refreshBoundaryKey = `${activeReportingDetails.questionLedgerAddress}:${activeReportingDetails.escalationEndTime.toString()}`
 		if (lastTimedOutRefreshBoundaryKey.current === refreshBoundaryKey) return
 		lastTimedOutRefreshBoundaryKey.current = refreshBoundaryKey
 		void onLoadReporting()
@@ -330,7 +330,7 @@ export function ReportingSection({
 			showDisabledReason={false}
 		/>
 	)
-	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined)
+	const showReportingHeaderStack = showFullReporting && (showQuestionLedgerAddressInput || reportingStageBanner !== undefined)
 	const settlementSection =
 		showSettlementSection && reportingReady !== false ? (
 			<ReportingSettlementSection
@@ -360,11 +360,11 @@ export function ReportingSection({
 		<>
 			{showReportingHeaderStack ? (
 				<div className='reporting-header-stack'>
-					{showSecurityPoolAddressInput ? (
+					{showQuestionLedgerAddressInput ? (
 						<LookupFieldRow
-							label={commonCopy.securityPoolAddress}
-							value={reportingForm.securityPoolAddress}
-							onInput={securityPoolAddress => onReportingFormChange({ securityPoolAddress })}
+							label={commonCopy.questionLedgerAddress}
+							value={reportingForm.questionLedgerAddress}
+							onInput={questionLedgerAddress => onReportingFormChange({ questionLedgerAddress })}
 							placeholder={commonCopy.hexValuePlaceholder}
 							action={
 								<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails || preOpenLockedReason !== undefined} title={preOpenLockedReason}>
@@ -391,7 +391,7 @@ export function ReportingSection({
 							}}
 						/>
 					)}
-					{activeReportingDetails === undefined || activeReportingDetails.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0) ? undefined : <EscalationReminderLine key={activeReportingDetails.securityPoolAddress} details={activeReportingDetails} />}
+					{activeReportingDetails === undefined || activeReportingDetails.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0) ? undefined : <EscalationReminderLine key={activeReportingDetails.questionLedgerAddress} details={activeReportingDetails} />}
 					<EscalationExplainer details={effectiveReportingDetails} />
 				</>
 			) : undefined}
@@ -563,7 +563,7 @@ export function ReportingSection({
 										pending={reportingActiveAction === 'approveReportingRep'}
 										pendingLabel={commonCopy.approvingRep}
 										requiredAmount={walletDepositAmount}
-										resetKey={`${effectiveReportingDetails?.securityPoolAddress ?? ''}:${selectedOutcome ?? ''}`}
+										resetKey={`${effectiveReportingDetails?.questionLedgerAddress ?? ''}:${selectedOutcome ?? ''}`}
 										tokenSymbol={commonCopy.rep}
 										tokenUnits={18}
 									/>
@@ -587,7 +587,7 @@ export function ReportingSection({
 
 			{forkTriggeredActions}
 
-			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={showSecurityPoolAddressInput ? undefined : onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting} />
+			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={showQuestionLedgerAddressInput ? undefined : onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting} />
 		</>
 	)
 	if (embedInCard) return sections

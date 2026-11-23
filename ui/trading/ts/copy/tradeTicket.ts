@@ -32,7 +32,7 @@ export const invalidUsedNote = 'Selling redeems complete sets for collateral, us
 export const updatingEstimate = 'Updating estimate…'
 export const amountTooSmall = 'Amount too small to trade.'
 export const invalidCoverageReason = 'Not enough Invalid shares to insure this sale.'
-export const mintingCapacityExhaustedReason = 'The security pool cannot mint more complete sets now.'
+export const mintingCapacityExhaustedReason = 'The question ledger cannot mint more complete sets now.'
 export const acknowledgeImpactReason = 'Confirm the price impact first.'
 /** Every ticket control is disabled once the market stops taking new positions; Settlement is where holdings go next. */
 export const tradingEndedReason = 'Trading has ended for this market.'
@@ -41,7 +41,7 @@ export const openSettlement = 'Open settlement'
 /** The closed-market notice names the step Settlement actually offers for the market's state. */
 export function formatTradingEndedDetail(path: MarketSettlementPath) {
 	if (path === 'migrate-shares') return `${tradingEndedReason} Use Settlement to migrate your shares to a child universe.`
-	if (path === 'unavailable') return `${tradingEndedReason} Redemption is unavailable until the security pool is operational.`
+	if (path === 'unavailable') return `${tradingEndedReason} Redemption is unavailable until the question ledger is operational.`
 	return `${tradingEndedReason} Use Settlement to redeem.`
 }
 
@@ -50,9 +50,9 @@ export function formatPriceImpactBlockedReason(limit: string) {
 	return `Trade at most ${limit}; larger trades exceed the 15% price-impact limit.`
 }
 
-/** A buy mints complete sets with the ETH paid, up to the security pool's remaining minting capacity. */
+/** A buy mints complete sets with the ETH paid, up to the question ledger's remaining minting capacity. */
 export function formatMintingCapacityReason(limitEth: string, symbol = 'ETH') {
-	return `Buy at most ${limitEth} ${symbol}; the security pool cannot mint more now.`
+	return `Buy at most ${limitEth} ${symbol}; the question ledger cannot mint more now.`
 }
 
 export function gasReserveReason(reserve: string) {

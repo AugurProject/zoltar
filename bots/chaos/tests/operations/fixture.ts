@@ -40,7 +40,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 		anchor: { baseFeePerGas: '1', blockHash: hash(100), blockNumber: '100', timestamp: '2000000000' },
 		auctions: [],
 		chainId: 31337,
-		deployments: { multicall3: address(90), openOracle, questionData, securityPoolFactory: factory, securityPoolForker: forker, tradingFactory, tradingRouter: router, weth, zoltar },
+		deployments: { multicall3: address(90), openOracle, questionData, securityPoolFactory: factory, questionForker: forker, tradingFactory, tradingRouter: router, weth, zoltar },
 		escalationDeposits: [],
 		pairs: [{ address: pair, effectiveNoReserve: '1000000000000000000', effectiveYesReserve: '1000000000000000000', feeBps: 30, noReserve: '1000000000000000000', pool, shareToken, status: 0, totalSupply: '1000000000000000000', universeId: '0', walletLiquidity: '1000000000000000', yesReserve: '1000000000000000000' }],
 		portfolioCapital: [],

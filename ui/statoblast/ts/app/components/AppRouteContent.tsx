@@ -4,9 +4,9 @@ import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundS
 import { PortfoliosSection } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfoliosSection.js'
 import { PriceRequestStatusSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
 import { PortfolioQuestionWorkspace } from './PortfolioQuestionWorkspace.js'
-import { UniversePoolDirectorySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/UniversePoolDirectorySection.js'
+import { UniversePoolDirectorySection } from '@zoltar/ui-statoblast-shared/features/question-ledgers/components/UniversePoolDirectorySection.js'
 import { ZoltarMigrationWorkflow } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationWorkflow.js'
-import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import type { QuestionLedgersView } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -32,7 +32,7 @@ type Props = {
 	readBackendMessage: string | undefined
 	route: StatoblastRoute
 	questions: ComponentProps<typeof PortfolioQuestionWorkspace>
-	questionView: SecurityPoolsView
+	questionView: QuestionLedgersView
 	universeDirectory: ComponentProps<typeof UniversePoolDirectorySection>
 	migration: ComponentProps<typeof ZoltarMigrationWorkflow>
 }

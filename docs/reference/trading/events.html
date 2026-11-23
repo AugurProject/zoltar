@@ -17,7 +17,7 @@
 			</header>
 			<section id="factory">
 				<h2>Factory</h2>
-				<p><code>PairCreated(indexed securityPool, indexed shareToken, indexed universeId, pair, feeBps)</code> identifies one exact branch market and its immutable fee.</p>
+				<p><code>PairCreated(indexed questionLedger, indexed shareToken, indexed universeId, pair, feeBps)</code> identifies one exact branch market and its immutable fee.</p>
 			</section>
 			<section id="pair">
 				<h2>Pair</h2>
@@ -35,13 +35,13 @@
 				<h2>Router</h2>
 				<ul>
 					<li><code>PositionExitedByTransfer(indexed owner, indexed pair, completeSetShares, longSharesUsed, longSharesRefunded, payoutRecipient)</code> records an <a href="../glossary.html#insured-exit">insured exit</a> initiated by <code>owner</code>'s share transfer.</li>
-					<li><code>CompleteSetRedeemedByTransfer(indexed securityPool, completeSetShares, payoutRecipient)</code> records a complete-set redemption initiated by share transfer.</li>
+					<li><code>CompleteSetRedeemedByTransfer(indexed questionLedger, completeSetShares, payoutRecipient)</code> records a complete-set redemption initiated by share transfer.</li>
 				</ul>
 			</section>
 			<section id="attribution">
 				<h2>Attributing router operations</h2>
-				<p>For router-mediated operations, pair <code>provider</code>/<code>sender</code> fields and SecurityPool <code>redeemer</code> identify the router. SecurityPool <code>creator</code> identifies Portfolio Services, which supplies collateral; the router is the <code>recipient</code> in <code>CompleteSetsFunded</code>. None of these immediate-caller fields identifies the initiating wallet. Pair <code>recipient</code> identifies the explicit asset recipient only for direct pair calls and router liquidity operations; router entry and insured-exit swaps name the router, which then forwards the assets. Insured exits carry the owner in <code>PositionExitedByTransfer</code>. For complete-set redemptions, take the owner from the ShareToken <code>TransferBatch</code> log's <code>from</code> field, since <code>CompleteSetRedeemedByTransfer</code> records only the pool and payout recipient. Entry and liquidity operations emit no router event, so for those an indexer must combine the transaction sender, the called router method, pair and core logs, and the recipient from calldata or the ShareToken <code>TransferBatch</code> log; it must not infer wallet attribution from the immediate-caller fields alone.</p>
-				<p>Router return tuples are available from authoritative call simulation only; they are not stored in a transaction receipt. Complete-set and ETH-flow evidence comes from the SecurityPool's <code>CompleteSetCreated</code> and <code>CompleteSetRedeemed</code> events plus transaction logs.</p>
+				<p>For router-mediated operations, pair <code>provider</code>/<code>sender</code> fields and QuestionLedger <code>redeemer</code> identify the router. QuestionLedger <code>creator</code> identifies Portfolio Services, which supplies collateral; the router is the <code>recipient</code> in <code>CompleteSetsFunded</code>. None of these immediate-caller fields identifies the initiating wallet. Pair <code>recipient</code> identifies the explicit asset recipient only for direct pair calls and router liquidity operations; router entry and insured-exit swaps name the router, which then forwards the assets. Insured exits carry the owner in <code>PositionExitedByTransfer</code>. For complete-set redemptions, take the owner from the ShareToken <code>TransferBatch</code> log's <code>from</code> field, since <code>CompleteSetRedeemedByTransfer</code> records only the pool and payout recipient. Entry and liquidity operations emit no router event, so for those an indexer must combine the transaction sender, the called router method, pair and core logs, and the recipient from calldata or the ShareToken <code>TransferBatch</code> log; it must not infer wallet attribution from the immediate-caller fields alone.</p>
+				<p>Router return tuples are available from authoritative call simulation only; they are not stored in a transaction receipt. Complete-set and ETH-flow evidence comes from the QuestionLedger's <code>CompleteSetCreated</code> and <code>CompleteSetRedeemed</code> events plus transaction logs.</p>
 			</section>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

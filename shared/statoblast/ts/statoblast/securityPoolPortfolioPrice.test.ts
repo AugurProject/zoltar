@@ -33,8 +33,8 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		priceFeed: feed,
 		isPriceReportingOpen: true,
 		getSecurityPoolPortfolio: portfolio,
-		getSecurityPoolOriginId: hash,
-		getSecurityPool: seed,
+		getQuestionLedgerOriginId: hash,
+		getQuestionLedger: seed,
 		sharedPriceFeeds: feed,
 		getRepToken: rep,
 		portfolio,
@@ -146,7 +146,7 @@ describe('portfolio branch price SDK', () => {
 		expect(snapshot.observation).toMatchObject({ weth, openOracle: oracle, minimumWethAttoEth: 2n * unit, bounty: settlementBounty, repAllowanceAttoRep: 10n * unit })
 		expect(new Set(calls.map(call => call.blockNumber))).toEqual(new Set([10n]))
 		expect(calls.length).toBeLessThan(40)
-		expect(calls.some(call => call.functionName === 'securityPool' || call.functionName === 'stagedOperations')).toBe(false)
+		expect(calls.some(call => call.functionName === 'questionLedger' || call.functionName === 'stagedOperations')).toBe(false)
 	})
 	test('missing feeds remain readable and produce only a canonical preparation transaction', async () => {
 		const { client, calls } = fixture({ priceFeed: zeroAddress, sharedPriceFeeds: zeroAddress, isPriceReportingOpen: false, getRepToken: zeroAddress })
@@ -172,7 +172,7 @@ describe('portfolio branch price SDK', () => {
 		expect(calls.some(call => call.functionName === 'minimumToken1ReportAttoEth')).toBe(false)
 		expect(() => quotePortfolioPriceFunding(snapshot, unit)).toThrow('closed')
 	})
-	test.each([{ portfolio: owner }, { securityPoolFactory: owner }, { reputationToken: owner }, { sharedPriceFeeds: owner }, { getSecurityPool: owner }, { getSecurityPoolPortfolio: owner }])('rejects mismatched canonical identities %j', async overrides => {
+	test.each([{ portfolio: owner }, { securityPoolFactory: owner }, { reputationToken: owner }, { sharedPriceFeeds: owner }, { getQuestionLedger: owner }, { getSecurityPoolPortfolio: owner }])('rejects mismatched canonical identities %j', async overrides => {
 		await expect(load(fixture(overrides).client)).rejects.toThrow()
 	})
 	test('quotes upward REP rounding and exact wrap and bounty requirements', async () => {

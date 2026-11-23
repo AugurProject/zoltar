@@ -15,7 +15,7 @@ export function executionProfileId(settings: Pick<OperatorSettings, 'deployment'
 		openOracle: settings.deployment.openOracle.toLowerCase(),
 		questionData: settings.deployment.questionData.toLowerCase(),
 		securityPoolFactory: settings.deployment.securityPoolFactory.toLowerCase(),
-		securityPoolForker: settings.deployment.securityPoolForker.toLowerCase(),
+		questionForker: settings.deployment.questionForker.toLowerCase(),
 		tradingFactory: settings.deployment.tradingFactory.toLowerCase(),
 		tradingRouter: settings.deployment.tradingRouter.toLowerCase(),
 		weth: settings.deployment.weth.toLowerCase(),

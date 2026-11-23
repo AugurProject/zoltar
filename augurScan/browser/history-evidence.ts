@@ -77,7 +77,7 @@ export const timelineEntityTypeLabel = (value: JsonValue | undefined): string =>
 		case 'auction':
 			return 'Collateral repair auction'
 		case 'pool':
-			return 'Security pool'
+			return 'Question ledger'
 		case 'vault':
 			return 'Vault'
 		case 'amm':

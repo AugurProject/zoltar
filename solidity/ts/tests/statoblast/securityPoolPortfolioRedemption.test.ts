@@ -2,7 +2,7 @@ import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory as gameFactoryArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -11,7 +11,7 @@ import {
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
@@ -29,7 +29,7 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 
 describe('Statoblast: native finalized portfolio redemptions', () => {
 	const fixture = useSecurityPoolPortfolioFixture({})
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
 	const shares = () => balanceOfShares(fixture.other(), fixture.poolFor(fixture.base.questionId).shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
 	const refresh = () => writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'refreshPortfolioFees' }))
@@ -52,11 +52,11 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const game = await fixture.owner().readContract({ ...pool(), functionName: 'escalationGame' })
 		return fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
 	}
-	const secondCash = () => fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [fixture.poolFor(fixture.secondQuestionId).securityPool, 20n * unit] })
+	const secondCash = () => fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [fixture.poolFor(fixture.secondQuestionId).questionLedger, 20n * unit] })
 	const questionCash = async (questionId: bigint) => {
 		const state = await settlementState()
 		const [question] = await fixture.owner().readContract({ abi: bookArtifact.abi, address: state.book, functionName: 'question', args: [state.bookId, questionId] })
-		return fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [fixture.poolFor(questionId).securityPool, question.outcomeSupplyAttoShares] })
+		return fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [fixture.poolFor(questionId).questionLedger, question.outcomeSupplyAttoShares] })
 	}
 
 	test.each([false, true])('a question finalized before another question forks cannot detach recovery rights (checkpointed: %s)', async checkpointed => {
@@ -102,12 +102,12 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		}
 		const firstDeadline = await prepareReportedQuestion(additional.map(question => question.id))
 		for (const question of additional) {
-			const address = fixture.poolFor(question.id).securityPool
+			const address = fixture.poolFor(question.id).questionLedger
 			await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), address)
 			await fixture.base.mockWindow.setTime(question.end + 1n)
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
 		}
-		const secondPool = fixture.poolFor(fixture.secondQuestionId).securityPool
+		const secondPool = fixture.poolFor(fixture.secondQuestionId).questionLedger
 		const second = { abi: poolArtifact.abi, address: secondPool }
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), secondPool)
 		await fixture.base.mockWindow.setTime(fixture.secondEndTime + 1n)
@@ -204,7 +204,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const settlementDeadlines = new Set()
 		const reporterDeadlines = new Set()
 		for (const { id, end } of reported) {
-			const address = fixture.poolFor(id).securityPool
+			const address = fixture.poolFor(id).questionLedger
 			await approveToken(owner, rep, address)
 			await mockWindow.setTime(end + 1n)
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
@@ -224,7 +224,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		if (purchaseTarget === undefined) throw new Error('Missing fee stream for the populated purchase')
 		const purchaseHash = await fixture.mint(unit, purchaseTarget)
 		expect((await owner.getTransactionReceipt({ hash: purchaseHash })).gasUsed).toBeLessThan(8_000_000n)
-		const feePool = fixture.poolFor(purchaseTarget).securityPool
+		const feePool = fixture.poolFor(purchaseTarget).questionLedger
 		const refreshHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: feePool, functionName: 'refreshPortfolioFees', gas: 6_000_000n }))
 		// Use the canonical book authorities to seed distant keys that the fixture's
 		// question and reporting windows cannot produce. Measurements use ordinary entry points.
@@ -249,7 +249,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		}
 		for (const [level, { id }] of reported.entries()) {
 			const key = level === 24 ? cutoff : Number(BigInt(cutoff) ^ (1n << BigInt(2 * level + 1)))
-			const game = await owner.readContract({ abi: poolArtifact.abi, address: fixture.poolFor(id).securityPool, functionName: 'escalationGame' })
+			const game = await owner.readContract({ abi: poolArtifact.abi, address: fixture.poolFor(id).questionLedger, functionName: 'escalationGame' })
 			await writeContractAndWait(settlementAuthority, () => settlementAuthority.writeContract({ ...ledger, functionName: 'scheduleFinality', args: [parentBook, id, key, stressTime] }))
 			await writeContractAndWait(reporterAuthority, () => reporterAuthority.writeContract({ ...reporters, functionName: 'scheduleFinality', args: [game, key] }))
 			expect((await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [parentBook, id] }))[0].finalAfter).toBe(BigInt(key))
@@ -258,7 +258,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const victim = streams[17]
 		if (victim === undefined) throw new Error('Missing full-depth fee redemption question')
 		const fullDepth = await mockWindow.anvilSnapshot()
-		const victimPool = fixture.poolFor(victim).securityPool
+		const victimPool = fixture.poolFor(victim).questionLedger
 		const fullDepthRedemption = await writeContractAndWait(donor, () => donor.writeContract({ abi: poolArtifact.abi, address: victimPool, functionName: 'redeemCompleteSet', args: [unit / 10n], gas: 16_777_216n }))
 		const fullDepthRedemptionGas = (await owner.getTransactionReceipt({ hash: fullDepthRedemption })).gasUsed
 		expect(fullDepthRedemptionGas).toBeLessThan(16_777_216n)
@@ -266,7 +266,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		// deployed the game. Anyone can deploy the unstarted game first, leaving the report a wide margin.
 		const firstReportTarget = streams[0]
 		if (firstReportTarget === undefined) throw new Error('Missing full-depth first report question')
-		const firstReportPool = fixture.poolFor(firstReportTarget).securityPool
+		const firstReportPool = fixture.poolFor(firstReportTarget).questionLedger
 		await mockWindow.setTime(forkAt + 3n * DAY + 1n)
 		const gameFactory = { abi: gameFactoryArtifact.abi, address: await owner.readContract({ abi: poolArtifact.abi, address: firstReportPool, functionName: 'escalationGameFactory' }) }
 		const preparedGame = await owner.readContract({ ...gameFactory, functionName: 'escalationGameAddress', args: [firstReportPool] })
@@ -326,8 +326,8 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		if (reportTarget === undefined) throw new Error('Missing child report target')
 		await addRepToMigrationBalance(owner, genesisUniverse, 1_000n * unit)
 		await splitMigrationRep(owner, genesisUniverse, 1_000n * unit, [1])
-		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
-		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [fixture.poolFor(reportTarget).securityPool, child] }))
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
+		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [fixture.poolFor(reportTarget).questionLedger, child] }))
 		const childPool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [reportTarget, child] })
 		await approveToken(owner, getRepTokenAddress(child), childPool)
 		const beforeReport = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [childBook, reportTarget] })
@@ -415,7 +415,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const secondPool = fixture.poolFor(fixture.secondQuestionId)
 		const remainingShares = await balanceOfShares(fixture.other(), secondPool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
 		const beforeFinalPayout = await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: secondPool.securityPool, functionName: 'redeemCompleteSet', args: [remainingShares[0]] }))
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: secondPool.questionLedger, functionName: 'redeemCompleteSet', args: [remainingShares[0]] }))
 		expect(await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)).toBe(beforeFinalPayout + settledOtherCash)
 		expect(await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)).toBe(balance + custodyBefore - pendingAfter)
 		expect(await collateralBalance(fixture.owner(), fixture.portfolio, state.engine)).toBe(pendingAfter)
@@ -462,7 +462,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		const child = getChildUniverseId(fixture.base.genesisUniverse, 1)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
-		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [pool().address, child] }))).rejects.toThrow('Question finalized in source universe')
+		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'preparePortfolioQuestion', args: [pool().address, child] }))).rejects.toThrow('Question finalized in source universe')
 		await expect(owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		await refresh()
 		const state = await settlementState()

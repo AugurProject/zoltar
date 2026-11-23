@@ -9,13 +9,13 @@ function marketUniverseIdentity(market: Pick<LiveMarket, 'universeId' | 'originU
 	return { currentUniverseId: market.universeId, originUniverseId: market.originUniverseId }
 }
 
-/** Identity metrics for a SecurityPool; render inside a `DataGrid`. */
-export function SecurityPoolIdentityFields({ market }: { market: Pick<LiveMarket, 'collateral' | 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
+/** Identity metrics for a QuestionLedger; render inside a `DataGrid`. */
+export function QuestionLedgerIdentityFields({ market }: { market: Pick<LiveMarket, 'collateral' | 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
 	const scope = shareBalanceScope(market)
 	const identity = marketUniverseIdentity(market)
 	return (
 		<>
-			<MetricField label={identityCopy.securityPoolAddress}>
+			<MetricField label={identityCopy.questionLedgerAddress}>
 				<AddressValue address={scope.pool} />
 			</MetricField>
 			<MetricField label={identityCopy.shareTokenAddress}>

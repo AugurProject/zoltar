@@ -1,6 +1,6 @@
 import { carryStorageAbi as storageAbi } from '../contracts/carry-storage-abi.ts'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
-import { escalationGameAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { drainConcurrent, type ChaosReadClient } from './discovery-client.ts'
 import { carryCommitment, createMerkleMountainRangeProof, createSparseNullifierProof, hashCarryLeaf, nullifierPath, sparseNullifierRoot, type CarryLeafSlot, type CarryOutcome } from './carry-proof-index.ts'
 
@@ -24,15 +24,15 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 	const gameCache = new Map<string, ReturnType<typeof readGame>>()
 	async function readGame(game: Address) {
 		budget()
-		const pool = await client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'securityPool' })
+		const pool = await client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'questionLedger' })
 		const [parent, actualGame, forker, continuation] = await drainConcurrent([
-			client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),
-			client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
-			client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'securityPoolForker' }),
+			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'parent' }),
+			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
+			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'questionForker' }),
 			client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'forkContinuation' }),
 		])
 		if (actualGame.toLowerCase() !== game.toLowerCase()) throw new Error('Carry storage game/pool route mismatch')
-		const parentGame = parent === zeroAddress ? zeroAddress : await client.readContract({ abi: securityPoolAbi, address: parent, blockNumber, functionName: 'escalationGame' })
+		const parentGame = parent === zeroAddress ? zeroAddress : await client.readContract({ abi: questionLedgerAbi, address: parent, blockNumber, functionName: 'escalationGame' })
 		return { pool, parent, parentGame, forker, continuation }
 	}
 	function gameInfo(game: Address) {

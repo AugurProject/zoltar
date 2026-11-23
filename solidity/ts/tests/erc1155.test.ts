@@ -381,7 +381,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			await client.readContract({
 				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
-				functionName: 'canonicalPoolByUniverse',
+				functionName: 'canonicalQuestionLedgerByUniverse',
 				args: [0n],
 			}),
 			firstPool,
@@ -646,7 +646,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			await client.readContract({
 				abi: tokenAbi,
 				address: shareTokenAddress,
-				functionName: 'canonicalPoolByUniverse',
+				functionName: 'canonicalQuestionLedgerByUniverse',
 				args: [childUniverseId],
 			}),
 			zeroAddress,

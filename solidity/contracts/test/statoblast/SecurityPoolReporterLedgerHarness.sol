@@ -21,7 +21,7 @@ contract SecurityPoolReporterLedgerHarness {
 		questionId = question;
 	}
 
-	function securityPool() external view returns (address) {
+	function questionLedger() external view returns (address) {
 		return address(this);
 	}
 	function escalationGame() external view returns (address) {

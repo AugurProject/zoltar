@@ -3,8 +3,8 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 } from '../types/contractArtifact'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -38,8 +38,8 @@ describe('audit: a portfolio question ledger descends only from an ancestor univ
 		await fixture.prepare()
 		await fixture.mint(10n * unit, q2)
 		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...p, functionName: 'forkController' }) }
-		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
-		const originPool = fixture.poolFor(q2).securityPool
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
+		const originPool = fixture.poolFor(q2).questionLedger
 		const state = async (pool: `0x${string}`) => Number(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'systemState' }))
 		const parentOf = async (pool: `0x${string}`) => (await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'parent' })).toLowerCase()
 

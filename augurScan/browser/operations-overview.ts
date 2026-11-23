@@ -96,7 +96,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			changes.filter(item => item['entity_type'] === 'auction'),
 		),
 		operationCard(
-			'Security pools',
+			'Question ledgers',
 			operationNumber(totals['pools'] ?? pools.length),
 			undefined,
 			changes.filter(item => item['entity_type'] === 'pool'),

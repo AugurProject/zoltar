@@ -24,7 +24,7 @@ test.each([
 					return 0n
 				case 'sourceGame':
 					return zeroAddress
-				case 'getSecurityPool':
+				case 'getQuestionLedger':
 					return zeroAddress
 				case 'getPool':
 					expect(request.args).toEqual([7n, 0n])

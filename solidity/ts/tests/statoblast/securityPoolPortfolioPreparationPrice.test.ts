@@ -38,10 +38,10 @@ describe('Statoblast: child portfolio price preparation', () => {
 		if (useSdk) {
 			const missing = await loadPortfolioPriceSnapshot({ client: owner, portfolio: fixture.portfolio, owner: owner.account.address, universeId: child })
 			expect(missing.observation).toBeUndefined()
-			expect(missing.sourcePool).toBe(fixture.poolFor(fixture.base.questionId).securityPool)
+			expect(missing.sourcePool).toBe(fixture.poolFor(fixture.base.questionId).questionLedger)
 			await writeContractAndWait(owner, () => owner.sendTransaction(buildPortfolioPricePreparationRequest(missing)))
 		} else {
-			await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [fixture.poolFor(fixture.base.questionId).securityPool, child] }))
+			await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [fixture.poolFor(fixture.base.questionId).questionLedger, child] }))
 		}
 		const feed = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [child] })
 		const capital = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'capitalLedger', args: [child] })

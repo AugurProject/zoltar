@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import '../interfaces/ISecurityPool.sol';
+import '../interfaces/IQuestionLedger.sol';
 import '../BinaryOutcomes.sol';
 
 interface IShareToken {
@@ -14,9 +14,9 @@ interface IShareToken {
 	/// @param actor Constructor deployer for the initial owner authorization; already-authorized caller thereafter.
 	event AuthorizationUpdated(address indexed account, address indexed actor, bool authorized);
 
-	function authorize(ISecurityPool _securityPoolCandidate) external;
+	function authorize(IQuestionLedger _questionLedgerCandidate) external;
 	function isAuthorized(address account) external view returns (bool);
-	function canonicalPoolByUniverse(uint248 universeId) external view returns (ISecurityPool);
+	function canonicalQuestionLedgerByUniverse(uint248 universeId) external view returns (IQuestionLedger);
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 amountAttoShares) external;
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 amountAttoShares) external;
 	function burnTokenIdAndGetRemainingSupply(uint256 _tokenId, address _owner) external returns (uint256 balanceAttoShares, uint256 remainingSupplyAttoShares);

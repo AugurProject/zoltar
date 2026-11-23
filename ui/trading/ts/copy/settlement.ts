@@ -14,7 +14,7 @@ export const marketDataUnavailableReason = 'Market data is unavailable. Refresh 
 export const universeNotForkedReason = 'The universe has not forked, so there is nothing to migrate.'
 export const noSharesToMigrateReason = 'You hold no Yes, No, or Invalid shares to migrate.'
 export const universeForkedReason = 'The universe forked; migrate your shares instead.'
-export const poolNotOperationalReason = 'The security pool is not operational, so it cannot redeem shares.'
+export const poolNotOperationalReason = 'The question ledger is not operational, so it cannot redeem shares.'
 export const noCompleteSetsReason = 'You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.'
 export const questionNotResolvedReason = 'The question has not resolved yet.'
 export const questionResolvedReason = 'The question resolved. Redeem your winning shares instead.'
@@ -26,8 +26,8 @@ export const forkDetailsUnavailable = 'Fork question details are unavailable.'
 export const retryForkDetails = 'Retry fork details'
 export const completeSetAmountTooSmall = 'Amount too small to redeem any collateral.'
 export const childUniverseRequired = 'Select at least one child universe.'
-export const missingChildPoolBlocker = 'This selection includes a child universe without a security pool. Migrate into each such child universe separately.'
-export const missingChildPoolWarning = 'For this share, migrate into each child universe that has no security pool in a separate transaction. Another share can migrate into those child universes together once their security pools are ready.'
+export const missingChildPoolBlocker = 'This selection includes a child universe without a question ledger. Migrate into each such child universe separately.'
+export const missingChildPoolWarning = 'For this share, migrate into each child universe that has no question ledger in a separate transaction. Another share can migrate into those child universes together once their question ledgers are ready.'
 
 export function redeemOutcomeAction(outcome: 'INVALID' | 'YES' | 'NO') {
 	return `Redeem ${outcomeLabel(outcome)}`
@@ -69,7 +69,7 @@ export function acknowledgeMigration(balance: string, outcome: 'INVALID' | 'YES'
 
 /** `balance` is omitted until the wallet's balance is known, so the sentence never quotes a loading or missing state. */
 export function formatWinningRedemptionGuidance(outcome: 'INVALID' | 'YES' | 'NO', balance: string | undefined) {
-	return balance === undefined ? `Redeem your entire ${outcomeLabel(outcome)} balance through this security pool.` : `Redeem your entire ${outcomeLabel(outcome)} balance (${balance}) through this security pool.`
+	return balance === undefined ? `Redeem your entire ${outcomeLabel(outcome)} balance through this question ledger.` : `Redeem your entire ${outcomeLabel(outcome)} balance (${balance}) through this question ledger.`
 }
 export const settlementTransaction = 'Settlement transaction'
 export const transactionFailed = 'Settlement transaction failed.'

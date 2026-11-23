@@ -36,7 +36,7 @@ const snapshotAbi = (kind: SystemContractKind): Abi => {
 	return abi
 }
 
-const poolAbi = snapshotAbi('securityPool')
+const poolAbi = snapshotAbi('questionLedger')
 const coordinatorAbi = snapshotAbi('priceCoordinator')
 const escalationAbi = snapshotAbi('escalationGame')
 const auctionAbi = snapshotAbi('securityPoolUniformPriceAuction')

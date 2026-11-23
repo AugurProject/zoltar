@@ -4,7 +4,7 @@ import { getDeploymentSteps } from '@zoltar/ui-statoblast-shared/protocol/deploy
 import { getZoltarAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
 import { forkSeededPortfolio } from '@zoltar/ui-statoblast-shared/simulation/portfolioScenarioFork.js'
-import { createCompleteSetInSecurityPool, loadShareMigrationTargets, loadTradingDetails, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInQuestionLedger, loadShareMigrationTargets, loadTradingDetails, migrateSharesFromUniverse, redeemCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { discoverSimulationPortfolio, portfolioReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { loadPortfolioForkSnapshot, quotePortfolioAuctionRefundClaim } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -13,7 +13,7 @@ import { expect, test } from 'bun:test'
 import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllSecurityPools } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 
 test(
 	'forked portfolio simulation retains parent shares and prepares a child question',
@@ -23,19 +23,19 @@ test(
 				applyScenario: async parameters => {
 					setRuntimeNetworkProfile(parameters.profile)
 					await applyStatoblastScenario({ ...parameters, scenario: 'security-pool' })
-					const [pool] = await loadAllSecurityPools(parameters.createReadClient())
+					const [pool] = await loadAllQuestionLedgers(parameters.createReadClient())
 					if (pool === undefined) throw new Error('Missing seeded portfolio question')
 					const owner = parameters.accounts[0]
 					if (owner === undefined) throw new Error('Missing portfolio owner')
 					const writer = parameters.createWriteClient(owner)
-					const before = await loadTradingDetails(parameters.createReadClient(), pool.securityPoolAddress, owner)
-					await createCompleteSetInSecurityPool(writer, pool.securityPoolAddress, 10n ** 16n)
-					const minted = await loadTradingDetails(parameters.createReadClient(), pool.securityPoolAddress, owner)
+					const before = await loadTradingDetails(parameters.createReadClient(), pool.questionLedgerAddress, owner)
+					await createCompleteSetInQuestionLedger(writer, pool.questionLedgerAddress, 10n ** 16n)
+					const minted = await loadTradingDetails(parameters.createReadClient(), pool.questionLedgerAddress, owner)
 					expect(minted.shareBalances?.yesAttoShares).toBeGreaterThan(before.shareBalances?.yesAttoShares ?? 0n)
-					await redeemCompleteSetInSecurityPool(writer, pool.securityPoolAddress, 10n ** 15n)
-					const redeemed = await loadTradingDetails(parameters.createReadClient(), pool.securityPoolAddress, owner)
+					await redeemCompleteSetInQuestionLedger(writer, pool.questionLedgerAddress, 10n ** 15n)
+					const redeemed = await loadTradingDetails(parameters.createReadClient(), pool.questionLedgerAddress, owner)
 					expect(redeemed.shareBalances?.yesAttoShares).toBe((minted.shareBalances?.yesAttoShares ?? 0n) - 10n ** 15n)
-					await forkSeededPortfolio(parameters, pool.portfolioAddress, pool.securityPoolAddress, BigInt(pool.questionId))
+					await forkSeededPortfolio(parameters, pool.portfolioAddress, pool.questionLedgerAddress, BigInt(pool.questionId))
 					const forkedUniverse = await loadZoltarUniverseSummary(parameters.createReadClient(), 0n)
 					if (forkedUniverse === undefined) throw new Error('Missing forked universe')
 					const targetsBefore = await loadShareMigrationTargets(parameters.createReadClient(), redeemed, forkedUniverse.childUniverses, owner)
@@ -44,17 +44,17 @@ test(
 						[1n, true, 0n],
 						[2n, false, 0n],
 					])
-					await expect(migrateSharesFromUniverse(writer, pool.securityPoolAddress, 'no', [0n, 1n, 2n])).rejects.toThrow('ShareToken bulk migration requires canonical child pools')
-					await migrateSharesFromUniverse(writer, pool.securityPoolAddress, 'no', [1n], redeemed.shareBalances?.noAttoShares)
+					await expect(migrateSharesFromUniverse(writer, pool.questionLedgerAddress, 'no', [0n, 1n, 2n])).rejects.toThrow('ShareToken bulk migration requires canonical child pools')
+					await migrateSharesFromUniverse(writer, pool.questionLedgerAddress, 'no', [1n], redeemed.shareBalances?.noAttoShares)
 					const targetsAfter = await loadShareMigrationTargets(parameters.createReadClient(), redeemed, forkedUniverse.childUniverses, owner)
 					expect(targetsAfter.find(target => target.outcomeIndex === 1n)?.migratedAttoShares.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
-					const remaining = await loadTradingDetails(parameters.createReadClient(), pool.securityPoolAddress, owner)
+					const remaining = await loadTradingDetails(parameters.createReadClient(), pool.questionLedgerAddress, owner)
 					expect(remaining.shareBalances?.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
-					const child = (await loadAllSecurityPools(parameters.createReadClient())).find(candidate => candidate.universeId !== 0n)
+					const child = (await loadAllQuestionLedgers(parameters.createReadClient())).find(candidate => candidate.universeId !== 0n)
 					if (child === undefined) throw new Error('Missing migrated child question')
-					const childDetails = await loadTradingDetails(parameters.createReadClient(), child.securityPoolAddress, owner)
+					const childDetails = await loadTradingDetails(parameters.createReadClient(), child.questionLedgerAddress, owner)
 					expect(childDetails.shareBalances?.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
-					await expect(migrateSharesFromUniverse(writer, pool.securityPoolAddress, 'no', [1n])).rejects.toThrow()
+					await expect(migrateSharesFromUniverse(writer, pool.questionLedgerAddress, 'no', [1n])).rejects.toThrow()
 					return true
 				},
 				getDeploymentSteps,
@@ -66,13 +66,13 @@ test(
 			await engine.bootstrap()
 			setRuntimeNetworkProfile(engine.getProfile())
 			const client = createPublicClient({ transport: custom({ request: request => engine.request(request) }) })
-			const pools = await loadAllSecurityPools(client)
+			const pools = await loadAllQuestionLedgers(client)
 			expect(pools.some(pool => pool.universeId === 0n && pool.universeHasForked)).toBe(true)
 			expect(pools.some(pool => pool.universeId !== 0n)).toBe(true)
 			const parent = pools.find(pool => pool.universeId === 0n)
 			const [owner] = await engine.getAccounts()
 			if (parent === undefined || owner === undefined) throw new Error('Missing parent market or wallet')
-			const details = await loadTradingDetails(client, parent.securityPoolAddress, owner)
+			const details = await loadTradingDetails(client, parent.questionLedgerAddress, owner)
 			expect(details.shareBalances?.yesAttoShares).toBeGreaterThan(0n)
 		} finally {
 			resetActiveEnvironmentForTesting()

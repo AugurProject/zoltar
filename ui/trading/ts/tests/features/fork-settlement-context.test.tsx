@@ -282,7 +282,7 @@ describe('live fork settlement context', () => {
 		// The child universe that received the balance is marked migrated, and the balance left behind is locked.
 		expect(redTarget().textContent).toContain('Migrated')
 		expect(document.body.textContent).toMatch(/Balance: 1.0000 Yes \([^)]*\) · locked after migration/)
-		// The migrated shares are reachable in the child universe's security pool.
+		// The migrated shares are reachable in the child universe's question ledger.
 		const childLink = Array.from(document.querySelectorAll('.fork-migrated-list a')).find(link => link.textContent === 'Open in Red universe')
 		expect(childLink?.getAttribute('href')).toContain(`#/market/${canonicalPool}`)
 		expect(childLink?.getAttribute('href')).toContain('universe=101')

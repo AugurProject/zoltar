@@ -1,0 +1,28 @@
+import { test } from 'bun:test'
+import assert from '../testSupport/simulator/utils/assert'
+import { getContractOutput, getRecord, getString, loadContractsJson } from './contractArtifactHelpers'
+
+const eip3860InitcodeLimitBytes = 49_152
+const eip170RuntimeCodeLimitBytes = 24_576
+const questionForkerConstructorArgumentBytes = 64
+
+function getBytecodeBytes(kind: 'bytecode' | 'deployedBytecode') {
+	const artifacts = loadContractsJson(import.meta.dir)
+	const output = getContractOutput(artifacts, 'contracts/statoblast/QuestionForker.sol', 'QuestionForker')
+	const evm = getRecord(output['evm'], 'QuestionForker output is missing EVM bytecode')
+	const bytecode = getRecord(evm[kind], `QuestionForker output is missing ${kind}`)
+	return getString(bytecode['object'], `QuestionForker ${kind} is missing`).length / 2
+}
+
+test('QuestionForker initcode stays within the EIP-3860 limit', () => {
+	const creationBytecodeBytes = getBytecodeBytes('bytecode')
+	const initcodeBytes = creationBytecodeBytes + questionForkerConstructorArgumentBytes
+
+	assert.ok(initcodeBytes <= eip3860InitcodeLimitBytes, `QuestionForker initcode exceeds EIP-3860: ${initcodeBytes} bytes (limit ${eip3860InitcodeLimitBytes})`)
+})
+
+test('QuestionForker runtime stays within the EIP-170 limit', () => {
+	const runtimeBytecodeBytes = getBytecodeBytes('deployedBytecode')
+
+	assert.ok(runtimeBytecodeBytes <= eip170RuntimeCodeLimitBytes, `QuestionForker runtime exceeds EIP-170: ${runtimeBytecodeBytes} bytes (limit ${eip170RuntimeCodeLimitBytes})`)
+})

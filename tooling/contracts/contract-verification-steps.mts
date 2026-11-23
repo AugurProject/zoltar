@@ -103,15 +103,15 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolPortfolioAuctionDeployer',
 	},
-	securityPoolEventEmitter: {
-		artifactPath: 'contracts/statoblast/SecurityPoolEventEmitter.sol',
+	questionLedgerEventEmitter: {
+		artifactPath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolEventEmitter',
+		contractName: 'QuestionLedgerEventEmitter',
 	},
-	securityPoolOperationsDelegate: {
-		artifactPath: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol',
+	questionLedgerOperationsDelegate: {
+		artifactPath: 'contracts/statoblast/QuestionLedgerOperationsDelegate.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolOperationsDelegate',
+		contractName: 'QuestionLedgerOperationsDelegate',
 	},
 	openOracle: {
 		artifactPath: 'contracts/statoblast/openOracle/OpenOracle.sol',
@@ -139,15 +139,15 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'OpenOraclePriceCoordinatorFactory',
 	},
-	securityPoolForkerPortfolioDelegate: {
-		artifactPath: 'contracts/statoblast/SecurityPoolForkerPortfolioDelegate.sol',
+	questionForkerDelegate: {
+		artifactPath: 'contracts/statoblast/QuestionForkerDelegate.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolForkerPortfolioDelegate',
+		contractName: 'QuestionForkerDelegate',
 	},
-	securityPoolForker: {
-		artifactPath: 'contracts/statoblast/SecurityPoolForker.sol',
+	questionForker: {
+		artifactPath: 'contracts/statoblast/QuestionForker.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolForker',
+		contractName: 'QuestionForker',
 	},
 	escalationGameDepositDelegate: {
 		artifactPath: 'contracts/statoblast/EscalationGameDepositDelegate.sol',

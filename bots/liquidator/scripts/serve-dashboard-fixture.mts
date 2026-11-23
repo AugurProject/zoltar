@@ -93,7 +93,7 @@ function pool(address: string, questionId: string, selected: boolean, isPriceVal
 		repToken: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
 		requestPriceCostEth: '0.0042',
 		selected,
-		securityPoolForker: '0xcccccccccccccccccccccccccccccccccccccccc',
+		questionForker: '0xcccccccccccccccccccccccccccccccccccccccc',
 		stagedOperations: [],
 		systemState,
 		totalCapacityOwnershipEth: '1644.2',

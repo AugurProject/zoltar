@@ -5,7 +5,7 @@ import { initializeLiquidityAction } from './liquidity.js'
 import { marketDataUnavailable } from './marketBlockers.js'
 import { tradingFee } from './tradeTicket.js'
 
-const securityPoolDiscoveryFailedLead = 'Security pool discovery failed'
+const questionLedgerDiscoveryFailedLead = 'Question ledger discovery failed'
 const universeDiscoveryFailedLead = 'Universe discovery failed'
 const unknownDiscovery = 'unknown error'
 
@@ -23,24 +23,24 @@ function formatInitializationUnavailable(blocker: string) {
 }
 
 function formatMarketNotCreatedDetail(feePercent: string) {
-	return `This security pool does not have a market yet. Creating the market and adding the first liquidity happen in one transaction. Trading fee: ${feePercent}%.`
+	return `This question ledger does not have a market yet. Creating the market and adding the first liquidity happen in one transaction. Trading fee: ${feePercent}%.`
 }
 
 function formatNoLiquidityDetail(feePercent: string) {
 	return `This market needs its first liquidity before trading can open. Trading fee: ${feePercent}%.`
 }
 
-function securityPoolDetailsUnavailable(loadError: string, refreshError?: string) {
-	return refreshError === undefined ? `Security pool details could not be loaded: ${endSentence(loadError)}` : `Security pool details could not be loaded: ${endSentence(loadError)} Latest retry failed: ${endSentence(refreshError)}`
+function questionLedgerDetailsUnavailable(loadError: string, refreshError?: string) {
+	return refreshError === undefined ? `Question ledger details could not be loaded: ${endSentence(loadError)}` : `Question ledger details could not be loaded: ${endSentence(loadError)} Latest retry failed: ${endSentence(refreshError)}`
 }
 
-function securityPoolRefreshFailed(refreshError: string) {
-	return `Security pool refresh failed; showing the last successful result: ${endSentence(refreshError)}`
+function questionLedgerRefreshFailed(refreshError: string) {
+	return `Question ledger refresh failed; showing the last successful result: ${endSentence(refreshError)}`
 }
 
-/** The lead a route's discovery failure is reported under: the universe route discovers universes, every other live route discovers security pools. */
+/** The lead a route's discovery failure is reported under: the universe route discovers universes, every other live route discovers question ledgers. */
 function discoveryFailureLead(route: string) {
-	return route === 'universe' ? universeDiscoveryFailedLead : securityPoolDiscoveryFailedLead
+	return route === 'universe' ? universeDiscoveryFailedLead : questionLedgerDiscoveryFailedLead
 }
 
 /** Composes a discovery failure under its lead; a detail that already carries the lead (a redacted error) is not prefixed twice. */
@@ -49,18 +49,18 @@ function describeDiscoveryFailure(lead: string, detail?: string) {
 	return endSentence(detail.startsWith(lead) ? detail : `${lead}: ${detail}`)
 }
 
-function securityPoolDiscoveryFailed(error?: string) {
-	return describeDiscoveryFailure(securityPoolDiscoveryFailedLead, error)
+function questionLedgerDiscoveryFailed(error?: string) {
+	return describeDiscoveryFailure(questionLedgerDiscoveryFailedLead, error)
 }
 
-function securityPoolCouldNotLoad(error: string) {
-	return `This security pool could not be loaded. Trading, liquidity, and settlement are unavailable until it loads: ${endSentence(error)}`
+function questionLedgerCouldNotLoad(error: string) {
+	return `This question ledger could not be loaded. Trading, liquidity, and settlement are unavailable until it loads: ${endSentence(error)}`
 }
 
 export const liveCopy = {
-	securityPoolDoesNotExist: 'Security pool does not exist',
+	questionLedgerDoesNotExist: 'Question ledger does not exist',
 	backToCreateMarket: 'Back to create market',
-	openSecurityPool: 'Open security pool',
+	openQuestionLedger: 'Open question ledger',
 	openMarket: 'Open market',
 	marketDataUnavailable,
 	marketNotCreated: 'Market not created',
@@ -71,17 +71,17 @@ export const liveCopy = {
 	marketCreated: 'Market created and liquidity added. Your LP tokens are listed under Your position.',
 	noLiquidityYet: 'No liquidity yet',
 	operational,
-	poolForked: 'Security pool forked',
+	poolForked: 'Question ledger forked',
 	forkMigration: 'Fork migration',
 	unresolvedOutcome: 'None (unresolved)',
 	neverInitializedDetail: 'This market was never created, so it has no price.',
 	addFirstLiquidity: initializeLiquidityAction,
-	refreshingSecurityPool: 'Refreshing security pool; showing the last successful result.',
-	retryingSecurityPoolDetails: 'Retrying security pool details…',
+	refreshingQuestionLedger: 'Refreshing question ledger; showing the last successful result.',
+	retryingQuestionLedgerDetails: 'Retrying question ledger details…',
 	retryRefresh: 'Retry refresh',
-	retrySecurityPool: 'Retry security pool',
+	retryQuestionLedger: 'Retry question ledger',
 	questionEnd: 'Question end',
-	securityPoolState: 'Security pool state',
+	questionLedgerState: 'Question ledger state',
 	universeFork: 'Universe fork',
 	notForked: 'Not forked',
 	outcome,
@@ -91,17 +91,17 @@ export const liveCopy = {
 	commitmentLimits: 'Total / fee-eligible commitment limit',
 	mintingCapacity: 'Minting capacity',
 	unknownDiscovery,
-	loadingSecurityPoolDetails: 'Loading security pool details…',
+	loadingQuestionLedgerDetails: 'Loading question ledger details…',
 	retryDiscovery: 'Retry discovery',
-	discoveringSecurityPools: 'Discovering security pools…',
-	noFavoritePools: 'No favorite security pools yet',
-	noFavoritePoolsDetail: 'This list only shows security pools opened in this browser. Paste a security pool address from Statoblast above to open one.',
-	findSecurityPoolGuide: 'How to find a security pool',
-	poolAddressRequired: 'Enter a full security pool address: 0x followed by 40 hexadecimal characters.',
+	discoveringQuestionLedgers: 'Discovering question ledgers…',
+	noFavoritePools: 'No favorite question ledgers yet',
+	noFavoritePoolsDetail: 'This list only shows question ledgers opened in this browser. Paste a question ledger address from Statoblast above to open one.',
+	findQuestionLedgerGuide: 'How to find a question ledger',
+	poolAddressRequired: 'Enter a full question ledger address: 0x followed by 40 hexadecimal characters.',
 	details: 'Details',
-	securityPoolFacts: 'Security pool facts',
-	parameters: 'Security pool parameters',
-	securityPool: appCopy.securityPool,
+	questionLedgerFacts: 'Question ledger facts',
+	parameters: 'Question ledger parameters',
+	questionLedger: appCopy.questionLedger,
 	tradingPool: 'Trading pool',
 	tradingFee,
 	forked,
@@ -110,10 +110,10 @@ export const liveCopy = {
 	formatInitializationUnavailable,
 	formatMarketNotCreatedDetail,
 	formatNoLiquidityDetail,
-	securityPoolDetailsUnavailable,
-	securityPoolRefreshFailed,
-	securityPoolDiscoveryFailed,
+	questionLedgerDetailsUnavailable,
+	questionLedgerRefreshFailed,
+	questionLedgerDiscoveryFailed,
 	discoveryFailureLead,
 	describeDiscoveryFailure,
-	securityPoolCouldNotLoad,
+	questionLedgerCouldNotLoad,
 } as const

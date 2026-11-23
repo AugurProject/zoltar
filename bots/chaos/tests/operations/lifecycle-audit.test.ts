@@ -96,7 +96,7 @@ describe('raw lifecycle identity audit', () => {
 		expect(plan?.metadata).toEqual({ balanceBefore: '777', escalationGame: pool.escalationGame, pool: pool.address })
 		expect(plan?.classification).toBe('selectable')
 		expect(plan?.obligation).toBe(false)
-		expect(classifiedMethod('EscalationGame', 'sweepResidualRepToSecurityPool')).toMatchObject({ classification: 'selectable', operationId: 'statoblast.escalation.sweep-residual' })
+		expect(classifiedMethod('EscalationGame', 'sweepResidualRepToQuestionLedger')).toMatchObject({ classification: 'selectable', operationId: 'statoblast.escalation.sweep-residual' })
 	})
 })
 

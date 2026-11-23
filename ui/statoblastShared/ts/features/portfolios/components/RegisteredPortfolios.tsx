@@ -6,7 +6,7 @@ import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNoti
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import type { RegisteredPortfolio } from '../../../protocol/securityPools.js'
+import type { RegisteredPortfolio } from '../../../protocol/questionLedgers.js'
 import { useRegisteredPortfolios } from '../hooks/useRegisteredPortfolios.js'
 import * as copy from '../../../copy/portfolio.js'
 

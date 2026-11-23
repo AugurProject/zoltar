@@ -18,10 +18,10 @@ const artifacts = {
 	sharedPoolPriceFeedDeploymentWorker: artifact(8),
 	securityPoolFactory: artifact(9, 'address,address,address,address,address,address,address,address,address,bytes32,address[9]'),
 	securityPoolPortfolio: artifact(26),
-	securityPoolForker: artifact(10, 'address,address'),
-	securityPoolForkerPortfolioDelegate: artifact(11, 'address'),
-	securityPoolOperationsDelegate: artifact(12),
-	securityPoolEventEmitter: artifact(13),
+	questionForker: artifact(10, 'address,address'),
+	questionForkerDelegate: artifact(11, 'address'),
+	questionLedgerOperationsDelegate: artifact(12),
+	questionLedgerEventEmitter: artifact(13),
 	shareTokenFactory: artifact(15, 'address'),
 	securityPoolCapitalLedgerDeployer: artifact(17),
 	securityPoolCommitmentIndexDeployer: artifact(18),
@@ -38,12 +38,12 @@ const constructorArgs = (code: Hex) => `0x${code.slice(10)}` as const
 
 describe('shared capital infrastructure init codes', () => {
 	test('native fork delegation binds the same protocol and deterministic module address', () => {
-		const delegateCode = builders.getSecurityPoolForkerPortfolioDelegateByteCode(zoltar)
+		const delegateCode = builders.getQuestionForkerDelegateByteCode(zoltar)
 		const delegate = getCreate2Address({ bytecode: delegateCode, from: proxy, salt: zeroSalt })
 		expect(constructorArgs(delegateCode)).toBe(encodeAbiParameters(parseAbiParameters('address'), [zoltar]))
-		expect(constructorArgs(builders.getSecurityPoolForkerByteCode(zoltar))).toBe(encodeAbiParameters(parseAbiParameters('address,address'), [zoltar, delegate]))
+		expect(constructorArgs(builders.getQuestionForkerByteCode(zoltar))).toBe(encodeAbiParameters(parseAbiParameters('address,address'), [zoltar, delegate]))
 		const addresses = builders.createInfraContractAddresses(weth, { getZoltarAddress: () => zoltar, getZoltarQuestionDataAddress: () => questionData })()
-		expect(addresses.securityPoolForkerPortfolioDelegate).toBe(delegate)
+		expect(addresses.questionForkerDelegate).toBe(delegate)
 	})
 
 	test('fork and auction deployers need no constructor parameters and all module addresses are distinct', () => {
@@ -81,15 +81,15 @@ describe('shared capital infrastructure init codes', () => {
 		] as const
 		expect(constructorArgs(factoryCode)).toBe(
 			encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address,address,address,bytes32,address[9]'), [
-				addresses.securityPoolForker,
+				addresses.questionForker,
 				addresses.zoltarQuestionData,
 				addresses.escalationGameFactory,
 				addresses.openOracle,
 				addresses.zoltar,
 				addresses.shareTokenFactory,
 				addresses.openOraclePriceCoordinatorFactory,
-				addresses.securityPoolOperationsDelegate,
-				addresses.securityPoolEventEmitter,
+				addresses.questionLedgerOperationsDelegate,
+				addresses.questionLedgerEventEmitter,
 				keccak256(builders.getSecurityPoolPortfolioCreationCode()),
 				deployers,
 			]),

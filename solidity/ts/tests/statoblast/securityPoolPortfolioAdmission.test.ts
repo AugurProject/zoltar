@@ -5,18 +5,18 @@ import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as nativeForkArtifact,
+	statoblast_QuestionForker_QuestionForker as nativeForkArtifact,
 	statoblast_SecurityPoolFixedAdmissionPolicy_SecurityPoolFixedAdmissionPolicy as fixedArtifact,
 	test_statoblast_QuestionAdmissionPolicyHarness_QuestionAdmissionPolicyHarness as policyArtifact,
 } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { initiateSecurityPoolFork } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { initiateQuestionLedgerFork } from '../../testSupport/simulator/utils/contracts/questionForker'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
@@ -78,7 +78,7 @@ describe('Statoblast: pluggable question admission', () => {
 		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: portfolio })).rejects.toThrow('Admission unavailable')
 		const pool = fixture.poolFor(fixture.base.questionId, fixture.base.genesisUniverse, zeroAddress, portfolio)
 		const shares = await balanceOfShares(fixture.owner(), pool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
-		await redeemCompleteSet(fixture.other(), pool.securityPool, shares[0])
+		await redeemCompleteSet(fixture.other(), pool.questionLedger, shares[0])
 		const capital = await fixture.capitalFor(portfolio)
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'setCommitment', args: [0n] }))
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'withdrawPrincipal', args: [1_000n * unit, fixture.owner().account.address] }))
@@ -90,18 +90,18 @@ describe('Statoblast: pluggable question admission', () => {
 		const policy = await deployContract(owner, encodeDeployData({ abi: policyArtifact.abi, bytecode: `0x${policyArtifact.evm.bytecode.object}` }))
 		const portfolio = await fixture.deployPortfolio(policy)
 		await fixture.register(fixture.secondQuestionId, portfolio)
-		const parent = fixture.poolFor(fixture.secondQuestionId, universe, zeroAddress, portfolio).securityPool
+		const parent = fixture.poolFor(fixture.secondQuestionId, universe, zeroAddress, portfolio).questionLedger
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		await approveToken(owner, getRepTokenAddress(universe), getZoltarAddress())
 		await forkUniverse(owner, universe, fixture.base.questionId)
-		await initiateSecurityPoolFork(owner, parent)
+		await initiateQuestionLedgerFork(owner, parent)
 		const forkTime = (await getUniverseData(owner, universe)).forkTime
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		const coordinator = await owner.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
 		const child = getChildUniverseId(universe, QuestionOutcome.No)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'startBranch', args: [universe, BigInt(QuestionOutcome.No)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: nativeForkArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [parent, child] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: nativeForkArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'preparePortfolioQuestion', args: [parent, child] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, false] }))
 		await expect(owner.writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [child, fixture.secondQuestionId, unit, owner.account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow('Question rejected by admission policy')
 	})

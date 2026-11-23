@@ -1,5 +1,5 @@
 import { concatHex, encodeDeployData, getCreateAddress, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
-import { createSecurityPoolAddressHelper } from '../../../evm/securityPoolAddressDerivation'
+import { createQuestionLedgerAddressHelper } from '../../../evm/questionLedgerAddressDerivation'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { createStatoblastInitCodes, encodeOpenOraclePriceCoordinatorArguments } from '@zoltar/statoblast-shared/deployment/initCodes'
 import { createZoltarAddressHelpers } from '@zoltar/zoltar-shared/deployment/deploymentAddresses'
@@ -21,12 +21,12 @@ import {
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	statoblast_openOracle_OpenOracle_OpenOracle,
-	statoblast_SecurityPool_SecurityPool,
-	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
-	statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
+	statoblast_QuestionLedger_QuestionLedger,
+	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
+	statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
-	statoblast_SecurityPoolForker_SecurityPoolForker,
-	statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate,
+	statoblast_QuestionForker_QuestionForker,
+	statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
@@ -58,10 +58,10 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		sharedPoolPriceFeedDeploymentWorker: statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker,
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPoolPortfolio: statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
-		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
-		securityPoolForkerPortfolioDelegate: statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate,
-		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
-		securityPoolEventEmitter: statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
+		questionForker: statoblast_QuestionForker_QuestionForker,
+		questionForkerDelegate: statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
+		questionLedgerOperationsDelegate: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
+		questionLedgerEventEmitter: statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter,
 		securityPoolCapitalLedgerDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer,
 		securityPoolCommitmentIndexDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer,
 		securityPoolCapitalFeeStreamsDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
@@ -82,10 +82,10 @@ const {
 	getPriceCoordinatorDeploymentWorkerByteCode,
 	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
-	getSecurityPoolForkerByteCode,
-	getSecurityPoolForkerPortfolioDelegateByteCode,
-	getSecurityPoolOperationsDelegateByteCode,
-	getSecurityPoolEventEmitterByteCode,
+	getQuestionForkerByteCode,
+	getQuestionForkerDelegateByteCode,
+	getQuestionLedgerOperationsDelegateByteCode,
+	getQuestionLedgerEventEmitterByteCode,
 	getSecurityPoolCapitalLedgerDeployerByteCode,
 	getSecurityPoolCommitmentIndexDeployerByteCode,
 	getSecurityPoolCapitalFeeStreamsDeployerByteCode,
@@ -140,12 +140,12 @@ const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddress
 	zeroSalt: ZERO_SALT,
 })
 
-export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
-	getEscalationGameInitCode: (securityPool, repToken, proofVerifier) =>
+export const { getQuestionLedgerAddresses } = createQuestionLedgerAddressHelper({
+	getEscalationGameInitCode: (questionLedger, repToken, proofVerifier) =>
 		encodeDeployData({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameDepositDelegate],
+			args: [questionLedger, repToken, proofVerifier, getInfraContractAddresses().escalationGameDepositDelegate],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
 	getOpenOraclePriceCoordinatorInitCode: (openOracle, repToken, initialReportPriorityFeeAttoEthPerGas) =>
@@ -154,12 +154,12 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			encodeOpenOraclePriceCoordinatorArguments({ initialReportPriorityFeeAttoEthPerGas, openOracle, repToken, weth: MAINNET_WETH_ADDRESS, reportDelegate: getCreateAddress({ from: getInfraContractAddresses().priceCoordinatorDeploymentWorker, nonce: 3n }) }),
 		]),
 	getRepTokenAddress,
-	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, openOraclePriceCoordinator, questionId, statoblastSecurityMultiplierBps, securityPoolForker, shareToken, universeId, zoltar, zoltarQuestionData }) =>
+	getQuestionLedgerInitCode: ({ escalationGameFactory, openOracle, parent, openOraclePriceCoordinator, questionId, statoblastSecurityMultiplierBps, questionForker, shareToken, universeId, zoltar, zoltarQuestionData }) =>
 		(() => {
 			return encodeDeployData({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				bytecode: `0x${statoblast_SecurityPool_SecurityPool.evm.bytecode.object}`,
-				args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps],
+				abi: statoblast_QuestionLedger_QuestionLedger.abi,
+				bytecode: `0x${statoblast_QuestionLedger_QuestionLedger.evm.bytecode.object}`,
+				args: [questionForker, zoltarQuestionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps],
 			})
 		})(),
 	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
@@ -195,15 +195,15 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'multicall3', address: infraContracts.multicall3 },
 		{ id: 'zoltarQuestionData', address: infraContracts.zoltarQuestionData },
 		{ id: 'zoltar', address: infraContracts.zoltar },
-		{ id: 'securityPoolOperationsDelegate', address: infraContracts.securityPoolOperationsDelegate },
-		{ id: 'securityPoolEventEmitter', address: infraContracts.securityPoolEventEmitter },
+		{ id: 'questionLedgerOperationsDelegate', address: infraContracts.questionLedgerOperationsDelegate },
+		{ id: 'questionLedgerEventEmitter', address: infraContracts.questionLedgerEventEmitter },
 		{ id: 'openOracle', address: infraContracts.openOracle },
 		{ id: 'shareTokenFactory', address: infraContracts.shareTokenFactory },
 		{ id: 'priceCoordinatorDeploymentWorker', address: infraContracts.priceCoordinatorDeploymentWorker },
 		{ id: 'sharedPoolPriceFeedDeploymentWorker', address: infraContracts.sharedPoolPriceFeedDeploymentWorker },
 		{ id: 'openOraclePriceCoordinatorFactory', address: infraContracts.openOraclePriceCoordinatorFactory },
-		{ id: 'securityPoolForkerPortfolioDelegate', address: infraContracts.securityPoolForkerPortfolioDelegate },
-		{ id: 'securityPoolForker', address: infraContracts.securityPoolForker },
+		{ id: 'questionForkerDelegate', address: infraContracts.questionForkerDelegate },
+		{ id: 'questionForker', address: infraContracts.questionForker },
 		{ id: 'escalationGameDepositDelegate', address: infraContracts.escalationGameDepositDelegate },
 		{ id: 'escalationGameFactory', address: infraContracts.escalationGameFactory },
 		{ id: 'securityPoolFactory', address: infraContracts.securityPoolFactory },
@@ -231,16 +231,16 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 	const deploymentMask = await loadDeploymentStatusOracleMask(client)
 	return {
 		multicall3: isDeploymentStatusOracleStepDeployed(deploymentMask, 'multicall3'),
-		securityPoolOperationsDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolOperationsDelegate'),
-		securityPoolEventEmitter: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolEventEmitter'),
+		questionLedgerOperationsDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionLedgerOperationsDelegate'),
+		questionLedgerEventEmitter: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionLedgerEventEmitter'),
 		openOracle: isDeploymentStatusOracleStepDeployed(deploymentMask, 'openOracle'),
 		zoltar: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltar'),
 		shareTokenFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'shareTokenFactory'),
 		priceCoordinatorDeploymentWorker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'priceCoordinatorDeploymentWorker'),
 		sharedPoolPriceFeedDeploymentWorker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'sharedPoolPriceFeedDeploymentWorker'),
 		openOraclePriceCoordinatorFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'openOraclePriceCoordinatorFactory'),
-		securityPoolForkerPortfolioDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolForkerPortfolioDelegate'),
-		securityPoolForker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolForker'),
+		questionForkerDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionForkerDelegate'),
+		questionForker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionForker'),
 		escalationGameFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		escalationGameDepositDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameDepositDelegate'),
@@ -270,8 +270,8 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const existence = await getInfraDeployedInformation(client)
 
 	if (!existence['multicall3']) await deployBytecode('multicall3', MULTICALL3_BYTECODE)
-	if (!existence['securityPoolOperationsDelegate']) await deployBytecode('securityPoolOperationsDelegate', getSecurityPoolOperationsDelegateByteCode())
-	if (!existence['securityPoolEventEmitter']) await deployBytecode('securityPoolEventEmitter', getSecurityPoolEventEmitterByteCode())
+	if (!existence['questionLedgerOperationsDelegate']) await deployBytecode('questionLedgerOperationsDelegate', getQuestionLedgerOperationsDelegateByteCode())
+	if (!existence['questionLedgerEventEmitter']) await deployBytecode('questionLedgerEventEmitter', getQuestionLedgerEventEmitterByteCode())
 	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 	if (!existence['zoltarQuestionData']) await deployBytecode('zoltarQuestionData', getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {
@@ -286,8 +286,8 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['priceCoordinatorDeploymentWorker']) await deployBytecode('priceCoordinatorDeploymentWorker', getPriceCoordinatorDeploymentWorkerByteCode())
 	if (!existence['sharedPoolPriceFeedDeploymentWorker']) await deployBytecode('sharedPoolPriceFeedDeploymentWorker', getSharedPoolPriceFeedDeploymentWorkerByteCode())
 	if (!existence['openOraclePriceCoordinatorFactory']) await deployBytecode('openOraclePriceCoordinatorFactory', getOpenOraclePriceCoordinatorFactoryByteCode(MAINNET_WETH_ADDRESS))
-	if (!existence['securityPoolForkerPortfolioDelegate']) await deployBytecode('securityPoolForkerPortfolioDelegate', getSecurityPoolForkerPortfolioDelegateByteCode(contractAddresses.zoltar))
-	if (!existence['securityPoolForker']) await deployBytecode('securityPoolForker', getSecurityPoolForkerByteCode(contractAddresses.zoltar))
+	if (!existence['questionForkerDelegate']) await deployBytecode('questionForkerDelegate', getQuestionForkerDelegateByteCode(contractAddresses.zoltar))
+	if (!existence['questionForker']) await deployBytecode('questionForker', getQuestionForkerByteCode(contractAddresses.zoltar))
 	if (!existence['escalationGameDepositDelegate']) await deployBytecode('escalationGameDepositDelegate', `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`)
 	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode(contractAddresses.escalationGameDepositDelegate))
 	if (!existence['securityPoolFactory']) await deployBytecode('securityPoolFactory', getSecurityPoolFactoryByteCode(contractAddresses))

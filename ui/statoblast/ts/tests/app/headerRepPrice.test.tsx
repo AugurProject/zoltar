@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { ComponentChildren } from 'preact'
-import { resolveRepPrice, type UiPriceOracle } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { resolveRepPrice, type UiPriceOracle } from '@zoltar/ui-statoblast-shared/features/question-ledgers/lib/uiPriceOracle.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { getHeaderRepPerEthPrice } from '../../app/lib/headerRepPrice.js'

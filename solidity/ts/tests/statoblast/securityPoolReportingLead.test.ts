@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseAbi } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact } from '../../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -10,7 +10,7 @@ describe('Statoblast: reporting lead bounds', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	test('#1328 an intervening leader top-up cannot turn a protected reply into trailing stake', async () => {
 		const owner = fixture.owner()
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), pool)
 		const deposit = (outcome: number, amount: bigint) => writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))

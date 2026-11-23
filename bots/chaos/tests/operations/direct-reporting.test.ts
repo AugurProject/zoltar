@@ -2,7 +2,7 @@ import { escalationWithdrawalSafe } from '../../src/operations/statoblast/planni
 import { withdrawEscalation } from '../../src/operations/statoblast/reporter-claims.ts'
 import { expect, test } from 'bun:test'
 import { directEscalationDeposit } from '../../src/operations/statoblast/direct-deposits.ts'
-import { escalationGameAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { address, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
@@ -47,7 +47,7 @@ test('resolved wallet reporter claims are available without a vault slot', () =>
 	const step = plans?.[0]?.steps[0]
 	if (step === undefined) throw new Error('Missing reporter claim')
 	expect(step.to).toBe(pool.address)
-	const call = decodeFunctionData({ abi: securityPoolAbi, data: step.data })
+	const call = decodeFunctionData({ abi: questionLedgerAbi, data: step.data })
 	expect(call.functionName).toBe('withdrawFromEscalationGame')
 	expect(call.args).toEqual([1n, [3n]])
 })
@@ -88,7 +88,7 @@ test('initial question reporting uses wallet REP and cleans up approval if anoth
 	if (draft === undefined) throw new Error('Missing initial reporter plan')
 	const step = draft.steps.at(-1)
 	if (step === undefined) throw new Error('Missing report step')
-	expect(decodeFunctionData({ abi: securityPoolAbi, data: step.data }).functionName).toBe('depositWalletRepToEscalationGame')
+	expect(decodeFunctionData({ abi: questionLedgerAbi, data: step.data }).functionName).toBe('depositWalletRepToEscalationGame')
 	expect(step.walletAssetDebits).toEqual([{ kind: 'erc20', asset: pool.repToken, amount: '1000', category: 'rep' }])
 	pool.escalationGame = address(900)
 	const cleanup = escalationDeposit.buildContinuationPlan?.(snapshot, options, { previousPlan: { ...draft, planningSeed: options.seed }, confirmedStepIds: ['approve-rep'] })

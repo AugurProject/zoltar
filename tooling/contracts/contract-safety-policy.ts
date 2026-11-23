@@ -47,19 +47,19 @@ export const contractSafetyPolicy = {
 			reason: 'Deposits mutate EscalationGame storage through delegatecall.',
 		},
 		{
-			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
-			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
-			reason: 'Native fee accounting and portfolio credits mutate SecurityPool storage through this fixed delegate.',
+			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
+			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol', contractName: 'QuestionLedgerEventEmitter' },
+			reason: 'Native fee accounting and portfolio credits mutate QuestionLedger storage through this fixed delegate.',
 		},
 		{
-			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
-			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolSettlementDelegate.sol', contractName: 'SecurityPoolSettlementDelegate' },
-			reason: 'Settlement operations mutate SecurityPool storage through delegatecall.',
+			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
+			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerSettlementDelegate.sol', contractName: 'QuestionLedgerSettlementDelegate' },
+			reason: 'Settlement operations mutate QuestionLedger storage through delegatecall.',
 		},
 		{
-			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
-			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol', contractName: 'SecurityPoolOperationsDelegate' },
-			reason: 'Native trading operations mutate SecurityPool storage through delegatecall.',
+			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
+			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerOperationsDelegate.sol', contractName: 'QuestionLedgerOperationsDelegate' },
+			reason: 'Native trading operations mutate QuestionLedger storage through delegatecall.',
 		},
 		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPoolSettlementBook.sol', contractName: 'SecurityPoolSettlementBook' },
@@ -69,9 +69,9 @@ export const contractSafetyPolicy = {
 	] satisfies readonly ExactLayoutPair[],
 	anchoredLayouts: [
 		{
-			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
-			consumer: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
-			reason: 'Pool accounting events and fee accrual read these exact SecurityPool slots through the shared storage base.',
+			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
+			consumer: { sourcePath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol', contractName: 'QuestionLedgerEventEmitter' },
+			reason: 'Pool accounting events and fee accrual read these exact QuestionLedger slots through the shared storage base.',
 			anchors: [
 				{ label: 'settlementCollateralAttoEth', slot: '1', offset: 0, typeLabel: 'uint256' },
 				{ label: 'lastSettlementPortfolioTime', slot: '4', offset: 0, typeLabel: 'uint256' },

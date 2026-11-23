@@ -12,8 +12,8 @@ const abi = parseAbi([
 	'function universeId() view returns (uint248)',
 	'function getRepToken(uint248 universeId) view returns (address)',
 	'function getSecurityPoolPortfolio(address pool) view returns (address)',
-	'function getSecurityPoolOriginId(address pool) view returns (bytes32)',
-	'function getSecurityPool(bytes32 origin,uint248 universeId) view returns (address)',
+	'function getQuestionLedgerOriginId(address pool) view returns (bytes32)',
+	'function getQuestionLedger(bytes32 origin,uint248 universeId) view returns (address)',
 	'function sharedPriceFeeds(address portfolio,uint248 universeId) view returns (address)',
 	'function priceFeed(uint248 universeId) view returns (address)',
 	'function isPriceReportingOpen(uint248 universeId) view returns (bool)',
@@ -75,9 +75,9 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 	let sourcePool: Address | undefined
 	if (questionPage.length === 1) {
 		sourcePool = decodeAddress(await read(portfolio, 'getPool', [decodeUint(questionPage[0], 'Source question'), originUniverseId]), 'Preparation source')
-		const [sourcePortfolio, sourceOrigin] = await Promise.all([read(factory, 'getSecurityPoolPortfolio', [sourcePool]), read(factory, 'getSecurityPoolOriginId', [sourcePool])])
+		const [sourcePortfolio, sourceOrigin] = await Promise.all([read(factory, 'getSecurityPoolPortfolio', [sourcePool]), read(factory, 'getQuestionLedgerOriginId', [sourcePool])])
 		if (typeof sourceOrigin !== 'string' || !isHex(sourceOrigin) || sourceOrigin.length !== 66) throw new Error('Invalid preparation source origin.')
-		if (decodeAddress(sourcePortfolio, 'Source portfolio') !== portfolio || decodeAddress(await read(factory, 'getSecurityPool', [sourceOrigin, originUniverseId]), 'Canonical source') !== sourcePool) throw new Error('Portfolio preparation source is not canonical.')
+		if (decodeAddress(sourcePortfolio, 'Source portfolio') !== portfolio || decodeAddress(await read(factory, 'getQuestionLedger', [sourceOrigin, originUniverseId]), 'Canonical source') !== sourcePool) throw new Error('Portfolio preparation source is not canonical.')
 	}
 	const repToken = decodeAddress(repValue, 'Branch REP', true)
 	let observation:

@@ -102,7 +102,7 @@ export function selectMarketCacheUpdates(markets: readonly LiveMarket[], recorde
 	})
 }
 
-/** Portfolio reads cover both saved security pools and saved markets, once per pool address. */
+/** Portfolio reads cover both saved question ledgers and saved markets, once per pool address. */
 export function selectPortfolioMarkets(downloadedPools: readonly DownloadedEntry<LiveMarket>[], poolFavorites: readonly FavoriteEntry[], downloadedMarkets: readonly DownloadedEntry<LiveMarket>[], marketFavorites: readonly FavoriteEntry[]) {
 	const byId = new Map([...downloadedPools, ...downloadedMarkets].map(entry => [normalizeEntityId(entry.id), entry.data]))
 	const ids = new Set([...poolFavorites, ...marketFavorites].map(entry => normalizeEntityId(entry.id)))

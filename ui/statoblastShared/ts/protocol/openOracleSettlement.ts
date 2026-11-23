@@ -4,7 +4,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_QuestionLedger_QuestionLedger, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
 import type { OpenOraclePriceSettlement } from '../types/contracts.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
@@ -49,11 +49,11 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 	const abi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 	const [oracle, pool] = await readOptionalMulticall(client, [
 		{ address: game.callbackContract, abi, functionName: 'openOracle' },
-		{ address: game.callbackContract, abi, functionName: 'securityPool' },
+		{ address: game.callbackContract, abi, functionName: 'questionLedger' },
 	])
 	if (oracle.status !== 'success' || !sameAddress(oracle.result, openOracleAddress)) return undefined
-	const securityPool = pool.status === 'success' ? pool.result : zeroAddress
-	if (securityPool === zeroAddress) {
+	const questionLedger = pool.status === 'success' ? pool.result : zeroAddress
+	if (questionLedger === zeroAddress) {
 		if (reportId === undefined) return undefined
 		const [feed, escrowReport] = await readOptionalMulticall(client, [
 			{ address: game.callbackContract, abi: reportEscrowAbi, functionName: 'feed' },
@@ -88,7 +88,7 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 		if (registeredFeed.status !== 'success' || !sameAddress(registeredFeed.result, feed.result) || validity.status !== 'success') return undefined
 		return game.reportTimestamp + game.settlementTime + validity.result
 	}
-	const [coordinator] = await readOptionalMulticall(client, [{ address: securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' }])
+	const [coordinator] = await readOptionalMulticall(client, [{ address: questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'openOraclePriceCoordinator' }])
 	if (coordinator.status !== 'success' || !sameAddress(coordinator.result, game.callbackContract)) return undefined
 	return getOracleManagerPriceValidUntilTimestamp(game.reportTimestamp + game.settlementTime, chainId)
 }

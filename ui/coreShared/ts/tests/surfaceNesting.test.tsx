@@ -53,11 +53,11 @@ describe('flat nested surfaces', () => {
 	test('aligns workflow actions as rows and keeps share totals with the distribution', () => {
 		const cssSource = readFeatureCssSource('statoblastShared')
 		const totalRuleStart = cssSource.indexOf('.trading-share-callouts-total {')
-		const totalRule = cssSource.slice(totalRuleStart, cssSource.indexOf('.security-pool-strip-meter {', totalRuleStart))
+		const totalRule = cssSource.slice(totalRuleStart, cssSource.indexOf('.question-ledger-strip-meter {', totalRuleStart))
 
 		expect(cssSource).toContain('.vault-action-launcher-grid {\n\tgrid-template-columns: minmax(0, 1fr)')
 		expect(cssSource).toContain('.vault-action-launcher-grid .action-launcher-card {')
-		expect(cssSource).toContain('.security-pool-strip-stats button.currency-value.copyable')
+		expect(cssSource).toContain('.question-ledger-strip-stats button.currency-value.copyable')
 		expect(cssSource).toContain('.trading-holdings-layout {\n\tgrid-template-columns: minmax(0, 1fr)')
 		expect(totalRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
 		expect(totalRule).toContain('.trading-share-distribution .ranked-bar-item-value button.currency-value.copyable')

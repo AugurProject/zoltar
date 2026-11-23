@@ -4,7 +4,7 @@ import {
 	test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
 	trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as factoryArtifact,
@@ -121,7 +121,7 @@ describe('ERC20 portfolio collateral', () => {
 			await fixture.base.mockWindow.advanceTime(481n)
 			await openOracleSettle(owner, adverseReport)
 		}
-		const pool = fixture.poolFor(fixture.base.questionId, undefined, undefined, portfolio).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId, undefined, undefined, portfolio).questionLedger
 		for (const sender of [owner, other]) await approveToken(sender, getRepTokenAddress(fixture.base.genesisUniverse), pool)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		if (mode === 'paused') await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setPaused', args: [true] }))
@@ -193,7 +193,7 @@ describe('ERC20 portfolio collateral', () => {
 			})
 		expect(transfers.some(transfer => transfer.from === buyer.account.address && transfer.to === settlement && transfer.amount === cash)).toBe(true)
 		expect(before - (await balance())).toBe(cash + quote[0])
-		const pool = fixture.poolFor(fixture.base.questionId, undefined, undefined, portfolio).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId, undefined, undefined, portfolio).questionLedger
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setFee', args: [100n] }))
 		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [cash] }))).rejects.toThrow('Collateral transfer amount mismatch')
 		expect(await balance()).toBe(before - cash - quote[0])

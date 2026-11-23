@@ -47,7 +47,7 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	previewMarketDetails?: MarketDetails | undefined
 	reportActionGuardMessage?: string | undefined
 	showHeader?: boolean
-	showSecurityPoolAddressInput?: boolean
+	showQuestionLedgerAddressInput?: boolean
 	triggerZoltarForkAvailability?: ActionAvailability | undefined
 	triggerZoltarForkPending?: boolean | undefined
 }

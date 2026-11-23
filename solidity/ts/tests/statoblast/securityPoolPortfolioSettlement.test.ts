@@ -140,7 +140,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		const deadline = 100 + 3 * 24 * 60 * 60
 		const inheritedAbi = parseAbi(['function fixInheritedQuestionFinality(uint248 universeId,uint256 questionId,uint48 finalAfter)'])
 		await writeContractAndWait(client, () => client.writeContract({ address, abi: inheritedAbi, functionName: 'fixInheritedQuestionFinality', args: [1n, 1n, deadline] }))
-		expect(await client.readContract({ ...target(), functionName: 'poolsByQuestion', args: [1n, 1n] })).toBe(addressString(0n))
+		expect(await client.readContract({ ...target(), functionName: 'ledgersByQuestion', args: [1n, 1n] })).toBe(addressString(0n))
 		await checkpoint(1n, deadline)
 		expect((await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [2n] })).slice(0, 2)).toEqual([100n, 100n])
 		await checkpoint(1n, deadline + 1)

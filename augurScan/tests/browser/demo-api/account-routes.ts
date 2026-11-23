@@ -164,8 +164,8 @@ export async function demoAddressTransactionsRoute(env: DemoEnvironment, path: s
 			transaction_index: ordinal % 12,
 			from_address: owner?.address,
 			to_address: toAddress,
-			to_label: ordinal % 2 === 0 ? 'OpenOracle' : 'Security Pool',
-			to_kind: ordinal % 2 === 0 ? 'openOracle' : 'securityPool',
+			to_label: ordinal % 2 === 0 ? 'OpenOracle' : 'Question Ledger',
+			to_kind: ordinal % 2 === 0 ? 'openOracle' : 'questionLedger',
 			value: ordinal % 4 === 0 ? '125000000000000000' : '0',
 			status: 'success',
 			gas_used: String(94_000 + ordinal * 117),
@@ -183,7 +183,7 @@ export async function demoAddressTransactionsRoute(env: DemoEnvironment, path: s
 				ordinal % 2 === 0
 					? {
 							reporter: 'OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)',
-							recipients: ['Security Pool (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
+							recipients: ['Question Ledger (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
 						}
 					: {},
 			action_argument_schema:
@@ -222,12 +222,12 @@ export async function demoAddressIdentityRoute(env: DemoEnvironment, path: strin
 	const owner = demoRichList.find(item => item.chain_id === chainId && item.address.toLowerCase() === address)
 	const fixedIdentities: Record<string, readonly [string, string]> = {
 		'0xc9b36e44643fc5d882654ffd9791ae7171b0e9db': ['OpenOracle', 'openOracle'],
-		'0x7777777777777777777777777777777777777777': ['Security Pool', 'securityPool'],
+		'0x7777777777777777777777777777777777777777': ['Question Ledger', 'questionLedger'],
 	}
 	const fixedIdentity = address === undefined ? undefined : fixedIdentities[address]
 	const catalogIdentity = [
 		...demoPools.flatMap(pool => [
-			[pool.chain_id, pool.pool_address, 'Security Pool', 'securityPool'],
+			[pool.chain_id, pool.pool_address, 'Question Ledger', 'questionLedger'],
 			[pool.chain_id, pool.share_token_address, 'Share token', 'shareToken'],
 			[pool.chain_id, pool.coordinator_address, 'Price coordinator', 'priceCoordinator'],
 		]),

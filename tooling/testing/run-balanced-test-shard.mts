@@ -18,7 +18,7 @@ export function getTimingContextPaths(domain: TestDomain) {
 }
 
 export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
-	['ui/statoblast/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
+	['ui/statoblast/ts/tests/simulation/questionLedgerEnvironments.test.ts', 80],
 	['solidity/ts/tests/statoblast/forkMigrationEntry.test.ts', 32],
 	['solidity/ts/tests/statoblast/forkMigrationMultiPool.test.ts', 13],
 	['solidity/ts/tests/statoblast/forkMigrationRecovery.test.ts', 19],

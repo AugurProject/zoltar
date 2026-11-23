@@ -13,7 +13,7 @@ import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
 const DEFAULT_TABS: readonly RouteTabDefinition[] = [
 	{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
 	{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' },
-	{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
+	{ hash: '#/security-pools', label: 'Question ledgers', route: 'security-pools' },
 	{ hash: '#/open-oracle', label: 'OpenOracle', route: 'open-oracle' },
 ]
 
@@ -43,7 +43,7 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
-		expect(documentQueries.getByRole('link', { name: 'Security pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Question ledgers' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'OpenOracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.queryByRole('combobox')).toBeNull()
 		expect(documentQueries.queryByRole('link', { name: 'Protocol guide' })).toBeNull()
@@ -110,7 +110,7 @@ describe('TabNavigation', () => {
 		trackRendered(rendered)
 
 		const reasons = document.body.querySelectorAll('.tab-nav-unavailable .disabled-reason')
-		expect(Array.from(reasons, reason => reason.textContent)).toEqual([`Zoltar, Security pools, and OpenOracle: ${disabledReason}`])
+		expect(Array.from(reasons, reason => reason.textContent)).toEqual([`Zoltar, Question ledgers, and OpenOracle: ${disabledReason}`])
 	})
 
 	test('uses the disabled reason copy for disabled application sections', async () => {
@@ -164,7 +164,7 @@ describe('TabNavigation', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Security pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Question ledgers' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'OpenOracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})
 
@@ -182,11 +182,11 @@ describe('TabNavigation', () => {
 		)
 		trackRendered(rendered)
 
-		const securityPoolsLink = within(document.body).getByRole('link', { name: 'Security pools' })
+		const questionLedgersLink = within(document.body).getByRole('link', { name: 'Question ledgers' })
 		const locationBeforeClicks = window.location.href
 		const preventNativeNavigation = (event: Event) => event.preventDefault()
 		document.body.addEventListener('click', preventNativeNavigation)
-		for (const clickInit of [{ altKey: true }, { button: 1 }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) fireEvent.click(securityPoolsLink, clickInit)
+		for (const clickInit of [{ altKey: true }, { button: 1 }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) fireEvent.click(questionLedgersLink, clickInit)
 
 		expect(routeChanges).toEqual([])
 		expect(window.location.href).toBe(locationBeforeClicks)

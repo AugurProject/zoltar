@@ -5,8 +5,8 @@ import {
 	Zoltar_Zoltar as zoltarArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
@@ -28,7 +28,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		await fixture.mint(10n * unit)
 		const owner = fixture.owner(),
 			base = fixture.base
-		const pool = fixture.poolFor(base.questionId).securityPool
+		const pool = fixture.poolFor(base.questionId).questionLedger
 		const p = { abi: portfolioArtifact.abi, address: fixture.portfolio }
 		const bond = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'initialEscalationGameDepositAttoRep' })
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
@@ -68,7 +68,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 			trader = fixture.other(),
 			base = fixture.base
 		const p = { abi: portfolioArtifact.abi, address: fixture.portfolio }
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
 		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), source)
 		for (const [outcome, amount] of [
@@ -100,7 +100,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		const remaining = sourceEnd - firstFork
 		const expectedEnd = W + remaining
 		await base.mockWindow.setTime(materializationOffset === undefined ? W + 10n : expectedEnd + materializationOffset)
-		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'preparePortfolioQuestion', args: [source, child] }))
 		for (let i = 0; i < 3; i++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [source, child] }))
 		const childPool = await owner.readContract({ ...p, functionName: 'getPool', args: [base.questionId, child] })
@@ -154,7 +154,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		}
 		expect(secondFork).toBeLessThan(gameEnd)
 		expect(secondFork).toBeLessThan(bookEnd)
-		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'initiateSecurityPoolFork', args: [childPool] }))
+		await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'initiateQuestionLedgerFork', args: [childPool] }))
 		const grandchild = getChildUniverseId(child, 1)
 		await base.mockWindow.setTime(secondFork + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [child, 1n] }))

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction as auctionArtifact,
@@ -123,7 +123,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(totalsC[1]).toBe(210n * unit)
 
 		// The fork question itself is final in this child three days after activation; its holders redeem here.
-		const pool1C = (await e2e.materialize(fixture.poolFor(q1).securityPool, C)).pool
+		const pool1C = (await e2e.materialize(fixture.poolFor(q1).questionLedger, C)).pool
 		await base.mockWindow.setTime(context.deadline + 3n * DAY + 1n)
 		for (const outcome of OUTCOMES) await e2e.migrateShares(trader, U0, outcome, [YES], q1)
 		const q1Quote = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionSettlement', args: [pool1C, 10n * unit] })

@@ -3,7 +3,7 @@
 The production contracts keep stable source paths because paths participate in artifact identities, deployment tooling, and documentation links.
 
 - Root contracts own Zoltar universe identity, REP, common token interfaces, and deployment-status primitives.
-- `statoblast/` owns SecurityPool settlement, reporting, escalation, migration, auctions, shares, and its public interfaces.
+- `statoblast/` owns QuestionLedger settlement, reporting, escalation, migration, auctions, shares, and its public interfaces.
 - `trading/` is an optional subsystem. It consumes Statoblast through `statoblast/interfaces`, the shared outcome type, and the already-vendored math library; Statoblast core never depends on Trading.
 - `chaos/` holds `GenesisUniswapV3Seeder`, the Uniswap V3 seeding helper that the testnet chaos bot deploys. No protocol contract imports it.
 - `vendor/` and `statoblast/openOracle/` contain pinned upstream or upstream-derived sources with provenance records beside the code.

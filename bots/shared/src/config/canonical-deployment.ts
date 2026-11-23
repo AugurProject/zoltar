@@ -19,7 +19,7 @@ export function canonicalCoreDeployment(manifest: DeploymentManifest) {
 		questionData: address('zoltarQuestionData'),
 		openOracle: address('openOracle'),
 		securityPoolFactory: address('securityPoolFactory'),
-		securityPoolForker: address('securityPoolForker'),
+		questionForker: address('questionForker'),
 		weth: getAddress(manifest.network.wethAddress),
 	}
 }

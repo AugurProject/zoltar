@@ -36,7 +36,7 @@ describe('#1560 sealing after capital freeze collects no remaining fees', () => 
 		await fixture.base.mockWindow.impersonateAccount(coordinator)
 		await fixture.base.mockWindow.setBalance(coordinator, unit)
 		const authority = createWriteClient(fixture.base.mockWindow, BigInt(coordinator))
-		const snapshot = () => owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'snapshotQuestion', args: [fixture.poolFor(fixture.base.questionId).securityPool] })
+		const snapshot = () => owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'snapshotQuestion', args: [fixture.poolFor(fixture.base.questionId).questionLedger] })
 		const cashBeforeFreeze = (await snapshot()).questionCashAttoEth
 		// Reproduce the coordinator's production ordering, observing the first seal's return.
 		await writeContractAndWait(authority, () => authority.writeContract({ ...capital, functionName: 'freeze' }))

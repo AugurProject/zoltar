@@ -694,7 +694,7 @@ describe('chaos operator runtime', () => {
 			openOracle: settings.deployment.openOracle,
 			reports: [],
 			schemaVersion: 5,
-			securityPoolForker: settings.deployment.securityPoolForker,
+			questionForker: settings.deployment.questionForker,
 			startBlock: settings.runtime.protocolStartBlock.toString(),
 			wallet: zeroAddress,
 			zoltar: settings.deployment.zoltar,

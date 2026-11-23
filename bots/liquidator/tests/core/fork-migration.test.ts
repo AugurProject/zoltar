@@ -103,7 +103,7 @@ function pool(parameters: { address: string; approvedUniverse?: boolean; forkAct
 		repToken: zeroAddress,
 		requestPriceCostAttoEth: 0n,
 		selected: parameters.selected ?? false,
-		securityPoolForker: forker,
+		questionForker: forker,
 		stagedOperations: [],
 		systemState: parameters.systemState ?? 0n,
 		totalUnderwritingLimitAttoEth: 0n,

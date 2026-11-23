@@ -547,7 +547,7 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 }
 
 /* The pool link is the strip's only control; it keeps the minimum target height. */
-.sticky-object-context.context-strip .security-pool-link {
+.sticky-object-context.context-strip .question-ledger-link {
 	min-height: 1.5rem;
 	align-items: center;
 }

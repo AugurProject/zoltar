@@ -4,7 +4,7 @@ import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zo
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as policyArtifact } from '../../../../types/contractArtifact'
 import { deployContract } from '../../../deployContract'
 import { type WriteClient, writeContractAndWait } from '../clients'
-import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployStatoblast'
+import { getInfraContractAddresses, getQuestionLedgerAddresses } from './deployStatoblast'
 
 /** The protocol's portfolio module deployers, as `buildPortfolioDeploymentRequest` expects them. */
 export function getTestPortfolioDeployers() {
@@ -41,5 +41,5 @@ export async function deployTestPortfolio(client: WriteClient, universeId: bigin
 	const portfolio = portfolioAddressFromDeploymentLogs(receipt.logs, infrastructure.securityPoolFactory)
 	for (let stage = 0; stage < 4; stage++) await writeContractAndWait(client, () => client.sendTransaction({ ...buildPortfolioPrepareNextRequest({ caller: client.account.address, portfolio }), gas: 16_777_216n }))
 	await writeContractAndWait(client, () => client.writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'addQuestion', args: [questionId] }))
-	return { portfolio, ...getSecurityPoolAddresses(zeroAddress, universeId, questionId, securityMultiplierBps, universeId, reportPriorityFeeAttoEthPerGas, portfolio) }
+	return { portfolio, ...getQuestionLedgerAddresses(zeroAddress, universeId, questionId, securityMultiplierBps, universeId, reportPriorityFeeAttoEthPerGas, portfolio) }
 }

@@ -36,7 +36,7 @@ export async function verifySettingsConnectivityAndSigner(context: WorkflowRecov
 		connectivityDisabled: false,
 		connectivityHelp: "RPC checks run from the chaos-bot server. Docker service URLs such as http://reth:8545 work only when that process shares the service's container network. Saved endpoint URLs remain visible here so the active configuration can be reviewed and edited.",
 		initializerHelp:
-			'Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
+			'Continuously completes the exact genesis topology: binary question, origin question ledger, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
 		initializerHelpId: 'initialize-genesis-universe-help',
 		initializeGenesisUniverse: true,
 		readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,

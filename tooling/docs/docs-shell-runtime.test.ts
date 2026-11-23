@@ -145,7 +145,7 @@ test('contract reference index preserves the fragment ids of the former single p
 			expect(row?.tagName).toBe('TR')
 			expect(row?.querySelector('a')?.getAttribute('href')).toBe(`./contracts/${slug}.html`)
 		}
-		expect(document.getElementById('child-game-trust-boundary')?.getAttribute('href')).toBe('./contracts/securitypoolforker.html#child-game-trust-boundary')
+		expect(document.getElementById('child-game-trust-boundary')?.getAttribute('href')).toBe('./contracts/questionforker.html#child-game-trust-boundary')
 	} finally {
 		shell.cleanup()
 	}

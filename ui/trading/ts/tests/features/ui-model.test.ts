@@ -8,14 +8,14 @@ import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, settlementBalanceLabel, settlementBalanceStatus, settlementInputBlocker, settlementUnavailableReason } from '../../features/LiveSettlementModel.js'
 import {
-	createSecurityPoolDeploymentIndex,
+	createQuestionLedgerDeploymentIndex,
 	liveBalancesForMarket,
 	marketAcceptsNewRisk,
 	publicErrorMessage,
 	marketNewRiskBlocker,
 	marketSettlementPath,
 	mapWithConcurrency,
-	refreshSecurityPoolDeploymentIndex,
+	refreshQuestionLedgerDeploymentIndex,
 	registryBlockAnchorIsCanonical,
 	settlementAvailability,
 	shareBalanceScope,
@@ -23,7 +23,7 @@ import {
 	type SettlementOperation,
 } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
-import { broadcastUncertainMessage, discoveryCommitAllowed, livePairInitialized, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, discoveryCommitAllowed, livePairInitialized, positionControlsWorkflowLocked, questionLedgerAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { parseSlippagePercent, parseValidityMinutes } from '../../lib/tradeSettings.js'
 import { isTradingLookupRoute, tradingListKindFor, tradingRouting } from '../../lib/routing.js'
 import { liveLookupRoutePresentation, liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from '../../features/live/routePresentation.js'
@@ -40,7 +40,7 @@ describe('standalone trading UI model', () => {
 	test('names the route the user is on while contracts load so the header does not change once they resolve', () => {
 		const pool = `0x${'ab'.repeat(20)}`
 		expect(liveRouteLoadingPresentation('portfolio')).toEqual({ title: 'Portfolio' })
-		expect(liveRouteLoadingPresentation(`security-pool/${pool}`)).toEqual({ description: 'Identity, lifecycle, and capacity of the security pool that backs this market.', title: 'Security pool' })
+		expect(liveRouteLoadingPresentation(`security-pool/${pool}`)).toEqual({ description: 'Identity, lifecycle, and capacity of the question ledger that backs this market.', title: 'Question ledger' })
 		expect(liveRouteLoadingPresentation(`market/${pool}`)).toEqual(liveWorkflowRoutePresentation('market'))
 		expect(liveRouteLoadingPresentation(`liquidity/${pool}`)).toEqual(liveWorkflowRoutePresentation('liquidity'))
 		expect(liveRouteLoadingPresentation('create-market')).toEqual(liveWorkflowRoutePresentation('create-market'))
@@ -118,10 +118,10 @@ describe('standalone trading UI model', () => {
 		expect(message).not.toContain(tokenId)
 		expect(publicErrorMessage(new Error('RPC temporarily unavailable'), 'Balance refresh failed')).toBe('RPC temporarily unavailable.')
 	})
-	test('parses only exact security pool detail routes', () => {
+	test('parses only exact question ledger detail routes', () => {
 		const address = `0x${'AB'.repeat(20)}`
-		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(getAddress(address))
-		expect(securityPoolAddressFromRoute('security-pool/not-an-address')).toBeUndefined()
+		expect(questionLedgerAddressFromRoute(`security-pool/${address}`)).toBe(getAddress(address))
+		expect(questionLedgerAddressFromRoute('security-pool/not-an-address')).toBeUndefined()
 	})
 
 	test('parses and formats chain quantities without numbers', () => {
@@ -230,14 +230,14 @@ describe('standalone trading UI model', () => {
 		expect(marketAcceptsNewRisk(open, 2_000n)).toBeFalse()
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, universeForkTime: 999n }, 1_000n)).toBe('Universe forked')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, awaitingForkContinuation: true }, 1_000n)).toBe('Awaiting fork continuation')
-		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, systemState: 3 }, 1_000n)).toBe('Security pool inactive')
+		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, systemState: 3 }, 1_000n)).toBe('Question ledger inactive')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved Invalid')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined }, 2_000n)).toBe('Question ended')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: 0 }, 2_000n)).toBe('Question ended')
 	})
 
 	test('caches only the current registry snapshot and rebuilds on a new head', async () => {
-		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const index = createQuestionLedgerDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		let latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
 		const reads: bigint[] = []
 		const loadSnapshot = async (anchor: typeof latest) => {
@@ -245,7 +245,7 @@ describe('standalone trading UI model', () => {
 			return [anchor.blockNumber.toString()]
 		}
 		const refresh = () =>
-			refreshSecurityPoolDeploymentIndex(
+			refreshQuestionLedgerDeploymentIndex(
 				index,
 				'chain:factory:universe-7',
 				async () => latest,
@@ -260,13 +260,13 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('does not retain orphan registry entries when the discovery anchor is replaced', async () => {
-		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const index = createQuestionLedgerDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		const orphanAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
 		const canonicalAnchor = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 100n }
 		let latest = orphanAnchor
 		let canonicalHash = canonicalAnchor.blockHash
 		await expect(
-			refreshSecurityPoolDeploymentIndex(
+			refreshQuestionLedgerDeploymentIndex(
 				index,
 				'chain:factory:universe-7',
 				async () => latest,
@@ -280,7 +280,7 @@ describe('standalone trading UI model', () => {
 		latest = canonicalAnchor
 		canonicalHash = canonicalAnchor.blockHash
 		expect(
-			await refreshSecurityPoolDeploymentIndex(
+			await refreshQuestionLedgerDeploymentIndex(
 				index,
 				'chain:factory:universe-7',
 				async () => latest,
@@ -293,9 +293,9 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('rebuilds a replaced cached head without retaining orphan entries', async () => {
-		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const index = createQuestionLedgerDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		let anchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
-		await refreshSecurityPoolDeploymentIndex(
+		await refreshQuestionLedgerDeploymentIndex(
 			index,
 			'key',
 			async () => anchor,
@@ -304,7 +304,7 @@ describe('standalone trading UI model', () => {
 		)
 		anchor = { ...anchor, blockHash: `0x${'22'.repeat(32)}` }
 		expect(
-			await refreshSecurityPoolDeploymentIndex(
+			await refreshQuestionLedgerDeploymentIndex(
 				index,
 				'key',
 				async () => anchor,
@@ -373,7 +373,7 @@ describe('standalone trading UI model', () => {
 		])
 	})
 
-	test('scopes portfolio share balances to one exact SecurityPool token namespace', () => {
+	test('scopes portfolio share balances to one exact QuestionLedger token namespace', () => {
 		const first = shareBalanceScope({ pool: `0x${'11'.repeat(20)}`, shareToken: `0x${'22'.repeat(20)}`, universeId: 7n })
 		const second = shareBalanceScope({ pool: `0x${'33'.repeat(20)}`, shareToken: `0x${'44'.repeat(20)}`, universeId: 8n })
 		expect(first).toEqual({
@@ -395,7 +395,7 @@ describe('standalone trading UI model', () => {
 		expect(scope.noTokenId).toBe((1n << 256n) - 254n)
 	})
 
-	test('never exposes balances under another SecurityPool identity', () => {
+	test('never exposes balances under another QuestionLedger identity', () => {
 		const firstMarket = { pool: `0x${'11'.repeat(20)}`, shareToken: `0x${'22'.repeat(20)}`, universeId: 7n } as const
 		const secondMarket = { pool: `0x${'33'.repeat(20)}`, shareToken: `0x${'44'.repeat(20)}`, universeId: 8n } as const
 		const firstBalances = { scope: shareBalanceScope(firstMarket), invalid: 1n, yes: 2n, no: 3n, lp: 4n }
@@ -424,7 +424,7 @@ describe('standalone trading UI model', () => {
 			expect(settlementUnavailableReason('redeem-complete-set', market, balances)).toBe('The question resolved. Redeem your winning shares instead.')
 			expect(marketSettlementPath({ ...market, systemState: 1 })).toBe('unavailable')
 			expect(settlementAvailability({ ...market, systemState: 1 }, balances).canMigrateShares).toBe(false)
-			expect(settlementUnavailableReason('redeem-winning-shares', { ...market, systemState: 1 }, balances)).toBe('The security pool is not operational, so it cannot redeem shares.')
+			expect(settlementUnavailableReason('redeem-winning-shares', { ...market, systemState: 1 }, balances)).toBe('The question ledger is not operational, so it cannot redeem shares.')
 		})
 
 	test('allows many ready fork children while requiring missing children to be created singly', () => {
@@ -436,7 +436,7 @@ describe('standalone trading UI model', () => {
 		// The picker marks a child universe that already holds the share as migrated, so the warning no longer asks the holder to remember it.
 		expect(forkMigrationBatchWarning([missing, { ...missing, outcomeIndex: 3n }])).toContain('in a separate transaction')
 		expect(forkMigrationBatchWarning([missing, { ...missing, outcomeIndex: 3n }])).not.toContain('do not select that child universe again')
-		expect(forkMigrationBatchWarning([ready, missing])).toContain('Another share can migrate into those child universes together once their security pools are ready')
+		expect(forkMigrationBatchWarning([ready, missing])).toContain('Another share can migrate into those child universes together once their question ledgers are ready')
 		expect(forkMigrationBatchWarning([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
 	})
 
@@ -479,7 +479,7 @@ describe('standalone trading UI model', () => {
 		expect(settlementUnavailableReason('redeem-complete-set', open, empty)).toBe('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
 		expect(settlementUnavailableReason('redeem-complete-set', open, undefined)).toBe('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
 		expect(settlementUnavailableReason('redeem-complete-set', { ...open, universeForkTime: 1n }, holdings)).toBe('The universe forked; migrate your shares instead.')
-		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The security pool is not operational, so it cannot redeem shares.')
+		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The question ledger is not operational, so it cannot redeem shares.')
 		expect(settlementUnavailableReason('redeem-winning-shares', open, holdings)).toBe('The question has not resolved yet.')
 		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 0n })).toBe('You hold no No shares to redeem.')
 		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 1n })).toBeUndefined()

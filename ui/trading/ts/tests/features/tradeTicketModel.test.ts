@@ -242,7 +242,7 @@ describe('trade ticket inputs', () => {
 		expect(ticketModelFor(market, 'entry', formatCurrencyInputBalance(maximum + eth / 10n, 18)).impactTier).toBe('blocked')
 	})
 
-	test('caps the buy shortcuts at what the security pool can still mint and states that limit above it', () => {
+	test('caps the buy shortcuts at what the question ledger can still mint and states that limit above it', () => {
 		const limited = { ...market, availableMintingCapacityAttoEth: 2n * eth }
 		const shortcuts = tradeTicketModel({ ...ready, market: limited, amount: '' }).shortcuts
 		expect(shortcuts).toEqual([

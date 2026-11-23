@@ -10,13 +10,13 @@ export type DeploymentStepId =
 	| ZoltarDeploymentStepId
 	| 'priceCoordinatorDeploymentWorker'
 	| 'sharedPoolPriceFeedDeploymentWorker'
-	| 'securityPoolForker'
-	| 'securityPoolOperationsDelegate'
-	| 'securityPoolEventEmitter'
+	| 'questionForker'
+	| 'questionLedgerOperationsDelegate'
+	| 'questionLedgerEventEmitter'
 	| 'escalationGameDepositDelegate'
 	| 'escalationGameFactory'
 	| 'securityPoolFactory'
-	| 'securityPoolForkerPortfolioDelegate'
+	| 'questionForkerDelegate'
 	| 'securityPoolCapitalLedgerDeployer'
 	| 'securityPoolCommitmentIndexDeployer'
 	| 'securityPoolCapitalFeeStreamsDeployer'
@@ -29,7 +29,7 @@ export type DeploymentStepId =
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
-export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration'
+export type QuestionLedgerSystemState = 'operational' | 'poolForked' | 'forkMigration'
 
 export type QuestionData = {
 	title: string

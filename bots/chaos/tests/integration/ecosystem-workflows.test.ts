@@ -61,7 +61,7 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 			openOracle: current.infra.openOracle,
 			questionData: current.infra.zoltarQuestionData,
 			securityPoolFactory: current.infra.securityPoolFactory,
-			securityPoolForker: current.infra.securityPoolForker,
+			questionForker: current.infra.questionForker,
 			tradingFactory: current.tradingFactory,
 			tradingRouter: current.tradingRouter,
 			weth: getAddress(WETH_ADDRESS),

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as gameFactoryArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as gameFactoryArtifact } from '../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -11,7 +11,7 @@ import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPool
 describe('escalation game preparation', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	const YES = 1
-	const pool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const factory = async () => ({ abi: gameFactoryArtifact.abi, address: await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'escalationGameFactory' }) })
 	const code = async (address: Address) => (await fixture.base.mockWindow.request({ method: 'eth_getCode', params: [address, 'latest'] })) ?? '0x'
 	const prepareGame = async () => {

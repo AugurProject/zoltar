@@ -10,7 +10,7 @@ import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
@@ -32,7 +32,7 @@ interface IPortfolioForkRoot {
 	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
 	function prepareForkChild(uint248 parent, uint256 outcome) external returns (SecurityPoolCapitalLedger);
 	function activateForkChild(uint248 child) external;
-	function getPool(uint256 questionId, uint248 universeId) external view returns (ISecurityPool);
+	function getPool(uint256 questionId, uint248 universeId) external view returns (IQuestionLedger);
 	function minimumCommitmentAttoEth() external view returns (uint256);
 	function auctionDeployer() external view returns (IPortfolioCollateralRepairAuctionDeployer);
 }
@@ -436,7 +436,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		_freeze(source);
 		require(block.timestamp >= zoltar.getForkChoiceDeadline(source), 'Fork choices still open');
 		SecurityPoolSettlementBook.Question memory question = _recoveryQuestion(source, questionId);
-		ISecurityPool pool = portfolio.getPool(questionId, source);
+		IQuestionLedger pool = portfolio.getPool(questionId, source);
 		IPortfolioRecoveryShares(address(pool.shareToken())).consumePortfolioRecoveryCompleteSets(source, msg.sender, shares);
 		cash = _recordRecovery(source, questionId, question, shares);
 		IPortfolioForkServices(portfolio.services()).recoverPremiumCash(source, questionId, shares, msg.sender);

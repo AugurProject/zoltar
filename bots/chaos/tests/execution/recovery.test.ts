@@ -270,7 +270,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 			openOracle: zeroAddress,
 			questionData: zeroAddress,
 			securityPoolFactory: zeroAddress,
-			securityPoolForker: zeroAddress,
+			questionForker: zeroAddress,
 			tradingFactory: zeroAddress,
 			tradingRouter: zeroAddress,
 			weth: zeroAddress,

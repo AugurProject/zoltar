@@ -217,7 +217,7 @@ test('contracts outside the protocol deployment carry a provenance badge', async
 		})
 		renderContractsPage({
 			lookup,
-			contractItems: [contract(`0x${'1'.repeat(40)}`, 'securityPool', 'DeploySecurityPool', 'Security pool'), contract(`0x${'2'.repeat(40)}`, 'weth', 'manifest', 'WETH'), contract(`0x${'3'.repeat(40)}`, 'openOracle', 'manifest', 'OpenOracle')],
+			contractItems: [contract(`0x${'1'.repeat(40)}`, 'questionLedger', 'DeployQuestionLedger', 'Question ledger'), contract(`0x${'2'.repeat(40)}`, 'weth', 'manifest', 'WETH'), contract(`0x${'3'.repeat(40)}`, 'openOracle', 'manifest', 'OpenOracle')],
 			element: (tag, className = '', text) => {
 				const node = document.createElement(tag)
 				node.className = className
@@ -238,7 +238,7 @@ test('contracts outside the protocol deployment carry a provenance badge', async
 		expect(rows).toEqual([
 			['OpenOracle', undefined],
 			['WETH', 'System dependency'],
-			['Security pool', 'Discovered · not in deployment manifest'],
+			['Question ledger', 'Discovered · not in deployment manifest'],
 		])
 	})
 })

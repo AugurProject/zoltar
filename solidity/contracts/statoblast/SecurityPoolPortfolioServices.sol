@@ -12,7 +12,7 @@ import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Constants } from '../Constants.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { IPortfolioServiceRoot } from './interfaces/IPortfolioServiceRoot.sol';
 
 import { IShareToken } from './interfaces/IShareToken.sol';
@@ -64,7 +64,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	function purchase(address trader, uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) external onlyPortfolio nonReentrant returns (uint256 minted, uint256 fee) {
 		require(cash != 0, 'Purchase amount zero');
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
-		ISecurityPool pool = root.prepareServicePurchase(universeId, questionId);
+		IQuestionLedger pool = root.prepareServicePurchase(universeId, questionId);
 		uint256 premium;
 		(fee, premium) = root.quoteHelper().purchaseQuote(universeId, questionId, cash);
 		require(fee <= maximumFee, 'Purchase fee exceeds budget');
@@ -85,7 +85,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		}
 		_deliverCompleteSets(pool, recipient, minted);
 	}
-	function mintQuestionSettlement(ISecurityPool pool, uint256 cash) external onlyPortfolio returns (uint256, uint256, uint256) {
+	function mintQuestionSettlement(IQuestionLedger pool, uint256 cash) external onlyPortfolio returns (uint256, uint256, uint256) {
 		require(purchasePayer != address(0), 'No authorized purchase payer');
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		uint248 universeId = pool.universeId();
@@ -95,7 +95,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		_creditSnapshot(universeId, snapshot);
 		return (minted, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
-	function redeemQuestionSettlement(ISecurityPool pool, address recipient, uint256 shares) external onlyPortfolio nonReentrant returns (uint256, uint256, uint256) {
+	function redeemQuestionSettlement(IQuestionLedger pool, address recipient, uint256 shares) external onlyPortfolio nonReentrant returns (uint256, uint256, uint256) {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
@@ -105,7 +105,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		_cancelUnusedPremium(pool);
 		return (paid, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
-	function checkpointQuestionSettlement(ISecurityPool pool, bool refresh) external onlyPortfolio returns (uint256, uint256, uint48) {
+	function checkpointQuestionSettlement(IQuestionLedger pool, bool refresh) external onlyPortfolio returns (uint256, uint256, uint48) {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
@@ -158,7 +158,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		}
 		syncingFees[universeId] = false;
 	}
-	function onQuestionFinalityChanged(ISecurityPool pool, uint48 nativeFinalAfter) external onlyPortfolio {
+	function onQuestionFinalityChanged(IQuestionLedger pool, uint48 nativeFinalAfter) external onlyPortfolio {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		uint248 universeId = pool.universeId();
 		root.capitalLedger(universeId).checkpoint();
@@ -167,7 +167,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		premiumLedger.schedule(universeId, pool.questionId(), finalAfter);
 	}
 
-	function _cancelUnusedPremium(ISecurityPool pool) private {
+	function _cancelUnusedPremium(IQuestionLedger pool) private {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		(SecurityPoolSettlementBook.Question memory question, ) = root.settlement().ledger().question(root.settlement().bookIds(pool.universeId()), pool.questionId());
 		if (question.outcomeSupplyAttoShares == 0) {
@@ -253,7 +253,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		if (amount == 0) return;
 		Collateral.send(ICollateralConfig(portfolio).collateralToken(), recipient, amount);
 	}
-	function _mintCompleteSets(ISecurityPool pool, address recipient, uint256 minimumShares, uint256 cash) private returns (uint256 minted) {
+	function _mintCompleteSets(IQuestionLedger pool, address recipient, uint256 minimumShares, uint256 cash) private returns (uint256 minted) {
 		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
 		IShareToken token = pool.shareToken();
 		uint248 universeId = pool.universeId();
@@ -265,7 +265,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		require(minted > 0 && minted >= minimumShares, 'Minimum shares not met');
 	}
 	/// @dev Recipient callbacks run only after the funded premium is recorded.
-	function _deliverCompleteSets(ISecurityPool pool, address recipient, uint256 minted) private {
+	function _deliverCompleteSets(IQuestionLedger pool, address recipient, uint256 minted) private {
 		IShareToken token = pool.shareToken();
 		uint248 universeId = pool.universeId();
 		uint256[] memory ids = new uint256[](3);

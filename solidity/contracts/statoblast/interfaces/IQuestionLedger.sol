@@ -1,0 +1,124 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity 0.8.35;
+
+import { Zoltar } from '../../Zoltar.sol';
+import { OpenOracle } from '../openOracle/OpenOracle.sol';
+import { IShareToken } from './IShareToken.sol';
+import { ReputationToken } from '../../ReputationToken.sol';
+import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
+import { EscalationGame } from '../EscalationGame.sol';
+import { CarriedDepositProof } from '../EscalationGameTypes.sol';
+import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
+import { BinaryOutcomes } from '../BinaryOutcomes.sol';
+
+enum AccountingReason {
+	Accrual,
+	PoolInitialization,
+	CollateralReconciliation
+}
+
+enum SystemState {
+	Operational,
+	PoolForked,
+	ForkMigration
+}
+
+enum QuestionOutcome {
+	Invalid,
+	Yes,
+	No
+}
+
+interface IQuestionLedger {
+	function portfolioCustody() external view returns (address);
+	function setPortfolioCustody(address custody) external;
+	function refreshPortfolioFees() external;
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime);
+
+	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
+	event CompleteSetRedeemed(address indexed redeemer, uint256 completeSetsBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
+	event SharesRedeemed(address indexed redeemer, uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
+
+	// -------- View Functions --------
+	function questionId() external view returns (uint256);
+	function universeId() external view returns (uint248);
+	function zoltar() external view returns (Zoltar);
+	function settlementCollateralAttoEth() external view returns (uint256);
+	function statoblastSecurityMultiplierBps() external view returns (uint256);
+	function lastSettlementPortfolioTime() external view returns (uint256);
+	function awaitingForkContinuation() external view returns (bool);
+	function parent() external view returns (IQuestionLedger);
+	function systemState() external view returns (SystemState);
+	function shareToken() external view returns (IShareToken);
+	function repToken() external view returns (ReputationToken);
+	function securityPoolFactory() external view returns (ISecurityPoolFactory);
+	function openOraclePriceCoordinator() external view returns (OpenOraclePriceCoordinator);
+	function openOracle() external view returns (OpenOracle);
+	function shareTokenSupplyAttoShares() external view returns (uint256);
+
+	function attoSharesToAttoEth(uint256 amountAttoShares) external view returns (uint256);
+	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256);
+	function attoEthToAttoShares(uint256 amountAttoEth) external view returns (uint256);
+
+	function getTotalPoolHeldAttoRep() external view returns (uint256);
+	function getCurrentMintingCapacityAttoEth() external view returns (uint256);
+	function isEscalationResolved() external view returns (bool);
+	function initialEscalationGameDepositAttoRep() external view returns (uint256);
+	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external;
+
+	function setStartingParams() external;
+
+	function getFeeEpochEndTime() external view returns (uint256);
+	function updateSettlementCollateral() external;
+
+	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
+	function createCompleteSet(uint256 cash) external;
+	function redeemCompleteSet(uint256 amountAttoShares) external;
+
+	function escalationGame() external view returns (EscalationGame);
+	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external;
+	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep, bytes32 nullifierRoot) external;
+	function resumeForkedEscalationGame() external;
+	function setAwaitingForkContinuation(bool shouldAwait) external;
+	function activateForkMode() external;
+	function setSystemState(SystemState newState) external;
+	function setShareTokenSupplyAttoShares(uint256 newShareTokenSupplyAttoShares) external;
+	function authorizeChildQuestionLedger(IQuestionLedger pool) external;
+	function questionData() external view returns (ZoltarQuestionData);
+
+	function questionForker() external view returns (address);
+}
+
+interface ISecurityPoolFactory {
+	function maximumReportPriorityFeeAttoEthPerGas() external view returns (uint256);
+	function zoltar() external view returns (Zoltar);
+	function preparePortfolioPriceFeed(IQuestionLedger source, uint248 universeId) external returns (address);
+
+	struct QuestionLedgerDeployment {
+		IQuestionLedger questionLedger;
+		OpenOraclePriceCoordinator openOraclePriceCoordinator;
+		IShareToken shareToken;
+		IQuestionLedger parent;
+		uint248 universeId;
+		uint256 questionId;
+		uint256 statoblastSecurityMultiplierBps;
+		uint256 initialReportPriorityFeeAttoEthPerGas;
+	}
+
+	function deployChildQuestionLedger(IQuestionLedger parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps) external returns (IQuestionLedger questionLedger);
+	function deployPortfolioQuestionLedger(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (IQuestionLedger questionLedger);
+	function getPortfolioOriginId(address portfolio, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
+	function getSecurityPoolPortfolio(IQuestionLedger questionLedger) external view returns (address portfolio);
+	function prepareChildQuestionLedgerCoordinator(IQuestionLedger parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator);
+	function getChildQuestionLedgerCoordinator(IQuestionLedger parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator);
+	function preparePortfolioChildPriceFeed(IQuestionLedger parent, uint256 outcomeIndex) external returns (address);
+	function initializePortfolioPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address);
+	function initializePortfolioPriceFeedForUniverse(uint248 universeId) external returns (address);
+	function sharedPriceFeeds(address portfolio, uint248 universeId) external view returns (address);
+	function getQuestionLedgerId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);
+	function getQuestionLedger(bytes32 originId, uint248 universeId) external view returns (IQuestionLedger questionLedger);
+	function getQuestionLedgerOriginId(IQuestionLedger questionLedger) external view returns (bytes32 originId);
+	function getQuestionLedgerHasInheritedForkOutcome(IQuestionLedger questionLedger) external view returns (bool);
+	function questionLedgerDeploymentCount() external view returns (uint256);
+	function questionLedgerDeploymentsRange(uint256 startIndex, uint256 count) external view returns (QuestionLedgerDeployment[] memory deployments);
+}

@@ -2,7 +2,7 @@ import { tryParseBigIntInput } from '../forms/integerInput.js'
 import { parseGenesisOutcome, type GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 const UNIVERSE_QUERY_PARAM = 'universe'
-const SECURITY_POOL_QUESTION_ID_QUERY_PARAM = 'questionId'
+const QUESTION_LEDGER_QUESTION_ID_QUERY_PARAM = 'questionId'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
 /** Universe IDs are `uint248` in every contract, so a larger value can never resolve to a universe. */
 const UNIVERSE_ID_LIMIT = 1n << 248n
@@ -63,8 +63,8 @@ export function writeUniverseQueryParam(search: string, universeId: bigint | und
 	return writeStringQueryParam(search, UNIVERSE_QUERY_PARAM, universeId?.toString())
 }
 
-export function readSecurityPoolQuestionIdQueryParam(search: string) {
-	return readStringQueryParam(search, SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
+export function readQuestionLedgerQuestionIdQueryParam(search: string) {
+	return readStringQueryParam(search, QUESTION_LEDGER_QUESTION_ID_QUERY_PARAM)
 }
 
 export function readZoltarViewQueryParam(search: string) {

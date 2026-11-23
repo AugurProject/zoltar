@@ -140,7 +140,7 @@ export async function demoLogDetailRoute(env: DemoEnvironment, path: string): Pr
 		value: '0',
 		input: '0x4f8b2f2d',
 		gas_used: '184220',
-		contract_provenance: context.pageUrl.searchParams.get('detailLiveDemo') === '1' ? `Security Pool Factory.DeploySecurityPool · indexed block ${detailNetwork?.indexed_block}` : 'Security Pool Factory.DeploySecurityPool',
+		contract_provenance: context.pageUrl.searchParams.get('detailLiveDemo') === '1' ? `Security Pool Factory.DeployQuestionLedger · indexed block ${detailNetwork?.indexed_block}` : 'Security Pool Factory.DeployQuestionLedger',
 		explorer_base_url: detailNetwork?.id === 'sepolia' ? 'https://sepolia.etherscan.io' : 'https://etherscan.io',
 		action_arguments: {},
 		action_display_arguments: {},

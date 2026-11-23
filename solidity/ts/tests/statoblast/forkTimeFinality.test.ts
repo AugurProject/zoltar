@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact } from '../../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact } from '../../types/contractArtifact'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress, getZoltarAddress, forkUniverse, getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -15,7 +15,7 @@ describe('Statoblast: fork-time escalation finality', () => {
 	async function prepareDisputedPool() {
 		const owner = fixture.owner()
 		const base = fixture.base
-		const pool = fixture.poolFor(base.questionId).securityPool
+		const pool = fixture.poolFor(base.questionId).questionLedger
 		const unrelated = { ...base.questionData, title: 'Finality boundary external fork' }
 		await createQuestion(owner, unrelated, base.outcomes)
 		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), pool)

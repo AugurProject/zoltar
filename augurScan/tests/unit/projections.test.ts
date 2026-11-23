@@ -63,8 +63,8 @@ describe('state projections', () => {
 
 	test('captures a pool deployment', () => {
 		const [deployment] = projectionsFrom(
-			log('DeploySecurityPool', {
-				securityPool: pool,
+			log('DeployQuestionLedger', {
+				questionLedger: pool,
 				parent: '0x0000000000000000000000000000000000000000',
 				universeId: '0',
 				questionId: '42',
@@ -120,7 +120,7 @@ describe('state projections', () => {
 			log(
 				'PairCreated',
 				{
-					securityPool: pool,
+					questionLedger: pool,
 					shareToken: vault,
 					universeId: '7',
 					pair,
@@ -233,7 +233,7 @@ describe('state projections', () => {
 			entityType: 'question',
 			entityIdentity: '42',
 		})
-		expect(projectionsFrom(log('PairCreated', { pair: vault, securityPool: pool, shareToken: vault, universeId: '7', feeBps: '30' }, pool, 'ammFactory')).at(-1)).toMatchObject({
+		expect(projectionsFrom(log('PairCreated', { pair: vault, questionLedger: pool, shareToken: vault, universeId: '7', feeBps: '30' }, pool, 'ammFactory')).at(-1)).toMatchObject({
 			domain: 'trading',
 			entityType: 'amm',
 			entityIdentity: vault.toLowerCase(),
@@ -479,7 +479,7 @@ describe('previously raw-only lifecycle evidence', () => {
 		['ReputationTokenInitialized', { universeId: '7', repNumber: '2' }, 'reputationToken', 'reputation-token', pool],
 		['ChildReputationTokenInitialized', { universeId: '7', reputationToken: vault, repNumber: '2' }, 'zoltar', 'fork', '7'],
 		['PositionExitedByTransfer', { owner: vault, pair: vault, completeSetShares: '12' }, 'ammRouter', 'amm', vault],
-		['CompleteSetRedeemedByTransfer', { securityPool: vault, completeSetShares: '12' }, 'ammRouter', 'pool', vault],
+		['CompleteSetRedeemedByTransfer', { questionLedger: vault, completeSetShares: '12' }, 'ammRouter', 'pool', vault],
 	] as const) {
 		test(`projects ${name} with its owning entity`, () => {
 			expect(projectionsFrom(log(name, data, pool, kind))).toContainEqual(expect.objectContaining({ type: 'domainEvent', semanticEventKind: name, entityType, entityIdentity: identity }))

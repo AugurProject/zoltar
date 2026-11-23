@@ -3,8 +3,8 @@ import { zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/eth
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
@@ -117,7 +117,7 @@ export function createE2E(fixture: Fixture) {
 		return createWriteClient(mock(), address)
 	}
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const zoltar = () => ({ abi: zoltarArtifact.abi, address: getZoltarAddress() })
 	const coordinator = async () => ({ abi: coordinatorArtifact.abi, address: await owner().readContract({ ...portfolio(), functionName: 'forkController' }) })
 	const reporterLedger = (universe: bigint) => owner().readContract({ ...portfolio(), functionName: 'reporterLedger', args: [universe] })
@@ -319,7 +319,7 @@ export function createE2E(fixture: Fixture) {
 		await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [outcome, [...indexes]], gas: BRANCH_GAS }))
 		return (await rep(universe, beneficiary)) - before
 	}
-	const sweep = (sender: WriteClient, address: Address) => writeContractAndWait(sender, () => sender.writeContract({ ...game(address), functionName: 'sweepResidualRepToSecurityPool', gas: BRANCH_GAS }))
+	const sweep = (sender: WriteClient, address: Address) => writeContractAndWait(sender, () => sender.writeContract({ ...game(address), functionName: 'sweepResidualRepToQuestionLedger', gas: BRANCH_GAS }))
 	const shares = (questionId = fixture.base.questionId) => ({ abi: shareArtifact.abi, address: fixture.poolFor(questionId).shareToken })
 	const shareBalance = (holder: Address, universe: bigint, outcome: number, questionId = fixture.base.questionId) => owner().readContract({ ...shares(questionId), functionName: 'balanceOf', args: [holder, universe * 256n + BigInt(outcome)] })
 	const migrateShares = async (sender: WriteClient, universe: bigint, outcome: number, branches: number[], questionId = fixture.base.questionId) =>

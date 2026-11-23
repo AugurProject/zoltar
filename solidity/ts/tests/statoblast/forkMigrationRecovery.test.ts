@@ -3,8 +3,8 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
@@ -33,7 +33,7 @@ describe('Statoblast: lazy child outcome supply', () => {
 		await fixture.mint(10n * unit, base.questionId, { sender: owner() })
 		const parent = fixture.poolFor(base.questionId)
 		const settlement = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'settlement' })
-		await base.mockWindow.setBalance(parent.securityPool, 7n * unit)
+		await base.mockWindow.setBalance(parent.questionLedger, 7n * unit)
 		await base.mockWindow.setBalance(settlement, (await owner().getBalance({ address: settlement })) + 11n * unit)
 		const forkQuestion = { ...base.questionData, title: 'Early unrelated supply fork', startTime: 0n, endTime: (await base.mockWindow.getTime()) - 1n }
 		await createQuestion(owner(), forkQuestion, base.outcomes)
@@ -41,7 +41,7 @@ describe('Statoblast: lazy child outcome supply', () => {
 		await forkUniverse(owner(), base.genesisUniverse, getQuestionId(forkQuestion, base.outcomes))
 		expect(await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'availableMintCapacity', args: [base.genesisUniverse] })).toBe(0n)
 		await expect(fixture.mint(unit)).rejects.toThrow()
-		expect(await owner().readContract({ abi: poolArtifact.abi, address: parent.securityPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(20n * unit)
+		expect(await owner().readContract({ abi: poolArtifact.abi, address: parent.questionLedger, functionName: 'shareTokenSupplyAttoShares' })).toBe(20n * unit)
 		const controller = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'choose', args: [base.genesisUniverse, chosen ? 1n : 2n] }))
 		await addRepToMigrationBalance(owner(), base.genesisUniverse, 1_000n * unit)
@@ -51,7 +51,7 @@ describe('Statoblast: lazy child outcome supply', () => {
 		const child = getChildUniverseId(base.genesisUniverse, 1)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
-		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [parent.securityPool, child] }))
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializePortfolioQuestion', args: [parent.questionLedger, child] }))
 		const childPool = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'getPool', args: [base.questionId, child] })
 		await base.mockWindow.setBalance(childPool, 13n * unit)
 		for (const outcome of outcomes) await writeContractAndWait(other(), () => other().writeContract({ abi: shareArtifact.abi, address: parent.shareToken, functionName: 'migrate', args: [base.genesisUniverse * 256n + BigInt(outcome), [1n]] }))
@@ -113,7 +113,7 @@ describe('Statoblast: lazy child outcome supply', () => {
 		expect(await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'attoSharesToAttoEth', args: [10n * unit] })).toBe(0n)
 		expect(await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'attoSharesToAttoRep', args: [10n * unit] })).toBe(0n)
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemShares' }))
-		expect(await owner().getBalance({ address: parent.securityPool })).toBe(7n * unit)
+		expect(await owner().getBalance({ address: parent.questionLedger })).toBe(7n * unit)
 		expect(await owner().getBalance({ address: childPool })).toBe(13n * unit)
 		expect(await owner().getBalance({ address: settlement })).toBe(11n * unit)
 	})

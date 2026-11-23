@@ -30,7 +30,7 @@ test('execution waits for the retained range and discovery, without requiring th
 		chainId: 1,
 		openOracle: wallet,
 		zoltar: wallet,
-		securityPoolForker: wallet,
+		questionForker: wallet,
 		wallet,
 		startBlock: '0',
 		availableStartBlock: '11000000',
@@ -56,7 +56,7 @@ test('a keyless scan at the anchor has complete history without being executable
 		chainId: 1,
 		openOracle: wallet,
 		zoltar: wallet,
-		securityPoolForker: wallet,
+		questionForker: wallet,
 		wallet,
 		startBlock: '0',
 		cursor: { blockNumber: '132', blockHash: zeroHash },
@@ -86,7 +86,7 @@ function settings() {
 			openOracle: oracle,
 			questionData: wallet,
 			securityPoolFactory: wallet,
-			securityPoolForker: wallet,
+			questionForker: wallet,
 			tradingFactory: wallet,
 			tradingRouter: wallet,
 			weth,
@@ -134,7 +134,7 @@ function snapshot(): EcosystemSnapshot {
 		anchor: { baseFeePerGas: '1', blockHash: zeroHash, blockNumber: '10', timestamp: '20' },
 		auctions: [{ ...auctionFixture(), address: auction, engine: auction }],
 		chainId: 11155111,
-		deployments: { openOracle: oracle, questionData: wallet, securityPoolFactory: wallet, securityPoolForker: wallet, tradingFactory: wallet, tradingRouter: wallet, weth, zoltar: wallet },
+		deployments: { openOracle: oracle, questionData: wallet, securityPoolFactory: wallet, questionForker: wallet, tradingFactory: wallet, tradingRouter: wallet, weth, zoltar: wallet },
 		escalationDeposits: [],
 		pairs: [],
 		portfolioCapital: [],
@@ -183,7 +183,7 @@ describe('canonical scan policy', () => {
 				openOracle: oracle,
 				questionData: wallet,
 				securityPoolFactory: wallet,
-				securityPoolForker: wallet,
+				questionForker: wallet,
 				tradingFactory: wallet,
 				tradingRouter: wallet,
 				weth,
@@ -233,7 +233,7 @@ describe('canonical scan policy', () => {
 			openOracle: oracle,
 			reports: [],
 			schemaVersion: 5,
-			securityPoolForker: wallet,
+			questionForker: wallet,
 			startBlock: '0',
 			wallet,
 			zoltar: wallet,
@@ -266,7 +266,7 @@ describe('canonical scan policy', () => {
 			openOracle: partial.deployments.openOracle,
 			reports: [],
 			schemaVersion: 5,
-			securityPoolForker: partial.deployments.securityPoolForker,
+			questionForker: partial.deployments.questionForker,
 			startBlock: '0',
 			wallet: partial.wallet.address,
 			zoltar: partial.deployments.zoltar,
@@ -313,7 +313,7 @@ describe('canonical scan policy', () => {
 			openOracle: base.deployments.openOracle,
 			reports: [],
 			schemaVersion: 5,
-			securityPoolForker: base.deployments.securityPoolForker,
+			questionForker: base.deployments.questionForker,
 			startBlock: '0',
 			wallet: base.wallet.address,
 			zoltar: base.deployments.zoltar,
@@ -433,7 +433,7 @@ describe('canonical scan policy', () => {
 
 	test('blocks an entire terminal private next-block plan under public submission policy', () => {
 		const executable: EvaluatedOperation = {
-			definition: { classification: 'selectable', contract: 'SecurityPoolCoordinator', description: 'request', discoveryInputs: [], ecosystem: 'zoltar', id: 'request', label: 'Request', method: 'requestPrice', risk: 'low' },
+			definition: { classification: 'selectable', contract: 'QuestionLedgerCoordinator', description: 'request', discoveryInputs: [], ecosystem: 'zoltar', id: 'request', label: 'Request', method: 'requestPrice', risk: 'low' },
 			eligibility: { blockers: [], eligible: true },
 			plan: {
 				classification: 'selectable',
@@ -583,11 +583,11 @@ describe('canonical scan policy', () => {
 	test('shows role-restricted and dangerous ABI methods as explicit non-candidates', () => {
 		const coverage = completeOperationCoverage([])
 		const rawTransfer = coverage.find(operation => operation.definition.contract === 'ReputationToken' && operation.definition.method === 'transfer')
-		const roleCall = coverage.find(operation => operation.definition.contract === 'SecurityPool' && operation.definition.method === 'setSystemState')
+		const roleCall = coverage.find(operation => operation.definition.contract === 'QuestionLedger' && operation.definition.method === 'setSystemState')
 		expect(rawTransfer?.definition.classification).toBe('excluded-dangerous')
 		expect(rawTransfer?.eligibility.eligible).toBeFalse()
 		expect(roleCall?.definition.classification).toBe('role-restricted')
-		expect(roleCall?.eligibility.blockers[0]).toContain('SecurityPoolForker')
+		expect(roleCall?.eligibility.blockers[0]).toContain('QuestionForker')
 	})
 
 	test('assigns every canonical mutating contract family to its operator ecosystem', () => {

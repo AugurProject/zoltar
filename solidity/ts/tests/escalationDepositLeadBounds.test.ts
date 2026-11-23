@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, keccak256, parseAbi, parseAbiItem, parseAbiParameters, toFunctionSelector } from '@zoltar/core-shared/evm/ethereum'
-import { ReputationToken_ReputationToken as tokenArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/contractArtifact'
+import { ReputationToken_ReputationToken as tokenArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
@@ -22,7 +22,7 @@ describe('escalation deposit lead bounds', () => {
 			test(`#1328 ${throughPool ? 'pool' : 'game'} leading reply ${frontRun ? 'rejects a changed leader' : 'raises the median and the curve deadline'}`, async () => {
 				const honest = e2e.account(2)
 				const attacker = e2e.account(3)
-				const pool = fixture.poolFor(fixture.base.questionId).securityPool
+				const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 				await fixture.prepare()
 				await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 				await e2e.deposit(honest, pool, YES, 1_000n * unit)
@@ -62,7 +62,7 @@ describe('escalation deposit lead bounds', () => {
 	test('#1328 signed leading deposits bind the guard and cannot be downgraded', async () => {
 		const owner = fixture.owner()
 		const source = fixture.base.genesisUniverse
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 		await fixture.prepare()
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		await e2e.deposit(owner, pool, YES, 1_000n * unit)

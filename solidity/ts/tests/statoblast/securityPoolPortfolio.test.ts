@@ -6,7 +6,7 @@ import {
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	ReputationToken_ReputationToken as repArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 } from '../../types/contractArtifact'
@@ -15,7 +15,7 @@ import { deployContract } from '../../testSupport/deployContract'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { createCompleteSet, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -77,9 +77,9 @@ describe('Statoblast: central portfolio and native question integration', () => 
 
 	test('portfolio setup creates its shared capital and oracle without any seed question ledger', async () => {
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
-		const before = await fixture.owner().readContract({ ...factory, functionName: 'securityPoolDeploymentCount' })
+		const before = await fixture.owner().readContract({ ...factory, functionName: 'questionLedgerDeploymentCount' })
 		const created = await fixture.deployPortfolio()
-		expect(await fixture.owner().readContract({ ...factory, functionName: 'securityPoolDeploymentCount' })).toBe(before)
+		expect(await fixture.owner().readContract({ ...factory, functionName: 'questionLedgerDeploymentCount' })).toBe(before)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'questionCount' })).toBe(0n)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'capitalLedger', args: [fixture.base.genesisUniverse] })).not.toBe(zeroAddress)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })).not.toBe(zeroAddress)
@@ -130,7 +130,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await owner().readContract({ ...portfolio(), functionName: 'getQuestions', args: [0n, 10n] })).toEqual([base.questionId, secondQuestionId])
 		expect(poolFor(base.questionId).shareToken).not.toBe(poolFor(secondQuestionId).shareToken)
 		for (const question of [base.questionId, secondQuestionId]) {
-			const pool = poolFor(question).securityPool
+			const pool = poolFor(question).questionLedger
 			expect(await owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'portfolioCustody' })).toBe(fixture.capitalLedger)
 			expect(await owner().readContract({ ...portfolio(), functionName: 'getPool', args: [question, base.genesisUniverse] })).toBe(pool)
 		}
@@ -141,7 +141,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 	test('an ended question advertises no minting capacity before its first report (#1405)', async () => {
 		await fixture.prepare()
 		const { base } = fixture
-		const pool = { abi: poolArtifact.abi, address: fixture.poolFor(base.questionId).securityPool }
+		const pool = { abi: poolArtifact.abi, address: fixture.poolFor(base.questionId).questionLedger }
 		const capacity = () => fixture.owner().readContract({ ...pool, functionName: 'getCurrentMintingCapacityAttoEth' })
 		await base.mockWindow.setTime(base.questionData.endTime - 600n)
 		await fixture.refreshPrice()
@@ -161,7 +161,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await demand()).toBeGreaterThan(98n * unit)
 		const token = getRepTokenAddress(fixture.base.genesisUniverse)
 		expect(await fixture.owner().readContract({ abi: repArtifact.abi, address: token, functionName: 'balanceOf', args: [fixture.capitalLedger] })).toBe(1_000n * unit)
-		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) expect(await fixture.owner().readContract({ abi: repArtifact.abi, address: token, functionName: 'balanceOf', args: [fixture.poolFor(question).securityPool] })).toBe(0n)
+		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) expect(await fixture.owner().readContract({ abi: repArtifact.abi, address: token, functionName: 'balanceOf', args: [fixture.poolFor(question).questionLedger] })).toBe(0n)
 	})
 
 	test('rejects unsolicited shares at portfolio services while delivering a funded purchase (#1408)', async () => {
@@ -188,7 +188,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'setCommitment', args: [0n] }))
 		const pool = fixture.poolFor(fixture.base.questionId)
 		const shares = await balanceOfShares(fixture.owner(), pool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
-		await redeemCompleteSet(fixture.other(), pool.securityPool, shares[0])
+		await redeemCompleteSet(fixture.other(), pool.questionLedger, shares[0])
 		expect(await demand()).toBe(0n)
 		const index = await fixture.owner().readContract({ ...capital(), functionName: 'commitmentIndex' })
 		expect(await fixture.owner().readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })).toMatchObject({ rep: 1_000n * unit, commitment: 100n * unit, remainingCommitment: 0n })
@@ -198,7 +198,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 
 	test('bound native entry points cannot bypass purchase fees or create manual competing backing', async () => {
 		await fixture.prepare()
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 		await expect(createCompleteSet(fixture.other(), pool, unit)).rejects.toThrow('Use portfolio purchase')
 		// Encode the removed selector explicitly so the EVM, rather than the current ABI encoder, rejects it.
 		const data = encodeFunctionData({ abi: parseAbi(['function depositRepToVault(uint256,uint256)']), functionName: 'depositRepToVault', args: [100n * unit, 15_000n] })
@@ -212,7 +212,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 
 	test('a registered pool cannot mint settlement outside an authorized funded purchase', async () => {
 		await fixture.prepare()
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 		await fixture.base.mockWindow.impersonateAccount(pool)
 		await fixture.base.mockWindow.setBalance(pool, unit)
 		const caller = createWriteClient(fixture.base.mockWindow, BigInt(pool))
@@ -264,7 +264,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		const second = await fixture.deployPortfolio()
 		await fixture.register(fixture.base.questionId, second)
 		const secondPool = fixture.poolFor(fixture.base.questionId, fixture.base.genesisUniverse, zeroAddress, second)
-		expect(secondPool.securityPool).not.toBe(fixture.poolFor(fixture.base.questionId).securityPool)
+		expect(secondPool.questionLedger).not.toBe(fixture.poolFor(fixture.base.questionId).questionLedger)
 		await fixture.refreshPrice(fixture.base.questionId, unit, second)
 		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: second })).rejects.toThrow('Purchase exceeds healthy capacity')
 		await fixture.refreshPrice()

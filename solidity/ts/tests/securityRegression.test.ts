@@ -13,11 +13,11 @@ import { createQuestion, makeQuestion } from '../testSupport/simulator/utils/con
 import { approveToken, contractExists, getChildUniverseId } from '../testSupport/simulator/utils/utilities'
 import {
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_factories_ShareTokenFactory_ShareTokenFactory as tokenFactoryArtifact,
 	test_statoblast_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver as receiverArtifact,
@@ -27,7 +27,7 @@ import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPool
 describe('portfolio security regression coverage', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 
 	test('stale collateral prices close minting even within standing commitments', async () => {
 		await fixture.prepare()
@@ -71,7 +71,7 @@ describe('portfolio security regression coverage', () => {
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...forks, functionName: 'startBranch', args: [fixture.base.genesisUniverse, outcome] }))
 		const child = getChildUniverseId(fixture.base.genesisUniverse, outcome)
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...forks, functionName: 'finalizeBranch', args: [child] }))
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [pool().address, child] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'preparePortfolioQuestion', args: [pool().address, child] }))
 		const childPool = await fixture.owner().readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })
 		expect(childPool).not.toBe(zeroAddress)
 		expect(await contractExists(fixture.owner(), childPool)).toBe(true)
@@ -89,6 +89,6 @@ describe('portfolio security regression coverage', () => {
 		expect(await contractExists(fixture.owner(), expected.shareToken)).toBe(false)
 		await fixture.register(id)
 		expect(await contractExists(fixture.owner(), expected.shareToken)).toBe(true)
-		expect(await contractExists(fixture.owner(), expected.securityPool)).toBe(true)
+		expect(await contractExists(fixture.owner(), expected.questionLedger)).toBe(true)
 	})
 })

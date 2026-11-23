@@ -31,11 +31,11 @@ describe('contract safety failures', () => {
 		oversized.evm.bytecode.object = '00'.repeat(49_121)
 		const result = checkContractSafety({
 			contracts: {
-				'contracts/statoblast/SecurityPool.sol': { SecurityPool: oversized },
+				'contracts/statoblast/QuestionLedger.sol': { QuestionLedger: oversized },
 			},
 		})
-		expect(result.errors).toContain('contracts/statoblast/SecurityPool.sol:SecurityPool runtime is 24577 bytes; EIP-170 limit is 24576')
-		expect(result.errors).toContain('contracts/statoblast/SecurityPool.sol:SecurityPool initcode is 49153 bytes; EIP-3860 limit is 49152')
+		expect(result.errors).toContain('contracts/statoblast/QuestionLedger.sol:QuestionLedger runtime is 24577 bytes; EIP-170 limit is 24576')
+		expect(result.errors).toContain('contracts/statoblast/QuestionLedger.sol:QuestionLedger initcode is 49153 bytes; EIP-3860 limit is 49152')
 	})
 
 	test('reports missing declared delegate artifacts', () => {

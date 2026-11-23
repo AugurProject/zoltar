@@ -56,8 +56,8 @@ export const createPair: OperationDefinition = {
 	},
 	classification: 'selectable',
 	contract: 'TwoWayConstantProductFactory',
-	description: 'Permissionlessly deploys the canonical pair for an unpaired security pool.',
-	discoveryInputs: ['security pools', 'factory pair mapping'],
+	description: 'Permissionlessly deploys the canonical pair for an unpaired question ledger.',
+	discoveryInputs: ['question ledgers', 'factory pair mapping'],
 	ecosystem: 'trading',
 	evaluate(snapshot) {
 		const paired = new Set(snapshot.pairs.map(pair => pair.pool.toLowerCase()))

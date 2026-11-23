@@ -4,7 +4,7 @@ import { deployContract } from '../../testSupport/deployContract'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import {
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
@@ -16,7 +16,7 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 describe('Portfolio question transaction rollback', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const addresses = () => fixture.poolFor(fixture.base.questionId)
-	const pool = () => ({ abi: poolArtifact.abi, address: addresses().securityPool })
+	const pool = () => ({ abi: poolArtifact.abi, address: addresses().questionLedger })
 	const state = async (holder = fixture.owner().account.address) => {
 		const client = fixture.owner()
 		const ids = await Promise.all([0n, 1n, 2n].map(outcome => client.readContract({ abi: sharesArtifact.abi, address: addresses().shareToken, functionName: 'getTokenId', args: [fixture.base.genesisUniverse, outcome] })))

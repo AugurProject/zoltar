@@ -8,7 +8,7 @@ import { BINARY_OUTCOME_NONE, operationalPools, shareTokenId, sharesToEth, walle
 
 import { allowance, tokenInventory, erc20AllowanceEvidence, amount, choose, eligible, encodeStep, erc20WalletDebit, erc1155WalletDebit, eventEvidence, mixSeed, optionAmount, planBase } from '../planning.ts'
 
-import { erc20Abi, securityPoolAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, questionLedgerAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
 
 function mintDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions) {
@@ -114,13 +114,13 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 								}),
 							]
 						: []),
-					encodeStep({ abi: kind === 'create' ? securityPoolPortfolioAbi : securityPoolAbi, args, evidence: [eventEvidence(pool.address, signature)], functionName: method, id: method, label: method, to: kind === 'create' ? pool.portfolio : pool.address, value: 0n, walletAssetDebits }),
+					encodeStep({ abi: kind === 'create' ? securityPoolPortfolioAbi : questionLedgerAbi, args, evidence: [eventEvidence(pool.address, signature)], functionName: method, id: method, label: method, to: kind === 'create' ? pool.portfolio : pool.address, value: 0n, walletAssetDebits }),
 				],
 			})
 		},
 
 		classification: 'selectable',
-		contract: kind === 'create' ? 'SecurityPoolPortfolio' : 'SecurityPool',
+		contract: kind === 'create' ? 'SecurityPoolPortfolio' : 'QuestionLedger',
 		description: `Exercises the ${kind} complete-set/share workflow with wallet-owned inventory.`,
 		discoveryInputs: ['share balances', 'pool lifecycle', 'wallet ETH'],
 		ecosystem: 'statoblast',

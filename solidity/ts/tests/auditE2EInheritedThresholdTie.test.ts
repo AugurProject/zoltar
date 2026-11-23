@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../types/contractArtifact'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
@@ -21,7 +21,7 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 		const trader = fixture.other()
 		const U0 = base.genesisUniverse
 		const q = base.questionId
-		const source = fixture.poolFor(q).securityPool
+		const source = fixture.poolFor(q).questionLedger
 		const reporters = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5)] as const
 		const [r2, r3, r4, r5] = reporters
 		const thirdParty = e2e.account(6)
@@ -78,7 +78,7 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 				const first = leaves[outcome]?.[0]
 				if (first !== undefined) await expect(e2e.simulateInheritedClaim(owner, child.pool, outcome, leaves[outcome] ?? [], first, new SparseNullifierTree())).rejects.toThrow('Question not final')
 			}
-			await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('Question not final')
+			await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Question not final')
 		}
 		// The child universe may fork only after the parent's choice, recapitalization and response periods.
 		const earliest = await owner.readContract({ ...e2e.zoltar(), functionName: 'getEarliestForkTime', args: [A] })
@@ -109,7 +109,7 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 		expect(await owner.readContract({ ...e2e.game(childB.game), functionName: 'canTriggerOwnFork' })).toBe(true)
 		// Neither the origin nor the forked child pays anything.
 		for (const pool of [source, childA.pool]) await expect(owner.simulateContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [YES, [0n]] })).rejects.toThrow()
-		for (const game of [game0, childA.game]) await expect(owner.simulateContract({ ...e2e.game(game), functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow()
+		for (const game of [game0, childA.game]) await expect(owner.simulateContract({ ...e2e.game(game), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow()
 
 		await e2e.choose(owner, A, YES)
 		const grandchildren = []

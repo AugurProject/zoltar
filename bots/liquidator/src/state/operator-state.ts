@@ -48,7 +48,7 @@ export type PoolObservation = {
 	repToken: Address
 	requestPriceCostAttoEth: bigint
 	selected: boolean
-	securityPoolForker: Address
+	questionForker: Address
 	stagedOperations: StagedOperationObservation[]
 	systemState: bigint
 	totalUnderwritingLimitAttoEth: bigint
@@ -369,7 +369,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				repToken: pool.repToken,
 				requestPriceCostEth: formatDecimalAmount(pool.requestPriceCostAttoEth),
 				selected: pool.selected,
-				securityPoolForker: pool.securityPoolForker,
+				questionForker: pool.questionForker,
 				systemState: pool.systemState.toString(),
 				totalCapacityOwnershipEth: formatDecimalAmount(pool.totalUnderwritingLimitAttoEth),
 				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as engineArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
@@ -70,7 +70,7 @@ describe('Statoblast portfolio: fee-stream end keys chosen by dust buyers', () =
 		// Place the reference stream above the other reachable buckets in the fixture.
 		const victimId = await makeId('fee end depth victim')
 		await fixture.register(victimId, fixture.portfolio, victim)
-		const victimPool = fixture.poolFor(victimId).securityPool
+		const victimPool = fixture.poolFor(victimId).questionLedger
 		const victimDuration = duration(10n * unit)
 		const mask = (1n << REACHABLE_LEVELS) - 1n
 		const earliest = (await window.getTime()) + 2n * granularity + 5_000n + victimDuration

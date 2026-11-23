@@ -145,7 +145,7 @@ describe('universe directory', () => {
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
 		expect(within(rendered.container).queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
 		expect(within(rendered.container).getByRole('link', { name: 'Go to root universe' })).toBeTruthy()
-		expect(rendered.container.textContent).not.toContain('Security pool discovery failed')
+		expect(rendered.container.textContent).not.toContain('Question ledger discovery failed')
 		await waitFor(() => expect(discoveryStates.at(-1)).toBe('error'))
 		expect(rendered.container.textContent).not.toContain('Loading universe details')
 		expect(rendered.container.querySelector('#app-content, .route-header')?.textContent).toContain('Universe')
@@ -186,7 +186,7 @@ describe('universe directory', () => {
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed'))
 		const notice = rendered.container.querySelector('[role="alert"]')?.textContent ?? ''
 		expect(notice).toBe('Universe discovery failed.')
-		expect(notice).not.toContain('Security pool')
+		expect(notice).not.toContain('Question ledger')
 		expect(notice).not.toContain('0xab')
 	})
 
@@ -199,7 +199,7 @@ describe('universe directory', () => {
 		}
 		const rendered = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='0' confirmedUniverseId='0' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitFor(() => expect(rendered.container.textContent).toContain('Security pool discovery failed'))
+		await waitFor(() => expect(rendered.container.textContent).toContain('Question ledger discovery failed'))
 		for (const alert of Array.from(rendered.container.querySelectorAll('[role="alert"]'))) expect(alert.textContent?.match(/Security pool discovery failed/g) ?? []).toHaveLength(1)
 	})
 

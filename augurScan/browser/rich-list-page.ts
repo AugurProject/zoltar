@@ -117,7 +117,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 				chainId: item.chain_id,
 				className: 'rich-token-address address-link',
 			})
-			card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Associated security pool'), element('span', '', pool.label ?? 'Observed in the same protocol transaction'), link)
+			card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Associated question ledger'), element('span', '', pool.label ?? 'Observed in the same protocol transaction'), link)
 			involvementGrid.append(card)
 		}
 		for (const position of capitalPositions) {

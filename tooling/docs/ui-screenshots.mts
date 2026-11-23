@@ -140,9 +140,9 @@ export function pickMatch<T>(matches: readonly T[], nth: number): T | undefined 
 }
 
 /** Changes only explicitly marked simulator examples, retaining their surrounding HTML and URL parts. */
-function withSimulationSecurityPoolAddress(page: string, html: string, address: string): string {
+function withSimulationQuestionLedgerAddress(page: string, html: string, address: string): string {
 	return html.replace(/(<code\b[^>]*>)([\s\S]*?)(<\/code>)/g, (tag, opening: string, content: string, closing: string) => {
-		const marker = attributeValue(opening, 'data-simulation-security-pool')
+		const marker = attributeValue(opening, 'data-simulation-question-ledger')
 		if (marker === undefined) return tag
 		let pattern: RegExp | undefined
 		if (marker === 'address') pattern = /^(\s*)0x[0-9a-fA-F]{40}(\s*)$/
@@ -150,17 +150,17 @@ function withSimulationSecurityPoolAddress(page: string, html: string, address: 
 		const match = pattern?.exec(content)
 		const prefix = match?.[1]
 		const suffix = match?.[2]
-		if (prefix === undefined || suffix === undefined || (marker === 'market-url' && !URL.canParse(content.trim()))) throw new Error(`docs/${page} has malformed <code data-simulation-security-pool="${marker}"> content`)
+		if (prefix === undefined || suffix === undefined || (marker === 'market-url' && !URL.canParse(content.trim()))) throw new Error(`docs/${page} has malformed <code data-simulation-question-ledger="${marker}"> content`)
 		return `${opening}${prefix}${address}${suffix}${closing}`
 	})
 }
 
 /**
- * Copies a screenshot's size and, when supplied by the running simulator, its SecurityPool address into embedding pages.
+ * Copies a screenshot's size and, when supplied by the running simulator, its QuestionLedger address into embedding pages.
  * A missing page is reported through `warn` and skipped; docs:check-screenshots reports the gap.
  */
-export async function updateEmbeddingPages(docsRoot: string, spec: Pick<UiScreenshotSpec, 'usedBy'>, outputPath: string, size: ImageSize, warn: (message: string) => void, simulationSecurityPoolAddress?: string): Promise<void> {
-	if (simulationSecurityPoolAddress !== undefined && !/^0x[0-9a-fA-F]{40}$/.test(simulationSecurityPoolAddress)) throw new Error('Invalid simulation SecurityPool address: expected 0x followed by 40 hexadecimal digits')
+export async function updateEmbeddingPages(docsRoot: string, spec: Pick<UiScreenshotSpec, 'usedBy'>, outputPath: string, size: ImageSize, warn: (message: string) => void, simulationQuestionLedgerAddress?: string): Promise<void> {
+	if (simulationQuestionLedgerAddress !== undefined && !/^0x[0-9a-fA-F]{40}$/.test(simulationQuestionLedgerAddress)) throw new Error('Invalid simulation QuestionLedger address: expected 0x followed by 40 hexadecimal digits')
 	for (const page of spec.usedBy) {
 		const pagePath = path.join(docsRoot, page)
 		const html = await fs.readFile(pagePath, 'utf8').catch((error: unknown) => {
@@ -171,7 +171,7 @@ export async function updateEmbeddingPages(docsRoot: string, spec: Pick<UiScreen
 			warn(`docs/${page} does not exist yet; embed ${outputPath} there, then run 'bun run docs:screenshots -- --sync-sizes'.`)
 			continue
 		}
-		const withAddress = simulationSecurityPoolAddress === undefined ? html : withSimulationSecurityPoolAddress(page, html, simulationSecurityPoolAddress)
+		const withAddress = simulationQuestionLedgerAddress === undefined ? html : withSimulationQuestionLedgerAddress(page, html, simulationQuestionLedgerAddress)
 		const updated = withScreenshotSize(page, withAddress, outputPath, size)
 		if (updated !== html) await fs.writeFile(pagePath, updated)
 	}

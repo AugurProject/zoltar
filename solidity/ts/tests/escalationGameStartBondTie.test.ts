@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -12,7 +12,7 @@ import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfo
 describe('escalation game: a start-bond report that would tie the leader', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
-	const pool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const deposit = (sender: WriteClient, outcome: number, amount: bigint) => writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 	const setup = async () => {
 		const rep = getRepTokenAddress(fixture.base.genesisUniverse)

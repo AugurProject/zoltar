@@ -1,4 +1,4 @@
-/* Statoblast feature styles: collateral repair auction, escalation and reporting visualisations, security pool workspace, vaults, liquidation, staged operations, and the open oracle. Loaded after ui/coreShared/css/index.css by the pages that render these features. */
+/* Statoblast feature styles: collateral repair auction, escalation and reporting visualisations, question ledger workspace, vaults, liquidation, staged operations, and the open oracle. Loaded after ui/coreShared/css/index.css by the pages that render these features. */
 
 :root[data-product="statoblast"],
 :root[data-product="openoracle"] {
@@ -78,7 +78,7 @@
 	gap: var(--space-2);
 }
 
-.security-pool-overview-record {
+.question-ledger-overview-record {
 	display: grid;
 	gap: var(--space-2);
 }
@@ -193,7 +193,7 @@
 	gap: var(--space-3);
 }
 
-.security-pool-card-title-row {
+.question-ledger-card-title-row {
 	display: grid;
 	gap: var(--space-1);
 	grid-template-columns: auto minmax(0, 1fr);
@@ -201,21 +201,21 @@
 	padding: 0;
 }
 
-.security-pool-card {
+.question-ledger-card {
 	padding: var(--space-3) var(--space-4) var(--space-4);
 	gap: var(--space-2);
 }
 
-.security-pool-card .entity-card-body {
+.question-ledger-card .entity-card-body {
 	gap: var(--space-2);
 }
 
-.security-pool-card .entity-card-header {
+.question-ledger-card .entity-card-header {
 	gap: var(--space-1);
 	padding: 0;
 }
 
-.security-pool-card-title-copy {
+.question-ledger-card-title-copy {
 	display: block;
 	font-size: clamp(1.08rem, 1.45vw, 1.35rem);
 	line-height: var(--line-height-none);
@@ -1816,8 +1816,8 @@
 .selected-vault-summary-body {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.security-pool-strip,
-.security-pool-strip-stats,
+.question-ledger-strip,
+.question-ledger-strip-stats,
 .vault-detail-hero-secondary,
 .trading-holdings-layout,
 .trading-share-callouts {
@@ -1825,8 +1825,8 @@
 	gap: var(--space-4);
 }
 
-.security-pool-strip-stats span,
-.security-pool-strip-price span,
+.question-ledger-strip-stats span,
+.question-ledger-strip-price span,
 .vault-detail-hero span,
 .trading-holdings-hero > span,
 .trading-share-callouts span {
@@ -1834,8 +1834,8 @@
 	color: var(--muted);
 }
 
-.security-pool-strip-stats strong,
-.security-pool-strip-price strong,
+.question-ledger-strip-stats strong,
+.question-ledger-strip-price strong,
 .vault-detail-hero strong,
 .trading-holdings-hero strong,
 .trading-share-callouts strong {
@@ -1843,36 +1843,36 @@
 	line-height: var(--line-height-display);
 }
 
-.security-pool-strip-stats > div,
+.question-ledger-strip-stats > div,
 .vault-detail-hero-secondary > div,
 .trading-share-callouts > div {
 	display: grid;
 	gap: var(--space-1);
 }
 
-.security-pool-card-surface {
+.question-ledger-card-surface {
 	display: grid;
 	gap: var(--space-4);
 }
 
-.security-pool-strip {
+.question-ledger-strip {
 	grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.95fr);
 	align-items: start;
 	gap: var(--space-5);
 }
 
-.security-pool-strip-story,
-.security-pool-strip-signal {
+.question-ledger-strip-story,
+.question-ledger-strip-signal {
 	display: grid;
 	gap: var(--space-4);
 	min-width: 0;
 }
 
-.security-pool-strip-question .question-preview-meta {
+.question-ledger-strip-question .question-preview-meta {
 	display: none;
 }
 
-.security-pool-strip-question .question-preview-timeline-item {
+.question-ledger-strip-question .question-preview-timeline-item {
 	padding: var(--space-2) 0 0;
 	border: 0;
 	border-top: 1px solid var(--divider-subtle);
@@ -1880,19 +1880,19 @@
 	background: transparent;
 }
 
-.security-pool-strip-stats {
+.question-ledger-strip-stats {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	padding-top: var(--space-1);
 	padding-bottom: var(--space-1);
 	border-top: 1px solid var(--color-white-08);
 }
 
-.security-pool-strip-stats button.currency-value.copyable,
-.security-pool-card-progress button.currency-value.copyable {
+.question-ledger-strip-stats button.currency-value.copyable,
+.question-ledger-card-progress button.currency-value.copyable {
 	white-space: nowrap;
 }
 
-.security-pool-strip-price,
+.question-ledger-strip-price,
 .trading-holdings-hero {
 	display: grid;
 	gap: var(--space-1);
@@ -1925,34 +1925,34 @@
 	margin: 0;
 }
 
-.security-pool-card-progress {
+.question-ledger-card-progress {
 	display: grid;
 	gap: var(--space-3);
 }
 
-.security-pool-strip-meter {
+.question-ledger-strip-meter {
 	padding: var(--space-3) 0;
 	border-width: 0 0 1px;
 	border-radius: 0;
 	background: transparent;
 }
 
-.security-pool-detail-rail {
+.question-ledger-detail-rail {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 	gap: var(--space-3);
 }
 
-.security-pool-detail-rail > div {
+.question-ledger-detail-rail > div {
 	min-width: 0;
 }
 
-.security-pool-card-inline-details {
+.question-ledger-card-inline-details {
 	padding-top: 0;
 	border-top: 1px solid var(--color-white-08);
 }
 
-.security-pool-card .read-only-detail-accordion {
+.question-ledger-card .read-only-detail-accordion {
 	padding: 0;
 	border: 0;
 	border-top: 1px solid var(--divider-subtle);
@@ -1960,7 +1960,7 @@
 	background: transparent;
 }
 
-.security-pool-card .read-only-detail-accordion-content .security-pool-card-inline-details {
+.question-ledger-card .read-only-detail-accordion-content .question-ledger-card-inline-details {
 	border-top: 0;
 }
 
@@ -2239,23 +2239,23 @@
 	white-space: nowrap;
 }
 
-.security-pool-strip-meter {
+.question-ledger-strip-meter {
 	padding: 0;
 	border: 0;
 	background: transparent;
 }
 
-.security-pool-strip-meter.status-compact {
+.question-ledger-strip-meter.status-compact {
 	padding-top: var(--space-1);
 }
 
 @media (max-width: 64rem) {
-	.security-pool-strip,
+	.question-ledger-strip,
 	.trading-holdings-layout {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.security-pool-strip-stats {
+	.question-ledger-strip-stats {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
@@ -2509,13 +2509,13 @@
 		width: 100%;
 	}
 
-	.security-pool-detail-rail {
+	.question-ledger-detail-rail {
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
 
 /* Creating a pool pairs a wider question form with its sticky draft preview instead of capping both at the single-column form width. */
-.security-pool-create-question .question-create-form {
+.question-ledger-create-question .question-create-form {
 	max-width: 72rem;
 }
 
@@ -2554,8 +2554,8 @@
 }
 
 @media (max-width: 40rem) {
-	.security-pool-card-progress,
-	.security-pool-strip-stats,
+	.question-ledger-card-progress,
+	.question-ledger-strip-stats,
 	.vault-detail-hero-secondary,
 	.trading-holdings-layout,
 	.trading-share-callouts {
@@ -3421,7 +3421,7 @@ span.rep-price-status.stale,
 		grid-column: 1 / -1;
 	}
 }
-.security-pool-link.existing-pool-action {
+.question-ledger-link.existing-pool-action {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -3437,8 +3437,8 @@ span.rep-price-status.stale,
 	margin-top: calc(-1 * var(--space-2));
 }
 
-.security-pool-link.existing-pool-action:hover,
-.security-pool-link.existing-pool-action:focus-visible {
+.question-ledger-link.existing-pool-action:hover,
+.question-ledger-link.existing-pool-action:focus-visible {
 	border-color: var(--primary-button-border-hover);
 	background: var(--primary-button-bg-hover);
 	color: var(--primary-button-text);
@@ -4134,7 +4134,7 @@ span.rep-price-status.stale,
 	color: inherit;
 }
 
-/* Security pool UX fixes: next-action buttons and vault liquidation reasons. */
+/* Question ledger UX fixes: next-action buttons and vault liquidation reasons. */
 .pool-action-open {
 	display: inline-flex;
 	align-items: center;

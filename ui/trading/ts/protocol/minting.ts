@@ -1,6 +1,6 @@
 import { recoveryRepPurchase } from '../copy/marketBlockers.js'
 import { portfolioMintFee, portfolioMintWithinBudget, type PortfolioMintFees } from '@zoltar/trading-shared/trading/portfolioMint'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import type { LiveMarket } from './liveMarket.js'

@@ -8,7 +8,7 @@ import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-c
 import { createRangeProgressReporter, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact } from '../contractArtifact.js'
 import { createMarket } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { loadAllSecurityPools } from '../protocol/securityPools.js'
+import { loadAllQuestionLedgers } from '../protocol/questionLedgers.js'
 import { portfolioAddressFromCreationReceipt, portfolioContractRequest, portfolioCreationRequest, portfolioReadClient, sendPortfolioTransaction } from '../protocol/securityPoolPortfolio.js'
 import { settleSeededOracleReport, settleOracleReportIfNeeded, type ScenarioSeedParameters } from './statoblastScenarioSeeding.js'
 import { portfolioAdmissionCreationRequest } from '../protocol/securityPoolPortfolioAdmission.js'
@@ -73,7 +73,7 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	// One settlement refreshes every question in the portfolio universe.
 	await advanceSimulationTime(memoryClient, 301n)
 	const questionPool = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'getPool', args: [BigInt(initial.questionId), 0n] })
-	const managerAddress = (await loadAllSecurityPools(readClient)).find(pool => pool.securityPoolAddress.toLowerCase() === questionPool.toLowerCase())?.managerAddress
+	const managerAddress = (await loadAllQuestionLedgers(readClient)).find(pool => pool.questionLedgerAddress.toLowerCase() === questionPool.toLowerCase())?.managerAddress
 	if (managerAddress === undefined) throw new Error('Expected namespaced portfolio question pool')
 	await reportStep('Preparing shared portfolio oracle')
 	const commitment = 10n * collateralUnit

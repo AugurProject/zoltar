@@ -87,7 +87,7 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 			},
 		],
 		schemaVersion: 5,
-		securityPoolForker: getAddress('0x0000000000000000000000000000000000000030'),
+		questionForker: getAddress('0x0000000000000000000000000000000000000030'),
 		startBlock: '10',
 		wallet: getAddress('0x0000000000000000000000000000000000000022'),
 		zoltar: getAddress('0x0000000000000000000000000000000000000031'),

@@ -17,7 +17,7 @@ const streams = getAddress('0xDDdDddDdDdddDDddDDddDDDDdDdDDdDDdDDDDDDd')
 const feed = getAddress('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE')
 const escrow = getAddress('0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF')
 const emitter = { address: factory, kind: 'securityPoolFactory', label: 'Question factory', provenance: 'test' }
-const event = { name: 'DeploySecurityPool', status: 'decoded' as const, arguments: { securityPool: pool, universeId: 0n }, summary: 'Question created' }
+const event = { name: 'DeployQuestionLedger', status: 'decoded' as const, arguments: { questionLedger: pool, universeId: 0n }, summary: 'Question created' }
 // Each read names the contract it must be asked of; `portfolio` and `capitalLedger` are back-references answered by several components.
 const readTargets: Readonly<Record<string, readonly string[]>> = {
 	getSecurityPoolPortfolio: [factory],

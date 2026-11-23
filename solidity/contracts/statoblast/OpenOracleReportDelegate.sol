@@ -5,7 +5,7 @@ import { Collateral } from '../Collateral.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -17,7 +17,7 @@ interface IOracleReportConfig {
 	function reputationToken() external view returns (ReputationToken);
 	function openOracle() external view returns (OpenOracle);
 	function weth() external view returns (IWeth9);
-	function securityPool() external view returns (ISecurityPool);
+	function questionLedger() external view returns (IQuestionLedger);
 	function getSettlementCallbackGasLimit() external view returns (uint32);
 	function minimumToken1ReportAttoEth() external view returns (uint256);
 	function initialReportPriorityFeeAttoEthPerGas() external view returns (uint256);

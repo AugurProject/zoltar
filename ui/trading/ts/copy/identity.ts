@@ -1,4 +1,4 @@
-import { questionId, securityPoolAddress, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
+import { questionId, questionLedgerAddress, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 import { invalid, no, yes } from './outcomes.js'
 
 const shareTokenAddress = 'Share token address'
@@ -11,4 +11,4 @@ function outcomeTokenIdSummary(yesTokenId: string, noTokenId: string, invalidTok
 	return `${yes} ${yesTokenId} · ${no} ${noTokenId} · ${invalid} ${invalidTokenId}`
 }
 
-export const identityCopy = { securityPoolAddress, shareTokenAddress, collateralTokenAddress, currentUniverseId, originUniverseId, questionId, outcomeTokenIds, unavailable, outcomeTokenIdSummary } as const
+export const identityCopy = { questionLedgerAddress, shareTokenAddress, collateralTokenAddress, currentUniverseId, originUniverseId, questionId, outcomeTokenIds, unavailable, outcomeTokenIdSummary } as const

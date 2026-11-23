@@ -18,7 +18,7 @@ export interface ChaosProtocolIndex {
 	chainId: number
 	openOracle: Address
 	zoltar: Address
-	securityPoolForker: Address
+	questionForker: Address
 	wallet: Address
 	startBlock: string
 	/** Earliest retained log coverage when the requested prefix is pruned. */
@@ -37,7 +37,7 @@ export interface UpdateProtocolIndexContext {
 	openOracle: Address
 	weth: Address
 	zoltar: Address
-	securityPoolForker: Address
+	questionForker: Address
 	wallet: Address
 	trustedRepTokens: readonly Address[]
 	coordinatorReports: readonly CanonicalCoordinatorReportRoute[]
@@ -561,7 +561,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		openOracle: context.openOracle,
 		reports: [...reports.values()].sort((left, right) => (BigInt(left.reportId) < BigInt(right.reportId) ? -1 : 1)),
 		schemaVersion: 5,
-		securityPoolForker: context.securityPoolForker,
+		questionForker: context.questionForker,
 		startBlock: context.startBlock.toString(),
 		...(partialHistory ? { availableStartBlock: availableStartBlock.toString() } : {}),
 		wallet: context.wallet,

@@ -3,8 +3,8 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
@@ -22,7 +22,7 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 describe('Statoblast: native fork reporter registration', () => {
 	const fixture = useSecurityPoolPortfolioFixture({})
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const sourcePool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const sourcePool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const prepareReport = async (mintAmount = 10n * unit) => {
 		await fixture.prepare()
 		await fixture.deposit(1_000n * unit, fixture.other())
@@ -55,7 +55,7 @@ describe('Statoblast: native fork reporter registration', () => {
 		const child = getChildUniverseId(base.genesisUniverse, 1)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
-		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'preparePortfolioQuestion', args: [sourcePool(), child] }))
 		const childPool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [base.questionId, child] })
 		for (let outcome = 0; outcome < carryOutcomes; outcome++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [sourcePool(), child] }))
@@ -167,7 +167,7 @@ describe('Statoblast: native fork reporter registration', () => {
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'forkCarrySnapshotOutcomesInitialized' })).toBe(1n)
 		await expect(other.writeContract({ ...portfolio(), functionName: 'registerReporterGame', args: [childGame] })).rejects.toThrow('Reporter fork snapshot incomplete')
 		expect(await owner.readContract({ ...portfolio(), functionName: 'sourceGame', args: [child, fixture.base.questionId] })).toBe(sourceGame)
-		for (let outcome = 1; outcome < 3; outcome++) await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [sourcePool(), child] }))
+		for (let outcome = 1; outcome < 3; outcome++) await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializePortfolioQuestion', args: [sourcePool(), child] }))
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'forkCarrySnapshotInitialized' })).toBe(true)
 		expect(await owner.readContract({ ...portfolio(), functionName: 'sourceGame', args: [child, fixture.base.questionId] })).toBe(childGame)
 	})

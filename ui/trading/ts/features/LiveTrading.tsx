@@ -28,7 +28,7 @@ import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServ
 import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveLookupRoutePresentation, liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
-import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
+import { LiveQuestionLedgerDetails, PairInitializationAction, QuestionLedgerRouteEmptyState } from './LiveQuestionLedgerDetails.js'
 import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import { UniverseDirectory } from './UniverseDirectory.js'
 import type { LoadUniverseSummary } from './useUniverseSummary.js'
@@ -295,14 +295,14 @@ export function LiveTrading({
 	if (routePool !== undefined && route.startsWith('security-pool/')) {
 		if (selected !== undefined)
 			return (
-				<LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? liveCopy.unknownDiscovery) : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={refreshLocked} nowSeconds={nowSeconds} connectionMessage={connectionMessage} />
+				<LiveQuestionLedgerDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? liveCopy.unknownDiscovery) : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={refreshLocked} nowSeconds={nowSeconds} connectionMessage={connectionMessage} />
 			)
 		return (
 			<div className='route-view-flow'>
-				<RouteHeader title={appCopy.securityPool} description={appCopy.securityPoolRouteDescription} />
+				<RouteHeader title={appCopy.questionLedger} description={appCopy.questionLedgerRouteDescription} />
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
-					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} lookupRoute='create-market' address={routePool} />
+					<QuestionLedgerRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} lookupRoute='create-market' address={routePool} />
 				</SectionBlock>
 			</div>
 		)
@@ -326,8 +326,8 @@ export function LiveTrading({
 				{universeForkedNotice}
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
-					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : undefined}
-					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolDiscoveryFailed(discoveryError) : undefined} />
+					{discovering ? <EmptyState live title={liveCopy.discoveringQuestionLedgers} /> : undefined}
+					<ErrorNotice message={discoveryState === 'error' ? liveCopy.questionLedgerDiscoveryFailed(discoveryError) : undefined} />
 					{discoveryState === 'ready' && visibleMarkets.length === 0 ? (
 						<EmptyState
 							title={portfolioCopy.noFavoriteMarkets}
@@ -387,12 +387,12 @@ export function LiveTrading({
 		<div className='route-view-flow'>
 			{showsMarketPage ? <MarketPageHeader market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} actions={walletAction} /> : <RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />}
 			<ErrorNotice message={connectionMessage} />
-			<ErrorNotice message={selected !== undefined && discoveryState === 'error' ? liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery) : undefined} />
+			<ErrorNotice message={selected !== undefined && discoveryState === 'error' ? liveCopy.questionLedgerRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery) : undefined} />
 			{showsMarketCreated ? <UserMessage placement='section' tone='success' announcement='polite' className='market-created-notice' detail={liveCopy.marketCreated} /> : undefined}
 			<div className='market-stack'>
 				{selected === undefined ? (
 					<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
-						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} lookupRoute={creatingMarket ? 'create-market' : 'market'} address={routePool} />
+						<QuestionLedgerRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} lookupRoute={creatingMarket ? 'create-market' : 'market'} address={routePool} />
 					</SectionBlock>
 				) : undefined}
 				{(() => {
@@ -408,7 +408,7 @@ export function LiveTrading({
 						return (
 							<SectionBlock key={selected.pool} variant='plain'>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
-								<ErrorNotice message={liveCopy.securityPoolCouldNotLoad(selected.loadError)} />
+								<ErrorNotice message={liveCopy.questionLedgerCouldNotLoad(selected.loadError)} />
 							</SectionBlock>
 						)
 					const workflowPanelProps: LiveWorkflowPanelProps = {

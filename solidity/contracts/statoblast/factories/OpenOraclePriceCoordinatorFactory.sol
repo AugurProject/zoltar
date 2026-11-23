@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 import { OraclePriceMath } from '../OraclePriceMath.sol';
 import { IWeth9 } from '../interfaces/IWeth9.sol';
-import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from '../interfaces/IQuestionLedger.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
@@ -68,9 +68,9 @@ contract PriceCoordinatorDeploymentWorker {
 		return OpenOraclePriceCoordinator(deployed);
 	}
 
-	function configureSecurityPool(OpenOraclePriceCoordinator coordinator, ISecurityPool pool) external {
+	function configureQuestionLedger(OpenOraclePriceCoordinator coordinator, IQuestionLedger pool) external {
 		require(deployers[address(coordinator)] == msg.sender, 'Only coordinator factory');
-		coordinator.setSecurityPool(pool);
+		coordinator.setQuestionLedger(pool);
 	}
 
 	function configureSharedPriceFeed(OpenOraclePriceCoordinator coordinator, address feed) external {
@@ -162,9 +162,9 @@ contract OpenOraclePriceCoordinatorFactory {
 		feedDeployers[address(feed)] = msg.sender;
 	}
 
-	function configureSecurityPool(OpenOraclePriceCoordinator coordinator, ISecurityPool pool) external {
+	function configureQuestionLedger(OpenOraclePriceCoordinator coordinator, IQuestionLedger pool) external {
 		require(coordinatorDeployers[address(coordinator)] == msg.sender, 'Only coordinator deployer');
-		priceCoordinatorDeploymentWorker.configureSecurityPool(coordinator, pool);
+		priceCoordinatorDeploymentWorker.configureQuestionLedger(coordinator, pool);
 	}
 
 	function configureSharedPriceFeed(OpenOraclePriceCoordinator coordinator, SharedPoolPriceFeed feed) external {

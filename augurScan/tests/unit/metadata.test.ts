@@ -65,7 +65,7 @@ describe('ABI metadata', () => {
 		const topics = requireTopics(encodeEventTopics({ abi: eventAbi, eventName: 'CompleteSetCreated', args: { creator: account } }))
 		const data = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [2_000_000_000_000_000_000n, 3_000_000_000_000_000_000n, 4_000_000_000_000_000_000n, 5_000_000_000_000_000_000n])
 		const context = { nativeSymbol: 'SepoliaETH' }
-		const decodedEvent = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), context)
+		const decodedEvent = decodeLogRecord('questionLedger', topics, data, new Map(), new Map(), account, new Map(), context)
 		expect(decodedEvent.displayArguments?.['settlementCollateralProvidedAttoEth']).toBe('2000000000000000000 collateral units')
 
 		const openOracleAbi = abiForKind('openOracle')
@@ -291,7 +291,7 @@ describe('ABI metadata', () => {
 			encodeEventTopics({
 				abi,
 				eventName: 'PairCreated',
-				args: { securityPool: account, shareToken: childToken, universeId: 7n },
+				args: { questionLedger: account, shareToken: childToken, universeId: 7n },
 			}),
 		)
 		const data = encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 30n])
@@ -299,7 +299,7 @@ describe('ABI metadata', () => {
 		expect(decoded).toMatchObject({
 			name: 'PairCreated',
 			status: 'decoded',
-			arguments: { securityPool: account, shareToken: childToken, universeId: '7', pair, feeBps: '30' },
+			arguments: { questionLedger: account, shareToken: childToken, universeId: '7', pair, feeBps: '30' },
 		})
 		expect(discoveriesFrom(decoded)).toEqual([{ address: pair, kind: 'ammPair', label: 'Augur AMM Pair' }])
 	})
@@ -342,7 +342,7 @@ describe('ABI metadata', () => {
 
 		const checkpointAbi = parseAbi(['event QuestionAccountingCheckpoint(uint8 reason,uint256 settlementCollateralAttoEth,uint256 shareTokenSupplyAttoShares,uint256 lastSettlementPortfolioTime)'])
 		const checkpointTopics = requireTopics(encodeEventTopics({ abi: checkpointAbi, eventName: 'QuestionAccountingCheckpoint' }))
-		const decoded = decodeLogRecord('securityPool', checkpointTopics, '0x', new Map())
+		const decoded = decodeLogRecord('questionLedger', checkpointTopics, '0x', new Map())
 		expect(decoded.status).toBe('failed')
 		const stored: StoredLog = {
 			transactionHash: `0x${'11'.repeat(32)}`,
@@ -381,7 +381,7 @@ describe('ABI metadata', () => {
 	test('does not discover the zero address as a deployed contract', () => {
 		expect(
 			discoveriesFrom({
-				name: 'DeploySecurityPool',
+				name: 'DeployQuestionLedger',
 				arguments: { shareToken: zeroAddress },
 				status: 'decoded',
 				summary: 'deployment',
@@ -436,7 +436,7 @@ test('pool events use resolved collateral decimals for cash and shares', () => {
 	] as const) {
 		const amount = 10n ** BigInt(decimals)
 		const data = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [amount, amount, amount, amount])
-		const decoded = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), { nativeSymbol: 'ETH', collateral: { symbol, decimals } })
+		const decoded = decodeLogRecord('questionLedger', topics, data, new Map(), new Map(), account, new Map(), { nativeSymbol: 'ETH', collateral: { symbol, decimals } })
 		expect(decoded.displayArguments?.['settlementCollateralProvidedAttoEth']).toBe(`1 ${symbol}`)
 		expect(decoded.displayArguments?.['completeSetsMintedAttoShares']).toBe('1 shares')
 	}

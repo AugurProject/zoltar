@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
@@ -70,7 +70,7 @@ contract SecurityPoolPortfolioPurchase {
 		uint256 demand = capital.demandAttoEth();
 		return active > demand ? active - demand : 0;
 	}
-	function feeStream(ISecurityPool pool) external view returns (uint96 rate, uint48 stop) {
+	function feeStream(IQuestionLedger pool) external view returns (uint96 rate, uint48 stop) {
 		IPortfolioPurchaseRoot root = IPortfolioPurchaseRoot(portfolio);
 		SecurityPoolPortfolioSettlement engine = root.settlement();
 		uint256 nativeTime = engine.feeTimestamp(pool.universeId());

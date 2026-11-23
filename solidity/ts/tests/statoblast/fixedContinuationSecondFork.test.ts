@@ -17,7 +17,7 @@ describe('Statoblast: a fixed outcome interrupted after delayed branch activatio
 		const reporter = e2e.account(6)
 		const { base } = fixture
 		const root = { abi: portfolioArtifact.abi, address: fixture.portfolio }
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)

@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import '../../statoblast/interfaces/IERC1155Receiver.sol';
-import '../../statoblast/interfaces/ISecurityPool.sol';
+import '../../statoblast/interfaces/IQuestionLedger.sol';
 import '../../statoblast/interfaces/IShareToken.sol';
 
 contract ERC1155ReceiverMock is IERC1155Receiver {
@@ -64,14 +64,14 @@ contract ShareTokenAuthorizationPoolMock {
 	IShareToken public immutable shareToken;
 	uint248 public immutable universeId;
 	SystemState public systemState = SystemState.ForkMigration;
-	address public securityPoolForker;
+	address public questionForker;
 
 	constructor(IShareToken _shareToken, uint248 _universeId) {
 		shareToken = _shareToken;
 		universeId = _universeId;
 	}
 
-	function authorizePool(ISecurityPool pool) external {
+	function authorizePool(IQuestionLedger pool) external {
 		shareToken.authorize(pool);
 	}
 }

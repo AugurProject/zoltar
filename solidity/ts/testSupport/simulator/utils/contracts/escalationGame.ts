@@ -1,5 +1,5 @@
 import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as poolArtifact } from '../../../../types/contractArtifact'
+import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as poolArtifact } from '../../../../types/contractArtifact'
 import { type AccountAddress, QuestionOutcome } from '../../types/types'
 import type { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
 import { createWriteClient, type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
@@ -200,7 +200,7 @@ export const depositOnOutcome = async (writeClient: WriteClient, escalationGame:
 		'Escalation deposit preview',
 	)
 	const acceptedAmount = requireBigInt(preview[0], 'Accepted escalation deposit amount')
-	const pool = await writeClient.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'securityPool' })
+	const pool = await writeClient.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'questionLedger' })
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
 			abi: ReputationToken_ReputationToken.abi,

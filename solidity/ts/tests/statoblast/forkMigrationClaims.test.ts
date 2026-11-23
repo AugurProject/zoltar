@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
@@ -21,14 +21,14 @@ describe('Portfolio own-fork reporter claims', () => {
 		const owner = fixture.owner()
 		const relayer = fixture.other()
 		const universe = fixture.base.genesisUniverse
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 		const threshold = await owner.readContract({ abi: zoltarArtifact.abi, address: getZoltarAddress(), functionName: 'getNonDecisionThresholdAttoRep', args: [universe] })
 		await approveToken(owner, getRepTokenAddress(universe), pool)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		for (const side of [1, 2]) await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [side, threshold] }))
 		const sourceGame = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
 		const proof = await createCarryProof(owner, sourceGame, { expectedOutcome: outcome, parentDepositIndex: 0n, sourceNodeId: BigInt(outcome), leafIndex: 0n, merkleMountainRangePeakIndex: 0n, merkleMountainRangeSiblings: [], nullifierSiblings: new SparseNullifierTree().getProof(0n) })
-		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'forkZoltarWithOwnEscalationGame', args: [pool] }))
 		await expect(owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [outcome, [0n]] })).rejects.toThrow()
 		const controller = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'forkController' })

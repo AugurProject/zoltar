@@ -60,10 +60,10 @@ type StatoblastInfrastructureArtifacts = {
 	sharedPoolPriceFeedDeploymentWorker: BytecodeArtifact
 	securityPoolFactory: ContractArtifact
 	securityPoolPortfolio: BytecodeArtifact
-	securityPoolForker: ContractArtifact
-	securityPoolForkerPortfolioDelegate: ContractArtifact
-	securityPoolOperationsDelegate: BytecodeArtifact
-	securityPoolEventEmitter: BytecodeArtifact
+	questionForker: ContractArtifact
+	questionForkerDelegate: ContractArtifact
+	questionLedgerOperationsDelegate: BytecodeArtifact
+	questionLedgerEventEmitter: BytecodeArtifact
 	securityPoolCapitalLedgerDeployer: BytecodeArtifact
 	securityPoolCommitmentIndexDeployer: BytecodeArtifact
 	securityPoolCapitalFeeStreamsDeployer: BytecodeArtifact
@@ -80,9 +80,9 @@ type SecurityPoolFactoryInputs = {
 	escalationGameFactory: Address
 	openOracle: Address
 	openOraclePriceCoordinatorFactory: Address
-	securityPoolForker: Address
-	securityPoolOperationsDelegate: Address
-	securityPoolEventEmitter: Address
+	questionForker: Address
+	questionLedgerOperationsDelegate: Address
+	questionLedgerEventEmitter: Address
 	securityPoolCapitalLedgerDeployer: Address
 	securityPoolCommitmentIndexDeployer: Address
 	securityPoolCapitalFeeStreamsDeployer: Address
@@ -113,10 +113,10 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const getWorkerAddress = (bytecode: Hex) => getCreate2Address({ bytecode, from: proxyDeployerAddress, salt: zeroSalt })
 	const getOpenOraclePriceCoordinatorFactoryByteCode = (weth: Address) =>
 		concatHex([`0x${artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object}`, encodeOpenOraclePriceCoordinatorFactoryArguments(weth, getWorkerAddress(getPriceCoordinatorDeploymentWorkerByteCode()), getWorkerAddress(getSharedPoolPriceFeedDeploymentWorkerByteCode()))])
-	const getSecurityPoolForkerPortfolioDelegateByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForkerPortfolioDelegate.abi, bytecode: `0x${artifacts.securityPoolForkerPortfolioDelegate.evm.bytecode.object}`, args: [zoltar] })
-	const getSecurityPoolForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForker.abi, bytecode: `0x${artifacts.securityPoolForker.evm.bytecode.object}`, args: [zoltar, getWorkerAddress(getSecurityPoolForkerPortfolioDelegateByteCode(zoltar))] })
-	const getSecurityPoolEventEmitterByteCode = (): Hex => `0x${artifacts.securityPoolEventEmitter.evm.bytecode.object}`
-	const getSecurityPoolOperationsDelegateByteCode = (): Hex => `0x${artifacts.securityPoolOperationsDelegate.evm.bytecode.object}`
+	const getQuestionForkerDelegateByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.questionForkerDelegate.abi, bytecode: `0x${artifacts.questionForkerDelegate.evm.bytecode.object}`, args: [zoltar] })
+	const getQuestionForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.questionForker.abi, bytecode: `0x${artifacts.questionForker.evm.bytecode.object}`, args: [zoltar, getWorkerAddress(getQuestionForkerDelegateByteCode(zoltar))] })
+	const getQuestionLedgerEventEmitterByteCode = (): Hex => `0x${artifacts.questionLedgerEventEmitter.evm.bytecode.object}`
+	const getQuestionLedgerOperationsDelegateByteCode = (): Hex => `0x${artifacts.questionLedgerOperationsDelegate.evm.bytecode.object}`
 	const getSecurityPoolCapitalLedgerDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCapitalLedgerDeployer.evm.bytecode.object}`
 	const getSecurityPoolCommitmentIndexDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCommitmentIndexDeployer.evm.bytecode.object}`
 	const getSecurityPoolCapitalFeeStreamsDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCapitalFeeStreamsDeployer.evm.bytecode.object}`
@@ -133,15 +133,15 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			abi: artifacts.securityPoolFactory.abi,
 			bytecode: `0x${artifacts.securityPoolFactory.evm.bytecode.object}`,
 			args: [
-				inputs.securityPoolForker,
+				inputs.questionForker,
 				inputs.zoltarQuestionData,
 				inputs.escalationGameFactory,
 				inputs.openOracle,
 				inputs.zoltar,
 				inputs.shareTokenFactory,
 				inputs.openOraclePriceCoordinatorFactory,
-				inputs.securityPoolOperationsDelegate,
-				inputs.securityPoolEventEmitter,
+				inputs.questionLedgerOperationsDelegate,
+				inputs.questionLedgerEventEmitter,
 				keccak256(getSecurityPoolPortfolioCreationCode()),
 				// The order is the portfolio constructor's module deployer order.
 				[
@@ -164,8 +164,8 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			escalationGameDepositDelegateBytecode: bytecodeOf(artifacts.escalationGameDepositDelegate),
 			getEscalationGameFactoryByteCode,
 			getSecurityPoolFactoryByteCode,
-			getSecurityPoolForkerByteCode,
-			getSecurityPoolForkerPortfolioDelegateByteCode,
+			getQuestionForkerByteCode,
+			getQuestionForkerDelegateByteCode,
 			getShareTokenFactoryByteCode,
 			getZoltarAddress: zoltar.getZoltarAddress,
 			getZoltarQuestionDataAddress: zoltar.getZoltarQuestionDataAddress,
@@ -175,8 +175,8 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			priceCoordinatorDeploymentWorkerBytecode: getPriceCoordinatorDeploymentWorkerByteCode(),
 			sharedPoolPriceFeedDeploymentWorkerBytecode: getSharedPoolPriceFeedDeploymentWorkerByteCode(),
 			proxyDeployerAddress,
-			securityPoolOperationsDelegateBytecode: getSecurityPoolOperationsDelegateByteCode(),
-			securityPoolEventEmitterBytecode: getSecurityPoolEventEmitterByteCode(),
+			questionLedgerOperationsDelegateBytecode: getQuestionLedgerOperationsDelegateByteCode(),
+			questionLedgerEventEmitterBytecode: getQuestionLedgerEventEmitterByteCode(),
 			securityPoolCapitalLedgerDeployerBytecode: getSecurityPoolCapitalLedgerDeployerByteCode(),
 			securityPoolCommitmentIndexDeployerBytecode: getSecurityPoolCommitmentIndexDeployerByteCode(),
 			securityPoolCapitalFeeStreamsDeployerBytecode: getSecurityPoolCapitalFeeStreamsDeployerByteCode(),
@@ -197,10 +197,10 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getSharedPoolPriceFeedDeploymentWorkerByteCode,
 		getSecurityPoolFactoryByteCode,
 		getSecurityPoolPortfolioCreationCode,
-		getSecurityPoolForkerByteCode,
-		getSecurityPoolForkerPortfolioDelegateByteCode,
-		getSecurityPoolOperationsDelegateByteCode,
-		getSecurityPoolEventEmitterByteCode,
+		getQuestionForkerByteCode,
+		getQuestionForkerDelegateByteCode,
+		getQuestionLedgerOperationsDelegateByteCode,
+		getQuestionLedgerEventEmitterByteCode,
 		getSecurityPoolCapitalLedgerDeployerByteCode,
 		getSecurityPoolCommitmentIndexDeployerByteCode,
 		getSecurityPoolCapitalFeeStreamsDeployerByteCode,

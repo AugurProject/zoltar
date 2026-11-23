@@ -65,14 +65,14 @@ describe('transaction presentations', () => {
 
 	test('keeps pool and action context in trading and reporting intents', () => {
 		const context = {
-			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
+			questionLedgerAddress: '0x0000000000000000000000000000000000000001' as const,
 			universeId: 7n,
 		}
 		const tradingIntent = createTradingTransactionIntent('migrateShares', { ...context, shareOutcome: 'yes' })
 		const tradingPresentation = createTradingSuccessPresentation({
 			action: 'migrateShares',
 			hash: '0x1234',
-			securityPoolAddress: context.securityPoolAddress,
+			questionLedgerAddress: context.questionLedgerAddress,
 			shareOutcome: 'yes',
 			universeId: context.universeId,
 		})
@@ -85,16 +85,16 @@ describe('transaction presentations', () => {
 	})
 
 	test('uses the same pool grammar without redundant universe rows in intent and success presentations', () => {
-		const securityPoolAddress = '0x0000000000000000000000000000000000000001'
-		const context = { securityPoolAddress, universeId: 7n }
+		const questionLedgerAddress = '0x0000000000000000000000000000000000000001'
+		const context = { questionLedgerAddress, universeId: 7n }
 		const cases = [
 			{
 				intent: createTradingTransactionIntent('createCompleteSet', context),
-				presentation: createTradingSuccessPresentation({ action: 'createCompleteSet', hash: '0x1234', securityPoolAddress, universeId: 7n }),
+				presentation: createTradingSuccessPresentation({ action: 'createCompleteSet', hash: '0x1234', questionLedgerAddress, universeId: 7n }),
 			},
 			{
 				intent: createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'yes' }),
-				presentation: createReportingSuccessPresentation({ action: 'reportOutcome', hash: '0x1234', outcome: 'yes', securityPoolAddress, universeId: 7n }),
+				presentation: createReportingSuccessPresentation({ action: 'reportOutcome', hash: '0x1234', outcome: 'yes', questionLedgerAddress, universeId: 7n }),
 			},
 		]
 

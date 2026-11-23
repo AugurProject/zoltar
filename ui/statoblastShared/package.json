@@ -33,9 +33,9 @@
 			"bun": "./ts/copy/forkAuction.ts",
 			"default": "./js/copy/forkAuction.js"
 		},
-		"./copy/securityPool.js": {
-			"bun": "./ts/copy/securityPool.ts",
-			"default": "./js/copy/securityPool.js"
+		"./copy/questionLedger.js": {
+			"bun": "./ts/copy/questionLedger.ts",
+			"default": "./js/copy/questionLedger.js"
 		},
 		"./features/deployment/deploymentSections.js": {
 			"bun": "./ts/features/deployment/deploymentSections.ts",
@@ -65,25 +65,25 @@
 			"bun": "./ts/features/markets/lib/trading.ts",
 			"default": "./js/features/markets/lib/trading.js"
 		},
-		"./features/security-pools/components/RepPriceStatusLabel.js": {
-			"bun": "./ts/features/security-pools/components/RepPriceStatusLabel.tsx",
-			"default": "./js/features/security-pools/components/RepPriceStatusLabel.js"
+		"./features/question-ledgers/components/RepPriceStatusLabel.js": {
+			"bun": "./ts/features/question-ledgers/components/RepPriceStatusLabel.tsx",
+			"default": "./js/features/question-ledgers/components/RepPriceStatusLabel.js"
 		},
-		"./features/security-pools/lib/priorityFee.js": {
-			"bun": "./ts/features/security-pools/lib/priorityFee.ts",
-			"default": "./js/features/security-pools/lib/priorityFee.js"
+		"./features/question-ledgers/lib/priorityFee.js": {
+			"bun": "./ts/features/question-ledgers/lib/priorityFee.ts",
+			"default": "./js/features/question-ledgers/lib/priorityFee.js"
 		},
-		"./features/security-pools/lib/repPriceSource.js": {
-			"bun": "./ts/features/security-pools/lib/repPriceSource.tsx",
-			"default": "./js/features/security-pools/lib/repPriceSource.js"
+		"./features/question-ledgers/lib/repPriceSource.js": {
+			"bun": "./ts/features/question-ledgers/lib/repPriceSource.tsx",
+			"default": "./js/features/question-ledgers/lib/repPriceSource.js"
 		},
-		"./features/security-pools/lib/securityPoolState.js": {
-			"bun": "./ts/features/security-pools/lib/securityPoolState.ts",
-			"default": "./js/features/security-pools/lib/securityPoolState.js"
+		"./features/question-ledgers/lib/questionLedgerState.js": {
+			"bun": "./ts/features/question-ledgers/lib/questionLedgerState.ts",
+			"default": "./js/features/question-ledgers/lib/questionLedgerState.js"
 		},
-		"./features/security-pools/lib/uiPriceOracle.js": {
-			"bun": "./ts/features/security-pools/lib/uiPriceOracle.ts",
-			"default": "./js/features/security-pools/lib/uiPriceOracle.js"
+		"./features/question-ledgers/lib/uiPriceOracle.js": {
+			"bun": "./ts/features/question-ledgers/lib/uiPriceOracle.ts",
+			"default": "./js/features/question-ledgers/lib/uiPriceOracle.js"
 		},
 		"./features/transactionPresentations.js": {
 			"bun": "./ts/features/transactionPresentations.tsx",
@@ -109,9 +109,9 @@
 			"bun": "./ts/protocol/deployment.ts",
 			"default": "./js/protocol/deployment.js"
 		},
-		"./protocol/securityPools.js": {
-			"bun": "./ts/protocol/securityPools.ts",
-			"default": "./js/protocol/securityPools.js"
+		"./protocol/questionLedgers.js": {
+			"bun": "./ts/protocol/questionLedgers.ts",
+			"default": "./js/protocol/questionLedgers.js"
 		},
 		"./protocol/trading.js": {
 			"bun": "./ts/protocol/trading.ts",
@@ -249,9 +249,9 @@
 			"bun": "./ts/protocol/reportingCarryState.ts",
 			"default": "./js/protocol/reportingCarryState.js"
 		},
-		"./protocol/securityPoolAbi.js": {
-			"bun": "./ts/protocol/securityPoolAbi.ts",
-			"default": "./js/protocol/securityPoolAbi.js"
+		"./protocol/questionLedgerAbi.js": {
+			"bun": "./ts/protocol/questionLedgerAbi.ts",
+			"default": "./js/protocol/questionLedgerAbi.js"
 		},
 		"./contractArtifact.js": {
 			"bun": "./ts/contractArtifact.ts",
@@ -269,9 +269,9 @@
 			"bun": "./ts/protocol/fundingTransactions.ts",
 			"default": "./js/protocol/fundingTransactions.js"
 		},
-		"./features/security-pools/components/UniversePoolDirectorySection.js": {
-			"bun": "./ts/features/security-pools/components/UniversePoolDirectorySection.tsx",
-			"default": "./js/features/security-pools/components/UniversePoolDirectorySection.js"
+		"./features/question-ledgers/components/UniversePoolDirectorySection.js": {
+			"bun": "./ts/features/question-ledgers/components/UniversePoolDirectorySection.tsx",
+			"default": "./js/features/question-ledgers/components/UniversePoolDirectorySection.js"
 		},
 		"./protocol/reviewedClient.js": {
 			"bun": "./ts/protocol/reviewedClient.ts",
@@ -297,9 +297,9 @@
 			"bun": "./ts/lib/statoblastLocation.ts",
 			"default": "./js/lib/statoblastLocation.js"
 		},
-		"./features/security-pools/lib/poolLifecycle.js": {
-			"bun": "./ts/features/security-pools/lib/poolLifecycle.ts",
-			"default": "./js/features/security-pools/lib/poolLifecycle.js"
+		"./features/question-ledgers/lib/poolLifecycle.js": {
+			"bun": "./ts/features/question-ledgers/lib/poolLifecycle.ts",
+			"default": "./js/features/question-ledgers/lib/poolLifecycle.js"
 		},
 		"./copy/glossary.js": {
 			"bun": "./ts/copy/glossary.ts",

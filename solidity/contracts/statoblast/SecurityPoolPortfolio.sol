@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { CheckedCast } from '../CheckedCast.sol';
 
-import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger, ISecurityPoolFactory } from './interfaces/IQuestionLedger.sol';
 import { ISecurityPoolQuestionAdmissionPolicy } from './interfaces/ISecurityPoolQuestionAdmissionPolicy.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
 import { Collateral } from '../Collateral.sol';
@@ -50,7 +50,7 @@ interface IPortfolioForkCoordinatorDeployer {
 	function create(address authority, Zoltar zoltar) external returns (address);
 }
 interface IPortfolioReporterIdentity {
-	function securityPool() external view returns (ISecurityPool);
+	function questionLedger() external view returns (IQuestionLedger);
 	function forkContinuation() external view returns (bool);
 	function forkCarrySnapshotInitialized() external view returns (bool);
 }
@@ -119,12 +119,12 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
 	mapping(address => bool) private capitalAddresses;
 	mapping(uint256 => bytes32) public questionOriginIds;
-	mapping(address => bool) public registeredPools;
+	mapping(address => bool) public registeredLedgers;
 	uint256[] private questions;
 	bool private entered;
 	address private purchasingPool;
 
-	event QuestionRegistered(uint256 indexed questionId, bytes32 indexed originId, ISecurityPool indexed pool);
+	event QuestionRegistered(uint256 indexed questionId, bytes32 indexed originId, IQuestionLedger indexed pool);
 	event CompleteSetsFunded(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient, uint256 cashAttoEth, uint256 shares, uint256 purchaseFeeAttoEth);
 	event UniversePrepared(uint248 indexed universeId, address capitalLedger);
 	event SetupAdvanced(uint8 stage);
@@ -228,10 +228,10 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		page = new uint256[](count);
 		for (uint256 i; i < count; i++) page[i] = questions[start + i];
 	}
-	function getPool(uint256 questionId, uint248 universeId) public view returns (ISecurityPool pool) {
+	function getPool(uint256 questionId, uint248 universeId) public view returns (IQuestionLedger pool) {
 		bytes32 origin = questionOriginIds[questionId];
 		require(origin != bytes32(0), 'Question not registered');
-		pool = factory.getSecurityPool(origin, universeId);
+		pool = factory.getQuestionLedger(origin, universeId);
 		require(address(pool) != address(0), 'Question pool unavailable');
 	}
 	function priceFeed(uint248 universeId) external view returns (address) {
@@ -284,14 +284,14 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		factory.initializePortfolioPriceFeedForUniverse(child);
 		if (zoltar.getForkTime(child) == 0 && capitalLedger[child].isPriceValid()) services.activateFees(child);
 	}
-	function addQuestion(uint256 questionId) public returns (ISecurityPool pool) {
+	function addQuestion(uint256 questionId) public returns (IQuestionLedger pool) {
 		require(setupStage == SETUP_COMPLETE, 'Portfolio setup incomplete');
 		require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
 		bytes32 origin = questionOriginIds[questionId];
-		if (origin != bytes32(0)) return factory.getSecurityPool(origin, originUniverseId);
+		if (origin != bytes32(0)) return factory.getQuestionLedger(origin, originUniverseId);
 		require(zoltar.getForkTime(originUniverseId) == 0, 'Origin universe forked');
 		origin = factory.getPortfolioOriginId(address(this), originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
-		pool = factory.deployPortfolioSecurityPool(originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
+		pool = factory.deployPortfolioQuestionLedger(originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
 		uint256 end = pool.questionData().getQuestionEndDate(questionId);
 		require(end > block.timestamp && end - block.timestamp <= maximumQuestionHorizonSeconds, 'Question outside portfolio horizon');
 		questionOriginIds[questionId] = origin;
@@ -299,15 +299,15 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		_registerPool(pool);
 		emit QuestionRegistered(questionId, origin, pool);
 	}
-	function _registerPool(ISecurityPool pool) private {
+	function _registerPool(IQuestionLedger pool) private {
 		require(factory.getSecurityPoolPortfolio(pool) == address(this), 'Pool belongs to another portfolio');
 		require(address(getPool(pool.questionId(), pool.universeId())) == address(pool), 'Pool is not canonical');
-		if (registeredPools[address(pool)]) return;
-		registeredPools[address(pool)] = true;
+		if (registeredLedgers[address(pool)]) return;
+		registeredLedgers[address(pool)] = true;
 		settlement.registerQuestion(address(pool), pool.universeId(), pool.questionId());
 		pool.setPortfolioCustody(address(capitalLedger[pool.universeId()]));
 	}
-	function registerChildPool(ISecurityPool pool) external {
+	function registerChildQuestionLedger(IQuestionLedger pool) external {
 		IPortfolioForkCoordinator(forkController).ensureReady(pool.universeId());
 		require(IPortfolioForkCoordinator(forkController).isReady(pool.universeId()), 'Child settlement not ready');
 		_registerPool(pool);
@@ -316,9 +316,9 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		IPortfolioForkCoordinator(forkController).ensureReady(universeId);
 		require(IPortfolioForkCoordinator(forkController).isReady(universeId), 'Child settlement not ready');
 	}
-	function _pool(address caller) private view returns (ISecurityPool pool) {
-		require(registeredPools[caller], 'Unknown question callback');
-		return ISecurityPool(payable(caller));
+	function _pool(address caller) private view returns (IQuestionLedger pool) {
+		require(registeredLedgers[caller], 'Unknown question callback');
+		return IQuestionLedger(payable(caller));
 	}
 	function purchaseFee(uint256 mintAttoEth) public view returns (uint256) {
 		return quoteHelper.purchaseFee(mintAttoEth);
@@ -343,7 +343,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		purchasingPool = address(0);
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}
-	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (ISecurityPool pool) {
+	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (IQuestionLedger pool) {
 		require(setupStage == SETUP_COMPLETE, 'Portfolio setup incomplete');
 		IPortfolioForkCoordinator(forkController).ensureReady(universeId);
 		require(IPortfolioForkCoordinator(forkController).isReady(universeId), 'Universe is not ready');
@@ -355,7 +355,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 
 	function mintQuestionSettlement(uint256 cash) external returns (uint256, uint256, uint256) {
-		ISecurityPool pool = _pool(msg.sender);
+		IQuestionLedger pool = _pool(msg.sender);
 		require(entered && purchasingPool == msg.sender, 'No authorized portfolio purchase');
 		return services.mintQuestionSettlement(pool, cash);
 	}
@@ -394,7 +394,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		services.checkpointCapitalFees(universeId, through);
 	}
 	function onQuestionRepIncome(uint256 amountAttoRep) external {
-		ISecurityPool pool = _pool(msg.sender);
+		IQuestionLedger pool = _pool(msg.sender);
 		IERC20 token = IERC20(address(pool.repToken()));
 		SecurityPoolCapitalLedger capital = capitalLedger[pool.universeId()];
 		token.safeApprove(address(capital), amountAttoRep);
@@ -402,7 +402,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function registerReporterGame(address game) external {
 		IPortfolioReporterIdentity identity = IPortfolioReporterIdentity(game);
-		ISecurityPool pool = identity.securityPool();
+		IQuestionLedger pool = identity.questionLedger();
 		_pool(address(pool));
 		require(address(pool.escalationGame()) == game, 'Reporter game is not canonical');
 		// Until every carried outcome is installed, the parent's game must remain
@@ -411,19 +411,19 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		reporters.registerGame(pool.questionId(), game);
 	}
 	function onQuestionFinalityChanged(uint48 nativeFinalAfter) external {
-		ISecurityPool pool = IPortfolioReporterIdentity(msg.sender).securityPool();
+		IQuestionLedger pool = IPortfolioReporterIdentity(msg.sender).questionLedger();
 		_pool(address(pool));
 		require(address(pool.escalationGame()) == msg.sender, 'Finality caller is not canonical');
 		services.onQuestionFinalityChanged(pool, nativeFinalAfter);
 	}
 
 	function freezeForFork() external {
-		ISecurityPool pool = _pool(msg.sender);
+		IQuestionLedger pool = _pool(msg.sender);
 		IPortfolioForkCoordinator(forkController).freeze(pool.universeId());
 	}
-	function forkWithReporterQuestion(ISecurityPool pool) external {
+	function forkWithReporterQuestion(IQuestionLedger pool) external {
 		_pool(address(pool));
-		require(msg.sender == pool.securityPoolForker(), 'Only canonical native forker');
+		require(msg.sender == pool.questionForker(), 'Only canonical native forker');
 		require(pool.escalationGame().canTriggerOwnFork(), 'Reporter game cannot fork');
 		reporters.triggerFork(pool.universeId(), pool.questionId());
 		IPortfolioForkCoordinator(forkController).freeze(pool.universeId());

@@ -9,7 +9,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllSecurityPools } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import * as portfolioCopy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 
@@ -24,7 +24,7 @@ test(
 			installActiveEnvironmentForTesting(backend)
 			const [owner] = await backend.getAccounts()
 			if (owner === undefined) throw new Error('Missing scenario owner')
-			const pools = await loadAllSecurityPools(backend.createReadClient())
+			const pools = await loadAllQuestionLedgers(backend.createReadClient())
 			const first = pools[0]
 			if (first === undefined) throw new Error('Missing seeded question')
 			const selected: string[] = []
@@ -61,9 +61,9 @@ test(
 			await act(() => {
 				button.click()
 			})
-			expect(selected).toEqual([first.securityPoolAddress])
+			expect(selected).toEqual([first.questionLedgerAddress])
 			await act(() => {
-				render(<PortfolioQuestionWorkspace {...props} selectedAddress={first.securityPoolAddress} />, view.container)
+				render(<PortfolioQuestionWorkspace {...props} selectedAddress={first.questionLedgerAddress} />, view.container)
 			})
 			await waitFor(() => expect(view.container.textContent).toContain('Mint complete sets'), simulationWaitOptions)
 			await waitFor(() => expect(view.container.textContent).toContain('Reporting workflow'), simulationWaitOptions)

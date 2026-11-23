@@ -14,7 +14,7 @@ import { useEscalationGameFixture } from './fixture'
 
 describe('Escalation Game: tie-breaking and winner rewards', () => {
 	const fixture = useEscalationGameFixture()
-	const { reportBond, deployEscalationGameTestSecurityPool, depositOnOutcomeViaTestSecurityPool, claimWinningDepositAndReadClaimLog } = fixture
+	const { reportBond, deployEscalationGameTestQuestionLedger, depositOnOutcomeViaTestQuestionLedger, claimWinningDepositAndReadClaimLog } = fixture
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
@@ -29,12 +29,12 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 	}
 
 	test('depositOnOutcome prevents tie by refunding 1 attoREP', async () => {
-		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const depositAmount = 100n * reportBond
 		// Deposit on Yes to establish a leader
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, depositAmount)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, depositAmount)
 		// Deposit same amount on Invalid; would tie, but fix reduces by 1 attoREP
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, depositAmount)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, depositAmount)
 		const balances = await getBalances(client, escalationGame)
 		assert.strictEqual(balances.yes, depositAmount, 'Yes balance as leader')
 		assert.strictEqual(balances.invalid, depositAmount - 1n, 'Invalid balance reduced by 1 attoREP')
@@ -46,11 +46,11 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 	})
 
 	test('deposit on leading outcome does not trigger tie-breaking adjustment', async () => {
-		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const amount1 = 100n * reportBond
 		const amount2 = 50n * reportBond
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, amount1)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, amount2)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, amount1)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, amount2)
 		const balances = await getBalances(client, escalationGame)
 		assert.strictEqual(balances.yes, amount1 + amount2, 'Yes balance increased without adjustment')
 		assert.strictEqual(balances.invalid, 0n, 'Invalid balance zero')
@@ -61,7 +61,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 	})
 
 	test('claimDepositForWinning pays the pro-rata reward for a deposit fully below binding capital', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const winningDepositorAddress = client.account.address
 		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
 		const firstWinningDeposit = 5n * 10n ** 18n
@@ -70,17 +70,17 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		const excessWinningDeposit = 2n * 10n ** 18n
 		const losingDeposit = 10n * 10n ** 18n
 
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, thirdWinningDeposit)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, excessWinningDeposit)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, winningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, winningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, winningDepositorAddress, QuestionOutcome.Yes, thirdWinningDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, winningDepositorAddress, QuestionOutcome.Yes, excessWinningDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
 		await endEscalation(escalationGameAddress)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
 		const burnBalanceBeforeClaim = await getERC20Balance(client, getRepTokenAddress(0n), addressString(BURN_ADDRESS))
-		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		const claimLog = await claimWinningDepositAndReadClaimLog(testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
 		assert.strictEqual(await readBindingCapital(client, escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 10 REP depth')
 		assert.strictEqual(claimLog.args.depositor, winningDepositorAddress, 'claim event should identify the winning depositor')
 		assert.strictEqual(claimLog.args.outcome, BigInt(QuestionOutcome.Yes), 'claim event should identify the winning outcome')
@@ -93,7 +93,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 	})
 
 	test('claimDepositForWinning treats the region between binding capital and the reward cap as the first-come safety boundary', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const firstWinningDepositorAddress = client.account.address
 		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
 		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[2]).account.address
@@ -104,14 +104,14 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		// Reward eligibility is intentionally append-order dependent on the winning side.
 		// The first 20 REP deposit fills the binding-capital region, so the later 14 REP deposit
 		// only overlaps the final 10 REP safety-boundary slice and earns bonus on that slice alone.
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, firstWinningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, firstWinningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
 		await endEscalation(escalationGameAddress)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
-		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
+		const claimLog = await claimWinningDepositAndReadClaimLog(testQuestionLedgerAddress, 1n, QuestionOutcome.Yes)
 		assert.strictEqual(await readBindingCapital(client, escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 20 REP depth')
 		assert.strictEqual(claimLog.args.depositor, secondWinningDepositorAddress, 'claim event should identify the crossing depositor')
 		assert.strictEqual(claimLog.args.outcome, BigInt(QuestionOutcome.Yes), 'claim event should identify the winning outcome')
@@ -122,7 +122,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 	})
 
 	test('claimDepositForWinning shares the full reward pool across actual winning principal when winning depth stays below the reward cap', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const firstWinningDepositorAddress = client.account.address
 		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
 		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[2]).account.address
@@ -130,15 +130,15 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		const secondWinningDeposit = 10n * 10n ** 18n
 		const losingDeposit = 20n * 10n ** 18n
 
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, firstWinningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, firstWinningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
 		await endEscalation(escalationGameAddress)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
-		const firstClaimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
-		const secondClaimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
+		const firstClaimLog = await claimWinningDepositAndReadClaimLog(testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
+		const secondClaimLog = await claimWinningDepositAndReadClaimLog(testQuestionLedgerAddress, 1n, QuestionOutcome.Yes)
 		assert.strictEqual(await readBindingCapital(client, escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 20 REP depth')
 		assert.strictEqual(firstClaimLog.args.depositor, firstWinningDepositorAddress, 'first claim event should identify its depositor')
 		assert.strictEqual(firstClaimLog.args.parentDepositIndex, 0n, 'first claim event should identify the first deposit index')

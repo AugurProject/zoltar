@@ -3,7 +3,7 @@ import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -15,7 +15,7 @@ import { collateralBalance, burnedCollateralBalance, receiptBurns } from './burn
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
@@ -24,7 +24,7 @@ import { loadPortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statobla
 describe('Statoblast: reporting and unresolved capital compensation', () => {
 	const fixture = useSecurityPoolPortfolioFixture({})
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 	const service = async () => ({ abi: servicesArtifact.abi, address: await fixture.owner().readContract({ ...portfolio(), functionName: 'services' }) })
 	const questionState = async () => {
 		const client = fixture.owner()
@@ -142,7 +142,7 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		const native = fixture.poolFor(fixture.base.questionId)
 		const shares = await balanceOfShares(fixture.other(), native.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
 		const burnedBefore = await burnedCollateralBalance(fixture.owner(), fixture.portfolio)
-		const hash = await redeemCompleteSet(fixture.other(), native.securityPool, shares[0])
+		const hash = await redeemCompleteSet(fixture.other(), native.questionLedger, shares[0])
 		expect((await fixture.owner().readContract({ ...services, functionName: 'questionPremium', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))[1]).toBe(0n)
 		// The cancelled premium has no recorded payer and is burned rather than kept by services.
 		expect((await receiptBurns(fixture.owner(), hash)).serviceEth).toBe(0n)

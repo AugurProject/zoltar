@@ -3,8 +3,8 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 } from '../types/contractArtifact'
@@ -23,9 +23,9 @@ describe('a carried game: pause and resume the pure curve', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	const YES = 1
 	const NO = 2
-	const sourcePool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const sourcePool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const gameFor = (pool: Address) => fixture.owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
 	const readGame = <const Name extends 'getFinalQuestionResolution' | 'getQuestionResolution' | 'totalCostAttoRep' | 'getEscalationGameEndDate' | 'forkResumedAt' | 'activationTime' | 'startBondAttoRep' | 'getBindingCapitalAttoRep'>(game: Address, functionName: Name) =>
 		fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName })

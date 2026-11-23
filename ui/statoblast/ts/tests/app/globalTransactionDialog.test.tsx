@@ -170,7 +170,7 @@ describe('GlobalTransactionDialog', () => {
 
 	test('shows a nonblocking pending status and modal confirmed and failed statuses', async () => {
 		const hash = '0xabcd000000000000000000000000000000000000000000000000000000000001'
-		const pending: GlobalTransactionPresentation = { hash, title: 'Requesting Price', tone: 'pending' as const, rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
+		const pending: GlobalTransactionPresentation = { hash, title: 'Requesting Price', tone: 'pending' as const, rows: [{ label: 'Question ledger address', value: '0x0000000000000000000000000000000000000002' }] }
 		const renderedComponent = await renderIntoDocument(
 			<>
 				<button type='button'>Request price</button>
@@ -282,7 +282,7 @@ describe('GlobalTransactionDialog', () => {
 		const firstReview = controller.review(0)
 		await act(() => transactionSteps.value?.confirmStep(0))
 		await firstReview
-		const pending: GlobalTransactionPresentation = { hash, title: 'Wrapping ETH', tone: 'pending' as const, rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
+		const pending: GlobalTransactionPresentation = { hash, title: 'Wrapping ETH', tone: 'pending' as const, rows: [{ label: 'Question ledger address', value: '0x0000000000000000000000000000000000000002' }] }
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={pending} />)
 		trackRendered(renderedComponent)
 		await act(() => controller.submitted(hash))
@@ -451,7 +451,7 @@ describe('GlobalTransactionDialog', () => {
 				transaction={{
 					dismissKey: '0xprepared-price-request',
 					hash: '0xprepared-price-request',
-					rows: [{ label: 'Security pool address', value: '0xpool' }],
+					rows: [{ label: 'Question ledger address', value: '0xpool' }],
 					technicalRows: [
 						{ label: 'Function', value: 'requestPrice' },
 						{ label: 'Arguments', value: '0xpool, 1000000000000000000' },
@@ -467,7 +467,7 @@ describe('GlobalTransactionDialog', () => {
 		const details = documentQueries.getByText('Transaction details', { selector: 'summary' }).closest('details')
 		if (details === null) throw new Error('Missing transaction details disclosure')
 		expect(details.open).toBe(false)
-		expect(details.contains(documentQueries.getByText('Security pool address'))).toBe(true)
+		expect(details.contains(documentQueries.getByText('Question ledger address'))).toBe(true)
 		expect(details.contains(documentQueries.getByText('0xpool'))).toBe(true)
 		expect(details.contains(documentQueries.getByText('Technical details'))).toBe(true)
 		expect(details.contains(documentQueries.getByText('Arguments'))).toBe(true)
@@ -834,7 +834,7 @@ describe('GlobalTransactionDialog', () => {
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog routeKey='zoltar:create' transaction={{ hash, title: 'Creating question', tone: 'pending' }} />)
 		trackRendered(renderedComponent)
 
-		window.location.hash = '#/security-pools?securityPoolsView=browse'
+		window.location.hash = '#/security-pools?questionLedgersView=browse'
 		await act(() => {
 			render(<GlobalTransactionDialog routeKey='security-pools:browse' transaction={{ hash, title: 'Creating question', tone: 'pending' }} />, renderedComponent.container)
 		})

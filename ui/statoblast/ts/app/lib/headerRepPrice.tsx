@@ -1,9 +1,9 @@
 import type { ComponentChildren } from 'preact'
 import type { RepPriceFailure, RepPriceSource } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import * as appCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
-import { RepPriceStatusLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
-import { renderUiRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/repPriceSource.js'
-import { describeRepPriceStatus, type ResolvedRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { RepPriceStatusLabel } from '@zoltar/ui-statoblast-shared/features/question-ledgers/components/RepPriceStatusLabel.js'
+import { renderUiRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features/question-ledgers/lib/repPriceSource.js'
+import { describeRepPriceStatus, type ResolvedRepPrice } from '@zoltar/ui-statoblast-shared/features/question-ledgers/lib/uiPriceOracle.js'
 
 type HeaderRepPerEthPrice = {
 	repPerEthFailure: RepPriceFailure | undefined

@@ -44,7 +44,7 @@ contract SecurityPoolPortfolioSettlement {
 
 	uint256 public pendingServiceFees;
 	mapping(address => QuestionSource) public questions;
-	mapping(uint248 => mapping(uint256 => address)) public poolsByQuestion;
+	mapping(uint248 => mapping(uint256 => address)) public ledgersByQuestion;
 
 	struct UniverseSettlement {
 		uint64 bookId;
@@ -119,10 +119,10 @@ contract SecurityPoolPortfolioSettlement {
 
 	function registerQuestion(address pool, uint248 universeId, uint256 questionId) external onlyPortfolio {
 		require(pool != address(0) && !questions[pool].registered, 'Settlement question registered');
-		require(poolsByQuestion[universeId][questionId] == address(0), 'Settlement question already canonical');
+		require(ledgersByQuestion[universeId][questionId] == address(0), 'Settlement question already canonical');
 		_bookId(universeId);
 		questions[pool] = QuestionSource(universeId, questionId, true);
-		poolsByQuestion[universeId][questionId] = pool;
+		ledgersByQuestion[universeId][questionId] = pool;
 	}
 
 	function mint(address pool, uint256 cash, uint256 minimumShares, uint48 timestamp) external onlyPortfolio nonReentrant returns (uint256 shares, Snapshot memory snapshot) {

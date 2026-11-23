@@ -8,11 +8,11 @@ import { getInfraContractAddresses } from './deploymentHelpers.js'
 const abi = parseAbi([
 	'function factory() view returns (address)',
 	'function questionOriginIds(uint256 questionId) view returns (bytes32)',
-	'function getSecurityPool(bytes32 originId,uint248 universeId) view returns (address)',
+	'function getQuestionLedger(bytes32 originId,uint248 universeId) view returns (address)',
 	'function originUniverseId() view returns (uint248)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
 	'function sourceGame(uint248 universeId,uint256 questionId) view returns (address)',
-	'function securityPool() view returns (address)',
+	'function questionLedger() view returns (address)',
 	'function shareToken() view returns (address)',
 	'function balanceOfPortfolioRecoveryRights(uint248 universeId,address owner) view returns (uint256[3])',
 	'function isPortfolioRecoveryEligible(uint248 universeId) view returns (bool)',
@@ -33,10 +33,10 @@ export async function loadPortfolioSourceRecovery(client: ReadClient, snapshot: 
 	])
 	const factory = requireAddressValue(factoryValue, 'portfolio factory')
 	if (typeof originId !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(originId) || BigInt(originId) === 0n) throw new Error('Question is not registered in this portfolio.')
-	const pool = requireAddressValue(await client.readContract({ address: factory, abi, functionName: 'getSecurityPool', args: [originId, snapshot.universeId], blockNumber }), 'source pool')
+	const pool = requireAddressValue(await client.readContract({ address: factory, abi, functionName: 'getQuestionLedger', args: [originId, snapshot.universeId], blockNumber }), 'source pool')
 	const origin = requireBigintValue(originValue, 'origin universe')
 	const game = requireAddressValue(gameValue, 'source game')
-	const sourceValue = game === zeroAddress ? await client.readContract({ address: snapshot.portfolio, abi, functionName: 'getPool', args: [questionId, origin], blockNumber }) : await client.readContract({ address: game, abi, functionName: 'securityPool', blockNumber })
+	const sourceValue = game === zeroAddress ? await client.readContract({ address: snapshot.portfolio, abi, functionName: 'getPool', args: [questionId, origin], blockNumber }) : await client.readContract({ address: game, abi, functionName: 'questionLedger', blockNumber })
 	const source = requireAddressValue(sourceValue, 'reporter source pool')
 	if (source === zeroAddress) throw new Error('Question is not registered in this portfolio.')
 	const shareTokenValue = await client.readContract({ address: source, abi, functionName: 'shareToken', blockNumber })
@@ -53,5 +53,5 @@ export async function loadPortfolioSourceRecovery(client: ReadClient, snapshot: 
 	return { pool, source, shareToken, eligible, rights, availableShares }
 }
 export function buildPortfolioRecoveryPreparation(snapshot: PortfolioForkSnapshot, source: Awaited<ReturnType<typeof loadPortfolioSourceRecovery>>) {
-	return { account: snapshot.owner, to: getInfraContractAddresses().securityPoolForker, value: 0n, data: encodeFunctionData({ abi, functionName: 'preparePortfolioQuestion', args: [source.source, snapshot.universeId] }) }
+	return { account: snapshot.owner, to: getInfraContractAddresses().questionForker, value: 0n, data: encodeFunctionData({ abi, functionName: 'preparePortfolioQuestion', args: [source.source, snapshot.universeId] }) }
 }

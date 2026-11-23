@@ -18,7 +18,7 @@ import { formatReportBrowseTitle } from '@zoltar/ui-statoblast-shared/copy/openO
 import { getOpenOracleDisputeSwapTokenKey } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
-const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
+const alternateQuestionLedgerAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const wethAddress = getAddress(SEPOLIA_NETWORK_PROFILE.wethAddress)
@@ -332,7 +332,7 @@ describe('openOracle protocol client', () => {
 								]
 							: [
 									{ status: 'success', result: association === 'different oracle' ? token1Address : getOpenOracleAddress() },
-									{ status: 'success', result: alternateSecurityPoolAddress },
+									{ status: 'success', result: alternateQuestionLedgerAddress },
 								]
 					if (first === 'openOraclePriceCoordinator') return [{ status: 'success', result: association === 'different coordinator' ? token1Address : vaultAddress }]
 					throw new Error(`Unexpected multicall ${first}`)
@@ -367,11 +367,11 @@ describe('openOracle protocol client', () => {
 								{ status: 'success', result: 1n },
 							]
 						case 'reportCandidates':
-							return [{ status: 'success', result: [vaultAddress, initialReporter, alternateSecurityPoolAddress, 0n] }]
+							return [{ status: 'success', result: [vaultAddress, initialReporter, alternateQuestionLedgerAddress, 0n] }]
 						case 'securityPoolFactory':
 							return [
 								{ status: 'success', result: getInfraContractAddresses().securityPoolFactory },
-								{ status: 'success', result: alternateSecurityPoolAddress },
+								{ status: 'success', result: alternateQuestionLedgerAddress },
 								{ status: 'success', result: 0n },
 								{ status: 'success', result: game.token1 },
 								{ status: 'success', result: game.token2 },
@@ -415,10 +415,10 @@ describe('openOracle protocol client', () => {
 			preimage.game.callbackContract = vaultAddress
 			const feedAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
 			const escrowAbi = parseAbi(['event ReportCompleted(uint256 indexed reportId,address indexed priceFeed,uint8 outcome)'])
-			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('uint8'), [accepted ? 1 : 2]), topics: encodedLogTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateSecurityPoolAddress } }) }
+			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('uint8'), [accepted ? 1 : 2]), topics: encodedLogTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateQuestionLedgerAddress } }) }
 			const eventName = accepted ? ('PriceReported' as const) : ('PriceReportRejected' as const)
 			const result = {
-				address: alternateSecurityPoolAddress,
+				address: alternateQuestionLedgerAddress,
 				data: accepted ? encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]) : encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report stale', 0n, 0n, 0n, 0n]),
 				topics: encodedLogTopics({ abi: feedAbi, eventName, args: { reportId: 7n } }),
 			}
@@ -595,7 +595,7 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 					getContractFunctionName(request.contracts[0]) === 'openOracle'
 						? [
 								{ status: 'success', result: getOpenOracleAddress() },
-								{ status: 'success', result: alternateSecurityPoolAddress },
+								{ status: 'success', result: alternateQuestionLedgerAddress },
 							]
 						: [{ status: 'success', result: vaultAddress }],
 				),
@@ -720,7 +720,7 @@ function createOpenOracleMulticall({ tokens, universeTokens = {}, escrow }: { to
 		if (first === 'feed') return escrow === undefined ? [failure()] : [success(sharedFeedAddress)]
 		if (first === 'reportCandidates') {
 			if (escrow === undefined) throw new Error('Unexpected feed read')
-			return [success([escrow.candidate, initialReporter, alternateSecurityPoolAddress, 0n]), success(getInfraContractAddresses().securityPoolFactory), success(feedPortfolioAddress), success(0n), success(getOpenOracleAddress())]
+			return [success([escrow.candidate, initialReporter, alternateQuestionLedgerAddress, 0n]), success(getInfraContractAddresses().securityPoolFactory), success(feedPortfolioAddress), success(0n), success(getOpenOracleAddress())]
 		}
 		if (first === 'sharedPriceFeeds') return [success(escrow?.registered === true ? sharedFeedAddress : zeroAddress)]
 		throw new Error(`Unexpected multicall ${first}`)

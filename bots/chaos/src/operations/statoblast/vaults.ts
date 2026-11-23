@@ -2,7 +2,7 @@ import type { EcosystemSnapshot, OperationDefinition, PlanningOptions } from '..
 import { topologyMutationCapacityBlocker } from '../topology-capacity.ts'
 import { feeCheckpointDue, poolAccountingCurrentEvidence } from './planning.ts'
 import { choose, eligible, encodeStep, mixSeed, planBase } from '../planning.ts'
-import { securityPoolAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionLedgerAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
 import { inputMatches } from '../input-values.ts'
 
 function questionCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
@@ -67,13 +67,13 @@ export function checkpointDefinition(kind: 'collateral' | 'fees'): OperationDefi
 				postconditions: ['Pool accounting is current at the receipt block'],
 				risk: 'low',
 				snapshot,
-				steps: [encodeStep({ abi: securityPoolAbi, evidence: [poolAccountingCurrentEvidence(snapshot, pool)], functionName: method, id: method, label: `Update ${kind}`, to: pool.address })],
+				steps: [encodeStep({ abi: questionLedgerAbi, evidence: [poolAccountingCurrentEvidence(snapshot, pool)], functionName: method, id: method, label: `Update ${kind}`, to: pool.address })],
 			})
 		},
 		classification: 'selectable',
-		contract: 'SecurityPool',
+		contract: 'QuestionLedger',
 		description: `Permissionlessly checkpoints ${kind} accounting.`,
-		discoveryInputs: ['security pools'],
+		discoveryInputs: ['question ledgers'],
 		ecosystem: 'statoblast',
 		evaluate: snapshot => eligible(snapshot.pools.some(pool => feeCheckpointDue(snapshot, pool) && (kind === 'collateral' || pool.systemState === 0)) ? undefined : 'No eligible pool has an uncheckpointed accounting interval'),
 		id,

@@ -28,7 +28,7 @@ export interface CachedPoolDeployment {
 	coordinator: Address
 	parent: Address
 	questionId: string
-	securityPool: Address
+	questionLedger: Address
 	shareToken: Address
 	universeId: string
 }
@@ -179,12 +179,12 @@ function parseQuestion(value: unknown, index: number): QuestionSnapshot {
 function parsePoolDeployment(value: unknown, index: number): CachedPoolDeployment {
 	const label = `immutable topology pool deployment ${index.toString()}`
 	const deployment = requiredRecord(value, label)
-	assertExactKeys(deployment, ['coordinator', 'parent', 'questionId', 'securityPool', 'shareToken', 'universeId'], [], label)
+	assertExactKeys(deployment, ['coordinator', 'parent', 'questionId', 'questionLedger', 'shareToken', 'universeId'], [], label)
 	return {
 		coordinator: address(deployment['coordinator'], `${label}.coordinator`),
 		parent: address(deployment['parent'], `${label}.parent`),
 		questionId: unsignedIntegerString(deployment['questionId'], `${label}.questionId`),
-		securityPool: address(deployment['securityPool'], `${label}.securityPool`),
+		questionLedger: address(deployment['questionLedger'], `${label}.questionLedger`),
 		shareToken: address(deployment['shareToken'], `${label}.shareToken`),
 		universeId: unsignedIntegerString(deployment['universeId'], `${label}.universeId`),
 	}
@@ -202,7 +202,7 @@ export function parseTopologyCache(value: unknown): CanonicalImmutableTopologyCa
 	if (new Set(questions.map(question => question.id)).size !== questions.length) throw new Error('Immutable topology cache contains duplicate question IDs')
 	if (!Array.isArray(cache['poolDeployments'])) throw new Error('immutable topology cache.poolDeployments must be an array')
 	const poolDeployments = cache['poolDeployments'].map((deployment, index) => parsePoolDeployment(deployment, index))
-	if (new Set(poolDeployments.map(deployment => deployment.securityPool.toLowerCase())).size !== poolDeployments.length) throw new Error('Immutable topology cache contains duplicate security pools')
+	if (new Set(poolDeployments.map(deployment => deployment.questionLedger.toLowerCase())).size !== poolDeployments.length) throw new Error('Immutable topology cache contains duplicate question ledgers')
 	const rawChildren = requiredRecord(cache['universeChildren'], 'immutable topology cache.universeChildren')
 	const universeChildren: Record<string, CachedUniverseChildren> = {}
 	for (const universeId of Object.keys(rawChildren).sort(compareUnsignedStrings)) {

@@ -18,7 +18,7 @@
 				</header>
 				<section id="caller-and-trust-boundaries">
 					<h2>Caller and trust boundaries</h2>
-					<p>Deployment helpers are not interchangeable with canonical protocol discovery. Several are intentionally permissionless and bind the caller into each deployed address, through a caller-namespaced salt or the caller in the init code; an application must discover canonical instances through <code>SecurityPoolFactory</code>, recognized <a href="./glossary.html#security-pool">security pools</a>, and recognized <a href="./glossary.html#security-pool-forker">forker</a> events rather than treating every factory-created address as canonical.</p>
+					<p>Deployment helpers are not interchangeable with canonical protocol discovery. Several are intentionally permissionless and bind the caller into each deployed address, through a caller-namespaced salt or the caller in the init code; an application must discover canonical instances through <code>SecurityPoolFactory</code>, recognized <a href="./glossary.html#security-pool">question ledgers</a>, and recognized <a href="./glossary.html#question-forker">forker</a> events rather than treating every factory-created address as canonical.</p>
 					<table>
 						<thead>
 							<tr>
@@ -110,7 +110,7 @@
 							<tr>
 								<td>Reporter custody and native question materialization</td>
 								<td><code>SecurityPoolReporterLedger</code> holds funded per-question report balances in persistent books. Only canonical games can debit their own balances. A fork charges admission to the triggering question only; unrelated report balances cannot fund it. Strictly finalized escrow remains in its source universe; live books migrate once per branch.</td>
-								<td><code>SecurityPoolForker.preparePortfolioQuestion(source, targetUniverse)</code> creates the canonical question namespace separately from <code>materializePortfolioQuestion</code>, which installs at most one of three fixed outcome snapshots per call when needed; the question activates after the third. Bound questions do not deploy individual Collateral Repair Auctions or migrate provider vaults. Trader tokens retain their immediate-parent migration checks, so skipped native universes still need explicit token migration.</td>
+								<td><code>QuestionForker.preparePortfolioQuestion(source, targetUniverse)</code> creates the canonical question namespace separately from <code>materializePortfolioQuestion</code>, which installs at most one of three fixed outcome snapshots per call when needed; the question activates after the third. Bound questions do not deploy individual Collateral Repair Auctions or migrate provider vaults. Trader tokens retain their immediate-parent migration checks, so skipped native universes still need explicit token migration.</td>
 							</tr>
 							<tr>
 								<td><code>SecurityPoolUniformPriceAuction</code></td>
@@ -134,38 +134,38 @@
 							</tr>
 							<tr>
 								<td><code>EscalationGameFactory</code></td>
-								<td><code>deployEscalationGame</code> and <code>deployEscalationGameFromFork</code> require the caller to have a bound reporter portfolio and implement the <code>ISecurityPool</code> reads used during construction; an EOA or incompatible contract reverts. The <code>CREATE2</code> salt is zero; the caller is bound into the init code as the new game's <code>securityPool</code>, so each caller has one game address; the factory itself becomes the game's immutable <code>owner</code> and immediately calls <code>start</code> or <code>startFromFork</code>. Ordinary deployment requires a threshold above one attoREP and lowers a start bond at or above that threshold to <code>threshold - 1</code>. Its constructor receives the separately deployed deposit delegate and requires code at that address. Games share this immutable helper while keeping their own accounting through <code>delegatecall</code>. Deploying the deposit delegate separately keeps factory init code within the EVM limit. The factory has no owner role and no later <code>resumeFromFork</code> relay.</td>
+								<td><code>deployEscalationGame</code> and <code>deployEscalationGameFromFork</code> require the caller to have a bound reporter portfolio and implement the <code>IQuestionLedger</code> reads used during construction; an EOA or incompatible contract reverts. The <code>CREATE2</code> salt is zero; the caller is bound into the init code as the new game's <code>questionLedger</code>, so each caller has one game address; the factory itself becomes the game's immutable <code>owner</code> and immediately calls <code>start</code> or <code>startFromFork</code>. Ordinary deployment requires a threshold above one attoREP and lowers a start bond at or above that threshold to <code>threshold - 1</code>. Its constructor receives the separately deployed deposit delegate and requires code at that address. Games share this immutable helper while keeping their own accounting through <code>delegatecall</code>. Deploying the deposit delegate separately keeps factory init code within the EVM limit. The factory has no owner role and no later <code>resumeFromFork</code> relay.</td>
 								<td>Accept a game only after <code>EscalationGameSet</code> from a recognized pool. In the supported continuation path, the owning pool calls <code>resumeFromFork</code>, which also verifies aggregate funding.</td>
 							</tr>
 							<tr>
 								<td><code>ShareTokenFactory</code></td>
 								<td>Anyone can call <code>deployShareToken</code> to deploy or retrieve a token keyed by <code>keccak256(abi.encode(msg.sender, salt, questionId))</code>. The <code>CREATE2</code> salt is the raw <code>salt</code>; the caller and question id enter through constructor arguments, and that caller is the token's initial authorized address.</td>
-								<td>Origin lineage tokens are the instances created by <code>SecurityPoolFactory</code> and named in <code>DeploySecurityPool</code>; children reuse the parent's token.</td>
+								<td>Origin lineage tokens are the instances created by <code>SecurityPoolFactory</code> and named in <code>DeployQuestionLedger</code>; children reuse the parent's token.</td>
 							</tr>
 
 							<tr>
 								<td><code>OpenOraclePriceCoordinatorFactory</code></td>
 								<td>Anyone can call <code>deployOpenOraclePriceCoordinator</code> under a caller-namespaced salt with caller-supplied OpenOracle, REP token, and positive <code>initialReportPriorityFeeAttoEthPerGas</code>; coordinator construction rejects zero and values that would consume the reserved OpenOracle <code>uint128</code> report and escalation-halt capacity. The caller therefore chooses this immutable gas-price assumption within that bound.</td>
-								<td>A pool coordinator is the instance named by canonical <code>DeploySecurityPool</code>; <code>SecurityPoolFactory</code> atomically binds it to that pool before returning, and canonical child deployment inherits the value from the parent coordinator.</td>
+								<td>A pool coordinator is the instance named by canonical <code>DeployQuestionLedger</code>; <code>SecurityPoolFactory</code> atomically binds it to that pool before returning, and canonical child deployment inherits the value from the parent coordinator.</td>
 							</tr>
 							<tr>
-								<td><code>PriceCoordinatorDeploymentWorker</code> and <code>SecurityPoolDeploymentWorker</code></td>
+								<td><code>PriceCoordinatorDeploymentWorker</code> and <code>QuestionLedgerDeploymentWorker</code></td>
 								<td>Deployment workers split large creation code into deployable modules and bind the calling factory.</td>
 								<td>Use canonical factory registration and module bindings; code presence alone is insufficient.</td>
 							</tr>
 
 							<tr>
-								<td><code>SecurityPoolDeployer</code> and <code>SecurityPoolDeploymentWorker</code></td>
+								<td><code>QuestionLedgerDeployer</code> and <code>QuestionLedgerDeploymentWorker</code></td>
 								<td>Only the configured <code>SecurityPoolFactory</code> may call the deployer; only that deployer may call its worker.</td>
-								<td>They are code-size deployment plumbing. The proxy deployer deploys one deterministic <code>SecurityPoolOperationsDelegate</code>, and its address is passed into the <code>SecurityPoolFactory</code> constructor. The proxy deployer is the deterministic <code>CREATE2</code> deployment proxy that every canonical deployment goes through; it is not a Solidity source in this repository and appears in the deployment manifests as step <code>proxyDeployer</code>. The factory passes that address through its deployer and worker to every pool. Its deterministic address is published as <code>securityPoolOperationsDelegate</code>. Pools become canonical only when the factory emits <code>SecurityPoolRegistered</code> and <code>DeploySecurityPool</code>.</td>
+								<td>They are code-size deployment plumbing. The proxy deployer deploys one deterministic <code>QuestionLedgerOperationsDelegate</code>, and its address is passed into the <code>SecurityPoolFactory</code> constructor. The proxy deployer is the deterministic <code>CREATE2</code> deployment proxy that every canonical deployment goes through; it is not a Solidity source in this repository and appears in the deployment manifests as step <code>proxyDeployer</code>. The factory passes that address through its deployer and worker to every pool. Its deterministic address is published as <code>questionLedgerOperationsDelegate</code>. Pools become canonical only when the factory emits <code>QuestionLedgerRegistered</code> and <code>DeployQuestionLedger</code>.</td>
 							</tr>
 							<tr>
-								<td><code>EscalationGameDepositDelegate</code>, <code>SecurityPoolForkerPortfolioDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
-								<td>EscalationGame delegates share game storage and implement reporting deposits and authenticated historical claims. SecurityPoolOperationsDelegate handles wallet reporting, continuation resumption, and redemption. SecurityPoolForkerPortfolioDelegate prepares child questions against shared branch state. These helpers execute in their recognized host context.</td>
-								<td>Accept resulting state and logs only when the recognized game, pool, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through the portfolio capital ledger; continuation activation enters through <code>SecurityPool.resumeForkedEscalationGame</code>.</td>
+								<td><code>EscalationGameDepositDelegate</code>, <code>QuestionForkerDelegate</code>, <code>QuestionLedgerSettlementDelegate</code>, and <code>QuestionLedgerOperationsDelegate</code></td>
+								<td>EscalationGame delegates share game storage and implement reporting deposits and authenticated historical claims. QuestionLedgerOperationsDelegate handles wallet reporting, continuation resumption, and redemption. QuestionForkerDelegate prepares child questions against shared branch state. These helpers execute in their recognized host context.</td>
+								<td>Accept resulting state and logs only when the recognized game, pool, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through the portfolio capital ledger; continuation activation enters through <code>QuestionLedger.resumeForkedEscalationGame</code>.</td>
 							</tr>
 							<tr>
-								<td><code>SecurityPoolEventEmitter</code></td>
+								<td><code>QuestionLedgerEventEmitter</code></td>
 								<td>A fixed delegate shares the question ledger storage layout and handles central fee checkpoints, surplus transfers and settlement mirrors.</td>
 								<td>Only events from canonical question addresses describe protocol state. Calling a helper directly does not mutate a registered question.</td>
 							</tr>
@@ -254,7 +254,7 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol"><code>OpenOraclePriceCoordinatorTypes.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceSource.sol"><code>OpenOraclePriceSource.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOracleReportDelegate.sol"><code>OpenOracleReportDelegate.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedger.sol"><code>QuestionLedger.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolAuctionVault.sol"><code>SecurityPoolAuctionVault.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolBoundClones.sol"><code>SecurityPoolBoundClones.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalAuctionDelegate.sol"><code>SecurityPoolCapitalAuctionDelegate.sol</code></a
@@ -265,19 +265,19 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCommitmentIndex.sol"><code>SecurityPoolCommitmentIndex.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCommitmentTree.sol"><code>SecurityPoolCommitmentTree.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCreationCode.sol"><code>SecurityPoolCreationCode.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolEventEmitter.sol"><code>SecurityPoolEventEmitter.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerEventEmitter.sol"><code>QuestionLedgerEventEmitter.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolFixedAdmissionPolicy.sol"><code>SecurityPoolFixedAdmissionPolicy.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerPortfolioDelegate.sol"><code>SecurityPoolForkerPortfolioDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionForker.sol"><code>QuestionForker.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionForkerDelegate.sol"><code>QuestionForkerDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolFrozenHistory.sol"><code>SecurityPoolFrozenHistory.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolLinearFees.sol"><code>SecurityPoolLinearFees.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerLinearFees.sol"><code>QuestionLedgerLinearFees.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolMaturityMap.sol"><code>SecurityPoolMaturityMap.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOpenAdmissionPolicy.sol"><code>SecurityPoolOpenAdmissionPolicy.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>SecurityPoolOperationsDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerOperationsDelegate.sol"><code>QuestionLedgerOperationsDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPersistentMap.sol"><code>SecurityPoolPersistentMap.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolQuestionMap.sol"><code>SecurityPoolQuestionMap.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolio.sol"><code>SecurityPoolPortfolio.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioAccountingDelegate.sol"><code>SecurityPoolPortfolioAccountingDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerAccountingDelegate.sol"><code>QuestionLedgerAccountingDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioAuction.sol"><code>SecurityPoolPortfolioAuction.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol"><code>SecurityPoolPortfolioForkCoordinator.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol"><code>SecurityPoolPortfolioModuleDeployers.sol</code></a
@@ -287,11 +287,11 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolReporterLedger.sol"><code>SecurityPoolReporterLedger.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolResolutionPremiumBook.sol"><code>SecurityPoolResolutionPremiumBook.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementBook.sol"><code>SecurityPoolSettlementBook.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerSettlementDelegate.sol"><code>QuestionLedgerSettlementDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementMath.sol"><code>SecurityPoolSettlementMath.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementPricing.sol"><code>SecurityPoolSettlementPricing.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementState.sol"><code>SecurityPoolSettlementState.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolStorage.sol"><code>SecurityPoolStorage.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerStorage.sol"><code>QuestionLedgerStorage.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUniformPriceAuction.sol"><code>SecurityPoolUniformPriceAuction.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>SecurityPoolUtils.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SharedPoolPriceFeed.sol"><code>SharedPoolPriceFeed.sol</code></a
@@ -308,7 +308,7 @@
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/Create2Deployment.sol"><code>Create2Deployment.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>EscalationGameFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol"><code>OpenOraclePriceCoordinatorFactory.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolDeployer.sol"><code>SecurityPoolDeployer.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/QuestionLedgerDeployer.sol"><code>QuestionLedgerDeployer.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/ShareTokenFactory.sol"><code>ShareTokenFactory.sol</code></a>
 								</td>
@@ -325,10 +325,10 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IPortfolioServiceRoot.sol"><code>IPortfolioServiceRoot.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IPortfolioSettlement.sol"><code>IPortfolioSettlement.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IReportOperations.sol"><code>IReportOperations.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPool.sol"><code>ISecurityPool.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IQuestionLedger.sol"><code>IQuestionLedger.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolAuctionCapital.sol"><code>ISecurityPoolAuctionCapital.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolDeploymentWorkerConfiguration.sol"><code>ISecurityPoolDeploymentWorkerConfiguration.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol"><code>ISecurityPoolForker.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IQuestionLedgerDeploymentWorkerConfiguration.sol"><code>IQuestionLedgerDeploymentWorkerConfiguration.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IQuestionForker.sol"><code>IQuestionForker.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolPortfolioAccounting.sol"><code>ISecurityPoolPortfolioAccounting.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolPortfolioNative.sol"><code>ISecurityPoolPortfolioNative.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolQuestionAdmissionPolicy.sol"><code>ISecurityPoolQuestionAdmissionPolicy.sol</code></a

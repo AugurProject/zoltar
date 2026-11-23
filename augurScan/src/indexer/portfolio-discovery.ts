@@ -64,8 +64,8 @@ export async function discoverPortfolioEventDependencies(emitter: ContractMetada
 		if (escrow === zeroAddress || address(await call(escrow, 'sharedPoolReportEscrow', 'feed')) !== emitterAddress) throw new Error('Report escrow binding mismatch')
 		return [component('reportEscrow', escrow)]
 	}
-	if (emitter.kind === 'securityPoolFactory' && decoded.name === 'DeploySecurityPool') {
-		const pool = address(decoded.arguments?.['securityPool'])
+	if (emitter.kind === 'securityPoolFactory' && decoded.name === 'DeployQuestionLedger') {
+		const pool = address(decoded.arguments?.['questionLedger'])
 		const portfolio = address(await call(emitterAddress, 'securityPoolFactory', 'getSecurityPoolPortfolio', [pool]))
 		if (portfolio === zeroAddress) throw new Error('Question ledger is missing its portfolio binding')
 		if (address(await call(portfolio, 'securityPoolPortfolio', 'factory')) !== emitterAddress) throw new Error('Portfolio factory binding mismatch')

@@ -1,6 +1,6 @@
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
 import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
-import type { MarketDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketDetails, ReportingOutcomeKey, QuestionLedgerSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type ActionResult = { hash: Hash }
 
@@ -113,7 +113,7 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 	lastReportOppoTime: bigint
 }
 
-export type ListedSecurityPool = {
+export type ListedQuestionLedger = {
 	portfolioAddress: Address
 	settlementRecoveryAttoRep?: bigint
 	mintingCapacityAttoEth?: bigint
@@ -139,9 +139,9 @@ export type ListedSecurityPool = {
 	questionOutcome: ReportingOutcomeKey | 'none'
 	questionId: string
 	statoblastSecurityMultiplierBps: bigint
-	securityPoolAddress: Address
+	questionLedgerAddress: Address
 	shareTokenSupplyAttoShares: bigint
-	systemState: SecurityPoolSystemState
+	systemState: QuestionLedgerSystemState
 	totalPoolHeldAttoRep: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	universeHasForked: boolean
@@ -154,7 +154,7 @@ export type TradingShareBalances = {
 	yesAttoShares: bigint
 }
 
-/** A fork's child universe as the share token sees it: the canonical security pool a migration lands in, and what the wallet already migrated into it from each source outcome. */
+/** A fork's child universe as the share token sees it: the canonical question ledger a migration lands in, and what the wallet already migrated into it from each source outcome. */
 export type ShareMigrationTarget = {
 	canonicalPool: Address | undefined
 	migratedAttoShares: TradingShareBalances
@@ -175,7 +175,7 @@ export type TradingDetails = {
 
 export type TradingActionResult = ActionResult & {
 	action: 'createCompleteSet' | 'migrateShares' | 'redeemCompleteSet' | 'redeemShares'
-	securityPoolAddress: Address
+	questionLedgerAddress: Address
 	shareOutcome?: ReportingOutcomeKey
 	targetOutcomeIndexes?: bigint[]
 	universeId: bigint
@@ -246,12 +246,12 @@ type ReportingDetailsBase = {
 	forkThresholdAttoRep: bigint
 	marketDetails: MarketDetails
 	nonDecisionThresholdAttoRep: bigint
-	parentSecurityPoolAddress?: Address
+	parentQuestionLedgerAddress?: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
-	securityPoolAddress: Address
+	questionLedgerAddress: Address
 	settlementState: ReportingSettlementState
 	startBondAttoRep: bigint
-	systemState: SecurityPoolSystemState
+	systemState: QuestionLedgerSystemState
 	universeId: bigint
 	parentWithdrawalEnabled: boolean
 	viewerEscalationMigrationEntitlement?: EscalationMigrationEntitlementStatus | undefined
@@ -287,13 +287,13 @@ export type ReportingActionResult = ActionResult & {
 	amountAttoRep?: bigint
 	action: 'approveReportingRep' | 'reportOutcome' | 'withdrawEscalation'
 	outcome: ReportingOutcomeKey
-	securityPoolAddress: Address
+	questionLedgerAddress: Address
 	universeId: bigint
 }
 
 export type ForkAuctionActionResult = ActionResult & {
 	action: ForkAuctionAction
-	securityPoolAddress: Address
+	questionLedgerAddress: Address
 	settlementMode?: CollateralRepairAuctionSettlementMode
 	universeId: bigint
 }

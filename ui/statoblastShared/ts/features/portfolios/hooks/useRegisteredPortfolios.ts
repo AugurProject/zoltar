@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { loadRegisteredPortfolios, type RegisteredPortfolio } from '../../../protocol/securityPools.js'
+import { loadRegisteredPortfolios, type RegisteredPortfolio } from '../../../protocol/questionLedgers.js'
 import * as copy from '../../../copy/portfolio.js'
 
 /** Portfolios a visitor can open in this universe without already knowing an address. */

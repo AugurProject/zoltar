@@ -7,8 +7,8 @@ import {
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 } from '../types/contractArtifact'
@@ -34,7 +34,7 @@ describe('Shared portfolio child fee clock', () => {
 		const { base } = fixture
 		const owner = fixture.owner()
 		const portfolio = { abi: portfolioArtifact.abi, address: fixture.portfolio }
-		const parent = fixture.poolFor(base.questionId).securityPool
+		const parent = fixture.poolFor(base.questionId).questionLedger
 		const forkQuestion = { ...base.questionData, title: 'Unrelated child fee fork', endTime: (await base.mockWindow.getTime()) - 1n, startTime: 0n }
 		if (own) await base.mockWindow.setTime(base.questionData.endTime + 1n)
 		else await createQuestion(owner, forkQuestion, base.outcomes)
@@ -64,7 +64,7 @@ describe('Shared portfolio child fee clock', () => {
 		const book = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' })
 		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })
 		const feeRate = async () => (await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, base.questionId] }))[0].feeRateAttoEthPerSecond
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [parent, child] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializePortfolioQuestion', args: [parent, child] }))
 		const poolAddress = await owner.readContract({ ...portfolio, functionName: 'getPool', args: [base.questionId, child] })
 		const pool = { abi: poolArtifact.abi, address: poolAddress }
 		const refresh = () => writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'refreshPortfolioFees' }))

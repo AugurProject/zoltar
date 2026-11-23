@@ -129,7 +129,7 @@ function TransactionFeedbackOperationModalHarness() {
 		<GlobalTransactionPresentationProvider transaction={transaction}>
 			<OperationModal
 				context={[
-					{ identityKey: 'security-pool', label: 'Security pool address', value: '0xpool' },
+					{ identityKey: 'security-pool', label: 'Question ledger address', value: '0xpool' },
 					{ identityKey: 'outcome', label: 'Outcome', value: 'Yes' },
 				]}
 				isOpen={isOpen}
@@ -474,7 +474,7 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).queryByRole('status')).toBeNull()
-		expect(getTextOutsideContextHeader(dialog).includes('Security pool address')).toBe(false)
+		expect(getTextOutsideContextHeader(dialog).includes('Question ledger address')).toBe(false)
 		expect(getTextOutsideContextHeader(dialog).includes('Outcome')).toBe(false)
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete prerequisite' }))
@@ -482,7 +482,7 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).queryByRole('status')).toBeNull()
-		expect(getTextOutsideContextHeader(dialog).includes('Security pool address')).toBe(false)
+		expect(getTextOutsideContextHeader(dialog).includes('Question ledger address')).toBe(false)
 		expect(getTextOutsideContextHeader(dialog).includes('Outcome')).toBe(false)
 		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
 		await act(() => {
@@ -604,7 +604,7 @@ describe('OperationModal', () => {
 				<OperationModal
 					context={[
 						{ label: 'Question', value: 'Will this resolve?' },
-						{ label: 'Security pool', value: <AddressValue address={poolAddress} /> },
+						{ label: 'Question ledger', value: <AddressValue address={poolAddress} /> },
 						{ label: 'Universe', value: 'Genesis (0)' },
 						{ label: 'Vault', value: <AddressValue address={vaultAddress} /> },
 					]}
@@ -627,7 +627,7 @@ describe('OperationModal', () => {
 		expect(contextHeader.compareDocumentPosition(within(dialog).getByRole('button', { name: 'Confirm' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 		expect(within(contextHeader).getByText('Will this resolve?')).not.toBeNull()
 		expect(within(contextHeader).getByText('Genesis (0)')).not.toBeNull()
-		expect(contextHeader.textContent).toContain('Security pool')
+		expect(contextHeader.textContent).toContain('Question ledger')
 		expect(contextHeader.textContent).toContain('Vault')
 
 		render(null, container)

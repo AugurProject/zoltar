@@ -11,7 +11,7 @@ describe('shared transaction presentation helpers', () => {
 	})
 
 	test('builds the common security-pool identity row', () => {
-		const rows = getPoolUniverseTransactionRows({ securityPoolAddress: `0x${'12'.repeat(20)}`, universeId: 7n })
+		const rows = getPoolUniverseTransactionRows({ questionLedgerAddress: `0x${'12'.repeat(20)}`, universeId: 7n })
 		expect(rows).toHaveLength(1)
 		expect(rows?.[0]?.identityKey).toBe('security-pool')
 		expect(rows?.[0]?.value).toBeDefined()

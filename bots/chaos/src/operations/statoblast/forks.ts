@@ -1,7 +1,7 @@
 import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions, PoolSnapshot } from '../types.ts'
 import { choose, eligible, encodeStep, eventEvidence, mixSeed, planBase } from '../planning.ts'
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { securityPoolAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionLedgerAbi, questionForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { BINARY_OUTCOME_NONE, childRouteTopologyCapacityBlocker } from './planning.ts'
 
 /** A forked pool whose child escalation game is initialized but not yet resumed, funded or not. */
@@ -23,7 +23,7 @@ function resumeEscalationPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
 		priority: 'urgent',
 		risk: 'low',
 		snapshot,
-		steps: [encodeStep({ abi: securityPoolAbi, evidence: [eventEvidence(pool.escalationGame, 'ForkContinuationResumed(uint256)')], functionName: 'resumeForkedEscalationGame', id: 'resume-escalation', label: 'Resume forked escalation game', to: pool.address })],
+		steps: [encodeStep({ abi: questionLedgerAbi, evidence: [eventEvidence(pool.escalationGame, 'ForkContinuationResumed(uint256)')], functionName: 'resumeForkedEscalationGame', id: 'resume-escalation', label: 'Resume forked escalation game', to: pool.address })],
 	})
 }
 
@@ -43,7 +43,7 @@ export const resumeEscalation: OperationDefinition = {
 		return snapshot.pools.filter(isAwaitingEscalationResume).map(pool => ({ pool: pool.address }))
 	},
 	classification: 'lifecycle-obligation',
-	contract: 'SecurityPool',
+	contract: 'QuestionLedger',
 	description: 'Permissionlessly resumes a child escalation game after its fork continuation is initialized.',
 	discoveryInputs: ['pool fork continuation flag/state', 'child escalation game'],
 	ecosystem: 'statoblast',
@@ -56,7 +56,7 @@ export const resumeEscalation: OperationDefinition = {
 
 export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question'): OperationDefinition {
 	const id = `statoblast.fork.${kind}`
-	const method = { initiate: 'initiateSecurityPoolFork', 'own-question': 'forkZoltarWithOwnEscalationGame', 'create-child': 'preparePortfolioQuestion' }[kind]
+	const method = { initiate: 'initiateQuestionLedgerFork', 'own-question': 'forkZoltarWithOwnEscalationGame', 'create-child': 'preparePortfolioQuestion' }[kind]
 	const label = `Portfolio question fork: ${kind}`
 	function candidates(snapshot: EcosystemSnapshot, options?: PlanningOptions) {
 		return snapshot.pools.flatMap(pool => {
@@ -88,14 +88,14 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 			priority: kind === 'create-child' ? 'urgent' : 'random',
 			risk: 'irreversible',
 			snapshot,
-			steps: [encodeStep({ abi: securityPoolForkerAbi, evidence, args: kind === 'create-child' ? [candidate.pool.address, BigInt(candidate.targetUniverse)] : [candidate.pool.address], functionName: method, id: method, label, to: snapshot.deployments.securityPoolForker, gasLimit: 16_777_216n })],
+			steps: [encodeStep({ abi: questionForkerAbi, evidence, args: kind === 'create-child' ? [candidate.pool.address, BigInt(candidate.targetUniverse)] : [candidate.pool.address], functionName: method, id: method, label, to: snapshot.deployments.questionForker, gasLimit: 16_777_216n })],
 		})
 	}
 	return {
 		id,
 		label,
 		method,
-		contract: 'SecurityPoolForker',
+		contract: 'QuestionForker',
 		classification: kind === 'create-child' ? 'lifecycle-obligation' : 'selectable',
 		ecosystem: 'statoblast',
 		risk: 'irreversible',

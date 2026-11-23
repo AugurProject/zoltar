@@ -14,7 +14,7 @@ describe('protocol boundary hardening', () => {
 		await fixture.register(fixture.base.questionId)
 		const owner = fixture.owner()
 		const target = { abi: portfolioArtifact.abi, address: fixture.portfolio }
-		const addresses = [fixture.portfolio, fixture.poolFor(fixture.base.questionId).securityPool, await owner.readContract({ ...target, functionName: 'forkController' }), await owner.readContract({ ...target, functionName: 'services' })]
+		const addresses = [fixture.portfolio, fixture.poolFor(fixture.base.questionId).questionLedger, await owner.readContract({ ...target, functionName: 'forkController' }), await owner.readContract({ ...target, functionName: 'services' })]
 		for (const to of addresses) {
 			const before = await owner.getBalance({ address: to })
 			await expect(writeContractAndWait(owner, () => owner.sendTransaction({ to, value: 1n }))).rejects.toThrow()
@@ -40,7 +40,7 @@ describe('protocol boundary hardening', () => {
 		expect(result).toBeLessThan(178_000_000n)
 	})
 	test('#1356 excludes the unused per-pool migration proxy from production sources', () => {
-		expect(existsSync(new URL('../../../contracts/statoblast/SecurityPoolMigrationProxy.sol', import.meta.url))).toBe(false)
-		expect(Object.keys(artifacts).some(name => name.includes('SecurityPoolMigrationProxy'))).toBe(false)
+		expect(existsSync(new URL('../../../contracts/statoblast/QuestionLedgerMigrationProxy.sol', import.meta.url))).toBe(false)
+		expect(Object.keys(artifacts).some(name => name.includes('QuestionLedgerMigrationProxy'))).toBe(false)
 	})
 })

@@ -189,9 +189,9 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 			deploymentSteps: readDeploymentSteps(getDeploymentSteps(profile), readConstructorArgumentsById(getDeploymentStepConstructorArguments(profile))),
 			derivedContracts: [
 				{
-					id: 'securityPoolForker',
-					label: 'Security Pool Forker',
-					address: readStringField(infraContractAddresses, 'securityPoolForker', 'infraContractAddresses.securityPoolForker'),
+					id: 'questionForker',
+					label: 'Question Forker',
+					address: readStringField(infraContractAddresses, 'questionForker', 'infraContractAddresses.questionForker'),
 				},
 				{
 					id: 'escalationGameFactory',
@@ -204,9 +204,9 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 					address: readStringField(infraContractAddresses, 'securityPoolFactory', 'infraContractAddresses.securityPoolFactory'),
 				},
 				{
-					id: 'securityPoolOperationsDelegate',
-					label: 'Security Pool Operations Delegate',
-					address: readStringField(infraContractAddresses, 'securityPoolOperationsDelegate', 'infraContractAddresses.securityPoolOperationsDelegate'),
+					id: 'questionLedgerOperationsDelegate',
+					label: 'Question Ledger Operations Delegate',
+					address: readStringField(infraContractAddresses, 'questionLedgerOperationsDelegate', 'infraContractAddresses.questionLedgerOperationsDelegate'),
 				},
 				{
 					id: 'escalationGameProofVerifier',

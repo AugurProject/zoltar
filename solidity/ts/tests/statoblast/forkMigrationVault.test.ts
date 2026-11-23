@@ -3,8 +3,8 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	Zoltar_Zoltar as zoltarArtifact,
@@ -20,8 +20,8 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
-	const pool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
+	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const controller = async () => ({ abi: forkArtifact.abi, address: await fixture.owner().readContract({ ...portfolio(), functionName: 'forkController' }) })
 	const trigger = async (own: boolean) => {
 		const owner = fixture.owner()

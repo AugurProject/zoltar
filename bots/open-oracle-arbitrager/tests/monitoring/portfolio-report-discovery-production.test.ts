@@ -23,7 +23,7 @@ describe('native portfolio report discovery', () => {
 			const context = await (async () => {
 				if (branch === 'child') {
 					const child = await preparePortfolioCollateralRepairAuction(fixture)
-					expect(await child.owner.getCode({ address: fixture.poolFor(fixture.base.questionId, child.child, fixture.poolFor(fixture.base.questionId).securityPool).securityPool })).toBeUndefined()
+					expect(await child.owner.getCode({ address: fixture.poolFor(fixture.base.questionId, child.child, fixture.poolFor(fixture.base.questionId).questionLedger).questionLedger })).toBeUndefined()
 					return { owner: child.owner, mock: child.mock, feed: child.feed, universeId: child.child }
 				}
 				const portfolio = await fixture.deployPortfolio()

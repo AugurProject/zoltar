@@ -292,7 +292,7 @@ export interface EcosystemDeployments {
 	zoltar: Address
 	questionData: Address
 	securityPoolFactory: Address
-	securityPoolForker: Address
+	questionForker: Address
 	openOracle: Address
 	weth: Address
 	tradingFactory: Address

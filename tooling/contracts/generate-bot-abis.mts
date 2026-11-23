@@ -27,10 +27,10 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'zoltarAbi', sources: [root('Zoltar')] },
 	{ name: 'zoltarQuestionDataAbi', sources: [root('ZoltarQuestionData')] },
 	{ name: 'securityPoolFactoryAbi', sources: [statoblast('factories/SecurityPoolFactory')] },
-	{ name: 'securityPoolAbi', sources: [statoblast('SecurityPool')] },
+	{ name: 'questionLedgerAbi', sources: [statoblast('QuestionLedger')] },
 	{ name: 'openOraclePriceCoordinatorAbi', sources: [statoblast('OpenOraclePriceCoordinator')] },
 	{ name: 'sharedPoolPriceFeedAbi', sources: [statoblast('SharedPoolPriceFeed')] },
-	{ name: 'securityPoolForkerAbi', sources: [statoblast('SecurityPoolForker')] },
+	{ name: 'questionForkerAbi', sources: [statoblast('QuestionForker')] },
 	{ name: 'escalationGameAbi', sources: escalationGame },
 	{ name: 'multicall3Abi', sources: [statoblast('Multicall3')] },
 	{ name: 'securityPoolPortfolioAuctionAbi', sources: [statoblast('SecurityPoolPortfolioAuction')] },
@@ -50,7 +50,7 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'genesisUniswapV3SeederAbi', sources: [uniswapSeeder('GenesisUniswapV3Seeder')] },
 	{ name: 'genesisUniswapV3FactoryAbi', sources: [uniswapSeeder('IGenesisUniswapV3Factory')] },
 	{ name: 'genesisUniswapV3PoolStateAbi', sources: [uniswapSeeder('IGenesisUniswapV3PoolState')] },
-	{ name: 'deploySecurityPoolEvent', source: statoblast('factories/SecurityPoolFactory'), event: 'DeploySecurityPool' },
+	{ name: 'deployQuestionLedgerEvent', source: statoblast('factories/SecurityPoolFactory'), event: 'DeployQuestionLedger' },
 ]
 const PORTFOLIO_RUNTIME_CONTRACTS = [
 	'SecurityPoolPortfolio',

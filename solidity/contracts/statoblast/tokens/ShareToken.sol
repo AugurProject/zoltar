@@ -6,8 +6,8 @@ import { UniverseIds } from '../../UniverseIds.sol';
 import '../../Constants.sol';
 import './TokenId.sol';
 import '../../Zoltar.sol';
-import '../interfaces/ISecurityPool.sol';
-import '../interfaces/ISecurityPoolForker.sol';
+import '../interfaces/IQuestionLedger.sol';
+import '../interfaces/IQuestionForker.sol';
 import '../interfaces/IShareToken.sol';
 import '../BinaryOutcomes.sol';
 import './ERC1155.sol';
@@ -28,7 +28,7 @@ contract ShareToken is ERC1155, IShareToken {
 	string public symbol;
 	Zoltar public immutable zoltar;
 	mapping(address => bool) private authorized;
-	mapping(uint248 => ISecurityPool) public canonicalPoolByUniverse;
+	mapping(uint248 => IQuestionLedger) public canonicalQuestionLedgerByUniverse;
 	// Forked source shares remain as branch-independent entitlements. Once an
 	// account materializes any branch, its source balance is locked so a transfer
 	// cannot let both sender and receiver reproduce the same claim.
@@ -76,16 +76,16 @@ contract ShareToken is ERC1155, IShareToken {
 		return string(buffer);
 	}
 
-	function authorize(ISecurityPool _securityPoolCandidate) external {
+	function authorize(IQuestionLedger _questionLedgerCandidate) external {
 		require(authorized[msg.sender], 'ShareToken caller is not authorized to add another authorized pool');
-		require(address(_securityPoolCandidate.shareToken()) == address(this), 'ShareToken candidate must use this share token');
-		uint248 candidateUniverseId = _securityPoolCandidate.universeId();
-		ISecurityPool currentCanonicalPool = canonicalPoolByUniverse[candidateUniverseId];
-		require(address(currentCanonicalPool) == address(0x0) || address(currentCanonicalPool) == address(_securityPoolCandidate), 'ShareToken universe already has a canonical pool');
-		if (authorized[address(_securityPoolCandidate)]) return;
-		canonicalPoolByUniverse[candidateUniverseId] = _securityPoolCandidate;
-		authorized[address(_securityPoolCandidate)] = true;
-		emit AuthorizationUpdated(address(_securityPoolCandidate), msg.sender, true);
+		require(address(_questionLedgerCandidate.shareToken()) == address(this), 'ShareToken candidate must use this share token');
+		uint248 candidateUniverseId = _questionLedgerCandidate.universeId();
+		IQuestionLedger currentCanonicalPool = canonicalQuestionLedgerByUniverse[candidateUniverseId];
+		require(address(currentCanonicalPool) == address(0x0) || address(currentCanonicalPool) == address(_questionLedgerCandidate), 'ShareToken universe already has a canonical pool');
+		if (authorized[address(_questionLedgerCandidate)]) return;
+		canonicalQuestionLedgerByUniverse[candidateUniverseId] = _questionLedgerCandidate;
+		authorized[address(_questionLedgerCandidate)] = true;
+		emit AuthorizationUpdated(address(_questionLedgerCandidate), msg.sender, true);
 	}
 
 	function isAuthorized(address account) external view returns (bool) {
@@ -197,17 +197,17 @@ contract ShareToken is ERC1155, IShareToken {
 			previousOutcomeIndex = outcomeIndex;
 		}
 
-		ISecurityPool sourcePool = canonicalPoolByUniverse[universeId];
+		IQuestionLedger sourcePool = canonicalQuestionLedgerByUniverse[universeId];
 		require(address(sourcePool) != address(0x0), 'ShareToken source universe is missing a canonical pool');
 		// A question whose claims became final before the fork settles in this
 		// universe. A ledger that was never activated there reports no outcome, so
 		// finality is read from the settlement schedule, as for recovery rights.
 		require(sourcePool.portfolioCustody() == address(0) || isPortfolioRecoveryEligible(universeId), 'ShareToken question finalized before fork');
-		ISecurityPoolForker forker = ISecurityPoolForker(sourcePool.securityPoolForker());
+		IQuestionForker forker = IQuestionForker(sourcePool.questionForker());
 		// A source ledger that was prepared but never activated before its universe
 		// forked enters fork mode the same way an operational one does.
 		if (sourcePool.systemState() != SystemState.PoolForked) {
-			forker.initiateSecurityPoolFork(sourcePool);
+			forker.initiateQuestionLedgerFork(sourcePool);
 		}
 		require(sourcePool.systemState() == SystemState.PoolForked, 'ShareToken source pool cannot migrate');
 
@@ -215,11 +215,11 @@ contract ShareToken is ERC1155, IShareToken {
 		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
 			uint256 outcomeIndex = targetOutcomeIndexes[i];
 			uint248 targetUniverseId = _getChildUniverseId(universeId, outcomeIndex);
-			ISecurityPool targetPool = canonicalPoolByUniverse[targetUniverseId];
+			IQuestionLedger targetPool = canonicalQuestionLedgerByUniverse[targetUniverseId];
 			if (address(targetPool) == address(0x0)) {
 				require(targetOutcomeIndexesLength == 1, 'ShareToken bulk migration requires canonical child pools');
 				forker.createChildUniverse(sourcePool, outcomeIndex);
-				targetPool = canonicalPoolByUniverse[targetUniverseId];
+				targetPool = canonicalQuestionLedgerByUniverse[targetUniverseId];
 			}
 			require(address(targetPool) != address(0x0) && (address(targetPool.parent()) == address(sourcePool) || sourcePool.portfolioCustody() != address(0)), 'ShareToken destination is missing a canonical child pool');
 			targetUniverseIds[i] = targetUniverseId;
@@ -256,7 +256,7 @@ contract ShareToken is ERC1155, IShareToken {
 
 	/// @notice Final claims keep ordinary redemption and cannot detach source recovery rights.
 	function isPortfolioRecoveryEligible(uint248 sourceUniverse) public view returns (bool) {
-		ISecurityPool source = canonicalPoolByUniverse[sourceUniverse];
+		IQuestionLedger source = canonicalQuestionLedgerByUniverse[sourceUniverse];
 		if (
 			address(source) == address(0) ||
 			source.portfolioCustody() == address(0) ||
@@ -285,8 +285,8 @@ contract ShareToken is ERC1155, IShareToken {
 		emit PortfolioRecoveryRightsTransferred(sourceUniverse, msg.sender, recipient, amountsAttoShares);
 	}
 
-	function _requirePortfolioRecoverySource(uint248 sourceUniverse) private view returns (ISecurityPool source) {
-		source = canonicalPoolByUniverse[sourceUniverse];
+	function _requirePortfolioRecoverySource(uint248 sourceUniverse) private view returns (IQuestionLedger source) {
+		source = canonicalQuestionLedgerByUniverse[sourceUniverse];
 		require(address(source) != address(0) && source.portfolioCustody() != address(0), 'Recovery source is not a portfolio question');
 		require(zoltar.getForkTime(sourceUniverse) != 0, 'Recovery source has not forked');
 		require(isPortfolioRecoveryEligible(sourceUniverse), 'No live source recovery right');
@@ -308,7 +308,7 @@ contract ShareToken is ERC1155, IShareToken {
 
 	/// @notice Consume one independent recovery right per outcome, preserving every branch entitlement.
 	function consumePortfolioRecoveryCompleteSets(uint248 sourceUniverse, address holder, uint256 amountAttoShares) external returns (uint256 cumulativeClaimedAttoShares) {
-		ISecurityPool source = _requirePortfolioRecoverySource(sourceUniverse);
+		IQuestionLedger source = _requirePortfolioRecoverySource(sourceUniverse);
 		address portfolio = source.securityPoolFactory().getSecurityPoolPortfolio(source);
 		require(msg.sender == portfolio || (portfolio.code.length != 0 && msg.sender == IShareTokenPortfolioForkAuthority(portfolio).forkController()), 'Only portfolio recovery authority');
 		require(amountAttoShares != 0, 'Recovery amount is zero');

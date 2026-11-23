@@ -8,7 +8,7 @@ export type StatoblastRoute = (typeof STATOBLAST_ROUTES)[number]
 export type TradingFormState = {
 	completeSetAmount: string
 	redeemAmount: string
-	securityPoolAddress: string
+	questionLedgerAddress: string
 	selectedShareOutcome: ReportingOutcomeKey
 	targetOutcomeIndexes: string
 }
@@ -45,16 +45,16 @@ export type ReportingWithdrawDepositIndexesByOutcome = {
 export type ReportingFormState = {
 	contributionFunding?: 'vault' | 'wallet' | undefined
 	reportAmount: string
-	securityPoolAddress: string
+	questionLedgerAddress: string
 	selectedOutcome: ReportingOutcomeKey | undefined
 	selectedWithdrawDepositIndexesByOutcome: ReportingWithdrawDepositIndexesByOutcome
 }
 
 export type SelectedVaultView = 'browse-vaults' | 'selected-vault' | 'vault-by-address'
-export type SecurityPoolLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration'
+export type QuestionLedgerLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration'
 export type PoolSortKey = 'recent' | 'remainingCapacity' | 'endTime' | 'state'
 /** Browse filters use the pool badge vocabulary: a forked pool's badge reads Fork migration, so it filters with fork migration instead of on its own. */
-export type PoolStateFilter = 'all' | Exclude<SecurityPoolLifecycleState, 'poolForked'>
+export type PoolStateFilter = 'all' | Exclude<QuestionLedgerLifecycleState, 'poolForked'>
 export type PoolBrowseState = {
 	searchText: string
 	sortKey: PoolSortKey

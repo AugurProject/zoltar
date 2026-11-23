@@ -82,7 +82,7 @@ export function validatePreviousProtocolIndex(context: UpdateProtocolIndexContex
 	if (previous.chainId !== context.chainId) throw new Error('Protocol index chain does not match discovery chain')
 	if (previous.openOracle.toLowerCase() !== context.openOracle.toLowerCase()) throw new Error('Protocol index OpenOracle deployment changed')
 	if (previous.zoltar.toLowerCase() !== context.zoltar.toLowerCase()) throw new Error('Protocol index Zoltar deployment changed')
-	if (previous.securityPoolForker.toLowerCase() !== context.securityPoolForker.toLowerCase()) throw new Error('Protocol index SecurityPoolForker deployment changed')
+	if (previous.questionForker.toLowerCase() !== context.questionForker.toLowerCase()) throw new Error('Protocol index QuestionForker deployment changed')
 	if (previous.wallet.toLowerCase() !== context.wallet.toLowerCase()) throw new Error('Protocol index wallet changed')
 	if (previous.startBlock !== context.startBlock.toString()) throw new Error('Protocol index start block changed')
 }

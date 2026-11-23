@@ -32,13 +32,13 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		deployPortfolio: ['external(bytes,bytes)'],
 		initializePortfolioPriceFeed: ['external(uint248,uint256)'],
 		initializePortfolioPriceFeedForUniverse: ['external(uint248)'],
-		preparePortfolioPriceFeed: ['external(ISecurityPool,uint248)'],
-		deployPortfolioSecurityPool: ['external(uint248,uint256,uint256,uint256)'],
-		preparePortfolioChildPriceFeed: ['external(ISecurityPool,uint256)'],
-		prepareChildPoolCoordinator: ['external(ISecurityPool,uint256)'],
-		deployChildSecurityPool: ['external(ISecurityPool,IShareToken,uint248,uint256,uint256)'],
+		preparePortfolioPriceFeed: ['external(IQuestionLedger,uint248)'],
+		deployPortfolioQuestionLedger: ['external(uint248,uint256,uint256,uint256)'],
+		preparePortfolioChildPriceFeed: ['external(IQuestionLedger,uint256)'],
+		prepareChildQuestionLedgerCoordinator: ['external(IQuestionLedger,uint256)'],
+		deployChildQuestionLedger: ['external(IQuestionLedger,IShareToken,uint248,uint256,uint256)'],
 	},
-	'solidity/contracts/statoblast/SecurityPool.sol': {
+	'solidity/contracts/statoblast/QuestionLedger.sol': {
 		setPortfolioCustody: ['external(address)'],
 		creditEscalationSurplus: ['external(uint256)'],
 		refreshPortfolioFees: ['public()'],
@@ -59,14 +59,14 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		setAwaitingForkContinuation: ['external(bool)'],
 		setSystemState: ['external(SystemState)'],
 		setShareTokenSupplyAttoShares: ['external(uint256)'],
-		authorizeChildPool: ['external(ISecurityPool)'],
+		authorizeChildQuestionLedger: ['external(IQuestionLedger)'],
 	},
-	'solidity/contracts/statoblast/SecurityPoolForker.sol': {
-		preparePortfolioQuestion: ['external(ISecurityPool,uint248)'],
-		materializePortfolioQuestion: ['external(ISecurityPool,uint248)'],
-		initiateSecurityPoolFork: ['external(ISecurityPool)'],
-		forkZoltarWithOwnEscalationGame: ['external(ISecurityPool)'],
-		createChildUniverse: ['external(ISecurityPool,uint256)'],
+	'solidity/contracts/statoblast/QuestionForker.sol': {
+		preparePortfolioQuestion: ['external(IQuestionLedger,uint248)'],
+		materializePortfolioQuestion: ['external(IQuestionLedger,uint248)'],
+		initiateQuestionLedgerFork: ['external(IQuestionLedger)'],
+		forkZoltarWithOwnEscalationGame: ['external(IQuestionLedger)'],
+		createChildUniverse: ['external(IQuestionLedger,uint256)'],
 	},
 	'solidity/contracts/statoblast/EscalationGame.sol': {
 		start: ['external(uint256,uint256)'],
@@ -75,13 +75,13 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		depositRepOnOutcome: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		depositRepOnOutcomeWithLead: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		depositRepOnOutcomeWithAuthorizationAndLead: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
-		recordDepositFromSecurityPool: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
+		recordDepositFromQuestionLedger: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
 	},
 	'solidity/contracts/statoblast/EscalationGameSettlement.sol': {
 		withdrawDeposit: ['public(CarriedDepositProof,BinaryOutcomes.BinaryOutcome)', 'public(uint256,BinaryOutcomes.BinaryOutcome)'],
 		claimDepositForWinning: ['public(uint256,BinaryOutcomes.BinaryOutcome)'],
 		settleOrdinaryGame: ['external()'],
-		sweepResidualRepToSecurityPool: ['external()'],
+		sweepResidualRepToQuestionLedger: ['external()'],
 	},
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': {
 		initializeForkCarryOutcome: ['external(address,bytes32,bytes32[64],uint256,uint256,uint256,bytes32)'],
@@ -91,7 +91,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		recoverSettledPendingReport: ['public()'],
 		setSharedPriceFeed: ['external(SharedPoolPriceFeed)'],
 		syncExposure: ['external()'],
-		setSecurityPool: ['public(ISecurityPool)'],
+		setQuestionLedger: ['public(IQuestionLedger)'],
 	},
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': {
 		setApprovalForAll: ['external(address,bool)'],
@@ -102,7 +102,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		transferPortfolioRecoveryRights: ['external(uint248,address,uint256[3])'],
 		consumePortfolioRecoveryCompleteSets: ['external(uint248,address,uint256)'],
 		migrate: ['external(uint256,uint256[])'],
-		authorize: ['external(ISecurityPool)'],
+		authorize: ['external(IQuestionLedger)'],
 		mintCompleteSets: ['external(uint248,address,uint256)'],
 		burnCompleteSets: ['external(uint248,address,uint256)'],
 		burnTokenIdAndGetRemainingSupply: ['external(uint256,address)'],
@@ -132,8 +132,8 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/SecurityPool.sol': 'd79b7b44239f794e160464e2910e7267f5f9a49bc4f5612db5d61fe67185285c',
-	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
+	'solidity/contracts/statoblast/QuestionLedger.sol': 'd79b7b44239f794e160464e2910e7267f5f9a49bc4f5612db5d61fe67185285c',
+	'solidity/contracts/statoblast/QuestionForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '132aa4383180f1ea2384614440c4247328f2256ee16d95ecb0fe0be02f3a05bf',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': '68c370c22a6da29cf139846ea2fdf86f9922027ee6d46e2618de0dcdb7bc5e5f',
@@ -142,7 +142,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkPortfolioTime', 'settlement'],
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
-	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'operationsDelegate'],
+	'solidity/contracts/statoblast/QuestionLedger.sol': ['eventEmitter', 'factory', 'operationsDelegate'],
 }
 export function assertCoordinatorDataFunctionInventory(coordinatorData: string, compiledContractArtifacts: unknown): void {
 	const coordinatorIndex: unknown = JSON.parse(coordinatorData)

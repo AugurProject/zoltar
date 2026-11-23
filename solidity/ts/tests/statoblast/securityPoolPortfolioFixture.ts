@@ -13,7 +13,7 @@ import {
 import { deployContract } from '../../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses, getQuestionLedgerAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -41,7 +41,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 	let secondEndTime: bigint
 	const owner = () => base.client
 	const other = () => createWriteClient(base.mockWindow, TEST_ADDRESSES[1])
-	const poolFor = (questionId: bigint, universeId = base.genesisUniverse, parent = zeroAddress, namespace = portfolio) => getSecurityPoolAddresses(parent, universeId, questionId, base.statoblastSecurityMultiplierBps, base.genesisUniverse, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, namespace)
+	const poolFor = (questionId: bigint, universeId = base.genesisUniverse, parent = zeroAddress, namespace = portfolio) => getQuestionLedgerAddresses(parent, universeId, questionId, base.statoblastSecurityMultiplierBps, base.genesisUniverse, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, namespace)
 	const deployPortfolio = async (policy = questionAdmissionPolicy, configuration = economics, originOverrides: Partial<{ collateralToken: Address; minimumReportCollateral: bigint; universeId: bigint; securityMultiplierBps: bigint; reportPriorityFeeAttoEthPerGas: bigint }> = {}) => {
 		const infrastructure = getInfraContractAddresses()
 		const origin = {

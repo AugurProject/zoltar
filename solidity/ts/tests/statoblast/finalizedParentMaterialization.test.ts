@@ -4,8 +4,8 @@ import {
 	Zoltar_Zoltar as zoltarArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 } from '../../types/contractArtifact'
@@ -20,8 +20,8 @@ import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFi
 describe('Statoblast: reject materializing a question that finalized before an unrelated fork', () => {
 	const fixture = useSecurityPoolPortfolioFixture({})
 	const p = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
-	const sourcePool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
+	const sourcePool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const shares = () => ({ abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken })
 	const coordinator = async () => ({ abi: coordinatorArtifact.abi, address: await fixture.owner().readContract({ ...p(), functionName: 'forkController' }) })
 

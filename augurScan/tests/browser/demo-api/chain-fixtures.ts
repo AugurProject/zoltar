@@ -12,11 +12,11 @@ const demoManifestDeployment = (networkId: string, index: number, deploymentBloc
 	return { deployment_block: null, deployment_timestamp: null }
 }
 
-const DEMO_LOG_CONTRACT_LABELS = ['Security Pool 0x8c2f', 'OpenOracle', 'Genesis REP', 'Security Pool Factory'] as const
+const DEMO_LOG_CONTRACT_LABELS = ['Question Ledger 0x8c2f', 'OpenOracle', 'Genesis REP', 'Security Pool Factory'] as const
 
 const demoPoolQuestionTitle = (networkId: string) => (networkId === 'sepolia' ? 'Which client ships the next protocol release first?' : 'Will the 2030 global mean temperature anomaly exceed 1.5°C?')
 
-const demoEvents = ['QuestionAccountingCheckpoint', 'Transfer', 'PriceReported', 'ClaimDeposit', 'DeploySecurityPool', 'ReportSubmitted', 'UniverseInitialized', 'BidSubmitted']
+const demoEvents = ['QuestionAccountingCheckpoint', 'Transfer', 'PriceReported', 'ClaimDeposit', 'DeployQuestionLedger', 'ReportSubmitted', 'UniverseInitialized', 'BidSubmitted']
 
 export const createDemoChainFixtures = () => {
 	const demoNetworks = [
@@ -86,9 +86,9 @@ export const createDemoChainFixtures = () => {
 			{
 				chain_id: network.chain_id,
 				address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
-				label: 'Security Pool 0',
-				kind: 'securityPool',
-				provenance: 'DeploySecurityPool',
+				label: 'Question Ledger 0',
+				kind: 'questionLedger',
+				provenance: 'DeployQuestionLedger',
 				discovery_block: network.indexed_block,
 				discovery_tx_hash: demoHash,
 				deployment_block: network.indexed_block,
@@ -113,7 +113,7 @@ export const createDemoChainFixtures = () => {
 			tx_hash: demoHash.slice(0, -2) + String(index).padStart(2, '0'),
 			emitter_address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
 			contract_label: DEMO_LOG_CONTRACT_LABELS[index % DEMO_LOG_CONTRACT_LABELS.length],
-			contract_kind: 'securityPool',
+			contract_kind: 'questionLedger',
 			event_name: demoEvents[index % demoEvents.length],
 			function_name: index % 2 === 0 ? 'report' : 'updateSettlementCollateral',
 			function_signature: index % 2 === 0 ? 'report(uint256)' : 'updateSettlementCollateral()',
@@ -135,7 +135,7 @@ export const createDemoChainFixtures = () => {
 				['amountAttoRep']: (4_250_750n * 10n ** 15n).toString(),
 				vault: 'Market maker (0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0)',
 				coordinator: 'OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)',
-				recipients: ['Security Pool (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
+				recipients: ['Question Ledger (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
 			},
 			argument_schema: [
 				{ index: 0, name: 'amountAttoRep', type: 'uint256' },
@@ -220,7 +220,7 @@ export const createDemoChainFixtures = () => {
 			},
 			pool_associations: Array.from({ length: poolCount }, (_, poolIndex) => ({
 				address: `0x${(BigInt(index + 1) * 100n + BigInt(poolIndex + 1)).toString(16).padStart(40, 'a')}`,
-				label: poolIndex === 0 ? 'Security Pool' : null,
+				label: poolIndex === 0 ? 'Question Ledger' : null,
 				questionTitle: poolIndex === 0 ? demoPoolQuestionTitle(network.id) : null,
 			})),
 			capital_positions: network.chain_id === '1' ? demoOwnedCapitalPositions(address, network.indexed_block) : [],

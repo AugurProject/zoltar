@@ -4,7 +4,7 @@ import {
 	test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 } from '../../types/contractArtifact'
@@ -78,7 +78,7 @@ describe('collateral-independent outcome disputes', () => {
 		})
 		const pool = {
 			abi: poolArtifact.abi,
-			address: fixture.poolFor(fixture.base.questionId, undefined, undefined, portfolio).securityPool,
+			address: fixture.poolFor(fixture.base.questionId, undefined, undefined, portfolio).questionLedger,
 		}
 		return { owner, other, token, portfolio, target, pool, feed }
 	}

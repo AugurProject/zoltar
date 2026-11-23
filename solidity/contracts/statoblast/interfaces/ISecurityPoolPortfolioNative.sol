@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPool } from './ISecurityPool.sol';
+import { IQuestionLedger } from './IQuestionLedger.sol';
 
 /// @dev Canonical portfolio callbacks used by native question materialization.
 interface ISecurityPoolPortfolioNative {
@@ -13,7 +13,7 @@ interface ISecurityPoolPortfolioNative {
 	function reporterLedger(uint248 universeId) external view returns (address);
 	function settlement() external view returns (address);
 	function prepareQuestionUniverse(uint248 universeId) external;
-	function registerChildPool(ISecurityPool pool) external;
+	function registerChildQuestionLedger(IQuestionLedger pool) external;
 	function registerReporterGame(address game) external;
-	function forkWithReporterQuestion(ISecurityPool pool) external;
+	function forkWithReporterQuestion(IQuestionLedger pool) external;
 }

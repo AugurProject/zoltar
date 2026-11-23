@@ -3,8 +3,8 @@ import type { SystemContractKind } from './system-interfaces.ts'
 type Discovery = { readonly argument: string; readonly kind: SystemContractKind; readonly label: string }
 export const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
 	PairCreated: [{ argument: 'pair', kind: 'ammPair', label: 'Augur AMM Pair' }],
-	DeploySecurityPool: [
-		{ argument: 'securityPool', kind: 'securityPool', label: 'Security Pool' },
+	DeployQuestionLedger: [
+		{ argument: 'questionLedger', kind: 'questionLedger', label: 'Question Ledger' },
 		{ argument: 'openOraclePriceCoordinator', kind: 'priceCoordinator', label: 'Price Coordinator' },
 		{ argument: 'shareToken', kind: 'shareToken', label: 'Share Token' },
 	],

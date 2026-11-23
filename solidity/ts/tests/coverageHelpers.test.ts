@@ -33,17 +33,17 @@ import {
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker,
-	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer,
-	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
+	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer,
+	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
-	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
-	statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
+	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
+	statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
 	test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness,
 	test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness,
-	test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool,
-	test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
+	test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger,
+	test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar,
 } from '../types/contractArtifact'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -108,15 +108,15 @@ test('coverage runtime matching preserves linked PCs and masks generated mutable
 	const artifactDocument: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 	if (!isObjectRecord(artifactDocument) || !isObjectRecord(artifactDocument['contracts'])) throw new Error('Contract artifact must contain contracts')
 	const sourceContracts = artifactDocument['contracts']['contracts/statoblast/factories/SecurityPoolFactory.sol']
-	if (!isObjectRecord(sourceContracts) || !isObjectRecord(sourceContracts['SecurityPoolFactory'])) throw new Error('Contract artifact must contain SecurityPool')
+	if (!isObjectRecord(sourceContracts) || !isObjectRecord(sourceContracts['SecurityPoolFactory'])) throw new Error('Contract artifact must contain QuestionLedger')
 	const evm = sourceContracts['SecurityPoolFactory']['evm']
-	if (!isObjectRecord(evm) || !isObjectRecord(evm['deployedBytecode'])) throw new Error('SecurityPool must contain deployed bytecode')
+	if (!isObjectRecord(evm) || !isObjectRecord(evm['deployedBytecode'])) throw new Error('QuestionLedger must contain deployed bytecode')
 	const bytecode = evm['deployedBytecode']['object']
 	const sourceMap = evm['deployedBytecode']['sourceMap']
 	const immutableRanges = parseBytecodeRanges(evm['deployedBytecode']['immutableReferences'])
 	const linkRanges = parseBytecodeRanges(evm['deployedBytecode']['linkReferences'])
-	if (typeof bytecode !== 'string' || typeof sourceMap !== 'string') throw new Error('SecurityPool coverage metadata must contain bytecode and a source map')
-	assert.ok(immutableRanges.length > 0, 'SecurityPool must expose immutable ranges')
+	if (typeof bytecode !== 'string' || typeof sourceMap !== 'string') throw new Error('QuestionLedger coverage metadata must contain bytecode and a source map')
+	assert.ok(immutableRanges.length > 0, 'QuestionLedger must expose immutable ranges')
 	assert.strictEqual(linkRanges.length, 0, 'The pool factory must not depend on deployed libraries')
 	const ranges = [...immutableRanges, ...linkRanges]
 	const runtimeCharacters = bytecode.split('')
@@ -176,7 +176,7 @@ test('coverage classifier keeps side-effect-only call statements coverable', () 
 		'        token.safeTransfer(receiver, amount);',
 		'        _registerVault(vault);',
 		'        burnRep(repToken, msg.sender, amount);',
-		'        securityPool.configureVault(',
+		'        questionLedger.configureVault(',
 		'            vault,',
 		'            amount',
 		'        );',
@@ -326,12 +326,12 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 		)
 
-	const deployEscalationGameFactorySecurityPool = async (reputationTokenAddress: Address) =>
+	const deployEscalationGameFactoryQuestionLedger = async (reputationTokenAddress: Address) =>
 		await deployContract(
 			client,
 			encodeDeployData({
-				abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
-				bytecode: `0x${test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.evm.bytecode.object}`,
+				abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger.abi,
+				bytecode: `0x${test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger.evm.bytecode.object}`,
 				args: [reputationTokenAddress],
 			}),
 		)
@@ -381,8 +381,8 @@ describe('Solidity bytecode coverage helpers', () => {
 		const operationsDelegate = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.abi,
-				bytecode: `0x${statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object}`,
+				abi: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.abi,
+				bytecode: `0x${statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.evm.bytecode.object}`,
 			}),
 		)
 
@@ -399,8 +399,8 @@ describe('Solidity bytecode coverage helpers', () => {
 		const eventEmitter = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.abi,
-				bytecode: `0x${statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.bytecode.object}`,
+				abi: statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter.abi,
+				bytecode: `0x${statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter.evm.bytecode.object}`,
 			}),
 		)
 
@@ -416,7 +416,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client.readContract({
 				abi: factoryArtifact.abi,
 				address: factoryAddress,
-				functionName: 'securityPoolDeploymentsRange',
+				functionName: 'questionLedgerDeploymentsRange',
 				args: [1n, 0n],
 			}),
 			/Pool range start out of bounds/,
@@ -425,7 +425,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client.readContract({
 				abi: factoryArtifact.abi,
 				address: factoryAddress,
-				functionName: 'securityPoolDeploymentsRange',
+				functionName: 'questionLedgerDeploymentsRange',
 				args: [0n, 1n],
 			}),
 			/Pool range count too large/,
@@ -437,7 +437,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			client.writeContract({
 				abi: factoryArtifact.abi,
 				address: factoryAddress,
-				functionName: 'deployChildSecurityPool',
+				functionName: 'deployChildQuestionLedger',
 				args: [zeroAddress, zeroAddress, 0n, 0n, 2n],
 			}),
 			/Only security pool forker/,
@@ -1641,12 +1641,12 @@ describe('Solidity bytecode coverage helpers', () => {
 			),
 			/execution reverted|reverted with reason|returned no data/i,
 		)
-		const unboundPool = await deployEscalationGameFactorySecurityPool(reputationTokenAddress)
+		const unboundPool = await deployEscalationGameFactoryQuestionLedger(reputationTokenAddress)
 		for (const method of ['deployStartedGame', 'deployForkedGame'] as const) {
 			const data =
 				method === 'deployStartedGame'
-					? encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP] })
-					: encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n] })
+					? encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP] })
+					: encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n] })
 			await assert.rejects(transact(unboundPool, data), /Reporter portfolio required/)
 		}
 
@@ -1672,33 +1672,33 @@ describe('Solidity bytecode coverage helpers', () => {
 		const fakeZoltar = await deployContract(
 			client,
 			encodeDeployData({
-				abi: test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
-				bytecode: `0x${test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
+				abi: test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar.abi,
+				bytecode: `0x${test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar.evm.bytecode.object}`,
 			}),
 		)
 		const deploymentWorkerAddress = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
-				bytecode: `0x${statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object}`,
+				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
+				bytecode: `0x${statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.evm.bytecode.object}`,
 				args: [zeroAddress, zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(
 			participantClient.writeContract({
-				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 				address: deploymentWorkerAddress,
 				functionName: 'deploy',
 				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
 			}),
-			/Only SecurityPoolDeployer can use the deployment worker/,
+			/Only QuestionLedgerDeployer can use the deployment worker/,
 		)
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.sendTransaction({
 					to: deploymentWorkerAddress,
 					data: encodeFunctionData({
-						abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 						functionName: 'deploy',
 						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, zeroAddress],
 					}),
@@ -1707,18 +1707,18 @@ describe('Solidity bytecode coverage helpers', () => {
 			),
 			/Security pool deployment failed/,
 		)
-		const securityPoolDeployerAddress = await deployContract(
+		const questionLedgerDeployerAddress = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
-				bytecode: `0x${statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object}`,
+				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
+				bytecode: `0x${statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.evm.bytecode.object}`,
 				args: [zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(
 			participantClient.writeContract({
-				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
-				address: securityPoolDeployerAddress,
+				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
+				address: questionLedgerDeployerAddress,
 				functionName: 'deploy',
 				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
 			}),
@@ -1727,9 +1727,9 @@ describe('Solidity bytecode coverage helpers', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.sendTransaction({
-					to: securityPoolDeployerAddress,
+					to: questionLedgerDeployerAddress,
 					data: encodeFunctionData({
-						abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
+						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
 						functionName: 'deploy',
 						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, zeroAddress],
 					}),

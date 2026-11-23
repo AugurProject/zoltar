@@ -77,9 +77,9 @@ describe('audit4: router keeps no wrapped collateral or services allowance', () 
 			await fixture.refreshPrice()
 		}
 
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, unit, 6_300n, maxUint256, maxUint256, 0n, 0n, 1n, account, deadline], value: 2n * unit }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.questionLedger, unit, 6_300n, maxUint256, maxUint256, 0n, 0n, 1n, account, deadline], value: 2n * unit }))
 		await expectEmptyRouter()
-		const pair = await owner.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native.securityPool] })
+		const pair = await owner.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native.questionLedger] })
 
 		for (const [elapsed, cash] of [
 			[17n, unit / 7n],
@@ -98,7 +98,7 @@ describe('audit4: router keeps no wrapped collateral or services allowance', () 
 			await expectEmptyRouter()
 
 			const exitAmount = quote.result.completeSetShares / 3n
-			const exitData = encodeReceiveRequest([2, 0, native.shareToken, native.securityPool, pair, universeId, fixture.base.questionId, ids[0], ids[1], ids[2], 1, exitAmount, quote.result.totalLongShares, 0n, account, account, deadline, 0n])
+			const exitData = encodeReceiveRequest([2, 0, native.shareToken, native.questionLedger, pair, universeId, fixture.base.questionId, ids[0], ids[1], ids[2], 1, exitAmount, quote.result.totalLongShares, 0n, account, account, deadline, 0n])
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'safeBatchTransferFrom', args: [account, router, [ids[0], ids[1]], [exitAmount, quote.result.totalLongShares], exitData] }))
 			await expectEmptyRouter()
 		}
@@ -120,8 +120,8 @@ describe('audit4: LP claims survive a universe fork', () => {
 		const router = await deployContract(client, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))
 		const deadline = fixture.questionData.endTime - 1n
 		const amount = 1_000_000n
-		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.securityPool, amount, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, account, deadline], value: amount }))
-		const pair = await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native.securityPool] })
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithEth', args: [native.questionLedger, amount, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, account, deadline], value: amount }))
+		const pair = await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native.questionLedger] })
 		const universeId = fixture.genesisUniverse
 		const yesId = (universeId << 8n) | 1n
 		const balance = async (owner: `0x${string}`, id: bigint) => await client.readContract({ abi: sharesArtifact.abi, address: native.shareToken, functionName: 'balanceOf', args: [owner, id] })

@@ -38,7 +38,7 @@ export async function discoverPools({
 	const { client, deployments, wallet } = context
 	const universeById = new Map(universes.map(universe => [universe.id, universe]))
 	const questionById = new Map(questions.map(question => [question.id, question]))
-	const count = await client.readContract({ abi: abis.securityPoolFactoryAbi, address: deployments.securityPoolFactory, blockNumber, functionName: 'securityPoolDeploymentCount' })
+	const count = await client.readContract({ abi: abis.securityPoolFactoryAbi, address: deployments.securityPoolFactory, blockNumber, functionName: 'questionLedgerDeploymentCount' })
 	const questionCursor = topology.discoveryCursors.questions
 	const dependenciesComplete = questionCursor.retentionMode === 'resident' && questionCursor.nextIndex === questionCursor.canonicalCount && !issues.some(issue => issue.kind === 'universe-limit')
 	let cursor = topology.discoveryCursors.poolDeployments
@@ -65,7 +65,7 @@ export async function discoverPools({
 		label: 'Pool discovery',
 		maximumItems: limits.maxPools,
 		pageSize: limits.maxPools,
-		readPage: async (start, pageCount) => await client.readContract({ abi: abis.securityPoolFactoryAbi, address: deployments.securityPoolFactory, args: [start, pageCount], blockNumber, functionName: 'securityPoolDeploymentsRange' }),
+		readPage: async (start, pageCount) => await client.readContract({ abi: abis.securityPoolFactoryAbi, address: deployments.securityPoolFactory, args: [start, pageCount], blockNumber, functionName: 'questionLedgerDeploymentsRange' }),
 		start: BigInt(cursor.nextIndex),
 	})
 	const newDeployments = collectedDeployments.values
@@ -90,11 +90,11 @@ export async function discoverPools({
 	if (newDeployments.length > 0) mutation.changed = true
 	const deploymentsPage = [...topology.poolDeployments.map(deployment => ({ ...deployment })), ...newDeployments.map(cachePoolDeployment)]
 	if (BigInt(deploymentsPage.length) !== count) throw new Error('Security-pool registry cache did not reach the canonical deployment count')
-	if (new Set(deploymentsPage.map(deployment => deployment.securityPool.toLowerCase())).size !== deploymentsPage.length) throw new Error('Security-pool registry contains duplicate immutable deployments')
+	if (new Set(deploymentsPage.map(deployment => deployment.questionLedger.toLowerCase())).size !== deploymentsPage.length) throw new Error('Security-pool registry contains duplicate immutable deployments')
 	topology.poolDeployments = deploymentsPage.map(deployment => ({ ...deployment }))
 	const pools: PoolSnapshot[] = []
 	for (const [deploymentIndex, deployment] of deploymentsPage.entries()) {
-		const address = deployment.securityPool
+		const address = deployment.questionLedger
 		const portfolio = getAddress(await client.readContract({ address: deployments.securityPoolFactory, abi: abis.securityPoolFactoryAbi, functionName: 'getSecurityPoolPortfolio', args: [address], blockNumber }))
 		const coordinator = deployment.coordinator
 		const cachedDeployment = deploymentIndex < cachedDeploymentCount
@@ -131,17 +131,17 @@ export async function discoverPools({
 			poolCoordinator,
 			coordinatorPool,
 		] = await drainConcurrent([
-			cachedDeployment ? Promise.resolve(authenticatedUniverse.repToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'repToken' }),
-			cachedDeployment ? Promise.resolve(deployment.shareToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'shareToken' }),
-			cachedDeployment ? Promise.resolve(BigInt(deployment.universeId)) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'universeId' }),
-			cachedDeployment ? Promise.resolve(BigInt(deployment.questionId)) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'questionId' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'escalationGame' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'systemState' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'awaitingForkContinuation' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'settlementCollateralAttoEth' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'lastSettlementPortfolioTime' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'shareTokenSupplyAttoShares' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'initialEscalationGameDepositAttoRep' }),
+			cachedDeployment ? Promise.resolve(authenticatedUniverse.repToken) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'repToken' }),
+			cachedDeployment ? Promise.resolve(deployment.shareToken) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'shareToken' }),
+			cachedDeployment ? Promise.resolve(BigInt(deployment.universeId)) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'universeId' }),
+			cachedDeployment ? Promise.resolve(BigInt(deployment.questionId)) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'questionId' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'escalationGame' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'systemState' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'awaitingForkContinuation' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'settlementCollateralAttoEth' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'lastSettlementPortfolioTime' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'shareTokenSupplyAttoShares' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'initialEscalationGameDepositAttoRep' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'isPriceValid' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'settlementTime' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastPrice' }),
@@ -151,15 +151,15 @@ export async function discoverPools({
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'initialReportPriorityFeeAttoEthPerGas' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'escalationHaltMultiplierBps' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'pendingReportId' }),
-			client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getQuestionOutcome' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'statoblastSecurityMultiplierBps' }),
-			cachedDeployment ? Promise.resolve(deployments.securityPoolFactory) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'securityPoolFactory' }),
-			cachedDeployment ? Promise.resolve(deployments.securityPoolForker) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'securityPoolForker' }),
-			cachedDeployment ? Promise.resolve(deployments.zoltar) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'zoltar' }),
-			cachedDeployment ? Promise.resolve(deployments.questionData) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'questionData' }),
-			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'openOraclePriceCoordinator' }),
-			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
+			client.readContract({ abi: abis.questionForkerAbi, address: deployments.questionForker, args: [address], blockNumber, functionName: 'getQuestionOutcome' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'statoblastSecurityMultiplierBps' }),
+			cachedDeployment ? Promise.resolve(deployments.securityPoolFactory) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'securityPoolFactory' }),
+			cachedDeployment ? Promise.resolve(deployments.questionForker) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'questionForker' }),
+			cachedDeployment ? Promise.resolve(deployments.zoltar) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'zoltar' }),
+			cachedDeployment ? Promise.resolve(deployments.questionData) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'questionData' }),
+			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'openOraclePriceCoordinator' }),
+			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'questionLedger' }),
 			authenticatePoolProtocolBindings({
 				blockNumber,
 				canonicalRepToken: authenticatedUniverse.repToken,
@@ -180,7 +180,7 @@ export async function discoverPools({
 		const universe = authenticatedUniverse
 		assertCanonicalPoolGraph({
 			configuredFactory: deployments.securityPoolFactory,
-			configuredForker: deployments.securityPoolForker,
+			configuredForker: deployments.questionForker,
 			configuredQuestionData: deployments.questionData,
 			configuredZoltar: deployments.zoltar,
 			coordinatorPool: getAddress(coordinatorPool),
@@ -229,7 +229,7 @@ export async function discoverPools({
 						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'startBondAttoRep' }),
 						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
 						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getOutcomeBalancesAttoRep' }),
-						client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'isEscalationResolved' }),
+						client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'isEscalationResolved' }),
 						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkCarrySnapshotInitialized' }),
 						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getFinalQuestionResolution' }),
 					])
@@ -240,7 +240,7 @@ export async function discoverPools({
 		let escalationResidualSweepExpectedSuccess = false
 		if (wallet !== undefined && escalationAddress !== zeroAddress) {
 			try {
-				await client.simulateContract({ abi: abis.escalationGameAbi, account: wallet, address: escalationAddress, blockNumber, functionName: 'sweepResidualRepToSecurityPool' })
+				await client.simulateContract({ abi: abis.escalationGameAbi, account: wallet, address: escalationAddress, blockNumber, functionName: 'sweepResidualRepToQuestionLedger' })
 				escalationResidualSweepExpectedSuccess = true
 			} catch (error) {
 				if (!contractSimulationReverted(error)) throw error
@@ -253,7 +253,7 @@ export async function discoverPools({
 			await drainConcurrent(
 				[0, 1, 2].map(async outcome => {
 					try {
-						await client.simulateContract({ abi: abis.securityPoolAbi, account: wallet, address, args: [outcome, escalationMaximum], blockNumber, functionName: 'depositWalletRepToEscalationGame' })
+						await client.simulateContract({ abi: abis.questionLedgerAbi, account: wallet, address, args: [outcome, escalationMaximum], blockNumber, functionName: 'depositWalletRepToEscalationGame' })
 						safeEscalationDepositMaximumsAttoRep[outcome] = escalationMaximum.toString()
 					} catch (error) {
 						if (!contractSimulationReverted(error)) throw error
@@ -269,13 +269,13 @@ export async function discoverPools({
 		const pendingReportSettled = pendingReportId === 0n ? false : (await client.readContract({ abi: abis.openOracleAbi, address: deployments.openOracle, args: [pendingReportId], blockNumber, functionName: 'storedGame' })).settlementTimestamp !== 0n
 		const forkQuestion = questionById.get(universe.forkQuestionId)
 		const [projectedSettlementCollateral, projectedSettlementRecovery] = await Promise.all([
-			client.readContract({ abi: abis.securityPoolAbi, address, args: [shareTokenSupply], blockNumber, functionName: 'attoSharesToAttoEth' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, args: [shareTokenSupply], blockNumber, functionName: 'attoSharesToAttoRep' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, args: [shareTokenSupply], blockNumber, functionName: 'attoSharesToAttoEth' }),
+			client.readContract({ abi: abis.questionLedgerAbi, address, args: [shareTokenSupply], blockNumber, functionName: 'attoSharesToAttoRep' }),
 		])
 		let ownQuestionForkReady = false
 		if (wallet !== undefined && universe.forkTime === '0' && escalationCanTriggerOwnFork) {
 			try {
-				await client.simulateContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, account: wallet, functionName: 'forkZoltarWithOwnEscalationGame', args: [address], blockNumber })
+				await client.simulateContract({ abi: abis.questionForkerAbi, address: deployments.questionForker, account: wallet, functionName: 'forkZoltarWithOwnEscalationGame', args: [address], blockNumber })
 				ownQuestionForkReady = true
 			} catch (error) {
 				if (!contractSimulationReverted(error)) throw error

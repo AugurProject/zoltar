@@ -623,9 +623,9 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		const { securityPoolFactory } = getInfraContractAddresses(profile)
 		const abi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 		const readFixtureContract = (data: Hex) => readBrowserContract(driver, securityPoolFactory, data)
-		const count = decodeFunctionResult({ abi, functionName: 'securityPoolDeploymentCount', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'securityPoolDeploymentCount' })) })
+		const count = decodeFunctionResult({ abi, functionName: 'questionLedgerDeploymentCount', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'questionLedgerDeploymentCount' })) })
 		expect(count > 0n && count <= 10n).toBe(true)
-		const pools = decodeFunctionResult({ abi, functionName: 'securityPoolDeploymentsRange', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'securityPoolDeploymentsRange', args: [0n, count] })) })
+		const pools = decodeFunctionResult({ abi, functionName: 'questionLedgerDeploymentsRange', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'questionLedgerDeploymentsRange', args: [0n, count] })) })
 		return pools
 	}
 	return { completeTransactionReview, loadSeededPools }

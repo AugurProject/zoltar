@@ -4,12 +4,12 @@ import { DAY } from '../../testSupport/simulator/utils/constants'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact } from '../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact } from '../../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: ordinary settlement with portfolio reporter custody', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 	const token = () => getRepTokenAddress(fixture.base.genesisUniverse)
 	const report = (outcome: QuestionOutcome, amount: bigint) => writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 	const withdraw = (outcome: QuestionOutcome, index: bigint) => writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...pool(), functionName: 'withdrawFromEscalationGame', args: [outcome, [index]] }))

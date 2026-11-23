@@ -4,14 +4,14 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { redeemShares } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../../types/contractArtifact'
+import { redeemShares } from '../../testSupport/simulator/utils/contracts/questionLedger'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../../types/contractArtifact'
 import { statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact } from '../../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: question end and portfolio principal redemption', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 	const capital = () => ({ abi: capitalArtifact.abi, address: fixture.capitalLedger })
 	const supply = () => fixture.owner().readContract({ ...pool(), functionName: 'shareTokenSupplyAttoShares' })
 	const demand = () => fixture.owner().readContract({ ...capital(), functionName: 'demandAttoEth' })

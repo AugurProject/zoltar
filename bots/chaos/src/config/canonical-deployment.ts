@@ -14,7 +14,7 @@ export function canonicalDeployment(chainId: number): DeploymentSettings {
 		openOracle: core.openOracle,
 		questionData: core.questionData,
 		securityPoolFactory: core.securityPoolFactory,
-		securityPoolForker: core.securityPoolForker,
+		questionForker: core.questionForker,
 		tradingFactory: trading.factoryAddress,
 		tradingRouter: trading.routerAddress,
 		uniswapV3Factory: canonicalUniswapDeployment(chainId).factory,

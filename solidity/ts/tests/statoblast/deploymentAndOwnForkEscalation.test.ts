@@ -4,8 +4,8 @@ import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
@@ -25,9 +25,9 @@ import { portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './sec
 
 describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
-	const pool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const portfolio = (address = fixture.portfolio) => ({ abi: portfolioArtifact.abi, address })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const factory = () => ({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory })
 	const activate = async (outcome: number) => {
 		const owner = fixture.owner()
@@ -110,21 +110,21 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 			[fixture.portfolio, pool(), 3n * unit],
 			[second, secondPool, 7n * unit],
 		] as const) {
-			const origin = await owner.readContract({ ...factory(), functionName: 'getSecurityPoolOriginId', args: [native] })
+			const origin = await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [native] })
 			const token = await owner.readContract({ abi: poolArtifact.abi, address: native, functionName: 'shareToken' })
 			origins.push(origin)
 			tokens.push(token)
-			expect(await owner.readContract({ ...factory(), functionName: 'getSecurityPool', args: [origin, fixture.base.genesisUniverse] })).toBe(native)
+			expect(await owner.readContract({ ...factory(), functionName: 'getQuestionLedger', args: [origin, fixture.base.genesisUniverse] })).toBe(native)
 			expect(await owner.readContract({ ...factory(), functionName: 'getSecurityPoolPortfolio', args: [native] })).toBe(namespace)
 			expect(await owner.readContract({ abi: poolArtifact.abi, address: native, functionName: 'settlementCollateralAttoEth' })).toBe(cash)
-			expect(await owner.readContract({ abi: shareArtifact.abi, address: token, functionName: 'canonicalPoolByUniverse', args: [fixture.base.genesisUniverse] })).toBe(native)
+			expect(await owner.readContract({ abi: shareArtifact.abi, address: token, functionName: 'canonicalQuestionLedgerByUniverse', args: [fixture.base.genesisUniverse] })).toBe(native)
 			await expect(owner.writeContract({ abi: shareArtifact.abi, address: token, functionName: 'authorize', args: [native === pool() ? secondPool : pool()] })).rejects.toThrow('ShareToken caller is not authorized')
 		}
 		expect(origins[0]).not.toBe(origins[1])
 		expect(tokens[0]).not.toBe(tokens[1])
-		const count = await owner.readContract({ ...factory(), functionName: 'securityPoolDeploymentCount' })
+		const count = await owner.readContract({ ...factory(), functionName: 'questionLedgerDeploymentCount' })
 		await fixture.register(fixture.base.questionId, second)
-		expect(await owner.readContract({ ...factory(), functionName: 'securityPoolDeploymentCount' })).toBe(count)
+		expect(await owner.readContract({ ...factory(), functionName: 'questionLedgerDeploymentCount' })).toBe(count)
 	})
 
 	test('sibling branches and a new descendant portfolio retain separate canonical ledgers', async () => {
@@ -140,18 +140,18 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 		const independent = await fixture.deployPortfolio(undefined, portfolioEconomics, { universeId: yes.child })
 		await fixture.register(fixture.base.questionId, independent)
 		const independentPool = await owner.readContract({ ...portfolio(independent), functionName: 'getPool', args: [fixture.base.questionId, yes.child] })
-		const inheritedOrigin = await owner.readContract({ ...factory(), functionName: 'getSecurityPoolOriginId', args: [pool()] })
+		const inheritedOrigin = await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [pool()] })
 		const inheritedToken = fixture.poolFor(fixture.base.questionId).shareToken
 		for (const { child, childPool } of [yes, no]) {
-			expect(await owner.readContract({ ...factory(), functionName: 'getSecurityPool', args: [inheritedOrigin, child] })).toBe(childPool)
+			expect(await owner.readContract({ ...factory(), functionName: 'getQuestionLedger', args: [inheritedOrigin, child] })).toBe(childPool)
 			expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareToken' })).toBe(inheritedToken)
-			expect(await owner.readContract({ abi: shareArtifact.abi, address: inheritedToken, functionName: 'canonicalPoolByUniverse', args: [child] })).toBe(childPool)
+			expect(await owner.readContract({ abi: shareArtifact.abi, address: inheritedToken, functionName: 'canonicalQuestionLedgerByUniverse', args: [child] })).toBe(childPool)
 		}
-		const independentOrigin = await owner.readContract({ ...factory(), functionName: 'getSecurityPoolOriginId', args: [independentPool] })
+		const independentOrigin = await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [independentPool] })
 		expect(independentOrigin).not.toBe(inheritedOrigin)
 		expect(independentPool).not.toBe(yes.childPool)
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: independentPool, functionName: 'shareToken' })).not.toBe(inheritedToken)
-		expect(await owner.readContract({ ...factory(), functionName: 'getSecurityPool', args: [independentOrigin, yes.child] })).toBe(independentPool)
+		expect(await owner.readContract({ ...factory(), functionName: 'getQuestionLedger', args: [independentOrigin, yes.child] })).toBe(independentPool)
 	})
 
 	test('a deep independent origin deploys without materializing its ancestor questions', async () => {
@@ -176,10 +176,10 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 		await fixture.register(fixture.base.questionId, independent)
 		const native = await owner.readContract({ ...portfolio(independent), functionName: 'getPool', args: [fixture.base.questionId, universe] })
 		const expectedOrigin = await owner.readContract({ ...factory(), functionName: 'getPortfolioOriginId', args: [independent, universe, fixture.base.questionId, fixture.base.statoblastSecurityMultiplierBps, priorityFee] })
-		expect(await owner.readContract({ ...factory(), functionName: 'getSecurityPoolOriginId', args: [native] })).toBe(expectedOrigin)
+		expect(await owner.readContract({ ...factory(), functionName: 'getQuestionLedgerOriginId', args: [native] })).toBe(expectedOrigin)
 		expect(await owner.readContract({ ...portfolio(independent), functionName: 'initialReportPriorityFeeAttoEthPerGas' })).toBe(priorityFee)
 		const token = await owner.readContract({ abi: poolArtifact.abi, address: native, functionName: 'shareToken' })
-		expect(await owner.readContract({ abi: shareArtifact.abi, address: token, functionName: 'canonicalPoolByUniverse', args: [universe] })).toBe(native)
+		expect(await owner.readContract({ abi: shareArtifact.abi, address: token, functionName: 'canonicalQuestionLedgerByUniverse', args: [universe] })).toBe(native)
 	})
 
 	const payoutCases = [false, true].flatMap(reverse => [

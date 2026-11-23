@@ -5,7 +5,7 @@ import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTa
 
 const deploymentTab = { hash: '#/deploy', label: 'Deploy', route: 'deploy' }
 const primaryTabs = [
-	{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
+	{ hash: '#/security-pools', label: 'Question ledgers', route: 'security-pools' },
 	{ hash: '#/open-oracle', label: 'OpenOracle', route: 'open-oracle' },
 ]
 
@@ -29,9 +29,9 @@ describe('app navigation', () => {
 	})
 
 	test('resolves secondary views only for the route that owns them', () => {
-		const securityPoolViews = createSecondaryNavigation({ ariaLabel: 'Security pools views', onChange: () => undefined, options: [{ label: 'Browse pools', value: 'browse' }], value: 'browse' })
-		const secondaryByRoute = { 'security-pools': securityPoolViews }
-		expect(resolveSecondaryNavigation({ route: 'security-pools', secondaryByRoute })).toBe(securityPoolViews)
+		const questionLedgerViews = createSecondaryNavigation({ ariaLabel: 'Question ledgers views', onChange: () => undefined, options: [{ label: 'Browse pools', value: 'browse' }], value: 'browse' })
+		const secondaryByRoute = { 'security-pools': questionLedgerViews }
+		expect(resolveSecondaryNavigation({ route: 'security-pools', secondaryByRoute })).toBe(questionLedgerViews)
 		expect(resolveSecondaryNavigation({ route: 'deploy', secondaryByRoute })).toBeUndefined()
 		expect(resolveSecondaryNavigation({ route: 'open-oracle', secondaryByRoute })).toBeUndefined()
 		expect(resolveSecondaryNavigation({ route: 'not-found', secondaryByRoute })).toBeUndefined()
@@ -40,7 +40,7 @@ describe('app navigation', () => {
 	test('forwards only known view values to the typed change handler', () => {
 		const changes: Array<'browse' | 'create'> = []
 		const navigation = createSecondaryNavigation<'browse' | 'create'>({
-			ariaLabel: 'Security pools views',
+			ariaLabel: 'Question ledgers views',
 			onChange: value => changes.push(value),
 			options: [
 				{ label: 'Browse pools', value: 'browse' },

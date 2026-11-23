@@ -9,7 +9,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
-import { discoverAddressedMarket, discoverSavedMarkets, discoverTradingMarketPage, discoverUniverses, isSecurityPoolNotFoundError, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
+import { discoverAddressedMarket, discoverSavedMarkets, discoverTradingMarketPage, discoverUniverses, isQuestionLedgerNotFoundError, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
 import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { latestBlockIdentity } from '../../protocol/tradeQuote.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
@@ -17,8 +17,8 @@ import { LiveTrading } from '../../features/LiveTrading.js'
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { createSecurityPoolDeploymentIndex, discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
-import { statoblast_SecurityPool_SecurityPool, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { createQuestionLedgerDeploymentIndex, discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
+import { statoblast_QuestionLedger_QuestionLedger, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { shareTokenAbi } from '../../protocol/authorization.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { simulationDeploymentConfiguration } from '../support/simulationDeploymentConfiguration.js'
@@ -56,19 +56,19 @@ test('universe and address lookup discovery reads only the selected universe', a
 	expect(calls).toEqual([123n, 123n, 999n])
 })
 
-test('only missing pool identity reads are classified as a missing security pool', async () => {
+test('only missing pool identity reads are classified as a missing question ledger', async () => {
 	const configuration = deploymentConfigurationFixture()
 	const pool = getAddress(`0x${'12'.repeat(20)}`)
 	const addresses: Readonly<Record<string, Address>> = {
 		securityPoolFactory: configuration.securityPoolFactory,
 		zoltar: configuration.zoltar,
 		shareToken: getAddress(`0x${'34'.repeat(20)}`),
-		getSecurityPool: pool,
-		canonicalPoolByUniverse: pool,
+		getQuestionLedger: pool,
+		canonicalQuestionLedgerByUniverse: pool,
 		openOraclePriceCoordinator: getAddress(`0x${'56'.repeat(20)}`),
 	}
-	const abi = [...statoblast_SecurityPool_SecurityPool.abi, ...statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, ...statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, ...shareTokenAbi]
-	for (const failedFunction of ['securityPoolFactory', 'getSecurityPoolOriginId', 'getSecurityPool', 'initialReportPriorityFeeAttoEthPerGas']) {
+	const abi = [...statoblast_QuestionLedger_QuestionLedger.abi, ...statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, ...statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, ...shareTokenAbi]
+	for (const failedFunction of ['securityPoolFactory', 'getQuestionLedgerOriginId', 'getQuestionLedger', 'initialReportPriorityFeeAttoEthPerGas']) {
 		const client = createPublicClient({
 			transport: custom({
 				request: async ({ method, params }) => {
@@ -79,7 +79,7 @@ test('only missing pool identity reads are classified as a missing security pool
 					if (functionName === failedFunction) return '0x'
 					const address = addresses[functionName]
 					if (address !== undefined) return encodeAbiParameters([{ type: 'address' }], [address])
-					if (['universeId', 'getSecurityPoolOriginId', 'questionId', 'statoblastSecurityMultiplierBps'].includes(functionName)) return encodeAbiParameters([{ type: 'uint256' }], [0n])
+					if (['universeId', 'getQuestionLedgerOriginId', 'questionId', 'statoblastSecurityMultiplierBps'].includes(functionName)) return encodeAbiParameters([{ type: 'uint256' }], [0n])
 					throw new Error(`Unexpected contract read: ${functionName}`)
 				},
 			}),
@@ -91,7 +91,7 @@ test('only missing pool identity reads are classified as a missing security pool
 			failure = error
 		}
 		expect(failure).toBeInstanceOf(Error)
-		expect(isSecurityPoolNotFoundError(failure)).toBe(failedFunction === 'securityPoolFactory')
+		expect(isQuestionLedgerNotFoundError(failure)).toBe(failedFunction === 'securityPoolFactory')
 	}
 })
 
@@ -169,7 +169,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 		test('shows a missing pool without retry and offers a way back on addressed routes', async () => {
 			const configuration = simulationDeploymentConfiguration(backend)
 			const missingPool = getAddress('0x1111111111111111111111111111111111111111')
-			await expect(discoverAddressedMarket(backend.createReadClient(), configuration, missingPool)).rejects.toMatchObject({ name: 'SecurityPoolNotFoundError' })
+			await expect(discoverAddressedMarket(backend.createReadClient(), configuration, missingPool)).rejects.toMatchObject({ name: 'QuestionLedgerNotFoundError' })
 			const dom = installDomEnvironment()
 			const restore = installActiveEnvironmentForTesting(backend, backend)
 			try {
@@ -183,7 +183,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				for (const [route, backLabel, backHref] of returns) {
 					const rendered = await renderIntoDocument(h(LiveTrading, { route, configuration, configurationError: undefined, selectedUniverseId: '0', controllerServices: liveTradingControllerServices, onWorkflowLockChange: () => undefined }))
 					try {
-						await waitFor(() => expect(rendered.container.textContent).toContain('Security pool does not exist'), simulationWaitOptions)
+						await waitFor(() => expect(rendered.container.textContent).toContain('Question ledger does not exist'), simulationWaitOptions)
 						expect(rendered.container.textContent).not.toContain('discovery failed')
 						expect(rendered.container.textContent).not.toContain('Retry')
 						expect(rendered.container.querySelector('.empty-state')?.textContent).toContain(missingPool)
@@ -233,8 +233,8 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				const savedClient: typeof client = {
 					...client,
 					readContract: async parameters => {
-						if (['securityPoolDeploymentCount', 'securityPoolDeploymentsRange', 'pairDeploymentCount', 'pairDeploymentsRange'].includes(parameters.functionName)) throw new Error('Portfolio must never scan a pool registry')
-						if (parameters.functionName === 'getSecurityPoolOriginId') checkedPools.push(getAddress(String(parameters.args?.[0])))
+						if (['questionLedgerDeploymentCount', 'questionLedgerDeploymentsRange', 'pairDeploymentCount', 'pairDeploymentsRange'].includes(parameters.functionName)) throw new Error('Portfolio must never scan a pool registry')
+						if (parameters.functionName === 'getQuestionLedgerOriginId') checkedPools.push(getAddress(String(parameters.args?.[0])))
 						return await client.readContract(parameters)
 					},
 				}
@@ -286,7 +286,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 							throw failure
 						},
 					}
-					await expect(discoverAddressedMarket(failingClient, configuration, addressedPool)).rejects.toThrow(errorName === 'ContractFunctionZeroDataError' ? 'Security pool does not exist at this address. Check the address and network.' : 'RPC unavailable')
+					await expect(discoverAddressedMarket(failingClient, configuration, addressedPool)).rejects.toThrow(errorName === 'ContractFunctionZeroDataError' ? 'Question ledger does not exist at this address. Check the address and network.' : 'RPC unavailable')
 				}
 				let rejectedDeployment: unknown
 				try {
@@ -294,7 +294,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				} catch (error) {
 					rejectedDeployment = error
 				}
-				expect(rejectedDeployment).toMatchObject({ name: 'SecurityPoolNotFoundError' })
+				expect(rejectedDeployment).toMatchObject({ name: 'QuestionLedgerNotFoundError' })
 				expect(String(rejectedDeployment)).toContain('configured deployment')
 				await expect(discoverAddressedMarket(directClient, configuration, '0x0000000000000000000000000000000000000000')).rejects.toThrow('nonzero')
 				for (const directRoute of [`security-pool/${addressedPool}`, `market/${addressedPool}`, `liquidity/${addressedPool}`] as const) {
@@ -323,10 +323,10 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						await addressed.cleanup()
 					}
 				}
-				const pairIndex: TradingPairIndex = createSecurityPoolDeploymentIndex()
+				const pairIndex: TradingPairIndex = createQuestionLedgerDeploymentIndex()
 				pairIndex.key = `${configuration.chainId}:${configuration.factory}:${configuration.rpcUrl}:0`
 				pairIndex.anchor = await latestBlockIdentity(client)
-				pairIndex.deployments = Array.from({ length: 1_001 }, (_value, i) => ({ securityPool: getAddress(`0x${(i + 100_000).toString(16).padStart(40, '0')}`), shareToken: addressedPool, universeId: 0n }))
+				pairIndex.deployments = Array.from({ length: 1_001 }, (_value, i) => ({ questionLedger: getAddress(`0x${(i + 100_000).toString(16).padStart(40, '0')}`), shareToken: addressedPool, universeId: 0n }))
 				const attemptedPools = new Set<Address>()
 				const boundedRead: typeof client.readContract = async parameters => {
 					if (parameters.functionName === 'getRepToken') return await client.readContract(parameters)
@@ -337,7 +337,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				expect(page.total).toBe(1_001n)
 				expect(page.markets).toHaveLength(25)
 				expect(attemptedPools.size).toBe(25)
-				expect([...attemptedPools]).toEqual(pairIndex.deployments.slice(25, 50).map(deployment => deployment.securityPool))
+				expect([...attemptedPools]).toEqual(pairIndex.deployments.slice(25, 50).map(deployment => deployment.questionLedger))
 				expect(page.previousStart).toBe(0n)
 				expect(page.nextStart).toBe(50n)
 				// Addressed views automatically save favorites; remove those visits before checking empty browse lists.

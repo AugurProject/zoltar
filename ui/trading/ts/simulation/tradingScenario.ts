@@ -21,7 +21,7 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 	if (!TRADING_SIMULATION_SCENARIOS.includes(parameters.scenario)) return false
 	const usdcFunded = parameters.scenario === USDC_TRADING_SIMULATION_SCENARIO
 	const seeded = await applyStatoblastScenario({ ...parameters, scenario: usdcFunded ? 'securitypoolx2' : 'security-pool' }, usdcFunded ? 'USDC' : 'WETH')
-	if (!seeded) throw new Error('Trading simulation could not seed its Statoblast security pool')
+	if (!seeded) throw new Error('Trading simulation could not seed its Statoblast question ledger')
 
 	const account = requireQaAccount(parameters.accounts[0], 'Expected a Trading simulation QA account')
 	const addresses = getInfraContractAddresses(parameters.profile)
@@ -49,7 +49,7 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 		const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
 		const { markets } = await discoverLiveUniverseMarketPage(readClient, configuration, 0n)
 		const market = markets[0]
-		if (market === undefined || market.loadError !== undefined) throw new Error('Trading simulation could not discover its seeded SecurityPool')
+		if (market === undefined || market.loadError !== undefined) throw new Error('Trading simulation could not discover its seeded QuestionLedger')
 		const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 		const block = await readClient.getBlock()
 		if (block.number === undefined) throw new Error('Trading seed requires a mined block')

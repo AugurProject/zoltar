@@ -4,8 +4,8 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
@@ -51,14 +51,14 @@ describe('audit: multi-question portfolio across two universe forks', () => {
 		const services = await owner.readContract({ ...p, functionName: 'services' })
 		const book = { abi: bookArtifact.abi, address: await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' }) }
 		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...p, functionName: 'forkController' }) }
-		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		const cash = (holder: Address) => getERC20Balance(owner, collateral, holder)
 		const bookId = (universe: bigint) => owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [universe] })
 		const totals = async (universe: bigint) => owner.readContract({ ...book, functionName: 'totals', args: [await bookId(universe)] })
 		const question = async (universe: bigint, id: bigint) => owner.readContract({ ...book, functionName: 'question', args: [await bookId(universe), id] })
 		const premiumBook = { abi: premiumArtifact.abi, address: await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'premiumLedger' }) }
-		const source1 = fixture.poolFor(q1).securityPool
-		const source2 = fixture.poolFor(q2).securityPool
+		const source1 = fixture.poolFor(q1).questionLedger
+		const source2 = fixture.poolFor(q2).questionLedger
 		const shares1 = { abi: shareArtifact.abi, address: fixture.poolFor(q1).shareToken }
 		const shares2 = { abi: shareArtifact.abi, address: fixture.poolFor(q2).shareToken }
 
@@ -164,8 +164,8 @@ describe('audit: multi-question portfolio across two universe forks', () => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit, q2)
 		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...p, functionName: 'forkController' }) }
-		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
-		const source2 = fixture.poolFor(q2).securityPool
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
+		const source2 = fixture.poolFor(q2).questionLedger
 		const shares2 = { abi: shareArtifact.abi, address: fixture.poolFor(q2).shareToken }
 		await approveToken(owner, getRepTokenAddress(U0), getZoltarAddress())
 		await forkUniverse(owner, U0, await unrelatedQuestion('Audit prepared-pool first fork'))

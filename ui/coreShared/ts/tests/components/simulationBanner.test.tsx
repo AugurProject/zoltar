@@ -21,16 +21,16 @@ import { installTestRouting } from '../testUtils/testRouting.js'
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 
 registerSimulationScenario('security-pool', {
-	description: 'One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.',
-	label: 'Security pool',
+	description: 'One seeded question, one question ledger, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.',
+	label: 'Question ledger',
 })
 registerSimulationScenario('securitypoolx2', {
-	description: 'Two security pools sharing a vault with underwriting commitments split between them. Use it to test cross-pool liquidation and settlement paths.',
-	label: 'Security Pool x2',
+	description: 'Two question ledgers sharing a vault with underwriting commitments split between them. Use it to test cross-pool liquidation and settlement paths.',
+	label: 'Question Ledger x2',
 })
 registerSimulationScenario('securitypoolx2-auction', {
-	description: 'Two security pools with an in-progress collateral repair auction. Use it to test auction bidding and finalization paths.',
-	label: 'Security Pool x2 Auction',
+	description: 'Two question ledgers with an in-progress collateral repair auction. Use it to test auction bidding and finalization paths.',
+	label: 'Question Ledger x2 Auction',
 })
 
 function createSimulationController(overrides: Partial<SimulationController> = {}): SimulationController {
@@ -151,7 +151,7 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			expect(documentQueries.getByRole('heading', { name: 'Browser simulation' })).not.toBeNull()
 			expect(documentQueries.queryByText('Simulation Mode')).toBeNull()
-			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one question ledger, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -170,7 +170,7 @@ describe('SimulationBanner', () => {
 			const summary = disclosure.querySelector('summary')
 			if (!(summary instanceof HTMLElement)) throw new Error('Expected simulation banner disclosure summary')
 			expect(summary.textContent).toContain('Ready')
-			expect(summary.textContent).toContain('Security pool')
+			expect(summary.textContent).toContain('Question ledger')
 			expect(summary.textContent).toContain('QA account 1')
 		} finally {
 			await renderedComponent.cleanup()
@@ -394,7 +394,7 @@ describe('SimulationBanner', () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
 		const controller = createSimulationController({
-			bootstrapLabel: 'Deploying seeded security pool',
+			bootstrapLabel: 'Deploying seeded question ledger',
 			currentScenario: 'security-pool',
 			isBootstrapped: false,
 			isBootstrapping: true,
@@ -403,8 +403,8 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.')).not.toBeNull()
-			expect(documentQueries.getByText('Deploying seeded security pool')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one question ledger, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('Deploying seeded question ledger')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()

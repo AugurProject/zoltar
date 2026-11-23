@@ -2,9 +2,9 @@ import assert from '../../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import {
 	statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
@@ -28,7 +28,7 @@ describe('Statoblast REP authorization entry points', () => {
 		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
 		await mock.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [fixture.poolFor(fixture.secondQuestionId).securityPool, child] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializePortfolioQuestion', args: [fixture.poolFor(fixture.secondQuestionId).questionLedger, child] }))
 		await addRepToMigrationBalance(client, fixture.base.genesisUniverse, 1_000n * unit)
 		await splitMigrationRep(client, fixture.base.genesisUniverse, 1_000n * unit, [1])
 		const pool = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getPool', args: [fixture.secondQuestionId, child] })
@@ -69,7 +69,7 @@ describe('Statoblast REP authorization entry points', () => {
 	})
 	const initializeEscalationGame = async () => {
 		const client = fixture.owner()
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		await approveToken(client, getRepTokenAddress(fixture.base.genesisUniverse), pool)
 		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [1, reportBond] }))

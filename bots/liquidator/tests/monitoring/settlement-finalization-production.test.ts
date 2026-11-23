@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { fileURLToPath } from 'node:url'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { escalationGameAbi, securityPoolAbi, securityPoolCapitalLedgerAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, questionLedgerAbi, securityPoolCapitalLedgerAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
 import { writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact } from '../../../../solidity/ts/types/contractArtifact'
@@ -70,7 +70,7 @@ describe('portfolio settlement finalizer', () => {
 		const owner = fixture.owner()
 		const finalizer = fixture.other()
 		const { genesisUniverse, mockWindow, questionData, questionId } = fixture.base
-		const pool = fixture.poolFor(questionId).securityPool
+		const pool = fixture.poolFor(questionId).questionLedger
 		const scan = async (minimum: bigint) => {
 			const matches = []
 			for await (const candidate of scanSettlementFinalizations(finalizer, fixture.portfolio, minimum)) matches.push(candidate)
@@ -82,8 +82,8 @@ describe('portfolio settlement finalizer', () => {
 		expect(await scan(1n)).toEqual([])
 		await approveToken(owner, getRepTokenAddress(genesisUniverse), pool)
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await writeContractAndWait(owner, () => owner.writeContract({ address: pool, abi: securityPoolAbi, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
-		const game = await owner.readContract({ address: pool, abi: securityPoolAbi, functionName: 'escalationGame' })
+		await writeContractAndWait(owner, () => owner.writeContract({ address: pool, abi: questionLedgerAbi, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
+		const game = await owner.readContract({ address: pool, abi: questionLedgerAbi, functionName: 'escalationGame' })
 		const deadline = await owner.readContract({ address: game, abi: escalationGameAbi, functionName: 'getEscalationGameEndDate' })
 		await mockWindow.setTime(deadline)
 		expect(await scan(1n)).toEqual([])

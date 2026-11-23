@@ -1,4 +1,4 @@
-import { securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { choose, eligible, encodeStep, mixSeed, planBase } from '../planning.ts'
 import type { EcosystemSnapshot, OperationDefinition, OperationEvidence } from '../types.ts'
@@ -32,10 +32,10 @@ function initializationPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<t
 		postconditions: ['The next bounded child-history outcome is initialized without extending any migration window'],
 		steps: [
 			encodeStep({
-				abi: securityPoolForkerAbi,
+				abi: questionForkerAbi,
 				functionName: 'materializePortfolioQuestion',
 				args: [candidate.preparation.sourcePool, BigInt(candidate.preparation.childUniverseId)],
-				to: snapshot.deployments.securityPoolForker,
+				to: snapshot.deployments.questionForker,
 				id: 'initialize-child-history',
 				label: 'Initialize one child history outcome',
 				gasLimit: 16_777_216n,
@@ -50,7 +50,7 @@ export const initializeChildHistory: OperationDefinition = {
 	method: 'materializePortfolioQuestion',
 	label: 'Initialize child dispute history',
 	classification: 'lifecycle-obligation',
-	contract: 'SecurityPoolForker',
+	contract: 'QuestionForker',
 	ecosystem: 'statoblast',
 	risk: 'low',
 	description: 'Permissionlessly initializes one inherited outcome for a registered child, including after the migration deadline.',

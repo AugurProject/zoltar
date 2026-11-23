@@ -3,7 +3,7 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 import * as appCopy from '../copy/app.js'
 
 type TradingNavigationState = {
-	/** The security pool the current route addresses; the market link keeps it. */
+	/** The question ledger the current route addresses; the market link keeps it. */
 	addressedPool: string | undefined
 	displayedRoute: string
 	liveDeploymentStatus: 'loading' | 'verified' | 'missing' | 'unreachable'

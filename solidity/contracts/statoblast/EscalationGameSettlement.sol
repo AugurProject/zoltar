@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameEscrow } from './EscalationGameEscrow.sol';
-import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
+import { IQuestionForker } from './interfaces/IQuestionForker.sol';
 import { CarriedDepositProof, Deposit, Node, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
@@ -11,7 +11,7 @@ import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.s
 abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
 		public
-		onlySecurityPoolOrForker
+		onlyQuestionLedgerOrForker
 		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
@@ -21,7 +21,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 
 	function withdrawDeposit(CarriedDepositProof calldata proof, BinaryOutcomes.BinaryOutcome outcome)
 		public
-		onlySecurityPoolOrForker
+		onlyQuestionLedgerOrForker
 		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
@@ -41,7 +41,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	}
 
 	function withdrawDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
-		require(msg.sender == address(securityPool), 'Only pool');
+		require(msg.sender == address(questionLedger), 'Only pool');
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		BinaryOutcomes.BinaryOutcome questionResolution = _getPayoutQuestionResolution();
@@ -65,7 +65,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		_consumeEscrowedRepForBundle(depositor, originalDepositAmountAttoRep);
 	}
 
-	function sweepResidualRepToSecurityPool() external {
+	function sweepResidualRepToQuestionLedger() external {
 		require(getFinalQuestionResolution() != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		if (!forkContinuation) {
 			require(_settleOrdinaryGame(true) > 0, 'No sweepable REP');
@@ -77,10 +77,10 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(totalDisputeStakedAttoRep == 0, 'Escrowed REP remains');
 		uint256 amountAttoRep = _reporterRepBalance();
 		require(amountAttoRep > 0, 'No sweepable REP');
-		_safeTransferRep(address(securityPool), amountAttoRep);
+		_safeTransferRep(address(questionLedger), amountAttoRep);
 		// Continuation backing predates every child-local owner class. Burning its
 		// terminal residual prevents both late capture and ownerless stranding.
-		securityPool.burnEscalationWinnerHaircut(amountAttoRep);
+		questionLedger.burnEscalationWinnerHaircut(amountAttoRep);
 		emit ForkContinuationResidualRepBurned(amountAttoRep);
 	}
 
@@ -117,7 +117,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 
 	function _getPayoutQuestionResolution() private view returns (BinaryOutcomes.BinaryOutcome questionResolution) {
 		questionResolution = getFinalQuestionResolution();
-		require(questionResolution == ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool), 'Pool/game outcome mismatch');
+		require(questionResolution == IQuestionForker(questionLedger.questionForker()).getQuestionOutcome(questionLedger), 'Pool/game outcome mismatch');
 	}
 
 	function _claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) private returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
@@ -139,7 +139,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	function _burnWinningHaircut(uint256 burnAmountAttoRep, bool haircutPaidByFork) private {
 		if (burnAmountAttoRep == 0) return;
 		if (haircutPaidByFork) return;
-		_safeTransferRep(address(securityPool), burnAmountAttoRep);
-		securityPool.burnEscalationWinnerHaircut(burnAmountAttoRep);
+		_safeTransferRep(address(questionLedger), burnAmountAttoRep);
+		questionLedger.burnEscalationWinnerHaircut(burnAmountAttoRep);
 	}
 }

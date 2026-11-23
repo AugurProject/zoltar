@@ -108,7 +108,7 @@ export function approvePool(snapshot: EcosystemSnapshot, pool: PoolSnapshot, req
 	return [poolApprovalStep(snapshot, pool.repToken, pool.address, required)]
 }
 
-function poolApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, pool: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for security pool') {
+function poolApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, pool: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for question ledger') {
 	return encodeStep({ abi: erc20Abi, args: [pool, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, pool, required)], functionName: 'approve', id, label, to: token })
 }
 

@@ -17,10 +17,10 @@ contract CounterfeitPortfolioQuestionSource {
 	function securityPoolFactory() external view returns (address) {
 		return address(this);
 	}
-	function getSecurityPoolOriginId(address) external pure returns (bytes32) {
+	function getQuestionLedgerOriginId(address) external pure returns (bytes32) {
 		return bytes32(0);
 	}
-	function getSecurityPool(bytes32, uint248 universe) external view returns (address) {
+	function getQuestionLedger(bytes32, uint248 universe) external view returns (address) {
 		// Canonical for the source lookup, but no existing child in the prepared target.
 		return universe == universeId && !(targetPrepared && universe == preparedUniverse) ? address(this) : address(0);
 	}
@@ -54,9 +54,9 @@ contract CounterfeitPortfolioQuestionSource {
 	function preparePortfolioPriceFeed(address, uint248) external pure returns (address) {
 		return address(0);
 	}
-	function deployChildSecurityPool(address, address, uint248, uint256, uint256) external view returns (address) {
+	function deployChildQuestionLedger(address, address, uint248, uint256, uint256) external view returns (address) {
 		return victim;
 	}
-	function authorizeChildPool(address) external {}
-	function registerChildPool(address) external {}
+	function authorizeChildQuestionLedger(address) external {}
+	function registerChildQuestionLedger(address) external {}
 }

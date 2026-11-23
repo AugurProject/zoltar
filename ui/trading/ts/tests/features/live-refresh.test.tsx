@@ -31,7 +31,7 @@ const pair = `0x${'33'.repeat(20)}` as Address
 const shareToken = `0x${'44'.repeat(20)}` as Address
 const configuration = deploymentConfigurationFixture()
 
-// One attoETH of collateral is worth 10^18 attoShares, mirroring the SecurityPool genesis rate that makes raw share counts unreadable.
+// One attoETH of collateral is worth 10^18 attoShares, mirroring the QuestionLedger genesis rate that makes raw share counts unreadable.
 const market = etherScaleMarketFixture({ pool, pair, shareToken, title: 'Background fixture market', description: 'Background refresh fixture' })
 
 // Stands in for the chain: reports a new block every interval so the block-driven background refresh runs.
@@ -234,7 +234,7 @@ describe('live market refresh', () => {
 			{
 				...offlineControllerServices,
 				discoverAddressedMarket: async (_client, _config, address) => {
-					if (address === pool) throw Object.assign(new Error('Security pool does not exist.'), { name: 'SecurityPoolNotFoundError' })
+					if (address === pool) throw Object.assign(new Error('Question ledger does not exist.'), { name: 'QuestionLedgerNotFoundError' })
 					return await pending.promise
 				},
 			},
@@ -525,7 +525,7 @@ describe('live market refresh', () => {
 		})
 		await waitForDom(() => walletHolding('Wallet Yes') === '3 Yes 3 ETH if the question resolves Yes', 'wallet balances shown as collateral value')
 		// The lookup instruction belongs to the landing list, not to an opened market.
-		expect(document.body.textContent).not.toContain('Open a market by security pool address')
+		expect(document.body.textContent).not.toContain('Open a market by question ledger address')
 		expect(document.body.textContent).toContain('3 Invalid')
 		expect(document.body.textContent).toContain('Price if not Invalid')
 		expect(document.body.textContent).toContain('Yes 50.0%')
@@ -988,7 +988,7 @@ describe('live market refresh', () => {
 		await act(async () => {
 			await universes.reject(new Error('RPC unavailable'))
 		})
-		await waitForDom(() => document.body.textContent?.includes('Security pool discovery failed: RPC unavailable') === true, 'discovery failure')
+		await waitForDom(() => document.body.textContent?.includes('Question ledger discovery failed: RPC unavailable') === true, 'discovery failure')
 		expect(document.querySelector('.skeleton-list')).toBeNull()
 		expect(document.body.textContent).not.toContain('Loading markets…')
 		expect(document.querySelector('.market-browser')?.getAttribute('aria-busy')).not.toBe('true')
@@ -1189,7 +1189,7 @@ describe('live market refresh', () => {
 			}
 			const rendered = await renderIntoDocument(<LiveTrading route={`market/${unavailablePool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 			cleanupRendered = rendered.cleanup
-			await waitForDom(() => document.body.textContent?.includes('This security pool could not be loaded') === true, 'unavailable market')
+			await waitForDom(() => document.body.textContent?.includes('This question ledger could not be loaded') === true, 'unavailable market')
 			window.location.hash = `#/market/${pool}`
 			await act(() => {
 				render(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container)

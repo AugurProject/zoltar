@@ -1,13 +1,13 @@
 import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
-import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger, statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { ForkQuestionDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getMarketType } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import type { LiveMarket } from './live.js'
 
-const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi
+const poolForkAbi = statoblast_QuestionLedger_QuestionLedger.abi
 const zoltarForkAbi = Zoltar_Zoltar.abi
 const forkQuestionAbi = ZoltarQuestionData_ZoltarQuestionData.abi
 const shareForkAbi = statoblast_tokens_ShareToken_ShareToken.abi
@@ -64,7 +64,7 @@ async function loadMigratedShares(client: PublicClient, market: Pick<LiveMarket,
 
 async function targetWithCanonicalPool(client: PublicClient, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, outcomeIndex: bigint, label: string, account: Address | undefined, knownUniverseId?: bigint): Promise<ForkTarget> {
 	const universeId = knownUniverseId ?? getChildUniverseId(market.universeId, outcomeIndex)
-	const canonicalPoolAddress = await client.readContract({ abi: shareForkAbi, address: market.shareToken, functionName: 'canonicalPoolByUniverse', args: [universeId] })
+	const canonicalPoolAddress = await client.readContract({ abi: shareForkAbi, address: market.shareToken, functionName: 'canonicalQuestionLedgerByUniverse', args: [universeId] })
 	const canonicalPool = canonicalPoolAddress === zeroAddress ? undefined : getAddress(canonicalPoolAddress)
 	return { outcomeIndex, universeId, label, canonicalPool, migrated: await loadMigratedShares(client, market, universeId, account, canonicalPool) }
 }

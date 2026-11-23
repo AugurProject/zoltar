@@ -9,7 +9,7 @@ import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { IReportOperations } from './interfaces/IReportOperations.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
-import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger, ISecurityPoolFactory } from './interfaces/IQuestionLedger.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SharedPoolReportEscrow } from './SharedPoolReportEscrow.sol';
 import { ReputationToken } from '../ReputationToken.sol';
@@ -18,7 +18,7 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import './OpenOraclePriceCoordinatorTypes.sol';
 
 interface ISharedPoolPriceCoordinator {
-	function securityPool() external view returns (ISecurityPool);
+	function questionLedger() external view returns (IQuestionLedger);
 	function reputationToken() external view returns (ReputationToken);
 	function openOracle() external view returns (OpenOracle);
 	function weth() external view returns (IWeth9);
@@ -121,7 +121,7 @@ contract SharedPoolPriceFeed {
 		return reports[reportId].outcome;
 	}
 
-	event CoordinatorRegistered(address indexed coordinator, address indexed securityPool);
+	event CoordinatorRegistered(address indexed coordinator, address indexed questionLedger);
 	event ExposureCheckpoint(address indexed coordinator, uint256 aggregateExposureAttoEth);
 	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 	event ReportFundingAssigned(uint256 indexed reportId, address indexed coordinator, address indexed sponsor);
@@ -168,7 +168,7 @@ contract SharedPoolPriceFeed {
 		require(!registeredCoordinators[coordinatorAddress], 'Coordinator already registered');
 		(uint248 universe, address token) = SecurityPoolBoundClones.universeBindings();
 		ISharedPoolPriceCoordinator coordinator = ISharedPoolPriceCoordinator(coordinatorAddress);
-		ISecurityPool pool = coordinator.securityPool();
+		IQuestionLedger pool = coordinator.questionLedger();
 		require(address(pool) != address(0) && address(pool.securityPoolFactory()) == securityPoolFactory, 'Wrong security pool factory');
 		require(address(pool.openOraclePriceCoordinator()) == coordinatorAddress, 'Wrong pool coordinator');
 		require(address(coordinator.reputationToken()) == token && address(pool.repToken()) == token, 'Wrong REP token');
@@ -185,10 +185,10 @@ contract SharedPoolPriceFeed {
 	/// @notice Emits a changed aggregate exposure after an authenticated question checkpoint.
 	function syncExposure(address coordinatorAddress) external {
 		require(registeredCoordinators[coordinatorAddress], 'Unregistered coordinator');
-		_syncExposure(coordinatorAddress, ISharedPoolPriceCoordinator(coordinatorAddress).securityPool());
+		_syncExposure(coordinatorAddress, ISharedPoolPriceCoordinator(coordinatorAddress).questionLedger());
 	}
 
-	function _syncExposure(address coordinatorAddress, ISecurityPool pool) private {
+	function _syncExposure(address coordinatorAddress, IQuestionLedger pool) private {
 		require(pool.universeId() == universeId(), 'Wrong exposure universe');
 		uint256 exposureAttoEth = aggregateExposureAttoEth();
 		if (exposureAttoEth == checkpointedExposureAttoEth) return;

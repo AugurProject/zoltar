@@ -2,17 +2,17 @@
 pragma solidity 0.8.35;
 
 import { Zoltar } from '../../Zoltar.sol';
-import { EscalationGameProofTestSecurityPool } from './EscalationGameProofTestSecurityPool.sol';
+import { EscalationGameProofTestQuestionLedger } from './EscalationGameProofTestQuestionLedger.sol';
 import { SecurityPoolReporterLedger } from '../../statoblast/SecurityPoolReporterLedger.sol';
 
 /// @dev Real game/report custody with a deterministic portfolio clock for native clock tests.
-contract EscalationGamePortfolioClockHarness is EscalationGameProofTestSecurityPool {
+contract EscalationGamePortfolioClockHarness is EscalationGameProofTestQuestionLedger {
 	uint48 public immutable wallAnchor;
 	uint48 public immutable portfolioTimeAnchor;
 	uint256 public constant questionId = 17;
 	SecurityPoolReporterLedger public immutable reporters;
 
-	constructor(Zoltar protocol, uint48 wallStart, uint48 portfolioStartTime) EscalationGameProofTestSecurityPool(protocol, 0, address(0)) {
+	constructor(Zoltar protocol, uint48 wallStart, uint48 portfolioStartTime) EscalationGameProofTestQuestionLedger(protocol, 0, address(0)) {
 		wallAnchor = wallStart;
 		portfolioTimeAnchor = portfolioStartTime;
 		reporters = new SecurityPoolReporterLedger(address(this), protocol);

@@ -39,13 +39,13 @@ contract ForkerSourceSpoof {
 	function statoblastSecurityMultiplierBps() external pure returns (uint256) {
 		return 0;
 	}
-	function authorizeChildPool(address) external {}
+	function authorizeChildQuestionLedger(address) external {}
 
 	// Factory surface.
-	function getSecurityPoolOriginId(address) external pure returns (bytes32) {
+	function getQuestionLedgerOriginId(address) external pure returns (bytes32) {
 		return bytes32(uint256(1));
 	}
-	function getSecurityPool(bytes32, uint248 requestedUniverseId) external view returns (address) {
+	function getQuestionLedger(bytes32, uint248 requestedUniverseId) external view returns (address) {
 		return requestedUniverseId == universeId ? address(this) : address(0);
 	}
 	function getSecurityPoolPortfolio(address) external view returns (address) {
@@ -54,13 +54,13 @@ contract ForkerSourceSpoof {
 	function preparePortfolioPriceFeed(address, uint248) external pure returns (address) {
 		return address(0);
 	}
-	function deployChildSecurityPool(address, address, uint248, uint256, uint256) external view returns (address) {
+	function deployChildQuestionLedger(address, address, uint248, uint256, uint256) external view returns (address) {
 		return victim;
 	}
 
 	// Portfolio and reporter ledger surface.
 	function prepareQuestionUniverse(uint248) external {}
-	function registerChildPool(address) external {}
+	function registerChildQuestionLedger(address) external {}
 	function reporterLedger(uint248) external view returns (address) {
 		return address(this);
 	}

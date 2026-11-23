@@ -6,8 +6,8 @@ import {
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	Zoltar_Zoltar as zoltarArtifact,
 } from '../types/contractArtifact'
@@ -36,7 +36,7 @@ describe('audit: a holding fee does not restart in a fork child for a question u
 		await fixture.deposit(1_000n * unit, other)
 		await fixture.authorize(200n * unit, other)
 		await fixture.mint(10n * unit)
-		const parent = fixture.poolFor(base.questionId).securityPool
+		const parent = fixture.poolFor(base.questionId).questionLedger
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
 		await fixture.refreshPrice()
 		// Both outcomes reach the non-decision threshold: the game has no winner, so no finality time is scheduled.
@@ -60,7 +60,7 @@ describe('audit: a holding fee does not restart in a fork child for a question u
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [child] }))
 		// Register the child pool without materializing the branch's own game.
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [parent, child] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'preparePortfolioQuestion', args: [parent, child] }))
 		const childPool = await owner.readContract({ ...portfolio, functionName: 'getPool', args: [base.questionId, child] })
 		expect(childPool).not.toBe(zeroAddress)
 

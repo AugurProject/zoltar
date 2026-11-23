@@ -9,10 +9,10 @@ export const POOLS_ROUTE_HASH = '#/pools'
 const LEGACY_SECURITY_POOLS_ROUTE_HASH = '#/security-pools'
 const POOLS_PATH_PREFIX = `${POOLS_ROUTE_HASH}/`
 const QUESTION_ID_QUERY_PARAM = 'questionId'
-const LEGACY_POOL_QUERY_PARAMS = ['securityPool', 'securityPoolsView', 'selectedPoolView'] as const
+const LEGACY_POOL_QUERY_PARAMS = ['questionLedger', 'questionLedgersView', 'selectedPoolView'] as const
 
 /** A location inside the Pools route: the address entry, browse list, create and universe views, or one pool page without per-pool tabs. */
-export type PoolsLocation = { view: 'browse' } | { view: 'create' } | { view: 'universes' } | { view: 'migrate' } | { view: 'operate'; securityPoolAddress: string }
+export type PoolsLocation = { view: 'browse' } | { view: 'create' } | { view: 'universes' } | { view: 'migrate' } | { view: 'operate'; questionLedgerAddress: string }
 
 function decodeSegment(segment: string) {
 	try {
@@ -37,7 +37,7 @@ export function parsePoolsRouteHash(routeHash: string): PoolsLocation | undefine
 	if (first === 'browse' || first === 'create' || first === 'universes' || first === 'migrate') return { view: first }
 	// `operate` is the pool page's internal view name, not an address; a hand-written `#/pools/operate` link is unroutable.
 	if (RESERVED_POOLS_SEGMENTS.has(first)) return undefined
-	return { securityPoolAddress: first, view: 'operate' }
+	return { questionLedgerAddress: first, view: 'operate' }
 }
 
 export function buildPoolsRouteHash(location: PoolsLocation) {
@@ -49,7 +49,7 @@ export function buildPoolsRouteHash(location: PoolsLocation) {
 		case 'migrate':
 			return `${POOLS_PATH_PREFIX}${location.view}`
 		case 'operate': {
-			const address = location.securityPoolAddress.trim()
+			const address = location.questionLedgerAddress.trim()
 			if (address === '') return POOLS_ROUTE_HASH
 			return `${POOLS_PATH_PREFIX}${encodeURIComponent(address)}`
 		}
@@ -59,17 +59,17 @@ export function buildPoolsRouteHash(location: PoolsLocation) {
 }
 
 /**
- * Maps the legacy `#/security-pools?securityPoolsView=…&securityPool=…&selectedPoolView=…` links onto the path routes so
+ * Maps the legacy `#/security-pools?questionLedgersView=…&questionLedger=…&selectedPoolView=…` links onto the path routes so
  * bookmarked pool links and the documented simulator entry points keep opening the same pool or list view.
  */
 export function mapLegacyStatoblastHash(hash: string): string | undefined {
 	const { routeHash, search } = parseRouteHash(hash)
 	if (routeHash !== LEGACY_SECURITY_POOLS_ROUTE_HASH && routeHash !== `${LEGACY_SECURITY_POOLS_ROUTE_HASH}/`) return undefined
 	const params = new URLSearchParams(search)
-	const view = params.get('securityPoolsView')?.trim() ?? ''
-	const securityPoolAddress = params.get('securityPool')?.trim() ?? ''
+	const view = params.get('questionLedgersView')?.trim() ?? ''
+	const questionLedgerAddress = params.get('questionLedger')?.trim() ?? ''
 	const location: PoolsLocation = (() => {
-		if (securityPoolAddress !== '' && view !== 'browse' && view !== 'create' && view !== 'universes') return { securityPoolAddress, view: 'operate' }
+		if (questionLedgerAddress !== '' && view !== 'browse' && view !== 'create' && view !== 'universes') return { questionLedgerAddress, view: 'operate' }
 		if (view === 'create' || (view === '' && params.has(QUESTION_ID_QUERY_PARAM))) return { view: 'create' }
 		if (view === 'universes' || view === 'universe') return { view: 'universes' }
 		return { view: 'browse' }
@@ -85,7 +85,7 @@ export function mapLegacyStatoblastHash(hash: string): string | undefined {
 export function writePoolsLocationSearch(search: string, current: PoolsLocation | undefined, next: PoolsLocation) {
 	return updateSearchParams(search, params => {
 		if (next.view !== 'create') params.delete('questionId')
-		if (next.view !== 'operate' || current?.view !== 'operate' || current.securityPoolAddress.toLowerCase() !== next.securityPoolAddress.toLowerCase()) {
+		if (next.view !== 'operate' || current?.view !== 'operate' || current.questionLedgerAddress.toLowerCase() !== next.questionLedgerAddress.toLowerCase()) {
 			params.delete('vault')
 			params.delete('vaultView')
 		}

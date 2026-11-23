@@ -1,8 +1,8 @@
 import type { AccountState, TradingFormState } from '../types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ListedSecurityPool, TradingActionResult, TradingDetails } from '../types/contracts.js'
-import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
-import type { UiRepPriceSource } from './security-pools/lib/repPriceSource.js'
+import type { ListedQuestionLedger, TradingActionResult, TradingDetails } from '../types/contracts.js'
+import type { QuestionLedgerStateModel } from './question-ledgers/lib/questionLedgerState.js'
+import type { UiRepPriceSource } from './question-ledgers/lib/repPriceSource.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
@@ -12,7 +12,7 @@ type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
-export type SecurityPoolsView = 'browse' | 'operate' | 'universes' | 'migrate'
+export type QuestionLedgersView = 'browse' | 'operate' | 'universes' | 'migrate'
 
 type TradingRouteContentProps = {
 	accountState: AccountState
@@ -24,7 +24,7 @@ type TradingRouteContentProps = {
 	onRedeemCompleteSet: () => void
 	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
-	selectedPool: ListedSecurityPool | undefined
+	selectedPool: ListedQuestionLedger | undefined
 	tradingActiveAction: TradingActionResult['action'] | undefined
 	tradingDetails: TradingDetails | undefined
 	tradingError: string | undefined
@@ -35,7 +35,7 @@ type TradingRouteContentProps = {
 
 export type TradingSectionProps = TradingRouteContentProps & {
 	embedInCard?: boolean
-	poolState?: SecurityPoolStateModel | undefined
-	showSecurityPoolAddressInput?: boolean
+	poolState?: QuestionLedgerStateModel | undefined
+	showQuestionLedgerAddressInput?: boolean
 	showHeader?: boolean
 }

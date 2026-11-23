@@ -3,7 +3,7 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
-import { securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
+import { questionLedgerTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import type { ReportingActionResult, TradingActionResult } from '../types/contracts.js'
 
 type TradingTransactionContext = PoolUniverseTransactionContext & {
@@ -18,7 +18,7 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 	return buildIntent({
 		action: actionName,
 		rows: getTradingTransactionRows(context),
-		scope: securityPoolTransactionScope(context?.securityPoolAddress),
+		scope: questionLedgerTransactionScope(context?.questionLedgerAddress),
 		source: 'trading',
 		submittedTitle: humanizeTransactionAction(actionName),
 		universeId: context?.universeId,
@@ -36,7 +36,7 @@ export function createTradingSuccessPresentation(result: TradingActionResult) {
 		...(detail === undefined ? {} : { detail }),
 		hash: result.hash,
 		rows: [
-			{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={result.questionLedgerAddress} /> },
 			...(result.shareOutcome === undefined ? [] : [{ identityKey: 'outcome', label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
 			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: transactionCopy.targetOutcomeIndexes, value: result.targetOutcomeIndexes.join(', ') }]),
 		],
