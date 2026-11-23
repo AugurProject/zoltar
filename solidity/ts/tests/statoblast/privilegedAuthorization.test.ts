@@ -135,7 +135,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		await securityPool.prepare()
 		const attacker = securityPool.other()
 		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, functionName: 'setStartingParams' }), /Only factory/)
-		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, functionName: 'setSecurityPoolCustody', args: [attacker.account.address] }), /Only securityPool/)
+		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, functionName: 'setSecurityPoolCustody', args: [attacker.account.address] }), /Only security pool/)
 	})
 
 	test('escalation accounting rejects direct callers without changing capital', async () => {

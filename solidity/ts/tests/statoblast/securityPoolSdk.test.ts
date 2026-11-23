@@ -66,7 +66,9 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		const services = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' })
 		await approveToken(client, collateral, services)
 		await writeContractAndWait(client, () =>
-			client.sendTransaction(buildSecurityPoolMintRequest({ trader: owner, securityPool: fixture.securityPool, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit, recipient: owner, minimumShares: quote.shares, maximumPurchaseFeeAttoEth: quote.maximumPurchaseFeeAttoEth })),
+			client.sendTransaction(
+				buildSecurityPoolMintRequest({ trader: owner, securityPool: fixture.securityPool, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit, recipient: owner, minimumShares: quote.shares, maximumPurchaseFeeAttoEth: quote.maximumPurchaseFeeAttoEth }),
+			),
 		)
 		await writeContractAndWait(client, () => client.sendTransaction(buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: 0n })))
 		const pool = fixture.poolFor(fixture.base.questionId)

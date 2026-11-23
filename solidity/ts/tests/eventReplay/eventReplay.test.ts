@@ -1123,7 +1123,10 @@ describe('event-only replay', () => {
 			return log.eventName === 'DeployQuestionLedger' && typeof deployedPool === 'string' && deployedPool.toLowerCase() === questionLedgerAddresses.questionLedger.toLowerCase()
 		})
 		const receiptLogs = (
-			await Promise.all([getContractReplayLogs(questionLedgerAddresses.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(questionLedgerAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)])
+			await Promise.all([
+				getContractReplayLogs(questionLedgerAddresses.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, receipt.blockNumber, receipt.blockNumber),
+				getContractReplayLogs(questionLedgerAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber),
+			])
 		)
 			.flat()
 			.filter(log => log.transactionHash === depositHash)

@@ -119,24 +119,24 @@ export const fallbackRoutedEntrypointSignatures: Record<string, Record<string, R
 }
 export const interfaceEntrypointExclusionsBySource: Record<string, string[]> = {}
 export const stateChangingAbiFingerprintBySource: Record<string, string> = {
-	'solidity/contracts/statoblast/OpenOraclePriceSource.sol': '825ac979b8b2a2b3622c65a0dfc79be3252b1315e829fbcf60fdf99fe0da230b',
+	'solidity/contracts/statoblast/OpenOraclePriceSource.sol': '395129796c5f6e2acb4e9290860a651010691f8f19e1f5dd75d07afcbb4e7298',
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
 	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
 	'solidity/contracts/Zoltar.sol': '7820943e20dcb5ea796e2c00af55219042cb772133f0844c8d79dcd2ae30c938',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
-	'solidity/contracts/statoblast/EscalationGame.sol': '318f27df64ff36dbeaf147d822f83175b5753025b95bc8439e22c121974bd1c4',
+	'solidity/contracts/statoblast/EscalationGame.sol': 'ace27e1a535bc7d088e2634d1d30c96644c610ad9a9fb014e3fc31e036d4d63a',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': '7a09d1ce16324a2165c74fa4548c45410fd1177fb66929adee8732a572a90301',
-	'solidity/contracts/statoblast/EscalationGameSettlement.sol': 'c0e413e31690d76b60a8ddc3bfe7481ffbddd79cb3c7ff4e7939f338a9d46feb',
+	'solidity/contracts/statoblast/EscalationGameSettlement.sol': 'd74a5944d10743e0804ba120722aef4dba4361eb8942afcf140264f0cc2c1941',
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/QuestionLedger.sol': 'd79b7b44239f794e160464e2910e7267f5f9a49bc4f5612db5d61fe67185285c',
-	'solidity/contracts/statoblast/QuestionForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
-	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '132aa4383180f1ea2384614440c4247328f2256ee16d95ecb0fe0be02f3a05bf',
+	'solidity/contracts/statoblast/QuestionLedger.sol': '7a36de96e277aee6bcf6d3a3480d783d184a08746677c1736f766191d8fa12ce',
+	'solidity/contracts/statoblast/QuestionForker.sol': '706506c8a6f3b9cab5022f10c037b1ed96e240b4b5f3b0a3100448ad3b586567',
+	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '4d6009a01c640efcf0545d8f1a8342bbe4f677467d4383759e6a095af241a02b',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
-	'solidity/contracts/statoblast/tokens/ShareToken.sol': '68c370c22a6da29cf139846ea2fdf86f9922027ee6d46e2618de0dcdb7bc5e5f',
+	'solidity/contracts/statoblast/tokens/ShareToken.sol': 'e1eb94e04ee65aa3f3f1147cdf1be9a855e30e7ba5900e6f8e048107d92cc400',
 	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',
 }
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {

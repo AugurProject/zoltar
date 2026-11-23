@@ -95,7 +95,7 @@ export function securityPoolAddressFromDeploymentLogs(logs: readonly { address: 
 /** Each call completes one immutable setup stage; anyone can resume an interrupted setup until the origin universe forks. */
 export function buildSecurityPoolPrepareNextRequest(parameters: { caller: Address; securityPool: Address }) {
 	address(parameters.caller, 'Caller')
-	address(parameters.securityPool, 'SecurityPool')
+	address(parameters.securityPool, 'Security pool')
 	return { account: parameters.caller, to: parameters.securityPool, data: encodeFunctionData({ abi: parseAbi(['function prepareNext()']), functionName: 'prepareNext' }), value: 0n }
 }
 

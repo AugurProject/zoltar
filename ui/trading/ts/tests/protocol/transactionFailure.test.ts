@@ -17,8 +17,8 @@ describe('transaction failure explanations', () => {
 		['Deadline expired', 'The transaction deadline passed.'],
 		['LP permit or allowance', 'The liquidity permit expired or was already used.'],
 		['Question ended', 'Trading has ended for this market.'],
-		['Purchase exceeds healthy capacity', 'The question ledger does not have enough minting capacity for this size.'],
-		['Portfolio backing insufficient', 'The question ledger does not have enough backing for this size.'],
+		['Purchase exceeds healthy capacity', 'This question does not have enough minting capacity for this size.'],
+		['Security pool backing insufficient', 'The security pool does not have enough backing for this size.'],
 		['Net input is zero', 'The amount is too small to trade.'],
 		['Already initialized', 'Someone already added the first liquidity.'],
 	])('explains the %s revert string with a cause and a next step', (reason, cause) => {

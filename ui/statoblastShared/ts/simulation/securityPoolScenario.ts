@@ -66,9 +66,9 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 	}
 	const capitalLedger = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'capitalLedger', args: [0n] })
 	const depositAttoRep = 5000n * 10n ** 18n
-	await sendSecurityPoolTransaction(client, { account: owner, to: profile.genesisRepTokenAddress, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [capitalLedger, depositAttoRep] }), value: 0n }, 'Approve security pool REP')
-	await reportStep('Approved common security pool REP deposit')
-	await sendSecurityPoolTransaction(client, buildSecurityPoolCapitalDepositRequest({ owner, capitalLedger, amountAttoRep: depositAttoRep }), 'Deposit security pool REP')
+	await sendSecurityPoolTransaction(client, { account: owner, to: profile.genesisRepTokenAddress, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [capitalLedger, depositAttoRep] }), value: 0n }, 'Approve REP for the security pool')
+	await reportStep('Approved common REP deposit for the security pool')
+	await sendSecurityPoolTransaction(client, buildSecurityPoolCapitalDepositRequest({ owner, capitalLedger, amountAttoRep: depositAttoRep }), 'Deposit REP into the security pool')
 	await reportStep('Funded owner principal')
 	// One settlement refreshes every question in the security pool universe.
 	await advanceSimulationTime(memoryClient, 301n)

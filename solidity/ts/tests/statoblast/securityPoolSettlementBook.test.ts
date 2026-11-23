@@ -1,10 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, parseAbi, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import {
-	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact,
-	statoblast_SecurityPoolModuleDeployers_SecurityPoolSettlementBookDeployer as deployerArtifact,
-	test_statoblast_SettlementPersistentMapHarness_SettlementPersistentMapHarness as mapArtifact,
-} from '../../types/contractArtifact'
+import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact, statoblast_SecurityPoolModuleDeployers_SecurityPoolSettlementBookDeployer as deployerArtifact, test_statoblast_SettlementPersistentMapHarness_SettlementPersistentMapHarness as mapArtifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'

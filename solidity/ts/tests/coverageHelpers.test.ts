@@ -356,7 +356,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, `0x${'00'.repeat(32)}`, securityPoolModuleDeployers],
 				}),
 			}),
-			/SecurityPool creation code hash missing/,
+			/Security pool creation code hash missing/,
 		)
 		await assert.rejects(
 			client.sendTransaction({
@@ -431,8 +431,8 @@ describe('Solidity bytecode coverage helpers', () => {
 			/Pool range count too large/,
 		)
 		assert.strictEqual(await client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'securityPoolCount' }), 0n)
-		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'securityPoolsRange', args: [1n, 0n] }), /SecurityPool range start out of bounds/)
-		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'securityPoolsRange', args: [0n, 1n] }), /SecurityPool range count too large/)
+		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'securityPoolsRange', args: [1n, 0n] }), /Security pool range start out of bounds/)
+		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'securityPoolsRange', args: [0n, 1n] }), /Security pool range count too large/)
 		await assert.rejects(
 			client.writeContract({
 				abi: factoryArtifact.abi,
@@ -440,7 +440,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				functionName: 'deployChildQuestionLedger',
 				args: [zeroAddress, zeroAddress, 0n, 0n, 2n],
 			}),
-			/Only security pool forker/,
+			/Only question forker/,
 		)
 	})
 
@@ -1647,7 +1647,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				method === 'deployStartedGame'
 					? encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP] })
 					: encodeFunctionData({ abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageQuestionLedger.abi, functionName: method, args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n] })
-			await assert.rejects(transact(unboundPool, data), /Reporter securityPool required/)
+			await assert.rejects(transact(unboundPool, data), /Reporter security pool required/)
 		}
 
 		const coordinatorWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.abi, bytecode: `0x${statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.evm.bytecode.object}` }))
@@ -1705,7 +1705,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					gas: 10_000_000n,
 				}),
 			),
-			/Security pool deployment failed/,
+			/Question ledger deployment failed/,
 		)
 		const questionLedgerDeployerAddress = await deployContract(
 			client,
@@ -1736,7 +1736,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					gas: 10_000_000n,
 				}),
 			),
-			/Security pool deployment failed/,
+			/Question ledger deployment failed/,
 		)
 	})
 })

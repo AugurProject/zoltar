@@ -135,7 +135,7 @@ describe('Safe ERC20 Operations', () => {
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
 				}),
 			),
-			/Security pool deployment failed/,
+			/Question ledger deployment failed/,
 		)
 	})
 })

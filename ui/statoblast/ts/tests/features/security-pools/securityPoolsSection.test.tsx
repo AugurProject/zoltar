@@ -13,7 +13,7 @@ import { capitalSnapshot, owner, securityPool } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
 import { priceFeed, priceFixture } from './priceFixture.js'
 
-const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/securityPools?securityPool=${securityPool}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
+const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/security-pools?securityPool=${securityPool}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
 const renderSecurityPools = async () => {
@@ -170,7 +170,7 @@ test('an unforked security pool with an expired price can fund a new report from
 
 test('shared backing has no price report until a security pool account is shown', async () => {
 	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/securityPools')
+	window.history.replaceState(undefined, '', '/#/security-pools')
 	capitalClient().install()
 	const view = await renderSecurityPools()
 	const backing = () => sectionTitled(view.container, copy.poolTitle)

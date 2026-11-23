@@ -532,11 +532,11 @@ describe('ReportingSection', () => {
 			// The shared approval control abbreviates large approvals and keeps the exact amount in the button title.
 			expectTransactionButtonEnabled(document.body, 'Approve 225k REP')
 			const label = 'Report No & trigger fork · 225 000 REP…'
-			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this question ledger before reporting.')
+			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this question before reporting.')
 			await act(() => {
 				fireEvent.click(queries.getByRole('checkbox', { name: 'I understand this report ends escalation and leads to a universe fork.' }))
 			})
-			expectTransactionButtonDisabled(document.body, label, 'Approve REP for this question ledger before reporting.')
+			expectTransactionButtonDisabled(document.body, label, 'Approve REP for this question before reporting.')
 		})
 	})
 
@@ -935,7 +935,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).toContain('Paid from: wallet REP')
 		expect(document.body.textContent).not.toContain('Paid from: pool vault REP')
 		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this question ledger before reporting.')
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this question before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
 		const approvalButton = within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ })
 		const reportAction = reportButton.closest('.tx-action')

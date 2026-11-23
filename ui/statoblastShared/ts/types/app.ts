@@ -2,7 +2,7 @@ import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts
 
 export type { AccountState, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
 
-export const STATOBLAST_ROUTES = ['deploy', 'pools', 'securityPools', 'open-oracle', 'not-found'] as const
+export const STATOBLAST_ROUTES = ['deploy', 'pools', 'security-pools', 'open-oracle', 'not-found'] as const
 export type StatoblastRoute = (typeof STATOBLAST_ROUTES)[number]
 
 export type TradingFormState = {

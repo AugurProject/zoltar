@@ -35,7 +35,7 @@ export function buildSecurityPoolMintRequest(parameters: { trader: Address; secu
 	decodeUint(cash + fee, 'Total collateral')
 	return {
 		account: decodeAddress(parameters.trader, 'Trader'),
-		to: decodeAddress(parameters.securityPool, 'SecurityPool'),
+		to: decodeAddress(parameters.securityPool, 'Security pool'),
 		value: 0n,
 		data: maximumRecoveryAttoRep === 0n ? encodeFunctionData({ abi, functionName: 'createCompleteSet', args }) : encodeFunctionData({ abi, functionName: 'createCompleteSetWithRecoveryRep', args: [...args, maximumRecoveryAttoRep] }),
 	}
@@ -43,7 +43,7 @@ export function buildSecurityPoolMintRequest(parameters: { trader: Address; secu
 
 /** @public Register a question without purchasing shares; the pool's admission policy still decides eligibility. */
 export function buildSecurityPoolAddQuestionRequest(parameters: { caller: Address; securityPool: Address; questionId: bigint }) {
-	return { account: decodeAddress(parameters.caller, 'Caller'), to: decodeAddress(parameters.securityPool, 'SecurityPool'), value: 0n, data: encodeFunctionData({ abi, functionName: 'addQuestion', args: [decodeUint(parameters.questionId, 'Question id')] }) }
+	return { account: decodeAddress(parameters.caller, 'Caller'), to: decodeAddress(parameters.securityPool, 'Security pool'), value: 0n, data: encodeFunctionData({ abi, functionName: 'addQuestion', args: [decodeUint(parameters.questionId, 'Question id')] }) }
 }
 
 export type SecurityPoolMintQuote = {
@@ -63,7 +63,7 @@ export type SecurityPoolMintQuote = {
 
 /** Quotes units and fees at one block. The atomic purchase still checks available mint capacity, excluding queued retirement reductions. */
 export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPoolReadClient; securityPool: Address; universeId: bigint; questionId: bigint; mintAttoEth: bigint; blockNumber?: bigint }): Promise<SecurityPoolMintQuote> {
-	const securityPool = decodeAddress(parameters.securityPool, 'SecurityPool')
+	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
 	const universeId = decodeUint(parameters.universeId, 'Universe id', 248)
 	const questionId = decodeUint(parameters.questionId, 'Question id')
 	const cash = decodeUint(parameters.mintAttoEth, 'Mint collateral')

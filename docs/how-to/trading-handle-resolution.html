@@ -19,10 +19,10 @@
 				<h2>Unwind after question end</h2>
 				<ol>
 					<li>Remove your LP tokens from the <a href="../reference/glossary.html#trading-pool">trading pool</a> into Yes and No shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
-					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">QuestionLedger</a> is <code>Operational</code> and its universe has not forked. If the universe forks while the question is unresolved, follow <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</li>
+					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#question-ledger">QuestionLedger</a> is <code>Operational</code> and its universe has not forked. If the universe forks while the question is unresolved, follow <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</li>
 					<li>After the market finalizes, redeem the winning share through <code>QuestionLedger.redeemShares</code>, which requires the QuestionLedger to be <code>Operational</code>. Keep redeeming through this pool if its universe forks later; resolved shares cannot migrate.</li>
 				</ol>
-				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including trading fees earned as LP, are worth nothing once they lose. Each redemption burns the redeemed shares and pays ETH at the QuestionLedger's current collateral rate. A shared portfolio child can also pay recovery REP from its <a href="../explanation/statoblast.html#portfolio-shared-forks">fork claim basket</a>. The receipt can contain REP even when its ETH payout is zero; a new price report or an auction buyer is not required for redemption.</p>
+				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including trading fees earned as LP, are worth nothing once they lose. Each redemption burns the redeemed shares and pays ETH at the QuestionLedger's current collateral rate. A shared security pool child can also pay recovery REP from its <a href="../explanation/statoblast.html#security-pool-shared-forks">fork claim basket</a>. The receipt can contain REP even when its ETH payout is zero; a new price report or an auction buyer is not required for redemption.</p>
 			</section>
 			<section id="in-the-ui">
 				<h2>In the UI</h2>

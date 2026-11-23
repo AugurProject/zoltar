@@ -273,7 +273,7 @@ export function useReportingOperations(
 				if (preflight.contributionFunding !== 'wallet') throw new Error('This report uses vault backing and does not require wallet REP approval.')
 				const approvalAmountAttoRep = amountAttoRep ?? preflight.walletDepositAmount
 				const allowanceAttoRep = preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n
-				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.walletDepositAmount ? 'The question ledger already has enough REP allowance for this report.' : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
+				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.walletDepositAmount ? 'This question already has enough REP allowance for this report.' : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
 				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, preflight.selectedOutcome, approvalAmountAttoRep)), amountAttoRep: approvalAmountAttoRep }
 			},
 			'Failed to approve REP for reporting',

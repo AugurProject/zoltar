@@ -16,17 +16,17 @@ export const universeUnavailable = 'Unable to load the universe.'
 export function universeNotFound(label: string) {
 	return `${label} is not deployed on this network.`
 }
-export const questionLedger = 'Question ledger'
+export const questionLedger = 'Question'
 export const loadingBalances = 'Loading balances…'
 /** The one phrase every Trading surface uses when wallet balances cannot be read. */
 export const walletBalancesUnavailable = 'Wallet balances unavailable'
 export const loadingWalletBalance = 'Loading wallet ETH balance…'
 export const loadingContracts = 'Loading trading contracts…'
-export const marketRouteDescription = 'Trade conditional Yes and No shares backed by Statoblast question ledgers.'
+export const marketRouteDescription = 'Trade conditional Yes and No shares backed by Statoblast security pools.'
 export const liquidityRouteDescription = 'Open a market by question ledger address to add or remove liquidity.'
-export const createMarketRouteDescription = 'Open a question ledger without a market to create its market and add the first liquidity.'
+export const createMarketRouteDescription = 'Open a question without a market to create its market and add the first liquidity.'
 export const universeRouteDescription = 'Markets, Portfolio, and Create follow this universe. After it forks, its child universes are listed here.'
-export const questionLedgerRouteDescription = 'Identity, lifecycle, and capacity of the question ledger that backs this market.'
+export const questionLedgerRouteDescription = 'Identity, lifecycle, and minting capacity of the question this market trades.'
 export const deployRouteDescription = 'Deploy the trading factory and router that this interface uses.'
 export const marketGuideDescription = 'How trades, prices, and payouts work in a conditional market, and where to start each task.'
 export const marketWorkspaceViews = 'Market views'
@@ -41,13 +41,13 @@ export const deploymentRegistryUnavailable = 'The deployment list could not be d
 export const checkingDeployment = 'Checking deployment…'
 export const securityPoolFactoryNotDeployed = 'Security pool factory is not deployed'
 export const checkingContract = 'Checking…'
-export const questionLedgerDataUnavailable = 'Question ledger data unavailable'
+export const questionLedgerDataUnavailable = 'Question data unavailable'
 export const marketGuideStepsTitle = 'How a trade works'
 export const marketGuideSteps = [
 	{
 		number: '01',
 		title: 'Create a complete set',
-		description: 'Your collateral goes to the market’s shared portfolio, which funds equal amounts of Yes, No, and Invalid shares at the current collateral rate.',
+		description: 'Your collateral goes to the market’s security pool, which funds equal amounts of Yes, No, and Invalid shares at the current collateral rate.',
 	},
 	{
 		number: '02',
@@ -73,10 +73,10 @@ export const shareValueDescription =
 export const pricesAndPayoutsTitle = 'Prices and payouts'
 export const tasksTitle = 'Common tasks'
 export const findMarketTitle = 'Find a market'
-export const findMarketDescription = 'Markets lists registered markets in the selected universe, with your favorites first. Portfolio discovers your wallet’s holdings in registered question ledgers in the selected universe. Paste a question ledger address into Markets to open it directly.'
+export const findMarketDescription = 'Markets lists registered markets in the selected universe, with your favorites first. Portfolio discovers your wallet’s holdings in registered questions in the selected universe. Paste a question ledger address into Markets to open it directly.'
 export const findMarketLink = 'Guide: find a market'
 export const createMarketTitle = 'Create a market'
-export const createMarketDescription = 'Open a question ledger without a market under Create, then add the first liquidity at your conditional Yes price.'
+export const createMarketDescription = 'Open a question without a market under Create, then add the first liquidity at your conditional Yes price.'
 export const createMarketLink = 'Guide: your first market'
 export const afterTradingTitle = 'After resolution or a fork'
 export const afterTradingDescription = 'When trading ends, a market’s Settlement view redeems your shares, or migrates them to a child universe after a fork.'
@@ -113,7 +113,7 @@ export function formatHeaderErrorLabel(errorLabel: string | undefined, error: st
 }
 
 export function openQuestionLedgerLabel(address: string) {
-	return `Open question ledger ${address}`
+	return `Open question ${address}`
 }
 
 export const deploymentConfigurationInvalid = 'Deployment configuration invalid'

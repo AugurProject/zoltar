@@ -1,9 +1,5 @@
 import { auctionVaultRuntimeCode, boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import {
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
-} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact, statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { auctionAddress, auctionEngine, auctionVault, auctionVaultBindings, auctionVaultImplementation, capital, owner, token, unit } from './capitalFixture.js'
 import { modules } from './capitalClient.js'
 import { priceFixture } from './priceFixture.js'

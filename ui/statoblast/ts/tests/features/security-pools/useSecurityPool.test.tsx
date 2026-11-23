@@ -8,7 +8,7 @@ import { useSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { capitalSnapshot, owner, securityPool } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
-const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/securityPools?securityPool=${securityPool}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
+const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/security-pools?securityPool=${securityPool}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
 async function mount() {
 	const hook = await renderHookWithProps(useSecurityPool, { accountAddress: owner, enabled: true, environmentKey: 0, activeUniverseId: 0n })
 	lifecycle.trackRendered(hook)
@@ -16,7 +16,7 @@ async function mount() {
 }
 /** Opens the bare security pools route with automatic discovery waiting on the returned log request. */
 function installPendingDiscovery() {
-	window.history.replaceState({}, '', '#/securityPools')
+	window.history.replaceState({}, '', '#/security-pools')
 	const source = capitalClient()
 	const logs = createDeferred<never[]>()
 	const client = source.client.extend(() => ({ getLogs: () => logs.promise }))
@@ -186,7 +186,7 @@ test('remembered security pools stay scoped to their genesis REP deployment', as
 	const yes = await mount()
 	await waitFor(() => expect(yes.state().snapshot).toBeDefined())
 	await yes.cleanup()
-	window.history.replaceState({}, '', '#/securityPools')
+	window.history.replaceState({}, '', '#/security-pools')
 	installActiveEnvironmentForTesting({
 		...source.backend,
 		profile: { ...source.backend.profile, genesisOutcome: 'no', genesisRepTokenAddress: '0x00000000000000000000000000000000000000b2' },

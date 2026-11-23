@@ -988,7 +988,7 @@ describe('live market refresh', () => {
 		await act(async () => {
 			await universes.reject(new Error('RPC unavailable'))
 		})
-		await waitForDom(() => document.body.textContent?.includes('Question ledger discovery failed: RPC unavailable') === true, 'discovery failure')
+		await waitForDom(() => document.body.textContent?.includes('Question discovery failed: RPC unavailable') === true, 'discovery failure')
 		expect(document.querySelector('.skeleton-list')).toBeNull()
 		expect(document.body.textContent).not.toContain('Loading markets…')
 		expect(document.querySelector('.market-browser')?.getAttribute('aria-busy')).not.toBe('true')
@@ -1189,7 +1189,7 @@ describe('live market refresh', () => {
 			}
 			const rendered = await renderIntoDocument(<LiveTrading route={`market/${unavailablePool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 			cleanupRendered = rendered.cleanup
-			await waitForDom(() => document.body.textContent?.includes('This question ledger could not be loaded') === true, 'unavailable market')
+			await waitForDom(() => document.body.textContent?.includes('This question could not be loaded') === true, 'unavailable market')
 			window.location.hash = `#/market/${pool}`
 			await act(() => {
 				render(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container)

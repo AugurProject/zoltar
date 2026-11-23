@@ -34,7 +34,7 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 	const rate = ((accounting?.linearFee?.rateAttoEthPerSecond ?? 0n) * 1_000_000_000n) / (accounting?.linearFee?.rateScale ?? 1n)
 	const requestedEnd = accounting?.linearFee?.endTime ?? market.endTime
 	const end = requestedEnd < 2n ** 48n ? requestedEnd : 2n ** 48n - 1n
-	if (['questionData()', 'securityPoolCustody()', 'portfolio()', 'settlement()', 'ledger()'].some(name => signature === selector(name))) return encodeAbiParameters([address], [market.pool])
+	if (['questionData()', 'securityPoolCustody()', 'securityPool()', 'settlement()', 'ledger()'].some(name => signature === selector(name))) return encodeAbiParameters([address], [market.pool])
 	const integers: ReadonlyArray<readonly [string, bigint]> = [
 		['getCurrentBlockTimestamp()', timestamp],
 		['getQuestionEndDate(uint256)', market.endTime],

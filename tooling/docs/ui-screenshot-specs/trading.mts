@@ -2,9 +2,9 @@ import type { UiScreenshotCrop, UiScreenshotSpec, UiScreenshotStep } from '../ui
 
 // Resolve the fixture's canonical pool at capture time; deployment changes alter its address.
 const seededPool = { from: 'simulationQuestionLedger' } as const
-const openSeededPool: readonly UiScreenshotStep[] = [{ fill: 'Search markets', value: seededPool }, { click: 'Open question ledger' }, { waitForText: 'Question end' }]
+const openSeededPool: readonly UiScreenshotStep[] = [{ fill: 'Search markets', value: seededPool }, { click: 'Open question' }, { waitForText: 'Question end' }]
 const openFirstMarket: readonly UiScreenshotStep[] = openSeededPool
-const openSeededPoolForCreation: readonly UiScreenshotStep[] = [{ fill: 'Search question ledgers', value: seededPool }, { click: 'Open question ledger' }, { waitForText: 'Question end' }]
+const openSeededPoolForCreation: readonly UiScreenshotStep[] = [{ fill: 'Search questions', value: seededPool }, { click: 'Open question' }, { waitForText: 'Question end' }]
 const initializeAtSeventyPercent: readonly UiScreenshotStep[] = [...openSeededPoolForCreation, { waitForText: 'Yes price if not Invalid' }, { fill: 'Amount', value: '0.01' }, { fill: 'Yes price if not Invalid', value: '70' }, { waitForText: 'You receive' }, { waitForEnabled: 'Create market and add liquidity' }]
 const travelOneYear: readonly UiScreenshotStep[] = [{ click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+1 year' }, { waitForEnabled: '+1 year' }, { click: 'Hide details' }]
 // The trade panel scrolls inside the viewport, so panel shots use a taller window.
@@ -54,14 +54,14 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		usedBy: ['tutorials/trading-first-trade.html'],
 	},
 	{
-		id: 'securityPool',
+		id: 'portfolio',
 		app: 'trading',
 		scenario: 'deployed',
 		route: '#/create-market',
-		steps: [...initializeAtSeventyPercent, { click: 'Create market and add liquidity' }, { waitForText: 'TRADING OPEN' }, { click: 'SecurityPool' }, { waitForText: 'LP' }],
-		expectText: ['SecurityPool', 'Invalid', 'LP'],
+		steps: [...initializeAtSeventyPercent, { click: 'Create market and add liquidity' }, { waitForText: 'TRADING OPEN' }, { click: 'Portfolio' }, { waitForText: 'LP' }],
+		expectText: ['Portfolio', 'Invalid', 'LP'],
 		viewport: pageViewport,
-		crop: { selector: '.security-pool-positions', padding: 0 },
+		crop: { selector: '.portfolio-positions', padding: 0 },
 		usedBy: ['tutorials/trading-first-market.html'],
 	},
 	{
@@ -76,14 +76,14 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		usedBy: ['tutorials/trading-first-market.html'],
 	},
 	{
-		id: 'question-ledger-details',
+		id: 'security-pool-details',
 		app: 'trading',
 		scenario: 'deployed',
 		route: '#/create-market',
 		steps: [...openSeededPoolForCreation, { click: 'Create', nth: -1 }, { click: 'Details' }, { waitForText: 'Minting capacity' }],
-		expectText: ['Question ledger facts', 'Question ledger state', 'Minting capacity', 'Create market'],
+		expectText: ['Question facts', 'Question state', 'Minting capacity', 'Create market'],
 		viewport: pageViewport,
-		crop: { selector: '.section-block', containing: 'Question ledger facts', padding: 6 },
+		crop: { selector: '.section-block', containing: 'Question facts', padding: 6 },
 		usedBy: ['tutorials/trading-first-market.html'],
 	},
 	{

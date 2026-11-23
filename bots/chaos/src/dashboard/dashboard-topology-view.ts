@@ -78,7 +78,7 @@ export function createDashboardTopologyView({ elements }: { elements: DashboardE
 		)
 		renderTopologyGroup(elements.topologyAuctions, value.auctions, source =>
 			topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable', 'collateral repair auction address'), [
-				topologyIdentifierFact('SecurityPool', stringValue(source['securityPool']), 'collateral repair auction security pool address'),
+				topologyIdentifierFact('Security pool', stringValue(source['securityPool']), 'collateral repair auction security pool address'),
 				`universe ${String(source['universeId'] ?? 'unavailable')}`,
 				source['finalized'] === true ? 'finalized' : 'active',
 				`${String(source['bidCount'] ?? 0)} indexed bids`,

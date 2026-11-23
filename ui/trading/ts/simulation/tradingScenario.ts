@@ -65,9 +65,9 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 			? await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithCollateral', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, 0n, 0n, account, block.timestamp + 1_200n, budget] })
 			: await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, 0n, 0n, account, block.timestamp + 1_200n], value: 10n ** 16n })
 		await readClient.waitForTransactionReceipt({ hash: liquidityHash })
-		const portfolio = await readClient.readContract({ abi: factoryArtifact.abi, address: addresses.securityPoolFactory, functionName: 'securityPoolOf', args: [market.pool] })
-		await sendSecurityPoolTransaction(writeClient, await prepareSeededSecurityPoolMint(securityPoolReadClient(readClient), account, portfolio, market.questionId, !nativeFunding ? 5n * 10n ** BigInt(asset.decimals) : 5n * 10n ** 15n, 100n), 'Fund trading wallet shares')
-		if (parameters.scenario === FORKED_TRADING_SIMULATION_SCENARIO) await forkSeededSecurityPool(parameters, portfolio, market.pool, market.questionId)
+		const securityPool = await readClient.readContract({ abi: factoryArtifact.abi, address: addresses.securityPoolFactory, functionName: 'securityPoolOf', args: [market.pool] })
+		await sendSecurityPoolTransaction(writeClient, await prepareSeededSecurityPoolMint(securityPoolReadClient(readClient), account, securityPool, market.questionId, !nativeFunding ? 5n * 10n ** BigInt(asset.decimals) : 5n * 10n ** 15n, 100n), 'Fund trading wallet shares')
+		if (parameters.scenario === FORKED_TRADING_SIMULATION_SCENARIO) await forkSeededSecurityPool(parameters, securityPool, market.pool, market.questionId)
 	}
 	await reportBootstrapProgress(parameters.onProgress, 'Trading simulation is ready', 0.995)
 	return true

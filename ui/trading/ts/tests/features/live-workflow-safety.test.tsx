@@ -368,8 +368,8 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		rejectDiscovery = true
 		await rerouteForRefresh('portfolio')
-		await waitForDom(() => Array.from(document.querySelectorAll('[role="alert"]')).some(candidate => candidate.textContent?.includes('Question ledger discovery failed') === true), 'discovery failure notice')
-		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Question ledger discovery failed') === true)).toHaveLength(1)
+		await waitForDom(() => Array.from(document.querySelectorAll('[role="alert"]')).some(candidate => candidate.textContent?.includes('Question discovery failed') === true), 'discovery failure notice')
+		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Question discovery failed') === true)).toHaveLength(1)
 		expect(hasButton('Refresh')).toBeFalse()
 		expect(document.body.textContent).not.toContain('Retry balances')
 		rejectDiscovery = false

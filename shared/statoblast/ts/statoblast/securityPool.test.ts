@@ -79,7 +79,7 @@ describe('shared capital security pool deployment', () => {
 		const request = buildSecurityPoolPrepareNextRequest({ caller: owner, securityPool: factory })
 		expect(request).toMatchObject({ account: owner, to: factory, value: 0n })
 		expect(decodeFunctionData({ abi: parseAbi(['function prepareNext()']), data: request.data })).toEqual({ functionName: 'prepareNext', args: [] })
-		expect(() => buildSecurityPoolPrepareNextRequest({ caller: owner, securityPool: zeroAddress })).toThrow('SecurityPool')
+		expect(() => buildSecurityPoolPrepareNextRequest({ caller: owner, securityPool: zeroAddress })).toThrow('Security pool')
 	})
 })
 

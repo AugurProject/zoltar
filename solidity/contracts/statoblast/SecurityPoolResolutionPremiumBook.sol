@@ -212,7 +212,8 @@ contract SecurityPoolResolutionPremiumBook {
 		if (state.securityPoolEndTime < book.refundedBefore) return Question(0, 0, 0, 0, 0);
 		uint48 end = uint48(Math.min(book.securityPoolTimestamp, state.securityPoolEndTime));
 		if (end == state.securityPoolFundedEndTime) state.units = 0;
-		else if (end > state.securityPoolStartTime) state.units -= uint256(state.rate) * (end - state.securityPoolStartTime);
+		else if (end > state.securityPoolStartTime)
+			state.units -= uint256(state.rate) * (end - state.securityPoolStartTime);
 		state.securityPoolStartTime = book.securityPoolTimestamp;
 	}
 	function _takeUnits(Book storage book, uint256 units) private returns (uint256 cash) {
@@ -225,7 +226,9 @@ contract SecurityPoolResolutionPremiumBook {
 		if (state.securityPoolEndTime == 0) return;
 		_changeRate(book, state.securityPoolEndTime, state.rate, false);
 		uint256 duration =
-			state.securityPoolEndTime > state.securityPoolStartTime ? state.securityPoolEndTime - state.securityPoolStartTime : 0;
+			state.securityPoolEndTime > state.securityPoolStartTime
+				? state.securityPoolEndTime - state.securityPoolStartTime
+				: 0;
 		uint256 tail = state.units - uint256(state.rate) * duration;
 		if (state.securityPoolEndTime == state.securityPoolFundedEndTime)
 			_changeTail(book, state.securityPoolEndTime, tail, false);

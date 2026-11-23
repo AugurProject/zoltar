@@ -7,9 +7,9 @@ installDomTestLifecycle({ url: 'http://localhost/#/pools?universe=7' })
 
 test('shows one primary row with Pools, Security pools and Price reports', () => {
 	const tabs = getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'pools', showDeployTab: false })
-	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'securityPools', 'open-oracle'])
-	expect(tabs.map(tab => tab.label)).toEqual(['Questions', 'SecurityPools', 'Price reports'])
-	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/securityPools', '#/open-oracle'])
+	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'security-pools', 'open-oracle'])
+	expect(tabs.map(tab => tab.label)).toEqual(['Questions', 'Security pools', 'Price reports'])
+	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/security-pools', '#/open-oracle'])
 })
 
 test('keeps deployment reachable while needed and while its route is active', () => {
@@ -22,7 +22,7 @@ test('disables the other sections with a reason while required contracts are mis
 	expect(tabs.map(tab => [tab.route, tab.disabled === true, tab.disabledReason])).toEqual([
 		['deploy', false, undefined],
 		['pools', true, 'Deploy the required contracts first'],
-		['securityPools', true, 'Deploy the required contracts first'],
+		['security-pools', true, 'Deploy the required contracts first'],
 		['open-oracle', true, 'Deploy the required contracts first'],
 	])
 	expect(getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'deploy', showDeployTab: true }).some(tab => tab.disabled === true)).toBe(false)
@@ -55,7 +55,7 @@ test('lands on Browse pools by default and rejects the removed security pool rou
 	expect(statoblastRouting.getHash('pools')).toBe('#/pools')
 	expect(statoblastRouting.resolve('#/pools/browse')).toBe('pools')
 	expect(statoblastRouting.resolve('#/securityPool')).toBe('not-found')
-	expect(statoblastRouting.resolve('#/securityPools')).toBe('securityPools')
+	expect(statoblastRouting.resolve('#/security-pools')).toBe('security-pools')
 })
 
 test('treats a malformed pools path as not found instead of falling back to Browse pools', () => {

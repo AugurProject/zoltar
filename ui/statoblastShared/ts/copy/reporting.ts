@@ -163,10 +163,10 @@ export const forkTriggerWarningTitle = 'This report triggers a universe fork'
 export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold ends escalation without a decision: deposits lock, and the question can only resolve by forking the universe into Yes, No, and Invalid. This can’t be undone.`
 export const forkTriggerConfirmation = 'I understand this report ends escalation and leads to a universe fork.'
 export const forkTriggerConfirmationRequired = 'Confirm that this report triggers the universe fork.'
-export const reportingRepApprovalRequired = 'Approve REP for this question ledger before reporting.'
+export const reportingRepApprovalRequired = 'Approve REP for this question before reporting.'
 export const reportingApprovalAction = 'reporting'
 export const reportAmountRequired = 'Enter a report amount.'
-export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this question ledger before reporting.'
+export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this question before reporting.'
 export const maxBelowForkHint = <Amount>(amount: Amount): CopyParts<Amount> => ['Max stops at ', amount, ', just below the non-decision threshold. Confirm the fork warning to fill the side.']
 export const maxBelowForkReason = 'Max stops below the non-decision threshold, which leaves less than the minimum first report. Enter an amount to fill the side and trigger the fork.'
 export const reportAndTriggerForkLabel = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount} REP`

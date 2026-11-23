@@ -108,7 +108,15 @@ export function SecurityPoolsSection({ parameters, walletConnected, enabled, env
 						</MetricGrid>
 						<UserMessage detail={copy.immutableEconomics} />
 						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
-						<SecurityPoolButton model={actions} action='deploySecurityPoolAdmission' label={copy.deployAdmission} pendingLabel={copy.deployingAdmission} reason={actions.admissionDeployReason} sharedReasonId={actions.admissionDeployReason === copy.originForked ? deployReasonId : undefined} onClick={actions.deployAdmission} />
+						<SecurityPoolButton
+							model={actions}
+							action='deploySecurityPoolAdmission'
+							label={copy.deployAdmission}
+							pendingLabel={copy.deployingAdmission}
+							reason={actions.admissionDeployReason}
+							sharedReasonId={actions.admissionDeployReason === copy.originForked ? deployReasonId : undefined}
+							onClick={actions.deployAdmission}
+						/>
 						{actions.admissionAddress === undefined ? undefined : <code>{actions.admissionAddress}</code>}
 						<SecurityPoolButton model={actions} action='deploySecurityPool' label={copy.deploy} pendingLabel={copy.deploying} reason={actions.deployReason} sharedReasonId={actions.deployReason === copy.originForked ? deployReasonId : undefined} onClick={actions.deploy} />
 						{actions.originForked ? (

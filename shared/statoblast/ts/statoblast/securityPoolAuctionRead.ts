@@ -76,7 +76,7 @@ export type SecurityPoolAuctionBid = {
 /** One confirmed block, one explicit bidder page. No historical log or bidder scan. */
 export async function loadSecurityPoolAuctionSnapshot(parameters: { client: AuctionReadClient; securityPool: Address; bidder: Address; universeId: bigint; bidStart?: bigint; bidCount?: number }) {
 	const { client } = parameters
-	const securityPool = decodeAddress(parameters.securityPool, 'SecurityPool')
+	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
 	const bidder = decodeAddress(parameters.bidder, 'Bidder')
 	const universeId = decodeUint(parameters.universeId, 'Universe', 248)
 	const bidStart = decodeUint(parameters.bidStart ?? 0n, 'Bid page start')

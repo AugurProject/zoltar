@@ -267,7 +267,10 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const validateBeforeSubmit = async () => {
 		const game = await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'escalationGame' })
 		if (BigInt(game) !== 0n) throw new Error('Minting closed after escalation starts.')
-		const [questionData, questionId] = await Promise.all([client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'questionData' }), client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'questionId' })])
+		const [questionData, questionId] = await Promise.all([
+			client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'questionData' }),
+			client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'questionId' }),
+		])
 		const [endTime, block] = await Promise.all([client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [questionId] }), client.getBlock()])
 		if (block.timestamp >= endTime) throw new Error('Minting closed when the question ended.')
 		return questionId
@@ -349,6 +352,9 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 async function redemptionReview(client: Pick<ReadClient, 'readContract'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
 	const collateral = await loadTradingCollateralIdentity(client, pool, blockNumber)
 	const recoveryAbi = parseAbi(['function attoSharesToAttoRep(uint256 amountAttoShares) view returns (uint256)'])
-	const [cash, rep] = await Promise.all([client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares], blockNumber }), client.readContract({ abi: recoveryAbi, address: pool, functionName: 'attoSharesToAttoRep', args: [shares], blockNumber })])
+	const [cash, rep] = await Promise.all([
+		client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares], blockNumber }),
+		client.readContract({ abi: recoveryAbi, address: pool, functionName: 'attoSharesToAttoRep', args: [shares], blockNumber }),
+	])
 	return `Redeem ${formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals)} for approximately ${formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)} and ${formatCurrencyBalanceWithUnit(requireBigintValue(rep, 'recovery REP quote'), 'REP')} in this universe.`
 }

@@ -17,7 +17,7 @@
 			</header>
 			<section id="how-it-works">
 				<h2>How it works</h2>
-				<p>Each ordinary ETH entry returns one Invalid share for each <a href="../../reference/glossary.html#complete-set">complete set</a> created. If the question resolves Invalid, the holder redeems those shares with the <a href="../../reference/glossary.html#security-pool">QuestionLedger</a>'s <code>redeemShares()</code> at the current collateral value.</p>
+				<p>Each ordinary ETH entry returns one Invalid share for each <a href="../../reference/glossary.html#complete-set">complete set</a> created. If the question resolves Invalid, the holder redeems those shares with the <a href="../../reference/glossary.html#question-ledger">QuestionLedger</a>'s <code>redeemShares()</code> at the current collateral value.</p>
 				<p>Keeping Invalid shares out of the <a href="../../reference/glossary.html#trading-pool">pair</a> removes the on-chain three-reserve quadratic and makes an ordinary entry insured against an Invalid result. The cost is that nothing in the AMM can detect a suspicious market from an Invalid price, because no such price exists.</p>
 			</section>
 			<section id="worked-example">

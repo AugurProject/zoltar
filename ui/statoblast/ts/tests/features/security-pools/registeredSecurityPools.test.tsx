@@ -14,7 +14,7 @@ import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { capital, capitalSnapshot, owner, securityPool } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
 
-const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/securityPools?securityPool=${securityPool}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
+const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/security-pools?securityPool=${securityPool}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
 const { questionCount } = capitalSnapshot()
@@ -28,7 +28,7 @@ function registerSecurityPool(source: ReturnType<typeof capitalClient>, { ledger
 /** A first visit: nothing remembered and no security pool in the URL. */
 function startFirstVisit() {
 	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/securityPools')
+	window.history.replaceState(undefined, '', '/#/security-pools')
 }
 function installRegisteredSecurityPool() {
 	const source = capitalClient()
@@ -87,7 +87,7 @@ test('a linked or remembered security pool keeps the list folded', async () => {
 	await waitFor(() => expect(list(linked.container)?.querySelector('li button')?.getAttribute('aria-disabled')).toBe('true'))
 	linked.unmount()
 	// Opening the linked security pool remembered it for this network.
-	window.history.replaceState(undefined, '', '/#/securityPools')
+	window.history.replaceState(undefined, '', '/#/security-pools')
 	const remembered = await renderSection()
 	await waitFor(() => expect(addressField(remembered.container)?.value).toBe(securityPool))
 	expect(list(remembered.container)?.open).toBe(false)

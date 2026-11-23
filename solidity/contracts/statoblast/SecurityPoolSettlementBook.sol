@@ -50,8 +50,12 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	modifier onlySecurityPool() {
-		require(msg.sender == securityPool, 'Only security pool');
+		_requireSecurityPool();
 		_;
+	}
+
+	function _requireSecurityPool() private view {
+		require(msg.sender == securityPool, 'Only security pool');
 	}
 
 	function createBook(uint48 securityPoolTimestamp) external onlySecurityPool returns (uint64 bookId) {
@@ -161,10 +165,22 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	function totals(uint64 bookId)
 		external
 		view
-		returns (uint256 cashAttoEth, uint256 units, uint256 feeCashAttoEth, uint48 securityPoolTimestamp, bool isSealed)
+		returns (
+			uint256 cashAttoEth,
+			uint256 units,
+			uint256 feeCashAttoEth,
+			uint48 securityPoolTimestamp,
+			bool isSealed
+		)
 	{
 		Book storage book = _book(bookId);
-		return (book.cashAttoEth, _descaled(book.units), book.feeCashAttoEth, book.securityPoolTimestamp, book.isSealed);
+		return (
+			book.cashAttoEth,
+			_descaled(book.units),
+			book.feeCashAttoEth,
+			book.securityPoolTimestamp,
+			book.isSealed
+		);
 	}
 
 	/// @notice Donate the active cash deficit while preserving all recovery REP.

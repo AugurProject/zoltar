@@ -5,7 +5,7 @@ import { initializeLiquidityAction } from './liquidity.js'
 import { marketDataUnavailable } from './marketBlockers.js'
 import { tradingFee } from './tradeTicket.js'
 
-const questionLedgerDiscoveryFailedLead = 'Question ledger discovery failed'
+const questionLedgerDiscoveryFailedLead = 'Question discovery failed'
 const universeDiscoveryFailedLead = 'Universe discovery failed'
 const unknownDiscovery = 'unknown error'
 
@@ -23,7 +23,7 @@ function formatInitializationUnavailable(blocker: string) {
 }
 
 function formatMarketNotCreatedDetail(feePercent: string) {
-	return `This question ledger does not have a market yet. Creating the market and adding the first liquidity happen in one transaction. Trading fee: ${feePercent}%.`
+	return `This question does not have a market yet. Creating the market and adding the first liquidity happen in one transaction. Trading fee: ${feePercent}%.`
 }
 
 function formatNoLiquidityDetail(feePercent: string) {
@@ -31,14 +31,14 @@ function formatNoLiquidityDetail(feePercent: string) {
 }
 
 function questionLedgerDetailsUnavailable(loadError: string, refreshError?: string) {
-	return refreshError === undefined ? `Question ledger details could not be loaded: ${endSentence(loadError)}` : `Question ledger details could not be loaded: ${endSentence(loadError)} Latest retry failed: ${endSentence(refreshError)}`
+	return refreshError === undefined ? `Question details could not be loaded: ${endSentence(loadError)}` : `Question details could not be loaded: ${endSentence(loadError)} Latest retry failed: ${endSentence(refreshError)}`
 }
 
 function questionLedgerRefreshFailed(refreshError: string) {
-	return `Question ledger refresh failed; showing the last successful result: ${endSentence(refreshError)}`
+	return `Question refresh failed; showing the last successful result: ${endSentence(refreshError)}`
 }
 
-/** The lead a route's discovery failure is reported under: the universe route discovers universes, every other live route discovers question ledgers. */
+/** The lead a route's discovery failure is reported under: the universe route discovers universes, every other live route discovers questions. */
 function discoveryFailureLead(route: string) {
 	return route === 'universe' ? universeDiscoveryFailedLead : questionLedgerDiscoveryFailedLead
 }
@@ -54,13 +54,13 @@ function questionLedgerDiscoveryFailed(error?: string) {
 }
 
 function questionLedgerCouldNotLoad(error: string) {
-	return `This question ledger could not be loaded. Trading, liquidity, and settlement are unavailable until it loads: ${endSentence(error)}`
+	return `This question could not be loaded. Trading, liquidity, and settlement are unavailable until it loads: ${endSentence(error)}`
 }
 
 export const liveCopy = {
-	questionLedgerDoesNotExist: 'Question ledger does not exist',
+	questionLedgerDoesNotExist: 'Question does not exist',
 	backToCreateMarket: 'Back to create market',
-	openQuestionLedger: 'Open question ledger',
+	openQuestionLedger: 'Open question',
 	openMarket: 'Open market',
 	marketDataUnavailable,
 	marketNotCreated: 'Market not created',
@@ -71,17 +71,17 @@ export const liveCopy = {
 	marketCreated: 'Market created and liquidity added. Your LP tokens are listed under Your position.',
 	noLiquidityYet: 'No liquidity yet',
 	operational,
-	poolForked: 'Question ledger forked',
+	poolForked: 'Question forked',
 	forkMigration: 'Fork migration',
 	unresolvedOutcome: 'None (unresolved)',
 	neverInitializedDetail: 'This market was never created, so it has no price.',
 	addFirstLiquidity: initializeLiquidityAction,
-	refreshingQuestionLedger: 'Refreshing question ledger; showing the last successful result.',
-	retryingQuestionLedgerDetails: 'Retrying question ledger details…',
+	refreshingQuestionLedger: 'Refreshing question; showing the last successful result.',
+	retryingQuestionLedgerDetails: 'Retrying question details…',
 	retryRefresh: 'Retry refresh',
-	retryQuestionLedger: 'Retry question ledger',
+	retryQuestionLedger: 'Retry question',
 	questionEnd: 'Question end',
-	questionLedgerState: 'Question ledger state',
+	questionLedgerState: 'Question state',
 	universeFork: 'Universe fork',
 	notForked: 'Not forked',
 	outcome,
@@ -91,16 +91,16 @@ export const liveCopy = {
 	commitmentLimits: 'Total / fee-eligible commitment limit',
 	mintingCapacity: 'Minting capacity',
 	unknownDiscovery,
-	loadingQuestionLedgerDetails: 'Loading question ledger details…',
+	loadingQuestionLedgerDetails: 'Loading question details…',
 	retryDiscovery: 'Retry discovery',
-	discoveringQuestionLedgers: 'Discovering question ledgers…',
-	noFavoritePools: 'No favorite question ledgers yet',
-	noFavoritePoolsDetail: 'This list only shows question ledgers opened in this browser. Paste a question ledger address from Statoblast above to open one.',
-	findQuestionLedgerGuide: 'How to find a question ledger',
+	discoveringQuestionLedgers: 'Discovering questions…',
+	noFavoritePools: 'No favorite questions yet',
+	noFavoritePoolsDetail: 'This list only shows questions opened in this browser. Paste a question ledger address from Statoblast above to open one.',
+	findQuestionLedgerGuide: 'How to find a question',
 	poolAddressRequired: 'Enter a full question ledger address: 0x followed by 40 hexadecimal characters.',
 	details: 'Details',
-	questionLedgerFacts: 'Question ledger facts',
-	parameters: 'Question ledger parameters',
+	questionLedgerFacts: 'Question facts',
+	parameters: 'Question parameters',
 	questionLedger: appCopy.questionLedger,
 	tradingPool: 'Trading pool',
 	tradingFee,

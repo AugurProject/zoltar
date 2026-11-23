@@ -24,7 +24,7 @@ export function formatRemovalGuidance(path: MarketSettlementPath | undefined) {
 	if (path === 'redeem-complete-sets') return `${removalLead} Next, redeem them with matching Invalid shares as complete sets on the Settlement tab, or hold them until the question resolves.`
 	if (path === 'redeem-winning-shares') return `${removalLead} Next, redeem the winning shares on the Settlement tab.`
 	if (path === 'migrate-shares') return `${removalLead} Next, migrate them to a child universe on the Settlement tab.`
-	return `${removalLead} They cannot be redeemed until the question ledger is operational.`
+	return `${removalLead} They cannot be redeemed until the question is operational.`
 }
 
 export const marketNotInitializedReason = 'Create the market first.'

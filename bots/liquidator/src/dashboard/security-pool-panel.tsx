@@ -8,8 +8,8 @@ export function renderSecurityPools(securityPools: readonly SecurityPoolView[] |
 	render(
 		<>
 			<p class='muted'>
-				Select securityPool addresses and universes on the SecurityPools page. Approve each universe separately in Settings. Enable funded takeovers and set exposure limits under SecurityPool policy in Settings. Previously managed securityPools remain visible for exposure accounting. Total principal limits include direct ledger
-				capital, owned auction vaults and reserved exposure for pending bids.
+				Select security pool addresses and universes on the Security pools page. Approve each universe separately in Settings. Enable funded takeovers and set exposure limits under Security pool policy in Settings. Previously managed security pools remain visible for exposure accounting. Total principal limits include
+				direct ledger capital, owned auction vaults and reserved exposure for pending bids.
 			</p>
 			<details class='security-pool-guidance'>
 				<summary>Monitoring limits</summary>
@@ -17,16 +17,17 @@ export function renderSecurityPools(securityPools: readonly SecurityPoolView[] |
 					Each scan reads one bounded page of positions and one bounded page of unmaterialized auction winners. Winning bids already back claims before their individual positions are recorded. Unchanged retirement warnings require repeated observations; the monitor retains the latest 256 retiring positions per scope.
 				</p>
 			</details>
-			{stale && <p class='notice warning'>Connection lost. These securityPool observations are stale.</p>}
+			{stale && <p class='notice warning'>Connection lost. These security pool observations are stale.</p>}
 			{securityPools === undefined || securityPools.length === 0 ? (
-				<p class='empty'>No managed securityPool observations yet. A selected securityPool appears after a successful scan.</p>
+				<p class='empty'>No managed security pool observations yet. A selected security pool appears after a successful scan.</p>
 			) : (
 				securityPools.map(securityPool => (
 					<article class='panel security-pool-card' key={`${securityPool.address}:${securityPool.universeId}`}>
 						<h3>SecurityPool · universe {securityPool.universeId}</h3>
 						<p class='security-pool-address'>{securityPool.address}</p>
 						<p class='muted'>
-							Block {securityPool.blockNumber} · {securityPool.selected ? 'Selected' : 'Exposure monitoring only'} · {securityPool.approvedUniverse ? 'Universe approved' : 'Universe not approved'} · {securityPool.priceValid ? 'Price current' : 'Price expired'} · Automation {securityPool.automation ? 'enabled' : 'disabled'}
+							Block {securityPool.blockNumber} · {securityPool.selected ? 'Selected' : 'Exposure monitoring only'} · {securityPool.approvedUniverse ? 'Universe approved' : 'Universe not approved'} · {securityPool.priceValid ? 'Price current' : 'Price expired'} · Automation{' '}
+							{securityPool.automation ? 'enabled' : 'disabled'}
 						</p>
 						<p>
 							Owner principal {formatAmount(securityPool.principalRep, 'REP')} · commitment {formatAmount(securityPool.commitmentEth, 'ETH')}. Managed principal {formatAmount(securityPool.managedPrincipalRep, 'REP')} / {formatAmount(securityPool.maximumTotalPrincipalRep, 'REP')} limit.

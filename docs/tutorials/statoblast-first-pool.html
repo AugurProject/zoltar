@@ -17,7 +17,7 @@
 			</header>
 			<section id="before-you-start">
 				<h2>Open the prepared security pool</h2>
-				<p>This exercise uses fake assets in a browser-local chain. From a prepared checkout, run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/#/portfolios?simulate=1&amp;genesis=yes&amp;simScenario=securitypoolx2</code>. No wallet extension or live funds are needed. Wait for <strong>Price current</strong> in the Shared backing section.</p>
+				<p>This exercise uses fake assets in a browser-local chain. From a prepared checkout, run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/#/security-pools?simulate=1&amp;genesis=yes&amp;simScenario=securitypoolx2</code>. No wallet extension or live funds are needed. Wait for <strong>Price current</strong> in the Shared backing section.</p>
 				<p>The fixture supplies two registered questions, 5,000 REP of your principal, a 10 WETH commitment and a 120% saved health target. The security pool shares that commitment across its questions; each question has separate outcome shares. See <a href="../explanation/statoblast.html">How Statoblast works</a> for the economic model.</p>
 				<figure class="screenshot">
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/security-pool-capital.png"><img width="800" height="312" src="../assets/screenshots/statoblast/security-pool-capital.png" alt="The prepared security pool's Your capital section shows principal, commitment and saved health target." loading="lazy" /></a>
@@ -44,7 +44,7 @@
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/security-pool-purchase.png"><img width="800" height="998" src="../assets/screenshots/statoblast/security-pool-purchase.png" alt="The security pool purchase form selects a registered question and bounds collateral, purchase charge and shares received." loading="lazy" /></a>
 					<figcaption><span class="figure-label">Purchase controls.</span> The fee budget is separate from collateral.</figcaption>
 				</figure>
-				<p>You have added capital and bought question shares through the same security pool. Reloading a new simulation resets its local chain; these balances are not live assets. To understand fees or exiting capital, continue with <a href="../explanation/fees.html">Fees</a> and the <a href="../reference/operator-guardrails.html#question-ledger-guardrails">capital guardrails</a>.</p>
+				<p>You have added capital and bought question shares through the same security pool. Reloading a new simulation resets its local chain; these balances are not live assets. To understand fees or exiting capital, continue with <a href="../explanation/fees.html">Fees</a> and the <a href="../reference/operator-guardrails.html#security-pool-guardrails">capital guardrails</a>.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

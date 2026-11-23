@@ -28,7 +28,7 @@ test('preserves the selected pool through Advanced navigation and refresh', () =
 
 test('a security pool purchase links to its question pool page inside the same simulation', () => {
 	const pool = '0x3333333333333333333333333333333333333333'
-	window.history.replaceState({}, '', `#/securityPools?simulate=1&genesis=yes&simScenario=securitypoolx2&securityPool=${pool}&owner=${pool}`)
+	window.history.replaceState({}, '', `#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2&securityPool=${pool}&owner=${pool}`)
 	const href = buildQuestionPoolHref(pool)
 	expect(href).toBe(`#/pools/${pool}?simulate=1&genesis=yes&simScenario=securitypoolx2`)
 	window.history.replaceState({}, '', href)
@@ -81,10 +81,10 @@ test('uses the Favorites browser when no pool context was selected', () => {
 test('opens Security pools with the price report return context and drops removed oracle views', () => {
 	for (const openOracleView of ['create', 'selected-report']) {
 		window.history.replaceState({}, '', `#/open-oracle?openOracleView=${openOracleView}&openOracleReportId=42&universe=7`)
-		const href = getRouteHref('securityPools')
+		const href = getRouteHref('security-pools')
 		const search = href.split('?')[1] ?? ''
 		const resolvedRoute = statoblastRouting.resolve(href)
-		expect(resolvedRoute).toBe('securityPools')
+		expect(resolvedRoute).toBe('security-pools')
 		expect(new URLSearchParams(search).has('openOracleView')).toBe(false)
 		expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute, search }))).toBe(false)
 		window.history.replaceState({}, '', href)

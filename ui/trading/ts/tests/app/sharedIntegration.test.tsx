@@ -266,7 +266,7 @@ test('Trading pool addresses offer explorer and copy controls beside the local p
 	const dom = installDomEnvironment()
 	const address = '0x00000000000000000000000000000000000000a1'
 	const rendered = await renderIntoDocument(<TradingQuestionLedgerLink value={address} />)
-	expect(rendered.container.querySelector('a.security-pool-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
+	expect(rendered.container.querySelector('a.question-ledger-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
 	expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${address}"]`)).not.toBeNull()
 	expect(rendered.container.querySelector(`[role="button"][aria-label="Copy address ${address}"]`)).not.toBeNull()
 	expect(rendered.container.querySelector('a a, a button, a [role=button], button a, button button, button [role=button], [role=button] a')).toBeNull()

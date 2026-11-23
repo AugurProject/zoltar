@@ -52,7 +52,7 @@ async function loadLiveQuestionLedgerSettings(client: PublicClient, pool: Addres
 		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'securityPoolCustody' }),
 	])
 	const central = await loadCentralSecurityPoolQuestion(client, pool, capital, blockNumber)
-	// A pool's own custody link is not proof: the market is offered only when the factory deployed the portfolio it reports.
+	// A pool's own custody link is not proof: the market is offered only when the factory deployed the security pool it reports.
 	if ((await requireCanonicalSecurityPoolOf(client, securityPoolFactory, pool, blockNumber)) !== getAddress(central.securityPoolAddress)) throw new Error('Market custody belongs to another portfolio.')
 	const token = await client.readContract({ address: central.securityPoolAddress, abi: securityPoolArtifact.abi, functionName: 'collateralToken', blockNumber })
 	const collateral = await loadTradingCollateralAsset(client, token, blockNumber)
@@ -167,7 +167,7 @@ export function unavailableMarket(deployment: QuestionLedgerDeployment, error: u
 		shareToken: getAddress(deployment.shareToken),
 		universeId: deployment.universeId,
 		questionId: deployment.questionId,
-		title: `Question ledger ${formatQuestionIdHex(deployment.questionId)}`,
+		title: `Question ${formatQuestionIdHex(deployment.questionId)}`,
 		description: 'Live market data is temporarily unavailable.',
 		endTime: 0n,
 		statoblastSecurityMultiplierBps: deployment.statoblastSecurityMultiplierBps,

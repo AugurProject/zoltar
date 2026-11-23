@@ -40,7 +40,7 @@ function formatCollateralValue(amountAttoShares: bigint, rate: ShareValueRate, m
 	return value > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
 }
 
-/** LP tokens use their fixed ERC20 precision; outcome quantities follow their portfolio collateral unit. */
+/** LP tokens use their fixed ERC20 precision; outcome quantities follow their security pool collateral unit. */
 export const SHARE_QUANTITY_DECIMALS = 18
 
 function formatShareQuantity(amount: bigint, maximumFractionDigits: number, rounding: ShareValueRounding, decimals = SHARE_QUANTITY_DECIMALS) {

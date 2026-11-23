@@ -33,7 +33,7 @@ test('universe preparation discovers capital and indexes deposits from the same 
 			indexer,
 			10n,
 			10n,
-			new Map([[securityPool.toLowerCase(), { address: securityPool, kind: 'securityPool', label: 'SecurityPool', provenance: 'test' }]]),
+			new Map([[securityPool.toLowerCase(), { address: securityPool, kind: 'securityPool', label: 'Security pool', provenance: 'test' }]]),
 			new Map(),
 			header.parentHash,
 			header,

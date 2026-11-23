@@ -127,17 +127,17 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			forkPending.value = false
 		}
 	}
-	if (selectedAddress !== '' && selected === undefined) return <EmptyState title={loading ? copy.loadingQuestion : copy.questionUnavailable} detail={loadError ?? copy.selectRegisteredQuestion} actions={<a href='#/securityPools'>{copy.openSecurityPools}</a>} />
+	if (selectedAddress !== '' && selected === undefined) return <EmptyState title={loading ? copy.loadingQuestion : copy.questionUnavailable} detail={loadError ?? copy.selectRegisteredQuestion} actions={<a href='#/security-pools'>{copy.openSecurityPools}</a>} />
 	if (selected === undefined)
 		return (
 			<div className='route-view-flow'>
-				<RouteHeader title={copy.securityPoolQuestions} description={copy.securityPoolQuestionsDescription} actions={<a href='#/securityPools'>{copy.openSecurityPools}</a>} />
+				<RouteHeader title={copy.securityPoolQuestions} description={copy.securityPoolQuestionsDescription} actions={<a href='#/security-pools'>{copy.openSecurityPools}</a>} />
 				<ErrorNotice message={loadError} />
 				{unavailable.map(question => (
 					<StateHint key={question.address} title={<AddressText address={question.address} />} presentation={{ key: 'load_failed', badgeLabel: copy.questionUnavailable, badgeTone: 'blocked', detail: question.reason }} />
 				))}
 				{loading && <EmptyState title={copy.loadingQuestions} />}
-				{!loading && questions.filter(question => question.universeId === universeId).length === 0 && <EmptyState title={copy.noRegisteredQuestions} detail={copy.registerQuestionsHint} actions={<a href='#/securityPools'>{copy.openSecurityPools}</a>} />}
+				{!loading && questions.filter(question => question.universeId === universeId).length === 0 && <EmptyState title={copy.noRegisteredQuestions} detail={copy.registerQuestionsHint} actions={<a href='#/security-pools'>{copy.openSecurityPools}</a>} />}
 				{!loading && questions.filter(question => question.universeId === universeId).length > 0 && (
 					<div className='security-pool-questions-table' role='region' aria-label={copy.securityPoolQuestions} tabIndex={0}>
 						{/* Explicit roles keep the table semantics when phone widths stack each row (see .security-pool-questions-table). */}
@@ -161,7 +161,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 											</td>
 											<td role='cell' data-label={copy.securityPoolColumn}>
 												{/* The address shortens only when its cell is too narrow for it; the full address stays in the page text, the link's accessible name and its title. */}
-												<a className='security-pool-questions-address' href={`#/securityPools?securityPool=${question.securityPoolAddress}&universe=${question.universeId}`} aria-label={copy.formatOpenSecurityPoolLabel(question.securityPoolAddress)} title={question.securityPoolAddress}>
+												<a className='security-pool-questions-address' href={`#/security-pools?securityPool=${question.securityPoolAddress}&universe=${question.universeId}`} aria-label={copy.formatOpenSecurityPoolLabel(question.securityPoolAddress)} title={question.securityPoolAddress}>
 													<AddressText address={question.securityPoolAddress} />
 												</a>
 											</td>
@@ -178,7 +178,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		)
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader title={getQuestionTitle(selected.marketDetails)} actions={<a href={`#/securityPools?securityPool=${selected.securityPoolAddress}&universe=${selected.universeId}`}>{copy.manageBackingAndRecovery}</a>} />
+			<RouteHeader title={getQuestionTitle(selected.marketDetails)} actions={<a href={`#/security-pools?securityPool=${selected.securityPoolAddress}&universe=${selected.universeId}`}>{copy.manageBackingAndRecovery}</a>} />
 			<ErrorNotice message={forkError.value} />
 			<TradingSection
 				accountState={accountState}
@@ -218,7 +218,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				reportingResult={reporting.reportingResult}
 				forkAlreadyTriggered={selected.universeHasForked}
 				onOpenForkWorkflow={() => {
-					window.location.hash = `#/securityPools?securityPool=${selected.securityPoolAddress}&universe=${selected.universeId}`
+					window.location.hash = `#/security-pools?securityPool=${selected.securityPoolAddress}&universe=${selected.universeId}`
 				}}
 				onTriggerZoltarFork={() => void triggerFork()}
 				triggerZoltarForkPending={forkPending.value}

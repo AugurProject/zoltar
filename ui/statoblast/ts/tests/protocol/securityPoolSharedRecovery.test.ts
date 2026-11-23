@@ -25,8 +25,8 @@ test.each([
 				case 'sourceGame':
 					return zeroAddress
 				case 'getQuestionLedger':
-					return zeroAddress
-				case 'getQuestionLedger':
+					// The factory lookup takes an origin ID; the security pool lookup takes a question ID.
+					if (typeof request.args?.[0] === 'string') return zeroAddress
 					expect(request.args).toEqual([7n, 0n])
 					return token
 				case 'shareToken':

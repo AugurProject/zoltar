@@ -284,7 +284,7 @@ export async function loadSecurityPoolClaimableEarnings(
 /** All reads share one block and inspect only the owner's single position. */
 export async function loadSecurityPoolCapitalSnapshot(parameters: { client: SecurityPoolReadClient; securityPool: Address; owner: Address; universeId?: bigint; blockNumber?: bigint }): Promise<SecurityPoolCapitalSnapshot> {
 	const { client } = parameters
-	const securityPool = decodeAddress(parameters.securityPool, 'SecurityPool')
+	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
 	const owner = decodeAddress(parameters.owner, 'Owner')
 	const [chainId, block] = await Promise.all([client.getChainId(), client.getBlock(parameters.blockNumber === undefined ? undefined : { blockNumber: parameters.blockNumber })])
 	if (!Number.isSafeInteger(chainId) || chainId <= 0 || block.number === undefined || block.hash === undefined) throw new Error('A confirmed block is required for capital accounting.')

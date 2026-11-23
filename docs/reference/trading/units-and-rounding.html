@@ -18,7 +18,7 @@
 			<section id="units">
 				<h2>Units</h2>
 				<ul>
-					<li>Collateral amounts use the portfolio token's atomic units: 10<sup>6</sup> units per USDC and 10<sup>18</sup> units per WETH. Native ETH amounts use attoETH (10<sup>−18</sup> ETH).</li>
+					<li>Collateral amounts use the security pool collateral token's atomic units: 10<sup>6</sup> units per USDC and 10<sup>18</sup> units per WETH. Native ETH amounts use attoETH (10<sup>−18</sup> ETH).</li>
 					<li>Outcome shares use the collateral token's display precision. At an empty QuestionLedger, one collateral atomic unit creates one atomic share of every outcome. Protocol <a href="../glossary.html#holding-fee">holding fees</a> make the later collateral-to-share ratio dynamic, so clients must use the current mutation result rather than assuming this initial rate.</li>
 					<li>LP token amounts use 18 decimal places independently of the collateral token's precision.</li>
 					<li>Fees, slippage, initial conditional price, and displayed conditional price use basis points over 10,000 where applicable.</li>

@@ -10,6 +10,6 @@ describe('statoblast document title', () => {
 	})
 
 	test('names the security pool route', () => {
-		expect(getAppPageTitle({ activeQuestionLedgersView: 'browse', route: 'securityPools' })).toBe('SecurityPools')
+		expect(getAppPageTitle({ activeQuestionLedgersView: 'browse', route: 'security-pools' })).toBe('Security pools')
 	})
 })

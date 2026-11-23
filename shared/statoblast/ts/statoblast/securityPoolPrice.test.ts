@@ -34,7 +34,8 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		isPriceReportingOpen: true,
 		securityPoolOf: securityPool,
 		getQuestionLedgerOriginId: hash,
-		getQuestionLedger: seed,
+		// The factory's getQuestionLedger(originId, universeId) shares its name with the security pool's question lookup.
+		factoryGetQuestionLedger: seed,
 		sharedPriceFeeds: feed,
 		getRepToken: rep,
 		securityPool,
@@ -68,8 +69,9 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		readContract: async parameters => {
 			calls.push(parameters)
 			if (parameters.functionName === 'universeId') return parameters.address === seed ? 0n : 42n
-			if (!(parameters.functionName in values)) throw new Error(`Unexpected read ${parameters.functionName}`)
-			return values[parameters.functionName]
+			const key = parameters.functionName === 'getQuestionLedger' && typeof parameters.args?.[0] === 'string' ? 'factoryGetQuestionLedger' : parameters.functionName
+			if (!(key in values)) throw new Error(`Unexpected read ${key}`)
+			return values[key]
 		},
 	}
 	return { client, calls }
@@ -172,7 +174,7 @@ describe('security pool branch price SDK', () => {
 		expect(calls.some(call => call.functionName === 'minimumToken1ReportAttoEth')).toBe(false)
 		expect(() => quoteSecurityPoolPriceFunding(snapshot, unit)).toThrow('closed')
 	})
-	test.each([{ securityPool: owner }, { securityPoolFactory: owner }, { reputationToken: owner }, { sharedPriceFeeds: owner }, { getQuestionLedger: owner }, { securityPoolOf: owner }])('rejects mismatched canonical identities %j', async overrides => {
+	test.each([{ securityPool: owner }, { securityPoolFactory: owner }, { reputationToken: owner }, { sharedPriceFeeds: owner }, { factoryGetQuestionLedger: owner }, { securityPoolOf: owner }])('rejects mismatched canonical identities %j', async overrides => {
 		await expect(load(fixture(overrides).client)).rejects.toThrow()
 	})
 	test('quotes upward REP rounding and exact wrap and bounty requirements', async () => {

@@ -12,6 +12,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { useSecurityPoolSharedFork, type SecurityPoolSharedForkParameters } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolSharedFork.js'
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
+import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { capitalSnapshot, token, capital, owner, unit } from './capitalFixture.js'
 import { capitalClient, modules } from './capitalClient.js'
@@ -236,7 +237,6 @@ async function recoverySetup() {
 	fixture.source.setRead('questionOriginIds', `0x${'11'.repeat(32)}`)
 	fixture.source.setRead('sourceGame', zeroAddress)
 	fixture.source.setRead('getQuestionLedger', token)
-	fixture.source.setRead('getQuestionLedger', token)
 	fixture.source.setRead('shareToken', token)
 	fixture.source.setRead('balanceOfSecurityPoolRecoveryRights', [3n * unit, 5n * unit, 4n * unit])
 	fixture.source.setRead('isSecurityPoolRecoveryEligible', true)
@@ -284,7 +284,8 @@ test('recovery transfer blocks invalid recipients, zero amounts, per-outcome ove
 	await act(() => hook.state().setInvalidRights('-1'))
 	expect(hook.state().transferReason).toContain('nonnegative')
 	await act(() => hook.state().setInvalidRights('1'))
-	source.setRead('getQuestionLedger', zeroAddress)
+	// Only the factory's origin lookup finds no child ledger; the security pool still resolves its source question.
+	source.setRead('getQuestionLedger', zeroAddress, getInfraContractAddresses().securityPoolFactory)
 	await act(() => hook.state().setQuestion('8'))
 	await waitFor(() => expect(hook.state().recovery?.pool).toBe(zeroAddress))
 	expect(hook.state().transferReason).toBe('Prepare the source question first.')

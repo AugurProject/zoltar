@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import {
-	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
-	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
-	statoblast_QuestionForker_QuestionForker as forkerArtifact,
-	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
-} from '../types/contractArtifact'
+import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken, getChildUniverseId } from '../testSupport/simulator/utils/utilities'

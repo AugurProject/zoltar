@@ -193,7 +193,13 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
 		await writeContractAndWait(sponsor, () =>
-			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [withdraw(unit, sponsor.account.address)] }], value: bounty }),
+			sponsor.writeContract({
+				abi: batchAbi,
+				address: feed.address,
+				functionName: 'requestSecurityPoolPriceWithOperations',
+				args: [unit, 10n * unit, bounty, { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations: [withdraw(unit, sponsor.account.address)] }],
+				value: bounty,
+			}),
 		)
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
@@ -221,7 +227,9 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const operations = [withdraw(unit, sponsor.account.address), withdraw(10_000n * unit, sponsor.account.address), withdraw(2n * unit, sponsor.account.address)]
 		const bounty = 3n * (await sponsor.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' }))
 		const timestamp = (await sponsor.getBlock()).timestamp
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 1_800_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty }))
+		await writeContractAndWait(sponsor, () =>
+			sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, 10n * unit, bounty, { gasLimit: 1_800_000n, minimumPrice: unit, maximumPrice: unit, deadline: timestamp + 1000n, operations }], value: bounty }),
+		)
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(fixture.owner(), report)

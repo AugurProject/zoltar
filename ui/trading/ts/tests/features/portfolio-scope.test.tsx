@@ -88,7 +88,7 @@ describe('live portfolio scope', () => {
 		// The genesis universe is named without its raw identifier.
 		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('No positions in Augur v2 › Yes')
 		// Holdings discovery covers registered pools in the selected universe.
-		expect(empty?.textContent).toContain('No Yes, No, Invalid, or LP balance was found in registered question ledgers in this universe.')
+		expect(empty?.textContent).toContain('No Yes, No, Invalid, or LP balance was found in registered questions in this universe.')
 		expect(empty?.textContent).not.toContain('only covers markets opened in this browser')
 		const links = Array.from(empty?.querySelectorAll('a') ?? [])
 		expect(links.map(link => [link.textContent, link.getAttribute('href'), link.classList.contains('primary')])).toEqual([
@@ -252,7 +252,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
 		expect(rendered.container.textContent).toContain('Outcome token IDs')
-		expect(rendered.container.textContent).toContain('Question ledger stateOperational')
+		expect(rendered.container.textContent).toContain('Question stateOperational')
 		expect(rendered.container.textContent).toContain('Security multiplier2×')
 		expect(rendered.container.querySelector('details')?.open).toBe(false)
 		const capacity = Array.from(rendered.container.querySelectorAll('.metric-label')).find(field => field.textContent?.includes('Minting capacity'))
@@ -288,16 +288,16 @@ describe('live portfolio scope', () => {
 		const failedMarket: LiveMarket = { ...market, loadError: 'pool RPC failed' }
 		const rendered = await renderIntoDocument(<LiveQuestionLedgerDetails market={failedMarket} retry={() => retries++} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question ledger details could not be loaded: pool RPC failed')
+		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question details could not be loaded: pool RPC failed')
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
 		expect(rendered.container.textContent).toContain('Outcome token IDs')
-		expect(rendered.container.textContent).not.toContain('Question ledger state')
+		expect(rendered.container.textContent).not.toContain('Question state')
 		expect(rendered.container.textContent).not.toContain('Registered vaults')
 		expect(rendered.container.textContent).not.toContain('Minting capacity')
 		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
 		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)')
-		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry question ledger button is unavailable')
+		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry question button is unavailable')
 		retry.click()
 		expect(retries).toBe(1)
 	})
@@ -305,14 +305,14 @@ describe('live portfolio scope', () => {
 	test('uses one truthful recovery state across failed pool retry combinations', async () => {
 		const failedMarket: LiveMarket = { ...market, loadError: 'pool RPC failed' }
 		const refreshing = await renderIntoDocument(<LiveQuestionLedgerDetails market={failedMarket} refreshing retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
-		expect(refreshing.container.querySelector('[role="status"]')?.textContent).toContain('Retrying question ledger details')
+		expect(refreshing.container.querySelector('[role="status"]')?.textContent).toContain('Retrying question details')
 		expect(refreshing.container.textContent).not.toContain('last successful result')
 		expect(refreshing.container.querySelectorAll('button:not([aria-label^="Copy"]):not(.favorite-toggle)')).toHaveLength(0)
 		await refreshing.cleanup()
 
 		const failedRetry = await renderIntoDocument(<LiveQuestionLedgerDetails market={failedMarket} refreshError='factory RPC failed' retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = failedRetry.cleanup
-		expect(failedRetry.container.querySelector('[role="alert"]')?.textContent).toContain('Question ledger details could not be loaded: pool RPC failed. Latest retry failed: factory RPC failed')
+		expect(failedRetry.container.querySelector('[role="alert"]')?.textContent).toContain('Question details could not be loaded: pool RPC failed. Latest retry failed: factory RPC failed')
 		expect(failedRetry.container.textContent).not.toContain('last successful result')
 		expect(failedRetry.container.querySelectorAll('button:not([aria-label^="Copy"]):not(.favorite-toggle)')).toHaveLength(1)
 	})
@@ -321,8 +321,8 @@ describe('live portfolio scope', () => {
 		let retries = 0
 		const rendered = await renderIntoDocument(<LiveQuestionLedgerDetails market={market} refreshError='factory RPC failed' retry={() => retries++} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question ledger refresh failed; showing the last successful result: factory RPC failed')
-		expect(rendered.container.textContent).toContain('Question ledger stateOperational')
+		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question refresh failed; showing the last successful result: factory RPC failed')
+		expect(rendered.container.textContent).toContain('Question stateOperational')
 		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry refresh button is unavailable')
 		retry.click()
@@ -332,9 +332,9 @@ describe('live portfolio scope', () => {
 	test('keeps stale pool details identified while a refresh is pending', async () => {
 		const rendered = await renderIntoDocument(<LiveQuestionLedgerDetails market={market} refreshing retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing question ledger; showing the last successful result.')
+		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing question; showing the last successful result.')
 		expect(rendered.container.querySelector('[aria-busy="true"]')).not.toBeNull()
-		expect(rendered.container.textContent).toContain('Question ledger stateOperational')
+		expect(rendered.container.textContent).toContain('Question stateOperational')
 		expect(rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)') === null).toBe(true)
 	})
 
@@ -342,7 +342,7 @@ describe('live portfolio scope', () => {
 		let retries = 0
 		const rendered = await renderIntoDocument(<QuestionLedgerRouteEmptyState discoveryState='error' discoveryError='RPC unavailable' workflowLocked={false} retry={() => retries++} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question ledger discovery failed: RPC unavailable')
+		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question discovery failed: RPC unavailable')
 		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry discovery button is unavailable')
 		retry.click()
@@ -354,7 +354,7 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		const empty = rendered.container.querySelector('.empty-state')
 		// The pool route names what is wrong once, and offers both ways out.
-		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('Question ledger not in this universe')
+		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('Question not in this universe')
 		expect(empty?.textContent).not.toContain('No question ledger selected')
 		expect(Array.from(empty?.querySelectorAll('a') ?? []).map(link => [link.textContent, link.getAttribute('href')])).toEqual([
 			['Switch universe', '#/universe'],

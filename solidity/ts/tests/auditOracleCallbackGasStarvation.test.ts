@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, parseAbi, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import {
-	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
-	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
-	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
-	statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact,
-} from '../types/contractArtifact'
+import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_openOracle_OpenOracle_OpenOracle as oracleArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { loadOpenOracleEventState, wrapWeth } from '../testSupport/simulator/utils/contracts/statoblast'

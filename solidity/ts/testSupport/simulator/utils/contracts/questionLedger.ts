@@ -142,4 +142,3 @@ export const getRepToken = async (client: ReadClient, questionLedgerAddress: Add
 		}),
 		'REP token address',
 	)
-

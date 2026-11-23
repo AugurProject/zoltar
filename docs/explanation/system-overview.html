@@ -29,9 +29,9 @@
 					<dt>Universe</dt>
 					<dd>A <a href="../reference/glossary.html#universe">ledger that can branch</a>. Markets and REP balances belong to a particular universe. Questions are registered globally, so the same question can have markets in multiple universes. When reporters split irreconcilably, the universe forks into children, one per possible answer, each with its own REP.</dd>
 					<dt>Security pool</dt>
-					<dd>A <a href="../reference/glossary.html#securityPool">shared capital and settlement system</a> that backs admitted questions. Each owner keeps an individual REP account and commitment; each question keeps separate outcome shares and accounting. A security pool can hold one fixed question or many.</dd>
+					<dd>A <a href="../reference/glossary.html#security-pool">shared capital and settlement system</a> that backs admitted questions. Each owner keeps an individual REP account and commitment; each question keeps separate outcome shares and accounting. A security pool can hold one fixed question or many.</dd>
 					<dt>QuestionLedger</dt>
-					<dd>The <a href="../reference/glossary.html#security-pool">question contract</a> inside a security pool. It exposes outcome shares, reporting and redemption; security pool modules hold REP and collateral.</dd>
+					<dd>The <a href="../reference/glossary.html#question-ledger">question contract</a> inside a security pool. It exposes outcome shares, reporting and redemption; security pool modules hold REP and collateral.</dd>
 				</dl>
 			</section>
 			<section id="components">
@@ -54,7 +54,7 @@
 					<ol class="protocol-flow">
 						<li>Register question</li>
 						<li>Admit question to security pool</li>
-						<li>Deposit security pool REP</li>
+						<li>Deposit REP into the security pool</li>
 						<li>Mint complete sets</li>
 						<li>Trade shares</li>
 						<li>Question ends</li>

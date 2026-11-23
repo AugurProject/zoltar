@@ -6,7 +6,7 @@ import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { readOpenOracleReportIdQueryParam, writeOpenOracleReportIdQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
 import { readQuestionLedgerQuestionIdQueryParam, readUniverseQueryParam, updateSearchParams, setOrDeleteSearchParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { buildPoolsRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash, writePoolsLocationSearch, type PoolsLocation } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
+import { buildPoolsRouteHash, parsePoolsRouteHash, writePoolsLocationSearch, type PoolsLocation } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
 
 type StatoblastUrlState = {
 	poolBrowseState: PoolBrowseState
@@ -36,8 +36,7 @@ function readStatoblastUrlState(search: string, routeHash: string): StatoblastUr
 }
 
 export function useStatoblastUrlState() {
-	// A legacy `#/security-pools` link is rewritten in place so every reader sees the path-based pool location.
-	const { navigate: navigateUrl, state } = useUrlSearchState(readStatoblastUrlState, { mapLegacyHash: mapLegacyStatoblastHash })
+	const { navigate: navigateUrl, state } = useUrlSearchState(readStatoblastUrlState)
 	const updateSearch = useCallback((update: (search: string) => string, historyMode: UrlHistoryMode = 'push') => navigateUrl(getCurrentRouteHash(), update(getRouteHashSearch()), historyMode), [navigateUrl])
 	const navigatePools = useCallback(
 		(location: PoolsLocation, historyMode: UrlHistoryMode = 'push') => {

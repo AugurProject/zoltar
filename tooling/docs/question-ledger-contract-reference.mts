@@ -1,11 +1,11 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
-	compiledAbiFingerprint: 'f275b60774a048940a26b49aa82e844e7a8bd8d30e6d8c45dba3289acea0dcd6',
+	compiledAbiFingerprint: 'c4f1592d409d1b4d2453e5c8e1403380e5c2655849f21067bc0ef10fe0d3d862',
 	name: 'QuestionLedger',
 	interactionNotes:
 		'All deployed question ledgers belong to a security pool. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered security pool route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
 	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
-	readAbiFingerprint: 'bb7f9551cde59425e97ae1385f4e225183103e0ff33d578edb9bc768302838ce',
+	readAbiFingerprint: '537009037021a731264f837907f59ef6ffff763fd4e3e76d3879ea8b63672f95',
 	readSurface:
 		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `getCurrentMintingCapacityAttoEth` is zero once the question ends or reporting starts; otherwise it includes current question collateral and available shared capacity. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. `getFeeEpochEndTime` is the native fee cutoff, bounded by the universe fork time. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `openOraclePriceCoordinator`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
 	securityBoundary:

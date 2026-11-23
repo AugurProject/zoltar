@@ -27,7 +27,6 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 		getQuestionLedger: token,
 		securityPoolOf: securityPool,
 		getQuestionLedgerOriginId: `0x${'11'.repeat(32)}`,
-		getQuestionLedger: token,
 		priceFeed,
 		sharedPriceFeeds: priceFeed,
 		isPriceReportingOpen: true,

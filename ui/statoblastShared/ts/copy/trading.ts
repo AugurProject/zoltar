@@ -7,12 +7,12 @@ export const childNotDeployed = 'Child not deployed'
 export const clear = 'Clear'
 export const loadingForkQuestionDetails = 'Loading fork question details…'
 export const loadingForkTargetUniverses = 'Loading child universes…'
-export const loadingShareMigrationTargetPools = 'Loading child universe question ledgers…'
-export const shareMigrationTargetPoolsUnavailable = 'Child universe question ledgers unavailable. Refresh pool to retry.'
-export const missingChildPoolBlocker = 'This selection includes a child universe without a question ledger. Migrate into each such child universe separately.'
+export const loadingShareMigrationTargetPools = 'Loading this question in child universes…'
+export const shareMigrationTargetPoolsUnavailable = 'This question is unavailable in child universes. Refresh to retry.'
+export const missingChildPoolBlocker = 'This selection includes a child universe where this question is not registered yet. Migrate into each such child universe separately.'
 export const formatSharesAlreadyMigratedReason = (outcomeLabel: string) => `Your ${outcomeLabel} shares are already migrated into the selected child universes.`
 export const formatSharesMigratedIntoEveryChildReason = (outcomeLabel: string) => `Your ${outcomeLabel} shares are already migrated into every child universe.`
-export const noChildPoolForBatchMigration = 'No child universe has a question ledger yet. Select one child universe; migrating into it creates its pool.'
+export const noChildPoolForBatchMigration = 'This question is not registered in any child universe yet. Select one child universe; migrating into it registers the question there.'
 export const formatMalformedOutcomeLabel = (outcomeIndex: string) => `Malformed (${outcomeIndex})`
 export const selectAll = 'Select all'
 export const childTargetsLockedReason = 'Child universe targets unlock after this universe forks.'

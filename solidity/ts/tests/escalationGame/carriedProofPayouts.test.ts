@@ -162,7 +162,14 @@ describe('Escalation Game: carried proof payouts', () => {
 		const { peaks: parentNoPeaks, leafCount: parentNoLeafCount, carryTotal: parentNoCarryTotal, nullifierRoot: parentNoNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.No)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotWithResolutionBalancesViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentYesPeaks, parentNoPeaks], [0n, parentYesLeafCount, parentNoLeafCount], [0n, parentYesCarryTotal, parentNoCarryTotal], [0n, 0n, 1n], [zeroHash(), parentYesNullifierRoot, parentNoNullifierRoot])
+		await initializeSnapshotWithResolutionBalancesViaTestQuestionLedger(
+			child.testQuestionLedgerAddress,
+			[zeroPeakArray(), parentYesPeaks, parentNoPeaks],
+			[0n, parentYesLeafCount, parentNoLeafCount],
+			[0n, parentYesCarryTotal, parentNoCarryTotal],
+			[0n, 0n, 1n],
+			[zeroHash(), parentYesNullifierRoot, parentNoNullifierRoot],
+		)
 		await fundEscalationGame(child.escalationGameAddress, parentYesCarryTotal + parentNoCarryTotal - 1n)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))

@@ -40,7 +40,7 @@ describe('standalone trading UI model', () => {
 	test('names the route the user is on while contracts load so the header does not change once they resolve', () => {
 		const pool = `0x${'ab'.repeat(20)}`
 		expect(liveRouteLoadingPresentation('portfolio')).toEqual({ title: 'Portfolio' })
-		expect(liveRouteLoadingPresentation(`security-pool/${pool}`)).toEqual({ description: 'Identity, lifecycle, and capacity of the question ledger that backs this market.', title: 'Question ledger' })
+		expect(liveRouteLoadingPresentation(`security-pool/${pool}`)).toEqual({ description: 'Identity, lifecycle, and minting capacity of the question this market trades.', title: 'Question' })
 		expect(liveRouteLoadingPresentation(`market/${pool}`)).toEqual(liveWorkflowRoutePresentation('market'))
 		expect(liveRouteLoadingPresentation(`liquidity/${pool}`)).toEqual(liveWorkflowRoutePresentation('liquidity'))
 		expect(liveRouteLoadingPresentation('create-market')).toEqual(liveWorkflowRoutePresentation('create-market'))
@@ -230,7 +230,7 @@ describe('standalone trading UI model', () => {
 		expect(marketAcceptsNewRisk(open, 2_000n)).toBeFalse()
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, universeForkTime: 999n }, 1_000n)).toBe('Universe forked')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, awaitingForkContinuation: true }, 1_000n)).toBe('Awaiting fork continuation')
-		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, systemState: 3 }, 1_000n)).toBe('Question ledger inactive')
+		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, systemState: 3 }, 1_000n)).toBe('Question inactive')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved Invalid')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined }, 2_000n)).toBe('Question ended')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: 0 }, 2_000n)).toBe('Question ended')
@@ -424,7 +424,7 @@ describe('standalone trading UI model', () => {
 			expect(settlementUnavailableReason('redeem-complete-set', market, balances)).toBe('The question resolved. Redeem your winning shares instead.')
 			expect(marketSettlementPath({ ...market, systemState: 1 })).toBe('unavailable')
 			expect(settlementAvailability({ ...market, systemState: 1 }, balances).canMigrateShares).toBe(false)
-			expect(settlementUnavailableReason('redeem-winning-shares', { ...market, systemState: 1 }, balances)).toBe('The question ledger is not operational, so it cannot redeem shares.')
+			expect(settlementUnavailableReason('redeem-winning-shares', { ...market, systemState: 1 }, balances)).toBe('The question is not operational, so its shares cannot be redeemed.')
 		})
 
 	test('allows many ready fork children while requiring missing children to be created singly', () => {
@@ -479,7 +479,7 @@ describe('standalone trading UI model', () => {
 		expect(settlementUnavailableReason('redeem-complete-set', open, empty)).toBe('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
 		expect(settlementUnavailableReason('redeem-complete-set', open, undefined)).toBe('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
 		expect(settlementUnavailableReason('redeem-complete-set', { ...open, universeForkTime: 1n }, holdings)).toBe('The universe forked; migrate your shares instead.')
-		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The question ledger is not operational, so it cannot redeem shares.')
+		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The question is not operational, so its shares cannot be redeemed.')
 		expect(settlementUnavailableReason('redeem-winning-shares', open, holdings)).toBe('The question has not resolved yet.')
 		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 0n })).toBe('You hold no No shares to redeem.')
 		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 1n })).toBeUndefined()

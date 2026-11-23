@@ -61,7 +61,7 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	},
 	{
 		name: 'SharedPriceFeedRegistered',
-		parameters: 'address indexed security pool,uint248 indexed universeId,address indexed priceFeed',
+		parameters: 'address indexed securityPool,uint248 indexed universeId,address indexed priceFeed',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -131,4 +131,4 @@ export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArgum
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = 'bbedbb4e1c8e5b4a331770d93e75a5334669a59c030014d30a08a13c62fb77bd'
+export const referencedEventAbiFingerprint = 'ce02b828077a0eb9833157bcf72ec672d95da7dcc61ebcd2b0250fddf64a8f83'

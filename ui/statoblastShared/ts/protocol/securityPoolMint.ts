@@ -17,7 +17,11 @@ export async function loadSecurityPoolMintQuestion(client: ReadClient, snapshot:
 			client.getBlock({ blockNumber }),
 		])
 		if (originUniverseId !== universeId) throw new Error('Register new questions in the origin universe before purchasing.')
-		await Promise.all([requireSecurityPoolQuestionAdmission(client, admissionPolicy, securityPool, universeId, questionId, blockNumber), requireSecurityPoolQuestionHorizon(client, securityPool, questionId, blockNumber, block.timestamp), requireSecurityPoolQuestionEligibility(client, universeId, questionId, blockNumber)])
+		await Promise.all([
+			requireSecurityPoolQuestionAdmission(client, admissionPolicy, securityPool, universeId, questionId, blockNumber),
+			requireSecurityPoolQuestionHorizon(client, securityPool, questionId, blockNumber, block.timestamp),
+			requireSecurityPoolQuestionEligibility(client, universeId, questionId, blockNumber),
+		])
 		const questionEndTime = await client.readContract({ address: getZoltarContractAddresses().zoltarQuestionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'getQuestionEndDate', args: [questionId], blockNumber })
 		const [finalBlock, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 		if (finalBlock.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the question. Refresh and try again.')

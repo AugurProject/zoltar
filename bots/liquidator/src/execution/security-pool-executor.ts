@@ -73,7 +73,7 @@ export async function executeSecurityPoolTakeover(
 	if (plan.ownFunding > 0n && current.allowance < plan.ownFunding) {
 		action = 'approval'
 		request = { to: observation.snapshot.repToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [base.capitalLedger, plan.ownFunding] }), value: 0n }
-		label = 'Approve bounded security pool REP funding'
+		label = 'Approve bounded REP funding for the security pool'
 	} else if (plan.ownFunding > 0n) {
 		action = 'principal'
 		request = buildSecurityPoolCapitalDepositRequest({ ...base, amountAttoRep: plan.ownFunding })

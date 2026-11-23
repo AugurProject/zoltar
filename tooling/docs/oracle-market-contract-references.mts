@@ -1,10 +1,10 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const oracleMarketContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '4bec387c51f0e08af8b07d4b8f35af30f2fce89bab990a4dab47c3eff0fe74e8',
+		compiledAbiFingerprint: '465ae5e4cab4541e4697e17ffd30f4ba2628eb10743465b997b90b3ccee3f31c',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Per-question adapter to the security pool universe\u2019s shared REP-per-collateral feed. It exposes reporting and canonical price reads without staging capital operations.',
-		readAbiFingerprint: '57561ab6a60dd586366a6da6ceb4eeeef28f14eb09d5a1a710d7c6edfc1e9e1f',
+		readAbiFingerprint: '42823cad2ad885dfb7efee89cf4967e14a7cbbd78fe60e6466c85499e199e283',
 		readSurface:
 			'`priceFeed` and `sharedPriceFeed` identify the shared universe feed. It owns accepted price, freshness and report candidates. `lastSettlementTimestamp` records settlement eligibility, not delayed execution time. `isPriceValid` checks the accepted price and canonical `priceValidUntil`; pending or rejected reports do not extend expiry. `pendingReportId` and `pendingReportSponsor` identify the latest candidate, without blocking independent candidates. Reports use separate escrows. `reportDelegate` implements authenticated shared report creation. `questionLedger` is bound once by the coordinator factory. Capital operations may execute directly against an accepted price or as a sponsor-bound batch submitted through the shared feed. Additional validated getters: `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getSettlementCallbackGasLimit`, `reputationToken`, `openOracle`, `collateralToken`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `minLiquidationPriceDistanceBps`.',
 		securityBoundary:
@@ -172,7 +172,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				call: '`syncExposure()`',
 				caller: 'Anyone; pool accounting checkpoints also invoke it',
-				effect: 'Reads the live securityPool aggregate, max(standing commitments, branch-auction commitment, funded demand), and emits a checkpoint if it changed. Question finality does not independently clear this shared exposure.',
+				effect: 'Reads the live security pool aggregate, max(standing commitments, branch-auction commitment, funded demand), and emits a checkpoint if it changed. Question finality does not independently clear this shared exposure.',
 				declarations: [
 					{
 						name: 'syncExposure',
@@ -199,10 +199,10 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'a5a5bd5ea48f6e815f880a8e6b86840cc0793340eafff23ab28879af48c551cd',
+		compiledAbiFingerprint: '790ccaf0f17571515aaf5603b08550689b1deab361af6af68b9cf4c024534db3',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: '0194bb1e0f88ac06380299cf0929f248401c3fb6db8373010f01cba437918089',
+		readAbiFingerprint: '7579ee9d868a9c4ed0ce13e35d1286a34804e1dca9789be15dc5aaf7a2aa41d2',
 		readSurface:
 			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalQuestionLedgerByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, `unpackTokenId`, `isSecurityPoolRecoveryEligible`, and `balanceOfSecurityPoolRecoveryRights`. The eligibility getter applies the [source recovery rules](./contract-inventory.html#security-pool-recovery-rights), preserving ordinary source-pool redemption for protected finalized questions. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible; the minimum bounds complete-set cash recovery. Received rights are included independently of the holder\u2019s source-token balances.',
 		readDeclarations: [
@@ -343,7 +343,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'Canonical source is a securityPool question in a forked universe with `isSecurityPoolRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); recipient is a different nonzero account; at least one amount is positive; every amount fits its corresponding unspent recovery-right balance.',
+					'Canonical source is a security pool question in a forked universe with `isSecurityPoolRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); recipient is a different nonzero account; at least one amount is positive; every amount fits its corresponding unspent recovery-right balance.',
 				signals: '`SecurityPoolRecoveryRightsTransferred`',
 			},
 			{
@@ -357,7 +357,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'Canonical source is a securityPool question in a forked universe with `isSecurityPoolRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); positive amount no greater than any of the holder\u2019s three unspent recovery-right balances. The coordinator authenticates the holder and calculates the corresponding cash payout.',
+					'Canonical source is a security pool question in a forked universe with `isSecurityPoolRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); positive amount no greater than any of the holder\u2019s three unspent recovery-right balances. The coordinator authenticates the holder and calculates the corresponding cash payout.',
 				signals: '`SecurityPoolRecoveryRightsConsumed`',
 			},
 			{
@@ -371,7 +371,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'Source universe forked; for a securityPool question, `isSecurityPoolRecoveryEligible(sourceUniverse)` is true (`ShareToken question finalized before fork`): shares of a question whose claims were final before the fork redeem in the source universe; a canonical source pool that is not yet `PoolForked` has no final outcome and no inherited fixed outcome, because fork-mode activation rejects both; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; each target is an immediate native child, including when its bound question contract skips intermediate reporter ancestors; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
+					'Source universe forked; for a security pool question, `isSecurityPoolRecoveryEligible(sourceUniverse)` is true (`ShareToken question finalized before fork`): shares of a question whose claims were final before the fork redeem in the source universe; a canonical source pool that is not yet `PoolForked` has no final outcome and no inherited fixed outcome, because fork-mode activation rejects both; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; each target is an immediate native child, including when its bound question contract skips intermediate reporter ancestors; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
 				signals: 'Canonical child preparation may emit `QuestionLedgerRegistered`, `DeployQuestionLedger`, and share-token `AuthorizationUpdated`. Successful materialization emits ERC-1155 `TransferSingle` and `Migrate` for each target.',
 			},
 			{

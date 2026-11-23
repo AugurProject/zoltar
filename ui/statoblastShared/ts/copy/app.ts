@@ -7,7 +7,7 @@ export const oracleReportViews = 'OpenOracle views'
 export const statoblastSecurityMultiplierBps = 'Security multiplier'
 export const openPoolForOraclePrice = 'Open a pool to see its oracle price'
 
-export const securityPools = 'SecurityPools'
+export const securityPools = 'Security pools'
 
 export const questions = 'Questions'
 

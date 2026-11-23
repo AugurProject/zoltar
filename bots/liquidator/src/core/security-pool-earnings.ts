@@ -11,5 +11,7 @@ export function securityPoolEarningsCoverGas(observation: SecurityPoolObservatio
 	const { snapshot } = observation
 	const price = securityPoolEarningsPrice(observation)
 	const repValue = marketAllowed && snapshot.priceValid && snapshot.timestamp < snapshot.priceValidUntil && price > 0n ? (snapshot.accruedFeesAttoRep * 10n ** 18n) / price : 0n
-	return observation.selected && observation.approvedUniverse && snapshot.accruedFeesAttoEth + repValue >= settings.strategy.maximumGasCostAttoEth + settings.securityPoolPolicy.minimumNetRewardAttoEth && observation.walletAttoEth >= settings.strategy.maximumGasCostAttoEth + settings.securityPoolPolicy.walletReserveAttoEth
+	return (
+		observation.selected && observation.approvedUniverse && snapshot.accruedFeesAttoEth + repValue >= settings.strategy.maximumGasCostAttoEth + settings.securityPoolPolicy.minimumNetRewardAttoEth && observation.walletAttoEth >= settings.strategy.maximumGasCostAttoEth + settings.securityPoolPolicy.walletReserveAttoEth
+	)
 }

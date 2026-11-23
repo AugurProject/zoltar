@@ -48,7 +48,7 @@ type PriceReadClient = SecurityPoolReadClient & { getBalance(parameters: { addre
 /** Read one branch feed directly, without a question coordinator or history scan. */
 export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceReadClient; securityPool: Address; owner: Address; universeId: bigint; blockNumber?: bigint }) {
 	const { client } = parameters
-	const securityPool = decodeAddress(parameters.securityPool, 'SecurityPool')
+	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
 	const owner = decodeAddress(parameters.owner, 'Report sponsor')
 	const universeId = decodeUint(parameters.universeId, 'Universe', 248)
 	const [block, chainId] = await Promise.all([client.getBlock(parameters.blockNumber === undefined ? undefined : { blockNumber: parameters.blockNumber }), client.getChainId()])

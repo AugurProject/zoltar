@@ -166,7 +166,12 @@ export const diagramGraphSpecs = {
 			),
 			section(
 				'security-pool-forks',
-				[node('fork', 'Universe fork', 'red', ['local non-decision or another question']), node('choices', 'Shared owner choices', 'gold', ['one per security pool and universe']), node('branch', 'Branch accounting', 'blue', ['auction where ETH is short']), node('child', 'Child questions', 'green', ['prepare on demand'])],
+				[
+					node('fork', 'Universe fork', 'red', ['local non-decision or another question']),
+					node('choices', 'Shared owner choices', 'gold', ['one per security pool and universe']),
+					node('branch', 'Branch accounting', 'blue', ['auction where ETH is short']),
+					node('child', 'Child questions', 'green', ['prepare on demand']),
+				],
 				[edge('fork-choices', 'fork', 'choices'), edge('choices-branch', 'choices', 'branch', 'after choice cutoff'), edge('branch-child', 'branch', 'child', 'settle or continue')],
 				{ title: 'Shared fork recovery' },
 			),

@@ -91,17 +91,6 @@ describe('useStatoblastUrlState', () => {
 		expect(state().questionLedgerAddress).toBe(POOL_A)
 	})
 
-	test('rewrites legacy question ledger links onto the pool path', async () => {
-		const state = await renderHarness()
-		await act(() => {
-			window.location.hash = `#/security-pools?questionLedger=${POOL_B}&questionLedgersView=operate&selectedPoolView=reporting&universe=2`
-			window.dispatchEvent(new Event('hashchange'))
-		})
-		expect(window.location.hash).toBe(`#/pools/${POOL_B}?universe=2`)
-		expect(state().questionLedgerAddress).toBe(POOL_B)
-		expect(state().activeUniverseId).toBe(2n)
-	})
-
 	test('updates the pool path and query through setter callbacks', async () => {
 		const state = await renderHarness()
 

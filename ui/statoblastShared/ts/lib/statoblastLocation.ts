@@ -1,15 +1,11 @@
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import type { PoolBrowseState, PoolSortKey, PoolStateFilter, SelectedVaultView } from '../types/app.js'
-import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { setOrDeleteSearchParam, updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 export const POOLS_ROUTE_HASH = '#/pools'
-const LEGACY_SECURITY_POOLS_ROUTE_HASH = '#/security-pools'
 const POOLS_PATH_PREFIX = `${POOLS_ROUTE_HASH}/`
-const QUESTION_ID_QUERY_PARAM = 'questionId'
-const LEGACY_POOL_QUERY_PARAMS = ['questionLedger', 'questionLedgersView', 'selectedPoolView'] as const
 
 /** A location inside the Pools route: the address entry, browse list, create and universe views, or one pool page without per-pool tabs. */
 export type PoolsLocation = { view: 'browse' } | { view: 'create' } | { view: 'universes' } | { view: 'migrate' } | { view: 'operate'; questionLedgerAddress: string }
@@ -56,29 +52,6 @@ export function buildPoolsRouteHash(location: PoolsLocation) {
 		default:
 			return assertNever(location)
 	}
-}
-
-/**
- * Maps the legacy `#/security-pools?questionLedgersView=…&questionLedger=…&selectedPoolView=…` links onto the path routes so
- * bookmarked pool links and the documented simulator entry points keep opening the same pool or list view.
- */
-export function mapLegacyStatoblastHash(hash: string): string | undefined {
-	const { routeHash, search } = parseRouteHash(hash)
-	if (routeHash !== LEGACY_SECURITY_POOLS_ROUTE_HASH && routeHash !== `${LEGACY_SECURITY_POOLS_ROUTE_HASH}/`) return undefined
-	const params = new URLSearchParams(search)
-	const view = params.get('questionLedgersView')?.trim() ?? ''
-	const questionLedgerAddress = params.get('questionLedger')?.trim() ?? ''
-	const location: PoolsLocation = (() => {
-		if (questionLedgerAddress !== '' && view !== 'browse' && view !== 'create' && view !== 'universes') return { questionLedgerAddress, view: 'operate' }
-		if (view === 'create' || (view === '' && params.has(QUESTION_ID_QUERY_PARAM))) return { view: 'create' }
-		if (view === 'universes' || view === 'universe') return { view: 'universes' }
-		return { view: 'browse' }
-	})()
-	const nextSearch = updateSearchParams(search, nextParams => {
-		for (const key of LEGACY_POOL_QUERY_PARAMS) nextParams.delete(key)
-		if (location.view !== 'create') nextParams.delete(QUESTION_ID_QUERY_PARAM)
-	})
-	return `${buildPoolsRouteHash(location)}${nextSearch}`
 }
 
 /** Clears pool-scoped vault context when navigating to another pool or to the list. */

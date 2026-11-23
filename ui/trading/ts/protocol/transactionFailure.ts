@@ -24,8 +24,8 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 		cause: 'Trading has ended for this market.',
 		nextStep: 'Reload the market to see its current status.',
 	},
-	{ reasons: ['Purchase exceeds healthy capacity'], cause: 'The question ledger does not have enough minting capacity for this size.', nextStep: 'Try a smaller amount.' },
-	{ reasons: ['Portfolio backing insufficient'], cause: 'The question ledger does not have enough backing for this size.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Purchase exceeds healthy capacity'], cause: 'This question does not have enough minting capacity for this size.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Security pool backing insufficient'], cause: 'The security pool does not have enough backing for this size.', nextStep: 'Try a smaller amount.' },
 	{
 		reasons: ['Insufficient output', 'Net input is zero', 'Input is zero', 'Complete set is zero', 'Exchange rate undefined', 'Liquidity rounds to zero', 'Liquidity output is zero', 'Liquidity is zero', 'Initial reserves round to zero', 'Initial liquidity too small'],
 		cause: 'The amount is too small to trade.',

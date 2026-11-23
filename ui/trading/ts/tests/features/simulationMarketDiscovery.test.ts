@@ -183,7 +183,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				for (const [route, backLabel, backHref] of returns) {
 					const rendered = await renderIntoDocument(h(LiveTrading, { route, configuration, configurationError: undefined, selectedUniverseId: '0', controllerServices: liveTradingControllerServices, onWorkflowLockChange: () => undefined }))
 					try {
-						await waitFor(() => expect(rendered.container.textContent).toContain('Question ledger does not exist'), simulationWaitOptions)
+						await waitFor(() => expect(rendered.container.textContent).toContain('Question does not exist'), simulationWaitOptions)
 						expect(rendered.container.textContent).not.toContain('discovery failed')
 						expect(rendered.container.textContent).not.toContain('Retry')
 						expect(rendered.container.querySelector('.empty-state')?.textContent).toContain(missingPool)
@@ -380,7 +380,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 
 			expect(discovery.universeIds).toEqual([0n])
 			expect(discovery.markets).toHaveLength(1)
-			expect(discovery.markets[0]?.title).toBe('Will this resolve? (portfolio question 1)')
+			expect(discovery.markets[0]?.title).toBe('Will this resolve? (security pool question 1)')
 			expect(discovery.markets[0]?.originUniverseId).toBe(0n)
 			const market = discovery.markets[0]
 			if (market === undefined) throw new Error('Seeded market is missing')

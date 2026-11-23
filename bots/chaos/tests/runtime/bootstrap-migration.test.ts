@@ -23,7 +23,7 @@ test('restarts an empty bootstrap that recorded the previous zero-address deploy
 	try {
 		const stateFile = join(directory, 'state.json')
 		const old = initialDurableState(11155111, true, executionProfileId(obsoleteSettings()))
-		expect(old.profileId).toBe('profile:v1:5cdcef7d8af58831a1093e7b976163b2af8a3fc02e201ede57a9f93514075115')
+		expect(old.profileId).toBe('profile:v1:011a100c2a572a6cd70a02e8f12c1980ef13615113c5c28be588ecb187ed0b66')
 		old.signerAddress = '0x1111111111111111111111111111111111111111'
 		old.safetyPaused = true
 		old.activities.push({ at: new Date().toISOString(), message: `Operator cycle stopped safely: No contract code on RPC chain 11155111 at block 100: zoltar (${zeroAddress}). Verify the selected network, RPC synchronization, and deployment addresses before retrying.`, status: 'failed', type: 'error' })

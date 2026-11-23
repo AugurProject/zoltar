@@ -49,7 +49,8 @@ describe('Escalation game: bounded carry readiness', () => {
 		const zeros = [0n, 0n, 0n] as const
 		const totals = [0n, reportBond, 0n] as const
 		const roots = [zeroHash(), zeroHash(), zeroHash()] as const
-		for (let stage = 0; stage < 3; stage++) await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: child.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, zeros, totals, zeros, roots] }))
+		for (let stage = 0; stage < 3; stage++)
+			await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: child.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, zeros, totals, zeros, roots] }))
 		expect(await client.readContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'forkCarrySnapshotInitialized' })).toBe(true)
 		expect(await client.readContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'isForkCarryFundingComplete' })).toBe(false)
 		await expect(client.simulateContract({ abi: poolArtifact.abi, address: child.testQuestionLedgerAddress, functionName: 'resumeEscalationGameFromFork' })).rejects.toThrow('Fork carry underfunded')

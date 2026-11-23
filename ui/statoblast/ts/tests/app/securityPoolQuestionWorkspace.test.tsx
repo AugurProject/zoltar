@@ -55,7 +55,7 @@ test(
 			expect(securityPoolLink.querySelector('.address-value-full')?.textContent).toBe(securityPoolAddress)
 			expect([...securityPoolLink.querySelectorAll('.address-value-abbreviated')].map(form => form.textContent)).toContain(abbreviateAddress(securityPoolAddress, 6, 4))
 			expect(securityPoolLink.getAttribute('aria-label')).toBe(securityPoolCopy.formatOpenSecurityPoolLabel(securityPoolAddress))
-			expect(securityPoolLink.getAttribute('href')).toBe(`#/securityPools?securityPool=${securityPoolAddress}&universe=0`)
+			expect(securityPoolLink.getAttribute('href')).toBe(`#/security-pools?securityPool=${securityPoolAddress}&universe=0`)
 			const button = table?.querySelector('button')
 			if (!(button instanceof HTMLButtonElement)) throw new Error('Missing question selector')
 			await act(() => {
@@ -86,7 +86,7 @@ test('viewing a pending price report replaces the new oracle route entry and pre
 			accountState: createAccountState(),
 			canReadOnchainData: false,
 			navigate: route => calls.push(['navigate', route]),
-			route: 'securityPools',
+			route: 'security-pools',
 			setOpenOracleReport: (id, mode) => calls.push(['report', id, mode]),
 			urlOpenOracleReportId: '',
 			walletScopedHookConfig: { ...callbacks, accountAddress: undefined },

@@ -483,7 +483,7 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(migrateSharesFromUniverse.mock.calls).toEqual([])
-		expect(hook.state().tradingFeedback?.status.detail).toBe('This selection includes a child universe without a question ledger. Migrate into each such child universe separately.')
+		expect(hook.state().tradingFeedback?.status.detail).toBe('This selection includes a child universe where this question is not registered yet. Migrate into each such child universe separately.')
 	})
 
 	function getMigrateGuardMessage(state: ReturnType<typeof useTradingOperations>) {
@@ -537,11 +537,11 @@ describe('useTradingOperations', () => {
 			}),
 		)
 
-		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'Child universe question ledgers unavailable. Refresh pool to retry. Reason: multicall failed.' }))
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'This question is unavailable in child universes. Refresh to retry. Reason: multicall failed.' }))
 		expect(hook.state().tradingError).toBeUndefined()
 		expect(hook.state().tradingDetails?.shareBalances).toEqual(shareBalances)
 		expect(hook.state().tradingDetails?.maxRedeemableCompleteSetsAttoShares).toBe(ATTO_ETH_PER_ETH)
-		expect(getMigrateGuardMessage(hook.state())).toBe('Child universe question ledgers unavailable. Refresh pool to retry. Reason: multicall failed.')
+		expect(getMigrateGuardMessage(hook.state())).toBe('This question is unavailable in child universes. Refresh to retry. Reason: multicall failed.')
 
 		failTargetsRead = false
 		await act(() => invalidateAppData())
@@ -602,7 +602,7 @@ describe('useTradingOperations', () => {
 		// A wallet switch reloads the details, and this time the child universe read fails.
 		failTargetsRead = true
 		await hook.rerender({ accountAddress: NEXT_WALLET_ADDRESS })
-		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'Child universe question ledgers unavailable. Refresh pool to retry. Reason: multicall failed.' }))
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'This question is unavailable in child universes. Refresh to retry. Reason: multicall failed.' }))
 		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('1')
 
 		failTargetsRead = false

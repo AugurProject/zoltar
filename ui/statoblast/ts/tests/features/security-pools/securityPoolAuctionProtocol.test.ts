@@ -3,11 +3,7 @@ import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/e
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { loadSecurityPoolAccount } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { authenticateSecurityPoolAuctionVault, loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolAuction.js'
-import {
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
-} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact, statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { auctionVaultRuntimeCode, predictAuctionVaultAddress } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { capitalClient, modules } from './capitalClient.js'
 import { capital, capitalSnapshot, index, owner, securityPool, token, unit } from './capitalFixture.js'

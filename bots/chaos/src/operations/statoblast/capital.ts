@@ -44,7 +44,7 @@ function depositStep(snapshot: EcosystemSnapshot, token: `0x${string}`, ledger: 
 		label: 'Deposit REP into security pool capital',
 		to: ledger,
 		walletAssetDebits: [erc20WalletDebit(token, spend, 'rep')],
-		preflightCalls: [encodePreflightCall({ abi: securityPoolCapitalLedgerAbi, args: [snapshot.wallet.address, spend], caller: snapshot.wallet.address, expectedResult: '0x', functionName: 'depositFor', label: 'Revalidate security pool REP deposit', to: ledger })],
+		preflightCalls: [encodePreflightCall({ abi: securityPoolCapitalLedgerAbi, args: [snapshot.wallet.address, spend], caller: snapshot.wallet.address, expectedResult: '0x', functionName: 'depositFor', label: 'Revalidate REP deposit into the security pool', to: ledger })],
 	})
 }
 
@@ -82,7 +82,7 @@ function cleanup(snapshot: EcosystemSnapshot, context: OperationContinuationCont
 
 export const depositCapital: OperationDefinition = {
 	id: 'statoblast.capital.deposit',
-	label: 'Deposit security pool REP',
+	label: 'Deposit REP into the security pool',
 	method: 'depositFor',
 	contract: 'SecurityPoolCapitalLedger',
 	classification: 'selectable',
@@ -102,7 +102,7 @@ export const depositCapital: OperationDefinition = {
 			label: depositCapital.label,
 			metadata: { securityPool: capital.securityPool, universeId: capital.universeId, capitalLedger: capital.capitalLedger, repToken: capital.repToken, amountAttoRep: spend.toString() },
 			maximumCleanupTransactionCount: needsApproval ? 1 : undefined,
-			postconditions: ['The owner’s security pool REP principal increases'],
+			postconditions: ['The owner’s REP principal in the security pool increases'],
 			risk: 'medium',
 			snapshot,
 			steps: [...(needsApproval ? [approval(snapshot, capital.repToken, capital.capitalLedger, spend)] : []), depositStep(snapshot, capital.repToken, capital.capitalLedger, spend)],
@@ -144,7 +144,7 @@ export const depositCapital: OperationDefinition = {
 			label: depositCapital.label,
 			metadata,
 			maximumCleanupTransactionCount: previousApproval === undefined ? undefined : 1,
-			postconditions: ['The owner’s security pool REP principal increases'],
+			postconditions: ['The owner’s REP principal in the security pool increases'],
 			risk: 'medium',
 			snapshot,
 			steps: [...(approved ? [] : [expectedApproval]), expectedAction],
@@ -156,7 +156,7 @@ type CapitalAction = 'withdraw' | 'claim' | 'retire' | 'serve-retirement'
 export function capitalAction(kind: CapitalAction): OperationDefinition {
 	const id = `statoblast.capital.${kind}`
 	const method = { withdraw: 'withdrawPrincipal', claim: 'claimEarnings', retire: 'setCommitment', 'serve-retirement': 'serveRetirement' }[kind]
-	const label = { withdraw: 'Withdraw free security pool REP', claim: 'Claim security pool earnings', retire: 'Retire security pool commitment', 'serve-retirement': 'Serve security pool retirement' }[kind]
+	const label = { withdraw: 'Withdraw free REP from the security pool', claim: 'Claim security pool earnings', retire: 'Retire security pool commitment', 'serve-retirement': 'Serve security pool retirement' }[kind]
 	function candidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 		return (kind === 'withdraw' || kind === 'claim' ? ownerCapital(snapshot, options) : openCapital(snapshot, options)).filter(capital => {
 			if (kind === 'withdraw') return amount(capital.withdrawableAttoRep) > 0n

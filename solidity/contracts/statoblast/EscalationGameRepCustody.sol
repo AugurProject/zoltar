@@ -9,10 +9,7 @@ import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { SecurityPoolSettlement } from './SecurityPoolSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
-import {
-	ISecurityPoolReporterLedger,
-	ISecurityPoolReporterHost
-} from './interfaces/ISecurityPoolReporterLedger.sol';
+import { ISecurityPoolReporterLedger, ISecurityPoolReporterHost } from './interfaces/ISecurityPoolReporterLedger.sol';
 
 /// @dev One adapter for native game logic and security pool reporter custody. Standalone
 /// games (including narrow test pool contexts) keep their existing direct REP custody.

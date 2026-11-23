@@ -92,7 +92,15 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	const vaultCode = await client.getCode({ address: vault, blockNumber })
 	const bindings = decodeAuctionVaultBindings(vaultCode)
 	if (bindings === undefined) throw new Error('Unrecognized auction vault runtime code.')
-	const [ownerValue, capitalValue, auctionValue, idValue, controllerValue, protocolValue, factoryValue] = await Promise.all([read(vault, 'owner'), read(vault, 'initialCapital'), read(vault, 'auction'), read(vault, 'bidId'), read(securityPool, 'forkController'), read(securityPool, 'zoltar'), read(securityPool, 'factory')])
+	const [ownerValue, capitalValue, auctionValue, idValue, controllerValue, protocolValue, factoryValue] = await Promise.all([
+		read(vault, 'owner'),
+		read(vault, 'initialCapital'),
+		read(vault, 'auction'),
+		read(vault, 'bidId'),
+		read(securityPool, 'forkController'),
+		read(securityPool, 'zoltar'),
+		read(securityPool, 'factory'),
+	])
 	const bidder = requireAddressValue(ownerValue, 'auction vault owner')
 	const initialCapital = requireAddressValue(capitalValue, 'initial auction capital')
 	const auction = requireAddressValue(auctionValue, 'vault auction')

@@ -398,10 +398,10 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'b80c65ffc09bee9a03c4f3092442b1c0e8deb8939f902915a3915c23e3e93d24',
+		compiledAbiFingerprint: '9f140ba187e551ae4eb92e1451a42456a171e7ae71a7d9722bb212df37d63050',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys every security pool from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: 'b614b97269b3eceef7cab1d8c26a5a7a083c25835a2069184404608c8d8062a3',
+		readAbiFingerprint: 'c5bae8b03b730f22009ece36ed0b8cedb22792b6f4ac7f0b4647659cd881021b',
 		readSurface:
 			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `questionLedgerDeploymentCount` and strict `questionLedgerDeploymentsRange` enumerate canonical question ledgers. `isSecurityPool` is true only for a securityPool this factory deployed, and `securityPoolCreationCodeHash` is the hash of the only creation code it deploys. `securityPoolCount` and strict `securityPoolsRange` enumerate, in registration order, the factory-deployed securityPools that have configured their namespace; a deployed securityPool is listed when its final setup step calls `initializeSecurityPoolPriceFeed`. `getQuestionLedgerId`, `getQuestionLedger`, `getQuestionLedgerOriginId` and `getQuestionLedgerHasInheritedForkOutcome` identify their lineage. `getQuestionOriginId` includes the caller securityPool namespace. `securityPoolOf` returns the factory-deployed securityPool a ledger belongs to; `sharedPriceFeeds` is indexed by securityPool and universe. `getChildQuestionLedgerCoordinator` returns the prepared child coordinator, or zero before preparation. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured coordinator-factory ceiling used to reject over-cap securityPool creation before setup. `zoltar` identifies the protocol root.',
 		readDeclarations: [
@@ -467,7 +467,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'`keccak256(creationCode)` equals `securityPoolCreationCodeHash` (`SecurityPool creation code is not canonical`); `configuration` is exactly 13 words (`SecurityPool configuration length invalid`). The securityPool constructor\u2019s own checks apply and revert the deployment, including that every pinned module deployer holds code.',
+					'`keccak256(creationCode)` equals `securityPoolCreationCodeHash` (`Security pool creation code is not canonical`); `configuration` is exactly 13 words (`Security pool configuration length invalid`). The securityPool constructor\u2019s own checks apply and revert the deployment, including that every pinned module deployer holds code.',
 				signals: '`SecurityPoolDeployed` with the security pool and the caller. Setup continues through the security pool\u2019s `prepareNext`.',
 			},
 			{
@@ -481,7 +481,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'The universe has a REP token and has not forked. A repeated call must match the first call\u2019s REP token and priority fee. The feed starts without an accepted price. The caller satisfies `isSecurityPool` (`SecurityPool is not canonical`), so no other contract can open a namespace. This call neither registers a question nor allocates REP.',
+					'The universe has a REP token and has not forked. A repeated call must match the first call\u2019s REP token and priority fee. The feed starts without an accepted price. The caller satisfies `isSecurityPool` (`Security pool is not canonical`), so no other contract can open a namespace. This call neither registers a question nor allocates REP.',
 				signals: 'Returns the canonical feed address. The first setup emits `SecurityPoolRegistered`. Each new feed emits `SharedPriceFeedRegistered` with the security pool, universe and feed address.',
 			},
 			{
@@ -519,7 +519,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'The caller has configured its namespace (`SecurityPool configuration missing`), which only a factory-deployed security pool can do. The ordinary origin deployment checks apply; no lineage for this question/configuration has been claimed in the caller namespace. The namespace is derived from msg.sender and cannot be supplied on behalf of another pool.',
+					'The caller has configured its namespace (`Security pool configuration missing`), which only a factory-deployed security pool can do. The ordinary origin deployment checks apply; no lineage for this question/configuration has been claimed in the caller namespace. The namespace is derived from msg.sender and cannot be supplied on behalf of another pool.',
 				signals: '`SharedPriceFeedSet`, feed `CoordinatorRegistered`, `QuestionLedgerRegistered`, and `DeployQuestionLedger`',
 			},
 			{
@@ -555,7 +555,8 @@ export const coreContractReferences: ContractReference[] = [
 						name: 'deployChildQuestionLedger',
 					},
 				],
-				preconditions: 'Parent is the canonical pool for its lineage; supplied share token equals the parent share token; no pool has already been claimed for the parent origin in the target universe; a security pool child feed has already been prepared; deployment arguments satisfy downstream constructors and wiring.',
+				preconditions:
+					'Parent is the canonical pool for its lineage; supplied share token equals the parent share token; no pool has already been claimed for the parent origin in the target universe; a security pool child feed has already been prepared; deployment arguments satisfy downstream constructors and wiring.',
 				signals: '`QuestionLedgerRegistered`, then `DeployQuestionLedger`',
 			},
 		],

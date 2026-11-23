@@ -12,7 +12,7 @@ export type AppPageTitleInput = {
 }
 
 export function getAppPageTitle({ activeQuestionLedgersView, route }: AppPageTitleInput) {
-	if (route === 'securityPools') return statoblastAppCopy.securityPools
+	if (route === 'security-pools') return statoblastAppCopy.securityPools
 	if (route === 'deploy') return appCopy.deployContracts
 	if (route === 'pools') {
 		if (activeQuestionLedgersView === 'operate') return 'Question'

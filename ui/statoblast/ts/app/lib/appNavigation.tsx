@@ -25,7 +25,7 @@ export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, sh
 		route,
 		tabs: [
 			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.questions, route: 'pools' },
-			{ hash: statoblastRouting.getHash('securityPools'), label: statoblastAppCopy.securityPools, route: 'securityPools' },
+			{ hash: statoblastRouting.getHash('security-pools'), label: statoblastAppCopy.securityPools, route: 'security-pools' },
 			{ hash: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports, route: 'open-oracle' },
 		],
 	})

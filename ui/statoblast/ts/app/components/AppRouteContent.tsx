@@ -19,7 +19,7 @@ import { buildPoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblast
 
 const STATOBLAST_NOT_FOUND_LINKS = [
 	{ href: statoblastRouting.getHash('pools'), label: statoblastAppCopy.questions },
-	{ href: statoblastRouting.getHash('securityPools'), label: statoblastAppCopy.securityPools },
+	{ href: statoblastRouting.getHash('security-pools'), label: statoblastAppCopy.securityPools },
 	{ href: buildPoolsRouteHash({ view: 'universes' }), label: zoltarCopy.universesTitle },
 	{ href: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports },
 	{ href: statoblastRouting.getHash('deploy'), label: commonCopy.deploy },
@@ -51,7 +51,7 @@ export function AppRouteContent({ deploy, openOracle, securityPools, readBackend
 			if (questionView === 'universes') return <UniversePoolDirectorySection {...universeDirectory} />
 			if (questionView === 'migrate') return <ZoltarMigrationWorkflow {...migration} />
 			return <SecurityPoolQuestionWorkspace {...questions} />
-		case 'securityPools':
+		case 'security-pools':
 			return <SecurityPoolsSection {...securityPools} />
 		case 'open-oracle':
 			return <PriceRequestStatusSection {...openOracle} />

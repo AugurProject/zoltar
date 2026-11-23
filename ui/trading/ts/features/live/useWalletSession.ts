@@ -360,7 +360,7 @@ export function useWalletSummaryEffects({
 		}
 		if (configuration === undefined) throw new Error('Wallet summary availability was resolved without a deployment configuration')
 		if (selected?.loadError !== undefined) {
-			resolveStatus('error', `Wallet balances could not be loaded because the selected question ledger is unavailable: ${selected.loadError}`, 'Question ledger unavailable')
+			resolveStatus('error', `Wallet balances could not be loaded because the selected question is unavailable: ${selected.loadError}`, 'Question unavailable')
 			return
 		}
 		const walletMarket = selected ?? { zoltar: configuration.zoltar, universeId: BigInt(selectedUniverseId ?? '0') }

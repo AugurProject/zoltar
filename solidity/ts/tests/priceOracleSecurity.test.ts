@@ -832,7 +832,7 @@ describe('Shared security pool oracle security regressions', () => {
 	test('adapter setup rejects repeated and unauthorized binding without changing the canonical feed', async () => {
 		const target = { abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle }
 		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
-		await assert.rejects(client.writeContract({ ...target, functionName: 'setQuestionLedger', args: [pool] }), /Security pool already set/)
+		await assert.rejects(client.writeContract({ ...target, functionName: 'setQuestionLedger', args: [pool] }), /Question ledger already set/)
 		await assert.rejects(client.writeContract({ ...target, functionName: 'setSharedPriceFeed', args: [priceFeed] }), /Shared feed setup invalid/)
 		await assert.rejects(client.writeContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'registerCoordinator', args: [priceOracle] }), /Only security pool factory/)
 		assert.strictEqual(await client.readContract({ ...target, functionName: 'questionLedger' }), pool)

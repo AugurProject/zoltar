@@ -474,7 +474,7 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/securityPools?simulate=1&genesis=yes&simScenario=portfolio-auction',
+		hash: '#/security-pools?simulate=1&genesis=yes&simScenario=portfolio-auction',
 		expected: 'Fork choices and recovery',
 		workflow: true,
 		name: 'statoblast fork and auction',
@@ -510,7 +510,7 @@ test(
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		await loadProductionDocumentInChromium(
-			`${baseUrl}/statoblast/#/securityPools?simulate=1&genesis=yes&simScenario=securitypoolx2`,
+			`${baseUrl}/statoblast/#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2`,
 			{ height: 900, width: 1440 },
 			async driver => {
 				// Worker bootstrap can finish before main-thread discovery authenticates the ledger.
@@ -648,7 +648,7 @@ async function securityPoolMetric(driver: ProductionBrowserDriver, label: string
 	return driver.evaluate(`(() => { const field = [...document.querySelectorAll('.metric-label')].find(node => node.textContent === ${JSON.stringify(label)}); return field?.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, '') })()`)
 }
 
-productionInteractionTest('capital-recovery', '#/securityPools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
+productionInteractionTest('capital-recovery', '#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 	const before = await securityPoolMetric(driver, capitalCopy.principalRep)
 	expect(before).toBe('5000REP')
@@ -673,7 +673,7 @@ productionInteractionTest('capital-recovery', '#/securityPools?simulate=1&genesi
 	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5001REP')
 })
 
-productionInteractionTest('security-pool-purchase', '#/securityPools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
+productionInteractionTest('security-pool-purchase', '#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 	const selected = await driver.evaluate(
 		`(() => { const label = [...document.querySelectorAll('label')].find(node => node.textContent === ${JSON.stringify(securityPoolCopy.registeredQuestions)}); const select = label?.control; if (!(select instanceof HTMLSelectElement)) return false; const option = [...select.options].find(option => option.value !== ''); if (!option) return false; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,

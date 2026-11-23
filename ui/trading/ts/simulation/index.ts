@@ -10,7 +10,7 @@ export const FORKED_TRADING_SIMULATION_SCENARIO = 'trading-forked'
 export function registerTradingSimulationScenario() {
 	registerSimulationScenario(USDC_TRADING_SIMULATION_SCENARIO, { label: 'Trading with USDC', description: 'A funded USDC market with six-decimal collateral and separate router approvals.' })
 	registerSimulationScenario(DEPLOYED_TRADING_SIMULATION_SCENARIO, {
-		description: 'A seeded Statoblast question ledger with the trading factory and router deployed for walletless trade, liquidity, and settlement testing.',
+		description: 'A seeded Statoblast security pool with the trading factory and router deployed for walletless trade, liquidity, and settlement testing.',
 		label: 'Deployed',
 	})
 	registerSimulationScenario(FUNDED_TRADING_SIMULATION_SCENARIO, {

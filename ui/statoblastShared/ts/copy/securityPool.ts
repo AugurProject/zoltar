@@ -1,6 +1,6 @@
 import { formatConnectWalletBefore } from '@zoltar/ui-core-shared/copy/common.js'
 
-export const title = 'SecurityPools'
+export const title = 'Security pools'
 export const setup = 'Open a security pool'
 export const manager = 'Security pool address'
 export const owner = 'Owner address'
@@ -99,7 +99,7 @@ export const openSecurityPools = 'Open security pools'
 
 export const questionColumn = 'Question'
 
-export const securityPoolColumn = 'SecurityPool'
+export const securityPoolColumn = 'Security pool'
 
 export const securityPoolsInUniverse = 'Security pools in this universe'
 

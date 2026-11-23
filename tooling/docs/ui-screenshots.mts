@@ -142,7 +142,7 @@ export function pickMatch<T>(matches: readonly T[], nth: number): T | undefined 
 /** Changes only explicitly marked simulator examples, retaining their surrounding HTML and URL parts. */
 function withSimulationQuestionLedgerAddress(page: string, html: string, address: string): string {
 	return html.replace(/(<code\b[^>]*>)([\s\S]*?)(<\/code>)/g, (tag, opening: string, content: string, closing: string) => {
-		const marker = attributeValue(opening, 'data-simulation-question-ledger')
+		const marker = attributeValue(opening, 'data-simulation-security-pool')
 		if (marker === undefined) return tag
 		let pattern: RegExp | undefined
 		if (marker === 'address') pattern = /^(\s*)0x[0-9a-fA-F]{40}(\s*)$/
@@ -150,7 +150,7 @@ function withSimulationQuestionLedgerAddress(page: string, html: string, address
 		const match = pattern?.exec(content)
 		const prefix = match?.[1]
 		const suffix = match?.[2]
-		if (prefix === undefined || suffix === undefined || (marker === 'market-url' && !URL.canParse(content.trim()))) throw new Error(`docs/${page} has malformed <code data-simulation-question-ledger="${marker}"> content`)
+		if (prefix === undefined || suffix === undefined || (marker === 'market-url' && !URL.canParse(content.trim()))) throw new Error(`docs/${page} has malformed <code data-simulation-security-pool="${marker}"> content`)
 		return `${opening}${prefix}${address}${suffix}${closing}`
 	})
 }

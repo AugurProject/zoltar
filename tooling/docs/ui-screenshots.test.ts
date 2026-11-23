@@ -143,8 +143,8 @@ describe('documentation screenshots', () => {
 	test('syncs marked simulation addresses and market routes while preserving surrounding content', async () => {
 		const marketPrefix = `http://localhost:4163/trading/?simulate=1&amp;hint=${previousPool}#/market/`
 		const marketSuffix = `?tab=trade&amp;recipient=${previousPool}`
-		const unchanged = `<p>Keep ${previousPool}</p><code>${previousPool}</code><code>${marketPrefix}${previousPool}${marketSuffix}</code><span data-simulation-question-ledger="address">${previousPool}</span>`
-		const marked = (address: string) => `<code class="address" data-simulation-question-ledger="address"> ${address} </code><code data-simulation-question-ledger="market-url">${marketPrefix}${address}${marketSuffix}</code>`
+		const unchanged = `<p>Keep ${previousPool}</p><code>${previousPool}</code><code>${marketPrefix}${previousPool}${marketSuffix}</code><span data-simulation-security-pool="address">${previousPool}</span>`
+		const marked = (address: string) => `<code class="address" data-simulation-security-pool="address"> ${address} </code><code data-simulation-security-pool="market-url">${marketPrefix}${address}${marketSuffix}</code>`
 		await withEmbeddingPage(`${unchanged}${marked(previousPool)}`, async (docsRoot, pagePath) => {
 			await updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, currentPool)
 			expect(await readFile(pagePath, 'utf8')).toBe(`${unchanged}${marked(currentPool)}`)
@@ -152,7 +152,7 @@ describe('documentation screenshots', () => {
 	})
 
 	test('keeps marked simulation content unchanged when syncing sizes without a runtime address', async () => {
-		const marked = `<code data-simulation-question-ledger="address">${previousPool}</code><code data-simulation-question-ledger="market-url">http://localhost:4163/?simulate=1#/market/${previousPool}</code>`
+		const marked = `<code data-simulation-security-pool="address">${previousPool}</code><code data-simulation-security-pool="market-url">http://localhost:4163/?simulate=1#/market/${previousPool}</code>`
 		await withEmbeddingPage(`${marked}<img src="./assets/screenshots/trading/buy-ticket.png" width="1" height="1" alt="Ticket" />`, async (docsRoot, pagePath) => {
 			await updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined)
 			const updated = await readFile(pagePath, 'utf8')
@@ -162,7 +162,7 @@ describe('documentation screenshots', () => {
 	})
 
 	test('rejects invalid runtime addresses before changing any embedding page', async () => {
-		const html = `<code data-simulation-question-ledger="address">${previousPool}</code><img src="./assets/screenshots/trading/buy-ticket.png" width="1" height="1" alt="Ticket" />`
+		const html = `<code data-simulation-security-pool="address">${previousPool}</code><img src="./assets/screenshots/trading/buy-ticket.png" width="1" height="1" alt="Ticket" />`
 		await withEmbeddingPage(html, async (docsRoot, pagePath) => {
 			for (const invalid of ['', '0x1234', `0x${'z'.repeat(40)}`, `${currentPool}0`, ` ${currentPool}`]) {
 				await expect(updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, invalid)).rejects.toThrow('simulation QuestionLedger address')
@@ -173,10 +173,10 @@ describe('documentation screenshots', () => {
 
 	test('rejects malformed marked content without writing the page', async () => {
 		for (const marked of [
-			'<code data-simulation-question-ledger="address">0x1234</code>',
-			`<code data-simulation-question-ledger="address"><span>${previousPool}</span></code>`,
-			`<code data-simulation-question-ledger="market-url">http://localhost:4163/#/market/0x1234</code>`,
-			`<code data-simulation-question-ledger="market-url">http://localhost:4163/#/security pool/${previousPool}</code>`,
+			'<code data-simulation-security-pool="address">0x1234</code>',
+			`<code data-simulation-security-pool="address"><span>${previousPool}</span></code>`,
+			`<code data-simulation-security-pool="market-url">http://localhost:4163/#/market/0x1234</code>`,
+			`<code data-simulation-security-pool="market-url">http://localhost:4163/#/security pool/${previousPool}</code>`,
 		]) {
 			await withEmbeddingPage(marked, async (docsRoot, pagePath) => {
 				await expect(updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, currentPool)).rejects.toThrow('docs/existing.html')

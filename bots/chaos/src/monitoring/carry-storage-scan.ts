@@ -6,16 +6,7 @@ import { loadCarryStorageCandidates, type CarryStorageRoute } from './carry-proo
 import { computeWinningEconomics } from './carry-withdrawal-economics.ts'
 import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency, type ChaosReadClient } from './discovery-client.ts'
 
-export async function scanCarryStorage(context: {
-	client: Pick<ChaosReadClient, 'readContract' | 'simulateContract' | 'getBlock'>
-	escalationGames: readonly CarryStorageRoute[]
-	wallet: Address
-	questionForker: Address
-	anchorBlockNumber: bigint
-	expectedAnchorHash: Hash
-	maximumItems: number
-	multicall3?: Address
-}) {
+export async function scanCarryStorage(context: { client: Pick<ChaosReadClient, 'readContract' | 'simulateContract' | 'getBlock'>; escalationGames: readonly CarryStorageRoute[]; wallet: Address; questionForker: Address; anchorBlockNumber: bigint; expectedAnchorHash: Hash; maximumItems: number; multicall3?: Address }) {
 	const { client, anchorBlockNumber: blockNumber } = context
 	async function authenticateAnchor() {
 		const block = await client.getBlock({ blockNumber })
