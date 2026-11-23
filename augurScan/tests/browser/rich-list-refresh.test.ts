@@ -5,7 +5,7 @@ import { browserTest, desktopViewport, origin, writeScreenshot } from './browser
 browserTest(
 	'refreshes 1,150 retained rich-list rows within the server request limit',
 	async () => {
-		const url = `${origin}/richlist?demo=1&chainId=1&richPaginationDemo=large&streamDemo=1`
+		const url = `${origin}/addresses?demo=1&chainId=1&richPaginationDemo=large&streamDemo=1`
 		await withBrowserPage(url, desktopViewport, async session => {
 			await session.send('Page.addScriptToEvaluateOnNewDocument', {
 				source: `window.EventSource = class extends EventTarget {

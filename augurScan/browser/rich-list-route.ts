@@ -100,7 +100,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 			const fetchPage = async (offset: number, limit: number, snapshotCursor?: string) => {
 				const query = new URLSearchParams({ sort, offset: String(offset), limit: String(limit), chainId })
 				if (snapshotCursor !== undefined) query.set('snapshot', snapshotCursor)
-				return decodeItemsPage(await api(`/api/v1/richlist?${query}`), isRichListRecord, 'Rich list')
+				return decodeItemsPage(await api(`/api/v1/richlist?${query}`), isRichListRecord, 'Addresses')
 			}
 			const fetchSnapshot = async (requestedCount: number) => {
 				const firstLimit = Math.min(100, requestedCount)
