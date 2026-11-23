@@ -27,6 +27,7 @@ export const retryForkDetails = 'Retry fork details'
 export const completeSetAmountTooSmall = 'Amount too small to redeem any collateral.'
 export const childUniverseRequired = 'Select at least one child universe.'
 export const missingChildPoolBlocker = 'This selection includes a child universe without a security pool. Migrate into each such child universe separately.'
+export const inactiveBranchBlocker = 'Activate this branch in Statoblast under Fork choices and recovery before migrating.'
 export const missingChildPoolWarning = 'For this share, migrate into each child universe that has no security pool in a separate transaction. Another share can migrate into those child universes together once their security pools are ready.'
 
 export function redeemOutcomeAction(outcome: 'INVALID' | 'YES' | 'NO') {

@@ -131,6 +131,25 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('changed')
 })
 
+test('#1570 a partial takeover that would leave the source between the two prices stays disabled', async () => {
+	// Position 2 backs 10 with 15 REP: about 6.49 at the conservative 2.2 and 8.93 at the liquidation 1.6.
+	const snapshot = { ...capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit }), conservativePrice: (22n * unit) / 10n, liquidationPrice: (16n * unit) / 10n }
+	snapshot.ownerPrincipalAttoRep = 40n * unit
+	snapshot.positions = snapshot.positions.map(position => ({ ...position, rep: 40n * unit }))
+	installTakeoverReader(snapshot)
+	const view = await renderTakeover(snapshot, idleActions)
+	const button = view.container.querySelector('button')
+	if (button === null) throw new Error('Missing takeover button')
+	const fields = Array.from(view.container.querySelectorAll('input'))
+	for (const [offset, value] of ['2', '2', '20', '200', '100'].entries()) await fill(fields[offset], value)
+	await waitFor(() => expect(view.container.textContent).toContain('Take over the full repair, or little enough that the position stays below the liquidation price.'))
+	expect(button.disabled).toBe(true)
+	await fill(fields[1], '1')
+	await waitFor(() => expect(button.disabled).toBe(false))
+	await fill(fields[1], '10')
+	await waitFor(() => expect(button.disabled).toBe(false))
+})
+
 test('a position the unused commitment cannot restore keeps the takeover and disables the cure', async () => {
 	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
 	const reader = capitalClient(snapshot)

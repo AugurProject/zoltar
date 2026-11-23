@@ -214,14 +214,32 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		_sealFork(universeId, book, zoltar.getForkTime(universeId));
 	}
 
+	/// @notice REP that `triggerFork` pulls from its payer because the live fork threshold exceeds the question's escrow.
+	/// @dev Nonzero only when the genesis supply grew after the game fixed its non-decision threshold.
+	function forkAdmissionShortfallAttoRep(uint248 universeId, uint256 questionId) public view returns (uint256) {
+		(Question memory state, ) = _question(universeId, questionId);
+		uint256 threshold = zoltar.getForkThresholdAttoRep(universeId);
+		return threshold > state.balanceAttoRep ? threshold - state.balanceAttoRep : 0;
+	}
+
 	/// @notice Charge admission only to the actual triggering question, then freeze the aggregate.
-	function triggerFork(uint248 universeId, uint256 questionId) external onlyPortfolio {
+	/// @dev A game's non-decision threshold is fixed when it starts, but the genesis fork threshold
+	/// follows the live external supply. Any shortfall is pulled from `payer` (who approves this ledger)
+	/// and joins the question's escrow as a donation without a separate claim.
+	function triggerFork(uint248 universeId, uint256 questionId, address payer) external onlyPortfolio {
 		Book storage book = _book(universeId);
 		require(!book.isSealed && zoltar.getForkTime(universeId) == 0, 'Reporter universe is forked');
 		_freezeMatured(universeId, book, _portfolioTime(universeId));
 		(Question memory state, bool finalClaim) = _question(universeId, questionId);
+		require(!finalClaim && state.balanceAttoRep != 0, 'Triggering question lacks fork admission REP');
 		uint256 threshold = zoltar.getForkThresholdAttoRep(universeId);
-		require(!finalClaim && state.balanceAttoRep >= threshold, 'Triggering question lacks fork admission REP');
+		if (state.balanceAttoRep < threshold) {
+			uint256 shortfall = threshold - state.balanceAttoRep;
+			IERC20(address(zoltar.getRepToken(universeId))).safeTransferFrom(payer, address(this), shortfall);
+			_changeFinality(book, state.finalAfter, shortfall, true);
+			state.balanceAttoRep = threshold;
+			book.liveAttoRep += shortfall;
+		}
 		uint256 haircut = threshold / zoltar.forkBurnDivisor();
 		state.balanceAttoRep -= haircut;
 		state.winnerHaircutPaidByFork = true;

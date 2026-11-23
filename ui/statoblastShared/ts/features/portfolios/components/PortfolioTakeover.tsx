@@ -115,7 +115,8 @@ export function PortfolioTakeover({ model, actions }: { model: { snapshot: Takeo
 		const receiver = snapshot.positions.find(position => position.id === snapshot.ownerAccount.positionId)
 		const principal = (receiver?.rep ?? 0n) + snapshot.ownerAccount.freeAttoRep + award
 		const totalCommitment = (receiver?.commitment ?? 0n) + transferred
-		if (snapshot.ownerAccount.positionId !== 0n && receiver === undefined) reason = copy.receiverMissing
+		if (portfolioTakeoverTransfer(source, commitment) === undefined) reason = copy.strandsSource
+		else if (snapshot.ownerAccount.positionId !== 0n && receiver === undefined) reason = copy.receiverMissing
 		else if (receiver !== undefined && receiver.batch !== 0n && receiver.batch !== source.batch) reason = copy.receiverCohort
 		else if (snapshot.ownerAccount.freeAttoRep > maximumOwnRep) reason = copy.receiverConsent
 		else if (principal < requiredPortfolioCollateral(snapshot, totalCommitment)) reason = copy.receiverCollateral

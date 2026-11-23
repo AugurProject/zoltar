@@ -1,6 +1,6 @@
 import type { OperatorSettings } from '#config/settings'
 import type { PortfolioObservation, PortfolioPosition } from '#monitoring/portfolio-monitor'
-import { portfolioTakeoverFill } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { portfolioTakeoverFill, portfolioTakeoverTransfer } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { portfolioCureOutcome } from './portfolio-cure-state.ts'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -87,7 +87,10 @@ function paidTakeoverPlan(observation: PortfolioObservation, position: Portfolio
 	if (source.healthy) return source.removed === 0n ? reject('Cure restores target health without a takeover') : { reason: 'Cure restores target health without a takeover', healingCure: source.removed }
 	if (receiver !== undefined && receiver.batch !== 0n && receiver.batch !== source.batch) return reject('Receiver and target retirement cohorts differ')
 	const requiredFor = (commitment: bigint) => ceilDiv(ceilDiv(ceilDiv((snapshot.ownerCommitmentAttoEth + commitment) * snapshot.ownerConservativePrice, UNIT) * snapshot.securityMultiplierBps, BPS) * policy.targetHealthFactorBps, BPS)
-	const quote = (commitment: bigint) => portfolioTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth)
+	const quote = (commitment: bigint) => {
+		const allowed = portfolioTakeoverTransfer(source, commitment)
+		return portfolioTakeoverFill(source, allowed ?? source.maximumPartialCommitment, snapshot.economics.minimumCommitmentAttoEth)
+	}
 	let fill = quote(requestedCommitment ?? source.maximumTakeoverCommitment)
 	// After funding, accept the part this capital supports instead of chasing
 	// an ever-growing full-repair quote through repeated approval/deposit cycles.

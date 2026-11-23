@@ -17,6 +17,7 @@ interface ICapitalSettlementRepairRoot {
 }
 
 interface ICapitalLifecycleHost {
+	function minimumCommitmentAttoEth() external view returns (uint256);
 	function portfolio() external view returns (address);
 	function universeId() external view returns (uint248);
 	function securityMultiplierBps() external view returns (uint256);
@@ -147,15 +148,18 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		host.repToken().safeTransfer(recipient, amount);
 		emit PrincipalWithdrawn(_capitalOwner(), recipient, amount);
 	}
-	function claimEarnings() external onlyDelegateCall {
+	/// @dev Pays to a recipient the owner chooses, so a token that refuses the owner
+	/// cannot strand either the REP or the collateral earnings.
+	function claimEarnings(address recipient) external onlyDelegateCall {
+		require(recipient != address(0), 'Invalid earnings recipient');
 		_settleOwner(_capitalOwner());
 		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 ethAmount = owner.feesAttoEth;
 		uint256 repAmount = owner.feesAttoRep;
 		owner.feesAttoEth = 0;
 		owner.feesAttoRep = 0;
-		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(_capitalOwner(), repAmount);
-		_sendEth(_capitalOwner(), ethAmount);
+		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(recipient, repAmount);
+		_sendEth(recipient, ethAmount);
 		emit EarningsClaimed(_capitalOwner(), ethAmount, repAmount);
 	}
 
@@ -174,22 +178,19 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		address receiverOwner = _capitalOwner();
 		uint256 securityMultiplierBps = host.securityMultiplierBps();
-		require(commitmentIndex.liquidationStarted(id) != 0, 'Adverse observation missing');
-		SecurityPoolCommitmentIndex.Account memory beforeCure = commitmentIndex.accountOf(id);
-		require(beforeCure.owner != receiverOwner && beforeCure.maxHealthyPrice < liquidationPrice, 'Position does not need takeover');
-		require(commitment > 0 && commitment <= beforeCure.commitment, 'Invalid takeover commitment');
-		uint256 cured = cure(id, 0, false, minimumCommitmentAttoEth, securityMultiplierBps);
-		// A keeper must be able to leave a successful cure in place. No assets
-		// transfer and no award is paid when nominal excess alone restores health.
-		if (cured != 0 && commitmentIndex.liquidationStarted(id) == 0) {
-			return 0;
-		}
 		(
+			SecurityPoolCommitmentIndex.Cure memory cured,
 			SecurityPoolCommitmentIndex.Account memory source,
 			uint256 repaired,
 			uint256 award,
 			uint256 debit
-		) = commitmentIndex.takeoverQuote(id, receiverOwner, commitment, minimumCommitmentAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
+		) = commitmentIndex.takeover(id, auctionCohort.positionId, receiverOwner, commitment, minimumCommitmentAttoEth, demandAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
+		if (cured.removed != 0) {
+			owners[cured.owner].account.freeAttoRep += cured.freedRep;
+			totalFreeAttoRep += cured.freedRep;
+			emit CommitmentCured(id, cured.removed);
+		}
+		if (cured.settled) return 0;
 		commitment = repaired;
 		require(award >= minimumAward, 'Takeover award below minimum');
 		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.portfolio()).priceFeed(host.universeId()));
@@ -218,7 +219,6 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			require(existing.rep + plan.receivedPrincipalAttoRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
 			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
 		}
-		commitmentIndex.recordLiquidationAward(id, award);
 		receiverId = _transferTakeoverPosition(id, commitment, debit, receiver, existing, plan, receiverOwner);
 		if (
 			plan.remainingCommitmentAttoEth == 0 ||
@@ -237,14 +237,14 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		uint256 receiverPrincipalAttoRep;
 		uint256 receiverCommitmentAttoEth;
 		if (receiverId == 0) {
-			receiverId = commitmentIndex.split(id, receiverOwner, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment));
+			receiverId = commitmentIndex.split(id, receiverOwner, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment), ICapitalLifecycleHost(address(this)).minimumCommitmentAttoEth());
 			receiver.positionId = receiverId;
 			receiverPrincipalAttoRep = plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = commitment;
 		} else {
 			receiverPrincipalAttoRep = existing.rep + plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = existing.commitment + commitment;
-			commitmentIndex.transferTo(id, receiverId, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth));
+			commitmentIndex.transferTo(id, receiverId, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth), ICapitalLifecycleHost(address(this)).minimumCommitmentAttoEth());
 		}
 		// Balanced transfer preserved a closed cohort's commitment. This replacement only
 		// adjusts collateral and therefore cannot refill that cohort.

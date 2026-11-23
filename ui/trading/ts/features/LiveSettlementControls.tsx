@@ -28,7 +28,7 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import type { LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, settlementBalanceLabel, settlementBalanceStatus, settlementInputBlocker, settlementUnavailableReason } from './LiveSettlementModel.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, forkMigrationBranchBlocker, settlementBalanceLabel, settlementBalanceStatus, settlementInputBlocker, settlementUnavailableReason } from './LiveSettlementModel.js'
 import { operationOption } from './live/operationOption.js'
 import { OperationSwitcher } from './OperationSwitcher.js'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
@@ -92,7 +92,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		// The loading line above the picker names what is loading; the action only needs to say it is waiting.
 		if (forkContextLoading) inputBlocker = commonCopy.loadingWithEllipsis
 		else if (forkContextState === 'error' || currentForkContext === undefined) inputBlocker = forkContextError ?? settlementCopy.forkDetailsUnavailable
-		else inputBlocker ??= forkMigrationBatchBlocker(selectedForkTargets)
+		else inputBlocker ??= forkMigrationBranchBlocker(selectedForkTargets) ?? forkMigrationBatchBlocker(selectedForkTargets)
 	}
 	// A positive migrated amount means the contract locked this source balance in the parent universe.
 	const sourceLocked = currentForkContext !== undefined && largestMigratedShares(currentForkContext.availableTargets)[migratedShareKey(sourceOutcome)] > 0n

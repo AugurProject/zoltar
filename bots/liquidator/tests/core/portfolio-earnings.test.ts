@@ -30,7 +30,7 @@ function fixture() {
 	const refresh: typeof refreshPortfolioExecution = async () => ({ observation, totalPrincipal: 0n, allowance: 0n })
 	const { calls, submit } = recordingSubmit()
 	const run = (priceAllowed: boolean) => executePortfolioEarnings(wallet, settings, state, pool, observation, async () => priceAllowed, { refresh, submit })
-	return { observation, settings, state, calls, run }
+	return { observation, settings, state, calls, run, owner: account.address }
 }
 
 test('earned fees are claimed in a single transaction only when claim cost is covered', async () => {
@@ -43,7 +43,9 @@ test('earned fees are claimed in a single transaction only when claim cost is co
 	const call = f.calls[0]
 	if (call === undefined) throw new Error('Claim missing')
 	expect(call.value).toBe(0n)
-	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: call.data }).functionName).toBe('claimEarnings')
+	const decoded = decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: call.data })
+	expect(decoded.functionName).toBe('claimEarnings')
+	expect(decoded.args).toEqual([f.owner])
 })
 
 test('earned REP counts for collection only with current independent market evidence', async () => {

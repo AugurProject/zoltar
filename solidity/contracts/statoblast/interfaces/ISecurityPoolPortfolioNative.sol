@@ -15,5 +15,5 @@ interface ISecurityPoolPortfolioNative {
 	function prepareQuestionUniverse(uint248 universeId) external;
 	function registerChildPool(ISecurityPool pool) external;
 	function registerReporterGame(address game) external;
-	function forkWithReporterQuestion(ISecurityPool pool) external;
+	function forkWithReporterQuestion(ISecurityPool pool, address payer) external;
 }

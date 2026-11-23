@@ -136,7 +136,7 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect((await position(secondOwner.positionId)).commitment).toBe(0n)
 		// Zero demand lets the ordinary queue release the lot; owner settlement credits its REP.
 		expect((await position(secondOwner.positionId)).releasedRep).toBe(REP)
-		await writeContractAndWait(second, () => second.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'claimEarnings' }))
+		await writeContractAndWait(second, () => second.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'claimEarnings', args: [second.account.address] }))
 		expect((await owner(second.account.address)).freeAttoRep).toBe(REP)
 		expect(await owner(caller.account.address)).toEqual(callerBefore)
 		expect((await owner(caller.account.address)).feesAttoRep).toBe(0n)
@@ -224,7 +224,7 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await materialize(1n)
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'creditFees', value: 30n }))
 		await materialize(2n)
-		await writeContractAndWait(first, () => first.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'claimEarnings' }))
+		await writeContractAndWait(first, () => first.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'claimEarnings', args: [first.account.address] }))
 		expect((await owner(second.account.address)).feesAttoEth).toBe(20n)
 		expect((await owner(first.account.address)).feesAttoEth).toBe(0n)
 		// The first owner has claimed 40 attoETH; only the second owner

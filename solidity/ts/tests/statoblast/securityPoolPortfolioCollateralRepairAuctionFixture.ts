@@ -17,7 +17,7 @@ import { addRepToMigrationBalance, getRepTokenAddress, splitMigrationRep } from 
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, type useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
-export async function preparePortfolioCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolPortfolioFixture>) {
+export async function preparePortfolioCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolPortfolioFixture>, mintAttoEth = 10n * unit) {
 	const owner = fixture.owner()
 	const other = fixture.other()
 	const mock = fixture.base.mockWindow
@@ -26,7 +26,7 @@ export async function preparePortfolioCollateralRepairAuction(fixture: ReturnTyp
 	await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(source), functionName: 'transfer', args: [other.account.address, 1_000n * unit] }))
 	await fixture.deposit(1_000n * unit, other)
 	await fixture.authorize(200n * unit, other)
-	await fixture.mint(10n * unit)
+	await fixture.mint(mintAttoEth)
 	const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
 	const auction = await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'auctions', args: [child] })
 	if (auction === zeroAddress) throw new Error('Collateral repair auction was not created')

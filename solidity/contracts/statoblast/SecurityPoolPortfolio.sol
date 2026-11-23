@@ -423,11 +423,12 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		ISecurityPool pool = _pool(msg.sender);
 		IPortfolioForkCoordinator(forkController).freeze(pool.universeId());
 	}
-	function forkWithReporterQuestion(ISecurityPool pool) external {
+	/// @dev `payer` funds any fork admission shortfall; only the canonical forker supplies it, as its own caller.
+	function forkWithReporterQuestion(ISecurityPool pool, address payer) external {
 		_pool(address(pool));
 		require(msg.sender == pool.securityPoolForker(), 'Only canonical native forker');
 		require(pool.escalationGame().canTriggerOwnFork(), 'Reporter game cannot fork');
-		reporters.triggerFork(pool.universeId(), pool.questionId());
+		reporters.triggerFork(pool.universeId(), pool.questionId(), payer);
 		IPortfolioForkCoordinator(forkController).freeze(pool.universeId());
 	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {

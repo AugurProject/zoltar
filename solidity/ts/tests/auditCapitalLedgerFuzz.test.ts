@@ -478,7 +478,7 @@ const KNOWN_REVERTS = [
 	'Takeover owner target changed',
 	'Takeover source cohort changed',
 	'Receiver retirement differs',
-	'Only retirement owner',
+	'Takeover would strand source between prices',
 	'Receiver consent exceeded',
 	'Receiver collateral insufficient',
 	'Takeover owner principal exceeds limit',
@@ -628,7 +628,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			case 'serve':
 				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'serveRetirement', args: [op.id] }))]
 			case 'claim':
-				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'claimEarnings' }))]
+				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'claimEarnings', args: [ownerAddress(op.o)] }))]
 			case 'takeover':
 				if (op.bounds === undefined) return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOver', args: [op.id, op.k, op.minAward, op.maxOwn] }))]
 				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOverWithBounds', args: [op.id, op.k, op.minAward, op.maxOwn, op.bounds] }))]
@@ -1096,11 +1096,14 @@ const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: nu
 		// (d) the award never exceeds the source position's own principal.
 		if (source !== undefined && op.c === 'takeover' && paid.award > source.rep) issues.push(`TAKEOVER.award: ${paid.award} exceeds the source principal ${source.rep}`)
 	}
-	// (d) an unpaid cure leaves its target out of distress and pays the caller nothing.
+	// (d) an unpaid cure leaves its target eligible at the conservative price, or at only the
+	// economic minimum that needs additional capacity, and pays the caller nothing (#1571).
 	if (result?.cured && op.c === 'takeover') {
-		if (after.startedAt[Number(op.id) - 1] !== 0n) issues.push(`TAKEOVER.cure: position ${op.id} is still in distress after an unpaid cure`)
 		const cured = after.accounts[Number(op.id) - 1]
-		if (cured !== undefined && cured.commitment !== 0n && cured.maxHealthyPrice < after.liquidation) issues.push(`TAKEOVER.cure: position ${op.id} is still below the liquidation price`)
+		if (cured !== undefined && cured.commitment > MINC) {
+			if (after.startedAt[Number(op.id) - 1] !== 0n) issues.push(`TAKEOVER.cure: position ${op.id} is still in distress after an unpaid cure`)
+			if (cured.maxHealthyPrice < after.conservative) issues.push(`TAKEOVER.cure: position ${op.id} is still below the conservative price`)
+		}
 	}
 	// (a)(b) the withdrawable view is exact: more than it reports never leaves the ledger.
 	// An unmaterialized auction vault is excluded: its view already includes the bid that the

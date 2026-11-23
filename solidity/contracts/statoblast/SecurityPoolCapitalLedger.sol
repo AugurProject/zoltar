@@ -247,10 +247,14 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_serveRetirement(id);
 	}
 
+	/// @notice Execute any owner's ready retirement request. Serving only carries out
+	/// the owner's own request and its REP stays with that owner, so anyone may call
+	/// it; an owner cannot keep an ineligible request reserving spare it does not supply.
+	/// A position without a pending request is left unchanged.
 	function serveRetirement(uint96 id) external nonReentrant {
 		_requireOpen();
-		require(id != 0 && commitmentIndex.accountOf(id).owner == _capitalOwner(), 'Only retirement owner');
 		_checkpoint();
+		require(id == 0 || id != auctionCohort.positionId, 'Materialize an individual auction vault');
 		_serveRetirement(id);
 	}
 	function _serveRetirement(uint96 id) private {
@@ -380,9 +384,9 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		feeStreams.addStream(cash, repAmount);
 	}
 
-	function claimEarnings() external nonReentrant {
+	function claimEarnings(address recipient) external nonReentrant {
 		_checkpoint();
-		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.claimEarnings, ()));
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.claimEarnings, (recipient)));
 	}
 
 	/// @dev Cut unbacked commitment down to `target`. Only the owner's own

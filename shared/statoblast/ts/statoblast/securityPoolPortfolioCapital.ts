@@ -52,7 +52,7 @@ const abi = parseAbi([
 	'function setCommitment(uint256 commitment) returns (uint96)',
 	'function setCommitmentWithReport(uint256 reportId,uint256 commitment) returns (uint96)',
 	'function serveRetirement(uint96 id)',
-	'function claimEarnings()',
+	'function claimEarnings(address recipient)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep) returns (uint96)',
 	'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)',
 ])
@@ -225,8 +225,9 @@ export function buildPortfolioCapitalSetCommitmentRequest(parameters: CapitalReq
 export function buildPortfolioCapitalServeRetirementRequest(parameters: CapitalRequest & { positionId: bigint }) {
 	return request(parameters, 'serveRetirement', [positive(decodeUint(parameters.positionId, 'Position id', 96), 'Position id')])
 }
-export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalRequest) {
-	return request(parameters, 'claimEarnings')
+/** Pays REP and collateral earnings to `recipient`, defaulting to the owner, so a token that refuses the owner cannot strand them. */
+export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalRequest & { recipient?: Address }) {
+	return request(parameters, 'claimEarnings', [decodeAddress(parameters.recipient ?? parameters.owner, 'Recipient')])
 }
 /** @public Keeper takeover: a new receiver commits all idle principal within maximumOwnRep; an existing receiver must be active or share the target cohort. */
 export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint }) {

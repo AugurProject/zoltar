@@ -527,7 +527,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const resumeHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'checkpoint' }))
 		const resumeGas = (await owner.waitForTransactionReceipt({ hash: resumeHash })).gasUsed
 		expect(resumeGas).toBeLessThan(1_600_000n)
-		const claimHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'claimEarnings' }))
+		const claimHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'claimEarnings', args: [owner.account.address] }))
 		const taggedOwnerClaimGas = (await owner.waitForTransactionReceipt({ hash: claimHash })).gasUsed
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ composedOracleSettlementGas: receipt.gasUsed, callbackGasBudget: budget, positionSetupGas, resumeGas, taggedOwnerClaimGas })
 		// This full claim also checkpoints the live settlement book and fee clocks.

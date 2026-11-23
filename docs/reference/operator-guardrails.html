@@ -25,7 +25,7 @@
 				</section>
 				<section id="share-migration">
 					<h2>Share migration</h2>
-					<p>Share tokens retain one question lineage and separate outcome balances per universe. A forked source uses its canonical child question. Prepare the shared branch and materialize a required child question before migrating shares. Finalized claims retain protected source settlement; do not assume every source claim must migrate.</p>
+					<p>Share tokens retain one question lineage and separate outcome balances per universe. A forked source uses its canonical child question. Activate the shared branch with <code>prepareBranch</code>, <code>startBranch</code> and <code>finalizeBranch</code> before migrating shares into it; until then <code>ShareToken.migrate</code> reverts with <code>Fork branch not active</code> instead of running that work inside the migration. In an active branch a single-target migration materializes a missing child question itself. Finalized claims retain protected source settlement; do not assume every source claim must migrate.</p>
 					<p>See the <a href="./contract-inventory.html#portfolio-recovery-rights">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
 				</section>
 				<section id="escalation-resolution-and-deposits">
