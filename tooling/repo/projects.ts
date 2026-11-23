@@ -103,6 +103,7 @@ export const projects: readonly Project[] = [
 						'bots/**',
 						'augurScan/**',
 					],
+					['complete-validation'],
 				),
 				covers: ['lint'],
 			},
@@ -287,7 +288,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('bots/shared'),
 			test: packageTask('bots/shared', 'test'),
-			check: packageTask('bots/shared', 'check', { covers: ['typecheck', 'lint', 'test'] }),
+			check: packageTask('bots/shared', 'check', { covers: ['typecheck', 'lint', 'test'], groups: ['complete-validation'] }),
 			lint: packageTask('bots/shared', 'lint'),
 			typecheck: packageTask('bots/shared', 'typecheck'),
 			audit: { ...packageTask('bots/shared', 'audit'), command: botAudit },
@@ -304,7 +305,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('bots/chaos'),
 			test: packageTask('bots/chaos', 'test'),
-			check: packageTask('bots/chaos', 'check', { covers: ['typecheck', 'lint', 'test'] }),
+			check: packageTask('bots/chaos', 'check', { covers: ['typecheck', 'lint', 'test'], groups: ['complete-validation'] }),
 			lint: packageTask('bots/chaos', 'lint'),
 			typecheck: packageTask('bots/chaos', 'typecheck'),
 			audit: { ...packageTask('bots/chaos', 'audit'), command: botAudit },
@@ -320,7 +321,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('bots/open-oracle-arbitrager'),
 			test: packageTask('bots/open-oracle-arbitrager', 'test'),
-			check: packageTask('bots/open-oracle-arbitrager', 'check', { covers: ['typecheck', 'lint', 'test'] }),
+			check: packageTask('bots/open-oracle-arbitrager', 'check', { covers: ['typecheck', 'lint', 'test'], groups: ['complete-validation'] }),
 			lint: packageTask('bots/open-oracle-arbitrager', 'lint'),
 			typecheck: packageTask('bots/open-oracle-arbitrager', 'typecheck'),
 			audit: { ...packageTask('bots/open-oracle-arbitrager', 'audit'), command: botAudit },
@@ -337,7 +338,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('bots/liquidator'),
 			test: packageTask('bots/liquidator', 'test'),
-			check: packageTask('bots/liquidator', 'check', { covers: ['typecheck', 'lint', 'test'] }),
+			check: packageTask('bots/liquidator', 'check', { covers: ['typecheck', 'lint', 'test'], groups: ['complete-validation'] }),
 			lint: packageTask('bots/liquidator', 'lint'),
 			typecheck: packageTask('bots/liquidator', 'typecheck'),
 			audit: { ...packageTask('bots/liquidator', 'audit'), command: botAudit },
@@ -358,7 +359,7 @@ export const projects: readonly Project[] = [
 				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'augurScan/src/**', 'docs/*-deployment-addresses.json'],
 			}),
 			test: packageTask('augurScan', 'test:ci', { groups: ['complete-validation'] }),
-			check: packageTask('augurScan', 'check', { covers: ['lint'] }),
+			check: packageTask('augurScan', 'check', { covers: ['lint'], groups: ['complete-validation'] }),
 			lint: packageTask('augurScan', 'check'),
 			typecheck: packageTask('augurScan', 'typecheck'),
 			audit: packageAuditTask('augurScan'),
