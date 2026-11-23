@@ -209,7 +209,7 @@ export async function loadShareMigrationTargets(client: Pick<ReadClient, 'multic
 			: childUniverses.flatMap(child => SHARE_MIGRATION_SOURCE_OUTCOMES.map(outcome => ({ address: shareTokenAddress, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'getMigratedShareAmountAttoShares', args: [getShareTokenId(universeId, outcome), child.universeId, accountAddress] })))
 	const results: readonly unknown[] = await readRequiredMulticall(client, [...canonicalPoolCalls, ...migratedAmountCalls])
 	return childUniverses.map((child, childIndex) => {
-		const canonicalPool = requireAddressValue(results[childIndex], 'canonical child pool')
+		const canonicalPool = requireAddressValue(results[childIndex], 'canonical child question ledger')
 		const migrated = (outcomeOffset: number) => (accountAddress === undefined ? 0n : requireBigintValue(results[childUniverses.length + childIndex * SHARE_MIGRATION_SOURCE_OUTCOMES.length + outcomeOffset], 'migrated share amount'))
 		return {
 			canonicalPool: canonicalPool === zeroAddress ? undefined : canonicalPool,
@@ -280,7 +280,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const securityPool = await requireCanonicalSecurityPoolOf(client, factory, questionLedgerAddress)
 	const quote = async () => {
 		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'getQuestionLedger', args: [questionId, universeId] })
-		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== questionLedgerAddress.toLowerCase()) throw new Error('Security pool question pool is not canonical.')
+		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== questionLedgerAddress.toLowerCase()) throw new Error('Security pool question ledger is not canonical.')
 		const [quoted, capacity, recoveryValue] = await Promise.all([
 			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
 			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'availableMintCapacity', args: [universeId] }),

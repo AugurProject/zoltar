@@ -74,7 +74,7 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 	await advanceSimulationTime(memoryClient, 301n)
 	const questionPool = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getQuestionLedger', args: [BigInt(initial.questionId), 0n] })
 	const managerAddress = (await loadAllQuestionLedgers(readClient)).find(pool => pool.questionLedgerAddress.toLowerCase() === questionPool.toLowerCase())?.managerAddress
-	if (managerAddress === undefined) throw new Error('Expected namespaced security pool question pool')
+	if (managerAddress === undefined) throw new Error('Expected namespaced security pool question ledger')
 	await reportStep('Preparing shared security pool oracle')
 	const commitment = 10n * collateralUnit
 	const feed = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'priceFeed', args: [0n] })

@@ -245,7 +245,7 @@ export function useReportingOperations(
 		const latestDetails = await dependencies.loadReportingDetails(questionLedgerAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
 		if (latestDetails.reportingBlockedReason !== undefined) throw new Error(latestDetails.reportingBlockedReason)
-		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
+		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this question is operational.')
 		const timingGuard = getReportingSubmissionTimingGuard(latestDetails.status === 'active' ? latestDetails : undefined)
 		if (timingGuard !== undefined) throw new Error(timingGuard)
 		const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
@@ -337,14 +337,14 @@ export function useReportingOperations(
 				if (latestDetails.status !== 'active') {
 					throw new Error('Deposits cannot be settled until the first report starts the escalation game.')
 				}
-				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
+				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this question is operational.')
 				const selectedSide = latestDetails.sides.find(side => side.key === outcome)
 				if (selectedSide === undefined) {
 					throw new Error('Unable to load deposits for the requested outcome side.')
 				}
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
-				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning parent deposits in the child pool after it finalizes; parent deposits do not need migration.')
+				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning parent deposits in the child question after it finalizes; parent deposits do not need migration.')
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error(reportingCopy.questionFinalizationRequired)
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]

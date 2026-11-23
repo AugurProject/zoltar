@@ -415,7 +415,7 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGame' }),
 					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'systemState' }),
 				])
-				if (currentGame !== escalationGameAddress || getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the pool again.')
+				if (currentGame !== escalationGameAddress || getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the question again.')
 				if (currentGame !== zeroAddress) {
 					const [endTime, acceptedDeposit] = await Promise.all([
 						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' }),
@@ -453,7 +453,7 @@ async function getEscalationGamePreparation(client: WriteClient, questionLedgerA
 		client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'questionData' }),
 		client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'questionId' }),
 	])
-	if (getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the pool again.')
+	if (getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the question again.')
 	const [endTime, block] = await Promise.all([client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [questionId] }), client.getBlock()])
 	if (block.timestamp < endTime) throw new Error('Reporting opens when the question ends.')
 	const factory = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGameFactory' })

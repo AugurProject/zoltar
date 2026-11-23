@@ -367,7 +367,7 @@ export function useSecurityPoolAggregate(
 		claim: () =>
 			run('claimSecurityPoolEarnings', 'Claim earnings', claimReason, selected => ({
 				...buildSecurityPoolCapitalClaimEarningsRequest(base(selected)),
-				reviewDescription: `Checkpoint and collect your earned ${selected.collateral.symbol} and REP. Future vesting rewards stay in the pool. This does not withdraw your principal.`,
+				reviewDescription: `Checkpoint and collect your earned ${selected.collateral.symbol} and REP. Future vesting rewards stay in the security pool. This does not withdraw your principal.`,
 			})),
 		serve: () =>
 			run(

@@ -48,7 +48,7 @@ export function capitalRetirementReason(snapshot: SecurityPoolCapitalSnapshot, i
 	if (remaining === undefined || remaining < 0n) return 'Enter the commitment to keep, or zero for full retirement.'
 	if (position.batch !== 0n) return remaining === position.remainingCommitment ? undefined : 'Retirement already requested.'
 	if (remaining >= position.commitment) return 'Choose a smaller remaining commitment.'
-	if (remaining !== 0n && (remaining < snapshot.economics.minimumCommitmentAttoEth || position.commitment - remaining < snapshot.economics.minimumCommitmentAttoEth)) return 'The remaining commitment and reduction must each meet the pool minimum.'
+	if (remaining !== 0n && (remaining < snapshot.economics.minimumCommitmentAttoEth || position.commitment - remaining < snapshot.economics.minimumCommitmentAttoEth)) return 'The remaining commitment and reduction must each meet the security pool minimum.'
 	return undefined
 }
 
@@ -56,7 +56,7 @@ export function capitalAuthorizationReason(snapshot: SecurityPoolCapitalSnapshot
 	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to new commitments.'
 	if (!snapshot.priceValid) return 'A new accepted REP price is required.'
 	if (commitment === undefined || commitment === 0n) return 'Enter a positive commitment amount.'
-	if (commitment < snapshot.economics.minimumCommitmentAttoEth) return 'Commitment is below this pool’s minimum.'
+	if (commitment < snapshot.economics.minimumCommitmentAttoEth) return 'Commitment is below this security pool’s minimum.'
 	const active = snapshot.positions.find(position => position.commitment > 0n)
 	if (active !== undefined && active.batch !== 0n) return 'Your commitment is locked until its retirement is released.'
 	if (active !== undefined && commitment < active.commitment) return 'Request retirement before reducing an existing commitment.'

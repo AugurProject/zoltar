@@ -246,7 +246,7 @@ describe('useTradingOperations', () => {
 	test.each([
 		{
 			capacity: createMintCapacity({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 10n * ATTO_ETH_PER_ETH }),
-			expectedMessage: 'Minting is unavailable because this pool has complete-set shares but no collateral.',
+			expectedMessage: 'Minting is unavailable because this question has complete-set shares but no collateral.',
 			name: 'latest pool capacity has no collateral exchange rate',
 		},
 		{

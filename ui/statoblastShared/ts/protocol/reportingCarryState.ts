@@ -317,7 +317,7 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, quest
 }
 
 async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, parentQuestionLedgerAddress: Address, childEscalationGameAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
-	if (parentQuestionLedgerAddress === zeroAddress) throw new Error('Parent deposits can only be settled in a child pool.')
+	if (parentQuestionLedgerAddress === zeroAddress) throw new Error('Parent deposits can only be settled in a child question.')
 	if (childEscalationGameAddress === zeroAddress) throw new Error('The child escalation game is unavailable for settling parent deposits.')
 	const parentEscalationGameAddress = await client.readContract({
 		address: parentQuestionLedgerAddress,

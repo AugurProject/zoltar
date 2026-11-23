@@ -255,7 +255,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 0n,
 				mintingCapacityAttoEth: 10n,
 			}),
-		).toBe('Select a pool before minting.')
+		).toBe('Select a question before minting.')
 
 		expect(
 			getTradingMintGuardMessage({
@@ -387,7 +387,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
-		).toBe('Minting is unavailable because this pool has complete-set shares but no collateral.')
+		).toBe('Minting is unavailable because this question has complete-set shares but no collateral.')
 	})
 
 	void test('allows minting when the pool has capacity and the wallet has enough ETH', () => {

@@ -87,5 +87,5 @@ export async function requireSecurityPoolQuestionEligibility(client: Pick<ReadCl
 	const supply = requireBigintValue(supplyValue, 'universe theoretical REP supply')
 	const supplyBasedDeposit = supply / 10_000_000n
 	const initialDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
-	if (threshold <= initialDeposit) throw new Error('The universe escalation threshold is too low to register a pool.')
+	if (threshold <= initialDeposit) throw new Error('The universe escalation threshold is too low to register a question.')
 }

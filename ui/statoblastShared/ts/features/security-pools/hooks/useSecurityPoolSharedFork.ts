@@ -132,7 +132,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, ope
 		(questionId === undefined ? 'Enter a question ID.' : undefined) ??
 		recoveryState?.error ??
 		(recovery === undefined ? 'Loading source recovery rights.' : undefined) ??
-		(recovery !== undefined && recovery.pool !== zeroAddress && !recovery.eligible ? 'No live source recovery rights. Redeem finalized shares through the source pool.' : undefined)
+		(recovery !== undefined && recovery.pool !== zeroAddress && !recovery.eligible ? 'No live source recovery rights. Redeem finalized shares through the source question.' : undefined)
 	const recoveryReason = sourceReason ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined)
 	const prepareReason = recoveryReason ?? (recovery?.pool !== zeroAddress ? 'The source question is already prepared.' : undefined)
 	const recoverReason =

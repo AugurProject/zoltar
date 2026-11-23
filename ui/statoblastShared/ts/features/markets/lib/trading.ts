@@ -17,7 +17,7 @@ import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-cor
 
 export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No vault has an active commitment.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'You need matching Yes, No, and Invalid shares to redeem complete sets.'
-export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
+export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this question has complete-set shares but no collateral.'
 export const MINTING_PAUSED_DURING_DISPUTE_MESSAGE = tradingCopy.mintingPausedDuringDispute
 
 /** True once an ordinary or fork-continuation escalation game has started. The flags stay set after the game, so use `isMintingPausedByEscalation` to tell a paused operating pool from one that finalization or a fork closed. */
@@ -256,7 +256,7 @@ export function getTradingMintGuardMessage({
 	shareTokenSupplyAttoShares: bigint | undefined
 	totalPoolHeldAttoRep: bigint | undefined
 }) {
-	if (!hasSelectedPool) return 'Select a pool before minting.'
+	if (!hasSelectedPool) return 'Select a question before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('minting complete sets') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const questionEndReason = getMintingQuestionEndReason(currentTimestamp, questionEndTime)
@@ -308,7 +308,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	shareBalances: TradingShareBalances | undefined
 	shareTokenSupplyAttoShares: bigint | undefined
 }) {
-	if (!hasSelectedPool) return 'Select a pool before redeeming complete sets.'
+	if (!hasSelectedPool) return 'Select a question before redeeming complete sets.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('redeeming complete sets') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingDetails) return 'Loading wallet share balances…'
@@ -350,7 +350,7 @@ export function getTradingMigrateSharesGuardMessage({
 	targetOutcomeIndexesInput: string
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
-	if (!hasSelectedPool) return 'Select a pool before migrating shares.'
+	if (!hasSelectedPool) return 'Select a question before migrating shares.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('migrating shares') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniverses

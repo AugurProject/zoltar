@@ -300,7 +300,7 @@ describe('ReportingSection', () => {
 	test('describes reporting timing with question terminology', () => {
 		const message = getReportingLockedUntilMessage(100n, 50n)
 
-		expect(message).toContain('this pool’s underlying question ends')
+		expect(message).toContain('when this question ends')
 		expect(message).not.toContain("this pool's market ends")
 	})
 

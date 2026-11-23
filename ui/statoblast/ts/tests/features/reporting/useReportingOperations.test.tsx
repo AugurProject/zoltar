@@ -331,7 +331,7 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(reportOutcomeInQuestionLedger).toHaveBeenCalledTimes(0)
 		expect(state().reportingResult).toBeUndefined()
-		expect(state().reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational.')
+		expect(state().reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this question is operational.')
 	})
 
 	test.each([false, true])('reportOutcome uses wallet REP in ordinary and continuation games (continuation: %s)', async forkContinuation => {
