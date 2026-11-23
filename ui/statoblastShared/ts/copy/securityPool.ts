@@ -71,6 +71,22 @@ export const triggerUniverseFork = 'Trigger universe fork'
 
 export const triggerUniverseForkDescription = 'This unresolved question forks its universe. Security pool owners choose a recovery branch. Reporter balances are copied into every child branch.'
 
+export const forkAdmission = 'Fork admission'
+
+export const approveForkAdmission = 'Approve fork admission REP'
+
+export const approveForkAdmissionDescription = 'REP supply grew after this Escalation Game started, so its escrow is below the fork threshold. Your wallet pays the difference; it joins the question escrow without a separate claim.'
+
+export const forkAdmissionShortfallDetail = 'REP supply grew after this game started; your wallet pays the escrow shortfall. The default approval adds 1 REP for further growth.'
+
+export const forkAdmissionActionLabel = 'triggering the fork'
+
+export const checkingForkAdmission = 'Checking fork admission…'
+
+export const forkAdmissionApprovalRequired = 'Fork admission REP approval required.'
+
+export const forkAdmissionApproved = 'Fork admission REP approved'
+
 export const universeForkTriggered = 'Universe fork triggered'
 
 export const loadingQuestion = 'Loading question…'

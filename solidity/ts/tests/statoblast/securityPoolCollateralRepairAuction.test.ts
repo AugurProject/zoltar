@@ -32,7 +32,7 @@ import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const prepare = () => prepareSecurityPoolCollateralRepairAuction(fixture)
-	test('#1339 equal lots cover a shortfall that is not a multiple of the minimum', async () => {
+	test('#1339 #1551 equal lots cover a shortfall that is not a multiple of the minimum', async () => {
 		const context = await prepare()
 		const implementation = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'vaultImplementation' })
 		const shortfall = (35n * unit) / 10n
@@ -43,8 +43,10 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		const target = { abi: auctionArtifact.abi, address: receipt.contractAddress }
 		const lot = await context.owner.readContract({ ...target, functionName: 'lotAttoEth' })
 		const lots = await context.owner.readContract({ ...target, functionName: 'targetLots' })
-		expect(lots * lot).toBe(shortfall)
-		expect(lots).toBe(2n)
+		// One lot per whole minimum commitment, rounded up to cover the deficit.
+		expect(lots).toBe(3n)
+		expect(lot).toBe((shortfall + 2n) / 3n)
+		expect(lots * lot - shortfall).toBeLessThan(lots)
 	})
 
 	test('#1331 opening cannot compress the competitive bidding period to seconds', async () => {

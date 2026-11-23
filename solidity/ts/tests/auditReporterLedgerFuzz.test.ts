@@ -504,7 +504,7 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 						await transact(ledger, encodeFunctionData({ abi: artifact.abi, functionName: 'checkpoint', args: [id] }), time)
 						return undefined
 					case 'trig':
-						await transact(authority, asAuthority(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [id, questionId(op.q)] })), time)
+						await transact(authority, asAuthority(encodeFunctionData({ abi: artifact.abi, functionName: 'triggerFork', args: [id, questionId(op.q), authority] })), time)
 						return undefined
 					case 'xfork': {
 						const repToken = await token(op.u)

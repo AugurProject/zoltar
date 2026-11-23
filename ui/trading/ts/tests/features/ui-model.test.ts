@@ -6,7 +6,7 @@ import { formatEthAmountPair, formatRoundedUnits } from '../../lib/format.js'
 import { parseNonNegativeDecimalInput, tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, settlementBalanceLabel, settlementBalanceStatus, settlementInputBlocker, settlementUnavailableReason } from '../../features/LiveSettlementModel.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, forkMigrationBranchBlocker, settlementBalanceLabel, settlementBalanceStatus, settlementInputBlocker, settlementUnavailableReason } from '../../features/LiveSettlementModel.js'
 import {
 	createQuestionLedgerDeploymentIndex,
 	liveBalancesForMarket,
@@ -438,6 +438,15 @@ describe('standalone trading UI model', () => {
 		expect(forkMigrationBatchWarning([missing, { ...missing, outcomeIndex: 3n }])).not.toContain('do not select that child universe again')
 		expect(forkMigrationBatchWarning([ready, missing])).toContain('Another share can migrate into those child universes together once their question ledgers are ready')
 		expect(forkMigrationBatchWarning([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
+	})
+
+	test('blocks migration into a child universe without a pool until its fork branch is active', () => {
+		const ready = { canonicalPool: `0x${'11'.repeat(20)}` as const, branchActive: true }
+		const activeWithoutPool = { canonicalPool: undefined, branchActive: true }
+		const inactive = { canonicalPool: undefined, branchActive: false }
+		expect(forkMigrationBranchBlocker([ready, activeWithoutPool])).toBeUndefined()
+		expect(forkMigrationBranchBlocker([inactive])).toContain('Activate this branch in Statoblast')
+		expect(forkMigrationBranchBlocker([ready, inactive])).toContain('Fork choices and recovery')
 	})
 
 	test('explains every settlement input that keeps simulation disabled', () => {

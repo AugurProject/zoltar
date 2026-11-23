@@ -82,7 +82,7 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		addedUnits = _mintUnits(bookId, book, cashAttoEth);
 		increment = SettlementMath.principal(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares, shares, addedUnits);
 		principal = state.feePrincipalAttoEth + increment;
-		require(principal < RECOVERY_SCALE, 'Settlement principal exceeds precision bound');
+		require(principal < RECOVERY_SCALE, 'Settlement principal too large');
 	}
 	function quoteMintRecoveryRep(uint64 bookId, uint256 questionId, uint256 cashAttoEth) public view returns (uint256) {
 		uint256 addedShares = quoteMint(bookId, questionId, cashAttoEth);
@@ -94,12 +94,12 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		uint256 entitlement = _mintEntitlement(bookId, book, questionId, state);
 		// A quotient of at least 2^256 would require at least 2^128 attoREP.
 		(uint256 high, ) = Math.mul512(entitlement, addedShares);
-		require(high < state.outcomeSupplyAttoShares, 'Recovery REP exceeds precision bound');
+		require(high < state.outcomeSupplyAttoShares, 'Recovery REP too large');
 		uint256 scaled = Math.mulDiv(entitlement, addedShares, state.outcomeSupplyAttoShares);
 		uint256 recoveryAttoRep = scaled / RECOVERY_SCALE;
 		if (scaled % RECOVERY_SCALE != 0 || mulmod(entitlement, addedShares, state.outcomeSupplyAttoShares) != 0)
 			recoveryAttoRep++;
-		require(recoveryAttoRep < RECOVERY_SCALE - book.recoveryAttoRep, 'Recovery REP exceeds precision bound');
+		require(recoveryAttoRep < RECOVERY_SCALE - book.recoveryAttoRep, 'Recovery REP too large');
 		return recoveryAttoRep;
 	}
 	function _mintEntitlement(uint64 bookId, Book storage book, uint256 questionId, Question memory state) internal view returns (uint256) {
@@ -109,9 +109,9 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 				: _scaledRecovery(bookId, book, questionId, state);
 	}
 	function _mintUnits(uint64 bookId, Book storage book, uint256 cash) internal view returns (uint256 added) {
-		require(cash < RECOVERY_SCALE - book.cashAttoEth, 'Settlement cash exceeds precision bound');
+		require(cash < RECOVERY_SCALE - book.cashAttoEth, 'Settlement cash too large');
 		added = SettlementMath.mintUnits(cash, book.units, _netCash(bookId, book));
-		require(added < RECOVERY_SCALE - book.units, 'Settlement units exceed precision bound');
+		require(added < RECOVERY_SCALE - book.units, 'Settlement units too large');
 	}
 	/// @dev Reported units: full-precision claim weights rounded up to whole units.
 	function _descaled(uint256 scaledUnits) internal pure returns (uint256) {

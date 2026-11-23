@@ -71,7 +71,7 @@ for (const [kind, method, args] of [
 		expect(step.to).toBe(capital.capitalLedger)
 		const decoded = decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: step.data })
 		expect(decoded.functionName).toBe(method)
-		expect(decoded.args ?? []).toEqual(kind === 'withdraw' ? [...args, snapshot.wallet.address] : [...args])
+		expect(decoded.args ?? []).toEqual(kind === 'withdraw' || kind === 'claim' ? [...args, snapshot.wallet.address] : [...args])
 		capital.owner = address(998)
 		expect(operation.evaluate(snapshot, options).eligible).toBe(false)
 	})

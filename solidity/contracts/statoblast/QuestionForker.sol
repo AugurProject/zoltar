@@ -7,6 +7,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { QuestionForkerDelegate } from './QuestionForkerDelegate.sol';
 import { ISecurityPoolNative } from './interfaces/ISecurityPoolNative.sol';
 import { DelegateCall } from './DelegateCall.sol';
+import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 
 contract QuestionForker {
 	Zoltar public immutable zoltar;
@@ -46,9 +47,18 @@ contract QuestionForker {
 	}
 
 	/// @notice Forks the universe on the pool's own question once its escalation game allows it, burning reporter-ledger REP; callable by anyone.
+	/// @dev When the live fork threshold exceeds the question's escrow (genesis supply grew after the game started),
+	/// the caller pays the shortfall from REP approved to the reporter ledger; see `getOwnForkAdmissionShortfall`.
 	function forkZoltarWithOwnEscalationGame(IQuestionLedger questionLedger) external {
-		ISecurityPoolNative(questionLedger.securityPoolFactory().securityPoolOf(questionLedger)).forkWithReporterQuestion(questionLedger);
+		ISecurityPoolNative(questionLedger.securityPoolFactory().securityPoolOf(questionLedger)).forkWithReporterQuestion(questionLedger, msg.sender);
 		questionLedger.activateForkMode();
+	}
+
+	/// @notice Returns the reporter ledger a caller of `forkZoltarWithOwnEscalationGame` must approve and the REP it pulls from that caller.
+	function getOwnForkAdmissionShortfall(IQuestionLedger questionLedger) external view returns (address reporterLedger, uint256 shortfallAttoRep) {
+		uint248 universeId = questionLedger.universeId();
+		reporterLedger = ISecurityPoolNative(questionLedger.securityPoolFactory().securityPoolOf(questionLedger)).reporterLedger(universeId);
+		shortfallAttoRep = SecurityPoolReporterLedger(reporterLedger).forkAdmissionShortfallAttoRep(universeId, questionLedger.questionId());
 	}
 
 	/// @notice Returns the pool's final question outcome, or None while unresolved or while the pool is forked.

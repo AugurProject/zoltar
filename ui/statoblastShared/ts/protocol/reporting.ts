@@ -1,12 +1,13 @@
 import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import * as reportingCopy from '../copy/reporting.js'
+import * as securityPoolCopy from '../copy/securityPool.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGame_EscalationGame, statoblast_QuestionLedger_QuestionLedger, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_QuestionLedger_QuestionLedger, statoblast_QuestionForker_QuestionForker, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '../contractArtifact.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState } from '../types/contracts.js'
@@ -468,6 +469,60 @@ async function getEscalationGamePreparation(client: WriteClient, questionLedgerA
 		isRequired,
 		execute: async () => await writeContractAndWait(client, () => callParams),
 	}
+}
+
+// The external genesis REP keeps minting between the approval and the fork transaction.
+const OWN_FORK_ADMISSION_GROWTH_BUFFER_ATTO_REP = 10n ** 18n
+
+export type OwnForkAdmission = {
+	/** The viewer's REP allowance to the reporter ledger; undefined without a wallet or when nothing is owed. */
+	allowanceAttoRep: bigint | undefined
+	/** The shortfall plus a buffer for REP supply growth before the fork confirms. */
+	recommendedApprovalAttoRep: bigint
+	shortfallAttoRep: bigint
+}
+
+async function readOwnForkAdmissionSpend(client: ReadClient, questionLedgerAddress: Address) {
+	const [reporterLedger, shortfallAttoRep] = await client.readContract({ address: getInfraContractAddresses().questionForker, abi: statoblast_QuestionForker_QuestionForker.abi, functionName: 'getOwnForkAdmissionShortfall', args: [questionLedgerAddress] })
+	const repTokenAddress = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'repToken', args: [] })
+	return { reporterLedger, repTokenAddress, shortfallAttoRep }
+}
+
+/**
+ * Reads the REP an own-question fork pulls from its caller when the genesis fork threshold grew past the
+ * question's escrow after the Escalation Game started, and the caller's allowance to the reporter ledger for it.
+ */
+export async function loadOwnForkAdmission(client: ReadClient, questionLedgerAddress: Address, accountAddress: Address | undefined): Promise<OwnForkAdmission> {
+	const { reporterLedger, repTokenAddress, shortfallAttoRep } = await readOwnForkAdmissionSpend(client, questionLedgerAddress)
+	const allowanceAttoRep = accountAddress === undefined ? undefined : await client.readContract({ address: repTokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [accountAddress, reporterLedger] })
+	return { allowanceAttoRep, recommendedApprovalAttoRep: shortfallAttoRep === 0n ? 0n : shortfallAttoRep + OWN_FORK_ADMISSION_GROWTH_BUFFER_ATTO_REP, shortfallAttoRep }
+}
+
+/** Approves the reporter ledger to pull the selected amount of fork admission REP. */
+export async function approveOwnForkAdmission(client: WriteClient, questionLedgerAddress: Address, amountAttoRep: bigint) {
+	const { reporterLedger, repTokenAddress } = await readOwnForkAdmissionSpend(client, questionLedgerAddress)
+	return await writeContractAndWait(client, () => ({
+		address: repTokenAddress,
+		abi: ABIS.mainnet.erc20,
+		functionName: 'approve',
+		args: [reporterLedger, amountAttoRep],
+		reviewTitle: securityPoolCopy.approveForkAdmission,
+		reviewDescription: securityPoolCopy.approveForkAdmissionDescription,
+	}))
+}
+
+/** Sends only the fork; the caller must already have approved any fork admission shortfall. */
+export async function forkWithOwnEscalationGame(client: WriteClient, questionLedgerAddress: Address) {
+	const admission = await loadOwnForkAdmission(client, questionLedgerAddress, client.account.address)
+	if (admission.shortfallAttoRep > 0n && (admission.allowanceAttoRep ?? 0n) < admission.shortfallAttoRep) throw new Error(securityPoolCopy.forkAdmissionApprovalRequired)
+	return await writeContractAndWait(client, () => ({
+		address: getInfraContractAddresses().questionForker,
+		abi: statoblast_QuestionForker_QuestionForker.abi,
+		functionName: 'forkZoltarWithOwnEscalationGame',
+		args: [questionLedgerAddress],
+		reviewTitle: securityPoolCopy.triggerUniverseFork,
+		reviewDescription: securityPoolCopy.triggerUniverseForkDescription,
+	}))
 }
 
 export async function approveReportingRep(client: WriteClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint) {

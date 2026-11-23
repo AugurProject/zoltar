@@ -72,7 +72,7 @@ describe('audit: fee conservation at the fork instant', () => {
 		expect(after.services).toBe(premiumTotal + pendingCapitalCash + pendingBurnCash - pendingSettlementFees)
 		// A later payout drains assigned fee escrow without consuming sealed trader cash.
 		await base.mockWindow.advanceTime(30n * DAY)
-		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'claimEarnings' }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'claimEarnings', args: [owner.account.address] }))
 		expect(await cash(engine)).toBe(totals[0])
 		expect(await cash(fixture.securityPool)).toBe(0n)
 		const outstandingLater = await owner.readContract({ ...streams, functionName: 'fundedOutstanding' })

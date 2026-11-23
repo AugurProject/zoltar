@@ -1,5 +1,6 @@
 /** Whether the child universe already has the question a migration batch lands in. */
 export const childPoolMissing = 'Not registered yet'
+export const branchNotActive = 'Branch not active'
 export const childPoolReady = 'Question ready'
 /** A child universe that already holds this share's whole balance; migrating there again would move nothing. */
 export const migrated = 'Migrated'

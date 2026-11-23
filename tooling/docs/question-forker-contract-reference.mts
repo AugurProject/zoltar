@@ -1,13 +1,17 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionForkerContractReference: ContractReference = {
-	compiledAbiFingerprint: '091f7c78c3c9605f34272a4799d0f31d81f2fca5a49fb6eccf7a3db9b285eb07',
+	compiledAbiFingerprint: 'f4f40cac0a9e7d7f567cdcc23173f2ce8c03290100c4b02e94abbde95215023f',
 	name: 'QuestionForker',
 	purpose: 'Routes shared-security-pool question forks and lazy child question preparation.',
-	readAbiFingerprint: 'fe12bd76e196503abfc9c82c377fc76ad7f05b020561424e6d20941bcd3ccd74',
-	readSurface: '`zoltar` identifies the protocol root. `getQuestionOutcome` returns the fixed or finalized question outcome, or None while unresolved; the shared security pool clock protects pre-fork final claims.',
+	readAbiFingerprint: '71d147b73a91ab01a9a48a22ba2e0ac710f5c7e6999e8c205853047aee0488a4',
+	readSurface:
+		'`zoltar` identifies the protocol root. `getQuestionOutcome` returns the fixed or finalized question outcome, or None while unresolved; the shared security pool clock protects pre-fork final claims. `getOwnForkAdmissionShortfall` returns the reporter ledger and the REP an own-question fork pulls from its caller.',
 	readDeclarations: [
 		{
 			name: 'getQuestionOutcome',
+		},
+		{
+			name: 'getOwnForkAdmissionShortfall',
 		},
 	],
 	readStorageDeclarations: [
@@ -60,13 +64,14 @@ export const questionForkerContractReference: ContractReference = {
 		{
 			call: '`forkZoltarWithOwnEscalationGame(questionLedger)`',
 			caller: 'Anyone',
-			effect: 'Uses this question\u2019s reporter custody to pay native fork admission and freezes its security pool.',
+			effect:
+				'Uses this question\u2019s reporter custody to pay native fork admission and freezes its security pool. A game fixes its non-decision threshold when it opens, but the genesis fork threshold follows the live external supply until the first fork, so the escrow can fall short. The caller then pays the shortfall from REP approved to the reporter ledger. That REP joins the question\u2019s escrow with no separate claim.',
 			declarations: [
 				{
 					name: 'forkZoltarWithOwnEscalationGame',
 				},
 			],
-			preconditions: 'Canonical reporter question has non-decision and sufficient admission REP; universe is not already forked.',
+			preconditions: 'Canonical reporter question has non-decision; the caller has approved the reporter ledger for any shortfall `getOwnForkAdmissionShortfall` reports; universe is not already forked.',
 			signals: 'Shared fork, question deployment and reporting continuation events as applicable.',
 		},
 		{

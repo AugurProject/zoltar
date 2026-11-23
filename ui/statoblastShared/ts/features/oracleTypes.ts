@@ -34,6 +34,17 @@ type ReportingRouteContentProps = {
 	reportingResult: ReportingActionResult | undefined
 }
 
+/** The REP approval an own-question fork pulls from its caller; `requiredAmount` 0 means no approval is needed. */
+export type ForkAdmissionApproval = {
+	allowanceError: string | undefined
+	approvedAmount: bigint | undefined
+	loading: boolean
+	onApprove: (amountAttoRep?: bigint) => void
+	pending: boolean
+	recommendedAmount: bigint | undefined
+	requiredAmount: bigint | undefined
+}
+
 export type ReportingSectionProps = ReportingRouteContentProps & {
 	oracleBlocker?: import('preact').ComponentChildren
 	currentTimestamp?: bigint | undefined
@@ -48,6 +59,7 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	reportActionGuardMessage?: string | undefined
 	showHeader?: boolean
 	showQuestionLedgerAddressInput?: boolean
+	triggerZoltarForkApproval?: ForkAdmissionApproval | undefined
 	triggerZoltarForkAvailability?: ActionAvailability | undefined
 	triggerZoltarForkPending?: boolean | undefined
 }

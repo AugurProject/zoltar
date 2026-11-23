@@ -30,7 +30,7 @@ const bookSizes = [8, 256] as const
 // Branch closing, the first branch choice and branch starting deploy child modules.
 const branchTransactions = new Set(['close: finalize branch and install the auction cohort', 'fork: unmaterialized winner chooses a branch', 'fork: start the chosen branch'])
 const setHealthTargetData = (target: bigint) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [target] })
-const claimEarningsData = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' })
+const claimEarningsData = (recipient: Address) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [recipient] })
 const setCommitmentData = (commitment: bigint) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setCommitment', args: [commitment] })
 const withdrawPrincipalData = (amount: bigint, recipient: Address) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [amount, recipient] })
 
@@ -164,7 +164,7 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		}
 		const fill = (id: bigint) => owner.readContract({ ...engine, functionName: 'previewBid', args: [id] })
 		const positionIdOf = async (vault: Address) => (await owner.readContract({ ...capital, functionName: 'ownerAccount', args: [vault] })).positionId
-		const claim = (label: string, client: WriteClient, vault: Address) => vaultCall(label, client, vault, context.capital, claimEarningsData, true)
+		const claim = (label: string, client: WriteClient, vault: Address) => vaultCall(label, client, vault, context.capital, claimEarningsData(vault), true)
 
 		await context.report()
 		await context.open()

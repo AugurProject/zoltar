@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { Collateral } from '../Collateral.sol';
+import { Constants } from '../Constants.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
@@ -75,11 +76,7 @@ contract SecurityPoolAuction is ISecurityPoolAuctionCapital {
 		inventoryAttoRep = inventory;
 		shortfallAttoEth = shortfall;
 		uint256 minimumLot = securityPool.minimumCommitmentAttoEth();
-		targetLots = Math.max(1, shortfall / minimumLot);
-		// Exact equal lots: use the requested count when it divides the deficit,
-		// otherwise a power-of-two divisor found in at most 128 halvings.
-		if (shortfall % targetLots != 0) targetLots = _powerOfTwoDivisor(shortfall, targetLots);
-		lotAttoEth = Math.max(minimumLot, Math.ceilDiv(shortfall, targetLots));
+		(targetLots, lotAttoEth) = _coveringLots(shortfall, Math.max(1, shortfall / minimumLot), minimumLot);
 		uint256 multiplier = capital.securityMultiplierBps();
 		repGrid = multiplier / _gcd(multiplier, 10_000);
 		engine = new SecurityPoolUniformPriceAuction(address(this), ICollateralConfig(root).collateralToken());
@@ -107,11 +104,10 @@ contract SecurityPoolAuction is ISecurityPoolAuctionCapital {
 		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote is not funded and fresh');
 		openingConservativePrice = feed.conservativePrice();
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
-		// Fewer, larger lots bound REP-grid rounding without losing any of the
-		// deficit. A single full-deficit lot is the liveness exception.
+		// Fewer, larger lots bound REP-grid rounding while still covering the
+		// whole deficit. A single full-deficit lot is the liveness exception.
 		while (targetLots > 1 && (Math.ceilDiv(required, repGrid) * repGrid - required) * 100 >= required) {
-			targetLots = _powerOfTwoDivisor(shortfallAttoEth, targetLots / 2);
-			lotAttoEth = Math.max(securityPool.minimumCommitmentAttoEth(), Math.ceilDiv(shortfallAttoEth, targetLots));
+			(targetLots, lotAttoEth) = _coveringLots(shortfallAttoEth, targetLots / 2, securityPool.minimumCommitmentAttoEth());
 			required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
 		}
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
@@ -166,7 +162,17 @@ contract SecurityPoolAuction is ISecurityPoolAuctionCapital {
 				floorAttoRepPerLot =
 					Math.ceilDiv(capital.commitmentIndex().requiredRep(lotAttoEth, feed.conservativePrice(), capital.securityMultiplierBps(), 10_000), repGrid) * repGrid;
 			result = engine.finalize(eligible ? targetLots : 0, floorAttoRepPerLot);
-			engine.withdrawRaised(payable(forkAuthority));
+			engine.withdrawRaised(payable(address(this)));
+			// Equal lots round up, so a full fill can exceed the deficit: by less
+			// than one attoETH per lot once the deficit spans at least one minimum
+			// commitment, and otherwise by up to the minimum lot. The child book
+			// accepts at most the deficit, and the surplus has no owner, so it is burned.
+			IERC20 collateral = ICollateralConfig(address(securityPool)).collateralToken();
+			if (result.raisedAttoEth > shortfallAttoEth) {
+				Collateral.send(collateral, Constants.BURN_ADDRESS, result.raisedAttoEth - shortfallAttoEth);
+				result.raisedAttoEth = shortfallAttoEth;
+			}
+			Collateral.send(collateral, forkAuthority, result.raisedAttoEth);
 		} else engine.finalizeUnopened();
 		// All sold inventory enters capital custody. Any indivisible remainder is
 		// owned only by winning bids through the auction's initial REP fee credits.
@@ -229,9 +235,12 @@ contract SecurityPoolAuction is ISecurityPoolAuctionCapital {
 		while (b != 0) (a, b) = (b, a % b);
 		return a;
 	}
-	function _powerOfTwoDivisor(uint256 amount, uint256 maximum) private pure returns (uint256 count) {
-		count = 1;
-		while (count <= maximum / 2 && amount % (count * 2) == 0) count *= 2;
+	/// @dev Equal lots of at least the minimum commitment that together cover the
+	/// whole deficit: at most `requestedLots` lots of ceil(deficit / requestedLots),
+	/// trimmed so no lot lies entirely beyond the deficit. Divisibility is not required.
+	function _coveringLots(uint256 shortfall, uint256 requestedLots, uint256 minimumLot) private pure returns (uint256 lots, uint256 lot) {
+		lot = Math.max(minimumLot, Math.ceilDiv(shortfall, requestedLots));
+		lots = Math.ceilDiv(shortfall, lot);
 	}
 }
 

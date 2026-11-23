@@ -47,11 +47,10 @@ export function securityPoolAuctionOpeningReason(snapshot: SecurityPoolAuctionSn
 	const requiredForLot = () => ceilDiv(ceilDiv(lot * price.conservativePrice, ATTO_UNITS) * auction.securityMultiplierBps, BPS)
 	let required = requiredForLot()
 	while (targetLots > 1n && (ceilDiv(required, auction.repGrid) * auction.repGrid - required) * 100n >= required) {
-		const maximum = targetLots / 2n
-		targetLots = 1n
-		while (targetLots <= maximum / 2n && auction.shortfallAttoEth % (targetLots * 2n) === 0n) targetLots *= 2n
-		const resized = ceilDiv(auction.shortfallAttoEth, targetLots)
+		// Mirrors the contract: half as many equal lots that still cover the whole deficit.
+		const resized = ceilDiv(auction.shortfallAttoEth, targetLots / 2n)
 		lot = resized > auction.lotAttoEth ? resized : auction.lotAttoEth
+		targetLots = ceilDiv(auction.shortfallAttoEth, lot)
 		required = requiredForLot()
 	}
 	const requiredCollateral = ceilDiv(required, auction.repGrid) * auction.repGrid

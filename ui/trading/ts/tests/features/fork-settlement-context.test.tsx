@@ -33,7 +33,7 @@ const forkContext: ForkMigrationContext = {
 	parentUniverseId: market.universeId,
 	questionId: 99n,
 	question: createMarketDetails({ title: 'Which branch wins?', description: 'Use the certified final tally.', marketType: 'categorical', outcomeLabels: ['Invalid', 'Red'], questionId: '0x63' }),
-	availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool, migrated: { invalid: 0n, yes: 0n, no: 0n } }],
+	availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool, branchActive: true, migrated: { invalid: 0n, yes: 0n, no: 0n } }],
 }
 
 async function settleEffects() {
@@ -229,8 +229,36 @@ describe('live fork settlement context', () => {
 		await settleEffects()
 		expect(document.body.textContent).not.toContain('confirmed.')
 	})
+	test('blocks migration into a child universe whose fork branch is not active and points to Statoblast', async () => {
+		let submissions = 0
+		const inactiveContext: ForkMigrationContext = { ...forkContext, availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool: undefined, branchActive: false, migrated: { invalid: 0n, yes: 0n, no: 0n } }] }
+		const services = {
+			createPublicClient: () => createPublicClient({ transport: custom({ request: async () => undefined }) }),
+			loadForkContext: async () => inactiveContext,
+			submit: async () => {
+				submissions++
+				return transactionHash
+			},
+		}
+		const balances = { scope: shareBalanceScope(market), invalid: 1n, yes: 1n, no: 1n, lp: 0n }
+		const rendered = await renderIntoDocument(<SettlementControls market={market} balances={balances} account={account} walletClient={createConfirmingWalletClient()} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await settleEffects()
+		const target = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Red') === true && candidate.closest('[aria-label="Settlement operation"]') === null)
+		if (!(target instanceof HTMLButtonElement)) throw new Error('Missing categorical fork target')
+		await act(() => {
+			target.click()
+		})
+		await settleEffects()
+
+		expect(document.body.textContent).toContain('Branch not active')
+		expect(document.body.textContent).toContain('Activate this branch in Statoblast under Fork choices and recovery before migrating.')
+		expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
+		expect(submissions).toBe(0)
+	})
+
 	test('shows a confirmed migration as done: the child universe is marked and linked, the balance reads as locked, and the same migration is blocked', async () => {
-		const migratedContext: ForkMigrationContext = { ...forkContext, availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool, migrated: { invalid: 0n, yes: 10n ** 18n, no: 0n } }] }
+		const migratedContext: ForkMigrationContext = { ...forkContext, availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool, branchActive: true, migrated: { invalid: 0n, yes: 10n ** 18n, no: 0n } }] }
 		let migrated = false
 		const loadedAccounts: (string | undefined)[] = []
 		const publicClient = createPublicClient({ transport: custom({ request: async () => undefined }) })

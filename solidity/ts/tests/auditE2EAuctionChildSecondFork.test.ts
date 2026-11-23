@@ -250,7 +250,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(sum(custody)).toBeLessThanOrEqual(4n)
 
 		// The origin's purchase-fee stream kept vesting for the providers who earned it and pays out completely.
-		for (const claimant of [owner, trader]) await writeContractAndWait(claimant, () => claimant.writeContract({ abi: capitalArtifact.abi, address: capital0, functionName: 'claimEarnings' }))
+		for (const claimant of [owner, trader]) await writeContractAndWait(claimant, () => claimant.writeContract({ abi: capitalArtifact.abi, address: capital0, functionName: 'claimEarnings', args: [claimant.account.address] }))
 		expect(await e2e.cash(capital0)).toBe(0n)
 		expect(await e2e.rep(U0, capital0)).toBe(0n)
 
@@ -310,14 +310,14 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		// Every purchased lot moved to the chosen branch; unsold REP remains reserved for claims.
 		expect(await e2e.rep(G1, capitalG1)).toBe(backing)
 		expect(await e2e.rep(C, context.capital)).toBe(rounding)
-		const claim = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' })
+		const claim = (vault: Address) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [vault] })
 		const earned: bigint[] = []
 		for (const [bidder, bid] of [
 			[b3, first],
 			[b4, second],
 		] as const) {
 			const before = await e2e.rep(C, bidder.account.address)
-			await execute(bidder, bid.vault, context.capital, claim)
+			await execute(bidder, bid.vault, context.capital, claim(bid.vault))
 			earned.push((await e2e.rep(C, bidder.account.address)) - before)
 		}
 		// Retained inventory creates no winner earning, and no winner REP is stranded.

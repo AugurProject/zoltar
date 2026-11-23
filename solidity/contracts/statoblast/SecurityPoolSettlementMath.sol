@@ -9,7 +9,7 @@ library SecurityPoolSettlementMath {
 	uint256 internal constant LIMIT = 1 << 128;
 
 	function netCash(uint256 cash, uint256 remainder) internal pure returns (uint256) {
-		require(cash < LIMIT, 'Settlement cash exceeds precision bound');
+		require(cash < LIMIT, 'Settlement cash too large');
 		return cash * SCALE - remainder;
 	}
 	function mintUnits(uint256 cash, uint256 units, uint256 net) internal pure returns (uint256 added) {

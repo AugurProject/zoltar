@@ -8,6 +8,9 @@ const shareToken = getAddress(`0x${'22'.repeat(20)}`)
 const zoltar = getAddress(`0x${'33'.repeat(20)}`)
 const questionData = getAddress(`0x${'44'.repeat(20)}`)
 const canonicalPool = getAddress(`0x${'55'.repeat(20)}`)
+const factory = getAddress(`0x${'66'.repeat(20)}`)
+const portfolio = getAddress(`0x${'77'.repeat(20)}`)
+const coordinator = getAddress(`0x${'88'.repeat(20)}`)
 const market = { pool, shareToken, universeId: 7n }
 
 const universeOutputs = [
@@ -46,6 +49,10 @@ const selectors = {
 	answerOptionName: selector('getAnswerOptionName(uint256,uint256)'),
 	canonicalPool: selector('canonicalQuestionLedgerByUniverse(uint248)'),
 	migratedShares: selector('getMigratedShareAmountAttoShares(uint256,uint248,address)'),
+	securityPoolFactory: selector('securityPoolFactory()'),
+	portfolio: selector('securityPoolOf(address)'),
+	forkController: selector('forkController()'),
+	isReady: selector('isReady(uint248)'),
 }
 
 function selector(signature: string) {
@@ -91,6 +98,10 @@ function commonResponse(callSelector: string, question: string) {
 	if (callSelector === selectors.universes) return encodedUniverse(99n)
 	if (callSelector === selectors.questions) return question
 	if (callSelector === selectors.questionCreatedTimestamp) return encodeAbiParameters([{ type: 'uint256' }], [90n])
+	if (callSelector === selectors.securityPoolFactory) return encodedAddress(factory)
+	if (callSelector === selectors.portfolio) return encodedAddress(portfolio)
+	if (callSelector === selectors.forkController) return encodedAddress(coordinator)
+	if (callSelector === selectors.isReady) return encodeAbiParameters([{ type: 'bool' }], [false])
 	return undefined
 }
 
@@ -123,11 +134,20 @@ describe('fork protocol helpers', () => {
 		})
 	})
 
-	test('loads paginated categorical branches with Invalid and canonical-pool readiness', async () => {
+	test('loads paginated categorical branches with Invalid, canonical-pool readiness, and fork-branch activation', async () => {
 		let labelsPage = 0
 		let canonicalPoolRead = 0
+		let coordinatorLookups = 0
+		const readinessReads: bigint[] = []
+		const invalidUniverse = getChildUniverseId(market.universeId, 0n)
 		const firstLabels = Array.from({ length: 30 }, (_, index) => `Choice ${index + 1}`)
-		const client = publicClient(callSelector => {
+		const client = publicClient((callSelector, data) => {
+			if (callSelector === selectors.forkController) coordinatorLookups++
+			if (callSelector === selectors.isReady) {
+				const universeId = BigInt(`0x${data.slice(10)}`)
+				readinessReads.push(universeId)
+				return encodeAbiParameters([{ type: 'bool' }], [universeId === invalidUniverse])
+			}
 			const common = commonResponse(callSelector, encodedQuestion('Categorical fork', 0n))
 			if (common !== undefined) return common
 			if (callSelector === selectors.outcomeLabels) {
@@ -146,10 +166,13 @@ describe('fork protocol helpers', () => {
 		expect(context.kind).toBe('categorical')
 		expect(context.question).toMatchObject({ title: 'Categorical fork', marketType: 'categorical', outcomeLabels: [...firstLabels, 'Choice 31', 'Choice 32'], outcomesComplete: true })
 		expect(context.availableTargets).toHaveLength(33)
-		expect(context.availableTargets[0]).toMatchObject({ outcomeIndex: 0n, label: 'Invalid', canonicalPool: undefined })
-		expect(context.availableTargets[1]).toMatchObject({ outcomeIndex: 1n, label: 'Choice 1', canonicalPool })
-		expect(context.availableTargets.at(-1)).toMatchObject({ outcomeIndex: 32n, label: 'Choice 32', canonicalPool: undefined })
+		expect(context.availableTargets[0]).toMatchObject({ outcomeIndex: 0n, label: 'Invalid', canonicalPool: undefined, branchActive: true })
+		expect(context.availableTargets[1]).toMatchObject({ outcomeIndex: 1n, label: 'Choice 1', canonicalPool, branchActive: true })
+		expect(context.availableTargets.at(-1)).toMatchObject({ outcomeIndex: 32n, label: 'Choice 32', canonicalPool: undefined, branchActive: false })
 		expect(labelsPage).toBe(2)
+		// Only child universes without a pool read branch activation, through one coordinator lookup.
+		expect(coordinatorLookups).toBe(1)
+		expect(readinessReads).toHaveLength(context.availableTargets.filter(target => target.canonicalPool === undefined).length)
 	})
 
 	test('loads paginated deployed scalar children with labels and ready or missing pools', async () => {

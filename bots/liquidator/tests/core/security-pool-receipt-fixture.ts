@@ -8,7 +8,7 @@ export async function securityPoolReceiptIntent(action: 'claimEarnings' | 'takeO
 	const to = getAddress('0x0000000000000000000000000000000000000010')
 	const data =
 		action === 'claimEarnings'
-			? encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: action })
+			? encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: action, args: [account.address] })
 			: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: action, args: [1n, 10n, 0n, 5n, { maximumOwnerPrincipal: 100n, maximumOwnerCommitment: 25n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 2n, expectedSourceBatch: 0n }] })
 	const serializedTransaction = await account.signTransaction({ chainId: 1, data, gas: 1_000_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0n, to, value: 0n })
 	const intent: PendingTransactionIntent = {

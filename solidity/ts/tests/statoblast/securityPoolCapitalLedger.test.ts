@@ -66,14 +66,21 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await position(id)).commitment).toBe(100n * E)
 		expect(await collateralBalance(alice, harness, ledger)).toBe(0n)
 	})
-	test('#1326 only the requesting owner serves a retirement', async () => {
+	test('#1552 anyone serves exactly the requested retirement once it is ready', async () => {
 		await deposit(alice, 210n * E)
 		await deposit(bob, 210n * E)
 		const id = await authorize(alice, 100n * E)
 		await authorize(bob, 100n * E)
 		await demand(190n * E)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [0n] }))
-		await expect(keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] })).rejects.toThrow('Only retirement owner')
+		// Not ready: serving leaves the request queued.
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))
+		expect((await position(id)).commitment).toBe(100n * E)
+		await demand(100n * E)
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))
+		expect((await position(id)).commitment).toBe(0n)
+		// An unknown position has no request to serve.
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [999n] }))
 	})
 	test('#1326 ready principal is quoted and withdrawn without processing other owners', async () => {
 		await deposit(alice, 210n * E)

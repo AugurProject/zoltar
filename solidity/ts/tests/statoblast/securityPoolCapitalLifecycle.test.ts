@@ -339,7 +339,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				const rep = owner.feesAttoRep + position.repFees
 				await action(
 					`claim old parent income ${i}`,
-					() => writeContractAndWait(fixture.client(i), () => fixture.client(i).writeContract({ ...fixture.capital, functionName: 'claimEarnings' })),
+					() => writeContractAndWait(fixture.client(i), () => fixture.client(i).writeContract({ ...fixture.capital, functionName: 'claimEarnings', args: [fixture.client(i).account.address] })),
 					() => {
 						paidEth += eth
 						paidRep += rep

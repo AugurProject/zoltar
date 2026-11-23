@@ -130,7 +130,7 @@ describe('fork migration target selection', () => {
 
 	test('exposes selected child shortcuts without redundant candidate status copy', async () => {
 		const context = scalarContext()
-		const readyTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: `0x${'11'.repeat(20)}`, migrated: noMigratedShares }
+		const readyTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: `0x${'11'.repeat(20)}`, branchActive: true, migrated: noMigratedShares }
 		const rendered = await renderIntoDocument(<ForkMigrationTargets context={{ ...context, availableTargets: [readyTarget] }} selectedTargets={[readyTarget]} sourceOutcome='YES' sourceBalance={10n} disabled={false} onChange={() => undefined} />)
 		cleanup = rendered.cleanup
 
@@ -140,23 +140,31 @@ describe('fork migration target selection', () => {
 		expect(shortcut.getAttribute('aria-pressed')).toBe('true')
 	})
 
-	test('describes an undeployed target as missing without promising an invalid batch will create it', async () => {
+	test('describes an undeployed target as lacking an active branch without promising an invalid batch will create it', async () => {
 		const context = scalarContext()
-		const missingTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: undefined, migrated: noMigratedShares }
+		const missingTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: undefined, branchActive: false, migrated: noMigratedShares }
 		const rendered = await renderIntoDocument(<ForkMigrationTargets context={context} selectedTargets={[missingTarget]} sourceOutcome='YES' sourceBalance={10n} disabled={false} onChange={() => undefined} />)
 		cleanup = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Not registered yet')
 		expect(rendered.container.textContent).not.toContain('will be created')
-		// A list that only holds selected targets does not repeat a Selected badge on every row.
-		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .badge'), badge => badge.textContent)).toEqual(['Not registered yet'])
+		// An undeployed child universe has no prepared fork branch. A list that only holds selected targets does not repeat a Selected badge on every row.
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .badge'), badge => badge.textContent)).toEqual(['Branch not active'])
+	})
+
+	test('describes a target in an active branch without a pool as missing its pool', async () => {
+		const target: ForkTarget = { outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: undefined, branchActive: true, migrated: noMigratedShares }
+		const rendered = await renderIntoDocument(<ForkMigrationTargets context={categoricalContext([target])} selectedTargets={[target]} sourceOutcome='YES' sourceBalance={10n} disabled={false} onChange={() => undefined} />)
+		cleanup = rendered.cleanup
+
+		expect(rendered.container.textContent).toContain('Not registered yet')
+		expect(rendered.container.textContent).not.toContain('Branch not active')
 	})
 
 	test('selects labeled categorical targets independently from source INVALID, YES, and NO shares', async () => {
 		const targets: readonly ForkTarget[] = [
-			{ outcomeIndex: 0n, universeId: 10n, label: 'Invalid', canonicalPool: undefined, migrated: noMigratedShares },
-			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, migrated: noMigratedShares },
-			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}`, migrated: noMigratedShares },
+			{ outcomeIndex: 0n, universeId: 10n, label: 'Invalid', canonicalPool: undefined, branchActive: true, migrated: noMigratedShares },
+			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, branchActive: true, migrated: noMigratedShares },
+			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}`, branchActive: true, migrated: noMigratedShares },
 		]
 		const context = categoricalContext(targets)
 		const rendered = await renderIntoDocument(<Harness context={context} />)
@@ -179,8 +187,8 @@ describe('fork migration target selection', () => {
 	test('marks a child universe that already holds the share as migrated and links to its pool in that universe', async () => {
 		const childPool = `0x${'11'.repeat(20)}` as const
 		const targets: readonly ForkTarget[] = [
-			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: childPool, migrated: { invalid: 0n, yes: 10n, no: 0n } },
-			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}`, migrated: noMigratedShares },
+			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: childPool, branchActive: true, migrated: { invalid: 0n, yes: 10n, no: 0n } },
+			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}`, branchActive: true, migrated: noMigratedShares },
 		]
 		const context = categoricalContext(targets)
 		const rendered = await renderIntoDocument(
@@ -209,7 +217,7 @@ describe('fork migration target selection', () => {
 
 	test('marks a scalar candidate as migrated when its deployed child universe already holds the share', async () => {
 		const context = scalarContext()
-		const migratedTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: `0x${'11'.repeat(20)}`, migrated: { invalid: 0n, yes: 10n, no: 0n } }
+		const migratedTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: `0x${'11'.repeat(20)}`, branchActive: true, migrated: { invalid: 0n, yes: 10n, no: 0n } }
 		const rendered = await renderIntoDocument(<Harness context={{ ...context, availableTargets: [migratedTarget] }} />)
 		cleanup = rendered.cleanup
 
@@ -220,7 +228,7 @@ describe('fork migration target selection', () => {
 	})
 
 	test('treats a balance that grew after migrating as not yet migrated there', async () => {
-		const targets: readonly ForkTarget[] = [{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, migrated: { invalid: 0n, yes: 10n, no: 0n } }]
+		const targets: readonly ForkTarget[] = [{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, branchActive: true, migrated: { invalid: 0n, yes: 10n, no: 0n } }]
 		const context = categoricalContext(targets)
 		const rendered = await renderIntoDocument(<Harness context={context} sourceBalance={15n} />)
 		cleanup = rendered.cleanup

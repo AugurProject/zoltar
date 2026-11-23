@@ -264,7 +264,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 			encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [15_000n] }),
 			encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setCommitment', args: [100n * unit] }),
 			withdraw(2n * unit, context.sponsor.account.address).data,
-			encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }),
+			encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [context.sponsor.account.address] }),
 		].map(data => ({ gasLimit: 1_000_000n, data }))
 		expect((await run(context, operations)).map(event => event.success)).toEqual([true, true, true, true, true])
 		expect((await context.sponsor.readContract({ ...capital(), functionName: 'ownerCollateral', args: [context.sponsor.account.address] })).slice(0, 2)).toEqual([3003n * unit, 100n * unit])
@@ -280,7 +280,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 	test('operation count has no fixed cap: twenty calls fill the feed operation gas allowance', async () => {
 		const context = await prepare()
 		// Only gas bounds the count: 20 x (200,000 + 100,000) is the whole 6,000,000 the feed allows a batch.
-		const operations = Array.from({ length: 20 }, () => ({ gasLimit: 200_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) }))
+		const operations = Array.from({ length: 20 }, () => ({ gasLimit: 200_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [context.sponsor.account.address] }) }))
 		const attempts = await run(context, operations)
 		expect(attempts).toHaveLength(20)
 		expect(attempts.every(event => event.success)).toBe(true)
@@ -330,7 +330,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'setReceiveReentry', args: [fixture.capitalLedger, withdraw(unit, receiver).data] }))
 		const operations = [
-			{ gasLimit: 3_500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) },
+			{ gasLimit: 3_500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [receiver] }) },
 			{ ...withdraw(unit, receiver), gasLimit: 2_000_000n },
 		]
 		expect((await run({ sponsor: owner, feed }, operations, unit, (data, value) => execute(feed.address, data, value), beforeSettlement)).map(event => event.success)).toEqual([true, true])

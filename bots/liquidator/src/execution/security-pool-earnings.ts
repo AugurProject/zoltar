@@ -29,7 +29,7 @@ export async function executeSecurityPoolEarnings(wallet: Wallet, settings: Oper
 		{
 			to: current.snapshot.capitalLedger,
 			value: 0n,
-			data: encodeFunctionData({ abi: capitalAbi, functionName: 'claimEarnings' }),
+			data: encodeFunctionData({ abi: capitalAbi, functionName: 'claimEarnings', args: [wallet.account.address] }),
 			gas: 'estimate',
 			label: 'Collect security pool earned fees',
 			preSubmit: refresh,

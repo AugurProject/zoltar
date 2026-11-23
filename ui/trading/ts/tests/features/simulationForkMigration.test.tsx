@@ -1,4 +1,11 @@
 import { simulateSettlement } from '../../protocol/settlementSimulation.js'
+import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/core-shared/evm/ethereum'
+import {
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 /// <reference types='bun-types' />
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
@@ -130,6 +137,19 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 				const migrate = async (sourceOutcome: 'YES' | 'NO', targetOutcomeIndexes: readonly bigint[]) => {
 					const quote = await simulateSettlement(writer, configuration, market, account, 'migrate-shares', { sourceOutcome, targetOutcomeIndexes })
 					const hash = await submitFreshSettlement(writer, configuration, account, quote, async write => await write())
+					expect((await writer.waitForTransactionReceipt({ hash })).status).toBe('success')
+				}
+				// The scenario activates only the Yes branch. Migrating into a child universe without a pool
+				// requires its fork branch to be active (#1565), so start and activate the No branch first.
+				const factory = await client.readContract({ abi: poolArtifact.abi, address: market.pool, functionName: 'securityPoolFactory' })
+				const portfolio = await client.readContract({ abi: factoryArtifact.abi, address: getAddress(factory), functionName: 'securityPoolOf', args: [market.pool] })
+				const coordinator = getAddress(await client.readContract({ abi: securityPoolArtifact.abi, address: getAddress(portfolio), functionName: 'forkController' }))
+				const noUniverse = BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [market.universeId, 2n]))) & ((1n << 248n) - 1n)
+				for (const [functionName, args] of [
+					['startBranch', [market.universeId, 2n]],
+					['finalizeBranch', [noUniverse]],
+				] as const) {
+					const hash = await writer.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName, args, account })
 					expect((await writer.waitForTransactionReceipt({ hash })).status).toBe('success')
 				}
 				await migrate('NO', [2n])

@@ -218,11 +218,12 @@ test('the preliminary cure respects minimum commitments without freeing backed R
 	observation.snapshot.demandAttoEth = 30n * unit
 	expect(securityPoolCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 100n * unit, healthy: false })
 	// A deep deficit (10.5 REP back 10 ETH) with a 30 ETH minimum and spare of 95: the uncovered 90 would
-	// leave 10, so the cut shrinks to 70 and exactly the minimum remains, still open to a takeover.
+	// leave 10, so the cut shrinks to 70 and exactly the minimum remains. Only additional healthy capacity and
+	// ordinary retirement can replace a minimum position, so the cure alone settles the takeover call.
 	Object.assign(position, { rep: (105n * unit) / 10n })
 	observation.snapshot.economics.minimumCommitmentAttoEth = 30n * unit
 	observation.snapshot.demandAttoEth = 5n * unit
-	expect(securityPoolCureOutcome(observation, position)).toMatchObject({ removed: 70n * unit, commitment: 30n * unit, healthy: false })
+	expect(securityPoolCureOutcome(observation, position)).toMatchObject({ removed: 70n * unit, commitment: 30n * unit, healthy: true, maximumTakeoverCommitment: 0n })
 })
 
 test('takeover prerequisites reject demand or total-capacity changes even below the cure floor', () => {

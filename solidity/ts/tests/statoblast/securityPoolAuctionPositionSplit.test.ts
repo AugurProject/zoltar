@@ -190,7 +190,7 @@ describe('Statoblast: auction position materialization preserves cohort history'
 		await observe(11n)
 		const distress = await started(source)
 		await getAnvilWindowEthereum().advanceTime(100n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'split', args: [source, owner(2), 50n, 5n, 10n, 10n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'split', args: [source, owner(2), 50n, 5n, 10n, 10n, 0n] }))
 		const receiver = await client.readContract({ abi: artifact.abi, address, functionName: 'lastPositionId' })
 		expect(await started(source)).toBe(distress)
 		expect(await started(receiver)).toBe(0n)

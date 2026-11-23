@@ -168,6 +168,7 @@ export function capitalAction(kind: CapitalAction): OperationDefinition {
 	function build(snapshot: EcosystemSnapshot, capital: SecurityPoolCapitalSnapshot) {
 		let args: (bigint | string)[] = []
 		if (kind === 'withdraw') args = [amount(capital.withdrawableAttoRep), snapshot.wallet.address]
+		if (kind === 'claim') args = [snapshot.wallet.address]
 		if (kind === 'retire') args = [0n]
 		if (kind === 'serve-retirement') args = [amount(capital.positionId)]
 		return planBase({
