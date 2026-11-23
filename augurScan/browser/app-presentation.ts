@@ -121,7 +121,7 @@ export const accountTransactionsError = (detail: string, hasLoaded: boolean, app
 
 export const richListError = (detail: string, append: boolean, empty: boolean): string => {
 	if (append) return `Could not load more; showing known rankings: ${detail}`
-	return empty ? `Rich list unavailable: ${detail}` : `Refresh failed; showing last known rankings: ${detail}`
+	return empty ? `Addresses unavailable: ${detail}` : `Refresh failed; showing last known rankings: ${detail}`
 }
 
 export const yesNoCheckpoint = (value: unknown): string => {

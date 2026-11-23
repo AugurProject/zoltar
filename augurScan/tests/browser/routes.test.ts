@@ -10,6 +10,12 @@ test('classifies canonical entities and rejects unknown routes', () => {
 	expect(routeTitle('/missing')).toBe('Page not found · augurScan')
 })
 
+test('serves the address directory at /addresses and retires the old route', () => {
+	expect(classifyRoute('/addresses')).toBe('richlist')
+	expect(routeTitle('/addresses')).toBe('Addresses · augurScan')
+	expect(classifyRoute('/richlist')).toBe('not-found')
+})
+
 test('question and universe routes accept the displayed hex ID and load it by its decimal ID', () => {
 	expect(classifyRoute('/question/0x1f5')).toBe('system')
 	expect(systemRouteIdentity('0x1f5')).toBe('501')

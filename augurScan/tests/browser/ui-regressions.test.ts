@@ -178,9 +178,9 @@ test('route filters do not follow the user to another route while page-wide para
 })
 
 test('rich list sort and view follow the user only to the rich list', () => {
-	const richList = new URL('https://scanner.test/richlist?chainId=1&sort=rep&view=cards')
+	const richList = new URL('https://scanner.test/addresses?chainId=1&sort=rep&view=cards')
 	expect(navigationTarget(new URL('https://scanner.test/contracts'), richList).search).toBe('?chainId=1')
-	const returning = navigationTarget(new URL('https://scanner.test/richlist'), new URL('https://scanner.test/address/0x1?chainId=1&sort=rep&view=cards'))
+	const returning = navigationTarget(new URL('https://scanner.test/addresses'), new URL('https://scanner.test/address/0x1?chainId=1&sort=rep&view=cards'))
 	expect(returning.searchParams.get('sort')).toBe('rep')
 	expect(returning.searchParams.get('view')).toBe('cards')
 })
@@ -194,9 +194,9 @@ test('switching networks drops block numbers and details that belong to the prev
 
 test('the rich list sort comes from the URL and falls back to the default ranking', () => {
 	const options = ['transactions', 'eth', 'weth', 'rep']
-	expect(richListSort(new URL('https://scanner.test/richlist?sort=rep'), options)).toBe('rep')
-	expect(richListSort(new URL('https://scanner.test/richlist'), options)).toBe('transactions')
-	expect(richListSort(new URL('https://scanner.test/richlist?sort=unknown'), options)).toBe('transactions')
+	expect(richListSort(new URL('https://scanner.test/addresses?sort=rep'), options)).toBe('rep')
+	expect(richListSort(new URL('https://scanner.test/addresses'), options)).toBe('transactions')
+	expect(richListSort(new URL('https://scanner.test/addresses?sort=unknown'), options)).toBe('transactions')
 })
 
 test('contracts outside the protocol deployment carry a provenance badge', async () => {
@@ -281,7 +281,7 @@ test('a route data context changes with the filters that select a different resu
 	expect(context('/operations/risk?atBlock=10')).not.toBe(context('/operations/risk'))
 	expect(context('/pool/0xabc?atBlock=10')).not.toBe(context('/pool/0xabc'))
 	expect(context('/pool/0xabc?tab=history')).toBe(context('/pool/0xabc'))
-	expect(context('/richlist?sort=rep')).toBe('1:/richlist')
+	expect(context('/addresses?sort=rep')).toBe('1:/addresses')
 })
 
 test('route focus skips headings that are not rendered', async () => {

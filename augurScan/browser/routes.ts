@@ -40,7 +40,7 @@ export const classifyRoute = (pathname: string): ScannerRoute => {
 	if (pathname === '/system' || (/^\/(question|universe)\/[^/]+$/.test(pathname) && systemRouteIdentity(pathname.split('/')[2] ?? '') !== undefined)) return 'system'
 	if (pathname === '/operations' || (pathname.startsWith('/operations/') && ((operationsSections.has(pathname.split('/')[2] ?? '') && pathname.split('/').length === 3) || parseOperationsDetailRoute(pathname) !== undefined)) || parseOperationsDetailRoute(pathname) !== undefined) return 'operations'
 	if (pathname === '/contracts') return 'contracts'
-	if (pathname === '/richlist') return 'richlist'
+	if (pathname === '/addresses') return 'richlist'
 	if (pathname === '/address' || new RegExp(`^/address/${address}$`).test(pathname)) return 'address'
 	if (new RegExp(`^/tx/${hash}$`).test(pathname) || /^\/block\/\d{1,19}$/.test(pathname)) return 'explorer'
 	return 'not-found'
@@ -56,7 +56,7 @@ export const canonicalOperationsPath = (pathname: string): string => {
 export const routeTitle = (pathname: string): string => {
 	const route = classifyRoute(pathname)
 	if (route === 'not-found') return 'Page not found · augurScan'
-	const names: Record<ScannerRoute, string> = { activity: 'Activity', system: 'System state', operations: 'Operations', contracts: 'Contracts', richlist: 'Rich list', address: 'Address', explorer: pathname.startsWith('/tx/') ? 'Transaction' : 'Block', 'not-found': 'Page not found' }
+	const names: Record<ScannerRoute, string> = { activity: 'Activity', system: 'System state', operations: 'Operations', contracts: 'Contracts', richlist: 'Addresses', address: 'Address', explorer: pathname.startsWith('/tx/') ? 'Transaction' : 'Block', 'not-found': 'Page not found' }
 	const canonicalKind = pathname.split('/')[1]
 	let name = names[route]
 	if (route === 'system' && canonicalKind === 'question') name = 'Question'
@@ -85,7 +85,7 @@ export const routeDataContext = (chainId: string, url: URL): string => {
 const routeScopedParameters = ['log', 'account', 'contract', 'entity', 'tab', 'fromBlock', 'toBlock', 'event', 'address', 'q', 'entityType', 'canonical', 'atBlock']
 
 // Preferences that only one route reads; they follow the user only back to that route.
-const routePreferenceParameters: Readonly<Record<string, string>> = { sort: '/richlist', view: '/richlist' }
+const routePreferenceParameters: Readonly<Record<string, string>> = { sort: '/addresses', view: '/addresses' }
 
 /** Builds the destination of a navigation link: the link's own URL plus the current page-wide parameters (network, demo flags, preferences). */
 export const navigationTarget = (linkUrl: URL, currentUrl: URL): URL => {

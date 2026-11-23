@@ -1,12 +1,12 @@
 import { collateralPresentation } from '../../../protocol/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { formatEther, formatUnits, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatEther, formatUnits, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioPriceApprovalRequest, buildPortfolioPricePreparationRequest, buildPortfolioPriceRequest, buildPortfolioPriceWrapRequest, quotePortfolioPriceFunding, type PortfolioForkSnapshot, type PortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { buildPortfolioPriceFundingWithdrawal, buildPortfolioPriceRecovery, buildPortfolioPriceSettlement, loadPortfolioBranchPrice, loadPortfolioPriceReport, submittedPortfolioPriceReport, type PortfolioPriceReport } from '../../../protocol/securityPoolPortfolioPrice.js'
+import { buildPortfolioPriceFundingWithdrawal, buildPortfolioPriceTokenWithdrawal, buildPortfolioPriceRecovery, buildPortfolioPriceSettlement, loadPortfolioBranchPrice, loadPortfolioPriceReport, submittedPortfolioPriceReport, type PortfolioPriceReport } from '../../../protocol/securityPoolPortfolioPrice.js'
 import type { PortfolioAccountSnapshot, PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import type { PortfolioSharedForkParameters } from './usePortfolioSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
@@ -42,6 +42,8 @@ const actionNames = {
 	settle: 'settlePortfolioPrice',
 	recover: 'recoverPortfolioPrice',
 	withdraw: 'withdrawPortfolioPrice',
+	withdrawCollateral: 'withdrawPortfolioPriceCollateral',
+	withdrawRep: 'withdrawPortfolioPriceRep',
 }
 /** The page shows a universe report and a branch report together, so each owns its action IDs and a pending transaction marks only the button that started it. */
 function portfolioPriceAction(scope: copy.PortfolioPriceScope, name: keyof typeof actionNames) {
@@ -61,6 +63,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 	const priceInput = useSignal('')
 	const wethInput = useSignal('')
 	const reportInput = useSignal('')
+	const recipientInput = useSignal<{ reportId: bigint; value: string } | undefined>(undefined)
 	const version = useSignal(0)
 	const loaded = useSignal<{ key: string; snapshot?: PortfolioPriceSnapshot; error?: string } | undefined>(undefined)
 	const reports = useSignal<{ key: string; report?: PortfolioPriceReport; error?: string } | undefined>(undefined)
@@ -74,6 +77,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		priceInput.value = ''
 		wethInput.value = ''
 		reportInput.value = ''
+		recipientInput.value = undefined
 	}, [backend, identity])
 	const key = `${backend.id}:${identity}:${target?.blockHash}:${version.value}`
 	useEffect(() => {
@@ -163,6 +167,15 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 	const settleReason = selectedReportReason ?? (report?.state.settled ? copy.alreadySettled : undefined) ?? (snapshot !== undefined && report !== undefined && snapshot.timestamp < report.eligibleAt ? copy.waitForSettlement : undefined)
 	const recoverReason = selectedReportReason ?? (!report?.state.settled ? copy.notSettled : undefined) ?? (report?.outcome !== 0n ? copy.callbackComplete : undefined) ?? feeReason(report)
 	const withdrawReason = selectedReportReason ?? (report?.wethCredit === 0n && report.repCredit === 0n ? copy.noFunding : undefined)
+	const canRedirectFunding = snapshot !== undefined && report !== undefined && getAddress(snapshot.owner) === getAddress(report.sponsor)
+	const recipientSelection = recipientInput.value
+	const recipientValue = recipientSelection !== undefined && recipientSelection.reportId === reportId ? recipientSelection.value : ''
+	const recipientDraft = canRedirectFunding ? recipientValue.trim() : ''
+	const parsedRecipient = isAddress(recipientDraft) ? getAddress(recipientDraft) : undefined
+	const recipient = recipientDraft === '' ? report?.sponsor : parsedRecipient
+	const recipientError = recipientDraft !== '' && (recipient === undefined || recipient === zeroAddress || recipient === report?.escrow) ? copy.invalidWithdrawalRecipient : undefined
+	const credit = (selected: PortfolioPriceReport | undefined, token: 'collateral' | 'rep') => (token === 'collateral' ? selected?.wethCredit : selected?.repCredit)
+	const tokenWithdrawReason = (token: 'collateral' | 'rep') => selectedReportReason ?? recipientError ?? (credit(report, token) === 0n ? copy.noFunding : undefined)
 
 	const run = (action: string, label: string, reason: string | undefined, build: (selected: PortfolioPriceSnapshot) => PortfolioTransaction, check: (latest: PortfolioPriceSnapshot) => Promise<void> = async () => undefined, captureReport = false) =>
 		actions.runPortfolioAction(
@@ -219,6 +232,23 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		if (fresh.escrow !== report.escrow || fresh.state.stateHash !== report.state.stateHash) throw new Error('This report changed. Refresh and review it again.')
 		return fresh
 	}
+	const withdrawToken = (token: 'collateral' | 'rep') => {
+		const symbol = token === 'collateral' ? collateral.symbol : 'REP'
+		return run(
+			portfolioPriceAction(scope, token === 'collateral' ? 'withdrawCollateral' : 'withdrawRep'),
+			copy.withdrawToken(symbol),
+			tokenWithdrawReason(token),
+			withReport((selected, selectedReport) => {
+				if (recipient === undefined) throw new Error(copy.invalidWithdrawalRecipient)
+				return { ...buildPortfolioPriceTokenWithdrawal(selected, selectedReport, token, recipient), reviewDescription: copy.tokenWithdrawalReview(symbol, recipient) }
+			}),
+			async latest => {
+				const fresh = await freshReport(latest)
+				if (fresh.sponsor !== report?.sponsor) throw new Error('Report sponsor changed. Refresh and review it again.')
+				if (credit(fresh, token) === 0n) throw new Error(copy.noFunding)
+			},
+		)
+	}
 	return {
 		collateral,
 		proposedPrice: price,
@@ -243,6 +273,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		},
 		setReportId: (value: string) => {
 			reportInput.value = value
+			recipientInput.value = undefined
 		},
 		prepareReason,
 		fundingReason,
@@ -251,6 +282,15 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		settleReason,
 		recoverReason,
 		withdrawReason,
+		withdrawCollateralReason: tokenWithdrawReason('collateral'),
+		withdrawRepReason: tokenWithdrawReason('rep'),
+		withdrawToken,
+		canRedirectFunding,
+		recipientInput: recipientValue,
+		recipientError,
+		setRecipient: (value: string) => {
+			if (reportId !== undefined) recipientInput.value = { reportId, value }
+		},
 		refreshReason,
 		/** Changes only when the drafts reset (another portfolio, sponsor, universe or environment), never on a block reload or while folded. */
 		draftKey: previous.current?.identity,

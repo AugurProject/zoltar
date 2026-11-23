@@ -48,7 +48,7 @@ const freshnessThresholdMs = Math.max(runtimeConfig.pollIntervalMs * 4, 45_000)
 const apiRequest = createConcurrencyGate(API_DATABASE_CONNECTIONS, () => Response.json({ error: 'Server is busy; retry shortly' }, { status: 503, headers: { ...securityHeaders, 'retry-after': '2' } }))
 const healthRoutes = createHealthRoutes({
 	checkReadiness: async () => await readinessDatabase.read(async sql => await sql`SELECT 1`, 3_000),
-	readIndexerHealth: async () => await healthDatabase.read(async sql => await readIndexerHealth(sql, transaction => healthDatabase.auditIntegrity(transaction), networks, freshnessThresholdMs), 3_000),
+	readIndexerHealth: async () => await healthDatabase.read(async sql => await readIndexerHealth(sql, (transaction, chainIds) => healthDatabase.auditIntegrity(transaction, chainIds), networks, freshnessThresholdMs), 3_000),
 	networks,
 	securityHeaders,
 })

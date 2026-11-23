@@ -272,14 +272,29 @@ export async function demoRichListRoute(env: DemoEnvironment, path: string): Pro
 	const limit = Number(request.searchParams.get('limit') ?? 50)
 	if (context.pageUrl.searchParams.get('richAppendDelay') === '1' && offset > 0) await new Promise(resolve => setTimeout(resolve, 1_500))
 	const filtered = demoRichList.filter(item => (!chainId || item.chain_id === chainId) && (!address || item.address.toLowerCase() === address) && !(counters.reorgObserved && context.pageUrl.searchParams.get('evictAccountOnReorg') === '1' && item.address.toLowerCase() === counters.evictedAddress))
+	const paginationDemo = context.pageUrl.searchParams.get('richPaginationDemo')
+	const largePagination = paginationDemo === 'large'
+	const snapshot = largePagination ? 'rich-list-demo-snapshot' : undefined
+	if (largePagination && offset > 0) {
+		if (request.searchParams.get('snapshot') !== snapshot) throw new Error('Rich list refresh lost its snapshot')
+		counters.routeRequestsInFlight++
+		counters.maxRouteRequestsInFlight = Math.max(counters.maxRouteRequestsInFlight, counters.routeRequestsInFlight)
+		window.__demoMaxRouteRequestsInFlight = counters.maxRouteRequestsInFlight
+		try {
+			if (counters.routeRequestsInFlight > 10) throw new Error('Server is busy; retry shortly')
+			await new Promise(resolve => setTimeout(resolve, 50))
+		} finally {
+			counters.routeRequestsInFlight--
+		}
+	}
 	const ranked =
-		context.pageUrl.searchParams.get('richPaginationDemo') === '1' && address === undefined && filtered.length > 0
-			? Array.from({ length: 120 }, (_, index) => ({
+		(paginationDemo === '1' || largePagination) && address === undefined && filtered.length > 0
+			? Array.from({ length: largePagination ? 1150 : 120 }, (_, index) => ({
 					...requiredArrayItem(filtered, index % filtered.length, 'Demo rich-list pagination template'),
 					address: `0x${BigInt(index + 1)
 						.toString(16)
 						.padStart(40, '0')}`,
 				}))
 			: filtered
-	return { items: ranked.slice(offset, offset + limit), total: ranked.length, limit, offset }
+	return { items: ranked.slice(offset, offset + limit), total: ranked.length, limit, offset, snapshotCursor: snapshot }
 }

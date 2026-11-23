@@ -135,6 +135,7 @@ const isNullableDateString = (value: unknown): value is string | null => value =
 
 export const isNetworkRecordValue = (value: unknown): boolean =>
 	isPlainRecord(value) &&
+	(value['enabled'] === undefined || typeof value['enabled'] === 'boolean') &&
 	isUnsignedIntegerString(value['chain_id']) &&
 	isString(value['id']) &&
 	isString(value['name']) &&

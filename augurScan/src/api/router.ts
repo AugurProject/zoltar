@@ -27,7 +27,9 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 	try {
 		if (url.pathname === '/api/v1/networks') {
 			const rows = await networkCatalog(sql)
-			return json({ items: rows, serverTime: new Date(), freshnessThresholdMs })
+			const enabled = new Set(enabledChainIds)
+			const items = rows.map((row: Record<string, unknown>) => ({ ...row, enabled: enabledChainIds === undefined || enabled.has(Number(row['chain_id'])) }))
+			return json({ items, serverTime: new Date(), freshnessThresholdMs })
 		}
 		if (url.pathname === '/api/v1/contracts') {
 			const chainId = integer(url.searchParams.get('chainId'), 'chainId')

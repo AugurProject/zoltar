@@ -1,4 +1,5 @@
 import { securityPoolPortfolioAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { Address, PublicClient } from '@zoltar/bot-shared/ethereum'
 
 const settlementAbi = [
@@ -86,7 +87,7 @@ export async function* scanSettlementFinalizations(client: Reader, portfolio: Ad
 	const blockPageSize = 10_000n
 	for (let fromBlock = 0n; fromBlock <= block.number; fromBlock += blockPageSize) {
 		const toBlock = fromBlock + blockPageSize - 1n < block.number ? fromBlock + blockPageSize - 1n : block.number
-		const prepared = await client.getLogs({ address: portfolio, event: preparedEvent, fromBlock, toBlock })
+		const prepared = await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, blockPageSize, range => client.getLogs({ address: portfolio, event: preparedEvent, ...range }))
 		for (const event of prepared) {
 			if (event.args === undefined) throw new Error('Prepared universe event arguments unavailable')
 			const { universeId } = event.args

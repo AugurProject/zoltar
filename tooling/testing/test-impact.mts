@@ -1,15 +1,32 @@
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs, readFileSync } from 'node:fs'
 import * as path from 'node:path'
 import { getChangedFileEntries, type ChangedFileEntry } from '../repo/changed-files.mts'
 import { documentationConsumerMatches, documentationConsumers } from '../repo/documentation-consumers.ts'
 import { mergeBaseWithMain, runGit } from '../repo/git.mts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
+import { repositoryRoot } from '../repo/root.mts'
 import { walkFiles } from '../repo/walk.mts'
 import { isTestSourceFile } from './test-discovery.mts'
 import { isScreenshotSourcePath, screenshotAppIds } from '../docs/ui-screenshots.mts'
 
 // The production workflows boot the Statoblast `securitypoolx2` and `portfolio-auction` simulation scenarios, which every module in this directory seeds or registers.
 const WORKFLOW_SIMULATION_SCENARIO_DIRECTORY = 'ui/statoblastShared/ts/simulation/'
+
+const augurScanRunners = {
+	unit: 'bun test',
+	integration: 'POSTGRES_TEST_URL="${POSTGRES_TEST_URL:?set-POSTGRES_TEST_URL}" bun ../tooling/testing/bun-test.mts',
+	browser: 'AUGURSCAN_BROWSER_URL="${AUGURSCAN_BROWSER_URL:?set-AUGURSCAN_BROWSER_URL}" bun test',
+}
+
+function augurScanRunner(filePath: string, source?: string) {
+	if (filePath.startsWith('augurScan/tests/integration/')) return augurScanRunners.integration
+	if (filePath.startsWith('augurScan/tests/browser/')) {
+		const sourcePath = path.join(repositoryRoot, filePath)
+		const testSource = source ?? (existsSync(sourcePath) ? readFileSync(sourcePath, 'utf8') : '')
+		if (/from ['"].*\/browser-test\.ts['"]/.test(testSource)) return augurScanRunners.browser
+	}
+	return augurScanRunners.unit
+}
 
 export type TestImpactRecommendation = {
 	command: string
@@ -132,7 +149,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 
 function directTestCommand(filePath: string) {
 	if (!/\.(?:fuzz|spec|test)\.(?:cts|mts|ts|tsx)$/.test(filePath)) return undefined
-	if (filePath.startsWith('augurScan/')) return `cd augurScan && bun test ${filePath.slice('augurScan/'.length)}`
+	if (filePath.startsWith('augurScan/')) return `cd augurScan && ${augurScanRunner(filePath)} ${filePath.slice('augurScan/'.length)}`
 	const botMatch = /^bots\/([^/]+)\/(.+)$/.exec(filePath)
 	if (botMatch?.[1] !== undefined && botMatch[2] !== undefined) return `cd bots/${botMatch[1]} && bun ../../tooling/testing/bun-test.mts ${botMatch[2]}`
 	if (filePath.startsWith('solidity/ts/')) return `bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup.ts ${filePath}`
@@ -279,13 +296,13 @@ function resolveImportSpecifier(importer: string, specifier: string, sourceFiles
 	return candidates.find(candidate => sourceFiles.has(candidate))
 }
 
-function groupedTestCommands(testFiles: readonly string[]) {
+function groupedTestCommands(testFiles: readonly string[], sources?: ReadonlyMap<string, string>) {
 	const groups = new Map<string, string[]>()
 	for (const filePath of testFiles) {
 		let group = 'root'
 		let commandPath = filePath
 		if (filePath.startsWith('augurScan/')) {
-			group = 'augurScan'
+			group = `augurScan && ${augurScanRunner(filePath, sources?.get(filePath))}`
 			commandPath = filePath.slice('augurScan/'.length)
 		} else {
 			const botMatch = /^bots\/([^/]+)\/(.+)$/.exec(filePath)
@@ -303,7 +320,7 @@ function groupedTestCommands(testFiles: readonly string[]) {
 	return [...groups]
 		.map(([group, files]) => {
 			const paths = files.sort((left, right) => left.localeCompare(right)).join(' ')
-			if (group === 'augurScan') return `cd ${group} && bun test ${paths}`
+			if (group.startsWith('augurScan && ')) return `cd ${group} ${paths}`
 			if (group.startsWith('bots/')) return `cd ${group} && bun ../../tooling/testing/bun-test.mts ${paths}`
 			if (group === 'solidity') return `bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup.ts ${paths}`
 			if (group === 'ui') return `bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ${paths}`
@@ -372,7 +389,7 @@ export async function getImportGraphTestRecommendations(changes: readonly (strin
 			if (currentSources.has(testFile)) affectedTests.add(testFile)
 		}
 	}
-	return groupedTestCommands([...affectedTests]).map(command => ({ command, reason: 'imports changed production source directly or transitively' }))
+	return groupedTestCommands([...affectedTests], currentSources).map(command => ({ command, reason: 'imports changed production source directly or transitively' }))
 }
 
 export function getTestImpactRecommendations(changes: readonly (string | ChangedFileEntry)[]) {
