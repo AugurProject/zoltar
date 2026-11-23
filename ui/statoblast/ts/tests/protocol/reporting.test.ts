@@ -271,7 +271,7 @@ describe('reporting protocol client', () => {
 		test('loads the shortfall, the reporter ledger allowance and a supply-growth buffer recommendation', async () => {
 			expect(await loadOwnForkAdmission(createShortfallClient(40n, 7n, []), securityPoolAddress, walletAddress)).toEqual({ allowanceAttoRep: 7n, recommendedApprovalAttoRep: 40n + 10n ** 18n, shortfallAttoRep: 40n })
 			expect(await loadOwnForkAdmission(createShortfallClient(40n, 7n, []), securityPoolAddress, undefined)).toEqual({ allowanceAttoRep: undefined, recommendedApprovalAttoRep: 40n + 10n ** 18n, shortfallAttoRep: 40n })
-			expect(await loadOwnForkAdmission(createShortfallClient(0n, 7n, []), securityPoolAddress, walletAddress)).toEqual({ allowanceAttoRep: undefined, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
+			expect(await loadOwnForkAdmission(createShortfallClient(0n, 7n, []), securityPoolAddress, walletAddress)).toEqual({ allowanceAttoRep: 7n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
 		})
 
 		test('approves the reporter ledger for exactly the selected amount', async () => {

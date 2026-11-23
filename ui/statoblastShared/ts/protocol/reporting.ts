@@ -484,7 +484,7 @@ export type OwnForkAdmission = {
 
 async function readOwnForkAdmissionSpend(client: ReadClient, securityPoolAddress: Address) {
 	const [reporterLedger, shortfallAttoRep] = await client.readContract({ address: getInfraContractAddresses().securityPoolForker, abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, functionName: 'getOwnForkAdmissionShortfall', args: [securityPoolAddress] })
-	const repTokenAddress = shortfallAttoRep === 0n ? undefined : await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', args: [] })
+	const repTokenAddress = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', args: [] })
 	return { reporterLedger, repTokenAddress, shortfallAttoRep }
 }
 
@@ -494,14 +494,13 @@ async function readOwnForkAdmissionSpend(client: ReadClient, securityPoolAddress
  */
 export async function loadOwnForkAdmission(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<OwnForkAdmission> {
 	const { reporterLedger, repTokenAddress, shortfallAttoRep } = await readOwnForkAdmissionSpend(client, securityPoolAddress)
-	const allowanceAttoRep = repTokenAddress === undefined || accountAddress === undefined ? undefined : await client.readContract({ address: repTokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [accountAddress, reporterLedger] })
+	const allowanceAttoRep = accountAddress === undefined ? undefined : await client.readContract({ address: repTokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [accountAddress, reporterLedger] })
 	return { allowanceAttoRep, recommendedApprovalAttoRep: shortfallAttoRep === 0n ? 0n : shortfallAttoRep + OWN_FORK_ADMISSION_GROWTH_BUFFER_ATTO_REP, shortfallAttoRep }
 }
 
 /** Approves the reporter ledger to pull the selected amount of fork admission REP. */
 export async function approveOwnForkAdmission(client: WriteClient, securityPoolAddress: Address, amountAttoRep: bigint) {
 	const { reporterLedger, repTokenAddress } = await readOwnForkAdmissionSpend(client, securityPoolAddress)
-	if (repTokenAddress === undefined) throw new Error(portfolioCopy.forkAdmissionNotNeeded)
 	return await writeContractAndWait(client, () => ({
 		address: repTokenAddress,
 		abi: ABIS.mainnet.erc20,

@@ -85,8 +85,6 @@ export const checkingForkAdmission = 'Checking fork admission…'
 
 export const forkAdmissionApprovalRequired = 'Fork admission REP approval required.'
 
-export const forkAdmissionNotNeeded = 'Fork admission REP is no longer needed.'
-
 export const forkAdmissionApproved = 'Fork admission REP approved'
 
 export const universeForkTriggered = 'Universe fork triggered'

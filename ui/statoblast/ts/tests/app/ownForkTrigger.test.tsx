@@ -148,11 +148,13 @@ describe('own-question fork admission', () => {
 	})
 
 	test('without a shortfall the approval stays in place as not needed and one fork click sends exactly the fork', async () => {
-		const { dependencies, sent } = createDependencies({ allowanceAttoRep: undefined, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
+		const { dependencies, sent } = createDependencies({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
 		const rendered = await renderIntoDocument(<Harness dependencies={dependencies} />)
 		trackCleanup(rendered.cleanup)
 		await waitFor(() => expectTransactionButtonEnabled(document.body, portfolioCopy.triggerUniverseFork))
 		expectTransactionButtonDisabled(forkSection(), transactionStepsCopy.skipped)
+		// A finished step shows the read allowance, not a loading placeholder.
+		expect(forkSection().textContent).not.toContain('—')
 		await act(async () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: portfolioCopy.triggerUniverseFork }))
 		})
