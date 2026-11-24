@@ -123,7 +123,7 @@
 					<li><a href="#question">Question pages</a></li>
 					<li><a href="#pool">Security pool pages</a></li>
 					<li><a href="#fork">Fork and recovery</a></li>
-					<li><a href="#other">Price reports and app-wide states</a></li>
+					<li><a href="#other">App-wide states</a></li>
 					<li><a href="#components">Shared components and behaviours</a></li>
 					<li><a href="#data">Data loading (no event logs)</a></li>
 					<li><a href="#wording">Wording rules and glossary</a></li>
@@ -150,7 +150,7 @@
 			<ol>
 				<li><b>No global lists.</b> No screen lists questions, security pools or price reports that anyone can create. Users reach things by link, address, question ID inside a security pool, or their Watchlist. Spam can never reach the screen.</li>
 				<li><b>No Home page and no Questions tab.</b> A question exists only inside a security pool (the same question ID can be registered in any number of security pools, each with its own shares and reporting). A question is always addressed as <code>(security pool, question ID)</code>.</li>
-				<li><b>Primary navigation is Watchlist and Price reports.</b> The universe switcher is a menu in the header.</li>
+				<li><b>The Watchlist is the only top-level page.</b> There are no header tabs and no mobile bottom bar; the logo opens the Watchlist. There is no Price reports page: each security pool's REP price tab shows and settles its own reports, and any other report opens in the separate OpenOracle app. The universe switcher is a menu in the header.</li>
 				<li><b>The UI never reads event logs.</b> No <code>eth_getLogs</code>, no event watching, no <code>fromBlock</code> scans. All information comes from contract state reads (decoding the receipt of the user's own transaction, e.g. a new report ID, is not a log query) (see <a href="#data">Data loading</a>).</li>
 				<li><b>No new contract indexes.</b> No per-account or per-deposit index contracts or storage are added for the UI.</li>
 				<li><b>The Watchlist holds only saved items</b> (★) plus a short recently-opened history; no app-shipped suggestions.</li>
@@ -238,11 +238,6 @@
 							<td><a href="mockups/06-portfolio-deploy.html">06</a>, <a href="mockups/06b-portfolio-deploy-send.html">06b</a></td>
 						</tr>
 						<tr>
-							<td><code>#/reports</code></td>
-							<td>Price reports</td>
-							<td><a href="mockups/14-price-reports.html">14</a></td>
-						</tr>
-						<tr>
 							<td><code>#/universes</code></td>
 							<td>Universes &amp; REP migration</td>
 							<td><a href="mockups/15-universes.html">15</a></td>
@@ -256,7 +251,7 @@
 			<h2 id="shell">4. App shell</h2>
 			<h3>Header (every screen)</h3>
 			<ul>
-				<li>Left: logo, tabs <b>Watchlist</b> (★) and <b>Price reports</b>. Question and security pool pages highlight Watchlist. Phones: tabs move to a bottom bar.</li>
+				<li>Left: logo, which opens the Watchlist. No tabs and no bottom bar; breadcrumbs on inner pages start with Watchlist.</li>
 				<li>Right: REP price chip (<code>1 REP = 0.0045 ETH</code>), universe menu button, wallet chip, Activity, Settings. The right group wraps to a second row when it doesn't fit (never runs off-screen).</li>
 			</ul>
 			<h3 id="universe-menu">Universe menu (02e, 02f)</h3>
@@ -396,9 +391,8 @@
 				<li><b>15 Universes &amp; REP migration</b>: current, parent and child universes with your REP in each; choose an outcome, amount, approve, migrate. Burning and migrating are irreversible (stated). Shares and REP can be migrated to more children later; there is no REP migration deadline.</li>
 			</ul>
 
-			<h2 id="other">9. Price reports and app-wide states (14, 17, 18)</h2>
+			<h2 id="other">9. App-wide states (17, 18)</h2>
 			<ul>
-				<li><b>14 Price reports</b>: latest report of each saved security pool (status dot, pool, REP price, status like “Dispute window · 3 min left”), Open report by ID, detail panel with the report stepper (Reported → Dispute window → Settle → Funds returned) and Settle (anyone can settle; shows the bounty).</li>
 				<li><b>17 Transaction states</b>: every transaction button goes through review → wallet → pending → confirmed in place; plus canceled, reverted (with reason), “Changed since you reviewed” (forces Review again), replaced. Disabled buttons always carry a visible reason.</li>
 				<li><b>18 App states</b>: no wallet, wrong network, loading (skeletons keep layout), empty, RPC error (data stays readable, retry), stale (“Block {n} · 3 min behind”, actions paused), un-star confirmation for held positions.</li>
 			</ul>
@@ -423,7 +417,7 @@
 				<li><b>Before → after rows</b> list only values the action changes.</li>
 				<li><b>Fixed-size inputs</b>: one-line inputs keep their height; long typed values are clipped with an ellipsis; units/hints sit inside the input on the right.</li>
 				<li><b>Tables</b> stack into label/value cards whenever their container is narrower than about 1000 px (container query), not just on phones.</li>
-				<li><b>Layout widths</b>: test 1440, 1280, 1024, 900, 768, 390, 360. Below 1100 px side columns move below the main column; below 640 px the bottom bar and select-style tabs apply.</li>
+				<li><b>Layout widths</b>: test 1440, 1280, 1024, 900, 768, 390, 360. Below 1100 px side columns move below the main column; below 640 px security pool tabs become a select.</li>
 				<li>Dates: “Jan 9, 14:00 UTC”; relative “in 2d 13h” only next to an absolute date. Durations “7 days”. Gas prices in <code>nanoETH/gas</code> (the repository unit rule, enforced by <code>bun run check:unit-terminology</code>).</li>
 				<li>Light and dark themes.</li>
 			</ul>
@@ -634,7 +628,7 @@
 						<tr>
 							<td>Routes</td>
 							<td><code>SS/lib/routing.ts</code>, <code>SS/types/app.ts</code> (<code>deploy</code>, <code>pools</code>, <code>security-pools</code>, <code>open-oracle</code>), <code>SS/lib/statoblastLocation.ts</code>, tabs in <code>ui/statoblast/ts/app/lib/appNavigation.tsx</code>, switch in <code>ui/statoblast/ts/app/components/AppRouteContent.tsx</code>, URL state <code>ui/statoblast/ts/app/hooks/useStatoblastUrlState.ts</code></td>
-							<td>Replace Questions / Security pools tabs with Watchlist / Price reports; add question routes under a pool and pool sub-tabs (§3). Today a question is addressed by its question ledger address (<code>#/pools/&lt;ledger&gt;</code>); switch to <code>(pool, question ID)</code>.</td>
+							<td>Remove the Questions, Security pools and Price reports tabs; the Watchlist is the only top-level page; add question routes under a pool and pool sub-tabs (§3). Today a question is addressed by its question ledger address (<code>#/pools/&lt;ledger&gt;</code>); switch to <code>(pool, question ID)</code>.</td>
 						</tr>
 						<tr>
 							<td>Shell</td>
@@ -684,7 +678,7 @@
 						<tr>
 							<td>REP price</td>
 							<td><code>SS/features/security-pools/components/SecurityPoolPriceReport.tsx</code> (<code>scope='branch'</code> for forks), <code>useSecurityPoolPrice.ts</code>; page <code>SS/features/open-oracle/components/PriceRequestStatusSection.tsx</code></td>
-							<td>10, 12b, 14.</td>
+							<td>10, 12b. Remove the <code>#/open-oracle</code> page; the REP price tab links any other report to the OpenOracle app.</td>
 						</tr>
 						<tr>
 							<td>Liquidations</td>
@@ -735,12 +729,12 @@
 			<p>Each milestone is shippable on its own and keeps the feature map (00) complete.</p>
 			<ol>
 				<li><b>Data layer first</b>: entry checks, block-pinned multicall refresh, saved-items refresh budget, deposit saving at deposit time, the state-only deposit search, device storage and export schema; simulation scenarios seed the Watchlist; delete log reads and global loaders. Add tests that fail if the app issues <code>eth_getLogs</code>.</li>
-				<li><b>Shell and navigation</b>: header tabs (Watchlist, Price reports), universe menu, fork banner, routes; remove the Questions tab and Home.</li>
+				<li><b>Shell and navigation</b>: logo to Watchlist, universe menu, fork banner, routes; remove all header tabs, the mobile bottom bar, Home and the Price reports page.</li>
 				<li><b>Watchlist</b> (02–02f) with export/import.</li>
 				<li><b>Question pages</b> (03–04e): full width, stepper with the fork branch, reporting, claim, locate deposits, inherited claims, fork step.</li>
 				<li><b>Security pool pages</b> (07–11), then deploy (06, 06b).</li>
 				<li><b>Fork and recovery</b> (12, 12b, 13) and universes (15).</li>
-				<li><b>Price reports</b> (14), <b>transaction</b> and <b>app states</b> (17, 18) across all screens.</li>
+				<li><b>Transaction</b> and <b>app states</b> (17, 18) across all screens.</li>
 				<li>Wording pass against the glossary; update copy tests and docs screenshots.</li>
 			</ol>
 

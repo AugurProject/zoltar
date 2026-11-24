@@ -4,10 +4,6 @@
 	const tab = rawTab === 'questions' || rawTab === 'portfolios' ? 'watchlist' : rawTab
 	const forked = document.body.dataset.forked === '1'
 	const menuOpen = document.body.dataset.umenu === 'open'
-	const tabs = [
-		['watchlist', 'Watchlist', '★'],
-		['reports', 'Price reports', '◷'],
-	]
 	// Universe menu: a button opens a non-modal popover of ordinary links and buttons (not role="menu").
 	// Esc closes it and returns focus to the button. Desktop: role="dialog" without aria-modal (non-modal popover).
 	// Phones: the same element becomes a bottom sheet over a scrim, so it is aria-modal="true" with focus kept inside and a visible Close button. data-umenu="open" renders it open; data-parent-rep="1" shows REP left in a forked parent.
@@ -53,8 +49,7 @@
 	else if (onPoolPage) bannerAction = '<span class="row"><a class="btn sm" href="#/fork">Choose a branch…</a></span>'
 	const header = `
 	<header class="app-header">
-		<div class="brand"><img src="favicon.svg" alt="" />Augur Statoblast</div>
-		<nav class="tabs">${tabs.map(([id, label]) => `<a class="${tab === id ? 'on' : ''}">${label}</a>`).join('')}</nav>
+		<a class="brand" href="02-watchlist.html" aria-label="Augur Statoblast, Watchlist"><img src="favicon.svg" alt="" />Augur Statoblast</a>
 		<div class="header-right">
 			<span class="chip hide-m num" title="REP price">1 REP = 0.0045 ETH</span>
 			<span class="umenu-wrap"><button type="button" class="chip universe-chip${menuOpen ? ' open' : ''}" aria-expanded="${menuOpen}"${menuOpen ? ' aria-controls="umenu"' : ''}><span class="hide-m" style="font-weight: 400; opacity: .75">Universe </span>Augur v2 › Yes${alert ? ` <span class="count" aria-hidden="true">!</span><span class="sr">, ${alertLabel}</span>` : ''} ▾</button>${menuOpen ? universeMenu : ''}</span>
@@ -64,11 +59,9 @@
 		</div>
 	</header>
 	${forked ? `<div class="universe-banner"><span><b>This universe forked</b>. Minting, takeovers and price reports are closed. Move your REP, shares and capital to a child universe.</span>${bannerAction}</div>` : ''}`
-	const bottom = `<nav class="bottom-nav">${tabs.map(([id, label, icon]) => `<a class="${tab === id ? 'on' : ''}"><span class="i">${icon}</span>${label}</a>`).join('')}</nav>`
 	const page = document.querySelector('.page')
 	if (tab !== 'none') page.insertAdjacentHTML('afterbegin', header)
 	if (menuOpen) page.insertAdjacentHTML('afterbegin', '<div class="umenu-scrim" aria-hidden="true"></div>')
-	if (tab !== 'none') page.insertAdjacentHTML('beforeend', bottom)
 	const lock = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true"><rect x="1" y="5" width="9" height="7" rx="1.5" fill="currentColor"/><path d="M3 5V3.5a2.5 2.5 0 0 1 5 0V5" stroke="currentColor" fill="none" stroke-width="1.5"/></svg>'
 	document.addEventListener('DOMContentLoaded', () => {
 		let n = 0

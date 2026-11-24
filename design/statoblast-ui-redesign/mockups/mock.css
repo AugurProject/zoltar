@@ -2696,3 +2696,7 @@ aside .diff > span:nth-child(4n + 1) {
 	color: var(--text-2);
 	margin-top: 0.2rem;
 }
+a.brand {
+	text-decoration: none;
+	color: inherit;
+}
