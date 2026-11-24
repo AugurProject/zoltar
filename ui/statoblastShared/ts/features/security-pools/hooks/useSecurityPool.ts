@@ -1,4 +1,4 @@
-import { statoblastPageCache } from '../../../protocol/statoblastPageCache.js'
+import { statoblastDisplayCache, statoblastPageCache } from '../../../protocol/statoblastPageCache.js'
 import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -8,6 +8,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { loadSecurityPoolAccount, loadSecurityPoolSetup, requireCanonicalSecurityPool, type SecurityPoolSetupSnapshot, type SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { securityPoolUnsignedId } from '../lib/draft.js'
 
@@ -29,6 +30,10 @@ function rememberedSecurityPool(chainId: number, pendingSetup = false) {
 
 function securityPoolBackendReady(backend: ReturnType<typeof getActiveBackend>) {
 	return backend.isBootstrapped !== false && backend.isBootstrapping !== true && backend.bootstrapError === undefined
+}
+
+function setupDisplayCache(profile: NetworkProfile, securityPool: Address, owner: Address, universeId: bigint) {
+	return statoblastDisplayCache(profile, { universeId, owner, page: `deploy-progress:${securityPool.toLowerCase()}` }, value => (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 4 ? value : undefined))
 }
 
 export function useSecurityPool({
@@ -63,6 +68,7 @@ export function useSecurityPool({
 	const backendReady = securityPoolBackendReady(renderedBackend)
 	const presentationEnvironmentCurrent = presentationContext.current?.guard.isCurrent() ?? true
 	const setup = useSignal<SecurityPoolSetupSnapshot | undefined>(undefined)
+	const savedSetupStage = useSignal<number | undefined>(undefined)
 	const pageCache = useRef<{ key: string; storage: ReturnType<typeof statoblastPageCache> }>()
 	const displayedAt = useSignal<number | undefined>(undefined)
 	const loading = useSignal(false)
@@ -126,6 +132,7 @@ export function useSecurityPool({
 			universeInput.value = String(universeId)
 			managerInput.value = securityPool
 			ownerInput.value = owner
+			if (resumeSetup) setupDisplayCache(renderedBackend.profile, securityPool, owner, universeId).write(preparation.stage, { number: preparation.blockNumber, timestamp: preparation.timestamp })
 			try {
 				const key = securityPoolStorageKey(preparation.chainId)
 				window.localStorage.setItem(key, securityPool)
@@ -159,6 +166,7 @@ export function useSecurityPool({
 			displayedAt.value = undefined
 		}
 		setup.value = undefined
+		savedSetupStage.value = undefined
 		error.value = undefined
 		loading.value = false
 	}
@@ -181,17 +189,29 @@ export function useSecurityPool({
 		invalidate(preservePresentation)
 		questionStart.value = 0n
 		admissionStart.value = 0n
-		if (!enabled || !backendReady) return
+		if ((!enabled && !resumeSetup) || !backendReady) return
 		const backend = getActiveBackend()
 		const storageKey = securityPoolStorageKey(backend.profile.chain.id)
 		if (selectedNetwork.current !== undefined && selectedNetwork.current !== storageKey) managerInput.value = ''
 		selectedNetwork.current = storageKey
 		if (managerInput.value === '') managerInput.value = resumeSetup ? (rememberedSecurityPool(backend.profile.chain.id, true) ?? '') : (securityPoolAddress ?? backend.seededSecurityPool?.address ?? rememberedSecurityPool(backend.profile.chain.id) ?? '')
+		if (!enabled) return
 		void refresh()
 		return () => {
 			generation.current++
 		}
-	}, [enabled, environmentKey, activeUniverseId, renderedBackend, backendReady, presentationEnvironmentCurrent])
+	}, [enabled, resumeSetup, environmentKey, activeUniverseId, renderedBackend, backendReady, presentationEnvironmentCurrent])
+	useEffect(() => {
+		if (!resumeSetup || !backendReady || setup.value !== undefined) return
+		const manager = managerInput.value.trim()
+		const owner = ownerInput.value.trim()
+		const universeId = securityPoolUnsignedId(universeInput.value, 248)
+		if (!isAddress(manager) || !isAddress(owner) || universeId === undefined) return
+		const cached = setupDisplayCache(renderedBackend.profile, getAddress(manager), getAddress(owner), universeId).read()
+		if (cached === undefined) return
+		savedSetupStage.value = cached.value
+		displayedAt.value = cached.savedAt
+	}, [resumeSetup, enabled, environmentKey, renderedBackend, backendReady, managerInput.value, ownerInput.value, universeInput.value])
 	useEffect(() => {
 		if (!cacheReads || !backendReady || presentationSnapshot.value !== undefined) return
 		const managerDraft = managerInput.value.trim()
@@ -266,6 +286,7 @@ export function useSecurityPool({
 		presentationSnapshot: presentationSnapshot.value,
 		displayedAt: displayedAt.value,
 		setup: setup.value,
+		savedSetupStage: savedSetupStage.value,
 		loading: loading.value,
 		error: error.value,
 		managerInput: managerInput.value,

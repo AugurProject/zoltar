@@ -15,7 +15,7 @@ import type { ShareMigrationTarget, TradingActionResult, TradingDetails, Trading
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { readQuestionLedgerUniverseId } from './questionLedgerActions.js'
-import { formatAmountDisplay, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmount, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as tradingCopy from '../copy/trading.js'
 import * as collateralCopy from '../copy/collateral.js'
 import { estimatedPurchaseFee, mintReview } from '../copy/securityPool.js'
@@ -303,7 +303,10 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const args = [universeId, questionId, amount, client.account.address, minimumShares, maximumFee] as const
 	const mintCall = maximumRecoveryAttoRep === 0n ? { functionName: 'createCompleteSet' as const, args } : { functionName: 'createCompleteSetWithRecoveryRep' as const, args: [...args, maximumRecoveryAttoRep] as const }
 	const collateralValue = (value: bigint) => formatCurrencyBalanceWithUnit(value, collateral.symbol, collateral.decimals)
-	const collateralPreview = (value: bigint) => formatValueWithUnit(formatAmountDisplay(value, { units: collateral.decimals }), collateral.symbol)
+	const collateralPreview = (value: bigint) => {
+		const amount = formatAmount(value, { units: collateral.decimals })
+		return formatValueWithUnit(amount.approximate ? `≈\u00a0${amount.text}` : amount.text, collateral.symbol)
+	}
 	const callParams = {
 		address: securityPool,
 		abi: purchaseAbi,
@@ -337,7 +340,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
 				await validateBeforeSubmit()
 				reviewRows = [
-					{ label: estimatedPurchaseFee, value: collateralValue(fresh.fee) },
+					{ label: estimatedPurchaseFee, value: `${formatCurrencyBalance(fresh.fee, collateral.decimals)} ${collateral.symbol}` },
 					{ label: collateralCopy.wallet, value: `${collateralPreview(latest.balance)} → ${collateralPreview(latest.balance - amount - fresh.fee)}` },
 					{ label: availableCapacity, value: `${collateralPreview(fresh.capacity)} → ${collateralPreview(fresh.capacity - amount)}` },
 				]

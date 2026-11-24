@@ -27,6 +27,7 @@ function model(): Parameters<typeof useSecurityPoolActions>[0] {
 		presentationSnapshot: undefined,
 		displayedAt: undefined,
 		setup: undefined,
+		savedSetupStage: undefined,
 		loading: false,
 		error: undefined,
 		setManagerInput: () => undefined,
@@ -201,6 +202,16 @@ test('creation rejects invalid economics without changing the owner health targe
 	expect(hook.state().creationError).toBeUndefined()
 })
 
+test('cached setup progress waits for verification before offering a transaction', async () => {
+	capitalClient().install()
+	const cached = { ...model(), setup: undefined, snapshot: undefined, savedSetupStage: 1, loading: true }
+	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, { model: cached })
+	lifecycle.trackRendered(hook)
+	expect(hook.state().preparationReason(2)).toBe('Checking setup progress…')
+	await hook.setProps({ model: { ...cached, loading: false, error: 'RPC unavailable' } })
+	expect(hook.state().preparationReason(2)).toBe('Try again to verify the saved setup progress.')
+})
+
 test('setup advances one explicit stage and rejects a stale stage before wallet submission', async () => {
 	const source = capitalClient()
 	source.setSetupStage(1n)
@@ -209,7 +220,7 @@ test('setup advances one explicit stage and rejects a stale stage before wallet 
 	installActiveEnvironmentForTesting({ ...source.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
 	const base = model()
 	const snapshot = capitalSnapshot()
-	const setup = { securityPool, owner, stage: 1, originUniverseId: 0n, originForkTime: 0n, chainId: 1, blockNumber: snapshot.blockNumber, blockHash: snapshot.blockHash }
+	const setup = { securityPool, owner, stage: 1, originUniverseId: 0n, originForkTime: 0n, chainId: 1, blockNumber: snapshot.blockNumber, blockHash: snapshot.blockHash, timestamp: snapshot.timestamp }
 	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, { model: { ...base, snapshot: undefined, setup } })
 	lifecycle.trackRendered(hook)
 	expect(hook.state().preparationReason(1)).toContain('complete')

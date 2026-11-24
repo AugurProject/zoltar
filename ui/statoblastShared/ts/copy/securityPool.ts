@@ -73,6 +73,9 @@ export const admissionCheckFailed = 'Could not verify the question rules.'
 export const approvedQuestionCount = (count: bigint) => `${count} permanently approved question${count === 1n ? '' : 's'}. Only the current page is listed below.`
 
 export const readUnavailable = 'Account refresh pending.'
+export const setupPoolRequired = 'Deploy or load a security pool first.'
+export const checkingSetupProgress = 'Checking setup progress…'
+export const retrySavedSetup = 'Try again to verify the saved setup progress.'
 
 export const triggerUniverseFork = 'Trigger universe fork'
 

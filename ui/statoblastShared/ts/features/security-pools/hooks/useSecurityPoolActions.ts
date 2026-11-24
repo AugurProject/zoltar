@@ -300,13 +300,18 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				},
 			),
 		setupStage: model.setup?.stage,
-		preparationReason: (stage: number) =>
-			walletReason ??
-			(model.setup === undefined ? 'Deploy or load a security pool first.' : undefined) ??
-			(model.loading ? 'Refreshing setup status.' : undefined) ??
-			(model.setup !== undefined && model.setup.originForkTime !== 0n ? 'Origin universe forked; setup is permanently closed.' : undefined) ??
-			(model.setup !== undefined && model.setup.stage >= stage ? 'This setup stage is complete.' : undefined) ??
-			(model.setup !== undefined && model.setup.stage !== stage - 1 ? 'Complete the previous setup stage first.' : undefined),
+		preparationReason: (stage: number) => {
+			if (walletReason !== undefined) return walletReason
+			const setup = model.setup
+			if (setup === undefined) {
+				if (model.savedSetupStage === undefined) return copy.setupPoolRequired
+				return model.loading ? copy.checkingSetupProgress : copy.retrySavedSetup
+			}
+			if (model.loading) return copy.checkingSetupProgress
+			if (setup.originForkTime !== 0n) return 'Origin universe forked; setup is permanently closed.'
+			if (setup.stage >= stage) return 'This setup stage is complete.'
+			return setup.stage === stage - 1 ? undefined : 'Complete the previous setup stage first.'
+		},
 		prepare: (stage: number) =>
 			run(`prepareSecurityPool${stage}`, 'Prepare security pool modules', () => {
 				const selected = model.setup

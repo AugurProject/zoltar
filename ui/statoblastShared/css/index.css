@@ -4770,6 +4770,10 @@ span.rep-price-status.stale,
 	background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 4%, transparent), transparent 24rem);
 }
 
+:root[data-product="statoblast"] .transaction-step-content > .transaction-object-context dl {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
 :root[data-product="statoblast"] .app-frame {
 	width: min(84rem, 100%);
 }

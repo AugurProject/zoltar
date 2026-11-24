@@ -170,6 +170,40 @@ test('partial setup loads without touching undeployed capital and resumes on ref
 	expect(hook.state().snapshot?.capitalLedger).toBeDefined()
 })
 
+test('reopening Deploy shows saved setup progress while the live read is pending', async () => {
+	const source = capitalClient()
+	source.setSetupStage(1n)
+	source.install()
+	const props = { accountAddress: owner, enabled: true, environmentKey: 0, activeUniverseId: 0n, resumeSetup: true }
+	const first = await renderHookWithProps(useSecurityPool, props)
+	lifecycle.trackRendered(first)
+	await waitFor(() => expect(first.state().setup?.stage).toBe(1))
+	await first.cleanup()
+	window.history.replaceState({}, '', '#/deploy-pool')
+	const delayed = createDeferred<number>()
+	let retry = false
+	const client = source.client.extend(() => ({ getChainId: async () => (retry ? 1 : await delayed.promise) }))
+	source.setSetupStage(2n)
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const reopened = await renderHookWithProps(useSecurityPool, props)
+	lifecycle.trackRendered(reopened)
+	try {
+		await waitFor(() => expect(reopened.state().savedSetupStage).toBe(1))
+		expect(reopened.state().displayedAt).toBeDefined()
+		expect(reopened.state().setup).toBeUndefined()
+		expect(reopened.state().loading).toBe(true)
+		await act(() => delayed.reject(new Error('RPC unavailable')))
+		await waitFor(() => expect(reopened.state().error).toContain('RPC unavailable'))
+		expect(reopened.state().savedSetupStage).toBe(1)
+		expect(reopened.state().setup).toBeUndefined()
+		retry = true
+		await act(() => reopened.state().refresh())
+		await waitFor(() => expect(reopened.state().setup?.stage).toBe(2))
+	} finally {
+		delayed.resolve(1)
+	}
+})
+
 test('remembered security pools stay scoped to their genesis REP deployment', async () => {
 	const source = capitalClient()
 	source.install()

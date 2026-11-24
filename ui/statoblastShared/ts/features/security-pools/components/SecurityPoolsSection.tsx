@@ -72,6 +72,9 @@ export function SecurityPoolsSection({
 	useStatoblastPageRefresh(registerPageRefresh, model.refresh)
 	useEffect(() => onReadStatus?.(model.displayedAt, undefined), [model.displayedAt, onReadStatus])
 	const actions = useSecurityPoolActions(model, parameters)
+	const shownSetupStage = model.setup?.stage ?? model.savedSetupStage
+	const setupVerificationReasonId = useId()
+	const setupVerificationReason = model.setup === undefined && model.savedSetupStage !== undefined ? actions.preparationReason(1) : undefined
 	const priceDeadline = useSecurityPoolPriceDeadline(model.presentationSnapshot, model.displayedAt, model.refresh)
 	const capital = useSecurityPoolAggregate(model, actions, parameters.accountAddress)
 	const purchase = useSecurityPoolPurchase(model, actions)
@@ -81,7 +84,7 @@ export function SecurityPoolsSection({
 	// Only a visitor with no wallet at all is asked to connect one; a wallet on another network is flagged in the header.
 	if (ownerMissing) ownerMessage = walletConnected ? copy.ownerAddressNeeded : copy.ownerNeeded
 	const disabled = actions.busy !== undefined
-	const isPresentationOnly = model.snapshot === undefined && model.presentationSnapshot !== undefined
+	const isPresentationOnly = (model.snapshot === undefined && model.presentationSnapshot !== undefined) || (deploying && model.setup === undefined && model.savedSetupStage !== undefined)
 	const shown = model.presentationSnapshot
 	const deployReasonId = useId()
 	// Once an account has been shown, its price report stays mounted through a failed refresh so typed drafts survive;
@@ -243,14 +246,23 @@ export function SecurityPoolsSection({
 					)}
 				</SectionBlock>
 			)}
-			{((deploying && (deployStep === 3 || model.setup !== undefined)) || (!deploying && (page === undefined || (model.setup?.stage !== undefined && model.setup.stage < 4)))) && (
-				<SectionBlock title={capitalCopy.prepareTitle} description={actions.setupStage === 4 ? undefined : capitalCopy.prepareHint}>
-					<UserMessage tone={actions.setupStage === 4 ? 'success' : 'neutral'} detail={actions.setupStage === undefined ? capitalCopy.prepareProgressUnknown : capitalCopy.prepareProgress(actions.setupStage)} />
+			{((deploying && (deployStep === 3 || shownSetupStage !== undefined)) || (!deploying && (page === undefined || (model.setup?.stage !== undefined && model.setup.stage < 4)))) && (
+				<SectionBlock title={capitalCopy.prepareTitle} description={shownSetupStage === 4 ? undefined : capitalCopy.prepareHint}>
+					<UserMessage tone={shownSetupStage === 4 ? 'success' : 'neutral'} detail={shownSetupStage === undefined ? capitalCopy.prepareProgressUnknown : capitalCopy.prepareProgress(shownSetupStage)} />
+					{setupVerificationReason === undefined ? undefined : <InlineHint id={setupVerificationReasonId} message={setupVerificationReason} />}
 					<ol className='statoblast-fork-steps'>
 						{capitalCopy.prepareStages.map((label, index) => (
 							<li key={label}>
-								<SecurityPoolButton model={actions} action={`prepareSecurityPool${index + 1}`} label={label} pendingLabel={capitalCopy.preparing} reason={actions.preparationReason(index + 1)} onClick={() => actions.prepare(index + 1)} />
-								<span>{(model.setup?.stage ?? 0) > index ? pageCopy.stepDone : pageCopy.sharedSetupStep}</span>
+								<SecurityPoolButton
+									model={actions}
+									action={`prepareSecurityPool${index + 1}`}
+									label={label}
+									pendingLabel={capitalCopy.preparing}
+									reason={actions.preparationReason(index + 1)}
+									sharedReasonId={setupVerificationReason === undefined ? undefined : setupVerificationReasonId}
+									onClick={() => actions.prepare(index + 1)}
+								/>
+								<span>{(shownSetupStage ?? 0) > index ? pageCopy.stepDone : pageCopy.sharedSetupStep}</span>
 							</li>
 						))}
 					</ol>

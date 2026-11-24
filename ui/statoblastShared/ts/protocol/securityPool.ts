@@ -142,7 +142,7 @@ export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Ad
 	const originForkTime = requireBigintValue(await client.readContract({ address: infrastructure.zoltar, abi: linksAbi, functionName: 'getForkTime', args: [originUniverseId], blockNumber }), 'origin fork time')
 	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (finalBlock.hash !== block.hash || finalChain !== chainId) throw new Error('Security pool setup changed. Refresh and retry.')
-	return { securityPool, owner, stage, originUniverseId, originForkTime, chainId, blockNumber, blockHash: block.hash }
+	return { securityPool, owner, stage, originUniverseId, originForkTime, chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp }
 }
 export type SecurityPoolSetupSnapshot = Awaited<ReturnType<typeof loadSecurityPoolSetup>>
 export function securityPoolPreparationRequest(owner: Address, securityPool: Address): SecurityPoolTransaction {
