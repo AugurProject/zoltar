@@ -158,6 +158,7 @@
 				<li><b>Less text.</b> Communicate visually (bars, timelines, before → after rows, status dots) and keep only text that changes a decision. Safety-critical facts (irreversible, amount at risk, deadlines, forfeits, liquidation consequence) are always visible, never only in a tooltip or a closed disclosure.</li>
 				<li><b>Addresses are shown in full whenever they fit</b>; only when there is no room are they shortened, never wrapped (<a href="#addresses">rule</a>).</li>
 				<li><b>Inputs never move or grow while typing</b>; status, spinners and hints live in fixed-size slots.</li>
+				<li><b>Reads are manual by default, and the app works on a slow RPC.</b> Data is read when a page opens, when the user presses ↻ Refresh (header, with the data's age), and after the user's own transaction confirms. Auto-refresh every block is an opt-in toggle. Saved data shows at once and stays readable while a refresh runs or fails; actions are never blocked by data age, because every transaction re-reads and simulates its inputs first.</li>
 			</ol>
 
 			<h2 id="ia">3. Information architecture and routes</h2>
@@ -178,9 +179,14 @@
 							<td><a href="mockups/01-universe-choice.html">01</a></td>
 						</tr>
 						<tr>
+							<td>any route, while contracts are missing</td>
+							<td>Contracts not deployed: full-page gate with today's deployment workflow (replaces the Deploy tab)</td>
+							<td><a href="mockups/01b-contracts-gate.html">01b</a></td>
+						</tr>
+						<tr>
 							<td><code>#/watchlist</code></td>
-							<td>Open by address or link, question-ID search in saved security pools, saved questions, saved security pools, recently opened</td>
-							<td><a href="mockups/02-watchlist.html">02</a>, <a href="mockups/02b-watchlist-forked.html">02b</a>, <a href="mockups/02c-watchlist-empty.html">02c</a>, <a href="mockups/02d-watchlist-id-search.html">02d</a></td>
+							<td>Open by security pool address or link, saved questions, saved security pools, recently opened</td>
+							<td><a href="mockups/02-watchlist.html">02</a>, <a href="mockups/02b-watchlist-forked.html">02b</a>, <a href="mockups/02c-watchlist-empty.html">02c</a></td>
 						</tr>
 						<tr>
 							<td><code>#/pool/{address}/question/{id}/shares</code></td>
@@ -198,23 +204,13 @@
 							<td><a href="mockups/04c-question-claims-details.html">04c</a></td>
 						</tr>
 						<tr>
-							<td><code>#/pool/{address}/question/{id}/details</code></td>
-							<td>Question › Details</td>
-							<td><a href="mockups/04c-question-claims-details.html">04c</a> (lower card)</td>
-						</tr>
-						<tr>
-							<td><code>#/pool/{address}</code> (<code>/overview</code>)</td>
-							<td>Security pool › Overview</td>
-							<td><a href="mockups/07-portfolio-overview.html">07</a></td>
-						</tr>
-						<tr>
-							<td><code>#/pool/{address}/capital</code></td>
+							<td><code>#/pool/{address}</code> (<code>/capital</code>, the landing tab)</td>
 							<td>Security pool › Capital</td>
 							<td><a href="mockups/08-portfolio-capital.html">08</a></td>
 						</tr>
 						<tr>
 							<td><code>#/pool/{address}/questions</code></td>
-							<td>Security pool › Questions (saved questions of this pool, find or register by ID, mint drawer)</td>
+							<td>Security pool › Questions (saved questions of this pool, find or register by ID)</td>
 							<td><a href="mockups/09-portfolio-questions.html">09</a>, <a href="mockups/09b-fixed-list-admission.html">09b</a>, <a href="mockups/09c-find-by-id-states.html">09c</a></td>
 						</tr>
 						<tr>
@@ -229,7 +225,7 @@
 						</tr>
 						<tr>
 							<td><code>#/pool/{address}/fork</code></td>
-							<td>Security pool › Fork &amp; recovery</td>
+							<td>Security pool › Fork &amp; recovery (only after a fork)</td>
 							<td><a href="mockups/12-portfolio-fork.html">12</a>, <a href="mockups/12b-portfolio-fork-price.html">12b</a>, <a href="mockups/13-portfolio-fork-auction.html">13</a></td>
 						</tr>
 						<tr>
@@ -238,26 +234,26 @@
 							<td><a href="mockups/06-portfolio-deploy.html">06</a>, <a href="mockups/06b-portfolio-deploy-send.html">06b</a></td>
 						</tr>
 						<tr>
-							<td><code>#/universes</code></td>
-							<td>Universes &amp; REP migration</td>
+							<td><code>#/migrate-rep</code></td>
+							<td>Migrate REP (opened from the universe menu or the fork banner)</td>
 							<td><a href="mockups/15-universes.html">15</a></td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
-			<p>Cross-cutting: <a href="mockups/17-transaction-states.html">17 Transaction states</a>, <a href="mockups/18-app-states.html">18 App states</a>, <a href="mockups/19-refresh-plan.html">19 Refresh plan</a>. The contract deployment tab is unchanged and not mocked.</p>
+			<p>Cross-cutting: <a href="mockups/17-transaction-states.html">17 Transaction states</a>, <a href="mockups/18-app-states.html">18 App states</a>, <a href="mockups/19-refresh-plan.html">19 Refresh plan</a>. The contract deployment workflow is unchanged but moves into the full-page gate 01b.</p>
 			<p>Breadcrumbs: <code>Watchlist › Security pool {address} › Questions › Question</code>. On phones they collapse to one “‹ back” link to the parent.</p>
 
 			<h2 id="shell">4. App shell</h2>
 			<h3>Header (every screen)</h3>
 			<ul>
 				<li>Left: logo, which opens the Watchlist. No tabs and no bottom bar; breadcrumbs on inner pages start with Watchlist.</li>
-				<li>Right: REP price chip (<code>1 REP = 0.0045 ETH</code>), universe menu button, wallet chip, Activity, Settings. The right group wraps to a second row when it doesn't fit (never runs off-screen).</li>
+				<li>Right: REP price chip (<code>1 REP = 0.0045 ETH</code>), <b>↻ Refresh</b> button showing the data's age (“2 min ago”; “Refreshing… 1 of 2” while running) with an <b>Auto-refresh</b> toggle beside it (in Settings on phones), universe menu button, wallet chip, Activity, Settings. The right group wraps to a second row when it doesn't fit (never runs off-screen). This is the only refresh control; pages have no Refresh buttons of their own.</li>
 			</ul>
 			<h3 id="universe-menu">Universe menu (02e, 02f)</h3>
 			<ul>
 				<li>A button showing the current universe path (<code>Augur v2 › Yes</code>) opens a non-modal popover (<code>role="dialog"</code>, no <code>aria-modal</code>) of ordinary links and buttons, not an ARIA menu. Esc closes it and returns focus to the button. On phones it is a bottom sheet over a scrim, <code>aria-modal="true"</code>, focus trapped, visible Close button.</li>
-				<li>Content: current universe (id, status badge Active/Forked, your REP there), its parent if any, child universes after a fork (Created / “Not created yet”), and a <b>Migrate REP…</b> action when there is REP to migrate. “All universes” links to 15.</li>
+				<li>Content: current universe (id, status badge Active/Forked, your REP there), its parent if any, child universes after a fork (Created / “Not created yet”), each row switching to that universe, and a <b>Migrate REP…</b> action (opens 15) when there is REP to migrate. This menu is the universe directory; there is no separate universes page.</li>
 				<li>The button shows an alert dot when the current universe forked, or when you still hold REP in a forked parent (02e: 1 250.00 REP unmigrated). There is no REP migration deadline; say so.</li>
 				<li>The popover uses an opaque surface (not translucent).</li>
 			</ul>
@@ -265,26 +261,25 @@
 			<p>When the current universe has forked, a banner sits under the header on every page. Its action depends on context:</p>
 			<ul>
 				<li>On a security pool page: <b>Choose a branch…</b> (links to that pool's Fork &amp; recovery). Hidden once the branch choice is committed (12b, 13).</li>
-				<li>On the Universes page: no action (you're already there).</li>
+				<li>On the Migrate REP page: no action (you're already there).</li>
 				<li>Elsewhere: <b>Migrate REP…</b> plus a “How to move shares and capital” link.</li>
 			</ul>
 
 			<h2 id="watchlist">5. Watchlist (02–02f)</h2>
 			<ul>
-				<li><b>Open card</b>: one field for a security pool address or shared link, one optional Question ID field, an Open button. The question-ID field searches only the user's saved security pools (02d: “Found in 2 of your saved security pools”). Both inputs are fixed single-line height; while checking, the spinner is inside the Open button, whose size doesn't change.</li>
-				<li>“View positions of another address” (closed disclosure): read-only mode for any address; the header then shows “Viewing as”.</li>
-				<li><b>Saved questions</b> table: star, question title, security pool address, stage badge with the relevant date, your shares, Open. If the same question is saved in two pools, each row notes “Also saved in another security pool”. A row can link “REP staked in deposits not found on this device. Locate them” (→ 04d).</li>
+				<li><b>Open card</b>: one field for a security pool address or shared link (a question link opens that question) and an Open button. The input is a fixed single-line height; while checking, the spinner is inside the Open button, whose size doesn't change. A bare question ID is looked up inside a security pool (09), not here.</li>
+				<li><b>Saved questions</b> table: star, question title, security pool address, stage badge with the relevant date, your shares, Open. A row can link “REP staked in deposits not found on this device. Locate them” (→ 04d).</li>
 				<li><b>Saved security pools</b>: star, address with collateral/policy/fees line, REP price status badge, capacity-in-use bar, your position (pledged REP, commitment, health, earned). Deploy a security pool… button.</li>
 				<li>Saved items that fail the entry check show “isn't a Statoblast security pool” (or question) with Remove. A question that is registered but not prepared in the current universe is never offered for removal (see <a href="#data">Entry check</a>).</li>
 				<li>Export / Import watchlist: the file also carries the deposits located on this device (<a href="#storage">schema</a>).</li>
 				<li><b>Recently opened</b>: last 20, a snapshot, not refreshed. Clear history.</li>
-				<li>Empty state (02c) explains the three ways in: paste a link or address, search a question ID in saved pools, or open something and star it.</li>
+				<li>Empty state (02c) explains the ways in: paste a link or address, or open something and star it.</li>
 				<li>Un-starring an item where you hold a position asks first (see 18).</li>
 				<li>Transactions save the touched question / security pool automatically.</li>
 			</ul>
 
 			<h2 id="question">6. Question pages (03–04e)</h2>
-			<p>All question pages share a head: breadcrumbs, stage badge, “Binary · question ID {id}”, star + title, <b>Open security pool</b> button, a notice when the same question is also in another saved pool, and a <b>stage stepper</b>. Tabs: Shares, Reporting (with action badge), Inherited claims (only when present), Details. No right-hand column: the page uses the full width.</p>
+			<p>All question pages share a head: breadcrumbs, stage badge, “Binary · question ID {id}”, star + title, <b>Open security pool</b> button, a closed <b>Resolution rules and details</b> disclosure under the title (rules, categories and tags, question type, trading end, question contract, minimum first report, response window, fork threshold; shown open on 04c), and a <b>stage stepper</b>. Tabs: Shares, Reporting (with action badge), Inherited claims (only when present). There is no Details tab. No right-hand column: the page uses the full width.</p>
 
 			<h3 id="stepper">Stage stepper and the fork branch</h3>
 			<ul>
@@ -307,7 +302,7 @@
 				<li><b>Next-step banner</b> states your situation and the one action: e.g. “You're behind on Yes · Add 420.01 REP to Yes before Jan 9, 14:00 UTC to take the lead · If Yes is still behind when the window ends, your 120.00 REP is lost.” with Add to calendar and a jump link. Other banner texts (no reports, tied, no REP staked, pending finalization) are in 04b.</li>
 				<li><b>REP staked per outcome</b> card: per-outcome bars (others vs you), Leading/Behind badges with “N more to lead”; beside it the <b>response window timeline</b> (today, current end, end if you take the lead, latest possible end) and one line: “Only a report that raises the second-highest outcome extends the window.” Closed “How reporting works” disclosure.</li>
 				<li><b>Report an outcome</b>: outcome radio list with stake per outcome, amount input with presets (Min, Take the lead, Full bonus share, Max), “Paid from your wallet · {balance}” (wallet only; no other funding source). Right side: “After this report” before → after rows (what you'd get back if the window ended now, your stake on the side, leader, window end) and the loss warning with the amount. Steps: Approve REP → Report.</li>
-				<li><b>Claim REP</b>: your deposits with the claim button disabled until resolution; “Deposit #3 saved on this device”.</li>
+				<li>No Claim card while the game runs: a ✓ beside your stake on the bars says the deposit is saved on this device. Claiming appears at resolution (04b) or when deposits must be located (04d). The report form shows no REP price status: reports are paid from wallet REP.</li>
 				<li>No fork control appears here. When the entered amount would bring a second outcome to 225 000 REP, the report's last step changes to a confirmation checkbox (“…Reporting then ends undecided and the universe can fork. This cannot be undone.”) and the button shows the amount; see the design note at the bottom of 04b.</li>
 			</ul>
 
@@ -317,12 +312,12 @@
 				<li>Table of your deposits with checkboxes for winning ones (preselected), deposited vs you receive; losing deposits show 0.00 and “Lost, no action needed” (listed only when saved on this device; never searched). One <b>Claim {sum} REP</b> button; its amount follows the checkboxes; all selected deposits are claimed in one transaction.</li>
 			</ul>
 
-			<h3>04c Inherited claims and Details</h3>
+			<h3>04c Inherited claims</h3>
 			<ul>
 				<li>Shown in a child universe for a question that was in reporting when the parent forked. First read your REP in the frozen parent game; if zero, show “Nothing to claim” and read nothing more.</li>
 				<li>Otherwise the parent's deposit list is read once in full (needed for claims), with a progress bar “Preparing your claims · 120 of 400”, then kept on the device (the parent never changes).</li>
 				<li>Each winning deposit shows its payout before claiming; Claim one, or all in one transaction (“Claim 1 680.00 REP (2 deposits, 1 transaction)”). Losing deposits: “Lost: returns no REP; no action needed.” Disabled reasons: “Wait for the question to resolve.”, “Refresh to verify this claim.”, “Another claim transaction is pending.”</li>
-				<li>Details tab: question type, trading end, question ID, question contract (the <code>QuestionLedger</code> address; the only place it appears), security pool, minimum first report, response window, “Fork at 225 000 REP per outcome”, resolution rules, categories, tags.</li>
+				<li>The “Resolution rules and details” disclosure in the head (open here) holds question type, trading end, question ID, question contract (the <code>QuestionLedger</code> address; the only place it appears), security pool, minimum first report, response window, “Fork at 225 000 REP per outcome”, resolution rules, categories and tags.</li>
 			</ul>
 
 			<h3>04d Locate deposits</h3>
@@ -342,17 +337,11 @@
 				<li>Your own deposits in this state are read-only: “Your REP stays staked and carries to the child universes after the fork.” They are claimed there (04c).</li>
 			</ul>
 
-			<h2 id="pool">7. Security pool pages (07–11, 06)</h2>
-			<p>Shared head (<code>portfolio-head.js</code>): status badge, collateral and question policy, star + full address (copy, add a label), “Position of you {address}” selector (switch to any position owner, read-only), Refresh. Tabs: Overview, Capital, Questions (count), REP price (status badge), Liquidations (count), Fork &amp; recovery (status). Tabs wrap; on phones a select replaces them. A forked pool shows a “Forked” badge.</p>
-			<h3>07 Overview</h3>
+			<h2 id="pool">7. Security pool pages (08–11, 06)</h2>
+			<p>Shared head (<code>portfolio-head.js</code>): status badge, collateral and question policy, star + full address (copy, add a label), “Position of you {address}” selector (switch to any position owner, read-only). Tabs before a fork: <b>Capital</b> (landing), Questions, REP price (status badge), Liquidations; after a fork: Capital (Limited), Questions (Minting closed), <b>Fork &amp; recovery</b> (action badge). Tabs the fork closes are hidden, and Fork &amp; recovery doesn\'t exist before a fork. No counts on tabs (they could only count what this device knows). Tabs wrap; on phones a select replaces them. A forked pool shows a “Forked” badge. There is no Overview tab.</p>
+			<h3>08 Capital (landing tab)</h3>
 			<ul>
-				<li>Security pool capacity (in use / free bar, total pledged REP), REP price status with time left.</li>
-				<li>Your position gauge: health with marks for liquidation (85%), backing (100%) and your target (120%); below 900 px the mark labels become a legend line. Earnings with a link to Capital.</li>
-				<li>“Needs attention” items (e.g. reduction ready to release, claimable earnings) link to the section that acts.</li>
-			</ul>
-			<h3>08 Capital</h3>
-			<ul>
-				<li>Section nav (Deposit REP, Health target &amp; commitment, Reduce commitment, Withdraw REP, Earnings) with each section's key value; on narrow screens it becomes a row above the content. A “Your position” summary column (pledged, commitment, health, target, withdrawable) sits beside the sections on wide screens and below on narrow ones.</li>
+				<li>Section nav (Deposit REP, Health target &amp; commitment, Reduce commitment, Withdraw REP, Earnings) with each section's key value; on narrow screens it becomes a row above the content. A “Your position” column (health gauge with marks for liquidation 85%, backing 100% and your target 120%, then pledged, commitment, withdrawable; below 900 px the gauge labels become a legend line) sits beside the sections on wide screens and below on narrow ones.</li>
 				<li>Deposit REP: amount (wallet balance as unit hint) → Approve → Deposit. “Deposited REP backs nothing and earns nothing until you set a commitment.”</li>
 				<li>Health target &amp; commitment: liquidation consequence always visible (“Below 85% health anyone can take over your commitment, and within an hour up to all your pledged REP goes to them as a liquidation penalty…”); inputs health target %, commitment (with Current / Max presets), optional extra REP; Preview before → after (target, REP needed, withdrawable, max commitment); steps only for what applies (Approve REP, Deposit REP and save target, Set commitment).</li>
 				<li>Reduce commitment: the queue is paid from free capacity in order, all-or-nothing, and can't be changed once queued. Show your commitment “10.00 → 6.00 WETH”, a bar of who's ahead of you vs your reduction, the free-capacity marker (“9.00 WETH free now, covers all 6.10”), and <b>Release reduction (keep 6.00 WETH)</b> when covered; otherwise disabled “Waiting for free capacity”; after a failed release “Retry release”.</li>
@@ -361,10 +350,10 @@
 			</ul>
 			<h3>09 Questions (09b, 09c)</h3>
 			<ul>
-				<li>Your saved questions in this pool (“Showing the 3 you saved, of 14 registered here.”) — never the full registry. Find or register by question ID: input starting with <code>0x</code> is hex, anything else is decimal.</li>
+				<li>Your saved questions in this pool (“Showing the 3 you saved here.”) — never the full registry. Find or register by question ID: input starting with <code>0x</code> is hex, anything else is decimal.</li>
 				<li>09c states: Registered here (open, mint); Not registered here (Register question; for an open pool); invalid input; not a question. Register is disabled with its reason when the question can't be registered: “Only Yes/No questions can be registered.”, “Trading on this question has already ended.”, “This universe has forked.” (<code>SecurityPoolFactory.sol</code> registration checks). A question registered here but not yet prepared in the current child universe shows “Registered, not prepared in this universe” and links to Fork &amp; recovery. Invalidate the session entry-check cache after Register and after Prepare.</li>
 				<li>09b fixed question list: “Which questions can be registered: Fixed question list” and the approved IDs; others can't be registered.</li>
-				<li>Mint drawer uses the shared mint form with a question picker and Find by ID.</li>
+				<li>Each row's Mint… and Redeem… open that question's Shares tab (03); there is no mint form on this tab.</li>
 			</ul>
 			<h3>10 REP price</h3>
 			<ul>
@@ -384,17 +373,18 @@
 			</ul>
 
 			<h2 id="fork">8. Fork and recovery (12, 12b, 13, 15)</h2>
+			<p>The Fork &amp; recovery pages have no side column: every deadline is on its step and in the banner.</p>
 			<ul>
 				<li><b>12 Branch choice</b>: “branch” is defined once here as this security pool's copy in a child universe. Diagram of the parent and child universes; pick Yes / No / Invalid; deadline “Choose by Jan 18, 14:00 UTC”; consequence visible: if you don't choose, your pledged REP goes to claimants in every branch and your commitment ends. Commit choice requires an “irreversible” checkbox. Then seven persistent steps (prepare question, commit choice, start migration, branch REP price, repair auction, activate, open your position) each with a visible reason when locked. Recovery for share holders: question picker, claim recovery, transfer rights.</li>
 				<li><b>12b Branch REP price</b> (after choosing No): the shared price-report component for the branch; one recapitalization deadline Jan 25, 14:00 UTC for the branch price, the auction close and earliest activation. If no branch price is accepted the auction can't fill, bids are refunded, and the branch activates under-collateralized.</li>
 				<li><b>13 Repair auction</b>: lots and bid-price scale; the lowest REP-per-lot asks win and all winners get the highest winning ask; your bids with status (winning, outbid: “Lower asks already fill the auction”), refunds and auction vault controls.</li>
-				<li><b>15 Universes &amp; REP migration</b>: current, parent and child universes with your REP in each; choose an outcome, amount, approve, migrate. Burning and migrating are irreversible (stated). Shares and REP can be migrated to more children later; there is no REP migration deadline.</li>
+				<li><b>15 Migrate REP</b>: only the migration form (choose child universes, amount, approve, migrate). Burning and migrating are irreversible (stated). Shares and REP can be migrated to more child universes later; there is no REP migration deadline. Universe browsing lives in the universe menu.</li>
 			</ul>
 
 			<h2 id="other">9. App-wide states (17, 18)</h2>
 			<ul>
 				<li><b>17 Transaction states</b>: every transaction button goes through review → wallet → pending → confirmed in place; plus canceled, reverted (with reason), “Changed since you reviewed” (forces Review again), replaced. Disabled buttons always carry a visible reason.</li>
-				<li><b>18 App states</b>: no wallet, wrong network, loading (skeletons keep layout), empty, RPC error (data stays readable, retry), stale (“Block {n} · 3 min behind”, actions paused), un-star confirmation for held positions.</li>
+				<li><b>18 App states</b>: no wallet, wrong network, loading (skeletons keep layout), empty, RPC error (data stays readable, retry), old data and slow RPC (saved data shown with its age, “Refreshing… 1 of 2”, “Couldn’t refresh, showing data from {age} ago”), un-star confirmation for held positions.</li>
 			</ul>
 
 			<h2 id="components">10. Shared components and behaviours</h2>
@@ -425,7 +415,7 @@
 			<h2 id="data">11. Data loading (no event logs)</h2>
 			<p>The full plan with per-row read counts, the request budget and the abuse analysis is <a href="mockups/19-refresh-plan.html">19 Refresh plan</a>. Summary:</p>
 			<ul>
-				<li><b>Refresh rules</b>: the open page every new block in one block-pinned multicall; saved items every block up to 25 (beyond that 10 rotate per block); recently opened never refreshed; hidden tab paused. <b>Staleness</b>: within 3 minutes of the chain head no age is shown. Beyond that the page shows a chip “Block {n} · {age} behind” and the notice “Data is {age} old. Actions are paused until it catches up.” with a link to change the RPC (18); saved rows show “{age} behind” (02).</li>
+				<li><b>Refresh rules</b>: a page is read when it opens, on ↻ Refresh, and after the user's own transaction confirms (only what it touched). With Auto-refresh on, the open page and up to 25 saved items are read every new block (the rest 10 per block), at most one refresh in flight; hidden tabs pause it. Countdowns run on the device from timestamps already read. Recently opened is never refreshed. <b>Slow RPC</b>: the last data read is kept on the device and shown immediately with its age; sections fill in as reads arrive; a read that times out (15 s) keeps the old value and shows “Couldn't refresh, showing data from {age} ago. Try again” (18). <b>Before every transaction</b> the action's inputs are re-read and simulated; if anything moved, “Changed since you reviewed” (17). Actions are never blocked by data age.</li>
 				<li><b>Entry check</b> before anything joins a read batch: security pool via <code>isSecurityPool(address)</code> on the factory; a question via <code>getQuestionLedger(questionId, universeId)</code> on that security pool, read with <code>allowFailure</code>. It has three outcomes: a ledger address (registered and prepared); revert “Question not registered” (not registered here, “Not a Statoblast question”, offered for removal); revert “Question pool unavailable” (registered but not prepared in this universe, e.g. a child universe before “prepare question”: keep the item and link to Fork &amp; recovery). The check runs in the first multicall, reads in the second; results are cached per session and invalidated after Register and Prepare.</li>
 				<li><b>Universe scope</b>: a question is really (security pool, question ID, universe). Routes keep the existing universe / network / simulation query context (as <code>buildQuestionPoolHref</code> in <code>SS/lib/routing.ts</code> does today), so a shared link opens the same universe. Saved items are stored per network as (security pool, question ID) and shown with their state in the currently selected universe; where that universe has no ledger yet, the row shows “Not prepared in this universe”.</li>
 				<li id="storage"><b>Device storage and export</b>: reuse <code>localEntityStore.ts</code> (app “statoblast”, kinds “question” and “pool”, per network, limit 500) and <code>FavoriteToggle.tsx</code> (aria-pressed; label “Saved: {name} in security pool {address}”). Also stored per network: history (last 20), located deposits <code>{pool, questionId, universeId, outcome, depositor, index}</code>, search cursors <code>{pool, questionId, universeId, outcome, depositor, nextIndex, block}</code>, and deploy progress. Export file: <code>{"version": 1, "chainId", "saved": [{kind, pool, questionId?, label?}], "deposits": [{pool, questionId, universeId, outcome, depositor, index}]}</code>. Import treats every entry as untrusted: the file's pool address is called only after the factory's <code>isSecurityPool</code> confirms it (in an earlier multicall), and no ledger or game address is ever taken from the file: validate the shape and chainId; run the entry check on saved items and on each deposit's (pool, question ID, universe); take the game address from that ledger's <code>escalationGame()</code>, not from the file; then verify each deposit with one <code>getDepositsByOutcome(outcome, index, 1)</code> read on that game (depositor must match). Merge by key, never overwrite. Errors: “Not a Statoblast watchlist file.”, “This file is for another network.”, and a count of skipped entries. Located deposits stored on the device use the same keys (pool, question ID, universe, outcome, depositor, index).</li>
@@ -663,7 +653,7 @@
 						<tr>
 							<td>Security pool page</td>
 							<td>One scrolling page: <code>SS/features/security-pools/components/SecurityPoolsSection.tsx</code> (open fields, <code>RegisteredSecurityPools.tsx</code>, deploy <code>&lt;details&gt;</code>, setup steps, <code>SecurityPoolAggregatePanel.tsx</code>, <code>SecurityPoolTakeover.tsx</code>, <code>SecurityPoolPurchasePanel.tsx</code>, <code>SecurityPoolSharedFork.tsx</code>); hooks <code>useSecurityPool.ts</code>, <code>useSecurityPoolActions.ts</code>, <code>useSecurityPoolAggregate.ts</code>, <code>useSecurityPoolPurchase.ts</code></td>
-							<td>Split into tabs 07–12; deploy becomes its own page (06); remove the registered-pools list.</td>
+							<td>Split into tabs 08–12 (Capital is the landing tab; Fork &amp; recovery only after a fork); deploy becomes its own page (06); remove the registered-pools list.</td>
 						</tr>
 						<tr>
 							<td>Capital</td>
@@ -673,7 +663,7 @@
 						<tr>
 							<td>Register / mint</td>
 							<td><code>SecurityPoolPurchasePanel.tsx</code>, <code>SS/protocol/securityPoolAdmission.ts</code>, <code>securityPoolMint.ts</code></td>
-							<td>09 tab and mint drawer.</td>
+							<td>09 tab; the only mint form is on the question's Shares tab.</td>
 						</tr>
 						<tr>
 							<td>REP price</td>
@@ -693,7 +683,7 @@
 						<tr>
 							<td>Universes</td>
 							<td><code>SS/features/question-ledgers/components/UniversePoolDirectorySection.tsx</code>, <code>ui/zoltarShared/ts/features/universes/components/ZoltarMigrationWorkflow.tsx</code></td>
-							<td>15, reached from the universe menu.</td>
+							<td>The universe menu replaces the directory; 15 keeps only the migration form.</td>
 						</tr>
 						<tr>
 							<td>Transactions, states</td>
@@ -728,11 +718,11 @@
 			<h2 id="order">15. Suggested implementation order</h2>
 			<p>Each milestone is shippable on its own and keeps the feature map (00) complete.</p>
 			<ol>
-				<li><b>Data layer first</b>: entry checks, block-pinned multicall refresh, saved-items refresh budget, deposit saving at deposit time, the state-only deposit search, device storage and export schema; simulation scenarios seed the Watchlist; delete log reads and global loaders. Add tests that fail if the app issues <code>eth_getLogs</code>.</li>
-				<li><b>Shell and navigation</b>: logo to Watchlist, universe menu, fork banner, routes; remove all header tabs, the mobile bottom bar, Home and the Price reports page.</li>
+				<li><b>Data layer first</b>: entry checks, manual refresh with an opt-in auto-refresh, a device cache of the last data read, re-read and simulate before every transaction, block-pinned multicalls, saved-items refresh budget, deposit saving at deposit time, the state-only deposit search, device storage and export schema; simulation scenarios seed the Watchlist; delete log reads and global loaders. Add tests that fail if the app issues <code>eth_getLogs</code>.</li>
+				<li><b>Shell and navigation</b>: logo to Watchlist, ↻ Refresh and Auto-refresh in the header, the contracts gate (01b), universe menu, fork banner, routes; remove all header tabs, the mobile bottom bar, Home and the Price reports page.</li>
 				<li><b>Watchlist</b> (02–02f) with export/import.</li>
 				<li><b>Question pages</b> (03–04e): full width, stepper with the fork branch, reporting, claim, locate deposits, inherited claims, fork step.</li>
-				<li><b>Security pool pages</b> (07–11), then deploy (06, 06b).</li>
+				<li><b>Security pool pages</b> (08–11), then deploy (06, 06b).</li>
 				<li><b>Fork and recovery</b> (12, 12b, 13) and universes (15).</li>
 				<li><b>Transaction</b> and <b>app states</b> (17, 18) across all screens.</li>
 				<li>Wording pass against the glossary; update copy tests and docs screenshots.</li>
@@ -742,13 +732,14 @@
 			<ul>
 				<li>Every row of <a href="mockups/00-feature-map.html">00 Feature map</a> is reachable.</li>
 				<li>No request to <code>eth_getLogs</code> in any simulation scenario (count JSON-RPC methods in a browser test).</li>
-				<li>Request budget, measured in <code>simScenario=securitypoolx2</code> on the Capital tab with 25 saved items: at most 5 JSON-RPC requests per new block (target 3).</li>
+				<li>Request budget, measured in <code>simScenario=securitypoolx2</code> on the Capital tab with 25 saved items: at most 5 JSON-RPC requests per Refresh (target 3), and none while idle with Auto-refresh off.</li>
+				<li>Slow RPC: with an RPC that answers in 10 s, every page shows saved data at once and stays usable; a timeout keeps the old data with its age and a Try again.</li>
 				<li>Deposits: a report saves its deposit; a fresh device locates it by search; an imported file restores it after verification (§11); a reorg during search doesn't skip a deposit; a missing deposit shows Search again.</li>
 				<li>Import: a file whose deposit names a foreign contract or an unregistered question is skipped and counted; a pool address from the file is called only after <code>isSecurityPool</code> confirms it, and no ledger or game address is taken from the file.</li>
 				<li>Entry check: a bogus address, a non-Statoblast contract, an unregistered question and a registered-but-unprepared question each show their own state; none breaks the shared multicall.</li>
 				<li>The report that brings a second outcome to the threshold requires the confirmation checkbox.</li>
 				<li>No copy hard-codes thresholds, windows or percentages (values come from contract reads).</li>
-				<li>Old routes (<code>#/pools</code>, <code>#/pools/&lt;ledger&gt;</code>, <code>#/security-pools</code>, <code>#/open-oracle</code>) are dropped without redirects and show the not-found page.</li>
+				<li>Old routes (<code>#/pools</code>, <code>#/pools/&lt;ledger&gt;</code>, <code>#/security-pools</code>, <code>#/open-oracle</code>, <code>#/deploy</code>) are dropped without redirects and show the not-found page.</li>
 				<li><code>bun run check:repository:current</code> passes (includes <code>check:unit-terminology</code>).</li>
 				<li><code>bun run ui:layout-scan -- --app statoblast</code> clean at the five default viewports; additionally no text outside its box and no wrapped addresses at 1440, 1024, 768, 390.</li>
 				<li>Inputs don't change size while typing or checking.</li>

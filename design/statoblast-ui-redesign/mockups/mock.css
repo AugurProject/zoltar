@@ -2700,3 +2700,37 @@ a.brand {
 	text-decoration: none;
 	color: inherit;
 }
+
+/* Global refresh control: manual by default, optional auto-refresh */
+.refresh-ctl {
+	display: inline-flex;
+	gap: 0.3rem;
+	align-items: center;
+}
+.refresh-ctl .chip {
+	cursor: pointer;
+}
+.refresh-ctl .auto-refresh {
+	gap: 0.35rem;
+	font-weight: 400;
+}
+.refresh-ctl .auto-refresh input {
+	margin: 0;
+}
+/* Gauge in a narrow column: marks as a legend line instead of labels */
+aside .gauge .lab {
+	display: none;
+}
+aside .gauge {
+	padding-bottom: var(--s2);
+}
+aside .gauge-legend.sr {
+	position: static;
+	width: auto;
+	height: auto;
+	margin: 0;
+	clip: auto;
+	clip-path: none;
+	overflow: visible;
+	white-space: normal;
+}

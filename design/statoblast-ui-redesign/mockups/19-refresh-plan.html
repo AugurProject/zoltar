@@ -12,7 +12,7 @@
 				<div>
 					<p class="section-label">Data plan · for design and engineering review · no contract changes</p>
 					<h1 style="margin-top: 0.4rem">What is read, and when</h1>
-					<p class="sub">Nothing is listed globally. You reach a question or security pool by link or address, or a question by ID inside its security pool; starring keeps it live. Everything else is read only while you look at it.</p>
+					<p class="sub">Nothing is listed globally. You reach a question or security pool by link or address, or a question by ID inside its security pool; starring keeps it on the Watchlist. Reads happen when you open a page, press Refresh, or after your own transaction; auto-refresh is opt-in. Everything else is read only while you look at it.</p>
 				</div>
 			</div>
 
@@ -31,13 +31,23 @@
 					<tbody>
 						<tr>
 							<td><b>The page you're on</b></td>
-							<td>Every new block</td>
-							<td>≈ 60 sub-calls in the live multicall</td>
+							<td>When opened, on ↻ Refresh, and after your own transaction confirms. With Auto-refresh on: every new block (at most one refresh in flight)</td>
+							<td>≈ 60 sub-calls in one multicall</td>
 						</tr>
 						<tr>
 							<td><b>★ Saved items</b></td>
-							<td>Every block, up to 25; beyond 25, 10 rotate per block and show how far behind they are</td>
+							<td>When the Watchlist opens and on ↻ Refresh; with Auto-refresh on, up to 25 every block and the rest 10 per block</td>
 							<td>3–5 sub-calls each, same multicall</td>
+						</tr>
+						<tr>
+							<td><b>Before sending a transaction</b></td>
+							<td>Always: the action's inputs are re-read and simulated; if anything changed, “Changed since you reviewed” (17)</td>
+							<td>1 multicall + 1 simulation</td>
+						</tr>
+						<tr>
+							<td><b>Countdowns and deadlines</b></td>
+							<td>Never re-read: computed on the device from timestamps already read</td>
+							<td>0</td>
 						</tr>
 						<tr>
 							<td><b>Recently opened</b> (last 20)</td>
@@ -51,12 +61,12 @@
 						</tr>
 						<tr>
 							<td><b>Hidden tab</b></td>
-							<td>Paused</td>
+							<td>Auto-refresh paused</td>
 							<td>0</td>
 						</tr>
 					</tbody>
 				</table>
-				<div class="table-foot"><span class="small muted">Saved items and history are saved per app and network on this device (store limit 500).</span></div>
+				<div class="table-foot"><span class="small muted">Saved items, history and the last data read are saved per app and network on this device (store limit 500). On a slow RPC the page shows the saved data at once with its age, and fills in sections as reads arrive; a read that times out keeps the old value and shows “Couldn't refresh, showing data from {age} ago.”</span></div>
 			</div>
 
 			<div class="card" style="margin-bottom: var(--s4)">

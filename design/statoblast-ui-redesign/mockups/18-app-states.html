@@ -137,10 +137,11 @@
 				</div>
 
 				<div>
-					<div class="frame-cap"><span>Stale data</span><span class="mock-note">chip only when behind</span></div>
+					<div class="frame-cap"><span>Old data, slow RPC</span><span class="mock-note">manual refresh by default</span></div>
 					<div class="card stack-sm">
-						<div class="spread"><b class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</b><span class="chip" style="border-color: var(--warning-b); color: var(--warning)">Block 24 118 402 · 3 min behind</span></div>
-						<div class="notice warn"><b>Data is 3 min old.</b> Actions are paused until it catches up. <a>Change RPC in Settings</a></div>
+						<div class="spread">
+							<b class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</b><span class="chip"><span class="spinner" style="width: 0.7rem; height: 0.7rem" aria-hidden="true"></span> Refreshing… 1 of 2</span>
+						</div>
 						<dl class="kv">
 							<dt>Your position</dt>
 							<dd>5 000.00 REP pledged, 10.00 WETH commitment</dd>
@@ -150,11 +151,15 @@
 						<div class="steps compact">
 							<div class="step">
 								<span class="mk">1</span>
-								<div><div class="t">Claim earnings</div></div>
-								<div class="act"><span class="btn sm disabled">Claim earnings</span><span class="why">Paused: data is 3 min old.</span></div>
+								<div>
+									<div class="t">Claim earnings</div>
+									<div class="s">Data from 6 min ago. Checked again before sending.</div>
+								</div>
+								<div class="act"><span class="btn sm">Claim earnings</span></div>
 							</div>
 						</div>
-						<p class="mock-note">Design note: new. Data stays visible; only actions are paused.</p>
+						<div class="notice warn">Couldn't refresh: the RPC didn't answer in 15 s. Showing data from 6 min ago. <a>Try again</a> · <a>Change RPC in Settings</a></div>
+						<p class="mock-note">Design note: reads happen on open, on ↻ Refresh (header, with its age) and after your own transactions; Auto-refresh is an opt-in toggle in the header (Settings on phones). Saved data shows at once and stays readable while a refresh runs or fails. Actions are never blocked by data age: every transaction re-reads and simulates its inputs before the wallet opens, and shows “Changed since you reviewed” when something moved (17).</p>
 					</div>
 				</div>
 			</div>

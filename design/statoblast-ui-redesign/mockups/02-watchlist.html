@@ -14,26 +14,13 @@
 				</div>
 			</div>
 			<div class="card" style="margin-bottom: var(--s4)">
-				<div class="open-grid">
+				<div class="open-grid find">
 					<div class="field">
 						<label>Open a security pool or question</label>
 						<div class="input one-line"><span class="ph">Security pool address or link</span></div>
 					</div>
-					<div class="field">
-						<label>Question ID <span class="muted" style="font-weight: 400">(optional)</span></label>
-						<div class="input one-line"><span class="ph">Search saved security pools</span></div>
-					</div>
 					<div><span class="btn">Open</span></div>
 				</div>
-
-				<details class="disc" style="margin-top: var(--s3)">
-					<summary>View positions of another address</summary>
-					<div class="field" style="margin-top: var(--s2); max-width: 560px">
-						<label>Address</label>
-						<div class="input">0x7a3f375917679e170d85356b88194849e4ea91c2<span class="unit">Your wallet</span></div>
-						<span class="hint">Read-only.</span>
-					</div>
-				</details>
 			</div>
 			<div class="card flush" style="margin-bottom: var(--s4)">
 				<div class="card-head">
@@ -41,7 +28,6 @@
 						<h2>★ Saved questions</h2>
 						<p>Saved on this device. Positions in questions you haven't saved don't appear here.</p>
 					</div>
-					<span class="fresh" title="Updating live"><span class="live"></span>Live</span>
 				</div>
 				<table class="stackable">
 					<thead>
@@ -59,7 +45,6 @@
 							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will a spot ETH ETF see net inflows above $1B in December? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
 							<td>
 								<a class="q-title">Will a spot ETH ETF see net inflows above $1B in December?</a>
-								<div class="q-meta">Also saved in another security pool</div>
 							</td>
 							<td><a class="mono small addr-1">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a></td>
 							<td>
@@ -73,7 +58,6 @@
 							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will a spot ETH ETF see net inflows above $1B in December? in security pool 0x1b44f8bd575f9c2346ca3887790dff199fe507c9">★</button></td>
 							<td>
 								<a class="q-title">Will a spot ETH ETF see net inflows above $1B in December?</a>
-								<div class="q-meta">Also saved in another security pool</div>
 							</td>
 							<td><a class="mono small addr-1">0x1b44f8bd575f9c2346ca3887790dff199fe507c9</a></td>
 							<td>
@@ -120,7 +104,7 @@
 				<div class="card-head">
 					<div><h2>★ Saved security pools</h2></div>
 					<div class="row">
-						<span class="fresh" title="Updating live"><span class="live"></span>Live</span><span class="btn sm">Deploy a security pool…</span>
+						<span class="btn sm">Deploy a security pool…</span>
 					</div>
 				</div>
 				<table class="stackable">
@@ -177,7 +161,7 @@
 					<div class="notice warn" style="padding: 0.35rem 0.7rem">1 saved item couldn't load: <span class="mono">0x41c20f45969027916390ec8bb016101eaa1caa10</span> isn't a Statoblast security pool. <a>Remove</a></div>
 				</div>
 				<div class="table-foot">
-					<span class="mock-note">Design note: the export file includes the deposits located on this device; the export dialog says so. Up to 25 saved items update every block; past 25, ten rotate per block. A row more than 3 minutes behind shows “{age} behind” and pauses its actions.</span><span class="row small"><a>Export watchlist</a><a>Import watchlist</a></span>
+					<span class="mock-note">Design note: the export file includes the deposits located on this device; the export dialog says so. Saved items refresh when the Watchlist opens and with ↻ Refresh in the header; with Auto-refresh on, up to 25 every block and the rest ten per block.</span><span class="row small"><a>Export watchlist</a><a>Import watchlist</a></span>
 				</div>
 			</div>
 			<div class="card flush">

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Contracts not deployed</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="none">
+		<div class="page" style="max-width: 1040px">
+			<header class="app-header">
+				<div class="brand"><img src="favicon.svg" alt="" />Augur Statoblast</div>
+				<div class="header-right">
+					<span class="chip num"><span class="dot"></span>0x7a3f…91c2</span>
+					<span class="chip">⚙<span class="icon-label"> Settings</span></span>
+				</div>
+			</header>
+
+			<div class="route-head" style="margin-top: 2.5rem">
+				<div>
+					<h1 style="margin-top: 0.4rem">Statoblast isn't deployed on this network</h1>
+					<p class="sub">Deploy the contracts once, or switch to a network where they exist.</p>
+				</div>
+			</div>
+
+			<div class="card stack">
+				<div class="spread">
+					<h2>Deploy contracts</h2>
+					<span class="badge warn">3 of 9 deployed</span>
+				</div>
+				<div class="p mock-note">Design note: this full-page gate replaces the old conditional Deploy tab, which had no place once the header tabs were removed. It is shown instead of the app whenever required contracts are missing, and its content is today's deployment workflow, unchanged (<code>DeploymentRouteContent.tsx</code>). Once everything is deployed, the app opens on the universe choice (01) or the Watchlist.</div>
+				<div class="steps compact">
+					<div class="step">
+						<span class="mk">✓</span>
+						<div><div class="t">Shared libraries</div></div>
+						<div class="act"><span class="btn sm done">Deployed</span></div>
+					</div>
+					<div class="step now">
+						<span class="mk">4</span>
+						<div><div class="t">Security pool factory</div></div>
+						<div class="act"><span class="btn sm primary">Deploy</span></div>
+					</div>
+					<div class="step locked">
+						<span class="mk"></span>
+						<div><div class="t">Remaining contracts (5)</div></div>
+						<div class="act"><span class="btn sm disabled" aria-describedby="g1">Deploy</span><span class="sr" id="g1">Deploy the security pool factory first.</span></div>
+					</div>
+				</div>
+				<a class="small">Switch network in Settings</a>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

@@ -10,31 +10,26 @@
 	const parentRep = document.body.dataset.parentRep === '1'
 	const alert = forked || parentRep
 	const alertLabel = forked ? 'This universe forked, action needed' : 'You still have REP in the forked parent universe'
-	const migrateRow = '<a class="umenu-row strong" href="#/universes">Universes &amp; REP migration<span class="small muted">→</span></a>'
-	const allRow = '<a class="umenu-row strong" href="#/universes?all=1">All universes<span class="small muted">→</span></a>'
 	const forkedMenu = `<div class="umenu" id="umenu" role="dialog" aria-label="Universe">
 			<div class="umenu-head"><span class="section-label">Universe</span><span class="row"><span class="badge bad">Forked</span><button type="button" class="btn sm link umenu-close">Close</button></span></div>
 			<div class="umenu-cur"><b class="mono">Augur v2 › Yes</b><span class="small muted">Universe #4, frozen since Nov 24</span><span class="small muted">Your REP here: <span class="nowrap">2 310.00</span></span><span class="small muted">No deadline to migrate it.</span></div>
 			<div class="section-label" style="margin-top: var(--s2)">Child universes</div>
-			<a class="umenu-row" href="#/universes?child=12"><span><b>Yes</b> <span class="muted small">#12</span></span><span class="small muted">Your REP: 0.00</span></a>
-			<a class="umenu-row" href="#/universes?child=13"><span><b>No</b> <span class="muted small">#13</span></span><span class="small muted">Your REP: 0.00</span></a>
+			<a class="umenu-row" href="#/switch?universe=12"><span><b>Yes</b> <span class="muted small">#12</span></span><span class="small muted">Your REP: 0.00 · Switch</span></a>
+			<a class="umenu-row" href="#/switch?universe=13"><span><b>No</b> <span class="muted small">#13</span></span><span class="small muted">Your REP: 0.00 · Switch</span></a>
 			<div class="umenu-row static"><span><b>Invalid</b> <span class="muted small">#14</span></span><span class="small muted">Not created yet. Created when you migrate REP to it.</span></div>
-			<div class="umenu-actions"><a class="btn sm primary" href="#/universes">Migrate REP…</a></div>
-			${allRow}
+			<div class="umenu-actions"><a class="btn sm primary" href="15-universes.html">Migrate REP…</a></div>
 		</div>`
 	const parentRepMenu = `<div class="umenu" id="umenu" role="dialog" aria-label="Universe">
 			<div class="umenu-head"><span class="section-label">Universe</span><span class="row"><span class="badge ok">Active</span><button type="button" class="btn sm link umenu-close">Close</button></span></div>
 			<div class="umenu-cur"><b class="mono">Augur v2 › Yes</b><span class="small muted">Universe #4</span><span class="small muted">Your REP here: <span class="nowrap">2 310.00</span></span></div>
 			<div class="notice warn" style="padding: .5rem .7rem"><b><span class="nowrap">1 250.00 REP</span> is still in Augur v2</b>, which forked. Migrate it to use it here. No deadline.</div>
-			<div class="umenu-actions"><a class="btn sm primary" href="#/universes">Migrate REP…</a></div>
-			<a class="umenu-row" href="#/universes?universe=0"><span>Augur v2 <span class="muted small">#0, forked parent</span></span><span class="small muted">View</span></a>
-			${allRow}
+			<div class="umenu-actions"><a class="btn sm primary" href="15-universes.html">Migrate REP…</a></div>
+			<a class="umenu-row" href="#/switch?universe=0"><span>Augur v2 <span class="muted small">#0, forked parent</span></span><span class="small muted">View</span></a>
 		</div>`
 	const activeMenu = `<div class="umenu" id="umenu" role="dialog" aria-label="Universe">
 			<div class="umenu-head"><span class="section-label">Universe</span><span class="row"><span class="badge ok">Active</span><button type="button" class="btn sm link umenu-close">Close</button></span></div>
 			<div class="umenu-cur"><b class="mono">Augur v2 › Yes</b><span class="small muted">Universe #4</span><span class="small muted">Your REP here: <span class="nowrap">2 310.00</span></span></div>
-			<a class="umenu-row" href="#/universes?universe=0"><span>Augur v2 <span class="muted small">#0, forked parent</span></span><span class="small muted">View</span></a>
-			${migrateRow}
+			<a class="umenu-row" href="#/switch?universe=0"><span>Augur v2 <span class="muted small">#0, forked parent</span></span><span class="small muted">View</span></a>
 		</div>`
 	let universeMenu = activeMenu
 	if (forked) universeMenu = forkedMenu
@@ -44,7 +39,7 @@
 	const onUniverses = rawTab === 'universes'
 	// After the branch choice is committed (data-branch-chosen), security pool pages need no banner action
 	const branchChosen = document.body.dataset.branchChosen === '1'
-	let bannerAction = '<span class="row"><a class="btn sm" href="#/universes">Migrate REP…</a><a class="small" href="#/universes">How to move shares and capital</a></span>'
+	let bannerAction = '<span class="row"><a class="btn sm" href="15-universes.html">Migrate REP…</a><a class="small" href="15-universes.html">How to move shares and capital</a></span>'
 	if (onUniverses || (onPoolPage && branchChosen)) bannerAction = ''
 	else if (onPoolPage) bannerAction = '<span class="row"><a class="btn sm" href="#/fork">Choose a branch…</a></span>'
 	const header = `
@@ -52,6 +47,7 @@
 		<a class="brand" href="02-watchlist.html" aria-label="Augur Statoblast, Watchlist"><img src="favicon.svg" alt="" />Augur Statoblast</a>
 		<div class="header-right">
 			<span class="chip hide-m num" title="REP price">1 REP = 0.0045 ETH</span>
+			<span class="refresh-ctl"><button type="button" class="chip" aria-label="Refresh. Updated 2 min ago">↻ <span class="num">2 min ago</span></button><label class="chip hide-m auto-refresh"><input type="checkbox" /> Auto-refresh</label></span>
 			<span class="umenu-wrap"><button type="button" class="chip universe-chip${menuOpen ? ' open' : ''}" aria-expanded="${menuOpen}"${menuOpen ? ' aria-controls="umenu"' : ''}><span class="hide-m" style="font-weight: 400; opacity: .75">Universe </span>Augur v2 › Yes${alert ? ` <span class="count" aria-hidden="true">!</span><span class="sr">, ${alertLabel}</span>` : ''} ▾</button>${menuOpen ? universeMenu : ''}</span>
 			<span class="chip num"><span class="dot"></span>0x7a3f…91c2</span>
 			<span class="chip" aria-label="Activity">◴<span class="icon-label"> Activity</span></span>
